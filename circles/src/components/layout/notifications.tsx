@@ -26,6 +26,7 @@ import { CirclePicture } from "../modules/circles/circle-picture";
 import { MdOutlineArticle } from "react-icons/md";
 import { Hammer, AlertCircle } from "lucide-react"; // Gavel icon for proposals, AlertCircle for issues
 import { AiFillHeart } from "react-icons/ai";
+import { Button } from "../ui/button";
 
 type Notification = {
     id: string;
@@ -119,6 +120,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     const [user] = useAtom(userAtom);
     const [, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
     const [records, setRecords] = useState<StoredNotificationRecord[]>([]);
+    const [isMarkingAllAsRead, setIsMarkingAllAsRead] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -323,6 +325,11 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         );
     }, [notifications]);
 
+    const hasUnreadNotifications = useMemo(
+        () => groupedNotifications.some((groupedNotification) => groupedNotification.unreadNotificationIds.length > 0),
+        [groupedNotifications],
+    );
+
     const markNotificationGroupAsRead = useCallback(
         async (groupedNotification: GroupedNotification) => {
             if (!groupedNotification.unreadNotificationIds.length) {
@@ -359,6 +366,39 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         },
         [fetchNotifications, setNotificationUnreadCount],
     );
+
+    const markAllNotificationsAsRead = useCallback(async () => {
+        if (!hasUnreadNotifications || isMarkingAllAsRead) {
+            return;
+        }
+
+        setIsMarkingAllAsRead(true);
+        setRecords((prevRecords) =>
+            prevRecords.map((record) =>
+                record.isRead
+                    ? record
+                    : {
+                          ...record,
+                          isRead: true,
+                      },
+            ),
+        );
+        setNotificationUnreadCount(0);
+
+        try {
+            const response = await fetch("/api/notifications/mark-all-read", {
+                method: "POST",
+            });
+            if (!response.ok) {
+                throw new Error(`Failed to mark all notifications as read (${response.status})`);
+            }
+        } catch (error) {
+            console.error("Failed to mark all notifications as read:", error);
+            void fetchNotifications();
+        } finally {
+            setIsMarkingAllAsRead(false);
+        }
+    }, [fetchNotifications, hasUnreadNotifications, isMarkingAllAsRead, setNotificationUnreadCount]);
 
     const handleNotificationClick = async (groupedNotification: GroupedNotification) => {
         await markNotificationGroupAsRead(groupedNotification);
@@ -621,109 +661,122 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     return (
         <div>
             {groupedNotifications.length > 0 ? (
-                groupedNotifications.map((groupedNotification) => (
-                    <div
-                        key={groupedNotification.key}
-                        className={`m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100`}
-                        onClick={() => void handleNotificationClick(groupedNotification)}
-                    >
-                        <div className="relative h-[40px] w-[40px]">
-                            {/* Different layouts based on notification type */}
-                            {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
-                                groupedNotification.latestNotification.notificationType,
-                            ) ||
-                            // Add proposal/issue types that involve a user action
-                            [
-                                "proposal_vote",
-                                "proposal_submitted_for_review",
-                                "issue_submitted_for_review", // Add issue types
-                                "issue_approved",
-                                "issue_assigned",
-                                "issue_status_changed",
-                            ].includes(groupedNotification.latestNotification.notificationType) ? (
-                                <>
-                                    {/* Show triggering user picture in the center */}
-                                    {groupedNotification.latestNotification.user && (
-                                        <CirclePicture
-                                            circle={groupedNotification.latestNotification.user}
-                                            size="34px"
-                                        />
-                                    )}
-
-                                    {/* Post/Proposal icon in bottom-right position */}
-                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
-                                        {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
-                                            groupedNotification.latestNotification.notificationType,
-                                        ) ? (
-                                            <MdOutlineArticle size="14px" />
-                                        ) : ["proposal_vote", "proposal_submitted_for_review"].includes(
-                                              groupedNotification.latestNotification.notificationType,
-                                          ) ? (
-                                            <Hammer size="14px" /> // Gavel for proposals
-                                        ) : (
-                                            <AlertCircle size="14px" /> // Alert for issues
-                                        )}
-                                    </div>
-                                </>
-                            ) : ["post_like", "comment_like"].includes(
-                                  groupedNotification.latestNotification.notificationType,
-                              ) ? (
-                                <>
-                                    {/* Show triggering user picture in the center */}
-                                    {groupedNotification.latestNotification.user && (
-                                        <CirclePicture
-                                            circle={groupedNotification.latestNotification.user}
-                                            size="34px"
-                                        />
-                                    )}
-
-                                    {/* Heart icon in bottom-right position */}
-                                    <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
-                                        <AiFillHeart className="fill-[#ff4772] stroke-[#ff4772]" size="14px" />
-                                    </div>
-                                </>
-                            ) : (
-                                // Default layout (e.g., follow requests, proposal status changes)
-                                <>
-                                    {/* Show circle picture */}
-                                    {groupedNotification.latestNotification.circle && (
-                                        <CirclePicture
-                                            circle={groupedNotification.latestNotification.circle}
-                                            size="30px"
-                                            className="absolute left-0 top-0"
-                                        />
-                                    )}
-
-                                    {/* Show user picture if available */}
-                                    {groupedNotification.latestNotification.user && (
-                                        <CirclePicture
-                                            circle={groupedNotification.latestNotification.user}
-                                            size="30px"
-                                            className={
-                                                groupedNotification.latestNotification.circle
-                                                    ? "absolute bottom-0 right-0"
-                                                    : "absolute left-0 top-0"
-                                            }
-                                        />
-                                    )}
-                                </>
-                            )}
-
-                            {/* Show count badge for grouped notifications */}
-                            {groupedNotification.count > 1 && (
-                                <div className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
-                                    {groupedNotification.count}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-sm">{createGroupedMessage(groupedNotification)}</p>
-                            <p className="text-xs text-muted-foreground">
-                                {timeSince(groupedNotification.latestNotification.createdAt, false)}
-                            </p>
-                        </div>
+                <>
+                    <div className="mb-1 flex items-center justify-end px-2 pt-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs"
+                            onClick={() => void markAllNotificationsAsRead()}
+                            disabled={!hasUnreadNotifications || isMarkingAllAsRead}
+                        >
+                            {isMarkingAllAsRead ? "Marking..." : "Mark all as read"}
+                        </Button>
                     </div>
-                ))
+                    {groupedNotifications.map((groupedNotification) => (
+                        <div
+                            key={groupedNotification.key}
+                            className={`m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100`}
+                            onClick={() => void handleNotificationClick(groupedNotification)}
+                        >
+                            <div className="relative h-[40px] w-[40px]">
+                                {/* Different layouts based on notification type */}
+                                {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
+                                    groupedNotification.latestNotification.notificationType,
+                                ) ||
+                                // Add proposal/issue types that involve a user action
+                                [
+                                    "proposal_vote",
+                                    "proposal_submitted_for_review",
+                                    "issue_submitted_for_review", // Add issue types
+                                    "issue_approved",
+                                    "issue_assigned",
+                                    "issue_status_changed",
+                                ].includes(groupedNotification.latestNotification.notificationType) ? (
+                                    <>
+                                        {/* Show triggering user picture in the center */}
+                                        {groupedNotification.latestNotification.user && (
+                                            <CirclePicture
+                                                circle={groupedNotification.latestNotification.user}
+                                                size="34px"
+                                            />
+                                        )}
+
+                                        {/* Post/Proposal icon in bottom-right position */}
+                                        <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                            {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
+                                                groupedNotification.latestNotification.notificationType,
+                                            ) ? (
+                                                <MdOutlineArticle size="14px" />
+                                            ) : ["proposal_vote", "proposal_submitted_for_review"].includes(
+                                                  groupedNotification.latestNotification.notificationType,
+                                              ) ? (
+                                                <Hammer size="14px" /> // Gavel for proposals
+                                            ) : (
+                                                <AlertCircle size="14px" /> // Alert for issues
+                                            )}
+                                        </div>
+                                    </>
+                                ) : ["post_like", "comment_like"].includes(
+                                      groupedNotification.latestNotification.notificationType,
+                                  ) ? (
+                                    <>
+                                        {/* Show triggering user picture in the center */}
+                                        {groupedNotification.latestNotification.user && (
+                                            <CirclePicture
+                                                circle={groupedNotification.latestNotification.user}
+                                                size="34px"
+                                            />
+                                        )}
+
+                                        {/* Heart icon in bottom-right position */}
+                                        <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
+                                            <AiFillHeart className="fill-[#ff4772] stroke-[#ff4772]" size="14px" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    // Default layout (e.g., follow requests, proposal status changes)
+                                    <>
+                                        {/* Show circle picture */}
+                                        {groupedNotification.latestNotification.circle && (
+                                            <CirclePicture
+                                                circle={groupedNotification.latestNotification.circle}
+                                                size="30px"
+                                                className="absolute left-0 top-0"
+                                            />
+                                        )}
+
+                                        {/* Show user picture if available */}
+                                        {groupedNotification.latestNotification.user && (
+                                            <CirclePicture
+                                                circle={groupedNotification.latestNotification.user}
+                                                size="30px"
+                                                className={
+                                                    groupedNotification.latestNotification.circle
+                                                        ? "absolute bottom-0 right-0"
+                                                        : "absolute left-0 top-0"
+                                                }
+                                            />
+                                        )}
+                                    </>
+                                )}
+
+                                {/* Show count badge for grouped notifications */}
+                                {groupedNotification.count > 1 && (
+                                    <div className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-white">
+                                        {groupedNotification.count}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm">{createGroupedMessage(groupedNotification)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {timeSince(groupedNotification.latestNotification.createdAt, false)}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </>
             ) : (
                 <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                     No notifications
