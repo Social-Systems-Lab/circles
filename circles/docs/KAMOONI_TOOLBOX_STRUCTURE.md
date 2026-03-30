@@ -136,6 +136,37 @@ The current UX intent is:
 
 That is why the toolbox uses a compact **Respond** dropdown instead of always showing full Accept/Decline buttons inline.
 
+## Tasks surfaces
+
+Task work now spans two related surfaces:
+
+- the main Tasks page for broader filtering, sorting, and detail work
+- the toolbox for compact personal workflow access
+
+### Current Tasks baseline
+
+On the main Tasks page:
+
+- ordinary tasks now support optional priority
+- supported priority levels are Low, Medium, High, and Critical
+- priority is unset by default
+- stage filtering is multi-select
+- priority filtering is available
+- sorting includes Assigned To, and priority sorting follows explicit urgency order instead of alphabetical order
+- the form flow is now: Create in, Title, Date + Priority, Description, Image, Location, Goal, Event
+- description remains optional
+- Goal and Event links remain available and can still be preselected from goal or event context
+- resolved tasks are hidden from the active list by default and remain available in a bottom expandable section
+- the resolved section auto-expands when current filters only match resolved tasks
+- in the task side panel, priority can be edited directly, stage and priority changes update visually immediately, and the header keeps Stage, Priority, and actions stable above long titles
+
+### Toolbox boundary
+
+- task list view state persistence is limited to the main Tasks page
+- persisted state includes selected stages, selected priorities, sort order, and search text
+- this persisted state is scoped to the Tasks page and does not carry into the toolbox or other contexts
+- toolbox task views remain compact and continue to exclude resolved tasks from the main list
+
 ## Important editing notes
 
 When modifying the toolbox in future:
