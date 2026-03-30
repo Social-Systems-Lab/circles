@@ -50,10 +50,7 @@ export async function requestVerification(
             return { message: "User not found." };
         }
 
-        const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(
-            user.communityGuidelinesAcceptance,
-            user.communityGuidelinesAcceptedAt,
-        );
+        const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(user.communityGuidelinesAcceptance);
 
         console.log("[requestVerification] invoked", {
             userDid,
