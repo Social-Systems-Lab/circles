@@ -143,9 +143,9 @@ export function VerificationSettingsCard() {
 
     if (isLoading) {
         return (
-            <Card className="mb-8">
-                <CardHeader>
-                    <CardTitle className="text-xl">Verification</CardTitle>
+            <Card>
+                <CardHeader className="space-y-2 pb-5">
+                    <CardTitle className="text-2xl font-semibold tracking-tight">Verification thread</CardTitle>
                     <CardDescription>Loading verification status...</CardDescription>
                 </CardHeader>
             </Card>
@@ -157,26 +157,29 @@ export function VerificationSettingsCard() {
     const canReply = Boolean(thread?.canReply && request?.id);
 
     return (
-        <Card className="mb-8">
-            <CardHeader>
+        <Card>
+            <CardHeader className="space-y-4 pb-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <CardTitle className="text-xl">Verification</CardTitle>
-                        <CardDescription>
+                    <div className="space-y-2">
+                        <CardTitle className="text-2xl font-semibold tracking-tight">Verification thread</CardTitle>
+                        <CardDescription className="max-w-2xl text-sm leading-6">
                             This is your dedicated verification thread with platform admins. It does not create a DM or
                             chat room.
                         </CardDescription>
                     </div>
-                    {status ? (
-                        <Badge variant={STATUS_VARIANTS[status] ?? "outline"}>{STATUS_LABELS[status] ?? status}</Badge>
-                    ) : (
-                        <Badge variant="outline">Not submitted</Badge>
-                    )}
+                    <div className="flex w-fit flex-col items-start gap-1 rounded-lg border px-3 py-2 sm:items-end">
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</span>
+                        {status ? (
+                            <Badge variant={STATUS_VARIANTS[status] ?? "outline"}>{STATUS_LABELS[status] ?? status}</Badge>
+                        ) : (
+                            <Badge variant="outline">Not submitted</Badge>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
                 {!request ? (
-                    <div className="space-y-3 rounded-lg border p-4">
+                    <div className="space-y-4 rounded-lg border bg-muted/20 p-5">
                         <p className="text-sm text-muted-foreground">
                             Submit a verification request to start a dedicated review thread with admins.
                         </p>
@@ -184,29 +187,35 @@ export function VerificationSettingsCard() {
                     </div>
                 ) : (
                     <>
-                        <div className="grid gap-3 rounded-lg border p-4 text-sm sm:grid-cols-2">
+                        <div className="grid gap-4 rounded-lg border bg-muted/20 p-5 text-sm sm:grid-cols-2">
                             <div>
-                                <div className="font-medium">Submitted</div>
-                                <div className="text-muted-foreground">{formatDate(request.submittedAt)}</div>
+                                <div className="font-medium text-foreground">Submitted</div>
+                                <div className="mt-1 text-muted-foreground">{formatDate(request.submittedAt)}</div>
                             </div>
                             <div>
-                                <div className="font-medium">Last updated</div>
-                                <div className="text-muted-foreground">{formatDate(request.updatedAt)}</div>
+                                <div className="font-medium text-foreground">Last updated</div>
+                                <div className="mt-1 text-muted-foreground">{formatDate(request.updatedAt)}</div>
                             </div>
                         </div>
 
                         {request.decisionReason ? (
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
                                 <div className="font-medium">Decision note</div>
-                                <p className="mt-1 whitespace-pre-wrap">{request.decisionReason}</p>
+                                <p className="whitespace-pre-wrap">{request.decisionReason}</p>
                             </div>
                         ) : null}
 
                         <div className="space-y-4">
+                            <div className="space-y-1">
+                                <h2 className="text-lg font-semibold">Thread</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Messages from admins and your replies will appear here in order.
+                                </p>
+                            </div>
                             {thread?.messages.length ? (
                                 thread.messages.map((message) => (
-                                    <div key={message.id} className="rounded-lg border p-4">
-                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <div key={message.id} className="rounded-lg border p-5">
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                             <div className="font-medium">
                                                 {message.senderRole === "admin" ? "Admin" : "You"}
                                             </div>
@@ -219,15 +228,15 @@ export function VerificationSettingsCard() {
                                     </div>
                                 ))
                             ) : (
-                                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                                <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
                                     No clarification messages yet. Admin updates will appear here.
                                 </div>
                             )}
                         </div>
 
                         {canReply ? (
-                            <div className="space-y-3 rounded-lg border p-4">
-                                <div>
+                            <div className="space-y-4 rounded-lg border bg-muted/20 p-5">
+                                <div className="space-y-1">
                                     <div className="font-medium">Reply</div>
                                     <p className="text-sm text-muted-foreground">
                                         Add the requested details or upload supporting material.
@@ -260,7 +269,7 @@ export function VerificationSettingsCard() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                            <div className="space-y-3 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
                                 <div>
                                     {status === "approved" || thread?.isVerified ? (
                                         <>

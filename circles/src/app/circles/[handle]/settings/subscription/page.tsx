@@ -17,5 +17,17 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
         return <div>Unauthorized</div>;
     }
 
-    return <SubscriptionFormSettings user={user} />;
+    return (
+        <div className="container flex-1 py-6">
+            <div className="mx-auto w-full max-w-5xl space-y-8">
+                <div className="space-y-2">
+                    <h1 className="text-2xl font-bold tracking-tight">Subscription</h1>
+                    <p className="max-w-3xl text-sm text-muted-foreground">
+                        Manage your verification thread and membership options in one place.
+                    </p>
+                </div>
+                <SubscriptionFormSettings user={user} />
+            </div>
+        </div>
+    );
 }

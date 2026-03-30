@@ -14,7 +14,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
 
     if (subscriptionAttempted) {
         return (
-            <div className="space-y-8">
+            <div className="space-y-10">
                 <VerificationSettingsCard />
                 <div className="flex flex-col items-center text-center">
                     <h1 className="text-2xl font-bold">Thank You!</h1>
@@ -27,7 +27,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     }
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-10">
             <VerificationSettingsCard />
             <SubscriptionForm circle={user} onDialogClose={handleDialogClose} />
         </div>
