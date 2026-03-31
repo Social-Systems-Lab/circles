@@ -540,138 +540,19 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     }, [getNotificationHref]);
 
     const handleNotificationClick = useCallback(async (groupedNotification: GroupedNotification) => {
-
         await markNotificationGroupAsRead(groupedNotification);
         if (onNavigate) {
             onNavigate();
         }
-        const notification = groupedNotification.latestNotification;
-        const circleHandle = notification.circle?.handle || "default"; // Use circle handle from notification if available
 
-        // Helper function to get parent item URL
-        const getParentItemUrl = (notif: Notification): string | null => {
-            const type = notif.post?.parentItemType;
-            const id = notif.post?.parentItemId;
-            const handle = notif.circle?.handle || circleHandle; // Prefer circle handle from notification payload
-
-            if (type && id && handle) {
-                // Map type to plural form used in URL paths
-                const typePlural = type === "issue" ? "issues" : `${type}s`;
-                return `/circles/${handle}/${typePlural}/${id}`;
-            }
-            return null;
-        };
-
-        switch (notification.notificationType) {
-            // Original notification types
-            case "follow_request":
-                router.push(`/circles/${notification.circle?.handle}/settings/membership-requests`);
-                break;
-            case "new_follower":
-                router.push(`/circles/${notification.user?.handle}`);
-                break;
-            case "follow_accepted":
-                router.push(`/circles/${notification.circle?.handle}`);
-                break;
-            case "user_verified":
-            case "user_verification_clarification_requested":
-            case "user_verification_rejected": {
-                const verificationHandle = user?.handle;
-                if (verificationHandle) {
-                    router.push(`/circles/${verificationHandle}/settings/subscription`);
-                } else {
-                    router.push(`/`);
-                }
-                break;
-            }
-            case "user_verification_request":
-            case "user_verification_reply_received":
-                router.push(`/admin`);
-                break;
-            case "pm_received":
-                if (notification.roomId) {
-                    router.push(`/chat/${notification.roomId}`);
-                }
-                break;
-            case "contact_request_received":
-                if (notification.user?.handle) {
-                    router.push(`/circles/${notification.user.handle}`);
-                }
-                break;
-
-            // Post/Comment related notifications - Check for parent item first
-            case "post_comment":
-            case "comment_reply":
-            case "post_like": // Link like to parent item? Or post? Linking to parent for now.
-            case "comment_like":
-            case "post_mention": // Link mention to parent item? Or post? Linking to parent for now.
-            case "comment_mention":
-                const parentUrl = getParentItemUrl(notification);
-                if (parentUrl) {
-                    // Navigate to the parent Goal/Task/Issue/Proposal page
-                    router.push(parentUrl);
-                } else if (notification.postId) {
-                    // Fallback: Navigate to the regular post page (or shadow post page)
-                    router.push(`/circles/${circleHandle}/post/${notification.postId}`);
-                    // TODO: Consider scrolling to the specific comment if commentId is present
-                }
-                break;
-
-            // Proposal Notifications Navigation
-            case "proposal_submitted_for_review":
-            case "proposal_moved_to_voting":
-            case "proposal_approved_for_voting":
-            case "proposal_resolved":
-            case "proposal_resolved_voter":
-            case "proposal_vote":
-                if (notification.proposalId) {
-                    router.push(`/circles/${circleHandle}/proposals/${notification.proposalId}`);
-                }
-                break;
-
-            // Issue Notifications Navigation
-            case "issue_submitted_for_review":
-            case "issue_approved":
-            case "issue_assigned":
-            case "issue_status_changed":
-                if (notification.issueId) {
-                    router.push(`/circles/${circleHandle}/issues/${notification.issueId}`);
-                }
-                break;
-
-            // Task Notifications Navigation
-            case "task_submitted_for_review":
-            case "task_approved":
-            case "task_assigned":
-            case "task_status_changed":
-                if (notification.taskId) {
-                    router.push(`/circles/${circleHandle}/tasks/${notification.taskId}`);
-                }
-                break;
-
-            // Goal Notifications Navigation
-            case "goal_submitted_for_review":
-            case "goal_approved":
-            case "goal_status_changed":
-                if (notification.goalId) {
-                    // Check goalId
-                    router.push(`/circles/${circleHandle}/goals/${notification.goalId}`);
-                }
-                break;
-
-            case "event_invitation":
-                if (notification.eventId) {
-                    router.push(`/circles/${circleHandle}/events/${notification.eventId}`);
-                }
-                break;
-
-            default:
-                // Ensure exhaustive check or provide a default behavior
-                const exhaustiveCheck = notification.notificationType;
-                console.log("Unknown notification type:", exhaustiveCheck);
-                break;
+        const href = getNotificationHref(groupedNotification.latestNotification);
+        if (href) {
+            router.push(href);
+            return;
         }
-    };
+
+        console.log("Unknown notification type:", groupedNotification.latestNotification.notificationType);
+    }, [getNotificationHref, markNotificationGroupAsRead, onNavigate, router]);
 
     // Helper function to create a grouped notification message
     const createGroupedMessage = (groupedNotification: GroupedNotification) => {
@@ -925,6 +806,18 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                     {timeSince(groupedNotification.latestNotification.createdAt, false)}
                                 </p>
                             </div>
+
+                            {getNotificationActionLabel(groupedNotification) && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        void handleNotificationClick(groupedNotification);
+                                    }}
+                                    className="ml-2 rounded-md border px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                                >
+                                    {getNotificationActionLabel(groupedNotification)}
+                                </button>
+                            )}
                             {groupedNotification.unreadNotificationIds.length > 0 && (
                                 <div className="ml-2 h-2 w-2 rounded-full bg-blue-500" />
                             )}
