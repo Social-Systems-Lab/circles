@@ -318,14 +318,28 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if ((permissions.canResolve || isAssignee) && currentStage === "open") {
+        if (currentStage === "open" && isAssignee) {
+            actions.push(
+                <Button key="accept" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Accept Task
+                </Button>,
+            );
+        }
+        if (permissions.canResolve && currentStage === "open" && !isAssignee) {
             actions.push(
                 <Button key="start" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
                 </Button>,
             );
         }
-        if ((permissions.canResolve || isAssignee) && currentStage === "inProgress") {
+        if (currentStage === "inProgress" && isAssignee) {
+            actions.push(
+                <Button key="complete" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Complete
+                </Button>,
+            );
+        }
+        if (permissions.canResolve && currentStage === "inProgress" && !isAssignee) {
             actions.push(
                 <Button key="resolve" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Resolved
