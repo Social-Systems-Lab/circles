@@ -676,7 +676,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     {groupedNotifications.map((groupedNotification) => (
                         <div
                             key={groupedNotification.key}
-                            className={`m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100`}
+                            className={`m-1 flex cursor-pointer items-center space-x-4 rounded-lg p-2 hover:bg-gray-100 ${
+                                groupedNotification.unreadNotificationIds.length > 0 ? "bg-gray-50" : ""
+                            }`}
                             onClick={() => void handleNotificationClick(groupedNotification)}
                         >
                             <div className="relative h-[40px] w-[40px]">
@@ -774,6 +776,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                     {timeSince(groupedNotification.latestNotification.createdAt, false)}
                                 </p>
                             </div>
+                            {groupedNotification.unreadNotificationIds.length > 0 && (
+                                <div className="ml-2 h-2 w-2 rounded-full bg-blue-500" />
+                            )}
                         </div>
                     ))}
                 </>
