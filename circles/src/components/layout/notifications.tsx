@@ -428,7 +428,119 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         }
     }, [fetchNotifications, isClearingRead]);
 
-    const handleNotificationClick = async (groupedNotification: GroupedNotification) => {
+    const getNotificationHref = useCallback(
+        (notification: Notification): string | null => {
+            const circleHandle = notification.circle?.handle || "default";
+
+            const getParentItemUrl = (notif: Notification): string | null => {
+                const type = notif.post?.parentItemType;
+                const id = notif.post?.parentItemId;
+                const handle = notif.circle?.handle || circleHandle;
+
+                if (type && id && handle) {
+                    const typePlural = type === "issue" ? "issues" : `${type}s`;
+                    return `/circles/${handle}/${typePlural}/${id}`;
+                }
+                return null;
+            };
+
+            switch (notification.notificationType) {
+                case "follow_request":
+                    return notification.circle?.handle
+                        ? `/circles/${notification.circle.handle}/settings/membership-requests`
+                        : null;
+                case "new_follower":
+                    return notification.user?.handle ? `/circles/${notification.user.handle}` : null;
+                case "follow_accepted":
+                    return notification.circle?.handle ? `/circles/${notification.circle.handle}` : null;
+                case "user_verified":
+                case "user_verification_clarification_requested":
+                case "user_verification_rejected":
+                    return user?.handle ? `/circles/${user.handle}/settings/subscription` : `/`;
+                case "user_verification_request":
+                case "user_verification_reply_received":
+                    return `/admin`;
+                case "pm_received":
+                    return notification.roomId ? `/chat/${notification.roomId}` : null;
+                case "contact_request_received":
+                    return notification.user?.handle ? `/circles/${notification.user.handle}` : null;
+                case "post_comment":
+                case "comment_reply":
+                case "post_like":
+                case "comment_like":
+                case "post_mention":
+                case "comment_mention":
+                    return getParentItemUrl(notification) ||
+                        (notification.postId ? `/circles/${circleHandle}/post/${notification.postId}` : null);
+                case "proposal_submitted_for_review":
+                case "proposal_moved_to_voting":
+                case "proposal_approved_for_voting":
+                case "proposal_resolved":
+                case "proposal_resolved_voter":
+                case "proposal_vote":
+                    return notification.proposalId ? `/circles/${circleHandle}/proposals/${notification.proposalId}` : null;
+                case "issue_submitted_for_review":
+                case "issue_approved":
+                case "issue_assigned":
+                case "issue_status_changed":
+                    return notification.issueId ? `/circles/${circleHandle}/issues/${notification.issueId}` : null;
+                case "task_submitted_for_review":
+                case "task_approved":
+                case "task_assigned":
+                case "task_status_changed":
+                    return notification.taskId ? `/circles/${circleHandle}/tasks/${notification.taskId}` : null;
+                case "goal_submitted_for_review":
+                case "goal_approved":
+                case "goal_status_changed":
+                    return notification.goalId ? `/circles/${circleHandle}/goals/${notification.goalId}` : null;
+                case "event_invitation":
+                    return notification.eventId ? `/circles/${circleHandle}/events/${notification.eventId}` : null;
+                default:
+                    return null;
+            }
+        },
+        [user?.handle],
+    );
+
+    const getNotificationActionLabel = useCallback((groupedNotification: GroupedNotification) => {
+        const notification = groupedNotification.latestNotification;
+        const href = getNotificationHref(notification);
+
+        if (!href) {
+            return null;
+        }
+
+        switch (notification.notificationType) {
+            case "pm_received":
+                return "Reply";
+            case "task_assigned":
+                return "Review";
+            case "post_comment":
+            case "comment_reply":
+            case "post_mention":
+            case "comment_mention":
+            case "task_status_changed":
+            case "task_approved":
+            case "task_submitted_for_review":
+            case "issue_assigned":
+            case "issue_status_changed":
+            case "issue_approved":
+            case "issue_submitted_for_review":
+            case "goal_status_changed":
+            case "goal_approved":
+            case "goal_submitted_for_review":
+            case "proposal_submitted_for_review":
+            case "proposal_moved_to_voting":
+            case "proposal_approved_for_voting":
+            case "proposal_resolved":
+                return "View";
+            default:
+                return null;
+        }
+    }, [getNotificationHref]);
+
+    const handleNotificationClick = useCallback(async (groupedNotification: GroupedNotification) => {
+
         await markNotificationGroupAsRead(groupedNotification);
         if (onNavigate) {
             onNavigate();
