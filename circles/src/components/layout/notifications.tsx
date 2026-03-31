@@ -120,7 +120,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     const [user] = useAtom(userAtom);
     const [, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
     const [records, setRecords] = useState<StoredNotificationRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [isMarkingAllAsRead, setIsMarkingAllAsRead] = useState(false);
+    const [isClearingRead, setIsClearingRead] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -133,9 +135,11 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         if (!user?.did) {
             setRecords([]);
             setNotificationUnreadCount(0);
+            setIsLoading(false);
             return;
         }
 
+        setIsLoading(true);
         try {
             const response = await fetch("/api/notifications?limit=50", { cache: "no-store" });
             if (!response.ok) {
@@ -145,8 +149,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             const data = await response.json();
             setRecords(Array.isArray(data.notifications) ? data.notifications : []);
             setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+            setIsLoading(false);
         } catch (error) {
             console.error("Failed to fetch notifications:", error);
+            setIsLoading(false);
         }
     }, [setNotificationUnreadCount, user?.did]);
 
@@ -399,6 +405,28 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             setIsMarkingAllAsRead(false);
         }
     }, [fetchNotifications, hasUnreadNotifications, isMarkingAllAsRead, setNotificationUnreadCount]);
+
+    const clearReadNotifications = useCallback(async () => {
+        if (isClearingRead) return;
+
+        setIsClearingRead(true);
+
+        // Optimistic UI: remove read notifications
+        setRecords(prev => prev.filter(r => !r.isRead));
+
+        try {
+            const res = await fetch("/api/notifications/clear-read", {
+                method: "POST",
+            });
+
+            if (!res.ok) throw new Error("Failed to clear read notifications");
+        } catch (err) {
+            console.error(err);
+            void fetchNotifications();
+        } finally {
+            setIsClearingRead(false);
+        }
+    }, [fetchNotifications, isClearingRead]);
 
     const handleNotificationClick = async (groupedNotification: GroupedNotification) => {
         await markNotificationGroupAsRead(groupedNotification);
@@ -659,7 +687,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     };
 
     return (
-        <div>
+        <div className={isLoading ? "opacity-70 transition-opacity" : ""}>
             {groupedNotifications.length > 0 ? (
                 <>
                     <div className="mb-1 flex items-center justify-end px-2 pt-2">
@@ -671,6 +699,15 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                             disabled={!hasUnreadNotifications || isMarkingAllAsRead}
                         >
                             {isMarkingAllAsRead ? "Marking..." : "Mark all as read"}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs"
+                            onClick={() => void clearReadNotifications()}
+                            disabled={isClearingRead}
+                        >
+                            {isClearingRead ? "Clearing..." : "Clear read"}
                         </Button>
                     </div>
                     {groupedNotifications.map((groupedNotification) => (
@@ -782,9 +819,21 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                         </div>
                     ))}
                 </>
+            ) : isLoading ? (
+                <div className="space-y-2 p-2">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="m-1 flex items-center space-x-4 rounded-lg p-2">
+                            <div className="h-[40px] w-[40px] animate-pulse rounded-full bg-gray-200" />
+                            <div className="flex-1 space-y-2">
+                                <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
+                                <div className="h-3 w-1/3 animate-pulse rounded bg-gray-100" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             ) : (
                 <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
-                    No notifications
+                    All caught up ✨
                 </div>
             )}
         </div>
