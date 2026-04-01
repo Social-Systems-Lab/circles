@@ -54,6 +54,7 @@ import RichText from "../feeds/RichText";
 import ImageThumbnailCarousel from "@/components/ui/image-thumbnail-carousel";
 import {
     changeTaskStageAction, // Renamed action
+    acceptTaskAction,
     assignTaskAction, // Renamed action
     deleteTaskAction, // Renamed action
     getMembersAction, // Keep this action (assuming it's generic)
