@@ -1370,6 +1370,8 @@ export const taskSchema = z.object({
     description: z.string(),
     stage: taskStageSchema.default("review"),
     assignedTo: didSchema.optional(), // User DID of the assignee
+    acceptedAt: z.date().optional(),
+    acceptedBy: didSchema.optional(),
     userGroups: z.array(z.string()).default([]), // User groups that can see this task
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
