@@ -322,19 +322,26 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             actions.push(
                 <Button
                     key="accept"
-                    onClick={async () => {
-                        setIsPending(true);
-                        const result = await acceptTaskAction(circle.handle, task._id);
-                        setIsPending(false);
+                    onClick={() =>
+                        startTransition(async () => {
+                            const result = await acceptTaskAction(circle.handle, task._id);
 
-                        if (!result.success) {
+                            if (!result.success) {
+                                toast({
+                                    title: "Error",
+                                    description: result.message || "Failed to accept task",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+
+                            router.refresh();
                             toast({
-                                title: "Error",
-                                description: result.message || "Failed to accept task",
-                                variant: "destructive",
+                                title: "Success",
+                                description: result.message || "Task accepted",
                             });
-                        }
-                    }}
+                        })
+                    }
                     disabled={isPending}
                 >
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Accept Task
