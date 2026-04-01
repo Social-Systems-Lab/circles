@@ -325,7 +325,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                     key="accept"
                     onClick={() =>
                         startTransition(async () => {
-                            const result = await acceptTaskAction(circle.handle, task._id);
+                            const result = await acceptTaskAction(circle.handle!, task._id as string);
 
                             if (!result.success) {
                                 toast({
