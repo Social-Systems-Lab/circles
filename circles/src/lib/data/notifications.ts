@@ -130,6 +130,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `${taskTitle} was approved`;
         case "task_assigned":
             return `${actorName} assigned you to ${taskTitle}`;
+        case "task_accepted":
+            return `${actorName} accepted ‘${taskTitle}’`;
         case "task_status_changed":
             return `${actorName} updated ${taskTitle}`;
         case "goal_submitted_for_review":
@@ -1675,6 +1677,40 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
+    }
+}
+
+/**
+ * Send notification when a task is accepted by the assignee
+ */
+export async function notifyTaskAccepted(task: TaskDisplay, accepter: Circle, recipient: UserPrivate): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskAccepted called:", {
+            taskId: task._id,
+            accepterDid: accepter.did,
+            recipientDid: recipient.did,
+        });
+
+        if (accepter.did === recipient.did) {
+            console.log("🔔 [NOTIFY] Skipping task_accepted notification - accepter is recipient");
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_accepted",
+            [recipient],
+            sanitizeObjectForJSON({
+                circle,
+                user: accepter,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskAccepted:", error);
     }
 }
 

@@ -487,6 +487,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "task_submitted_for_review":
                 case "task_approved":
                 case "task_assigned":
+                case "task_accepted":
                 case "task_status_changed":
                     return notification.taskId ? `/circles/${circleHandle}/tasks/${notification.taskId}` : null;
                 case "goal_submitted_for_review":
@@ -515,6 +516,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 return "Reply";
             case "task_assigned":
                 return "Review";
+            case "task_accepted":
+                return "View";
             case "post_comment":
             case "comment_reply":
             case "post_mention":

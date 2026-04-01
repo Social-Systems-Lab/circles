@@ -501,18 +501,31 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                     )}
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        <div className="flex items-center">
-                            <User className="mr-1 h-3 w-3" />
-                            Created by {task.author.name} {/* Use task prop */}
-                            {task.createdAt && formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}{" "}
-                            {/* Use task prop */}
+                        <div className="flex items-center gap-2">
+                            <UserPicture
+                                name={task.author.name}
+                                picture={task.author.picture?.url}
+                                size="18px"
+                            />
+                            <span>
+                                Created by {task.author.name} {/* Use task prop */}
+                                {task.createdAt && formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}{" "}
+                                {/* Use task prop */}
+                            </span>
                         </div>
                         {task.assignee && ( // Use task prop
-                            <div className="flex items-center">
-                                <User className="mr-1 h-3 w-3 text-blue-600" />
-                                Assigned to {task.assignee.name} {/* Use task prop */}
+                            <div className="flex items-center gap-2">
+                                <div className={!task.acceptedAt && currentStage === "open" ? "opacity-45" : ""}>
+                                    <UserPicture
+                                        name={task.assignee.name}
+                                        picture={task.assignee.picture?.url}
+                                        size="18px"
+                                    />
+                                </div>
+                                <span>Assigned to {task.assignee.name}</span> {/* Use task prop */}
                             </div>
                         )}
+
                         {task.location && ( // Use task prop
                             <div className="flex items-center">
                                 <MapPin className="mr-1 h-3 w-3" />

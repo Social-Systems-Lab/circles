@@ -1021,6 +1021,7 @@ export type NotificationType =
     | "task_submitted_for_review"
     | "task_approved"
     | "task_assigned"
+    | "task_accepted"
     | "task_status_changed"
     // Goal Notifications
     | "goal_submitted_for_review"
@@ -1084,6 +1085,7 @@ export const notificationTypeValues = [
     "task_submitted_for_review",
     "task_approved",
     "task_assigned",
+    "task_accepted",
     "task_status_changed",
     "goal_submitted_for_review",
     "goal_approved",
@@ -1166,6 +1168,7 @@ export const summaryNotificationTypeDetails: Record<
             "task_submitted_for_review",
             "task_approved",
             "task_assigned",
+            "task_accepted",
             "task_status_changed",
             "ranking_stale_reminder",
             "ranking_grace_period_ended",

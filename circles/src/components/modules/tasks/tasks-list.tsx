@@ -475,7 +475,15 @@ const TasksList: React.FC<TasksListProps> = ({
                                             openAssignee(assignee); // Call the correct handler
                                         }}
                                     >
-                                        <UserPicture name={assignee.name} picture={assignee.picture?.url} size="32px" />
+                                        <div
+                                            className={
+                                                info.row.original.stage === "open" && !info.row.original.acceptedAt
+                                                    ? "opacity-45"
+                                                    : ""
+                                            }
+                                        >
+                                            <UserPicture name={assignee.name} picture={assignee.picture?.url} size="32px" />
+                                        </div>
                                         {!isCompact && <span>{assignee.name}</span>}
                                     </div>
                                 </TooltipTrigger>

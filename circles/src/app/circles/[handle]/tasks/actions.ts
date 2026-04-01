@@ -45,6 +45,7 @@ import {
     notifyTaskSubmittedForReview,
     notifyTaskApproved,
     notifyTaskAssigned,
+    notifyTaskAccepted,
     notifyTaskStatusChanged,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
@@ -714,6 +715,82 @@ export async function deleteTaskAction( // Renamed function
     }
 }
 
+export async function acceptTaskAction(
+    circleHandle: string,
+    taskId: string,
+): Promise<{ success: boolean; message?: string; acceptedAt?: string; acceptedBy?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        if (task.assignedTo !== userDid) {
+            return { success: false, message: "Only the assignee can accept this task" };
+        }
+
+        if (task.stage !== "open") {
+            return { success: false, message: "Only open tasks can be accepted" };
+        }
+
+        if (task.acceptedAt && task.acceptedBy === userDid) {
+            return {
+                success: true,
+                message: "Task accepted",
+                acceptedAt: new Date(task.acceptedAt).toISOString(),
+                acceptedBy: userDid,
+            };
+        }
+
+        const acceptedAt = new Date();
+        const success = await updateTask(taskId, {
+            acceptedAt,
+            acceptedBy: userDid,
+        });
+
+        if (!success) {
+            return { success: false, message: "Failed to accept task" };
+        }
+
+        const acceptorUser = await getUserByDid(userDid);
+        const taskAuthor = task.createdBy && task.createdBy !== userDid ? await getUserPrivate(task.createdBy) : null;
+
+        if (acceptorUser && taskAuthor) {
+            await notifyTaskAccepted(
+                {
+                    ...task,
+                    acceptedAt,
+                    acceptedBy: userDid,
+                },
+                acceptorUser,
+                taskAuthor,
+            );
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return {
+            success: true,
+            message: "Task accepted",
+            acceptedAt: acceptedAt.toISOString(),
+            acceptedBy: userDid,
+        };
+    } catch (error) {
+        console.error("Error accepting task:", error);
+        return { success: false, message: "Failed to accept task" };
+    }
+}
 /**
  * Change the stage of a task
  * @param circleHandle The handle of the circle
