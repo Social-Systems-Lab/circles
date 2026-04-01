@@ -24,6 +24,8 @@ export const SAFE_TASK_PROJECTION = {
     description: 1,
     stage: 1,
     assignedTo: 1,
+    acceptedAt: 1,
+    acceptedBy: 1,
     userGroups: 1,
     location: 1,
     commentPostId: 1,
