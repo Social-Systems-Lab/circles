@@ -1019,6 +1019,8 @@ export type NotificationType =
     | "issue_status_changed" // Issue status changed (e.g., Open -> In Progress, In Progress -> Resolved) - sent to author/assignee
     // Task Notifications (mirroring Issue Notifications)
     | "task_submitted_for_review"
+    | "task_changes_requested"
+    | "task_verified"
     | "task_approved"
     | "task_assigned"
     | "task_accepted"
@@ -1083,6 +1085,8 @@ export const notificationTypeValues = [
     "issue_assigned",
     "issue_status_changed",
     "task_submitted_for_review",
+    "task_changes_requested",
+    "task_verified",
     "task_approved",
     "task_assigned",
     "task_accepted",
@@ -1166,6 +1170,8 @@ export const summaryNotificationTypeDetails: Record<
         moduleHandle: "tasks", // Tasks module might also handle ranking notifications
         mapsTo: [
             "task_submitted_for_review",
+            "task_changes_requested",
+            "task_verified",
             "task_approved",
             "task_assigned",
             "task_accepted",
@@ -1372,6 +1378,13 @@ export const taskSchema = z.object({
     assignedTo: didSchema.optional(), // User DID of the assignee
     acceptedAt: z.date().optional(),
     acceptedBy: didSchema.optional(),
+    submittedForReviewAt: z.date().optional(),
+    submittedForReviewBy: didSchema.optional(),
+    reviewRequestedChangesAt: z.date().optional(),
+    reviewRequestedChangesBy: didSchema.optional(),
+    reviewRequestedChangesNote: z.string().optional(),
+    verifiedAt: z.date().optional(),
+    verifiedBy: didSchema.optional(),
     userGroups: z.array(z.string()).default([]), // User groups that can see this task
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments

@@ -46,7 +46,9 @@ import {
     notifyTaskApproved,
     notifyTaskAssigned,
     notifyTaskAccepted,
+    notifyTaskChangesRequested,
     notifyTaskStatusChanged,
+    notifyTaskVerified,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
@@ -223,6 +225,10 @@ const updateTaskSchema = createTaskSchema.extend({
 const assignTaskSchema = z.object({
     // Renamed schema
     assigneeDid: didSchema.optional(), // Allow unassigning by passing undefined/null
+});
+
+const requestTaskChangesSchema = z.object({
+    note: z.string().max(500, "Changes request note must be 500 characters or fewer").optional(),
 });
 
 // --- Action Functions ---
@@ -791,6 +797,231 @@ export async function acceptTaskAction(
         return { success: false, message: "Failed to accept task" };
     }
 }
+
+export async function submitTaskForReviewAction(
+    circleHandle: string,
+    taskId: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const submitter = await getUserByDid(userDid);
+        if (!submitter) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        const isAcceptedAssignee =
+            task.assignedTo === userDid && task.acceptedBy === userDid && Boolean(task.acceptedAt);
+        if (!isAcceptedAssignee) {
+            return { success: false, message: "Only the accepted assignee can submit this task for review" };
+        }
+
+        if (task.stage !== "inProgress") {
+            return { success: false, message: "Only in-progress tasks can be submitted for review" };
+        }
+
+        if (task.submittedForReviewAt) {
+            return { success: true, message: "Task already submitted for review" };
+        }
+
+        const submittedForReviewAt = new Date();
+        const success = await updateTask(
+            taskId,
+            {
+                submittedForReviewAt,
+                submittedForReviewBy: userDid,
+            },
+            ["reviewRequestedChangesAt", "reviewRequestedChangesBy", "reviewRequestedChangesNote"],
+        );
+
+        if (!success) {
+            return { success: false, message: "Failed to submit task for review" };
+        }
+
+        const updatedTask = await getTaskById(taskId, userDid);
+        if (updatedTask) {
+            await notifyTaskSubmittedForReview(updatedTask, submitter);
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return { success: true, message: "Task submitted for review" };
+    } catch (error) {
+        console.error("Error submitting task for review:", error);
+        return { success: false, message: "Failed to submit task for review" };
+    }
+}
+
+export async function requestTaskChangesAction(
+    circleHandle: string,
+    taskId: string,
+    note?: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const validated = requestTaskChangesSchema.safeParse({
+            note: typeof note === "string" ? note.trim() || undefined : undefined,
+        });
+
+        if (!validated.success) {
+            return {
+                success: false,
+                message: validated.error.errors.map((error) => error.message).join(", "),
+            };
+        }
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const requester = await getUserByDid(userDid);
+        if (!requester) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        const isAuthor = task.createdBy === userDid;
+        const canAssign = await isAuthorized(userDid, circle._id as string, features.tasks.assign);
+        const canResolve = await isAuthorized(userDid, circle._id as string, features.tasks.resolve);
+        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks.moderate);
+        const canManageReview = isAuthor || canAssign || canResolve || canModerate;
+
+        if (!canManageReview) {
+            return { success: false, message: "Not authorized to request changes on this task" };
+        }
+
+        if (task.stage !== "inProgress" || !task.submittedForReviewAt) {
+            return { success: false, message: "Task must be submitted for review before requesting changes" };
+        }
+
+        const reviewRequestedChangesAt = new Date();
+        const success = await updateTask(
+            taskId,
+            {
+                reviewRequestedChangesAt,
+                reviewRequestedChangesBy: userDid,
+                reviewRequestedChangesNote: validated.data.note,
+            },
+            ["submittedForReviewAt", "submittedForReviewBy"],
+        );
+
+        if (!success) {
+            return { success: false, message: "Failed to request changes" };
+        }
+
+        const updatedTask = await getTaskById(taskId, userDid);
+        if (updatedTask) {
+            await notifyTaskChangesRequested(updatedTask, requester, validated.data.note);
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return { success: true, message: "Changes requested" };
+    } catch (error) {
+        console.error("Error requesting task changes:", error);
+        return { success: false, message: "Failed to request changes" };
+    }
+}
+
+export async function verifyTaskCompletionAction(
+    circleHandle: string,
+    taskId: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const verifier = await getUserByDid(userDid);
+        if (!verifier) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        const isAuthor = task.createdBy === userDid;
+        const canAssign = await isAuthorized(userDid, circle._id as string, features.tasks.assign);
+        const canResolve = await isAuthorized(userDid, circle._id as string, features.tasks.resolve);
+        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks.moderate);
+        const canManageReview = isAuthor || canAssign || canResolve || canModerate;
+
+        if (!canManageReview) {
+            return { success: false, message: "Not authorized to verify this task" };
+        }
+
+        if (task.stage !== "inProgress" || !task.submittedForReviewAt) {
+            return { success: false, message: "Task must be submitted for review before it can be verified" };
+        }
+
+        if (task.verifiedAt) {
+            return { success: true, message: "Task already verified" };
+        }
+
+        const now = new Date();
+        const success = await updateTask(
+            taskId,
+            {
+                stage: "resolved",
+                resolvedAt: now,
+                verifiedAt: now,
+                verifiedBy: userDid,
+            },
+            ["reviewRequestedChangesAt", "reviewRequestedChangesBy", "reviewRequestedChangesNote"],
+        );
+
+        if (!success) {
+            return { success: false, message: "Failed to verify task completion" };
+        }
+
+        const updatedTask = await getTaskById(taskId, userDid);
+        if (updatedTask) {
+            await notifyTaskVerified(updatedTask, verifier);
+        }
+
+        await invalidateUserRankingsIfNeededAction(circle._id!.toString());
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return { success: true, message: "Task verified" };
+    } catch (error) {
+        console.error("Error verifying task completion:", error);
+        return { success: false, message: "Failed to verify task completion" };
+    }
+}
 /**
  * Change the stage of a task
  * @param circleHandle The handle of the circle
@@ -851,7 +1082,7 @@ export async function changeTaskStageAction( // Renamed function
             // Assignee or anyone with resolve perm? Or just assignee? Let's say assignee or resolver.
             canChange = isAssignee || canResolve;
         } else if (currentStage === "inProgress" && newStage === "resolved") {
-            canChange = isAssignee || canResolve; // Assignee or resolver can resolve
+            canChange = canResolve; // Verification flow handles assignee completion separately
         } else if (currentStage === "inProgress" && newStage === "open") {
             // Allow moving back from In Progress to Open (e.g., unassigning work)
             canChange = isAssignee || canResolve; // Assignee or resolver

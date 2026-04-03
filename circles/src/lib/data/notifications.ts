@@ -126,6 +126,10 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `${actorName} updated ${issueTitle}`;
         case "task_submitted_for_review":
             return `${actorName} submitted ${taskTitle} for review`;
+        case "task_changes_requested":
+            return `${actorName} requested changes to ${taskTitle}`;
+        case "task_verified":
+            return `${taskTitle} was verified`;
         case "task_approved":
             return `${taskTitle} was approved`;
         case "task_assigned":
@@ -1559,16 +1563,28 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
         const circle = await getTaskCircle(task); // Renamed helper function
         if (!circle) return;
 
-        // Find DIDs of users with review permission (excluding the submitter)
-        const reviewerDids = (await getAuthorizedMembers(circle, features.tasks?.review)) // Updated feature check
-            .map((user) => user.did)
-            .filter((did): did is string => !!did && did !== submitter.did);
+        const recipientDids = new Set<string>();
 
-        if (reviewerDids.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewer DIDs found to notify for task:", task._id); // Updated message
+        if (task.createdBy && task.createdBy !== submitter.did) {
+            recipientDids.add(task.createdBy);
+        }
+
+        const reviewerGroups = await Promise.all([
+            getAuthorizedMembers(circle, features.tasks?.review),
+            getAuthorizedMembers(circle, features.tasks?.resolve),
+        ]);
+
+        reviewerGroups
+            .flat()
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== submitter.did)
+            .forEach((did) => recipientDids.add(did));
+
+        if (recipientDids.size === 0) {
+            console.log("🔔 [NOTIFY] No recipients found to notify for task review submission:", task._id);
             return;
         }
-        const reviewerUserPrivates = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+        const reviewerUserPrivates = (await Promise.all(Array.from(recipientDids).map((did) => getUserPrivate(did)))).filter(
             (up): up is UserPrivate => up !== null,
         );
 
@@ -1592,6 +1608,40 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskSubmittedForReview:", error); // Updated message
+    }
+}
+
+export async function notifyTaskChangesRequested(
+    task: TaskDisplay,
+    requester: Circle,
+    note?: string,
+): Promise<void> {
+    try {
+        if (!task.assignedTo || task.assignedTo === requester.did) {
+            return;
+        }
+
+        const assignee = await getUserPrivate(task.assignedTo);
+        if (!assignee) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_changes_requested",
+            [assignee],
+            sanitizeObjectForJSON({
+                circle,
+                user: requester,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+                reviewRequestedChangesNote: note,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskChangesRequested:", error);
     }
 }
 
@@ -1711,6 +1761,35 @@ export async function notifyTaskAccepted(task: TaskDisplay, accepter: Circle, re
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAccepted:", error);
+    }
+}
+
+export async function notifyTaskVerified(task: TaskDisplay, verifier: Circle): Promise<void> {
+    try {
+        if (!task.assignedTo || task.assignedTo === verifier.did) {
+            return;
+        }
+
+        const assignee = await getUserPrivate(task.assignedTo);
+        if (!assignee) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_verified",
+            [assignee],
+            sanitizeObjectForJSON({
+                circle,
+                user: verifier,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskVerified:", error);
     }
 }
 

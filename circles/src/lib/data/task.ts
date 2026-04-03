@@ -26,6 +26,13 @@ export const SAFE_TASK_PROJECTION = {
     assignedTo: 1,
     acceptedAt: 1,
     acceptedBy: 1,
+    submittedForReviewAt: 1,
+    submittedForReviewBy: 1,
+    reviewRequestedChangesAt: 1,
+    reviewRequestedChangesBy: 1,
+    reviewRequestedChangesNote: 1,
+    verifiedAt: 1,
+    verifiedBy: 1,
     userGroups: 1,
     location: 1,
     commentPostId: 1,
@@ -541,6 +548,7 @@ export const updateTask = async (
         eventId?: string;
         priority?: TaskPriority | "";
     },
+    fieldsToUnset: (keyof Task)[] = [],
 ): Promise<boolean> => {
     try {
         if (!ObjectId.isValid(taskId)) {
@@ -551,7 +559,7 @@ export const updateTask = async (
         const updateData: any = { ...updates, updatedAt: new Date() };
         delete updateData._id; // Cannot update _id
 
-        const unsetFields: any = {};
+        const unsetFields: Record<string, string> = {};
 
         // Check if goalId is explicitly being set to empty string (signal for removal)
         if (updateData.hasOwnProperty("goalId") && updateData.goalId === "") {
@@ -566,6 +574,15 @@ export const updateTask = async (
         if (updateData.hasOwnProperty("priority") && updateData.priority === "") {
             delete updateData.priority;
             unsetFields.priority = "";
+        }
+        Object.keys(updateData).forEach((key) => {
+            if (typeof updateData[key] === "undefined") {
+                delete updateData[key];
+            }
+        });
+        for (const field of fieldsToUnset) {
+            delete updateData[field];
+            unsetFields[String(field)] = "";
         }
 
         const updateOp: any = {};
@@ -632,13 +649,23 @@ export const changeTaskStage = async (taskId: string, newStage: TaskStage): Prom
         }
 
         const updates: Partial<Task> = { stage: newStage, updatedAt: new Date() }; // Updated type
-        const unsetFields: any = {};
+        const unsetFields: Record<string, string> = {};
 
         if (newStage === "resolved") {
             updates.resolvedAt = new Date();
         } else {
             // If moving out of resolved, ensure resolvedAt is unset
             unsetFields.resolvedAt = "";
+            unsetFields.verifiedAt = "";
+            unsetFields.verifiedBy = "";
+        }
+
+        if (newStage !== "inProgress") {
+            unsetFields.submittedForReviewAt = "";
+            unsetFields.submittedForReviewBy = "";
+            unsetFields.reviewRequestedChangesAt = "";
+            unsetFields.reviewRequestedChangesBy = "";
+            unsetFields.reviewRequestedChangesNote = "";
         }
 
         const updateOp: any = { $set: updates };
@@ -669,13 +696,26 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
             return false;
         }
 
-        const updateOp: any = { $set: { updatedAt: new Date() } };
+        const updateOp: any = {
+            $set: { updatedAt: new Date() },
+            $unset: {
+                acceptedAt: "",
+                acceptedBy: "",
+                submittedForReviewAt: "",
+                submittedForReviewBy: "",
+                reviewRequestedChangesAt: "",
+                reviewRequestedChangesBy: "",
+                reviewRequestedChangesNote: "",
+                verifiedAt: "",
+                verifiedBy: "",
+            },
+        };
         if (assigneeDid && assigneeDid !== "unassigned") {
             // Check for explicit "unassigned" value from select
             updateOp.$set.assignedTo = assigneeDid;
         } else {
             // Unset the assignedTo field if assigneeDid is null, undefined, or "unassigned"
-            updateOp.$unset = { assignedTo: "" };
+            updateOp.$unset.assignedTo = "";
         }
 
         const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp); // Changed Issues to Tasks, param issueId to taskId

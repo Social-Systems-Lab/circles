@@ -141,6 +141,22 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
+const getWorkflowStatusBadge = (task: TaskDisplay) => {
+    if (task.verifiedAt) {
+        return { label: "Verified", className: "bg-emerald-100 text-emerald-800" };
+    }
+
+    if (task.submittedForReviewAt) {
+        return { label: "Review Requested", className: "bg-amber-100 text-amber-800" };
+    }
+
+    if (task.reviewRequestedChangesAt) {
+        return { label: "Changes Requested", className: "bg-rose-100 text-rose-800" };
+    }
+
+    return null;
+};
+
 type PersistedTasksListViewState = {
     version: number;
     searchText: string;
@@ -436,11 +452,17 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => {
                     const stage = info.getValue() as TaskStage; // Updated type
                     const { color, icon: Icon, text } = getStageInfo(stage);
+                    const workflowStatus = getWorkflowStatusBadge(info.row.original);
                     return (
-                        <Badge className={`${color} items-center gap-1`}>
-                            <Icon className="h-3 w-3" />
-                            {text}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                            <Badge className={`${color} w-fit items-center gap-1`}>
+                                <Icon className="h-3 w-3" />
+                                {text}
+                            </Badge>
+                            {workflowStatus && (
+                                <Badge className={`${workflowStatus.className} w-fit`}>{workflowStatus.label}</Badge>
+                            )}
+                        </div>
                     );
                 },
                 filterFn: (row, id, value) => {

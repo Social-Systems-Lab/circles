@@ -485,6 +485,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "issue_status_changed":
                     return notification.issueId ? `/circles/${circleHandle}/issues/${notification.issueId}` : null;
                 case "task_submitted_for_review":
+                case "task_changes_requested":
+                case "task_verified":
                 case "task_approved":
                 case "task_assigned":
                 case "task_accepted":
@@ -518,6 +520,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 return "Review";
             case "task_accepted":
                 return "View";
+            case "task_changes_requested":
+            case "task_verified":
             case "post_comment":
             case "comment_reply":
             case "post_mention":
@@ -525,6 +529,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_status_changed":
             case "task_approved":
             case "task_submitted_for_review":
+            case "task_changes_requested":
+            case "task_verified":
             case "issue_assigned":
             case "issue_status_changed":
             case "issue_approved":
@@ -667,6 +673,13 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "issue_approved":
             case "issue_assigned":
             case "issue_status_changed":
+            case "task_submitted_for_review":
+            case "task_changes_requested":
+            case "task_verified":
+            case "task_approved":
+            case "task_assigned":
+            case "task_accepted":
+            case "task_status_changed":
                 // For now, issue notifications aren't grouped, so use original message
                 return groupedNotification.latestNotification.message;
 
@@ -727,6 +740,13 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                     "issue_approved",
                                     "issue_assigned",
                                     "issue_status_changed",
+                                    "task_submitted_for_review",
+                                    "task_changes_requested",
+                                    "task_verified",
+                                    "task_approved",
+                                    "task_assigned",
+                                    "task_accepted",
+                                    "task_status_changed",
                                 ].includes(groupedNotification.latestNotification.notificationType) ? (
                                     <>
                                         {/* Show triggering user picture in the center */}

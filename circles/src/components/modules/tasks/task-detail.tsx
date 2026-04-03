@@ -18,7 +18,6 @@ import {
     CheckCircle,
     Clock,
     Play,
-    Edit,
     Target,
 } from "lucide-react"; // Added Target icon
 import { formatDistanceToNow } from "date-fns";
@@ -42,10 +41,6 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-    DropdownMenuSub,
-    DropdownMenuSubTrigger,
-    DropdownMenuPortal,
-    DropdownMenuSubContent,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
@@ -58,12 +53,15 @@ import {
     assignTaskAction, // Renamed action
     deleteTaskAction, // Renamed action
     getMembersAction, // Keep this action (assuming it's generic)
+    requestTaskChangesAction,
+    submitTaskForReviewAction,
     updateTaskPriorityAction,
+    verifyTaskCompletionAction,
 } from "@/app/circles/[handle]/tasks/actions"; // Updated path
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Link from "next/link";
-import { Separator } from "@/components/ui/separator";
 import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
 
 // Helper function for stage badge styling and icons (copied from tasks-list)
@@ -106,6 +104,34 @@ const getPriorityInfo = (priority?: TaskPriority) => {
     }
 };
 
+const getWorkflowStatusInfo = (task: TaskDisplay) => {
+    if (task.verifiedAt) {
+        return {
+            label: "Verified",
+            badgeClassName: "border-transparent bg-emerald-100 text-emerald-800",
+            description: `Verified ${formatDistanceToNow(new Date(task.verifiedAt), { addSuffix: true })}`,
+        };
+    }
+
+    if (task.submittedForReviewAt) {
+        return {
+            label: "Review Requested",
+            badgeClassName: "border-transparent bg-amber-100 text-amber-800",
+            description: `Submitted for review ${formatDistanceToNow(new Date(task.submittedForReviewAt), { addSuffix: true })}`,
+        };
+    }
+
+    if (task.reviewRequestedChangesAt) {
+        return {
+            label: "Changes Requested",
+            badgeClassName: "border-transparent bg-rose-100 text-rose-800",
+            description: `Changes requested ${formatDistanceToNow(new Date(task.reviewRequestedChangesAt), { addSuffix: true })}`,
+        };
+    }
+
+    return null;
+};
+
 // Permissions type is imported from models
 
 interface TaskDetailProps {
@@ -126,14 +152,19 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const [targetStage, setTargetStage] = useState<TaskStage | null>(null); // Updated type
     const [selectedStage, setSelectedStage] = useState<TaskStage>(task.stage);
     const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+    const [requestChangesDialogOpen, setRequestChangesDialogOpen] = useState(false);
     const [members, setMembers] = useState<MemberDisplay[]>([]);
     const [selectedAssigneeDid, setSelectedAssigneeDid] = useState<string | undefined>(task.assignedTo); // Use task prop
     const [selectedPriority, setSelectedPriority] = useState<TaskPriority | "none">(task.priority ?? "none");
+    const [changesRequestNote, setChangesRequestNote] = useState(task.reviewRequestedChangesNote ?? "");
     const { toast } = useToast();
     const router = useRouter();
 
     const isAuthor = currentUserDid === task.createdBy; // Use task prop
     const isAssignee = currentUserDid === task.assignedTo; // Use task prop
+    const isAcceptedAssignee = isAssignee && task.acceptedBy === currentUserDid && Boolean(task.acceptedAt);
+    const canManageVerification = isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate;
+    const workflowStatus = getWorkflowStatusInfo(task);
 
     useEffect(() => {
         setSelectedPriority(task.priority ?? "none");
@@ -142,6 +173,10 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     useEffect(() => {
         setSelectedStage(task.stage);
     }, [task._id, task.stage]);
+
+    useEffect(() => {
+        setChangesRequestNote(task.reviewRequestedChangesNote ?? "");
+    }, [task._id, task.reviewRequestedChangesNote]);
 
     // Fetch members when assign dialog opens
     useEffect(() => {
@@ -252,31 +287,6 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const { color: stageColor, icon: StageIcon, text: stageText } = getStageInfo(currentStage);
     const priorityInfo = getPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
 
-    // Determine available stage transitions based on current stage and permissions
-    const availableStageActions: { label: string; stage: TaskStage; allowed: boolean }[] = [
-        // Updated type
-        {
-            label: "Approve (Open)",
-            stage: "open" as TaskStage, // Updated type
-            allowed: permissions.canReview && currentStage === "review",
-        },
-        {
-            label: "Start Progress",
-            stage: "inProgress" as TaskStage, // Updated type
-            allowed: (permissions.canResolve || isAssignee) && currentStage === "open",
-        },
-        {
-            label: "Mark Resolved",
-            stage: "resolved" as TaskStage, // Updated type
-            allowed: (permissions.canResolve || isAssignee) && currentStage === "inProgress",
-        },
-        {
-            label: "Re-open",
-            stage: "open" as TaskStage, // Updated type
-            allowed: permissions.canResolve && (currentStage === "resolved" || currentStage === "inProgress"),
-        }, // Allow re-opening
-    ].filter((action) => action.allowed);
-
     const canEditTask = (isAuthor && currentStage === "review") || permissions.canModerate;
     const canDeleteTask = isAuthor || permissions.canModerate; // Renamed variable
 
@@ -320,34 +330,42 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             );
         }
         if (currentStage === "open" && isAssignee) {
-            actions.push(
-                <Button
-                    key="accept"
-                    onClick={() =>
-                        startTransition(async () => {
-                            const result = await acceptTaskAction(circle.handle!, task._id as string);
+            if (!task.acceptedAt) {
+                actions.push(
+                    <Button
+                        key="accept"
+                        onClick={() =>
+                            startTransition(async () => {
+                                const result = await acceptTaskAction(circle.handle!, task._id as string);
 
-                            if (!result.success) {
+                                if (!result.success) {
+                                    toast({
+                                        title: "Error",
+                                        description: result.message || "Failed to accept task",
+                                        variant: "destructive",
+                                    });
+                                    return;
+                                }
+
+                                router.refresh();
                                 toast({
-                                    title: "Error",
-                                    description: result.message || "Failed to accept task",
-                                    variant: "destructive",
+                                    title: "Success",
+                                    description: result.message || "Task accepted",
                                 });
-                                return;
-                            }
-
-                            router.refresh();
-                            toast({
-                                title: "Success",
-                                description: result.message || "Task accepted",
-                            });
-                        })
-                    }
-                    disabled={isPending}
-                >
-                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Accept Task
-                </Button>,
-            );
+                            })
+                        }
+                        disabled={isPending}
+                    >
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Accept Task
+                    </Button>,
+                );
+            } else if (task.acceptedBy === currentUserDid) {
+                actions.push(
+                    <Button key="start-progress" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
+                    </Button>,
+                );
+            }
         }
         if (permissions.canResolve && currentStage === "open" && !isAssignee) {
             actions.push(
@@ -356,17 +374,80 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if (currentStage === "inProgress" && isAssignee) {
+        if (currentStage === "inProgress" && isAcceptedAssignee && !task.submittedForReviewAt) {
             actions.push(
-                <Button key="complete" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Complete
+                <Button
+                    key="submit-review"
+                    onClick={() =>
+                        startTransition(async () => {
+                            const result = await submitTaskForReviewAction(circle.handle!, task._id as string);
+
+                            if (!result.success) {
+                                toast({
+                                    title: "Error",
+                                    description: result.message || "Failed to submit task for review",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+
+                            router.refresh();
+                            toast({
+                                title: "Success",
+                                description: result.message || "Task submitted for review",
+                            });
+                        })
+                    }
+                    disabled={isPending}
+                >
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Submit for Review
                 </Button>,
             );
         }
-        if (permissions.canResolve && currentStage === "inProgress" && !isAssignee) {
+        if (currentStage === "inProgress" && isAcceptedAssignee && task.submittedForReviewAt) {
             actions.push(
-                <Button key="resolve" onClick={() => openStageChangeDialog("resolved")} disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Resolved
+                <Button key="submitted" variant="outline" disabled>
+                    Submitted for Review
+                </Button>,
+            );
+        }
+        if (currentStage === "inProgress" && task.submittedForReviewAt && canManageVerification) {
+            actions.push(
+                <Button
+                    key="verify"
+                    onClick={() =>
+                        startTransition(async () => {
+                            const result = await verifyTaskCompletionAction(circle.handle!, task._id as string);
+
+                            if (!result.success) {
+                                toast({
+                                    title: "Error",
+                                    description: result.message || "Failed to verify task",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+
+                            router.refresh();
+                            toast({
+                                title: "Success",
+                                description: result.message || "Task verified",
+                            });
+                        })
+                    }
+                    disabled={isPending}
+                >
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark Verified
+                </Button>,
+            );
+            actions.push(
+                <Button
+                    key="request-changes"
+                    variant="outline"
+                    onClick={() => setRequestChangesDialogOpen(true)}
+                    disabled={isPending}
+                >
+                    Request Changes
                 </Button>,
             );
         }
@@ -431,6 +512,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 <StageIcon className="h-3 w-3" />
                                 {stageText}
                             </Badge>
+                            {workflowStatus && (
+                                <Badge
+                                    variant="outline"
+                                    className={cn("shrink-0 border", workflowStatus.badgeClassName)}
+                                >
+                                    {workflowStatus.label}
+                                </Badge>
+                            )}
                             {canEditTask ? (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -570,6 +659,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             </div>
                         )}
                     </div>
+                    {workflowStatus && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                            <div>{workflowStatus.description}</div>
+                            {task.reviewRequestedChangesNote && (
+                                <div className="mt-1 text-slate-600">Note: {task.reviewRequestedChangesNote}</div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </CardHeader>
 
@@ -730,6 +827,64 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                         </DialogClose>
                         <Button onClick={confirmAssignment} disabled={isPending}>
                             {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Assign
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={requestChangesDialogOpen} onOpenChange={setRequestChangesDialogOpen}>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Request Changes</DialogTitle>
+                        <DialogDescription>
+                            Send the task back to the assignee without marking it resolved.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Textarea
+                            value={changesRequestNote}
+                            onChange={(event) => setChangesRequestNote(event.target.value)}
+                            placeholder="Optional note for the assignee"
+                            maxLength={500}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button
+                            onClick={() =>
+                                startTransition(async () => {
+                                    const result = await requestTaskChangesAction(
+                                        circle.handle!,
+                                        task._id as string,
+                                        changesRequestNote,
+                                    );
+
+                                    if (!result.success) {
+                                        toast({
+                                            title: "Error",
+                                            description: result.message || "Failed to request changes",
+                                            variant: "destructive",
+                                        });
+                                        return;
+                                    }
+
+                                    setRequestChangesDialogOpen(false);
+                                    router.refresh();
+                                    toast({
+                                        title: "Success",
+                                        description: result.message || "Changes requested",
+                                    });
+                                })
+                            }
+                            disabled={isPending}
+                        >
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Request Changes
                         </Button>
                     </DialogFooter>
                 </DialogContent>
