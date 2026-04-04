@@ -516,7 +516,7 @@ export const getTaskById = async (
     }
 };
 
-export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: string): Promise<TaskDisplay[]> => {
+export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: string): Promise<{ totalPublicCount: number; visibleTasks: TaskDisplay[] }> => {
     try {
         const tasks = (await Tasks.aggregate([
             {
@@ -613,8 +613,12 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
             { $sort: { verifiedAt: -1 } },
         ]).toArray()) as TaskDisplay[];
 
+        const totalPublicCount = (await filterTasksForViewer(tasks)).length;
         const visibleTasks = await filterTasksForViewer(tasks, viewerDid);
-        return visibleTasks.slice(0, 10);
+        return {
+            totalPublicCount,
+            visibleTasks: visibleTasks.slice(0, 10),
+        };
     } catch (error) {
         console.error(`Error getting verified tasks for user ${userDid}:`, error);
         throw error;
