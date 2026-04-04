@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAtom } from "jotai";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { Circle, ContentPreviewData, TaskDisplay, TaskPermissions } from "@/models/models";
@@ -17,13 +17,26 @@ export type VerifiedContributionItem = {
 
 type VerifiedContributionsPanelProps = {
     items: VerifiedContributionItem[];
+    totalPublicCount: number;
 };
 
-export default function VerifiedContributionsPanel({ items }: VerifiedContributionsPanelProps) {
+const PREVIEW_LIMIT = 5;
+
+export default function VerifiedContributionsPanel({
+    items,
+    totalPublicCount,
+}: VerifiedContributionsPanelProps) {
     const router = useRouter();
     const isCompact = useIsCompact();
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
+    const [showAllVisible, setShowAllVisible] = useState(false);
+
+    const hasAnyContributions = totalPublicCount > 0 || items.length > 0;
+    const visibleItems = showAllVisible ? items : items.slice(0, PREVIEW_LIMIT);
+    const hasMoreVisibleItems = items.length > PREVIEW_LIMIT;
+    const publicContributionLabel = `${totalPublicCount} public contribution${totalPublicCount === 1 ? "" : "s"}`;
 
     const openTask = useCallback(
         (item: VerifiedContributionItem) => {
@@ -58,34 +71,95 @@ export default function VerifiedContributionsPanel({ items }: VerifiedContributi
     );
 
     return (
-        <div className="mb-6 w-full">
-            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">Verified Contributions</div>
-            {items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No verified contributions yet</p>
+        <div className="w-full">
+            <div>
+                <h2 className="text-base font-semibold text-foreground">Verified Contributions</h2>
+                <p className="mt-1 text-xs text-muted-foreground">Verified work completed on Kamooni</p>
+            </div>
+            {!hasAnyContributions ? (
+                <div className="mt-2 space-y-1">
+                    <p className="text-sm text-muted-foreground">No verified contributions yet</p>
+                    <p className="text-xs text-muted-foreground">
+                        Complete tasks to build your contribution history
+                    </p>
+                </div>
             ) : (
                 <>
-                    <p className="mb-3 text-sm text-muted-foreground">{items.length} verified contributions</p>
-                    <div className="space-y-2">
-                        {items.map((item) => (
+                    <p className="mt-2 text-sm text-muted-foreground">{publicContributionLabel}</p>
+                    {items.length > 0 ? (
+                        <>
                             <button
-                                key={String(item.task._id)}
                                 type="button"
-                                onClick={() => openTask(item)}
-                                className="flex w-full items-start gap-3 rounded-xl border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:bg-muted/40"
+                                onClick={() => {
+                                    setIsPreviewExpanded((current) => {
+                                        if (current) {
+                                            setShowAllVisible(false);
+                                        }
+                                        return !current;
+                                    });
+                                }}
+                                className="mt-4 flex w-full items-center justify-between rounded-xl border border-border/60 bg-background px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted/30"
+                                aria-expanded={isPreviewExpanded}
                             >
-                                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" />
-                                <div className="min-w-0">
-                                    <div className="truncate text-sm font-medium text-foreground">{item.task.title}</div>
-                                    <div className="truncate text-sm text-muted-foreground">{item.circle.name}</div>
-                                    {item.task.verifiedAt && (
-                                        <div className="text-xs text-muted-foreground">
-                                            Verified {formatDistanceToNow(item.task.verifiedAt, { addSuffix: true })}
-                                        </div>
-                                    )}
-                                </div>
+                                <span>{isPreviewExpanded ? "Hide contributions" : "View contributions"}</span>
+                                {isPreviewExpanded ? (
+                                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                )}
                             </button>
-                        ))}
-                    </div>
+                            {isPreviewExpanded && (
+                                <>
+                                    <div className="mt-4 space-y-2">
+                                        {visibleItems.map((item) => (
+                                            <button
+                                                key={String(item.task._id)}
+                                                type="button"
+                                                onClick={() => openTask(item)}
+                                                className="flex w-full items-start gap-3 rounded-xl border border-border/60 bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
+                                            >
+                                                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="truncate text-sm font-medium leading-tight text-foreground">
+                                                        {item.task.title}
+                                                    </div>
+                                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                                        <span className="truncate">{item.circle.name}</span>
+                                                        {item.task.verifiedAt && (
+                                                            <>
+                                                                <span aria-hidden="true">•</span>
+                                                                <span>
+                                                                    Verified{" "}
+                                                                    {formatDistanceToNow(item.task.verifiedAt, {
+                                                                        addSuffix: true,
+                                                                    })}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4">
+                                        {hasMoreVisibleItems ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAllVisible((current) => !current)}
+                                                className="text-sm font-medium text-foreground underline underline-offset-4"
+                                            >
+                                                {showAllVisible ? "Show less" : "Show all"}
+                                            </button>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">Showing all visible contributions</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </>
+                    ) : (
+                        <p className="mt-3 text-sm text-muted-foreground">No visible contributions for this viewer.</p>
+                    )}
                 </>
             )}
         </div>
