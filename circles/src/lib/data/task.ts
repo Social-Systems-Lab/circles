@@ -43,6 +43,69 @@ export const SAFE_TASK_PROJECTION = {
     priority: 1,
 } as const;
 
+const getViewerMembershipsByCircleId = async (viewerDid?: string): Promise<Map<string, string[]>> => {
+    const viewerMemberships = new Map<string, string[]>();
+    viewerMemberships.set("everyone", ["everyone"]);
+
+    if (!viewerDid) {
+        return viewerMemberships;
+    }
+
+    const memberships = await Members.find({ userDid: viewerDid }).toArray();
+    for (const membership of memberships) {
+        viewerMemberships.set(membership.circleId, membership.userGroups ?? []);
+    }
+
+    return viewerMemberships;
+};
+
+const canViewerAccessTaskUserGroups = (
+    task: Pick<TaskDisplay, "circleId" | "userGroups">,
+    viewerMembershipsByCircleId: Map<string, string[]>,
+): boolean => {
+    if (!task.userGroups || task.userGroups.length === 0) {
+        return true;
+    }
+
+    if (task.userGroups.includes("everyone")) {
+        return true;
+    }
+
+    const viewerGroupsInCircle = viewerMembershipsByCircleId.get(task.circleId) || [];
+    return task.userGroups.some((group) => viewerGroupsInCircle.includes(group));
+};
+
+export const filterTasksForViewer = async (tasks: TaskDisplay[], viewerDid?: string): Promise<TaskDisplay[]> => {
+    const viewerMembershipsByCircleId = await getViewerMembershipsByCircleId(viewerDid);
+    const canViewTasksModuleByCircleId = new Map<string, boolean>();
+    const visibleTasks: TaskDisplay[] = [];
+
+    for (const task of tasks) {
+        const circleId = task.circle?._id || task.circleId;
+        if (!circleId) {
+            continue;
+        }
+
+        let canViewTasksModule = canViewTasksModuleByCircleId.get(circleId);
+        if (canViewTasksModule === undefined) {
+            canViewTasksModule = await isAuthorized(viewerDid, circleId, features.tasks.view);
+            canViewTasksModuleByCircleId.set(circleId, canViewTasksModule);
+        }
+
+        if (!canViewTasksModule) {
+            continue;
+        }
+
+        if (!canViewerAccessTaskUserGroups(task, viewerMembershipsByCircleId)) {
+            continue;
+        }
+
+        visibleTasks.push(task);
+    }
+
+    return visibleTasks;
+};
+
 /**
  * Get all tasks for a circle, including author and assignee details.
  * Filters results based on the user's group membership and the task's userGroups.
@@ -186,7 +249,7 @@ export const getTasksByCircleId = async (
             { $sort: { createdAt: -1 } },
         ]).toArray()) as TaskDisplay[]; // Updated type
 
-        return tasks; // Renamed variable
+        return await filterTasksForViewer(tasks, userDid);
     } catch (error) {
         console.error("Error getting tasks by circle ID:", error); // Updated error message
         throw error;
@@ -450,6 +513,111 @@ export const getTaskById = async (
     } catch (error) {
         console.error(`Error getting task by ID (${taskId}):`, error);
         throw error; // Re-throw
+    }
+};
+
+export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: string): Promise<TaskDisplay[]> => {
+    try {
+        const tasks = (await Tasks.aggregate([
+            {
+                $match: {
+                    assignedTo: userDid,
+                    stage: "resolved",
+                    verifiedAt: { $exists: true, $ne: null },
+                    verifiedBy: { $exists: true, $ne: null },
+                },
+            },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "assigneeDetails",
+                },
+            },
+            { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { cId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                enabledModules: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    ...SAFE_TASK_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    assignee: "$assigneeDetails",
+                    circle: "$circleDetails",
+                },
+            },
+            { $sort: { verifiedAt: -1 } },
+        ]).toArray()) as TaskDisplay[];
+
+        const visibleTasks = await filterTasksForViewer(tasks, viewerDid);
+        return visibleTasks.slice(0, 10);
+    } catch (error) {
+        console.error(`Error getting verified tasks for user ${userDid}:`, error);
+        throw error;
     }
 };
 

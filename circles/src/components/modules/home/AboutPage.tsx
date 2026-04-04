@@ -35,15 +35,17 @@ import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
+import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 
 interface AboutPageProps {
     circle: Circle;
+    verifiedContributions?: VerifiedContributionItem[];
 }
 
-export default function AboutPage({ circle }: AboutPageProps) {
+export default function AboutPage({ circle, verifiedContributions = [] }: AboutPageProps) {
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();
@@ -130,6 +132,7 @@ export default function AboutPage({ circle }: AboutPageProps) {
 
     // Check if sidebar has any content
     const hasSidebarContent =
+        isUserProfile ||
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
         !!(!isUserProfile && circleNeeds.length > 0) ||
@@ -412,6 +415,8 @@ export default function AboutPage({ circle }: AboutPageProps) {
                                     </div>
                                 </div>
                             )}
+
+                            {isUserProfile && <VerifiedContributionsPanel items={verifiedContributions} />}
 
                             {isUserProfile && visibleInterests.length > 0 && (
                                 <div className="mb-6 w-full">

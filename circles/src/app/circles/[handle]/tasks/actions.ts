@@ -29,6 +29,7 @@ import { features } from "@/lib/data/constants";
 import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
 // Placeholder imports for task data functions (from src/lib/data/task.ts)
 import {
+    filterTasksForViewer,
     getTasksByCircleId, // Removed duplicate
     getTaskById,
     createTask,
@@ -161,23 +162,12 @@ export async function getTaskAction(circleHandle: string, taskId: string): Promi
             return null;
         }
 
-        // Check general permission to view any tasks in the circle (Placeholder feature handle)
-        const canViewModule = await isAuthorized(userDid, circle._id as string, features.tasks?.view); // Updated feature handle
-
-        // Check if the user belongs to any of the user groups allowed to see *this specific* task
-        // This requires comparing task.userGroups with the user's groups in this circle
-        // (Logic for this check needs the user's memberships for the circle)
-        // For now, assume if they can view the module, they can view the specific task if found
-        // TODO: Implement fine-grained access check based on task.userGroups
-
-        if (!canViewModule) {
-            // Not authorized to view tasks module at all
+        const visibleTasks = await filterTasksForViewer([task], userDid);
+        if (visibleTasks.length === 0) {
             return null;
-            // throw new Error("Not authorized to view tasks"); // Updated message
         }
 
-        // If authorized and task exists, return it
-        return task; // Renamed variable
+        return visibleTasks[0];
     } catch (error) {
         console.error("Error getting task:", error); // Updated message
         return null; // Return null on error
