@@ -1184,6 +1184,13 @@ export async function assignTaskAction( // Renamed function
             return { success: false, message: "Failed to assign task" }; // Updated message
         }
 
+        if (assigneeDid && assigneeDid === userDid) {
+            await updateTask(taskId, {
+                acceptedBy: userDid,
+                acceptedAt: new Date(),
+            });
+        }
+
         // --- Trigger Notification ---
         const updatedTask = await getTaskById(taskId, userDid); // Get updated task, Renamed function call, variable, param
         if (updatedTask && assigneeDid && assigneeDid !== "unassigned") {

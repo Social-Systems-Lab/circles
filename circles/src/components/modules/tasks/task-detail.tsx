@@ -165,6 +165,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const isAuthor = currentUserDid === task.createdBy; // Use task prop
     const isAssignee = currentUserDid === task.assignedTo; // Use task prop
     const isAcceptedAssignee = isAssignee && task.acceptedBy === currentUserDid && Boolean(task.acceptedAt);
+    const canSubmitForReview = isAssignee;
     const canManageVerification = isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate;
     const workflowStatus = getWorkflowStatusInfo(task);
 
@@ -271,6 +272,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             const result = await changeTaskStageAction(circle.handle!, task._id as string, targetStage); // Renamed action, use task prop
             if (result.success) {
                 toast({ title: "Success", description: result.message });
+                await refreshOpenTaskPreview();
                 router.refresh(); // Refresh to show the new stage
             } else {
                 setSelectedStage(previousStage);
@@ -399,7 +401,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if (currentStage === "inProgress" && isAcceptedAssignee && !task.submittedForReviewAt) {
+        if (currentStage === "inProgress" && canSubmitForReview && !task.submittedForReviewAt) {
             actions.push(
                 <Button
                     key="submit-review"
@@ -430,7 +432,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if (currentStage === "inProgress" && isAcceptedAssignee && task.submittedForReviewAt) {
+        if (currentStage === "inProgress" && canSubmitForReview && task.submittedForReviewAt) {
             actions.push(
                 <Button key="submitted" variant="outline" disabled>
                     Submitted for Review
