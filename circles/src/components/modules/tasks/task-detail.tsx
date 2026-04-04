@@ -24,7 +24,7 @@ import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
 import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
 import {
     Dialog,
     DialogClose,
@@ -52,6 +52,7 @@ import {
     acceptTaskAction,
     assignTaskAction, // Renamed action
     deleteTaskAction, // Renamed action
+    getTaskAction,
     getMembersAction, // Keep this action (assuming it's generic)
     requestTaskChangesAction,
     submitTaskForReviewAction,
@@ -146,6 +147,7 @@ interface TaskDetailProps {
 const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, currentUserDid, isPreview = false }) => {
     // Renamed component, props
     const [user] = useAtom(userAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [isPending, startTransition] = useTransition();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
@@ -177,6 +179,28 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     useEffect(() => {
         setChangesRequestNote(task.reviewRequestedChangesNote ?? "");
     }, [task._id, task.reviewRequestedChangesNote]);
+
+    const refreshOpenTaskPreview = async () => {
+        if (!isPreview || !circle.handle) {
+            return;
+        }
+
+        const updatedTask = await getTaskAction(circle.handle, task._id as string);
+        if (!updatedTask) {
+            return;
+        }
+
+        setContentPreview((currentPreview) => {
+            if (currentPreview?.type !== "task" || currentPreview.content._id !== updatedTask._id) {
+                return currentPreview;
+            }
+
+            return {
+                ...currentPreview,
+                content: updatedTask,
+            };
+        });
+    };
 
     // Fetch members when assign dialog opens
     useEffect(() => {
@@ -347,6 +371,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     return;
                                 }
 
+                                await refreshOpenTaskPreview();
                                 router.refresh();
                                 toast({
                                     title: "Success",
@@ -391,6 +416,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 return;
                             }
 
+                            await refreshOpenTaskPreview();
                             router.refresh();
                             toast({
                                 title: "Success",
@@ -428,6 +454,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 return;
                             }
 
+                            await refreshOpenTaskPreview();
                             router.refresh();
                             toast({
                                 title: "Success",
@@ -875,6 +902,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     }
 
                                     setRequestChangesDialogOpen(false);
+                                    await refreshOpenTaskPreview();
                                     router.refresh();
                                     toast({
                                         title: "Success",
