@@ -25,14 +25,16 @@ export default async function CircleHomePage(props: PageProps) {
     }
 
     let verifiedContributions: VerifiedContributionItem[] = [];
+    let verifiedContributionPublicCount = 0;
 
     if (circle.circleType === "user" && circle.did) {
-        const verifiedTasks = await getVerifiedTasksForUser(circle.did, viewerDid);
+        const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);
         const permissionsByCircleId = new Map<string, TaskPermissions>();
+        verifiedContributionPublicCount = totalPublicCount;
 
         verifiedContributions = (
             await Promise.all(
-                verifiedTasks.map(async (task) => {
+                visibleTasks.map(async (task) => {
                     if (!task.circle?._id) {
                         return null;
                     }
@@ -59,5 +61,11 @@ export default async function CircleHomePage(props: PageProps) {
         ).filter((item): item is VerifiedContributionItem => item !== null);
     }
 
-    return <AboutPage circle={circle} verifiedContributions={verifiedContributions} />;
+    return (
+        <AboutPage
+            circle={circle}
+            verifiedContributions={verifiedContributions}
+            verifiedContributionPublicCount={verifiedContributionPublicCount}
+        />
+    );
 }

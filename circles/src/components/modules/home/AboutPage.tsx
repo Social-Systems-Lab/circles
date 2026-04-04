@@ -43,9 +43,14 @@ const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 interface AboutPageProps {
     circle: Circle;
     verifiedContributions?: VerifiedContributionItem[];
+    verifiedContributionPublicCount?: number;
 }
 
-export default function AboutPage({ circle, verifiedContributions = [] }: AboutPageProps) {
+export default function AboutPage({
+    circle,
+    verifiedContributions = [],
+    verifiedContributionPublicCount = 0,
+}: AboutPageProps) {
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();
@@ -130,9 +135,7 @@ export default function AboutPage({ circle, verifiedContributions = [] }: AboutP
         );
     };
 
-    // Check if sidebar has any content
-    const hasSidebarContent =
-        isUserProfile ||
+    const hasProfileSidebarDetails =
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
         !!(!isUserProfile && circleNeeds.length > 0) ||
@@ -140,6 +143,8 @@ export default function AboutPage({ circle, verifiedContributions = [] }: AboutP
         !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
         !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
+    const shouldShowVerifiedContributions = isUserProfile;
+    const hasSidebarContent = hasProfileSidebarDetails || shouldShowVerifiedContributions;
 
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
@@ -259,11 +264,13 @@ export default function AboutPage({ circle, verifiedContributions = [] }: AboutP
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
                 {hasSidebarContent && (
                     <div className="md:col-span-1">
-                        <div
-                            className={`flex flex-col items-center bg-white p-6
+                        <div className="space-y-6">
+                            {hasProfileSidebarDetails && (
+                                <div
+                                    className={`flex flex-col items-center bg-white p-6
                         ${isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"}
                         `}
-                        >
+                                >
                             {/* Mission */}
                             {circle.mission && (
                                 <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
@@ -416,8 +423,6 @@ export default function AboutPage({ circle, verifiedContributions = [] }: AboutP
                                 </div>
                             )}
 
-                            {isUserProfile && <VerifiedContributionsPanel items={verifiedContributions} />}
-
                             {isUserProfile && visibleInterests.length > 0 && (
                                 <div className="mb-6 w-full">
                                     <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
@@ -478,37 +483,52 @@ export default function AboutPage({ circle, verifiedContributions = [] }: AboutP
                                 </div>
                             )}
 
-                            {/* Skills/Needs */}
-                            {/* {circle.skills && circle.skills.length > 0 && (
-                                <div className="w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        {" "}
-                                        {circle.circleType === "user" ? "Skills" : "Needs"}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {circle.skills.map((handle) => {
-                                            const skill = skillMap.get(handle);
-                                            if (!skill) return null;
-                                            return (
-                                                <Badge
-                                                    key={handle}
-                                                    variant="outline"
-                                                    className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
-                                                >
-                                                    <Image
-                                                        src={skill.picture.url}
-                                                        alt=""
-                                                        width={20} // Increased size
-                                                        height={20} // Increased size
-                                                        className="h-5 w-5 rounded-full object-cover" // Increased size
-                                                    />
-                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}
-                                                </Badge>
-                                            );
-                                        })}
-                                    </div>
+                                    {/* Skills/Needs */}
+                                    {/* {circle.skills && circle.skills.length > 0 && (
+                                        <div className="w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                {" "}
+                                                {circle.circleType === "user" ? "Skills" : "Needs"}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {circle.skills.map((handle) => {
+                                                    const skill = skillMap.get(handle);
+                                                    if (!skill) return null;
+                                                    return (
+                                                        <Badge
+                                                            key={handle}
+                                                            variant="outline"
+                                                            className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
+                                                        >
+                                                            <Image
+                                                                src={skill.picture.url}
+                                                                alt=""
+                                                                width={20} // Increased size
+                                                                height={20} // Increased size
+                                                                className="h-5 w-5 rounded-full object-cover" // Increased size
+                                                            />
+                                                            <span className="text-sm font-medium">{skill.name}</span>{" "}
+                                                        </Badge>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )} */}
                                 </div>
-                            )} */}
+                            )}
+
+                            {shouldShowVerifiedContributions && (
+                                <div
+                                    className={`bg-white p-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <VerifiedContributionsPanel
+                                        items={verifiedContributions}
+                                        totalPublicCount={verifiedContributionPublicCount}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}{" "}
