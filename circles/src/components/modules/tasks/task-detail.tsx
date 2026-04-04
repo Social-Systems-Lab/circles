@@ -478,7 +478,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if (permissions.canResolve && (currentStage === "resolved" || currentStage === "inProgress")) {
+        if (permissions.canResolve && currentStage === "resolved") {
             actions.push(
                 <Button
                     key="reopen"
