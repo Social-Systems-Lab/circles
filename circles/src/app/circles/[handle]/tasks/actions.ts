@@ -813,10 +813,10 @@ export async function submitTaskForReviewAction(
             return { success: false, message: "Task not found" };
         }
 
-        const isAcceptedAssignee =
-            task.assignedTo === userDid && task.acceptedBy === userDid && Boolean(task.acceptedAt);
-        if (!isAcceptedAssignee) {
-            return { success: false, message: "Only the accepted assignee can submit this task for review" };
+        const canSubmitForReview =
+            task.assignedTo === userDid && (task.acceptedBy === userDid && Boolean(task.acceptedAt) || task.assignedTo === userDid);
+        if (!canSubmitForReview) {
+            return { success: false, message: "Only the assignee can submit this task for review" };
         }
 
         if (task.stage !== "inProgress") {
