@@ -160,6 +160,157 @@ On the main Tasks page:
 - the resolved section auto-expands when current filters only match resolved tasks
 - in the task side panel, priority can be edited directly, stage and priority changes update visually immediately, and the header keeps Stage, Priority, and actions stable above long titles
 
+## Task Acceptance (MVP behavior)
+
+Tasks now support explicit acceptance by the assignee.
+
+### Fields
+
+- acceptedAt: Date
+- acceptedBy: DID
+
+### Behavior
+
+- Only the assigned user can accept a task
+- Assigning a task to yourself auto-accepts it and removes the redundant extra acceptance click
+- Accepting a task:
+  - sets acceptedAt + acceptedBy
+  - triggers notification to task creator
+- Re-accepting is idempotent (no duplicate writes)
+
+## Task Review And Verification Workflow
+
+The current work lifecycle remains stage-based:
+
+- open
+- inProgress
+- resolved
+
+Review and verification are additive workflow metadata layered onto the existing task stages. They do not introduce a separate core work stage for accepted task progress, but they now gate how a task can move to completion.
+
+### Strict workflow lifecycle
+
+- An assignee accepts an open task
+- The accepted assignee starts progress and moves the task into inProgress
+- The accepted assignee submits in-progress work for review
+- The creator, admin, or task manager can request changes
+- The creator, admin, or task manager can mark the task verified
+- Only verified work moves to resolved
+
+### Workflow rules
+
+- There is no direct `inProgress -> resolved` shortcut
+- All tasks must pass through review submission and verification before resolution
+- `Re-open Task` only appears for resolved tasks
+
+### Backend workflow metadata
+
+In addition to acceptedAt and acceptedBy, the task workflow now uses:
+
+- submittedForReviewAt: Date
+- submittedForReviewBy: DID
+- reviewRequestedChangesAt: Date
+- reviewRequestedChangesBy: DID
+- reviewRequestedChangesNote: string
+- verifiedAt: Date
+- verifiedBy: DID
+
+### Current UI behavior
+
+Visible task workflow actions now include:
+
+- Accept Task
+- Start Progress
+- Submit for Review
+- Request Changes
+- Mark Verified
+- Re-open Task (resolved tasks only)
+
+Visible workflow status badges now include:
+
+- Review Requested
+- Changes Requested
+- Verified
+
+These badges appear in task views so reviewers and assignees can see whether work is waiting for review, has been sent back for changes, or has been verified.
+
+### Admin verification queue
+
+Circle task views now include a dedicated admin-only `Needs Verification` queue.
+
+- The queue is hidden for non-admins
+- It shows tasks where:
+  - stage is `inProgress`
+  - `submittedForReviewAt` exists
+  - `verifiedAt` does not exist
+- Admins can review directly from this queue
+- Queue actions are:
+  - Mark Verified
+  - Request Changes
+
+### Preview refresh behavior
+
+The open task side panel preview now refreshes immediately after successful task workflow actions.
+
+This is done by reloading the currently open preview task after:
+
+- Accept Task
+- Start Progress
+- Submit for Review
+- Request Changes
+- Mark Verified
+
+This prevents stale workflow state in the side panel and removes the need for a manual browser refresh after those actions.
+
+## Verified Contributions
+
+User profiles now include a `Verified Contributions` panel.
+
+### Source of truth
+
+A task counts as a verified contribution for a user when all of the following are true:
+
+- the task is assigned to that user
+- `verifiedAt` exists
+- `verifiedBy` exists
+- `stage == resolved`
+
+### Public count vs viewer-visible list
+
+The panel intentionally separates summary count from the rendered list:
+
+- the public contribution count is the public trust signal
+- the contribution list only includes items the current viewer is allowed to see
+- only public contributions count toward the public summary
+- private or otherwise non-visible tasks are never exposed in the visible list
+
+This means the public summary count and the visible list can differ by design.
+
+### Click-through behavior
+
+Verified contribution items open task detail when clicked:
+
+- on compact/mobile layouts they open the full task page
+- on larger layouts they open the task side preview
+
+### Important dev note
+
+If task workflow state appears broken (UI not updating, repeated notifications, badges missing, stale review state):
+
+Check SAFE_TASK_PROJECTION includes:
+
+- acceptedAt
+- acceptedBy
+- submittedForReviewAt
+- submittedForReviewBy
+- reviewRequestedChangesAt
+- reviewRequestedChangesBy
+- reviewRequestedChangesNote
+- verifiedAt
+- verifiedBy
+
+Missing projection fields will cause UI state to appear incorrect even when DB writes succeed.
+
 ### Toolbox boundary
 
 - task list view state persistence is limited to the main Tasks page
