@@ -160,6 +160,24 @@ On the main Tasks page:
 - the resolved section auto-expands when current filters only match resolved tasks
 - in the task side panel, priority can be edited directly, stage and priority changes update visually immediately, and the header keeps Stage, Priority, and actions stable above long titles
 
+## Shift Tasks / participation-based work
+
+Shift tasks now exist alongside ordinary outcome tasks.
+
+- shift tasks represent scheduled participation, not deliverable completion
+- required fields are:
+  - date
+  - start time
+  - duration
+  - slots
+- users sign up for a shift
+- admins confirm participants
+- only confirmed participants are shown publicly
+- pending sign-ups remain private to admins and moderators
+- public counts are based on confirmed participation
+- confirmed participants cannot silently leave online
+- participant notes can be used for instructions such as what to bring or where to meet
+
 ## Task Acceptance (MVP behavior)
 
 Tasks now support explicit acceptance by the assignee.

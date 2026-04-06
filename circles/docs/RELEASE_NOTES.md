@@ -1,6 +1,14 @@
 # Release Notes
 
 ## Current main - Task UX updates
+### Shift Tasks
+
+- Added Shift Tasks for scheduled participation work alongside ordinary outcome tasks.
+- Shift Tasks use a sign up -> confirm flow instead of deliverable-style completion.
+- Pending sign-ups remain private to admins and moderators until confirmed.
+- Public visibility and public participant counts are driven by confirmed participants.
+- Added notifications for shift sign-up and shift confirmation.
+
 - Added optional priority to ordinary tasks with Low, Medium, High, and Critical values. Priority is unset by default, and Help Wanted urgency was intentionally not changed in this pass.
 - Main Tasks page now supports multi-select stage filtering, priority filtering, Assigned To sorting, and explicit urgency ordering for priority sorting.
 - Reordered the task form to: Create in, Title, Date + Priority, Description, Image, Location, Goal, Event. Description remains optional, and Goal/Event can still be preselected from their context.
