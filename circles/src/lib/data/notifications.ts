@@ -136,6 +136,10 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `${actorName} assigned you to ${taskTitle}`;
         case "task_accepted":
             return `${actorName} accepted ‘${taskTitle}’`;
+        case "task_shift_signup":
+            return `${actorName} signed up for ${taskTitle}`;
+        case "task_shift_confirmed":
+            return `${actorName} confirmed you for ${taskTitle}`;
         case "task_status_changed":
             return `${actorName} updated ${taskTitle}`;
         case "goal_submitted_for_review":
@@ -1761,6 +1765,74 @@ export async function notifyTaskAccepted(task: TaskDisplay, accepter: Circle, re
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAccepted:", error);
+    }
+}
+
+export async function notifyTaskShiftSignup(task: TaskDisplay, participant: Circle): Promise<void> {
+    try {
+        if ((task.taskType ?? "outcome") !== "shift") {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        const adminDids = (await getAuthorizedMembers(circle, features.tasks?.moderate))
+            .map((user) => user.did)
+            .filter((did): did is string => Boolean(did) && did !== participant.did);
+
+        if (adminDids.length === 0) {
+            return;
+        }
+
+        const recipients = (await Promise.all(adminDids.map((did) => getUserPrivate(did)))).filter(
+            (user): user is UserPrivate => user !== null,
+        );
+
+        if (recipients.length === 0) {
+            return;
+        }
+
+        await sendNotifications(
+            "task_shift_signup",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: participant,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskShiftSignup:", error);
+    }
+}
+
+export async function notifyTaskShiftConfirmed(
+    task: TaskDisplay,
+    confirmer: Circle,
+    participant: UserPrivate,
+): Promise<void> {
+    try {
+        if ((task.taskType ?? "outcome") !== "shift" || confirmer.did === participant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_shift_confirmed",
+            [participant],
+            sanitizeObjectForJSON({
+                circle,
+                user: confirmer,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskShiftConfirmed:", error);
     }
 }
 

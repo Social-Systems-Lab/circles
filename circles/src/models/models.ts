@@ -1024,6 +1024,8 @@ export type NotificationType =
     | "task_approved"
     | "task_assigned"
     | "task_accepted"
+    | "task_shift_signup"
+    | "task_shift_confirmed"
     | "task_status_changed"
     // Goal Notifications
     | "goal_submitted_for_review"
@@ -1090,6 +1092,8 @@ export const notificationTypeValues = [
     "task_approved",
     "task_assigned",
     "task_accepted",
+    "task_shift_signup",
+    "task_shift_confirmed",
     "task_status_changed",
     "goal_submitted_for_review",
     "goal_approved",
@@ -1175,6 +1179,8 @@ export const summaryNotificationTypeDetails: Record<
             "task_approved",
             "task_assigned",
             "task_accepted",
+            "task_shift_signup",
+            "task_shift_confirmed",
             "task_status_changed",
             "ranking_stale_reminder",
             "ranking_grace_period_ended",
@@ -1363,6 +1369,15 @@ export const taskStageSchema = z.enum(["review", "open", "inProgress", "resolved
 export type TaskStage = z.infer<typeof taskStageSchema>;
 export const taskPrioritySchema = z.enum(["low", "medium", "high", "critical"]);
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
+export const taskTypeSchema = z.enum(["outcome", "shift"]);
+export type TaskType = z.infer<typeof taskTypeSchema>;
+export const taskParticipantSchema = z.object({
+    userDid: didSchema,
+    joinedAt: z.date(),
+    verifiedAt: z.date().optional(),
+    verifiedBy: didSchema.optional(),
+});
+export type TaskParticipant = z.infer<typeof taskParticipantSchema>;
 
 // Task model (mirroring Issue model)
 export const taskSchema = z.object({
@@ -1385,6 +1400,12 @@ export const taskSchema = z.object({
     reviewRequestedChangesNote: z.string().optional(),
     verifiedAt: z.date().optional(),
     verifiedBy: didSchema.optional(),
+    taskType: taskTypeSchema.optional(),
+    slots: z.number().int().positive().optional(),
+    shiftStartTime: z.string().optional(),
+    shiftDurationMinutes: z.number().int().positive().optional(),
+    participants: z.array(taskParticipantSchema).optional(),
+    participantNotes: z.string().optional(),
     userGroups: z.array(z.string()).default([]), // User groups that can see this task
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
@@ -1402,6 +1423,7 @@ export interface TaskDisplay extends Task {
     author: Circle; // Creator's details
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
+    participantProfiles?: Circle[];
     rank?: number; // Aggregated task rank
     goal?: GoalDisplay; // Associated goal details
     event?: EventDisplay; // Associated event details

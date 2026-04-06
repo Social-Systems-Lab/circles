@@ -10,7 +10,17 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, UserPrivate, TaskPriority } from "@/models/models"; // Added UserPrivate
+import {
+    Circle,
+    Media,
+    Task,
+    Location,
+    GoalDisplay,
+    EventDisplay,
+    UserPrivate,
+    TaskPriority,
+    type TaskType,
+} from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -27,6 +37,7 @@ import CircleSelector from "@/components/global-create/circle-selector"; // Adde
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions"; // Corrected import for fetching goals
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
+import { SHIFT_DURATION_OPTIONS } from "./shift-task-utils";
 
 const taskPriorityOptions: { value: TaskPriority; label: string; description: string }[] = [
     { value: "low", label: "Low", description: "Nice to have" },
@@ -36,16 +47,81 @@ const taskPriorityOptions: { value: TaskPriority; label: string; description: st
 ];
 
 // Form schema for creating/editing a task
-const taskFormSchema = z.object({
-    title: z.string().min(1, { message: "Task title is required" }),
-    description: z.string().optional(),
-    images: z.array(z.any()).optional(),
-    location: z.any().optional(),
-    targetDate: z.date().optional(),
-    goalId: z.string().optional().nullable(), // Allow null or undefined
-    eventId: z.string().optional().nullable(), // Allow null or undefined
-    priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
-});
+const taskFormSchema = z
+    .object({
+        title: z.string().min(1, { message: "Task title is required" }),
+        description: z.string().optional(),
+        images: z.array(z.any()).optional(),
+        location: z.any().optional(),
+        targetDate: z.date().optional(),
+        goalId: z.string().optional().nullable(), // Allow null or undefined
+        eventId: z.string().optional().nullable(), // Allow null or undefined
+        taskType: z.enum(["outcome", "shift"]).default("outcome"),
+        slots: z.preprocess((value) => {
+            if (value === "" || value == null) {
+                return undefined;
+            }
+            if (typeof value === "string") {
+                const parsedValue = Number(value);
+                return Number.isFinite(parsedValue) ? parsedValue : value;
+            }
+            return value;
+        }, z.number().int().positive("Slots must be at least 1").optional()),
+        shiftStartTime: z.preprocess(
+            (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+            z
+                .string()
+                .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format")
+                .optional(),
+        ),
+        shiftDurationMinutes: z.preprocess((value) => {
+            if (value === "" || value == null) {
+                return undefined;
+            }
+            if (typeof value === "string") {
+                const parsedValue = Number(value);
+                return Number.isFinite(parsedValue) ? parsedValue : value;
+            }
+            return value;
+        }, z.number().int().positive("Duration must be at least 1 minute").optional()),
+        participantNotes: z.preprocess(
+            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
+            z.string().max(1000, "Participant notes must be 1000 characters or fewer").optional(),
+        ),
+        priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
+    })
+    .superRefine((data, context) => {
+        if (data.taskType === "shift") {
+            if (!data.targetDate) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["targetDate"],
+                    message: "Date is required for shift tasks",
+                });
+            }
+            if (!data.shiftStartTime) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["shiftStartTime"],
+                    message: "Start time is required for shift tasks",
+                });
+            }
+            if (!data.shiftDurationMinutes) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["shiftDurationMinutes"],
+                    message: "Duration is required for shift tasks",
+                });
+            }
+            if (!data.slots) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["slots"],
+                    message: "Slots are required for shift tasks",
+                });
+            }
+        }
+    });
 
 type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location" | "targetDate"> & {
     images?: (File | Media)[];
@@ -53,6 +129,11 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
     targetDate?: Date;
     goalId?: string | null; // Allow null
     eventId?: string | null;
+    taskType: TaskType;
+    slots?: number;
+    shiftStartTime?: string;
+    shiftDurationMinutes?: number;
+    participantNotes?: string;
     priority?: TaskPriority | null;
 };
 
@@ -114,9 +195,16 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
             eventId: (task as any)?.eventId || preselectedEventId || null,
+            taskType: task?.taskType ?? "outcome",
+            slots: task?.slots,
+            shiftStartTime: task?.shiftStartTime,
+            shiftDurationMinutes: task?.shiftDurationMinutes,
+            participantNotes: task?.participantNotes,
             priority: task?.priority || null,
         },
     });
+
+    const taskType = form.watch("taskType");
 
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
@@ -201,6 +289,23 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         }
     }, [selectedCircle]);
 
+    useEffect(() => {
+        if (taskType !== "shift") {
+            form.setValue("slots", undefined, { shouldValidate: false });
+            form.setValue("shiftStartTime", undefined, { shouldValidate: false });
+            form.setValue("shiftDurationMinutes", undefined, { shouldValidate: false });
+            form.setValue("participantNotes", undefined, { shouldValidate: false });
+            return;
+        }
+
+        if (!form.getValues("slots")) {
+            form.setValue("slots", task?.slots ?? 1, { shouldValidate: false });
+        }
+        if (!form.getValues("shiftDurationMinutes")) {
+            form.setValue("shiftDurationMinutes", task?.shiftDurationMinutes ?? 60, { shouldValidate: false });
+        }
+    }, [form, task?.shiftDurationMinutes, task?.slots, taskType]);
+
     const handleImageChange = (items: ImageItem[]) => {
         const formImages: (File | Media)[] = items
             .map((item) => {
@@ -255,6 +360,28 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             // Explicitly handle unsetting the event
             formData.append("eventId", ""); // Send empty string to indicate removal
+        }
+
+        formData.append("taskType", values.taskType ?? "outcome");
+        if (values.taskType === "shift" && values.slots) {
+            formData.append("slots", String(values.slots));
+        } else {
+            formData.append("slots", "");
+        }
+        if (values.taskType === "shift" && values.shiftStartTime) {
+            formData.append("shiftStartTime", values.shiftStartTime);
+        } else {
+            formData.append("shiftStartTime", "");
+        }
+        if (values.taskType === "shift" && values.shiftDurationMinutes) {
+            formData.append("shiftDurationMinutes", String(values.shiftDurationMinutes));
+        } else {
+            formData.append("shiftDurationMinutes", "");
+        }
+        if (values.taskType === "shift" && values.participantNotes) {
+            formData.append("participantNotes", values.participantNotes);
+        } else {
+            formData.append("participantNotes", "");
         }
 
         if (values.priority) {
@@ -363,6 +490,34 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             </FormItem>
                                         )}
                                     />
+                                    <FormField
+                                        control={form.control}
+                                        name="taskType"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Task Format</FormLabel>
+                                                <Select
+                                                    onValueChange={(value) => field.onChange(value as TaskType)}
+                                                    value={field.value}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a task type" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="outcome">Outcome task</SelectItem>
+                                                        <SelectItem value="shift">Shift sign-up</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormDescription>
+                                                    Use a shift for a scheduled sign-up opportunity with limited slots.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
                                 </div>
                                 <div className="grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-x-6">
                                     <FormField
@@ -370,7 +525,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                         name="targetDate"
                                         render={({ field }) => (
                                             <FormItem className="py-3 md:py-4">
-                                                <FormLabel>Target Date (Optional)</FormLabel>
+                                                <FormLabel>
+                                                    {taskType === "shift" ? "Date" : "Target Date (Optional)"}
+                                                </FormLabel>
                                                 <Popover>
                                                     <PopoverTrigger asChild>
                                                         <FormControl>
@@ -404,12 +561,138 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                                     </PopoverContent>
                                                 </Popover>
                                                 <FormDescription>
-                                                    Set an optional target completion date for this task.
+                                                    {taskType === "shift"
+                                                        ? "Choose the calendar date for this shift."
+                                                        : "Set an optional target completion date for this task."}
                                                 </FormDescription>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
                                     />
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="shiftStartTime"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Start Time</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="time"
+                                                            value={field.value ?? ""}
+                                                            onChange={(event) => field.onChange(event.target.value)}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Set when sign-up participants should arrive.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="shiftDurationMinutes"
+                                            render={({ field }) => {
+                                                const durationOptions =
+                                                    field.value &&
+                                                    !SHIFT_DURATION_OPTIONS.some(
+                                                        (option) => option.value === field.value,
+                                                    )
+                                                        ? [
+                                                              ...SHIFT_DURATION_OPTIONS,
+                                                              {
+                                                                  value: field.value,
+                                                                  label: `${field.value} minutes`,
+                                                              },
+                                                          ].sort((left, right) => left.value - right.value)
+                                                        : SHIFT_DURATION_OPTIONS;
+
+                                                return (
+                                                    <FormItem className="py-3 md:py-4">
+                                                        <FormLabel>Duration</FormLabel>
+                                                        <Select
+                                                            onValueChange={(value) => field.onChange(Number(value))}
+                                                            value={field.value ? String(field.value) : undefined}
+                                                            disabled={isSubmitting}
+                                                        >
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Choose a duration" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {durationOptions.map((option) => (
+                                                                    <SelectItem
+                                                                        key={option.value}
+                                                                        value={String(option.value)}
+                                                                    >
+                                                                        {option.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormDescription>
+                                                            Choose how long the shift runs.
+                                                        </FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                );
+                                            }}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="slots"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Slots</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="number"
+                                                            min={1}
+                                                            step={1}
+                                                            value={field.value ?? ""}
+                                                            onChange={(event) => field.onChange(event.target.value)}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Set how many people can sign up for this shift.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="participantNotes"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:col-span-2 md:py-4">
+                                                    <FormLabel>Participant Notes (Optional)</FormLabel>
+                                                    <FormControl>
+                                                        <Textarea
+                                                            placeholder="What to bring, where to meet, clothing or tools needed"
+                                                            className="min-h-[100px]"
+                                                            {...field}
+                                                            value={field.value ?? ""}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Shared instructions for people taking this shift.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
                                     <FormField
                                         control={form.control}
                                         name="priority"
@@ -579,7 +862,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                                     <Select
                                                         onValueChange={field.onChange}
                                                         value={field.value ?? "none"}
-                                                        disabled={isSubmitting || isLoadingEvents || events.length === 0}
+                                                        disabled={
+                                                            isSubmitting || isLoadingEvents || events.length === 0
+                                                        }
                                                     >
                                                         <FormControl>
                                                             <SelectTrigger>

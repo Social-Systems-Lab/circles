@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, useTransition, useCallback, useMemo } from "react";
+import { formatDistanceToNow } from "date-fns";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -27,6 +28,7 @@ import {
     MoreHorizontal,
     Play,
     Plus,
+    User,
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -48,7 +50,13 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { deleteTaskAction } from "@/app/circles/[handle]/tasks/actions";
+import {
+    deleteTaskAction,
+    getTaskAction,
+    getTasksAction,
+    requestTaskChangesAction,
+    verifyTaskCompletionAction,
+} from "@/app/circles/[handle]/tasks/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
@@ -62,9 +70,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"; // Import CreateTaskDialog
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+    getShiftConfirmedParticipants,
+    getShiftConfirmedSummary,
+    getShiftDisplayStatus,
+    getShiftPendingSummary,
+    type ShiftDisplayStatus,
+    isShiftTask as isShiftTaskItem,
+} from "./shift-task-utils";
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -141,7 +157,26 @@ const getStageInfo = (stage: TaskStage) => {
     }
 };
 
+const getShiftStageInfo = (status: ShiftDisplayStatus) => {
+    switch (status) {
+        case "review":
+            return getStageInfo("review");
+        case "upcoming":
+            return { color: "bg-sky-100 text-sky-800", icon: Clock, text: "Upcoming" };
+        case "inProgress":
+            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
+        case "completed":
+            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Completed" };
+        default:
+            return getStageInfo("open");
+    }
+};
+
 const getWorkflowStatusBadge = (task: TaskDisplay) => {
+    if (isShiftTaskItem(task)) {
+        return null;
+    }
+
     if (task.verifiedAt) {
         return { label: "Verified", className: "bg-emerald-100 text-emerald-800" };
     }
@@ -157,6 +192,45 @@ const getWorkflowStatusBadge = (task: TaskDisplay) => {
     return null;
 };
 
+const ShiftAllocationPreview = ({
+    task,
+    showPendingHint,
+}: {
+    task: TaskDisplay;
+    showPendingHint: boolean;
+}) => {
+    const confirmedParticipants = getShiftConfirmedParticipants(task);
+    const pendingSummary = showPendingHint ? getShiftPendingSummary(task) : null;
+    const confirmedSummary = getShiftConfirmedSummary(task);
+    const slots = Math.max(task.slots ?? 0, confirmedParticipants.length);
+
+    return (
+        <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+                {confirmedParticipants.map(({ participant, profile }) => (
+                    <div key={participant.userDid} title={profile?.name || participant.userDid}>
+                        <UserPicture name={profile?.name} picture={profile?.picture?.url} size="28px" />
+                    </div>
+                ))}
+                {Array.from({ length: Math.max(slots - confirmedParticipants.length, 0) }).map((_, index) => (
+                    <Avatar
+                        key={`shift-open-slot-${task._id}-${index}`}
+                        className="h-7 w-7 border border-dashed border-slate-300 bg-slate-50"
+                    >
+                        <AvatarFallback className="bg-transparent text-slate-400">
+                            <User className="h-3.5 w-3.5" />
+                        </AvatarFallback>
+                    </Avatar>
+                ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-medium text-slate-700">{confirmedSummary}</span>
+                {pendingSummary && <span className="text-amber-700">{pendingSummary}</span>}
+            </div>
+        </div>
+    );
+};
+
 type PersistedTasksListViewState = {
     version: number;
     searchText: string;
@@ -165,8 +239,9 @@ type PersistedTasksListViewState = {
     selectedPriorities: TaskPriority[];
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null;
+type VerificationQueueAction = "verify" | "requestChanges";
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
 const sanitizeSelectedStages = (value: unknown): TaskStage[] => {
     if (!Array.isArray(value)) {
@@ -186,9 +261,7 @@ const sanitizeSelectedPriorities = (value: unknown): TaskPriority[] => {
     }
 
     const nextPriorities = Array.from(
-        new Set(
-            value.filter((item): item is TaskPriority => allTaskPriorities.includes(item as TaskPriority)),
-        ),
+        new Set(value.filter((item): item is TaskPriority => allTaskPriorities.includes(item as TaskPriority))),
     );
 
     return nextPriorities.length > 0 ? nextPriorities : allTaskPriorities;
@@ -241,11 +314,14 @@ const TasksList: React.FC<TasksListProps> = ({
     const [includeAssigned, setIncludeAssigned] = useState(true);
     const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
     const data = React.useMemo(() => {
-        const baseTasks =
-            circle.circleType === "user" && user?.did === circle.did ? filteredTasks : tasks;
+        const baseTasks = circle.circleType === "user" && user?.did === circle.did ? filteredTasks : tasks;
 
         if (inToolbox) {
-            return baseTasks.filter((task) => task.stage !== "resolved");
+            return baseTasks.filter(
+                (task) =>
+                    task.stage !== "resolved" &&
+                    (!isShiftTaskItem(task) || getShiftDisplayStatus(task) !== "completed"),
+            );
         }
 
         return baseTasks;
@@ -265,6 +341,11 @@ const TasksList: React.FC<TasksListProps> = ({
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
     const [isResolvedSectionOpen, setIsResolvedSectionOpen] = useState(false);
+    const [pendingVerificationAction, setPendingVerificationAction] = useState<{
+        taskId: string;
+        action: VerificationQueueAction;
+    } | null>(null);
+    const [hiddenVerificationTaskIds, setHiddenVerificationTaskIds] = useState<string[]>([]);
     const shouldPersistViewState = persistViewState && !inToolbox;
     const tasksListViewStateStorageKey = useMemo(() => {
         if (!shouldPersistViewState) {
@@ -277,6 +358,10 @@ const TasksList: React.FC<TasksListProps> = ({
     }, [shouldPersistViewState, user?.did, circle.handle, circle._id]);
 
     useEffect(() => {
+        setFilteredTasks(tasksData.tasks);
+    }, [tasksData.tasks]);
+
+    useEffect(() => {
         const fetchTasks = async () => {
             if (circle.circleType === "user" && user?.did === circle.did) {
                 const data = await getTasksAction(circle.handle!, includeCreated, includeAssigned);
@@ -286,6 +371,11 @@ const TasksList: React.FC<TasksListProps> = ({
 
         fetchTasks();
     }, [includeCreated, includeAssigned, circle, user]);
+
+    useEffect(() => {
+        setHiddenVerificationTaskIds([]);
+        setPendingVerificationAction(null);
+    }, [tasks]);
 
     const openAuthor = useCallback(
         (author: Circle) => {
@@ -388,24 +478,36 @@ const TasksList: React.FC<TasksListProps> = ({
                 ),
                 cell: (info) => {
                     const task = info.row.original; // Renamed variable
+                    const isShiftTask = isShiftTaskItem(task);
                     return (
-                        <Link
-                            href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (inToolbox) {
-                                    onTaskNavigate?.();
-                                }
-                            }}
-                            className="flex items-center font-medium text-blue-600 hover:underline"
-                        >
-                            {info.getValue() as string}
-                            {task.circle && task.circle._id !== circle._id && (
-                                <div className="ml-2">
+                        <div className="flex min-w-0 flex-col gap-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                                <Link
+                                    href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (inToolbox) {
+                                            onTaskNavigate?.();
+                                        }
+                                    }}
+                                    className="truncate font-medium text-blue-600 hover:underline"
+                                >
+                                    {info.getValue() as string}
+                                </Link>
+                                {task.circle && task.circle._id !== circle._id && (
                                     <CirclePicture circle={task.circle} size="24px" />
+                                )}
+                            </div>
+                            {isShiftTask && (
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <Badge className="border-transparent bg-sky-100 text-sky-800">Shift</Badge>
+                                    <span className="font-medium text-slate-700">{getShiftConfirmedSummary(task)}</span>
+                                    {permissions.canModerate && getShiftPendingSummary(task) && (
+                                        <span className="text-amber-700">{getShiftPendingSummary(task)}</span>
+                                    )}
                                 </div>
                             )}
-                        </Link>
+                        </div>
                     );
                 },
             },
@@ -450,9 +552,15 @@ const TasksList: React.FC<TasksListProps> = ({
                     </Button>
                 ),
                 cell: (info) => {
-                    const stage = info.getValue() as TaskStage; // Updated type
-                    const { color, icon: Icon, text } = getStageInfo(stage);
-                    const workflowStatus = getWorkflowStatusBadge(info.row.original);
+                    const task = info.row.original;
+                    const workflowStatus = getWorkflowStatusBadge(task);
+                    const {
+                        color,
+                        icon: Icon,
+                        text,
+                    } = isShiftTaskItem(task)
+                        ? getShiftStageInfo(getShiftDisplayStatus(task))
+                        : getStageInfo(info.getValue() as TaskStage);
                     return (
                         <div className="flex flex-col gap-1">
                             <Badge className={`${color} w-fit items-center gap-1`}>
@@ -477,11 +585,20 @@ const TasksList: React.FC<TasksListProps> = ({
                 accessorKey: "assignee",
                 header: ({ column }) => (
                     <Button variant="ghost" onClick={() => column.toggleSorting()}>
-                        Assigned To
+                        Assigned to
                         <SortIcon sortDir={column.getIsSorted()} />
                     </Button>
                 ),
                 cell: (info) => {
+                    if (isShiftTaskItem(info.row.original)) {
+                        return (
+                            <ShiftAllocationPreview
+                                task={info.row.original}
+                                showPendingHint={permissions.canModerate}
+                            />
+                        );
+                    }
+
                     const assignee = info.getValue() as Circle | undefined;
                     if (!assignee) {
                         return <span className="text-gray-500">Unassigned</span>;
@@ -504,14 +621,18 @@ const TasksList: React.FC<TasksListProps> = ({
                                                     : ""
                                             }
                                         >
-                                            <UserPicture name={assignee.name} picture={assignee.picture?.url} size="32px" />
+                                            <UserPicture
+                                                name={assignee.name}
+                                                picture={assignee.picture?.url}
+                                                size="32px"
+                                            />
                                         </div>
                                         {!isCompact && <span>{assignee.name}</span>}
                                     </div>
                                 </TooltipTrigger>
                                 <TooltipContent>{assignee.name}</TooltipContent>
                             </Tooltip>
-                            </TooltipProvider>
+                        </TooltipProvider>
                     );
                 },
                 sortingFn: (rowA, rowB, id) => {
@@ -576,7 +697,7 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate],
+        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate, permissions.canModerate],
     );
 
     const table = useReactTable({
@@ -689,6 +810,78 @@ const TasksList: React.FC<TasksListProps> = ({
         });
     };
 
+    const canManageTaskVerification = useCallback(
+        (task: TaskDisplay) => {
+            const isAuthor = user?.did === task.createdBy;
+            return isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate;
+        },
+        [permissions.canAssign, permissions.canModerate, permissions.canResolve, user?.did],
+    );
+
+    const refreshOpenTaskPreview = useCallback(
+        async (taskId: string) => {
+            if (!circle.handle) {
+                return;
+            }
+
+            const updatedTask = await getTaskAction(circle.handle, taskId);
+            if (!updatedTask) {
+                return;
+            }
+
+            setContentPreview((currentPreview) => {
+                if (currentPreview?.type !== "task" || currentPreview.content._id !== updatedTask._id) {
+                    return currentPreview;
+                }
+
+                return {
+                    ...currentPreview,
+                    content: updatedTask,
+                };
+            });
+        },
+        [circle.handle, setContentPreview],
+    );
+
+    const runVerificationQueueAction = useCallback(
+        (task: TaskDisplay, action: VerificationQueueAction) => {
+            const taskId = task._id as string;
+            setPendingVerificationAction({ taskId, action });
+
+            startTransition(async () => {
+                const result =
+                    action === "verify"
+                        ? await verifyTaskCompletionAction(circle.handle!, taskId)
+                        : await requestTaskChangesAction(circle.handle!, taskId);
+
+                if (!result.success) {
+                    setPendingVerificationAction(null);
+                    toast({
+                        title: "Error",
+                        description:
+                            result.message ||
+                            (action === "verify" ? "Failed to verify task" : "Failed to request changes"),
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
+                setHiddenVerificationTaskIds((currentTaskIds) =>
+                    currentTaskIds.includes(taskId) ? currentTaskIds : [...currentTaskIds, taskId],
+                );
+
+                await refreshOpenTaskPreview(taskId);
+                router.refresh();
+                setPendingVerificationAction(null);
+                toast({
+                    title: "Success",
+                    description: result.message || (action === "verify" ? "Task verified" : "Changes requested"),
+                });
+            });
+        },
+        [circle.handle, refreshOpenTaskPreview, router, startTransition, toast],
+    );
+
     // Check create permission for the button using the user object
     const canCreateTask = isAuthorized(user, circle, features.tasks.create);
 
@@ -697,12 +890,35 @@ const TasksList: React.FC<TasksListProps> = ({
     }
 
     const tableRows = table.getRowModel().rows;
-    const activeRows = inToolbox
-        ? tableRows
-        : tableRows.filter((row) => row.original.stage === "open" || row.original.stage === "inProgress" || row.original.stage === "review");
-    const resolvedRows = inToolbox ? [] : tableRows.filter((row) => row.original.stage === "resolved");
+    const isResolvedListTask = (task: TaskDisplay) =>
+        isShiftTaskItem(task) ? getShiftDisplayStatus(task) === "completed" : task.stage === "resolved";
+    const activeRows = inToolbox ? tableRows : tableRows.filter((row) => !isResolvedListTask(row.original));
+    const resolvedRows = inToolbox ? [] : tableRows.filter((row) => isResolvedListTask(row.original));
     const shouldAutoExpandResolvedSection = !inToolbox && activeRows.length === 0 && resolvedRows.length > 0;
     const resolvedSectionOpen = shouldAutoExpandResolvedSection || isResolvedSectionOpen;
+    const verificationQueueTasks = !inToolbox
+        ? data
+              .filter(
+                  (task) =>
+                      (task.taskType ?? "outcome") !== "shift" &&
+                      task.stage === "inProgress" &&
+                      Boolean(task.submittedForReviewAt) &&
+                      !task.verifiedAt &&
+                      canManageTaskVerification(task) &&
+                      !hiddenVerificationTaskIds.includes(task._id as string),
+              )
+              .sort(
+                  (taskA, taskB) =>
+                      new Date(taskA.submittedForReviewAt as Date).getTime() -
+                      new Date(taskB.submittedForReviewAt as Date).getTime(),
+              )
+        : [];
+    const shouldShowVerificationQueue =
+        !inToolbox &&
+        (verificationQueueTasks.length > 0 ||
+            permissions.canAssign ||
+            permissions.canResolve ||
+            permissions.canModerate);
     const activeEmptyMessage =
         !inToolbox && resolvedRows.length > 0
             ? "No active tasks match the current filters. Resolved matches are available below."
@@ -729,6 +945,9 @@ const TasksList: React.FC<TasksListProps> = ({
         const isAuthor = user?.did === task.createdBy;
         const canEdit = (isAuthor && task.stage === "review") || permissions.canModerate;
         const canDelete = isAuthor || permissions.canModerate;
+        const isShiftTask = isShiftTaskItem(task);
+        const isPreviewedTask =
+            (contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content";
 
         return (
             <motion.tr
@@ -737,10 +956,17 @@ const TasksList: React.FC<TasksListProps> = ({
                 initial="hidden"
                 animate="visible"
                 variants={tableRowVariants}
-                className={`cursor-pointer
-                    ${row.getIsSelected() ? "bg-muted" : ""}
-                    ${(contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"} // Updated type, variable
-                `}
+                className={[
+                    "cursor-pointer",
+                    row.getIsSelected() ? "bg-muted" : "",
+                    isPreviewedTask
+                        ? "bg-gray-100"
+                        : isShiftTask
+                          ? "bg-sky-50/40 hover:bg-sky-50/70"
+                          : "hover:bg-gray-50",
+                ]
+                    .filter(Boolean)
+                    .join(" ")}
                 onClick={() => handleRowClick(task)}
             >
                 {row.getVisibleCells().map((cell) => (
@@ -924,6 +1150,100 @@ const TasksList: React.FC<TasksListProps> = ({
                                 />
                                 <Label htmlFor="includeAssigned">Show assigned</Label>
                             </div>
+                        </div>
+                    )}
+
+                    {shouldShowVerificationQueue && (
+                        <div className="mt-4 overflow-hidden rounded-[15px] border border-amber-200 bg-amber-50/70 shadow-sm">
+                            <div className="border-b border-amber-200 px-4 py-3">
+                                <h2 className="text-sm font-semibold text-slate-900">Needs Verification</h2>
+                            </div>
+
+                            {verificationQueueTasks.length > 0 ? (
+                                <div className="divide-y divide-amber-100">
+                                    {verificationQueueTasks.map((task) => {
+                                        const submittedForReviewAt = task.submittedForReviewAt
+                                            ? formatDistanceToNow(new Date(task.submittedForReviewAt), {
+                                                  addSuffix: true,
+                                              })
+                                            : "just now";
+                                        const isVerifyPending =
+                                            pendingVerificationAction?.taskId === task._id &&
+                                            pendingVerificationAction?.action === "verify";
+                                        const isRequestChangesPending =
+                                            pendingVerificationAction?.taskId === task._id &&
+                                            pendingVerificationAction?.action === "requestChanges";
+
+                                        return (
+                                            <div
+                                                key={task._id as string}
+                                                className="flex cursor-pointer flex-col gap-3 px-4 py-3 hover:bg-white/60 md:flex-row md:items-center md:justify-between"
+                                                onClick={() => handleRowClick(task)}
+                                            >
+                                                <div className="min-w-0">
+                                                    <Link
+                                                        href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`}
+                                                        className="block truncate font-medium text-blue-600 hover:underline"
+                                                        onClick={(event) => event.stopPropagation()}
+                                                    >
+                                                        {task.title}
+                                                    </Link>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                        <div className="flex items-center gap-2">
+                                                            {task.assignee ? (
+                                                                <>
+                                                                    <UserPicture
+                                                                        name={task.assignee.name}
+                                                                        picture={task.assignee.picture?.url}
+                                                                        size="18px"
+                                                                    />
+                                                                    <span>{task.assignee.name}</span>
+                                                                </>
+                                                            ) : (
+                                                                <span>Unassigned</span>
+                                                            )}
+                                                        </div>
+                                                        <span>Submitted {submittedForReviewAt}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    className="flex flex-wrap items-center gap-2"
+                                                    onClick={(event) => event.stopPropagation()}
+                                                >
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => runVerificationQueueAction(task, "verify")}
+                                                        disabled={isPending}
+                                                    >
+                                                        {isVerifyPending ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : null}
+                                                        Mark Verified
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            runVerificationQueueAction(task, "requestChanges")
+                                                        }
+                                                        disabled={isPending}
+                                                    >
+                                                        {isRequestChangesPending ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : null}
+                                                        Request Changes
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="px-4 py-6 text-sm text-muted-foreground">
+                                    No tasks awaiting verification
+                                </div>
+                            )}
                         </div>
                     )}
 

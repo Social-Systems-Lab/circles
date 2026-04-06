@@ -490,6 +490,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "task_approved":
                 case "task_assigned":
                 case "task_accepted":
+                case "task_shift_signup":
+                case "task_shift_confirmed":
                 case "task_status_changed":
                     return notification.taskId ? `/circles/${circleHandle}/tasks/${notification.taskId}` : null;
                 case "goal_submitted_for_review":
@@ -517,7 +519,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "pm_received":
                 return "Reply";
             case "task_assigned":
+            case "task_shift_signup":
                 return "Review";
+            case "task_shift_confirmed":
+                return "Open";
             case "task_accepted":
                 return "View";
             case "task_changes_requested":
@@ -679,6 +684,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_approved":
             case "task_assigned":
             case "task_accepted":
+            case "task_shift_signup":
+            case "task_shift_confirmed":
             case "task_status_changed":
                 // For now, issue notifications aren't grouped, so use original message
                 return groupedNotification.latestNotification.message;
@@ -746,6 +753,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                     "task_approved",
                                     "task_assigned",
                                     "task_accepted",
+                                    "task_shift_signup",
+                                    "task_shift_confirmed",
                                     "task_status_changed",
                                 ].includes(groupedNotification.latestNotification.notificationType) ? (
                                     <>

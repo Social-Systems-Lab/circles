@@ -17,10 +17,11 @@ import {
     User,
     CheckCircle,
     Clock,
+    Megaphone,
     Play,
     Target,
 } from "lucide-react"; // Added Target icon
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
 import { useAtom } from "jotai";
@@ -54,9 +55,12 @@ import {
     deleteTaskAction, // Renamed action
     getTaskAction,
     getMembersAction, // Keep this action (assuming it's generic)
+    joinShiftTaskAction,
+    leaveShiftTaskAction,
     requestTaskChangesAction,
     submitTaskForReviewAction,
     updateTaskPriorityAction,
+    verifyShiftParticipantAction,
     verifyTaskCompletionAction,
 } from "@/app/circles/[handle]/tasks/actions"; // Updated path
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -64,6 +68,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Link from "next/link";
 import { CommentSection } from "../feeds/CommentSection"; // Import CommentSection
+import {
+    getShiftConfirmedParticipants,
+    getShiftConfirmedCount,
+    getShiftConfirmedSummary,
+    getShiftDisplayStatus,
+    getShiftPendingParticipants,
+    getShiftPendingSummary,
+    getShiftSignedUpCount,
+    type ShiftDisplayStatus,
+    isShiftTask as isShiftTaskItem,
+} from "./shift-task-utils";
 
 // Helper function for stage badge styling and icons (copied from tasks-list)
 const getStageInfo = (stage: TaskStage) => {
@@ -79,6 +94,21 @@ const getStageInfo = (stage: TaskStage) => {
             return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
         default:
             return { color: "bg-gray-200 text-gray-800", icon: Clock, text: "Unknown" };
+    }
+};
+
+const getShiftStageInfo = (status: ShiftDisplayStatus) => {
+    switch (status) {
+        case "review":
+            return getStageInfo("review");
+        case "upcoming":
+            return { color: "bg-sky-100 text-sky-800", icon: Clock, text: "Upcoming" };
+        case "inProgress":
+            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
+        case "completed":
+            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Completed" };
+        default:
+            return getStageInfo("open");
     }
 };
 
@@ -133,6 +163,44 @@ const getWorkflowStatusInfo = (task: TaskDisplay) => {
     return null;
 };
 
+const formatShiftStartTime = (value?: string) => {
+    if (!value) {
+        return "Not set";
+    }
+
+    const [hours, minutes] = value.split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+        return value;
+    }
+
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+
+    return new Intl.DateTimeFormat(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+    }).format(date);
+};
+
+const formatShiftDuration = (minutes?: number) => {
+    if (!minutes) {
+        return "Not set";
+    }
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (hours > 0 && remainingMinutes > 0) {
+        return `${hours}h ${remainingMinutes}m`;
+    }
+
+    if (hours > 0) {
+        return `${hours}h`;
+    }
+
+    return `${remainingMinutes}m`;
+};
+
 // Permissions type is imported from models
 
 interface TaskDetailProps {
@@ -162,12 +230,46 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const { toast } = useToast();
     const router = useRouter();
 
+    const isShiftTask = isShiftTaskItem(task);
+    const shiftParticipants = task.participants ?? [];
+    const shiftSlots = task.slots ?? 0;
+    const signedUpShiftParticipantsCount = getShiftSignedUpCount(task);
+    const verifiedShiftParticipantsCount = getShiftConfirmedCount(task);
+    const confirmedShiftParticipants = getShiftConfirmedParticipants(task);
+    const pendingShiftParticipants = getShiftPendingParticipants(task);
+    const shiftConfirmedSummary = getShiftConfirmedSummary(task);
+    const shiftPendingSummary = getShiftPendingSummary(task);
+    const shiftDisplayStatus = isShiftTask ? getShiftDisplayStatus(task) : null;
     const isAuthor = currentUserDid === task.createdBy; // Use task prop
     const isAssignee = currentUserDid === task.assignedTo; // Use task prop
-    const isAcceptedAssignee = isAssignee && task.acceptedBy === currentUserDid && Boolean(task.acceptedAt);
-    const canSubmitForReview = isAssignee;
-    const canManageVerification = isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate;
-    const workflowStatus = getWorkflowStatusInfo(task);
+    const canSubmitForReview = !isShiftTask && isAssignee;
+    const canManageVerification =
+        !isShiftTask && (isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate);
+    const workflowStatus = isShiftTask ? null : getWorkflowStatusInfo(task);
+    const currentShiftParticipant = shiftParticipants.find((participant) => participant.userDid === currentUserDid);
+    const isShiftParticipant = Boolean(currentShiftParticipant);
+    const canJoinShift =
+        isShiftTask &&
+        !isShiftParticipant &&
+        shiftSlots > 0 &&
+        shiftParticipants.length < shiftSlots &&
+        shiftDisplayStatus !== "review" &&
+        shiftDisplayStatus !== "completed";
+    const canLeaveShift =
+        isShiftTask &&
+        Boolean(currentShiftParticipant) &&
+        !currentShiftParticipant?.verifiedAt &&
+        shiftDisplayStatus !== "review" &&
+        shiftDisplayStatus !== "completed";
+    const canVerifyShiftParticipants = isShiftTask && permissions.canModerate;
+    const shiftIsWaitlistedByPending =
+        isShiftTask &&
+        !isShiftParticipant &&
+        shiftSlots > 0 &&
+        signedUpShiftParticipantsCount >= shiftSlots &&
+        verifiedShiftParticipantsCount < shiftSlots &&
+        shiftDisplayStatus !== "review" &&
+        shiftDisplayStatus !== "completed";
 
     useEffect(() => {
         setSelectedPriority(task.priority ?? "none");
@@ -310,7 +412,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     };
 
     const currentStage = selectedStage;
-    const { color: stageColor, icon: StageIcon, text: stageText } = getStageInfo(currentStage);
+    const displayStageInfo =
+        isShiftTask && shiftDisplayStatus ? getShiftStageInfo(shiftDisplayStatus) : getStageInfo(currentStage);
+    const { color: stageColor, icon: StageIcon, text: stageText } = displayStageInfo;
     const priorityInfo = getPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
 
     const canEditTask = (isAuthor && currentStage === "review") || permissions.canModerate;
@@ -351,11 +455,75 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         if (permissions.canReview && currentStage === "review") {
             actions.push(
                 <Button key="approve" onClick={() => openStageChangeDialog("open")} disabled={isPending}>
-                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Approve (Open)
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{" "}
+                    {isShiftTask ? "Approve Shift" : "Approve (Open)"}
                 </Button>,
             );
         }
-        if (currentStage === "open" && isAssignee) {
+        if (isShiftTask && canJoinShift) {
+            actions.push(
+                <Button
+                    key="join-shift"
+                    onClick={() =>
+                        startTransition(async () => {
+                            const result = await joinShiftTaskAction(circle.handle!, task._id as string);
+
+                            if (!result.success) {
+                                toast({
+                                    title: "Error",
+                                    description: result.message || "Failed to sign up for shift",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+
+                            await refreshOpenTaskPreview();
+                            router.refresh();
+                            toast({
+                                title: "Success",
+                                description: "Signed up for shift",
+                            });
+                        })
+                    }
+                    disabled={isPending}
+                >
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Sign up
+                </Button>,
+            );
+        }
+        if (isShiftTask && canLeaveShift) {
+            actions.push(
+                <Button
+                    key="leave-shift"
+                    variant="outline"
+                    onClick={() =>
+                        startTransition(async () => {
+                            const result = await leaveShiftTaskAction(circle.handle!, task._id as string);
+
+                            if (!result.success) {
+                                toast({
+                                    title: "Error",
+                                    description: result.message || "Failed to leave shift",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+
+                            await refreshOpenTaskPreview();
+                            router.refresh();
+                            toast({
+                                title: "Success",
+                                description: result.message || "Left shift",
+                            });
+                        })
+                    }
+                    disabled={isPending}
+                >
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Leave Shift
+                </Button>,
+            );
+        }
+        if (!isShiftTask && currentStage === "open" && isAssignee) {
             if (!task.acceptedAt) {
                 actions.push(
                     <Button
@@ -388,20 +556,24 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 );
             } else if (task.acceptedBy === currentUserDid) {
                 actions.push(
-                    <Button key="start-progress" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
+                    <Button
+                        key="start-progress"
+                        onClick={() => openStageChangeDialog("inProgress")}
+                        disabled={isPending}
+                    >
                         {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
                     </Button>,
                 );
             }
         }
-        if (permissions.canResolve && currentStage === "open" && !isAssignee) {
+        if (!isShiftTask && permissions.canResolve && currentStage === "open" && !isAssignee) {
             actions.push(
                 <Button key="start" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
                 </Button>,
             );
         }
-        if (currentStage === "inProgress" && canSubmitForReview && !task.submittedForReviewAt) {
+        if (!isShiftTask && currentStage === "inProgress" && canSubmitForReview && !task.submittedForReviewAt) {
             actions.push(
                 <Button
                     key="submit-review"
@@ -432,14 +604,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if (currentStage === "inProgress" && canSubmitForReview && task.submittedForReviewAt) {
+        if (!isShiftTask && currentStage === "inProgress" && canSubmitForReview && task.submittedForReviewAt) {
             actions.push(
                 <Button key="submitted" variant="outline" disabled>
                     Submitted for Review
                 </Button>,
             );
         }
-        if (currentStage === "inProgress" && task.submittedForReviewAt && canManageVerification) {
+        if (!isShiftTask && currentStage === "inProgress" && task.submittedForReviewAt && canManageVerification) {
             actions.push(
                 <Button
                     key="verify"
@@ -480,7 +652,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
-        if (permissions.canResolve && currentStage === "resolved") {
+        if (!isShiftTask && permissions.canResolve && currentStage === "resolved") {
             actions.push(
                 <Button
                     key="reopen"
@@ -495,7 +667,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         }
 
         // Assign action button
-        if (permissions.canAssign) {
+        if (!isShiftTask && permissions.canAssign) {
             actions.push(
                 <Button
                     key="assign"
@@ -541,6 +713,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 <StageIcon className="h-3 w-3" />
                                 {stageText}
                             </Badge>
+                            {isShiftTask && <Badge className="border-transparent bg-sky-100 text-sky-800">Shift</Badge>}
                             {workflowStatus && (
                                 <Badge
                                     variant="outline"
@@ -583,10 +756,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             ) : (
-                                <Badge
-                                    variant="outline"
-                                    className={cn("shrink-0 border", priorityInfo.badgeClassName)}
-                                >
+                                <Badge variant="outline" className={cn("shrink-0 border", priorityInfo.badgeClassName)}>
                                     {priorityInfo.label}
                                 </Badge>
                             )}
@@ -644,27 +814,37 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         <div className="flex items-center gap-2">
-                            <UserPicture
-                                name={task.author.name}
-                                picture={task.author.picture?.url}
-                                size="18px"
-                            />
+                            <UserPicture name={task.author.name} picture={task.author.picture?.url} size="18px" />
                             <span>
                                 Created by {task.author.name} {/* Use task prop */}
-                                {task.createdAt && formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}{" "}
+                                {task.createdAt &&
+                                    formatDistanceToNow(new Date(task.createdAt), { addSuffix: true })}{" "}
                                 {/* Use task prop */}
                             </span>
                         </div>
-                        {task.assignee && ( // Use task prop
-                            <div className="flex items-center gap-2">
-                                <div className={!task.acceptedAt && currentStage === "open" ? "opacity-45" : ""}>
-                                    <UserPicture
-                                        name={task.assignee.name}
-                                        picture={task.assignee.picture?.url}
-                                        size="18px"
-                                    />
+                        {!isShiftTask &&
+                            task.assignee && ( // Use task prop
+                                <div className="flex items-center gap-2">
+                                    <div className={!task.acceptedAt && currentStage === "open" ? "opacity-45" : ""}>
+                                        <UserPicture
+                                            name={task.assignee.name}
+                                            picture={task.assignee.picture?.url}
+                                            size="18px"
+                                        />
+                                    </div>
+                                    <span>Assigned to {task.assignee.name}</span> {/* Use task prop */}
                                 </div>
-                                <span>Assigned to {task.assignee.name}</span> {/* Use task prop */}
+                            )}
+                        {isShiftTask && (
+                            <div className="flex items-center gap-2">
+                                <CheckCircle className="h-3 w-3 text-emerald-600" />
+                                <span>{shiftConfirmedSummary}</span>
+                            </div>
+                        )}
+                        {isShiftTask && permissions.canModerate && shiftPendingSummary && (
+                            <div className="flex items-center gap-2">
+                                <Clock className="h-3 w-3 text-amber-600" />
+                                <span>{shiftPendingSummary}</span>
                             </div>
                         )}
 
@@ -716,6 +896,199 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             <ImageThumbnailCarousel images={task.images} className="w-full" /> {/* Use task prop */}
                         </div>
                     )}
+
+                {isShiftTask && (
+                    <div className="mb-6">
+                        <h3 className="mb-2 text-lg font-semibold">Shift Details</h3>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Date</div>
+                                <div className="mt-1 text-sm font-medium text-slate-900">
+                                    {task.targetDate ? format(new Date(task.targetDate), "PPP") : "Not set"}
+                                </div>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                    Start Time
+                                </div>
+                                <div className="mt-1 text-sm font-medium text-slate-900">
+                                    {formatShiftStartTime(task.shiftStartTime)}
+                                </div>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                    Duration
+                                </div>
+                                <div className="mt-1 text-sm font-medium text-slate-900">
+                                    {formatShiftDuration(task.shiftDurationMinutes)}
+                                </div>
+                            </div>
+                        </div>
+                        {task.participantNotes && (
+                            <div className="mt-5 rounded-2xl border border-amber-300 bg-gradient-to-br from-amber-50 via-white to-amber-100/80 px-4 py-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                    <div className="rounded-full bg-amber-100 p-2 text-amber-700">
+                                        <Megaphone className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
+                                            Important for participants
+                                        </div>
+                                        <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-900">
+                                            {task.participantNotes}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                            Sign up requests a spot. A participant only appears publicly after admin confirmation.
+                        </div>
+                        {currentShiftParticipant?.verifiedAt && (
+                            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                You are confirmed for this shift. Contact an admin if you can no longer attend.
+                            </div>
+                        )}
+                        {currentShiftParticipant && !currentShiftParticipant.verifiedAt && (
+                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                You are signed up and waiting for confirmation. You can still leave until an admin
+                                confirms you.
+                            </div>
+                        )}
+                        {shiftIsWaitlistedByPending && (
+                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                All current slots are pending confirmation. Contact an admin if you need help.
+                            </div>
+                        )}
+
+                        <div className="mt-6">
+                            <h4 className="text-base font-semibold text-foreground">Confirmed Participants</h4>
+                            {confirmedShiftParticipants.length > 0 ? (
+                                <div className="mt-3 space-y-3">
+                                    {confirmedShiftParticipants.map(({ participant, profile }) => {
+                                        const participantName = profile?.name || participant.userDid;
+
+                                        return (
+                                            <div
+                                                key={participant.userDid}
+                                                className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                            >
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <UserPicture
+                                                        name={participantName}
+                                                        picture={profile?.picture?.url}
+                                                        size="36px"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-base font-medium text-foreground">
+                                                            {participantName}
+                                                        </div>
+                                                        <div className="mt-1 text-sm text-emerald-700">
+                                                            Confirmed{" "}
+                                                            {participant.verifiedAt
+                                                                ? formatDistanceToNow(new Date(participant.verifiedAt), {
+                                                                      addSuffix: true,
+                                                                  })
+                                                                : ""}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="mt-3 text-sm text-muted-foreground">
+                                    No confirmed participants yet.
+                                </div>
+                            )}
+                        </div>
+
+                        {permissions.canModerate && (
+                            <div className="mt-6">
+                                <h4 className="text-base font-semibold text-foreground">Pending Sign-ups</h4>
+                                {pendingShiftParticipants.length > 0 ? (
+                                    <div className="mt-3 space-y-3">
+                                        {pendingShiftParticipants.map(({ participant, profile }) => {
+                                            const participantName = profile?.name || participant.userDid;
+
+                                            return (
+                                                <div
+                                                    key={participant.userDid}
+                                                    className="flex flex-col gap-4 rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <UserPicture
+                                                                name={participantName}
+                                                                picture={profile?.picture?.url}
+                                                                size="36px"
+                                                            />
+                                                            <div className="min-w-0">
+                                                                <div className="truncate text-base font-medium text-foreground">
+                                                                    {participantName}
+                                                                </div>
+                                                                <div className="mt-1 text-sm text-muted-foreground">
+                                                                    Signed up{" "}
+                                                                    {formatDistanceToNow(new Date(participant.joinedAt), {
+                                                                        addSuffix: true,
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {canVerifyShiftParticipants && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                startTransition(async () => {
+                                                                    const result = await verifyShiftParticipantAction(
+                                                                        circle.handle!,
+                                                                        task._id as string,
+                                                                        participant.userDid,
+                                                                    );
+
+                                                                    if (!result.success) {
+                                                                        toast({
+                                                                            title: "Error",
+                                                                            description:
+                                                                                result.message ||
+                                                                                "Failed to confirm participant",
+                                                                            variant: "destructive",
+                                                                        });
+                                                                        return;
+                                                                    }
+
+                                                                    await refreshOpenTaskPreview();
+                                                                    router.refresh();
+                                                                    toast({
+                                                                        title: "Success",
+                                                                        description: "Participant confirmed",
+                                                                    });
+                                                                })
+                                                            }
+                                                            disabled={isPending}
+                                                        >
+                                                            {isPending ? (
+                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            ) : null}
+                                                            Confirm
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="mt-3 text-sm text-muted-foreground">
+                                        No pending sign-ups.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Action Buttons Section */}
                 {renderTaskActions() && ( // Renamed function
