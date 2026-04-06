@@ -1,11 +1,27 @@
 # Release Notes
 
-## Current Production Note
-- Added Shift Tasks for scheduled participation work alongside normal outcome tasks.
-- Shift Tasks use sign-up and admin confirmation instead of the assignee review flow.
-- Pending shift sign-ups remain private to admins and moderators until confirmed.
-- Public participant visibility and counts reflect confirmed shift participation.
-- Added shift participant notifications for admin sign-up alerts and user confirmation alerts.
+## Current main - Task UX updates
+- Added optional priority to ordinary tasks with Low, Medium, High, and Critical values. Priority is unset by default, and Help Wanted urgency was intentionally not changed in this pass.
+- Main Tasks page now supports multi-select stage filtering, priority filtering, Assigned To sorting, and explicit urgency ordering for priority sorting.
+- Reordered the task form to: Create in, Title, Date + Priority, Description, Image, Location, Goal, Event. Description remains optional, and Goal/Event can still be preselected from their context.
+- Main Tasks page now persists selected stages, selected priorities, sort order, and search text locally for that page only.
+- Resolved tasks are hidden from the active list by default and moved into a bottom expandable section that auto-expands when current filters only match resolved tasks.
+- Task side panel now supports direct priority editing, immediate visual sync for priority and stage changes, and a more stable header layout for long titles.
+- Tasks now record acceptance metadata via `acceptedAt` and `acceptedBy` when the assignee explicitly accepts the work.
+- Self-assignment now auto-accepts the task so assignees do not need a redundant second acceptance step.
+- Added strict task review and verification workflow rules so in-progress work must be submitted for review, verified, and only then resolved.
+- Added the admin-only `Needs Verification` queue in circle tasks so admins can `Mark Verified` or `Request Changes` on submitted work.
+- Added the `Verified Contributions` panel on user profiles with a public contribution count separated from the viewer-visible contribution list.
+- Fixed task preview refresh after Accept Task, Start Progress, Submit for Review, Request Changes, and Mark Verified so the open side panel updates immediately without a manual browser refresh.
+
+## 0.8.16 - 2026-03-28
+- Fixed profile header CTA alignment by anchoring action buttons (Message, Follow, etc.) to the title row instead of the full text column.
+- Removed fragile negative-margin positioning in profile header.
+- Ensures consistent CTA positioning regardless of description length or metadata height.
+- Minor UX improvements:
+  - Latest post ordering refinement
+  - Circle message button routes to admin chat
+  - General UI polish and consistency tweaks
 
 ## 0.8.15 - 2025-12-13
 - Added the maintenance notice button from the holding screen to the welcome hero so both variants share the same messaging experience.
