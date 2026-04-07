@@ -28,7 +28,7 @@ import {
     Notification,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
-import { ChatConversation, ChatMessageDoc, ChatReadState } from "@/lib/chat/mongo-types";
+import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 
 const MONGODB_URI =
@@ -73,6 +73,7 @@ let Notifications: Collection<Notification>;
 let ChatConversations: Collection<ChatConversation>;
 let ChatMessageDocs: Collection<ChatMessageDoc>;
 let ChatReadStates: Collection<ChatReadState>;
+let MessageEmailReminders: Collection<MessageEmailReminder>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 let UserRelationships: Collection<any>;
 
@@ -116,6 +117,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatConversations = db.collection<ChatConversation>("chatConversations");
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
+    MessageEmailReminders = db.collection<MessageEmailReminder>("messageEmailReminders");
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
     UserRelationships = db.collection("userRelationships");
 }
@@ -159,6 +161,7 @@ export {
     ChatConversations,
     ChatMessageDocs,
     ChatReadStates,
+    MessageEmailReminders,
     PlatformBroadcastMessages,
     UserRelationships,
 };

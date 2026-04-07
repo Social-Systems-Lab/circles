@@ -20,6 +20,7 @@ import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
+import { enqueueMessageEmailReminders } from "@/lib/data/message-reminders";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
@@ -131,11 +132,13 @@ const sendConversationMessageNotifications = async ({
     conversation,
     senderDid,
     messageBody,
+    messageId,
 }: {
     conversationId: string;
     conversation: any;
     senderDid: string;
     messageBody: string;
+    messageId?: string;
 }) => {
     const isDirectMessage = conversation?.type === "dm";
     const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
@@ -176,6 +179,21 @@ const sendConversationMessageNotifications = async ({
         conversationName: conversation?.name,
         messagePreview: messageBody,
     });
+
+    if (!isDirectMessage || !messageId) {
+        return;
+    }
+
+    try {
+        await enqueueMessageEmailReminders({
+            messageId,
+            conversation,
+            senderDid,
+            recipientDids,
+        });
+    } catch (error) {
+        console.error("Failed to enqueue message email reminders:", error);
+    }
 };
 
 export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
@@ -512,6 +530,7 @@ export const sendMongoMessageAction = async (
             conversation: access.conversation,
             senderDid: userDid,
             messageBody: content,
+            messageId: doc._id as string,
         });
         return { success: true, messageId: doc._id as string };
     } catch (error) {
@@ -590,6 +609,7 @@ export const sendMongoAttachmentAction = async (
             conversation: access.conversation,
             senderDid: userDid,
             messageBody: file.name,
+            messageId: doc._id as string,
         });
 
         return { success: true, messageId: doc._id as string };

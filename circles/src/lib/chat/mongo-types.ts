@@ -67,3 +67,23 @@ export type ChatReadState = {
     lastReadMessageId: string | null;
     updatedAt: Date;
 };
+
+export type MessageEmailReminderStatus = "pending" | "processing" | "sent" | "skipped" | "failed";
+
+export type MessageEmailReminder = {
+    _id?: any;
+    messageId: string;
+    conversationId: string;
+    senderDid: string;
+    recipientDid: string;
+    dueAt: Date;
+    status: MessageEmailReminderStatus;
+    createdAt: Date;
+    updatedAt: Date;
+    sentAt?: Date;
+    skippedAt?: Date;
+    failedAt?: Date;
+    processingStartedAt?: Date;
+    skipReason?: string;
+    failureReason?: string;
+};

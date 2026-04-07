@@ -504,6 +504,7 @@ export const circleSchema = z.object({
     hiddenCancelledEventIds: z.array(z.string()).optional(),
     agreedToTos: z.boolean().optional(),
     agreedToEmailUpdates: z.boolean().optional(),
+    emailMissedMessages: z.boolean().optional(),
     communityGuidelinesAcceptance: communityGuidelineAgreementStateSchema.optional(),
     communityGuidelinesAcceptedAt: z.date().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
