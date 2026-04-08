@@ -269,6 +269,8 @@ Current launch-ready communication model:
 - In-app notifications are active
 - Chat mentions work
 - Non-chat mentions are intentionally disabled for launch
+- Missed-message email reminder MVP is active for DMs
+- Missed-message emails are gated by the user-level `emailMissedMessages` flag
 - Notification settings MVP is active
 - Notification settings are currently per circle/profile entity, not global
 - Notification settings currently control Bell-owned non-message activity only
@@ -278,7 +280,7 @@ Current launch-ready communication model:
 Deferred items:
 
 - web push notifications
-- email fallback notifications
+- broader email notification settings UI
 - rebuilt non-chat mentions for posts/comments/discussions
 - broader notification taxonomy refinement
 
