@@ -49,16 +49,16 @@ const settingsForms: SettingsForm[] = [
         handle: "matchmaking",
     },
     {
-        name: "General",
-        handle: "general",
-    },
-    {
         name: "Server",
         handle: "server-settings",
     },
     {
-        name: "Subscription",
+        name: "Account Settings",
         handle: "subscription",
+    },
+    {
+        name: "General",
+        handle: "general",
     },
 ];
 
