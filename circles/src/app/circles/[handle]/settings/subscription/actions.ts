@@ -1,6 +1,7 @@
 "use server";
 
-import { getUserPrivate } from "@/lib/data/user";
+import { revalidatePath } from "next/cache";
+import { getPrivateUserByDid, getUserPrivate, updateUser } from "@/lib/data/user";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 
@@ -52,4 +53,57 @@ export async function getPlans() {
     }
 
     return response.json();
+}
+
+export async function updateMissedMessageEmailSetting(enabled: boolean) {
+    if (typeof enabled !== "boolean") {
+        return {
+            success: false,
+            message: "Invalid missed-message email setting.",
+        };
+    }
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return {
+                success: false,
+                message: "You need to be logged in to update this setting.",
+            };
+        }
+
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?._id) {
+            return {
+                success: false,
+                message: "User not found.",
+            };
+        }
+
+        await updateUser(
+            {
+                _id: user._id,
+                emailMissedMessages: enabled,
+            },
+            userDid,
+        );
+
+        if (user.handle) {
+            revalidatePath(`/circles/${user.handle}/settings/subscription`);
+        }
+
+        return {
+            success: true,
+            message: enabled
+                ? "Missed-message email reminders enabled."
+                : "Missed-message email reminders disabled.",
+            emailMissedMessages: enabled,
+        };
+    } catch (error) {
+        console.error("Error updating missed-message email setting:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to update missed-message email setting.",
+        };
+    }
 }

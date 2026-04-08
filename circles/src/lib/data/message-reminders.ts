@@ -224,7 +224,7 @@ const processClaimedMessageEmailReminder = async (
             };
         }
 
-        if (recipient?.emailMissedMessages !== true) {
+        if (recipient?.emailMissedMessages === false) {
             const skipReason = "missed_message_emails_disabled";
             await markReminderSkipped(claimed._id, skipReason);
             return {
@@ -234,7 +234,7 @@ const processClaimedMessageEmailReminder = async (
             };
         }
 
-        if (!recipient.email) {
+        if (!recipient?.email) {
             const skipReason = "missing_email";
             await markReminderSkipped(claimed._id, skipReason);
             return {
@@ -272,6 +272,7 @@ const processClaimedMessageEmailReminder = async (
         }
 
         const senderName = sender?.name || sender?.handle || "Someone";
+        const recipientName = recipient.name || recipient.handle || "there";
         const messagePreview = truncatePreview(message.body || "Sent you a message");
         const baseUrl = resolveMessageReminderBaseUrl();
         const actionUrl = `${baseUrl}/chat/${claimed.conversationId}`;
@@ -280,7 +281,7 @@ const processClaimedMessageEmailReminder = async (
             to: recipient.email,
             templateAlias: "notification-reminder",
             templateModel: {
-                name: recipient.name || recipient.handle || "there",
+                name: recipientName,
                 notifications: [`${senderName} sent you a message: ${messagePreview}`],
                 actionUrl,
                 productUrl: baseUrl,
