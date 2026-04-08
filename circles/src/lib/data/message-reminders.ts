@@ -125,6 +125,142 @@ const isEligibleReminderConversation = (conversation: ChatConversation | null, r
     return reminder.senderDid !== reminder.recipientDid;
 };
 
+type MessageEmailReminderProcessResult = {
+    outcome: "sent" | "skipped" | "failed";
+    status: "sent" | "skipped" | "failed";
+    skipReason?: string;
+    failureReason?: string;
+};
+
+const processClaimedMessageEmailReminder = async (
+    claimed: MessageEmailReminder,
+): Promise<MessageEmailReminderProcessResult> => {
+    try {
+        const conversationObjectId = toObjectId(claimed.conversationId);
+        const messageObjectId = toObjectId(claimed.messageId);
+        if (!conversationObjectId || !messageObjectId) {
+            const skipReason = "invalid_ids";
+            await markReminderSkipped(claimed._id, skipReason);
+            return {
+                outcome: "skipped",
+                status: "skipped",
+                skipReason,
+            };
+        }
+
+        const [conversation, message, readState, recipient, sender] = await Promise.all([
+            ChatConversations.findOne({ _id: conversationObjectId }) as Promise<ChatConversation | null>,
+            ChatMessageDocs.findOne({ _id: messageObjectId }) as Promise<ChatMessageDoc | null>,
+            ChatReadStates.findOne({
+                conversationId: claimed.conversationId,
+                userDid: claimed.recipientDid,
+            }) as Promise<ChatReadState | null>,
+            Circles.findOne(
+                { did: claimed.recipientDid, circleType: "user" },
+                { projection: { did: 1, name: 1, handle: 1, email: 1, emailMissedMessages: 1 } },
+            ),
+            Circles.findOne(
+                { did: claimed.senderDid, circleType: "user" },
+                { projection: { did: 1, name: 1, handle: 1 } },
+            ),
+        ]);
+
+        if (!message || message.conversationId !== claimed.conversationId || message.senderDid !== claimed.senderDid) {
+            const skipReason = "message_missing";
+            await markReminderSkipped(claimed._id, skipReason);
+            return {
+                outcome: "skipped",
+                status: "skipped",
+                skipReason,
+            };
+        }
+
+        if (!isEligibleReminderConversation(conversation, claimed)) {
+            const skipReason = "conversation_ineligible";
+            await markReminderSkipped(claimed._id, skipReason);
+            return {
+                outcome: "skipped",
+                status: "skipped",
+                skipReason,
+            };
+        }
+
+        if (recipient?.emailMissedMessages !== true) {
+            const skipReason = "missed_message_emails_disabled";
+            await markReminderSkipped(claimed._id, skipReason);
+            return {
+                outcome: "skipped",
+                status: "skipped",
+                skipReason,
+            };
+        }
+
+        if (!recipient.email) {
+            const skipReason = "missing_email";
+            await markReminderSkipped(claimed._id, skipReason);
+            return {
+                outcome: "skipped",
+                status: "skipped",
+                skipReason,
+            };
+        }
+
+        if (
+            await hasReadConversationAfterMessage({
+                conversationId: claimed.conversationId,
+                recipientDid: claimed.recipientDid,
+                messageId: claimed.messageId,
+                readState,
+            })
+        ) {
+            const skipReason = "conversation_read";
+            await markReminderSkipped(claimed._id, skipReason);
+            return {
+                outcome: "skipped",
+                status: "skipped",
+                skipReason,
+            };
+        }
+
+        if (!process.env.POSTMARK_API_TOKEN || !process.env.POSTMARK_SENDER_EMAIL) {
+            const failureReason = "postmark_not_configured";
+            await markReminderFailed(claimed._id, failureReason);
+            return {
+                outcome: "failed",
+                status: "failed",
+                failureReason,
+            };
+        }
+
+        const senderName = sender?.name || sender?.handle || "Someone";
+        const messagePreview = truncatePreview(message.body || "Sent you a message");
+
+        await sendEmail({
+            to: recipient.email,
+            templateAlias: "notification-reminder",
+            templateModel: {
+                name: recipient.name || recipient.handle || "there",
+                notifications: [`${senderName} sent you a message: ${messagePreview}`],
+                actionUrl: buildChatUrl(claimed.conversationId),
+            },
+        });
+
+        await markReminderSent(claimed._id);
+        return {
+            outcome: "sent",
+            status: "sent",
+        };
+    } catch (error) {
+        const failureReason = error instanceof Error ? error.message : "unexpected_error";
+        await markReminderFailed(claimed._id, failureReason);
+        return {
+            outcome: "failed",
+            status: "failed",
+            failureReason,
+        };
+    }
+};
+
 export const enqueueMessageEmailReminders = async ({
     messageId,
     conversation,
@@ -212,99 +348,77 @@ export const processDueMessageEmailReminders = async (limit: number = DEFAULT_PR
         }
 
         stats.scanned += 1;
-
-        try {
-            const conversationObjectId = toObjectId(claimed.conversationId);
-            const messageObjectId = toObjectId(claimed.messageId);
-            if (!conversationObjectId || !messageObjectId) {
-                await markReminderSkipped(claimed._id, "invalid_ids");
-                stats.skipped += 1;
-                continue;
-            }
-
-            const [conversation, message, readState, recipient, sender] = await Promise.all([
-                ChatConversations.findOne({ _id: conversationObjectId }) as Promise<ChatConversation | null>,
-                ChatMessageDocs.findOne({ _id: messageObjectId }) as Promise<ChatMessageDoc | null>,
-                ChatReadStates.findOne({
-                    conversationId: claimed.conversationId,
-                    userDid: claimed.recipientDid,
-                }) as Promise<ChatReadState | null>,
-                Circles.findOne(
-                    { did: claimed.recipientDid, circleType: "user" },
-                    { projection: { did: 1, name: 1, handle: 1, email: 1, emailMissedMessages: 1 } },
-                ),
-                Circles.findOne(
-                    { did: claimed.senderDid, circleType: "user" },
-                    { projection: { did: 1, name: 1, handle: 1 } },
-                ),
-            ]);
-
-            if (!message || message.conversationId !== claimed.conversationId || message.senderDid !== claimed.senderDid) {
-                await markReminderSkipped(claimed._id, "message_missing");
-                stats.skipped += 1;
-                continue;
-            }
-
-            if (!isEligibleReminderConversation(conversation, claimed)) {
-                await markReminderSkipped(claimed._id, "conversation_ineligible");
-                stats.skipped += 1;
-                continue;
-            }
-
-            if (recipient?.emailMissedMessages !== true) {
-                await markReminderSkipped(claimed._id, "missed_message_emails_disabled");
-                stats.skipped += 1;
-                continue;
-            }
-
-            if (!recipient.email) {
-                await markReminderSkipped(claimed._id, "missing_email");
-                stats.skipped += 1;
-                continue;
-            }
-
-            if (
-                await hasReadConversationAfterMessage({
-                    conversationId: claimed.conversationId,
-                    recipientDid: claimed.recipientDid,
-                    messageId: claimed.messageId,
-                    readState,
-                })
-            ) {
-                await markReminderSkipped(claimed._id, "conversation_read");
-                stats.skipped += 1;
-                continue;
-            }
-
-            if (!process.env.POSTMARK_API_TOKEN || !process.env.POSTMARK_SENDER_EMAIL) {
-                await markReminderFailed(claimed._id, "postmark_not_configured");
-                stats.failed += 1;
-                continue;
-            }
-
-            const senderName = sender?.name || sender?.handle || "Someone";
-            const messagePreview = truncatePreview(message.body || "Sent you a message");
-
-            await sendEmail({
-                to: recipient.email,
-                templateAlias: "notification-reminder",
-                templateModel: {
-                    name: recipient.name || recipient.handle || "there",
-                    notifications: [`${senderName} sent you a message: ${messagePreview}`],
-                    actionUrl: buildChatUrl(claimed.conversationId),
-                },
-            });
-
-            await markReminderSent(claimed._id);
-            stats.sent += 1;
-        } catch (error) {
-            await markReminderFailed(
-                claimed._id,
-                error instanceof Error ? error.message : "unexpected_error",
-            );
-            stats.failed += 1;
-        }
+        const result = await processClaimedMessageEmailReminder(claimed);
+        stats[result.outcome] += 1;
     }
 
     return stats;
+};
+
+export const processMessageEmailReminderById = async (reminderId: string) => {
+    const reminderObjectId = toObjectId(reminderId);
+    if (!reminderObjectId) {
+        return {
+            ok: false as const,
+            code: "invalid_id" as const,
+            reminderId,
+        };
+    }
+
+    const existingReminder = await MessageEmailReminders.findOne({ _id: reminderObjectId });
+    if (!existingReminder?._id) {
+        return {
+            ok: false as const,
+            code: "not_found" as const,
+            reminderId,
+        };
+    }
+
+    const claimed = await MessageEmailReminders.findOneAndUpdate(
+        { _id: reminderObjectId, status: "pending" },
+        {
+            $set: {
+                status: "processing",
+                processingStartedAt: new Date(),
+                updatedAt: new Date(),
+            },
+        },
+        { returnDocument: "after" },
+    );
+
+    if (!claimed?._id) {
+        const currentReminder = await MessageEmailReminders.findOne({ _id: reminderObjectId });
+        return {
+            ok: false as const,
+            code: "not_pending" as const,
+            reminderId,
+            currentStatus: currentReminder?.status || existingReminder.status,
+        };
+    }
+
+    const result = await processClaimedMessageEmailReminder(claimed);
+    const refreshedReminder = await MessageEmailReminders.findOne(
+        { _id: reminderObjectId },
+        {
+            projection: {
+                status: 1,
+                sentAt: 1,
+                skippedAt: 1,
+                failedAt: 1,
+                skipReason: 1,
+                failureReason: 1,
+                dueAt: 1,
+                processingStartedAt: 1,
+                updatedAt: 1,
+            },
+        },
+    );
+
+    return {
+        ok: true as const,
+        code: "processed" as const,
+        reminderId,
+        outcome: result.outcome,
+        reminder: refreshedReminder,
+    };
 };
