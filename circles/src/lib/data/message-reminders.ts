@@ -27,9 +27,48 @@ const truncatePreview = (value: string, maxLength: number = 160): string => {
     return `${normalized.slice(0, maxLength - 1)}...`;
 };
 
-const buildChatUrl = (conversationId: string): string => {
-    const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
-    return `${baseUrl}/chat/${conversationId}`;
+const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, "");
+
+const isLocalHostname = (hostname: string): boolean => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
+const toHttpsUrl = (value?: string): string | undefined => (value ? `https://${value}` : undefined);
+
+const resolveMessageReminderBaseUrl = (): string => {
+    const candidates = [
+        process.env.NEXT_PUBLIC_APP_URL,
+        process.env.APP_URL,
+        process.env.SITE_URL,
+        process.env.CIRCLES_URL,
+        toHttpsUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+        toHttpsUrl(process.env.VERCEL_URL),
+    ];
+
+    let firstValidCandidate: string | null = null;
+    for (const candidate of candidates) {
+        if (!candidate) {
+            continue;
+        }
+
+        try {
+            const normalizedCandidate = normalizeBaseUrl(new URL(candidate).toString());
+            const hostname = new URL(normalizedCandidate).hostname;
+            if (hostname === "db") {
+                continue;
+            }
+
+            if (!firstValidCandidate) {
+                firstValidCandidate = normalizedCandidate;
+            }
+
+            if (!isLocalHostname(hostname)) {
+                return normalizedCandidate;
+            }
+        } catch {
+            continue;
+        }
+    }
+
+    return firstValidCandidate || "http://localhost:3000";
 };
 
 const hasReadConversationAfterMessage = async ({
@@ -234,6 +273,8 @@ const processClaimedMessageEmailReminder = async (
 
         const senderName = sender?.name || sender?.handle || "Someone";
         const messagePreview = truncatePreview(message.body || "Sent you a message");
+        const baseUrl = resolveMessageReminderBaseUrl();
+        const actionUrl = `${baseUrl}/chat/${claimed.conversationId}`;
 
         await sendEmail({
             to: recipient.email,
@@ -241,7 +282,12 @@ const processClaimedMessageEmailReminder = async (
             templateModel: {
                 name: recipient.name || recipient.handle || "there",
                 notifications: [`${senderName} sent you a message: ${messagePreview}`],
-                actionUrl: buildChatUrl(claimed.conversationId),
+                actionUrl,
+                productUrl: baseUrl,
+                introText: "You have an unread message on Kamooni.",
+                bodyText: "Click the button below to view your messages.",
+                summaryText: "You have an unread message on Kamooni. Click the button below to view your messages.",
+                actionText: "View Messages",
             },
         });
 

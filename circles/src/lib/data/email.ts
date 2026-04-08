@@ -21,6 +21,17 @@ interface EmailOptions {
     templateModel: Record<string, any>;
 }
 
+const getTemplateString = (templateModel: Record<string, any>, ...keys: string[]): string | undefined => {
+    for (const key of keys) {
+        const value = templateModel[key];
+        if (typeof value === "string" && value.trim().length > 0) {
+            return value;
+        }
+    }
+
+    return undefined;
+};
+
 /**
  * Sends an email using Postmark.
  * @param options - Email sending options.
@@ -43,14 +54,33 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
     const { to, templateAlias, templateModel } = options;
 
     const message = new TemplatedMessage(POSTMARK_SENDER_EMAIL, templateAlias, templateModel, to);
+    const productUrl = getTemplateString(templateModel, "productUrl", "product_url") || process.env.CIRCLES_URL || "http://localhost:3000";
+    const actionUrl = getTemplateString(templateModel, "actionUrl", "action_url");
+    const actionText = getTemplateString(templateModel, "actionText", "action_text", "buttonText", "button_text");
+    const introText = getTemplateString(templateModel, "introText", "intro_text");
+    const bodyText = getTemplateString(templateModel, "bodyText", "body_text");
+    const summaryText = getTemplateString(templateModel, "summaryText", "summary_text");
 
     // Add common variables that might be useful in all templates
-    (message.TemplateModel as any).product_url = process.env.CIRCLES_URL || "http://localhost:3000";
+    (message.TemplateModel as any).product_url = productUrl;
     (message.TemplateModel as any).product_name = "Kamooni";
     (message.TemplateModel as any).company_name = "Social Systems Lab";
     (message.TemplateModel as any).company_address = "Illerstigen 8, 170 71 Solna, Sweden";
     (message.TemplateModel as any).name = templateModel.name || "User"; // Default to "User" if not provided
-    (message.TemplateModel as any).action_url = templateModel.actionUrl;
+    (message.TemplateModel as any).action_url = actionUrl;
+    if (actionText) {
+        (message.TemplateModel as any).action_text = actionText;
+        (message.TemplateModel as any).button_text = actionText;
+    }
+    if (introText) {
+        (message.TemplateModel as any).intro_text = introText;
+    }
+    if (bodyText) {
+        (message.TemplateModel as any).body_text = bodyText;
+    }
+    if (summaryText) {
+        (message.TemplateModel as any).summary_text = summaryText;
+    }
     (message.TemplateModel as any).support_email = "hello@socialsystems.io";
     (message.TemplateModel as any).current_year = new Date().getFullYear().toString();
 
