@@ -18,12 +18,16 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
     }
 
     return (
-        <div className="container py-6">
-            <h1 className="mb-6 text-2xl font-bold">Subscription</h1>
-            <p className="mb-6 text-muted-foreground">
-                Manage your verification thread and membership options in one place.
-            </p>
-            <SubscriptionFormSettings user={user} />
+        <div className="container py-8">
+            <div className="max-w-3xl space-y-3">
+                <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
+                <p className="text-muted-foreground">
+                    Manage your verification thread, message reminders, and membership options in one place.
+                </p>
+            </div>
+            <div className="mt-8 max-w-5xl">
+                <SubscriptionFormSettings user={user} />
+            </div>
         </div>
     );
 }

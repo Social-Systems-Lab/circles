@@ -19,24 +19,40 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
 
     if (subscriptionAttempted) {
         return (
-            <div className="space-y-10">
+            <div className="space-y-8">
                 <VerificationSettingsCard />
                 <MissedMessageEmailSettingsCard initialValue={user.emailMissedMessages !== false} />
-                <div className="flex flex-col items-center text-center">
-                    <h1 className="text-2xl font-bold">Thank You!</h1>
-                    <p className="mb-4">
-                        Your subscription is being processed. Your membership status will be updated shortly.
-                    </p>
-                </div>
+                <section className="space-y-4">
+                    <div className="space-y-1 px-1">
+                        <h2 className="text-lg font-semibold tracking-tight">Membership</h2>
+                        <p className="text-sm text-muted-foreground">
+                            Founding membership supports Kamooni and unlocks member benefits.
+                        </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 px-6 py-8 text-center">
+                        <h3 className="text-2xl font-bold tracking-tight">Thank You!</h3>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Your subscription is being processed. Your membership status will be updated shortly.
+                        </p>
+                    </div>
+                </section>
             </div>
         );
     }
 
     return (
-        <div className="space-y-10">
+        <div className="space-y-8">
             <VerificationSettingsCard />
             <MissedMessageEmailSettingsCard initialValue={user.emailMissedMessages !== false} />
-            <SubscriptionForm circle={user} onDialogClose={handleDialogClose} />
+            <section className="space-y-4">
+                <div className="space-y-1 px-1">
+                    <h2 className="text-lg font-semibold tracking-tight">Membership</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Founding membership supports Kamooni and unlocks member benefits.
+                    </p>
+                </div>
+                <SubscriptionForm circle={user} onDialogClose={handleDialogClose} />
+            </section>
         </div>
     );
 }
