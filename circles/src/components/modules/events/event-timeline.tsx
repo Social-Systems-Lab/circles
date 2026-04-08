@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { hideCancelledEventAction } from "@/app/circles/[handle]/events/actions";
+import { getEventJoinState } from "./event-join-state";
 
 type Props = {
     circleHandle: string;
@@ -82,29 +83,15 @@ function isOngoing(evt: EventDisplay): boolean {
     return now >= start && now <= end;
 }
 
-// Show join button from 5 minutes before start until the event ends (or 2h after start if no end)
-function isWithinJoinWindow(evt: EventDisplay): boolean {
-    const start = evt.startAt ? new Date(evt.startAt as any) : undefined;
-    const end = evt.endAt ? new Date(evt.endAt as any) : undefined;
-    if (!start) return false;
-    const now = new Date();
-    const startMinus5 = new Date(start.getTime() - 5 * 60 * 1000);
-    if (end) {
-        return now >= startMinus5 && now <= end;
-    }
-    // Fallback if no end: allow for 2 hours after start
-    const fallbackEnd = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-    return now >= startMinus5 && now <= fallbackEnd;
-}
-
 const EventCard: React.FC<{
     e: EventDisplay;
     circleHandle: string;
     condensed?: boolean;
+    canManageJoinLink?: boolean;
     onHideCancelled?: (eventId: string) => Promise<void> | void;
     hidePending?: boolean;
     onNavigate?: () => void;
-}> = ({ e, circleHandle, condensed, onHideCancelled, hidePending, onNavigate }) => {
+}> = ({ e, circleHandle, condensed, canManageJoinLink, onHideCancelled, hidePending, onNavigate }) => {
     const stage = e.stage;
     const isDraft = stage === "review";
     const isCancelled = stage === "cancelled";
@@ -112,6 +99,10 @@ const EventCard: React.FC<{
     const ongoing = isOngoing(e);
     const eventId = getCanonicalEventId(e);
     const router = useRouter();
+    const joinState = getEventJoinState(e, {
+        canManageMissingLink: canManageJoinLink,
+        missingLinkLabel: "Missing link",
+    });
 
     return (
         <Card
@@ -217,18 +208,32 @@ const EventCard: React.FC<{
                     </div>
                 </CardContent>
             </Link>
-            {e.isVirtual && e.virtualUrl && isWithinJoinWindow(e) && !isCancelled && (
-                <Button
-                    size="sm"
-                    className="absolute right-2 top-2 z-10 bg-green-600 text-white hover:bg-green-700"
-                    onClick={(ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        window.open(e.virtualUrl!, "_blank", "noopener,noreferrer");
-                    }}
-                >
-                    Join
-                </Button>
+            {joinState && !isCancelled && (
+                <span className="absolute right-2 top-2 z-10" title={joinState.title}>
+                    <Button
+                        size="sm"
+                        type="button"
+                        variant={joinState.isEnabled ? "default" : "outline"}
+                        disabled={!joinState.isEnabled}
+                        className={cn(
+                            joinState.isEnabled && "bg-green-600 text-white hover:bg-green-700",
+                            !joinState.isEnabled &&
+                                !joinState.isMissingLink &&
+                                "border-green-200 bg-white text-green-700 opacity-70",
+                            joinState.isMissingLink &&
+                                "border-amber-300 bg-white text-amber-800 opacity-90",
+                        )}
+                        onClick={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            if (joinState.isEnabled && joinState.href) {
+                                window.open(joinState.href, "_blank", "noopener,noreferrer");
+                            }
+                        }}
+                    >
+                        {joinState.label}
+                    </Button>
+                </span>
             )}
             {isCancelled && onHideCancelled && eventId && (
                 <Button
@@ -318,7 +323,7 @@ export default function EventTimeline({
     onNavigate,
 }: Props) {
     const { toast } = useToast();
-    const [, setUser] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [locallyHiddenIds, setLocallyHiddenIds] = useState<string[]>([]);
     const [pendingHideId, setPendingHideId] = useState<string | null>(null);
 
@@ -486,6 +491,7 @@ export default function EventTimeline({
                                                             e={it.event}
                                                             circleHandle={circleHandle}
                                                             condensed={condensed}
+                                                            canManageJoinLink={Boolean(user?.did && user.did === it.event.createdBy)}
                                                             onHideCancelled={handleHideCancelled}
                                                             hidePending={pendingHideId === eventId}
                                                             onNavigate={onNavigate}
