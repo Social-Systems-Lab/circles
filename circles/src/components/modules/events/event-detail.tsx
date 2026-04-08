@@ -590,9 +590,9 @@ export default function EventDetail({
                                                     joinState.isEnabled && "bg-green-600 text-white hover:bg-green-700",
                                                     !joinState.isEnabled &&
                                                         !joinState.isMissingLink &&
-                                                        "border-green-200 bg-white text-green-700 opacity-70",
+                                                        "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:opacity-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700",
                                                     joinState.isMissingLink &&
-                                                        "border-amber-300 bg-amber-50 text-amber-800 opacity-90",
+                                                        "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:opacity-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900",
                                                 )}
                                                 onClick={() => {
                                                     if (joinState.isEnabled && joinState.href) {
