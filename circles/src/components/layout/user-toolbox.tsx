@@ -155,20 +155,28 @@ export const UserToolbox = () => {
             }
 
             try {
+                const today = new Date();
+                const nextYear = new Date(today);
+                nextYear.setFullYear(today.getFullYear() + 1);
 
-	        const results = await Promise.allSettled([
-		    getEventsAction(user.handle, undefined, true, true),
+                const results = await Promise.allSettled([
+                    getEventsAction(
+                        user.handle,
+                        { from: today.toISOString(), to: nextYear.toISOString() },
+                        true,
+                        true,
+                    ),
                     getGoalsAction(user.handle, true, true),
                     getTasksAction(user.handle, true, true),
                     getIssuesAction(user.handle, true, true),
                 ] as const);
 
-	        const eventsRes = results[0].status === "fulfilled" ? results[0].value : undefined;
-		const goalsRes = results[1].status === "fulfilled" ? results[1].value : undefined;
-		const tasksRes = results[2].status === "fulfilled" ? results[2].value : undefined;
-		const issuesRes = results[3].status === "fulfilled" ? results[3].value : undefined;
+                const eventsRes = results[0].status === "fulfilled" ? results[0].value : undefined;
+                const goalsRes = results[1].status === "fulfilled" ? results[1].value : undefined;
+                const tasksRes = results[2].status === "fulfilled" ? results[2].value : undefined;
+                const issuesRes = results[3].status === "fulfilled" ? results[3].value : undefined;
 
-		setEvents(eventsRes?.events ?? []);
+                setEvents(eventsRes?.events ?? []);
 
                 const goalMilestones: Milestone[] =
                     (goalsRes?.goals || [])
