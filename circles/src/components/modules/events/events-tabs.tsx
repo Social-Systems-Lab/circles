@@ -22,7 +22,13 @@ type Props = {
     canCreate: boolean;
 };
 
-type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+type Milestone = {
+    id: string;
+    type: "goal" | "task" | "issue";
+    title: string;
+    date: Date | string;
+    circleHandle?: string;
+};
 
 function EventsTabsContent({ circle, events, canCreate }: Props) {
     const searchParams = useSearchParams();
@@ -107,6 +113,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                         type: "task",
                         title: t.title,
                         date: t.targetDate,
+                        circleHandle: t.circle?.handle,
                     }));
 
                 const issueMilestones: Milestone[] = (issuesRes || [])

@@ -15,7 +15,7 @@ import { EventDisplay } from "@/models/models";
 type CalendarViewProps = {
     circleHandle: string;
     events: EventDisplay[];
-    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
+    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string }[];
 };
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
@@ -54,6 +54,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
                 extendedProps: {
                     type: m.type,
                     itemId: m.id,
+                    circleHandle: m.circleHandle,
                 },
             })) || [];
 
@@ -75,14 +76,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
         const ext = (clickInfo.event.extendedProps as any) || {};
         const type = ext.type as string | undefined;
         const itemId = (ext.itemId as string | undefined) || clickInfo.event.id;
+        const targetCircleHandle = (ext.circleHandle as string | undefined) || circleHandle;
         if (!itemId) return;
 
         if (type === "goal") {
-            router.push(`/circles/${circleHandle}/goals/${itemId}`);
+            router.push(`/circles/${targetCircleHandle}/goals/${itemId}`);
         } else if (type === "task") {
-            router.push(`/circles/${circleHandle}/tasks/${itemId}`);
+            router.push(`/circles/${targetCircleHandle}/tasks/${itemId}`);
         } else if (type === "issue") {
-            router.push(`/circles/${circleHandle}/issues/${itemId}`);
+            router.push(`/circles/${targetCircleHandle}/issues/${itemId}`);
         } else {
             // default to event
             router.push(`/circles/${circleHandle}/events/${itemId}`);
