@@ -20,7 +20,7 @@ import { getEventJoinState } from "./event-join-state";
 type Props = {
     circleHandle: string;
     events: EventDisplay[];
-    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
+    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string }[];
     condensed?: boolean;
     onEventHidden?: (eventId: string) => void;
     onNavigate?: () => void;
@@ -256,25 +256,26 @@ const EventCard: React.FC<{
 
 // Condensed one-line milestone row
 const MilestoneRow: React.FC<{
-    m: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+    m: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string };
     circleHandle: string;
     onNavigate?: () => void;
     isOverdue?: boolean;
 }> = ({ m, circleHandle, onNavigate, isOverdue }) => {
     const icon = m.type === "goal" ? "🎯" : m.type === "task" ? "🧩" : "🐞";
+    const targetCircleHandle = m.circleHandle || circleHandle;
     const href =
         m.type === "goal"
-            ? `/circles/${circleHandle}/goals/${m.id}#circle-tabs`
+            ? `/circles/${targetCircleHandle}/goals/${m.id}#circle-tabs`
             : m.type === "task"
-              ? `/circles/${circleHandle}/tasks/${m.id}#circle-tabs`
-              : `/circles/${circleHandle}/issues/${m.id}#circle-tabs`;
+              ? `/circles/${targetCircleHandle}/tasks/${m.id}#circle-tabs`
+              : `/circles/${targetCircleHandle}/issues/${m.id}#circle-tabs`;
 
     const editHref =
         m.type === "goal"
-            ? `/circles/${circleHandle}/goals/${m.id}/edit`
+            ? `/circles/${targetCircleHandle}/goals/${m.id}/edit`
             : m.type === "task"
-              ? `/circles/${circleHandle}/tasks/${m.id}/edit`
-              : `/circles/${circleHandle}/issues/${m.id}/edit`;
+              ? `/circles/${targetCircleHandle}/tasks/${m.id}/edit`
+              : `/circles/${targetCircleHandle}/issues/${m.id}/edit`;
 
     return (
         <div className="group flex items-center gap-2">

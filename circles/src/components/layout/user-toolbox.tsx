@@ -47,7 +47,7 @@ const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { useToast } from "../ui/use-toast";
 
-type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string };
 type ToolboxTab = UserToolboxTab | "connections";
 type ToolboxConnectionItem = {
     circle: Circle;
@@ -205,6 +205,7 @@ export const UserToolbox = () => {
                             type: "task" as const,
                             title: task.title,
                             date: task.targetDate,
+                            circleHandle: task.circle?.handle,
                         })) || [];
 
                 const issueMilestones: Milestone[] =
