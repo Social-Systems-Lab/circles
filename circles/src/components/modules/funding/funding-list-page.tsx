@@ -57,6 +57,9 @@ export function FundingListPage({ circle, asks, canCreate }: FundingListPageProp
         });
     }, [asks, categoryFilter, maxAmount, minAmount, openOnly, statusFilter]);
 
+    const filteredDrafts = filteredAsks.filter((ask) => ask.status === "draft");
+    const filteredPublishedAsks = filteredAsks.filter((ask) => ask.status !== "draft");
+
     return (
         <div className="formatted mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
             <div className="flex flex-col gap-4 rounded-[15px] bg-white p-6 shadow-lg md:flex-row md:items-end md:justify-between">
@@ -66,6 +69,11 @@ export function FundingListPage({ circle, asks, canCreate }: FundingListPageProp
                         Each ask is one concrete need with one total price. This MVP supports manual claiming and manual
                         completion only. There is no pooled crowdfunding or payment processing here.
                     </p>
+                    {filteredDrafts.length > 0 ? (
+                        <p className="mt-2 text-sm text-slate-600">
+                            Drafts below are only visible to their owner and circle admins.
+                        </p>
+                    ) : null}
                 </div>
                 {canCreate && (
                     <Button asChild>
@@ -126,15 +134,29 @@ export function FundingListPage({ circle, asks, canCreate }: FundingListPageProp
                 </CardContent>
             </Card>
 
-            {filteredAsks.length > 0 ? (
+            {filteredDrafts.length > 0 ? (
+                <section className="space-y-3">
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-900">Drafts</h2>
+                        <p className="text-sm text-slate-600">Not public. Visible only to the ask owner and circle admins.</p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {filteredDrafts.map((ask) => (
+                            <FundingCard key={ask._id?.toString()} ask={ask} circleHandle={circle.handle!} />
+                        ))}
+                    </div>
+                </section>
+            ) : null}
+
+            {filteredPublishedAsks.length > 0 ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {filteredAsks.map((ask) => (
+                    {filteredPublishedAsks.map((ask) => (
                         <FundingCard key={ask._id?.toString()} ask={ask} circleHandle={circle.handle!} />
                     ))}
                 </div>
             ) : (
                 <div className="rounded-[15px] border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-                    No funding asks match the current filters.
+                    {filteredDrafts.length > 0 ? "No published funding asks match the current filters." : "No funding asks match the current filters."}
                 </div>
             )}
         </div>

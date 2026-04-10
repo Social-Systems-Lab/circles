@@ -654,6 +654,12 @@ export const modules: ModuleInfo[] = [
             "Create and discover upcoming meetups, cleanups and gatherings. Publish event details, locations or virtual links, and manage RSVPs with calendar integration.",
     },
     {
+        name: "Funding Needs",
+        handle: "funding",
+        description:
+            "Enable the members-only Funding Needs surfaces for concrete asks with one total amount and one active supporter at a time.",
+    },
+    {
         name: "Proposals",
         handle: "proposals",
         description:

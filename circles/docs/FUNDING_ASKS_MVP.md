@@ -8,10 +8,11 @@ This is intentionally **not** full crowdfunding.
 
 This MVP supports:
 
-- one ask = one item or one bundle with one total price
+- one ask = one total price with optional itemized line items
 - manual supporter claim flow
 - manual completion confirmation
 - member-only visibility
+- circle-level activation before funding surfaces appear
 - optional cover image using the existing image storage pipeline
 
 This MVP intentionally does **not** support:
@@ -33,7 +34,7 @@ Phase 1 adds:
 - create page at `/circles/[handle]/funding/new`
 - edit page at `/circles/[handle]/funding/[askId]/edit`
 
-The funding routes are intentionally **not** wired into the circle tabs module system yet. They are linked from the home-page panel and direct URLs.
+Funding surfaces only render when the circle has the `funding` module enabled in existing page/module settings. When funding is disabled, the home panel and direct funding routes stay hidden.
 
 ## Data Model
 
@@ -54,8 +55,7 @@ Core fields:
 - `category`
 - `amount`
 - `currency`
-- `quantity`
-- `unitLabel`
+- `items[]`
 - `status`
 - `isProxy`
 - `beneficiaryType`
@@ -74,6 +74,13 @@ Core fields:
 - `updatedAt`
 
 The model is intentionally explicit and boring. It does not reuse tasks, and it does not attempt to model crowdfunding rounds or payment state.
+
+Line items are optional and each may include:
+
+- `name`
+- `quantity`
+- `unitLabel`
+- `note`
 
 ## Status Flow
 
@@ -102,10 +109,18 @@ Manual support flow:
 
 The claim path is atomic at the database update level so two members cannot successfully claim the same ask at the same time.
 
+Draft behavior:
+
+- `Save draft` persists the ask reliably before publish
+- draft asks appear in a dedicated `Drafts` section on the funding list page for the creator and circle admins
+- drafts are excluded from normal member-visible funding lists and detail views
+- after saving a draft, the user is returned to the draft edit page with a success message
+
 ## Permissions
 
 View rules:
 
+- funding surfaces must be enabled for the circle first
 - funding routes are members-only
 - logged-out users are blocked by the existing in-circle access gate
 - the home-page panel shows a sign-in / members-only message instead of ask content when needed
@@ -147,6 +162,27 @@ Funding asks use the existing upload/storage pipeline.
 - cover image upload goes through `saveFile`
 - stored URLs still depend on correct `CIRCLES_URL`
 - no separate funding-specific image system was added
+
+The multi-step form preserves the selected image across Back/Next navigation, and saved drafts reload the existing cover image into the edit flow.
+
+## Form UX
+
+Create and edit use a four-step flow:
+
+1. Basics
+2. Beneficiary
+3. Proof / image
+4. Review
+
+Current MVP form behavior:
+
+- Back/Next preserves entered values across steps
+- `Total amount` is the ask-level price and sits next to a controlled currency selector
+- supported currencies are `ZAR`, `USD`, and `EUR`
+- itemization is optional and does not change the one-supporter / one-total-amount model
+- beneficiary type includes `project`
+- the confirmation field is labeled `How will donors know this was fulfilled?`
+- helper text explains that confirmation can be an update, photo, receipt, or short note
 
 ## Deferred
 

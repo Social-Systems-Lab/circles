@@ -31,6 +31,7 @@ export default async function CircleHomePage(props: PageProps) {
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
+    const showFundingPanel = circle.enabledModules?.includes("funding") ?? false;
 
     if (circle.circleType === "user" && circle.did) {
         const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);
@@ -66,7 +67,7 @@ export default async function CircleHomePage(props: PageProps) {
         ).filter((item): item is VerifiedContributionItem => item !== null);
     }
 
-    if (viewerDid) {
+    if (showFundingPanel && viewerDid) {
         const fundingPermissions = await getFundingCirclePermissions(circle, viewerDid);
         canCreateFundingAsk = fundingPermissions.canCreate;
         fundingPanelVisibility = fundingPermissions.canView ? "visible" : "members_only";
@@ -87,6 +88,7 @@ export default async function CircleHomePage(props: PageProps) {
             fundingPreviewAsks={fundingPreviewAsks}
             fundingPanelVisibility={fundingPanelVisibility}
             canCreateFundingAsk={canCreateFundingAsk}
+            showFundingPanel={showFundingPanel}
         />
     );
 }

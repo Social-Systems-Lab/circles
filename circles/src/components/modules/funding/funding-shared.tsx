@@ -3,8 +3,11 @@ import { cn } from "@/lib/utils";
 import type {
     FundingAsk,
     FundingAskCategory,
+    FundingAskCurrency,
     FundingAskStatus,
     FundingAskTrustBadgeType,
+    FundingAskBeneficiaryType,
+    FundingAskItem,
 } from "@/models/models";
 
 export const fundingCategoryLabels: Record<FundingAskCategory, string> = {
@@ -31,6 +34,22 @@ export const fundingTrustBadgeLabels: Record<FundingAskTrustBadgeType, string> =
     verified_member: "Verified member ask",
     proxy_ask: "Proxy ask",
     member_ask: "Member ask",
+};
+
+export const fundingCurrencyOptions: Array<{ value: FundingAskCurrency; label: string }> = [
+    { value: "ZAR", label: "ZAR" },
+    { value: "USD", label: "USD" },
+    { value: "EUR", label: "EUR" },
+];
+
+export const fundingBeneficiaryTypeLabels: Record<FundingAskBeneficiaryType, string> = {
+    self: "My circle / direct need",
+    person: "A person",
+    family: "A family",
+    community: "A community",
+    group: "A group",
+    project: "A project",
+    other: "Other",
 };
 
 const fundingStatusClassNames: Record<FundingAskStatus, string> = {
@@ -77,6 +96,11 @@ export const getFundingBeneficiarySummary = (ask: FundingAsk) => {
     }
 
     return ask.beneficiaryName || "Direct beneficiary";
+};
+
+export const formatFundingItemSummary = (item: FundingAskItem) => {
+    const parts = [item.quantity ? String(item.quantity) : undefined, item.unitLabel, item.name].filter(Boolean);
+    return parts.join(" ");
 };
 
 export function FundingStatusPill({ status, className }: { status: FundingAskStatus; className?: string }) {

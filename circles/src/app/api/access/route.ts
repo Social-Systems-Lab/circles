@@ -23,8 +23,8 @@ export async function POST(req: Request) {
 
         const isFundingRoute = moduleHandle === "funding";
 
-        // Check if module is enabled using enabledModules, except for always-on MVP routes like funding.
-        const moduleEnabled = isFundingRoute ? true : isModuleEnabled(circle, moduleHandle);
+        // Check if module is enabled using enabledModules.
+        const moduleEnabled = isModuleEnabled(circle, moduleHandle);
         if (!moduleEnabled) {
             return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
         }

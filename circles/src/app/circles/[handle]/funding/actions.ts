@@ -10,14 +10,17 @@ import {
     deriveFundingTrustBadgeType,
     getFundingAskDocumentById,
     getFundingCirclePermissions,
+    isFundingEnabledForCircle,
     insertFundingAsk,
     updateFundingAskDocument,
 } from "@/lib/data/funding";
 import { Circles, FundingAsks, Members } from "@/lib/data/db";
 import {
     fileInfoSchema,
+    fundingAskCurrencySchema,
     fundingAskBeneficiaryTypeSchema,
     fundingAskCategorySchema,
+    fundingAskItemSchema,
     fundingAskSchema,
 } from "@/models/models";
 import { isVerifiedUser } from "@/lib/auth/verification";
@@ -31,20 +34,25 @@ const fundingAskFormSchema = z
         description: z.preprocess((value) => (typeof value === "string" ? value.trim() : ""), z.string()),
         category: fundingAskCategorySchema,
         amount: z.coerce.number().positive("Amount must be greater than zero"),
-        currency: z
-            .string()
-            .trim()
-            .min(1, "Currency is required")
-            .max(8, "Currency must be short")
-            .transform((value) => value.toUpperCase()),
-        quantity: z.preprocess(
-            (value) => (value === "" || value == null ? undefined : Number(value)),
-            z.number().positive("Quantity must be greater than zero").optional(),
+        currency: z.preprocess(
+            (value) => (typeof value === "string" ? value.toUpperCase() : value),
+            fundingAskCurrencySchema,
         ),
-        unitLabel: z.preprocess(
-            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-            z.string().max(80, "Unit label must be 80 characters or fewer").optional(),
-        ),
+        items: z.preprocess((value) => {
+            if (Array.isArray(value)) {
+                return value;
+            }
+
+            if (typeof value !== "string" || !value.trim()) {
+                return [];
+            }
+
+            try {
+                return JSON.parse(value);
+            } catch {
+                return value;
+            }
+        }, z.array(fundingAskItemSchema).max(25, "Add at most 25 line items")),
         isProxy: z.preprocess((value) => value === "true" || value === true, z.boolean()),
         beneficiaryType: fundingAskBeneficiaryTypeSchema,
         beneficiaryName: z.preprocess(
@@ -55,7 +63,11 @@ const fundingAskFormSchema = z
             (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
             z.string().max(500, "Proxy note must be 500 characters or fewer").optional(),
         ),
-        completionPlan: z.string().trim().min(1, "Completion plan is required").max(1000, "Completion plan is too long"),
+        completionPlan: z
+            .string()
+            .trim()
+            .min(1, "Please explain how donors will know this was fulfilled.")
+            .max(1000, "Confirmation note is too long"),
         submissionIntent: submissionIntentSchema,
     })
     .superRefine((value, context) => {
@@ -171,6 +183,9 @@ export async function createFundingAskAction(circleHandle: string, formData: For
         if (!circle?._id || !circle.handle) {
             return { success: false, message: "Circle not found" };
         }
+        if (!isFundingEnabledForCircle(circle)) {
+            return { success: false, message: "Funding Needs are not enabled for this circle." };
+        }
 
         const permissions = await getFundingCirclePermissions(circle, userDid);
         if (!permissions.canCreate) {
@@ -209,8 +224,7 @@ export async function createFundingAskAction(circleHandle: string, formData: For
                 category: parsed.data.category,
                 amount: parsed.data.amount,
                 currency: parsed.data.currency,
-                quantity: parsed.data.quantity,
-                unitLabel: parsed.data.unitLabel,
+                items: parsed.data.items,
                 status: parsed.data.submissionIntent === "draft" ? "draft" : "open",
                 isProxy: parsed.data.isProxy,
                 beneficiaryType: parsed.data.isProxy ? parsed.data.beneficiaryType : "self",
@@ -250,6 +264,9 @@ export async function updateFundingAskAction(
         const circle = await getCircleByHandle(circleHandle);
         if (!circle?._id || !circle.handle) {
             return { success: false, message: "Circle not found" };
+        }
+        if (!isFundingEnabledForCircle(circle)) {
+            return { success: false, message: "Funding Needs are not enabled for this circle." };
         }
 
         const existingAsk = await getFundingAskDocumentById(askId);
@@ -299,8 +316,7 @@ export async function updateFundingAskAction(
             category: parsed.data.category,
             amount: parsed.data.amount,
             currency: parsed.data.currency,
-            quantity: parsed.data.quantity,
-            unitLabel: parsed.data.unitLabel,
+            items: parsed.data.items,
             status: nextStatus,
             isProxy: parsed.data.isProxy,
             beneficiaryType: parsed.data.isProxy ? parsed.data.beneficiaryType : "self",
@@ -346,6 +362,9 @@ export async function claimFundingAskAction(circleHandle: string, askId: string)
         const circle = await getCircleByHandle(circleHandle);
         if (!circle?._id) {
             return { success: false, message: "Circle not found" };
+        }
+        if (!isFundingEnabledForCircle(circle)) {
+            return { success: false, message: "Funding Needs are not enabled for this circle." };
         }
 
         const permissions = await getFundingCirclePermissions(circle, userDid);
@@ -416,6 +435,9 @@ export async function completeFundingAskAction(
         if (!circle?._id) {
             return { success: false, message: "Circle not found" };
         }
+        if (!isFundingEnabledForCircle(circle)) {
+            return { success: false, message: "Funding Needs are not enabled for this circle." };
+        }
 
         const ask = await getFundingAskDocumentById(askId);
         if (!ask || ask.circleId !== circle._id.toString()) {
@@ -471,6 +493,9 @@ export async function closeFundingAskAction(circleHandle: string, askId: string)
         const circle = await getCircleByHandle(circleHandle);
         if (!circle?._id) {
             return { success: false, message: "Circle not found" };
+        }
+        if (!isFundingEnabledForCircle(circle)) {
+            return { success: false, message: "Funding Needs are not enabled for this circle." };
         }
 
         const ask = await getFundingAskDocumentById(askId);

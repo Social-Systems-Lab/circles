@@ -10,14 +10,17 @@ type PageProps = {
 
 export default async function CircleFundingPage(props: PageProps) {
     const { handle } = await props.params;
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        redirect("/login");
-    }
-
     const circle = await getCircleByHandle(handle);
     if (!circle) {
         notFound();
+    }
+    if (!circle.enabledModules?.includes("funding")) {
+        notFound();
+    }
+
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        redirect("/login");
     }
 
     const permissions = await getFundingCirclePermissions(circle, userDid);

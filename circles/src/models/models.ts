@@ -1448,8 +1448,19 @@ export type FundingAskCategory = z.infer<typeof fundingAskCategorySchema>;
 export const fundingAskTrustBadgeTypeSchema = z.enum(["circle_admin", "verified_member", "proxy_ask", "member_ask"]);
 export type FundingAskTrustBadgeType = z.infer<typeof fundingAskTrustBadgeTypeSchema>;
 
-export const fundingAskBeneficiaryTypeSchema = z.enum(["self", "person", "family", "community", "group", "other"]);
+export const fundingAskCurrencySchema = z.enum(["ZAR", "USD", "EUR"]);
+export type FundingAskCurrency = z.infer<typeof fundingAskCurrencySchema>;
+
+export const fundingAskBeneficiaryTypeSchema = z.enum(["self", "person", "family", "community", "group", "project", "other"]);
 export type FundingAskBeneficiaryType = z.infer<typeof fundingAskBeneficiaryTypeSchema>;
+
+export const fundingAskItemSchema = z.object({
+    name: z.string().trim().min(1),
+    quantity: z.number().positive().optional(),
+    unitLabel: z.string().max(80).optional(),
+    note: z.string().max(280).optional(),
+});
+export type FundingAskItem = z.infer<typeof fundingAskItemSchema>;
 
 export const fundingAskSchema = z.object({
     _id: z.any().optional(),
@@ -1462,7 +1473,8 @@ export const fundingAskSchema = z.object({
     description: z.string().optional(),
     category: fundingAskCategorySchema,
     amount: z.number().nonnegative(),
-    currency: z.string().min(1).max(8),
+    currency: fundingAskCurrencySchema,
+    items: z.array(fundingAskItemSchema).default([]).optional(),
     quantity: z.number().positive().optional(),
     unitLabel: z.string().max(80).optional(),
     status: fundingAskStatusSchema.default("draft"),

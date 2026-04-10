@@ -13,6 +13,7 @@ const FUNDING_LIST_STATUS_ORDER: Record<string, number> = {
 };
 
 export type FundingCirclePermissions = {
+    isEnabled: boolean;
     canView: boolean;
     canCreate: boolean;
     isCircleAdmin: boolean;
@@ -70,12 +71,17 @@ export const deriveFundingTrustBadgeType = ({
     return "member_ask";
 };
 
+export const isFundingEnabledForCircle = (circle: Circle): boolean => circle.enabledModules?.includes("funding") ?? false;
+
 export async function getFundingCirclePermissions(
     circle: Circle,
     viewerDid?: string,
 ): Promise<FundingCirclePermissions> {
-    if (!viewerDid || !circle._id) {
+    const isEnabled = isFundingEnabledForCircle(circle);
+
+    if (!viewerDid || !circle._id || !isEnabled) {
         return {
+            isEnabled,
             canView: false,
             canCreate: false,
             isCircleAdmin: false,
@@ -95,6 +101,7 @@ export async function getFundingCirclePermissions(
         circle.circleType === "user" && circle.did === viewerDid && isVerifiedUser(viewerCircle);
 
     return {
+        isEnabled,
         canView: isMember,
         canCreate: isCircleAdmin || isVerifiedOwnerOfOwnUserCircle,
         isCircleAdmin,
@@ -155,7 +162,7 @@ export async function listFundingAsksByCircleId(
     circle: Circle,
     options: ListFundingAsksOptions = {},
 ): Promise<FundingAskDisplay[]> {
-    if (!circle._id) {
+    if (!circle._id || !isFundingEnabledForCircle(circle)) {
         return [];
     }
 
@@ -186,7 +193,7 @@ export async function getFundingAskById(
     askId: string,
     viewerDid?: string,
 ): Promise<FundingAskDisplay | null> {
-    if (!circle._id || !ObjectId.isValid(askId)) {
+    if (!circle._id || !ObjectId.isValid(askId) || !isFundingEnabledForCircle(circle)) {
         return null;
     }
 

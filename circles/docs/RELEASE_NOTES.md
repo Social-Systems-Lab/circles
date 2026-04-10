@@ -27,7 +27,10 @@
 - Added the demo-safe `Funding Needs` home-page panel and dedicated funding routes under `/circles/[handle]/funding`.
 - Added a dedicated `fundingAsks` collection with explicit MVP fields for status, beneficiary, proxy state, trust badge, and single active supporter.
 - Added a step-based create/edit flow, manual `I will fund this` claim action, and admin/owner completion with required outcome note.
-- Funding routes are members-only, logged-out access is blocked through the existing in-circle gate, and proxy asks are clearly labeled.
+- Added optional ask line items, draft discovery for creators/admins, and form-state preservation across Back/Next and draft reloads.
+- Funding is now hidden by default and only appears when the circle enables the `funding` module through existing page/module settings.
+- Funding routes are members-only, support `ZAR`/`USD`/`EUR`, and use clearer fulfillment wording in create/edit/detail flows.
+- Proxy asks remain clearly labeled, including the new `project` beneficiary type.
 - Deferred payment processing, pooled crowdfunding, profile support summaries, and map/explore rollout.
 
 ## 0.8.16 - 2026-03-28

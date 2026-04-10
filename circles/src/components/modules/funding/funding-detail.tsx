@@ -24,7 +24,9 @@ import {
     FundingProxyBadge,
     FundingStatusPill,
     FundingTrustBadge,
+    fundingBeneficiaryTypeLabels,
     formatFundingAmount,
+    formatFundingItemSummary,
 } from "./funding-shared";
 
 type FundingDetailProps = {
@@ -159,9 +161,25 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                         </section>
 
                         <section>
-                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Completion plan</div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                How donors will know this was fulfilled
+                            </div>
                             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{ask.completionPlan}</p>
                         </section>
+
+                        {ask.items?.length ? (
+                            <section>
+                                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Items included</div>
+                                <div className="mt-3 space-y-3">
+                                    {ask.items.map((item, index) => (
+                                        <div key={`${item.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                            <div className="font-medium text-slate-900">{formatFundingItemSummary(item)}</div>
+                                            {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        ) : null}
 
                         {ask.isProxy && ask.proxyNote ? (
                             <section>
@@ -181,7 +199,7 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                             <div className="flex items-start gap-3">
                                 <CircleDollarSign className="mt-0.5 h-4 w-4 text-slate-500" />
                                 <div>
-                                    <div className="font-medium">Amount</div>
+                                    <div className="font-medium">Total amount</div>
                                     <div>{formatFundingAmount(ask.amount, ask.currency)}</div>
                                 </div>
                             </div>
@@ -195,8 +213,19 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                                             ? ask.beneficiaryName || "Proxy beneficiary"
                                             : ask.beneficiaryName || circle.name || "This circle"}
                                     </div>
+                                    <div className="text-xs text-slate-500">{fundingBeneficiaryTypeLabels[ask.beneficiaryType]}</div>
                                 </div>
                             </div>
+
+                            {ask.items?.length ? (
+                                <div className="flex items-start gap-3">
+                                    <CircleDollarSign className="mt-0.5 h-4 w-4 text-slate-500" />
+                                    <div>
+                                        <div className="font-medium">Items</div>
+                                        <div>{ask.items.length} item{ask.items.length === 1 ? "" : "s"} included in this ask</div>
+                                    </div>
+                                </div>
+                            ) : null}
 
                             <div className="flex items-start gap-3">
                                 <ShieldCheck className="mt-0.5 h-4 w-4 text-slate-500" />

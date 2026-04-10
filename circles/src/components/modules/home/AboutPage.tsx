@@ -49,6 +49,7 @@ interface AboutPageProps {
     fundingPreviewAsks?: FundingAskDisplay[];
     fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
     canCreateFundingAsk?: boolean;
+    showFundingPanel?: boolean;
 }
 
 export default function AboutPage({
@@ -58,6 +59,7 @@ export default function AboutPage({
     fundingPreviewAsks = [],
     fundingPanelVisibility = "sign_in",
     canCreateFundingAsk = false,
+    showFundingPanel = false,
 }: AboutPageProps) {
     const isCompact = useIsCompact();
     const router = useRouter();
@@ -152,7 +154,7 @@ export default function AboutPage({
         !!circle.websiteUrl ||
         !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
     const shouldShowVerifiedContributions = isUserProfile;
-    const shouldShowFundingPanel = true;
+    const shouldShowFundingPanel = showFundingPanel;
     const hasSidebarContent = hasProfileSidebarDetails || shouldShowVerifiedContributions || shouldShowFundingPanel;
 
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
