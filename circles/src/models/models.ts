@@ -1430,6 +1430,68 @@ export interface TaskDisplay extends Task {
     event?: EventDisplay; // Associated event details
 }
 
+export const fundingAskStatusSchema = z.enum(["draft", "open", "in_progress", "completed", "closed"]);
+export type FundingAskStatus = z.infer<typeof fundingAskStatusSchema>;
+
+export const fundingAskCategorySchema = z.enum([
+    "materials",
+    "transport",
+    "clothing",
+    "education",
+    "tools",
+    "household",
+    "health",
+    "other",
+]);
+export type FundingAskCategory = z.infer<typeof fundingAskCategorySchema>;
+
+export const fundingAskTrustBadgeTypeSchema = z.enum(["circle_admin", "verified_member", "proxy_ask", "member_ask"]);
+export type FundingAskTrustBadgeType = z.infer<typeof fundingAskTrustBadgeTypeSchema>;
+
+export const fundingAskBeneficiaryTypeSchema = z.enum(["self", "person", "family", "community", "group", "other"]);
+export type FundingAskBeneficiaryType = z.infer<typeof fundingAskBeneficiaryTypeSchema>;
+
+export const fundingAskSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    circleHandleSnapshot: z.string(),
+    createdByDid: didSchema,
+    createdByHandleSnapshot: z.string().optional(),
+    title: z.string(),
+    shortStory: z.string(),
+    description: z.string().optional(),
+    category: fundingAskCategorySchema,
+    amount: z.number().nonnegative(),
+    currency: z.string().min(1).max(8),
+    quantity: z.number().positive().optional(),
+    unitLabel: z.string().max(80).optional(),
+    status: fundingAskStatusSchema.default("draft"),
+    isProxy: z.boolean().default(false),
+    beneficiaryType: fundingAskBeneficiaryTypeSchema.default("self"),
+    beneficiaryName: z.string().optional(),
+    beneficiaryDid: didSchema.optional(),
+    proxyNote: z.string().optional(),
+    completionPlan: z.string(),
+    completionNote: z.string().optional(),
+    coverImage: fileInfoSchema.optional(),
+    trustBadgeType: fundingAskTrustBadgeTypeSchema.default("member_ask"),
+    activeSupporterDid: didSchema.optional(),
+    activeSupporterHandleSnapshot: z.string().optional(),
+    activeSupportStartedAt: z.date().optional(),
+    completedAt: z.date().optional(),
+    closedAt: z.date().optional(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
+
+export type FundingAsk = z.infer<typeof fundingAskSchema>;
+
+export interface FundingAskDisplay extends FundingAsk {
+    circle?: Circle;
+    creator?: Circle;
+    activeSupporter?: Circle;
+}
+
 /**
  * Event stages
  */

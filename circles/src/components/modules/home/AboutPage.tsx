@@ -36,6 +36,8 @@ import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
 import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
+import { FundingPanel } from "@/components/modules/funding/funding-panel";
+import type { FundingAskDisplay } from "@/models/models";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
@@ -44,12 +46,18 @@ interface AboutPageProps {
     circle: Circle;
     verifiedContributions?: VerifiedContributionItem[];
     verifiedContributionPublicCount?: number;
+    fundingPreviewAsks?: FundingAskDisplay[];
+    fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
+    canCreateFundingAsk?: boolean;
 }
 
 export default function AboutPage({
     circle,
     verifiedContributions = [],
     verifiedContributionPublicCount = 0,
+    fundingPreviewAsks = [],
+    fundingPanelVisibility = "sign_in",
+    canCreateFundingAsk = false,
 }: AboutPageProps) {
     const isCompact = useIsCompact();
     const router = useRouter();
@@ -144,7 +152,8 @@ export default function AboutPage({
         !!circle.websiteUrl ||
         !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
     const shouldShowVerifiedContributions = isUserProfile;
-    const hasSidebarContent = hasProfileSidebarDetails || shouldShowVerifiedContributions;
+    const shouldShowFundingPanel = true;
+    const hasSidebarContent = hasProfileSidebarDetails || shouldShowVerifiedContributions || shouldShowFundingPanel;
 
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
@@ -265,6 +274,14 @@ export default function AboutPage({
                 {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="space-y-6">
+                            {shouldShowFundingPanel && (
+                                <FundingPanel
+                                    circleHandle={circle.handle || ""}
+                                    asks={fundingPreviewAsks}
+                                    canCreate={canCreateFundingAsk}
+                                    visibility={fundingPanelVisibility}
+                                />
+                            )}
                             {hasProfileSidebarDetails && (
                                 <div
                                     className={`flex flex-col items-center bg-white p-6

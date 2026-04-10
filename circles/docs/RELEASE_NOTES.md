@@ -22,6 +22,14 @@
 - Added the `Verified Contributions` panel on user profiles with a public contribution count separated from the viewer-visible contribution list.
 - Fixed task preview refresh after Accept Task, Start Progress, Submit for Review, Request Changes, and Mark Verified so the open side panel updates immediately without a manual browser refresh.
 
+### Funding Asks MVP
+
+- Added the demo-safe `Funding Needs` home-page panel and dedicated funding routes under `/circles/[handle]/funding`.
+- Added a dedicated `fundingAsks` collection with explicit MVP fields for status, beneficiary, proxy state, trust badge, and single active supporter.
+- Added a step-based create/edit flow, manual `I will fund this` claim action, and admin/owner completion with required outcome note.
+- Funding routes are members-only, logged-out access is blocked through the existing in-circle gate, and proxy asks are clearly labeled.
+- Deferred payment processing, pooled crowdfunding, profile support summaries, and map/explore rollout.
+
 ## 0.8.16 - 2026-03-28
 - Fixed profile header CTA alignment by anchoring action buttons (Message, Follow, etc.) to the title row instead of the full text column.
 - Removed fragile negative-margin positioning in profile header.

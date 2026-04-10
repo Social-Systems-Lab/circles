@@ -7,6 +7,8 @@ import type { VerifiedContributionItem } from "@/components/modules/home/Verifie
 import { getVerifiedTasksForUser } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
 import type { TaskPermissions } from "@/models/models";
+import type { FundingAskDisplay } from "@/models/models";
+import { getFundingCirclePermissions, listFundingAsksByCircleId } from "@/lib/data/funding";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -26,6 +28,9 @@ export default async function CircleHomePage(props: PageProps) {
 
     let verifiedContributions: VerifiedContributionItem[] = [];
     let verifiedContributionPublicCount = 0;
+    let fundingPreviewAsks: FundingAskDisplay[] = [];
+    let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
+    let canCreateFundingAsk = false;
 
     if (circle.circleType === "user" && circle.did) {
         const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);
@@ -61,11 +66,27 @@ export default async function CircleHomePage(props: PageProps) {
         ).filter((item): item is VerifiedContributionItem => item !== null);
     }
 
+    if (viewerDid) {
+        const fundingPermissions = await getFundingCirclePermissions(circle, viewerDid);
+        canCreateFundingAsk = fundingPermissions.canCreate;
+        fundingPanelVisibility = fundingPermissions.canView ? "visible" : "members_only";
+
+        if (fundingPermissions.canView) {
+            fundingPreviewAsks = await listFundingAsksByCircleId(circle, {
+                viewerDid,
+                limit: 3,
+            });
+        }
+    }
+
     return (
         <AboutPage
             circle={circle}
             verifiedContributions={verifiedContributions}
             verifiedContributionPublicCount={verifiedContributionPublicCount}
+            fundingPreviewAsks={fundingPreviewAsks}
+            fundingPanelVisibility={fundingPanelVisibility}
+            canCreateFundingAsk={canCreateFundingAsk}
         />
     );
 }

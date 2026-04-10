@@ -21,8 +21,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
         }
 
-        // Check if module is enabled using enabledModules
-        const moduleEnabled = isModuleEnabled(circle, moduleHandle);
+        const isFundingRoute = moduleHandle === "funding";
+
+        // Check if module is enabled using enabledModules, except for always-on MVP routes like funding.
+        const moduleEnabled = isFundingRoute ? true : isModuleEnabled(circle, moduleHandle);
         if (!moduleEnabled) {
             return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
         }
@@ -33,9 +35,9 @@ export async function POST(req: Request) {
         // First try module-specific access rule
         let allowedUserGroups = accessRules[moduleHandle]?.view;
 
-        // If still not found, use default permissions for everyone
+        // If still not found, funding defaults to members-only and all other routes preserve the older everyone fallback.
         if (!allowedUserGroups) {
-            allowedUserGroups = ["everyone"];
+            allowedUserGroups = isFundingRoute ? ["admins", "moderators", "members"] : ["everyone"];
         }
 
         // if the module allows access to "everyone", consider it authorized

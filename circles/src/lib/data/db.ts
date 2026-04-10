@@ -17,6 +17,7 @@ import {
     Proposal,
     Issue,
     Task,
+    FundingAsk,
     RankedList,
     Goal,
     GoalMember, // Added GoalMember model
@@ -60,6 +61,7 @@ let Challenges: Collection<Challenge>;
 let Proposals: Collection<Proposal>;
 let Issues: Collection<Issue>;
 let Tasks: Collection<Task>;
+let FundingAsks: Collection<FundingAsk>;
 let Goals: Collection<Goal>;
 let Events: Collection<Event>;
 let EventRsvps: Collection<EventRsvp>;
@@ -104,6 +106,7 @@ if (process.env.IS_BUILD !== "true") {
     Proposals = db.collection<Proposal>("proposals");
     Issues = db.collection<Issue>("issues");
     Tasks = db.collection<Task>("tasks");
+    FundingAsks = db.collection<FundingAsk>("fundingAsks");
     Goals = db.collection<Goal>("goals");
     Events = db.collection<Event>("events");
     EventRsvps = db.collection<EventRsvp>("eventRsvps");
@@ -148,6 +151,7 @@ export {
     Proposals,
     Issues,
     Tasks,
+    FundingAsks,
     Goals,
     Events,
     EventRsvps,
