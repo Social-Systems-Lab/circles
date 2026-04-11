@@ -103,8 +103,8 @@ export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.Rea
                                 <CardDescription>
                                     {module.description}
                                     {module.handle === "funding" ? (
-                                        <span className="mt-2 block">
-                                            Funding Needs can only be enabled on circles, and only Super Admins can change this setting in the MVP.
+                                        <span className="mt-1.5 block">
+                                            MVP: circles only. Super Admins only.
                                         </span>
                                     ) : null}
                                 </CardDescription>

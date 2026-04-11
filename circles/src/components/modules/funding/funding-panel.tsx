@@ -27,8 +27,8 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
     const activeItemCount = asks.reduce((total, ask) => total + getFundingOpenItemCount(ask), 0);
 
     return (
-        <div className="rounded-[15px] border-0 bg-white p-6 shadow-lg">
-            <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="rounded-[15px] border-0 bg-white p-4 shadow-lg sm:p-5 md:p-6">
+            <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                     <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Funding Needs</div>
                     {visibility === "visible" ? (
@@ -61,56 +61,59 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
                     {asks.map((ask) => {
                         const askId = ask._id?.toString() || "";
                         const isExpanded = expandedId === askId;
+                        const openItemCount = getFundingOpenItemCount(ask);
 
                         return (
                             <div key={askId} className="rounded-xl border border-slate-200">
                                 <button
                                     type="button"
-                                    className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+                                    className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left sm:px-4"
                                     onClick={() => setExpandedId((current) => (current === askId ? null : askId))}
                                 >
-                                    <div className="min-w-0">
-                                        <div className="font-medium text-slate-900">{ask.title}</div>
-                                        <div className="mt-1 text-sm text-slate-600">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-semibold text-slate-900 sm:text-[15px]">{ask.title}</div>
+                                        <div className="mt-0.5 line-clamp-1 text-sm text-slate-600">
                                             {ask.shortStory || formatFundingOpenItemTotals(ask)}
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-3 text-sm text-slate-500">
-                                        <div>
-                                            {getFundingOpenItemCount(ask)} open item{getFundingOpenItemCount(ask) === 1 ? "" : "s"}
+                                    <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500 sm:text-sm">
+                                        <div className="whitespace-nowrap">
+                                            {openItemCount} open item{openItemCount === 1 ? "" : "s"}
                                         </div>
                                         {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                                     </div>
                                 </button>
 
                                 {isExpanded ? (
-                                    <div className="border-t border-slate-200 px-4 py-3">
-                                        <div className="space-y-3">
+                                    <div className="border-t border-slate-200 px-3 py-2.5 sm:px-4">
+                                        <div className="space-y-2">
                                             {(ask.items || []).map((item, index) => (
                                                 <div
                                                     key={`${item.title}-${index}`}
-                                                    className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-3"
+                                                    className="rounded-lg bg-slate-50 px-3 py-2.5"
                                                 >
-                                                    <div>
-                                                        <div className="font-medium text-slate-900">{item.title}</div>
-                                                        {item.note ? (
-                                                            <div className="mt-1 text-sm text-slate-600">{item.note}</div>
-                                                        ) : null}
-                                                    </div>
-
-                                                    <div className="flex items-start gap-4">
-                                                        <div className="text-sm font-medium text-slate-900">
-                                                            {formatFundingAmount(item.price, item.currency)}
+                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm font-medium text-slate-900">{item.title}</div>
+                                                            {item.note ? (
+                                                                <div className="mt-0.5 line-clamp-2 text-sm text-slate-600">{item.note}</div>
+                                                            ) : null}
                                                         </div>
-                                                        {item.status === "open" ? <FundingDemoButton /> : null}
+
+                                                        <div className="flex items-center justify-between gap-3 sm:justify-end">
+                                                            <div className="text-sm font-medium text-slate-900">
+                                                                {formatFundingAmount(item.price, item.currency)}
+                                                            </div>
+                                                            {item.status === "open" ? <FundingDemoButton /> : null}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
 
-                                        <div className="mt-3 flex justify-end">
-                                            <Button asChild variant="ghost" size="sm">
+                                        <div className="mt-2 flex justify-end">
+                                            <Button asChild variant="ghost" size="sm" className="px-2">
                                                 <Link href={`/circles/${circleHandle}/funding/${askId}`}>View request</Link>
                                             </Button>
                                         </div>
@@ -122,16 +125,14 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
                 </div>
             ) : canCreate ? (
                 <div className="space-y-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm text-slate-600">
-                        No funding requests have been published yet.
-                    </p>
+                    <p className="text-sm text-slate-600">No funding requests yet.</p>
                     <Button asChild size="sm">
                         <Link href={`/circles/${circleHandle}/funding/new`}>Create funding request</Link>
                     </Button>
                 </div>
             ) : (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                    No funding requests have been published yet.
+                    No funding requests yet.
                 </div>
             )}
         </div>

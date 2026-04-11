@@ -45,20 +45,16 @@ export function FundingListPage({ circle, asks, canCreate }: FundingListPageProp
     const activeItemCount = filteredPublishedAsks.reduce((total, ask) => total + getFundingOpenItemCount(ask), 0);
 
     return (
-        <div className="formatted mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
-            <div className="flex flex-col gap-4 rounded-[15px] bg-white p-6 shadow-lg md:flex-row md:items-end md:justify-between">
+        <div className="formatted mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6">
+            <div className="flex flex-col gap-3 rounded-[15px] bg-white p-4 shadow-lg sm:p-5 md:flex-row md:items-end md:justify-between md:p-6">
                 <div>
                     <h1 className="m-0 text-3xl font-bold text-slate-900">Funding Needs</h1>
-                    <p className="mt-2 max-w-3xl text-sm text-slate-600">
-                        Funding requests group together several individually fundable child items. Fund buttons are demo-only in this MVP.
-                    </p>
+                    <p className="mt-1.5 text-sm text-slate-600">Browse open funding requests and items.</p>
                     {filteredDrafts.length > 0 ? (
-                        <p className="mt-2 text-sm text-slate-600">
-                            Drafts below are only visible to Super Admins.
-                        </p>
+                        <p className="mt-1.5 text-sm text-slate-600">Drafts below are only visible to Super Admins.</p>
                     ) : null}
                     {filteredPublishedAsks.length > 0 ? (
-                        <p className="mt-2 text-sm text-slate-600">
+                        <p className="mt-1.5 text-sm text-slate-600">
                             {filteredPublishedAsks.length} request{filteredPublishedAsks.length === 1 ? "" : "s"} • {activeItemCount} active item{activeItemCount === 1 ? "" : "s"}
                         </p>
                     ) : null}
@@ -126,13 +122,11 @@ export function FundingListPage({ circle, asks, canCreate }: FundingListPageProp
                         ))}
                     </div>
                 </section>
-            ) : (
+            ) : filteredDrafts.length === 0 ? (
                 <div className="rounded-[15px] border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-                    {filteredDrafts.length > 0
-                        ? "Only draft funding requests match the current filters."
-                        : "No funding requests match the current filters."}
+                    No funding requests match the current filters.
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }

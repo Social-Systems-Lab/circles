@@ -656,8 +656,7 @@ export const modules: ModuleInfo[] = [
     {
         name: "Funding Needs",
         handle: "funding",
-        description:
-            "Enable the members-only Funding Needs surfaces for parent funding requests with individually fundable child items.",
+        description: "Enable members-only Funding Needs for this circle.",
     },
     {
         name: "Proposals",

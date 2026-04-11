@@ -70,14 +70,14 @@ export function FundingDetail({ circle, ask, canManageAsk }: FundingDetailProps)
     const openItemCount = getFundingOpenItemCount(ask);
 
     return (
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pb-10">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 pb-10">
             <Card className="overflow-hidden rounded-[18px] border-slate-200 shadow-sm">
                 {ask.coverImage?.url ? (
-                    <div className="relative aspect-[16/7] w-full bg-slate-100">
+                    <div className="relative aspect-[16/9] w-full bg-slate-100 md:aspect-[16/7]">
                         <Image src={ask.coverImage.url} alt={ask.title} fill className="object-cover" sizes="1200px" />
                     </div>
                 ) : null}
-                <CardContent className="space-y-5 p-6">
+                <CardContent className="space-y-4 p-4 sm:p-6">
                     <div className="flex flex-wrap items-center gap-2">
                         <FundingStatusPill status={ask.status} />
                         <FundingTrustBadge trustBadgeType={ask.trustBadgeType} />
@@ -143,14 +143,14 @@ export function FundingDetail({ circle, ask, canManageAsk }: FundingDetailProps)
 
                         <section>
                             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Funding items</div>
-                            <div className="mt-3 space-y-3">
+                            <div className="mt-3 space-y-2.5">
                                 {(ask.items || []).map((item, index) => (
                                     <div
                                         key={`${item.title}-${index}`}
-                                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                                        className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4"
                                     >
-                                        <div className="flex flex-wrap items-start justify-between gap-3">
-                                            <div className="space-y-1">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="min-w-0 space-y-1">
                                                 <div className="font-medium text-slate-900">{item.title}</div>
                                                 <div className="text-xs uppercase tracking-wide text-slate-500">
                                                     {fundingCategoryLabels[item.category]}
@@ -160,7 +160,7 @@ export function FundingDetail({ circle, ask, canManageAsk }: FundingDetailProps)
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-start gap-4">
+                                            <div className="flex items-center justify-between gap-3 sm:justify-end">
                                                 <div className="text-sm font-medium text-slate-900">
                                                     {formatFundingAmount(item.price, item.currency)}
                                                 </div>
