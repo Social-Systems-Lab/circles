@@ -657,7 +657,7 @@ export const modules: ModuleInfo[] = [
         name: "Funding Needs",
         handle: "funding",
         description:
-            "Enable the members-only Funding Needs surfaces for concrete asks with one total amount and one active supporter at a time.",
+            "Enable the members-only Funding Needs surfaces for parent funding requests with individually fundable child items.",
     },
     {
         name: "Proposals",

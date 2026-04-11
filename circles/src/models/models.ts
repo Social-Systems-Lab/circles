@@ -1454,11 +1454,20 @@ export type FundingAskCurrency = z.infer<typeof fundingAskCurrencySchema>;
 export const fundingAskBeneficiaryTypeSchema = z.enum(["self", "person", "family", "community", "group", "project", "other"]);
 export type FundingAskBeneficiaryType = z.infer<typeof fundingAskBeneficiaryTypeSchema>;
 
+export const fundingAskItemStatusSchema = z.enum(["draft", "open", "completed", "closed"]);
+export type FundingAskItemStatus = z.infer<typeof fundingAskItemStatusSchema>;
+
 export const fundingAskItemSchema = z.object({
-    name: z.string().trim().min(1),
+    title: z.string().trim().min(1),
+    category: fundingAskCategorySchema,
+    price: z.number().nonnegative(),
+    currency: fundingAskCurrencySchema,
     quantity: z.number().positive().optional(),
     unitLabel: z.string().max(80).optional(),
     note: z.string().max(280).optional(),
+    status: fundingAskItemStatusSchema.default("open"),
+    // Legacy field kept to normalize pre-reshape documents safely.
+    name: z.string().trim().optional(),
 });
 export type FundingAskItem = z.infer<typeof fundingAskItemSchema>;
 
@@ -1471,9 +1480,9 @@ export const fundingAskSchema = z.object({
     title: z.string(),
     shortStory: z.string(),
     description: z.string().optional(),
-    category: fundingAskCategorySchema,
-    amount: z.number().nonnegative(),
-    currency: fundingAskCurrencySchema,
+    category: fundingAskCategorySchema.optional(),
+    amount: z.number().nonnegative().optional(),
+    currency: fundingAskCurrencySchema.optional(),
     items: z.array(fundingAskItemSchema).default([]).optional(),
     quantity: z.number().positive().optional(),
     unitLabel: z.string().max(80).optional(),
@@ -1483,7 +1492,7 @@ export const fundingAskSchema = z.object({
     beneficiaryName: z.string().optional(),
     beneficiaryDid: didSchema.optional(),
     proxyNote: z.string().optional(),
-    completionPlan: z.string(),
+    completionPlan: z.string().optional(),
     completionNote: z.string().optional(),
     coverImage: fileInfoSchema.optional(),
     trustBadgeType: fundingAskTrustBadgeTypeSchema.default("member_ask"),

@@ -8,7 +8,7 @@ import { getVerifiedTasksForUser } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
 import type { TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
-import { getFundingCirclePermissions, listFundingAsksByCircleId } from "@/lib/data/funding";
+import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -31,7 +31,7 @@ export default async function CircleHomePage(props: PageProps) {
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
-    const showFundingPanel = circle.enabledModules?.includes("funding") ?? false;
+    const showFundingPanel = isFundingEnabledForCircle(circle);
 
     if (circle.circleType === "user" && circle.did) {
         const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);

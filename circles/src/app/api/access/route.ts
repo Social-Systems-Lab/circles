@@ -1,4 +1,4 @@
-import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
+import { getCircleByHandle } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
@@ -22,6 +22,9 @@ export async function POST(req: Request) {
         }
 
         const isFundingRoute = moduleHandle === "funding";
+        if (isFundingRoute && circle.circleType !== "circle") {
+            return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
+        }
 
         // Check if module is enabled using enabledModules.
         const moduleEnabled = isModuleEnabled(circle, moduleHandle);

@@ -26,6 +26,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { createFundingAskAction, updateFundingAskAction } from "@/app/circles/[handle]/funding/actions";
 import {
     fundingAskBeneficiaryTypeSchema,
+    fundingAskCategorySchema,
     fundingAskCurrencySchema,
     type Circle,
     type FundingAskDisplay,
@@ -35,7 +36,6 @@ import {
     fundingCategoryOptions,
     fundingCurrencyOptions,
     formatFundingAmount,
-    formatFundingItemSummary,
 } from "./funding-shared";
 
 const beneficiaryOptions = Object.entries(fundingBeneficiaryTypeLabels).map(([value, label]) => ({
@@ -43,39 +43,28 @@ const beneficiaryOptions = Object.entries(fundingBeneficiaryTypeLabels).map(([va
     label,
 }));
 
-const fundingFormItemSchema = z
-    .object({
-        name: z.string(),
-        quantity: z.number().positive("Quantity must be greater than zero").optional(),
-        unitLabel: z.preprocess(
-            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-            z.string().max(80, "Unit label must be 80 characters or fewer").optional(),
-        ),
-        note: z.preprocess(
-            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-            z.string().max(280, "Item note must be 280 characters or fewer").optional(),
-        ),
-    })
-    .superRefine((value, context) => {
-        const hasDetails = Boolean(value.quantity || value.unitLabel || value.note);
-        if (hasDetails && !value.name.trim()) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["name"],
-                message: "Add an item name or remove this empty row.",
-            });
-        }
-    });
+const fundingFormItemSchema = z.object({
+    title: z.string().trim().min(1, "Item title is required"),
+    category: fundingAskCategorySchema,
+    price: z.number().positive("Item price must be greater than zero"),
+    currency: fundingAskCurrencySchema,
+    quantity: z.number().positive("Quantity must be greater than zero").optional(),
+    unitLabel: z.preprocess(
+        (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
+        z.string().max(80, "Unit label must be 80 characters or fewer").optional(),
+    ),
+    note: z.preprocess(
+        (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
+        z.string().max(280, "Short note must be 280 characters or fewer").optional(),
+    ),
+});
 
 const fundingFormSchema = z
     .object({
         title: z.string().trim().min(1, "Title is required"),
         shortStory: z.string().trim().min(1, "Short story is required").max(280, "Short story is too long"),
         description: z.string().optional(),
-        category: z.enum(["materials", "transport", "clothing", "education", "tools", "household", "health", "other"]),
-        amount: z.coerce.number().positive("Total amount must be greater than zero"),
-        currency: fundingAskCurrencySchema,
-        items: z.array(fundingFormItemSchema),
+        items: z.array(fundingFormItemSchema).min(1, "Add at least one funding item"),
         isProxy: z.boolean().default(false),
         beneficiaryType: fundingAskBeneficiaryTypeSchema,
         beneficiaryName: z.preprocess(
@@ -86,18 +75,13 @@ const fundingFormSchema = z
             (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
             z.string().max(500, "Proxy note must be 500 characters or fewer").optional(),
         ),
-        completionPlan: z
-            .string()
-            .trim()
-            .min(1, "Please explain how donors will know this was fulfilled.")
-            .max(1000, "Confirmation note is too long"),
     })
     .superRefine((value, context) => {
         if (value.isProxy && !value.beneficiaryName) {
             context.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ["beneficiaryName"],
-                message: "Beneficiary name is required for proxy asks",
+                message: "Beneficiary name is required for proxy requests",
             });
         }
     });
@@ -110,16 +94,18 @@ type FundingFormProps = {
 };
 
 const steps = [
-    { key: "basics", title: "Basics", description: "What is the ask, what items are included, and what is the total amount?" },
-    { key: "beneficiary", title: "Beneficiary", description: "Who is this for?" },
-    { key: "proof", title: "Proof / image", description: "Add an image and explain how you will confirm the outcome." },
-    { key: "review", title: "Review", description: "Check the ask before saving or publishing." },
+    { key: "request", title: "Request", description: "Add the parent funding request title, story, and broader project context." },
+    { key: "items", title: "Items", description: "Add one or more individually fundable child items." },
+    { key: "beneficiary", title: "Beneficiary", description: "Add proxy or beneficiary context if it helps clarify the request." },
+    { key: "image", title: "Image", description: "Add an optional cover image for the parent request." },
+    { key: "review", title: "Review", description: "Check the funding request and its child items before saving or publishing." },
 ] as const;
 
 const fieldsByStep: Array<Array<keyof FundingFormValues>> = [
-    ["title", "shortStory", "category", "amount", "currency"],
+    ["title", "shortStory", "description"],
+    ["items"],
     ["isProxy", "beneficiaryType", "beneficiaryName", "proxyNote"],
-    ["completionPlan"],
+    [],
     [],
 ];
 
@@ -134,26 +120,38 @@ const getInitialCoverImageItems = (ask?: FundingAskDisplay): ImageItem[] =>
           ]
         : [];
 
+const getEmptyFundingItem = (): FundingFormValues["items"][number] =>
+    ({
+        title: "",
+        category: "materials" as const,
+        price: undefined as number | undefined,
+        currency: "ZAR" as const,
+        quantity: undefined as number | undefined,
+        unitLabel: "",
+        note: "",
+    }) as FundingFormValues["items"][number];
+
 const getDefaultValues = (ask?: FundingAskDisplay): FundingFormValues => ({
     title: ask?.title || "",
     shortStory: ask?.shortStory || "",
     description: ask?.description || "",
-    category: ask?.category || "materials",
-    amount: ask?.amount || 0,
-    currency: ask?.currency === "USD" || ask?.currency === "EUR" || ask?.currency === "ZAR" ? ask.currency : "ZAR",
-    items: ask?.items || [],
+    items: (
+        ask?.items?.length
+            ? ask.items.map((item) => ({
+                  title: item.title,
+                  category: item.category,
+                  price: typeof item.price === "number" ? item.price : undefined,
+                  currency: item.currency,
+                  quantity: item.quantity,
+                  unitLabel: item.unitLabel || "",
+                  note: item.note || "",
+              }))
+            : [getEmptyFundingItem()]
+    ) as FundingFormValues["items"],
     isProxy: ask?.isProxy || false,
     beneficiaryType: ask?.beneficiaryType || "self",
     beneficiaryName: ask?.beneficiaryName || "",
     proxyNote: ask?.proxyNote || "",
-    completionPlan: ask?.completionPlan || "",
-});
-
-const getEmptyLineItem = () => ({
-    name: "",
-    quantity: undefined as number | undefined,
-    unitLabel: "",
-    note: "",
 });
 
 export function FundingForm({ circle, ask }: FundingFormProps) {
@@ -181,13 +179,13 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
         form.reset(defaultValues);
         setCoverImageItems(getInitialCoverImageItems(ask));
         setStepIndex(0);
-    }, [ask?._id, defaultValues, form, isEditing]);
+    }, [ask?._id, defaultValues, form]);
 
     const isProxy = form.watch("isProxy");
     const values = form.watch();
     const progress = ((stepIndex + 1) / steps.length) * 100;
     const visibleSavedState = searchParams.get("saved");
-    const visibleItems = values.items?.filter((item) => item.name?.trim()) || [];
+    const requestItems = values.items || [];
 
     const goToStep = async (nextIndex: number) => {
         if (nextIndex <= stepIndex) {
@@ -216,27 +214,15 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
         setIsSubmitting(true);
         const formValues = form.getValues();
         const formData = new FormData();
-        const normalizedItems = (formValues.items || [])
-            .map((item) => ({
-                name: item.name.trim(),
-                quantity: item.quantity,
-                unitLabel: item.unitLabel?.trim() || undefined,
-                note: item.note?.trim() || undefined,
-            }))
-            .filter((item) => item.name);
 
         formData.append("title", formValues.title);
         formData.append("shortStory", formValues.shortStory);
         formData.append("description", formValues.description || "");
-        formData.append("category", formValues.category);
-        formData.append("amount", String(formValues.amount));
-        formData.append("currency", formValues.currency);
-        formData.append("items", JSON.stringify(normalizedItems));
+        formData.append("items", JSON.stringify(formValues.items));
         formData.append("isProxy", String(formValues.isProxy));
         formData.append("beneficiaryType", formValues.isProxy ? formValues.beneficiaryType : "self");
         formData.append("beneficiaryName", formValues.beneficiaryName || "");
         formData.append("proxyNote", formValues.proxyNote || "");
-        formData.append("completionPlan", formValues.completionPlan);
         formData.append("submissionIntent", submissionIntent);
 
         const primaryCoverImage = coverImageItems[0];
@@ -255,7 +241,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
 
         if (!result.success) {
             toast({
-                title: "Could not save funding ask",
+                title: "Could not save funding request",
                 description: result.message,
                 variant: "destructive",
             });
@@ -263,7 +249,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
         }
 
         toast({
-            title: submissionIntent === "draft" ? "Draft saved" : "Funding ask saved",
+            title: submissionIntent === "draft" ? "Draft saved" : "Funding request saved",
             description: result.message,
         });
 
@@ -286,10 +272,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
             <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                     <h1 className="m-0 text-2xl font-bold text-slate-900">
-                        {isEditing ? "Edit funding ask" : "Create funding ask"}
+                        {isEditing ? "Edit funding request" : "Create funding request"}
                     </h1>
                     <p className="mt-1 text-sm text-slate-600">
-                        Keep it concrete: one ask, one total amount, one active supporter at a time.
+                        One parent request can contain several individually fundable child items.
                     </p>
                 </div>
                 <Button asChild variant="ghost">
@@ -299,7 +285,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
 
             {visibleSavedState === "draft" ? (
                 <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                    Draft saved. Only you and circle admins can see draft asks until you publish them.
+                    Draft saved. Draft funding requests are only visible to Super Admins until you publish them.
                 </div>
             ) : null}
 
@@ -315,7 +301,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                         </div>
                     </div>
                     <Progress value={progress} />
-                    <div className="grid gap-2 md:grid-cols-4">
+                    <div className="grid gap-2 md:grid-cols-5">
                         {steps.map((step, index) => (
                             <button
                                 key={step.key}
@@ -342,9 +328,9 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         name="title"
                                         render={({ field }) => (
                                             <FormItem className="md:col-span-2">
-                                                <FormLabel>Title</FormLabel>
+                                                <FormLabel>Funding request title</FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="4 sheets of 18 mm plywood" {...field} />
+                                                    <Input placeholder="Roof repair materials for the community workshop" {...field} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -360,7 +346,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                 <FormControl>
                                                     <Textarea
                                                         rows={3}
-                                                        placeholder="Explain the concrete need in a few lines."
+                                                        placeholder="Explain the broader need in a few clear lines."
                                                         {...field}
                                                     />
                                                 </FormControl>
@@ -374,11 +360,11 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         name="description"
                                         render={({ field }) => (
                                             <FormItem className="md:col-span-2">
-                                                <FormLabel>Full description</FormLabel>
+                                                <FormLabel>Full description / project context</FormLabel>
                                                 <FormControl>
                                                     <Textarea
-                                                        rows={6}
-                                                        placeholder="Optional extra context for members."
+                                                        rows={7}
+                                                        placeholder="Add the broader project context, what the request is for, and why these items matter."
                                                         {...field}
                                                     />
                                                 </FormControl>
@@ -386,116 +372,132 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                             </FormItem>
                                         )}
                                     />
-
-                                    <FormField
-                                        control={form.control}
-                                        name="category"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Category</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Choose a category" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {fundingCategoryOptions.map((option) => (
-                                                            <SelectItem key={option.value} value={option.value}>
-                                                                {option.label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),180px]">
-                                        <FormField
-                                            control={form.control}
-                                            name="amount"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Total amount</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" inputMode="decimal" step="0.01" {...field} />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        <FormField
-                                            control={form.control}
-                                            name="currency"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Currency</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Currency" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            {fundingCurrencyOptions.map((option) => (
-                                                                <SelectItem key={option.value} value={option.value}>
-                                                                    {option.label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
                                 </div>
+                            </div>
 
+                            <div className={stepIndex === 1 ? "block space-y-4" : "hidden space-y-4"}>
                                 <div className="rounded-xl border border-slate-200 p-4">
                                     <div className="mb-2 flex items-center justify-between gap-3">
                                         <div>
-                                            <div className="text-sm font-medium text-slate-900">Items included in this ask</div>
+                                            <div className="text-sm font-medium text-slate-900">Funding items</div>
                                             <p className="mt-1 text-sm text-slate-600">
-                                                Optional. Add the concrete items covered by this one total amount.
+                                                Each child item is listed separately and has its own category and price.
                                             </p>
                                         </div>
-                                        <Button type="button" variant="outline" size="sm" onClick={() => append(getEmptyLineItem())}>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => append(getEmptyFundingItem())}>
                                             Add item
                                         </Button>
                                     </div>
 
-                                    <div className="space-y-4">
-                                        {itemFields.length === 0 ? (
-                                            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                                                No line items added yet. You can still publish a single concrete ask with just a title and total amount.
-                                            </div>
-                                        ) : null}
+                                    {form.formState.errors.items?.message ? (
+                                        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                                            {form.formState.errors.items.message}
+                                        </div>
+                                    ) : null}
 
+                                    <div className="space-y-4">
                                         {itemFields.map((itemField, index) => (
                                             <div key={itemField.id} className="rounded-lg border border-slate-200 p-4">
                                                 <div className="mb-3 flex items-center justify-between gap-3">
-                                                    <div className="text-sm font-medium text-slate-900">Item {index + 1}</div>
+                                                    <div className="text-sm font-medium text-slate-900">Funding item {index + 1}</div>
                                                     <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
                                                         Remove
                                                     </Button>
                                                 </div>
-                                                <div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr),120px,160px]">
+
+                                                <div className="grid gap-4 md:grid-cols-2">
                                                     <FormField
                                                         control={form.control}
-                                                        name={`items.${index}.name`}
+                                                        name={`items.${index}.title`}
                                                         render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Item name</FormLabel>
+                                                            <FormItem className="md:col-span-2">
+                                                                <FormLabel>Item title</FormLabel>
                                                                 <FormControl>
-                                                                    <Input placeholder="Plywood sheets" {...field} />
+                                                                    <Input placeholder="4 sheets of 18 mm plywood" {...field} />
                                                                 </FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
                                                         )}
                                                     />
+
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`items.${index}.category`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Category</FormLabel>
+                                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                                    <FormControl>
+                                                                        <SelectTrigger>
+                                                                            <SelectValue placeholder="Choose a category" />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        {fundingCategoryOptions.map((option) => (
+                                                                            <SelectItem key={option.value} value={option.value}>
+                                                                                {option.label}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),180px]">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`items.${index}.price`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Price</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            name={field.name}
+                                                                            ref={field.ref}
+                                                                            type="number"
+                                                                            inputMode="decimal"
+                                                                            step="0.01"
+                                                                            value={field.value ?? ""}
+                                                                            onBlur={field.onBlur}
+                                                                            onChange={(event) =>
+                                                                                field.onChange(
+                                                                                    event.target.value ? Number(event.target.value) : undefined,
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`items.${index}.currency`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Currency</FormLabel>
+                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                        <FormControl>
+                                                                            <SelectTrigger>
+                                                                                <SelectValue placeholder="Currency" />
+                                                                            </SelectTrigger>
+                                                                        </FormControl>
+                                                                        <SelectContent>
+                                                                            {fundingCurrencyOptions.map((option) => (
+                                                                                <SelectItem key={option.value} value={option.value}>
+                                                                                    {option.label}
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
 
                                                     <FormField
                                                         control={form.control}
@@ -537,33 +539,33 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                             </FormItem>
                                                         )}
                                                     />
-                                                </div>
 
-                                                <FormField
-                                                    control={form.control}
-                                                    name={`items.${index}.note`}
-                                                    render={({ field }) => (
-                                                        <FormItem className="mt-4">
-                                                            <FormLabel>Short detail</FormLabel>
-                                                            <FormControl>
-                                                                <Textarea
-                                                                    rows={3}
-                                                                    placeholder="Optional extra detail for this item."
-                                                                    {...field}
-                                                                    value={field.value ?? ""}
-                                                                />
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`items.${index}.note`}
+                                                        render={({ field }) => (
+                                                            <FormItem className="md:col-span-2">
+                                                                <FormLabel>Short note</FormLabel>
+                                                                <FormControl>
+                                                                    <Textarea
+                                                                        rows={3}
+                                                                        placeholder="Optional extra detail for this funding item."
+                                                                        {...field}
+                                                                        value={field.value ?? ""}
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className={stepIndex === 1 ? "block space-y-4" : "hidden space-y-4"}>
+                            <div className={stepIndex === 2 ? "block space-y-4" : "hidden space-y-4"}>
                                 <FormField
                                     control={form.control}
                                     name="isProxy"
@@ -575,9 +577,9 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                     onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                                                 />
                                                 <div>
-                                                    <FormLabel>This is a proxy ask for someone else</FormLabel>
+                                                    <FormLabel>This request is posted on behalf of someone else</FormLabel>
                                                     <p className="mt-1 text-sm text-slate-600">
-                                                        Turn this on when the creator is asking on behalf of a person, family, group, or project.
+                                                        Use this when the parent funding request is being posted for a person, family, group, or project.
                                                     </p>
                                                 </div>
                                             </div>
@@ -595,7 +597,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                             <Select onValueChange={field.onChange} value={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder="Choose who this ask is for" />
+                                                        <SelectValue placeholder="Choose who this request is for" />
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
@@ -620,7 +622,11 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                 <FormItem>
                                                     <FormLabel>Beneficiary name</FormLabel>
                                                     <FormControl>
-                                                        <Input placeholder="Child, family, school group, project name, etc." {...field} value={field.value ?? ""} />
+                                                        <Input
+                                                            placeholder="Person, family, group, or project name"
+                                                            {...field}
+                                                            value={field.value ?? ""}
+                                                        />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
@@ -636,7 +642,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                     <FormControl>
                                                         <Textarea
                                                             rows={4}
-                                                            placeholder="Explain why the ask is being posted by a proxy."
+                                                            placeholder="Explain why this request is being posted by a proxy."
                                                             {...field}
                                                             value={field.value ?? ""}
                                                         />
@@ -649,7 +655,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                 ) : null}
                             </div>
 
-                            <div className={stepIndex === 2 ? "block space-y-4" : "hidden space-y-4"}>
+                            <div className={stepIndex === 3 ? "block space-y-4" : "hidden space-y-4"}>
                                 <div>
                                     <div className="mb-2 text-sm font-medium">Cover image</div>
                                     <MultiImageUploader
@@ -659,57 +665,39 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         previewMode="large"
                                     />
                                     <p className="mt-2 text-sm text-slate-600">
-                                        Optional. The selected image stays attached to this draft unless you remove it.
+                                        Optional. The selected image stays attached when you move between steps or save a draft.
                                     </p>
                                 </div>
-
-                                <FormField
-                                    control={form.control}
-                                    name="completionPlan"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>How will donors know this was fulfilled?</FormLabel>
-                                            <FormControl>
-                                                <Textarea
-                                                    rows={5}
-                                                    placeholder="Explain how you will confirm the outcome, for example with an update, photo, receipt, or short note."
-                                                    {...field}
-                                                />
-                                            </FormControl>
-                                            <p className="text-sm text-slate-600">
-                                                Explain how you will confirm the outcome, for example with an update, photo, receipt, or short note.
-                                            </p>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
                             </div>
 
-                            <div className={stepIndex === 3 ? "block space-y-4" : "hidden space-y-4"}>
+                            <div className={stepIndex === 4 ? "block space-y-4" : "hidden space-y-4"}>
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <div className="text-xl font-semibold text-slate-900">{values.title}</div>
                                     <p className="mt-2 text-sm text-slate-600">{values.shortStory}</p>
-                                    <div className="mt-3 text-sm font-medium text-slate-800">
-                                        {formatFundingAmount(values.amount || 0, values.currency || "ZAR")}
-                                    </div>
                                 </div>
 
                                 <div className="grid gap-4 md:grid-cols-2">
-                                    <Card className="rounded-xl border-slate-200 shadow-none">
+                                    <Card className="rounded-xl border-slate-200 shadow-none md:col-span-2">
                                         <CardHeader>
-                                            <CardTitle className="text-base">Items</CardTitle>
+                                            <CardTitle className="text-base">Funding items</CardTitle>
                                         </CardHeader>
-                                        <CardContent className="space-y-2 text-sm text-slate-600">
-                                            {visibleItems.length > 0 ? (
-                                                visibleItems.map((item, index) => (
-                                                    <div key={`${item.name}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
-                                                        <div className="font-medium text-slate-900">{formatFundingItemSummary(item)}</div>
-                                                        {item.note ? <p className="mt-1">{item.note}</p> : null}
+                                        <CardContent className="space-y-3 text-sm text-slate-600">
+                                            {requestItems.map((item, index) => (
+                                                <div key={`${item.title}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="font-medium text-slate-900">{item.title}</div>
+                                                            <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                                                                {fundingCategoryOptions.find((option) => option.value === item.category)?.label}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-sm font-medium text-slate-900">
+                                                            {formatFundingAmount(item.price, item.currency)}
+                                                        </div>
                                                     </div>
-                                                ))
-                                            ) : (
-                                                <p>No line items added.</p>
-                                            )}
+                                                    {item.note ? <p className="mt-2">{item.note}</p> : null}
+                                                </div>
+                                            ))}
                                         </CardContent>
                                     </Card>
 
@@ -718,18 +706,20 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                             <CardTitle className="text-base">Beneficiary</CardTitle>
                                         </CardHeader>
                                         <CardContent className="space-y-2 text-sm text-slate-600">
-                                            <p>{isProxy ? "Proxy ask" : "Direct ask"}</p>
+                                            <p>{isProxy ? "Proxy request" : "Direct request"}</p>
                                             <p>{fundingBeneficiaryTypeLabels[values.beneficiaryType]}</p>
                                             <p>{values.beneficiaryName || "No named beneficiary provided"}</p>
                                             {values.proxyNote ? <p>{values.proxyNote}</p> : null}
                                         </CardContent>
                                     </Card>
 
-                                    <Card className="rounded-xl border-slate-200 shadow-none md:col-span-2">
+                                    <Card className="rounded-xl border-slate-200 shadow-none">
                                         <CardHeader>
-                                            <CardTitle className="text-base">How donors will know this was fulfilled</CardTitle>
+                                            <CardTitle className="text-base">Image</CardTitle>
                                         </CardHeader>
-                                        <CardContent className="text-sm text-slate-600">{values.completionPlan}</CardContent>
+                                        <CardContent className="text-sm text-slate-600">
+                                            {coverImageItems[0] ? "Cover image selected" : "No cover image selected"}
+                                        </CardContent>
                                     </Card>
                                 </div>
                             </div>

@@ -4,6 +4,7 @@ import type {
     FundingAsk,
     FundingAskCategory,
     FundingAskCurrency,
+    FundingAskItemStatus,
     FundingAskStatus,
     FundingAskTrustBadgeType,
     FundingAskBeneficiaryType,
@@ -30,10 +31,10 @@ export const fundingStatusLabels: Record<FundingAskStatus, string> = {
 };
 
 export const fundingTrustBadgeLabels: Record<FundingAskTrustBadgeType, string> = {
-    circle_admin: "Circle admin ask",
+    circle_admin: "Super admin managed",
     verified_member: "Verified member ask",
-    proxy_ask: "Proxy ask",
-    member_ask: "Member ask",
+    proxy_ask: "Proxy request",
+    member_ask: "Member request",
 };
 
 export const fundingCurrencyOptions: Array<{ value: FundingAskCurrency; label: string }> = [
@@ -86,21 +87,62 @@ export const formatFundingAmount = (amount: number, currency: string) => {
 
 export const getFundingBeneficiarySummary = (ask: FundingAsk) => {
     if (ask.isProxy) {
-        return ask.beneficiaryName
-            ? `${fundingCategoryLabels[ask.category]} for ${ask.beneficiaryName}`
-            : "Proxy ask";
+        return ask.beneficiaryName ? `For ${ask.beneficiaryName}` : "Proxy request";
     }
 
     if (ask.beneficiaryType === "self") {
-        return "Direct circle need";
+        return "Direct circle request";
     }
 
     return ask.beneficiaryName || "Direct beneficiary";
 };
 
 export const formatFundingItemSummary = (item: FundingAskItem) => {
-    const parts = [item.quantity ? String(item.quantity) : undefined, item.unitLabel, item.name].filter(Boolean);
+    const parts = [item.quantity ? String(item.quantity) : undefined, item.unitLabel, item.title].filter(Boolean);
     return parts.join(" ");
+};
+
+export const isFundingItemOpen = (item: FundingAskItem) => item.status === "open";
+
+export const getFundingOpenItems = (ask: FundingAsk) => (ask.items || []).filter(isFundingItemOpen);
+
+export const getFundingOpenItemCount = (ask: FundingAsk) => getFundingOpenItems(ask).length;
+
+export const getFundingOpenItemTotals = (ask: FundingAsk) => {
+    const totals = new Map<FundingAskCurrency, number>();
+
+    for (const item of getFundingOpenItems(ask)) {
+        const current = totals.get(item.currency) ?? 0;
+        totals.set(item.currency, current + item.price);
+    }
+
+    return totals;
+};
+
+export const formatFundingOpenItemTotals = (ask: FundingAsk) => {
+    const entries = Array.from(getFundingOpenItemTotals(ask).entries());
+
+    if (entries.length === 0) {
+        return "No open items";
+    }
+
+    return entries.map(([currency, amount]) => formatFundingAmount(amount, currency)).join(" + ");
+};
+
+export const getFundingRequestSummaryLine = (ask: FundingAsk) => {
+    const openCount = getFundingOpenItemCount(ask);
+    if (openCount === 0) {
+        return fundingStatusLabels[ask.status];
+    }
+
+    return `${openCount} open item${openCount === 1 ? "" : "s"} • ${formatFundingOpenItemTotals(ask)}`;
+};
+
+export const fundingItemStatusLabels: Record<FundingAskItemStatus, string> = {
+    draft: "Draft",
+    open: "Open",
+    completed: "Completed",
+    closed: "Closed",
 };
 
 export function FundingStatusPill({ status, className }: { status: FundingAskStatus; className?: string }) {

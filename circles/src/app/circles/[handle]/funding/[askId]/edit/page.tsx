@@ -4,7 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getFundingAskById, getFundingCirclePermissions } from "@/lib/data/funding";
+import { getFundingAskById, getFundingCirclePermissions, isFundingEnabledForCircle } from "@/lib/data/funding";
 import { FundingForm } from "@/components/modules/funding/funding-form";
 
 type PageProps = {
@@ -17,7 +17,7 @@ export default async function EditFundingAskPage(props: PageProps) {
     if (!circle) {
         notFound();
     }
-    if (!circle.enabledModules?.includes("funding")) {
+    if (!isFundingEnabledForCircle(circle)) {
         notFound();
     }
 
@@ -32,22 +32,22 @@ export default async function EditFundingAskPage(props: PageProps) {
     if (!ask) {
         return (
             <div className="formatted mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 py-10 text-center">
-                <h1 className="text-2xl font-bold">Funding ask not found</h1>
-                <p className="text-sm text-slate-600">This ask does not exist or you do not have access to it.</p>
+                <h1 className="text-2xl font-bold">Funding request not found</h1>
+                <p className="text-sm text-slate-600">This request does not exist or you do not have access to it.</p>
             </div>
         );
     }
 
-    const canManageAsk = permissions.isCircleAdmin || ask.createdByDid === userDid;
+    const canManageAsk = permissions.isSuperAdmin;
     if (!canManageAsk || ask.status === "completed" || ask.status === "closed") {
         return (
             <div className="formatted mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 py-10 text-center">
                 <h1 className="text-2xl font-bold">Access denied</h1>
                 <p className="text-sm text-slate-600">
-                    Only the ask owner or a circle admin can edit active funding asks.
+                    Only Super Admins can edit active funding requests.
                 </p>
                 <Button asChild variant="outline">
-                    <Link href={`/circles/${circle.handle}/funding/${ask._id}`}>Back to ask</Link>
+                    <Link href={`/circles/${circle.handle}/funding/${ask._id}`}>Back to request</Link>
                 </Button>
             </div>
         );
@@ -59,7 +59,7 @@ export default async function EditFundingAskPage(props: PageProps) {
                 <Button asChild variant="ghost">
                     <Link href={`/circles/${circle.handle}/funding/${ask._id}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to ask
+                        Back to request
                     </Link>
                 </Button>
             </div>

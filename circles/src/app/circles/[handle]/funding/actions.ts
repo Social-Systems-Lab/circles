@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { deleteFile, isFile, saveFile } from "@/lib/data/storage";
@@ -14,16 +13,14 @@ import {
     insertFundingAsk,
     updateFundingAskDocument,
 } from "@/lib/data/funding";
-import { Circles, FundingAsks, Members } from "@/lib/data/db";
+import { Circles } from "@/lib/data/db";
 import {
     fileInfoSchema,
     fundingAskCurrencySchema,
     fundingAskBeneficiaryTypeSchema,
-    fundingAskCategorySchema,
     fundingAskItemSchema,
     fundingAskSchema,
 } from "@/models/models";
-import { isVerifiedUser } from "@/lib/auth/verification";
 
 const submissionIntentSchema = z.enum(["draft", "publish", "update"]);
 
@@ -32,11 +29,9 @@ const fundingAskFormSchema = z
         title: z.string().trim().min(1, "Title is required"),
         shortStory: z.string().trim().min(1, "Short story is required").max(280, "Short story is too long"),
         description: z.preprocess((value) => (typeof value === "string" ? value.trim() : ""), z.string()),
-        category: fundingAskCategorySchema,
-        amount: z.coerce.number().positive("Amount must be greater than zero"),
         currency: z.preprocess(
             (value) => (typeof value === "string" ? value.toUpperCase() : value),
-            fundingAskCurrencySchema,
+            fundingAskCurrencySchema.optional(),
         ),
         items: z.preprocess((value) => {
             if (Array.isArray(value)) {
@@ -52,7 +47,7 @@ const fundingAskFormSchema = z
             } catch {
                 return value;
             }
-        }, z.array(fundingAskItemSchema).max(25, "Add at most 25 line items")),
+        }, z.array(fundingAskItemSchema).min(1, "Add at least one funding item").max(25, "Add at most 25 funding items")),
         isProxy: z.preprocess((value) => value === "true" || value === true, z.boolean()),
         beneficiaryType: fundingAskBeneficiaryTypeSchema,
         beneficiaryName: z.preprocess(
@@ -63,11 +58,6 @@ const fundingAskFormSchema = z
             (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
             z.string().max(500, "Proxy note must be 500 characters or fewer").optional(),
         ),
-        completionPlan: z
-            .string()
-            .trim()
-            .min(1, "Please explain how donors will know this was fulfilled.")
-            .max(1000, "Confirmation note is too long"),
         submissionIntent: submissionIntentSchema,
     })
     .superRefine((value, context) => {
@@ -151,26 +141,20 @@ const resolveCoverImage = async ({
     };
 };
 
-const getCreatorBadgeType = async ({
-    circleId,
-    userDid,
-    isProxy,
-}: {
-    circleId: string;
-    userDid: string;
-    isProxy: boolean;
-}) => {
-    const [membership, creator] = await Promise.all([
-        Members.findOne({ circleId, userDid }),
-        Circles.findOne({ did: userDid }),
-    ]);
-
-    return deriveFundingTrustBadgeType({
-        isCircleAdmin: membership?.userGroups?.includes("admins") ?? false,
-        isVerifiedCreator: isVerifiedUser(creator),
-        isProxy,
-    });
-};
+const normalizeFundingItemsForStorage = (
+    items: z.infer<typeof fundingAskItemSchema>[],
+    status: "draft" | "open" | "completed" | "closed",
+) =>
+    items.map((item) => ({
+        title: item.title.trim(),
+        category: item.category,
+        price: item.price,
+        currency: item.currency,
+        quantity: item.quantity,
+        unitLabel: item.unitLabel?.trim() || undefined,
+        note: item.note?.trim() || undefined,
+        status,
+    }));
 
 export async function createFundingAskAction(circleHandle: string, formData: FormData): Promise<FundingActionResult> {
     try {
@@ -189,14 +173,14 @@ export async function createFundingAskAction(circleHandle: string, formData: For
 
         const permissions = await getFundingCirclePermissions(circle, userDid);
         if (!permissions.canCreate) {
-            return { success: false, message: "You do not have permission to create funding asks in this circle." };
+            return { success: false, message: "You do not have permission to create funding requests in this circle." };
         }
 
         const parsed = fundingAskFormSchema.safeParse(Object.fromEntries(formData.entries()));
         if (!parsed.success) {
             return {
                 success: false,
-                message: parsed.error.issues[0]?.message || "Funding ask form is invalid.",
+                message: parsed.error.issues[0]?.message || "Funding request form is invalid.",
             };
         }
 
@@ -205,12 +189,11 @@ export async function createFundingAskAction(circleHandle: string, formData: For
             formData,
             circleId: circle._id.toString(),
         });
-        const trustBadgeType = await getCreatorBadgeType({
-            circleId: circle._id.toString(),
-            userDid,
+        const now = new Date();
+        const requestStatus = parsed.data.submissionIntent === "draft" ? "draft" : "open";
+        const trustBadgeType = deriveFundingTrustBadgeType({
             isProxy: parsed.data.isProxy,
         });
-        const now = new Date();
 
         const createdAsk = await insertFundingAsk(
             fundingAskSchema.parse({
@@ -221,16 +204,12 @@ export async function createFundingAskAction(circleHandle: string, formData: For
                 title: parsed.data.title,
                 shortStory: parsed.data.shortStory,
                 description: parsed.data.description,
-                category: parsed.data.category,
-                amount: parsed.data.amount,
-                currency: parsed.data.currency,
-                items: parsed.data.items,
-                status: parsed.data.submissionIntent === "draft" ? "draft" : "open",
+                items: normalizeFundingItemsForStorage(parsed.data.items, requestStatus),
+                status: requestStatus,
                 isProxy: parsed.data.isProxy,
                 beneficiaryType: parsed.data.isProxy ? parsed.data.beneficiaryType : "self",
                 beneficiaryName: parsed.data.beneficiaryName,
                 proxyNote: parsed.data.proxyNote,
-                completionPlan: parsed.data.completionPlan,
                 coverImage,
                 trustBadgeType,
                 createdAt: now,
@@ -241,12 +220,15 @@ export async function createFundingAskAction(circleHandle: string, formData: For
         revalidateFundingPaths(circleHandle, createdAsk._id?.toString?.() ?? createdAsk._id);
         return {
             success: true,
-            message: parsed.data.submissionIntent === "draft" ? "Funding ask saved as draft." : "Funding ask published.",
+            message:
+                parsed.data.submissionIntent === "draft"
+                    ? "Funding request saved as draft."
+                    : "Funding request published.",
             askId: createdAsk._id?.toString?.() ?? createdAsk._id,
         };
     } catch (error) {
-        console.error("Error creating funding ask:", error);
-        return { success: false, message: "Failed to create funding ask." };
+        console.error("Error creating funding request:", error);
+        return { success: false, message: "Failed to create funding request." };
     }
 }
 
@@ -271,20 +253,20 @@ export async function updateFundingAskAction(
 
         const existingAsk = await getFundingAskDocumentById(askId);
         if (!existingAsk || existingAsk.circleId !== circle._id.toString()) {
-            return { success: false, message: "Funding ask not found." };
+            return { success: false, message: "Funding request not found." };
         }
 
         const permissions = await getFundingCirclePermissions(circle, userDid);
-        const canManage = permissions.isCircleAdmin || existingAsk.createdByDid === userDid;
+        const canManage = permissions.isSuperAdmin;
         if (!canManage) {
-            return { success: false, message: "You do not have permission to edit this funding ask." };
+            return { success: false, message: "You do not have permission to edit this funding request." };
         }
 
         const parsed = fundingAskFormSchema.safeParse(Object.fromEntries(formData.entries()));
         if (!parsed.success) {
             return {
                 success: false,
-                message: parsed.error.issues[0]?.message || "Funding ask form is invalid.",
+                message: parsed.error.issues[0]?.message || "Funding request form is invalid.",
             };
         }
 
@@ -303,121 +285,63 @@ export async function updateFundingAskAction(
                       : "open"
                   : existingAsk.status;
 
-        const trustBadgeType = await getCreatorBadgeType({
-            circleId: circle._id.toString(),
-            userDid: existingAsk.createdByDid,
+        const trustBadgeType = deriveFundingTrustBadgeType({
             isProxy: parsed.data.isProxy,
         });
+        const itemStatus = nextStatus === "draft" ? "draft" : nextStatus === "closed" ? "closed" : nextStatus === "completed" ? "completed" : "open";
 
         const updated = await updateFundingAskDocument(askId, {
             title: parsed.data.title,
             shortStory: parsed.data.shortStory,
             description: parsed.data.description,
-            category: parsed.data.category,
-            amount: parsed.data.amount,
-            currency: parsed.data.currency,
-            items: parsed.data.items,
+            category: undefined,
+            amount: undefined,
+            currency: undefined,
+            items: normalizeFundingItemsForStorage(parsed.data.items, itemStatus),
             status: nextStatus,
             isProxy: parsed.data.isProxy,
             beneficiaryType: parsed.data.isProxy ? parsed.data.beneficiaryType : "self",
             beneficiaryName: parsed.data.beneficiaryName,
             proxyNote: parsed.data.proxyNote,
-            completionPlan: parsed.data.completionPlan,
+            completionPlan: undefined,
             coverImage,
             trustBadgeType,
+            activeSupporterDid: undefined,
+            activeSupporterHandleSnapshot: undefined,
+            activeSupportStartedAt: undefined,
             updatedAt: new Date(),
         });
 
         if (!updated) {
-            return { success: false, message: "Funding ask update failed." };
+            return { success: false, message: "Funding request update failed." };
         }
 
         if (shouldDeleteExisting && existingAsk.coverImage?.url) {
             try {
                 await deleteFile(existingAsk.coverImage.url);
             } catch (error) {
-                console.error("Failed to delete replaced funding ask image:", error);
+                console.error("Failed to delete replaced funding request image:", error);
             }
         }
 
         revalidateFundingPaths(circleHandle, askId);
         return {
             success: true,
-            message: nextStatus === "draft" ? "Funding ask saved as draft." : "Funding ask updated.",
+            message: nextStatus === "draft" ? "Funding request saved as draft." : "Funding request updated.",
             askId,
         };
     } catch (error) {
-        console.error("Error updating funding ask:", error);
-        return { success: false, message: "Failed to update funding ask." };
+        console.error("Error updating funding request:", error);
+        return { success: false, message: "Failed to update funding request." };
     }
 }
 
 export async function claimFundingAskAction(circleHandle: string, askId: string): Promise<FundingActionResult> {
-    try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) {
-            return { success: false, message: "User not authenticated" };
-        }
-
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle?._id) {
-            return { success: false, message: "Circle not found" };
-        }
-        if (!isFundingEnabledForCircle(circle)) {
-            return { success: false, message: "Funding Needs are not enabled for this circle." };
-        }
-
-        const permissions = await getFundingCirclePermissions(circle, userDid);
-        if (!permissions.canView) {
-            return { success: false, message: "Funding asks are members-only in this circle." };
-        }
-
-        const ask = await getFundingAskDocumentById(askId);
-        if (!ask || ask.circleId !== circle._id.toString()) {
-            return { success: false, message: "Funding ask not found." };
-        }
-
-        if (ask.status !== "open") {
-            return { success: false, message: "This funding ask is no longer open." };
-        }
-
-        if (ask.createdByDid === userDid) {
-            return { success: false, message: "You cannot claim your own funding ask." };
-        }
-
-        const supporter = await Circles.findOne({ did: userDid });
-        const now = new Date();
-        const result = await FundingAsks.updateOne(
-            {
-                _id: new ObjectId(askId),
-                circleId: circle._id.toString(),
-                status: "open",
-            },
-            {
-                $set: {
-                    status: "in_progress",
-                    activeSupporterDid: userDid,
-                    activeSupporterHandleSnapshot: supporter?.handle,
-                    activeSupportStartedAt: now,
-                    updatedAt: now,
-                },
-            },
-        );
-
-        if (result.modifiedCount === 0) {
-            return { success: false, message: "Someone else has already claimed this funding ask." };
-        }
-
-        revalidateFundingPaths(circleHandle, askId);
-        return {
-            success: true,
-            message: "You are now supporting this ask.",
-            askId,
-        };
-    } catch (error) {
-        console.error("Error claiming funding ask:", error);
-        return { success: false, message: "Failed to claim funding ask." };
-    }
+    return {
+        success: false,
+        message: "Demo only - payment flow not connected yet.",
+        askId,
+    };
 }
 
 export async function completeFundingAskAction(
@@ -441,17 +365,17 @@ export async function completeFundingAskAction(
 
         const ask = await getFundingAskDocumentById(askId);
         if (!ask || ask.circleId !== circle._id.toString()) {
-            return { success: false, message: "Funding ask not found." };
+            return { success: false, message: "Funding request not found." };
         }
 
         const permissions = await getFundingCirclePermissions(circle, userDid);
-        const canManage = permissions.isCircleAdmin || ask.createdByDid === userDid;
+        const canManage = permissions.isSuperAdmin;
         if (!canManage) {
-            return { success: false, message: "You do not have permission to complete this ask." };
+            return { success: false, message: "You do not have permission to complete this funding request." };
         }
 
-        if (ask.status !== "in_progress") {
-            return { success: false, message: "Only in-progress asks can be marked completed." };
+        if (ask.status === "closed" || ask.status === "completed") {
+            return { success: false, message: "Only active funding requests can be marked completed." };
         }
 
         const parsed = completionSchema.safeParse({ completionNote });
@@ -463,23 +387,27 @@ export async function completeFundingAskAction(
         const updated = await updateFundingAskDocument(askId, {
             status: "completed",
             completionNote: parsed.data.completionNote,
+            items: (ask.items || []).map((item) => ({ ...item, status: "completed" })),
             completedAt: now,
             updatedAt: now,
+            activeSupporterDid: undefined,
+            activeSupporterHandleSnapshot: undefined,
+            activeSupportStartedAt: undefined,
         });
 
         if (!updated) {
-            return { success: false, message: "Failed to complete funding ask." };
+            return { success: false, message: "Failed to complete funding request." };
         }
 
         revalidateFundingPaths(circleHandle, askId);
         return {
             success: true,
-            message: "Funding ask marked completed.",
+            message: "Funding request marked completed.",
             askId,
         };
     } catch (error) {
-        console.error("Error completing funding ask:", error);
-        return { success: false, message: "Failed to complete funding ask." };
+        console.error("Error completing funding request:", error);
+        return { success: false, message: "Failed to complete funding request." };
     }
 }
 
@@ -500,38 +428,45 @@ export async function closeFundingAskAction(circleHandle: string, askId: string)
 
         const ask = await getFundingAskDocumentById(askId);
         if (!ask || ask.circleId !== circle._id.toString()) {
-            return { success: false, message: "Funding ask not found." };
+            return { success: false, message: "Funding request not found." };
         }
 
         const permissions = await getFundingCirclePermissions(circle, userDid);
-        const canManage = permissions.isCircleAdmin || ask.createdByDid === userDid;
+        const canManage = permissions.isSuperAdmin;
         if (!canManage) {
-            return { success: false, message: "You do not have permission to close this ask." };
+            return { success: false, message: "You do not have permission to close this funding request." };
         }
 
         if (ask.status === "completed" || ask.status === "closed") {
-            return { success: false, message: "This funding ask is already closed to new support." };
+            return { success: false, message: "This funding request is already closed to new support." };
         }
 
         const now = new Date();
         const updated = await updateFundingAskDocument(askId, {
             status: "closed",
+            items: (ask.items || []).map((item) => ({
+                ...item,
+                status: item.status === "completed" ? "completed" : "closed",
+            })),
             closedAt: now,
             updatedAt: now,
+            activeSupporterDid: undefined,
+            activeSupporterHandleSnapshot: undefined,
+            activeSupportStartedAt: undefined,
         });
 
         if (!updated) {
-            return { success: false, message: "Failed to close funding ask." };
+            return { success: false, message: "Failed to close funding request." };
         }
 
         revalidateFundingPaths(circleHandle, askId);
         return {
             success: true,
-            message: "Funding ask closed.",
+            message: "Funding request closed.",
             askId,
         };
     } catch (error) {
-        console.error("Error closing funding ask:", error);
-        return { success: false, message: "Failed to close funding ask." };
+        console.error("Error closing funding request:", error);
+        return { success: false, message: "Failed to close funding request." };
     }
 }

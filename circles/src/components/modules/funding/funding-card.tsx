@@ -6,7 +6,8 @@ import {
     FundingProxyBadge,
     FundingStatusPill,
     FundingTrustBadge,
-    formatFundingAmount,
+    getFundingOpenItemCount,
+    getFundingRequestSummaryLine,
 } from "./funding-shared";
 
 type FundingCardProps = {
@@ -50,20 +51,20 @@ export function FundingCard({ ask, circleHandle, compact = false }: FundingCardP
 
                     <div className={compact ? "mt-2" : "mt-3"}>
                         <div className="text-lg font-semibold text-slate-900">{ask.title}</div>
-                        <div className="mt-1 text-sm font-medium text-slate-700">
-                            {formatFundingAmount(ask.amount, ask.currency)}
-                        </div>
+                        <div className="mt-1 text-sm font-medium text-slate-700">{getFundingRequestSummaryLine(ask)}</div>
                         <p className="mt-2 line-clamp-3 text-sm text-slate-600">{ask.shortStory}</p>
                     </div>
 
                     <div className={compact ? "mt-3" : "mt-4 flex items-center justify-between gap-3"}>
-                        {!compact && ask.creator?.handle ? (
-                            <div className="text-xs text-slate-500">Created by @{ask.creator.handle}</div>
+                        {!compact ? (
+                            <div className="text-xs text-slate-500">
+                                {getFundingOpenItemCount(ask)} open item{getFundingOpenItemCount(ask) === 1 ? "" : "s"}
+                            </div>
                         ) : (
                             <div />
                         )}
                         <Button asChild variant={compact ? "ghost" : "outline"} size="sm" className="shrink-0">
-                            <Link href={href}>View ask</Link>
+                            <Link href={href}>View request</Link>
                         </Button>
                     </div>
                 </div>

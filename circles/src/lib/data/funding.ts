@@ -1,8 +1,19 @@
 import { ObjectId } from "mongodb";
-import { isVerifiedUser } from "@/lib/auth/verification";
 import { SAFE_CIRCLE_PROJECTION } from "@/lib/data/circle";
 import { Circles, FundingAsks, Members } from "@/lib/data/db";
-import type { Circle, FundingAsk, FundingAskDisplay, FundingAskTrustBadgeType } from "@/models/models";
+import {
+    fundingAskCategorySchema,
+    fundingAskCurrencySchema,
+    fundingAskItemStatusSchema,
+} from "@/models/models";
+import type {
+    Circle,
+    FundingAsk,
+    FundingAskDisplay,
+    FundingAskItem,
+    FundingAskItemStatus,
+    FundingAskTrustBadgeType,
+} from "@/models/models";
 
 const FUNDING_LIST_STATUS_ORDER: Record<string, number> = {
     open: 0,
@@ -16,9 +27,8 @@ export type FundingCirclePermissions = {
     isEnabled: boolean;
     canView: boolean;
     canCreate: boolean;
-    isCircleAdmin: boolean;
+    isSuperAdmin: boolean;
     isMember: boolean;
-    isVerifiedOwnerOfOwnUserCircle: boolean;
 };
 
 type ListFundingAsksOptions = {
@@ -27,14 +37,74 @@ type ListFundingAsksOptions = {
     limit?: number;
 };
 
+const getNormalizedRequestStatus = (status?: string): FundingAsk["status"] => {
+    if (status === "in_progress") {
+        return "open";
+    }
+    return (status as FundingAsk["status"]) || "draft";
+};
+
+const getDefaultItemStatus = (requestStatus: FundingAsk["status"]): FundingAskItemStatus => {
+    if (requestStatus === "draft") {
+        return "draft";
+    }
+    if (requestStatus === "completed") {
+        return "completed";
+    }
+    if (requestStatus === "closed") {
+        return "closed";
+    }
+    return "open";
+};
+
+const normalizeFundingItem = (rawItem: Record<string, unknown> | undefined, ask: Record<string, unknown>): FundingAskItem => {
+    const requestStatus = getNormalizedRequestStatus(typeof ask.status === "string" ? ask.status : undefined);
+    const parsedCategory = fundingAskCategorySchema.safeParse(rawItem?.category);
+    const parsedLegacyCategory = fundingAskCategorySchema.safeParse(ask.category);
+    const parsedCurrency = fundingAskCurrencySchema.safeParse(rawItem?.currency);
+    const parsedLegacyCurrency = fundingAskCurrencySchema.safeParse(ask.currency);
+    const parsedItemStatus = fundingAskItemStatusSchema.safeParse(rawItem?.status);
+    const title =
+        (typeof rawItem?.title === "string" && rawItem.title.trim()) ||
+        (typeof rawItem?.name === "string" && rawItem.name.trim()) ||
+        (typeof ask.title === "string" && ask.title.trim()) ||
+        "Funding item";
+
+    return {
+        title,
+        category: parsedCategory.success ? parsedCategory.data : parsedLegacyCategory.success ? parsedLegacyCategory.data : "other",
+        price:
+            typeof rawItem?.price === "number"
+                ? rawItem.price
+                : typeof ask.amount === "number"
+                  ? ask.amount
+                  : 0,
+        currency: parsedCurrency.success ? parsedCurrency.data : parsedLegacyCurrency.success ? parsedLegacyCurrency.data : "ZAR",
+        quantity: typeof rawItem?.quantity === "number" ? rawItem.quantity : undefined,
+        unitLabel: typeof rawItem?.unitLabel === "string" ? rawItem.unitLabel : undefined,
+        note: typeof rawItem?.note === "string" ? rawItem.note : undefined,
+        status: parsedItemStatus.success ? parsedItemStatus.data : getDefaultItemStatus(requestStatus),
+        name: typeof rawItem?.name === "string" ? rawItem.name : undefined,
+    };
+};
+
 const normalizeFundingAsk = (ask: FundingAsk | null): FundingAsk | null => {
     if (!ask) {
         return null;
     }
 
+    const rawAsk = ask as FundingAsk & Record<string, unknown>;
+    const normalizedStatus = getNormalizedRequestStatus(typeof rawAsk.status === "string" ? rawAsk.status : undefined);
+    const rawItems = Array.isArray(rawAsk.items) ? (rawAsk.items as Array<Record<string, unknown>>) : [];
+    const normalizedItems = rawItems.length
+        ? rawItems.map((item) => normalizeFundingItem(item, rawAsk))
+        : [normalizeFundingItem(undefined, rawAsk)];
+
     return {
-        ...ask,
+        ...rawAsk,
         _id: ask._id?.toString?.() ?? ask._id,
+        status: normalizedStatus,
+        items: normalizedItems,
     };
 };
 
@@ -51,27 +121,18 @@ const sortFundingAsks = <T extends { status: string; updatedAt?: Date; createdAt
     });
 
 export const deriveFundingTrustBadgeType = ({
-    isCircleAdmin,
-    isVerifiedCreator,
     isProxy,
 }: {
-    isCircleAdmin: boolean;
-    isVerifiedCreator: boolean;
     isProxy: boolean;
 }): FundingAskTrustBadgeType => {
-    if (isCircleAdmin) {
-        return "circle_admin";
-    }
-    if (isVerifiedCreator) {
-        return "verified_member";
-    }
     if (isProxy) {
         return "proxy_ask";
     }
-    return "member_ask";
+    return "circle_admin";
 };
 
-export const isFundingEnabledForCircle = (circle: Circle): boolean => circle.enabledModules?.includes("funding") ?? false;
+export const isFundingEnabledForCircle = (circle: Circle): boolean =>
+    circle.circleType === "circle" && (circle.enabledModules?.includes("funding") ?? false);
 
 export async function getFundingCirclePermissions(
     circle: Circle,
@@ -84,40 +145,36 @@ export async function getFundingCirclePermissions(
             isEnabled,
             canView: false,
             canCreate: false,
-            isCircleAdmin: false,
+            isSuperAdmin: false,
             isMember: false,
-            isVerifiedOwnerOfOwnUserCircle: false,
         };
     }
 
     const [membership, viewerCircle] = await Promise.all([
         Members.findOne({ userDid: viewerDid, circleId: circle._id.toString() }),
-        Circles.findOne({ did: viewerDid }, { projection: SAFE_CIRCLE_PROJECTION }),
+        Circles.findOne({ did: viewerDid }, { projection: { isAdmin: 1 } }),
     ]);
 
     const isMember = Boolean(membership);
-    const isCircleAdmin = membership?.userGroups?.includes("admins") ?? false;
-    const isVerifiedOwnerOfOwnUserCircle =
-        circle.circleType === "user" && circle.did === viewerDid && isVerifiedUser(viewerCircle);
+    const isSuperAdmin = Boolean(viewerCircle?.isAdmin);
 
     return {
         isEnabled,
-        canView: isMember,
-        canCreate: isCircleAdmin || isVerifiedOwnerOfOwnUserCircle,
-        isCircleAdmin,
+        canView: isMember || isSuperAdmin,
+        canCreate: isSuperAdmin,
+        isSuperAdmin,
         isMember,
-        isVerifiedOwnerOfOwnUserCircle,
     };
 }
 
 const isFundingAskVisibleToViewer = ({
     ask,
     viewerDid,
-    isCircleAdmin,
+    isSuperAdmin,
 }: {
     ask: FundingAsk;
     viewerDid?: string;
-    isCircleAdmin: boolean;
+    isSuperAdmin: boolean;
 }) => {
     if (ask.status !== "draft") {
         return true;
@@ -127,7 +184,7 @@ const isFundingAskVisibleToViewer = ({
         return false;
     }
 
-    return ask.createdByDid === viewerDid || isCircleAdmin;
+    return ask.createdByDid === viewerDid || isSuperAdmin;
 };
 
 const hydrateFundingAskProfiles = async (asks: FundingAsk[], circle?: Circle): Promise<FundingAskDisplay[]> => {
@@ -179,7 +236,7 @@ export async function listFundingAsksByCircleId(
             isFundingAskVisibleToViewer({
                 ask,
                 viewerDid: options.viewerDid,
-                isCircleAdmin: permissions.isCircleAdmin,
+                isSuperAdmin: permissions.isSuperAdmin,
             }),
         );
 
@@ -216,7 +273,7 @@ export async function getFundingAskById(
         !isFundingAskVisibleToViewer({
             ask,
             viewerDid,
-            isCircleAdmin: permissions.isCircleAdmin,
+            isSuperAdmin: permissions.isSuperAdmin,
         })
     ) {
         return null;

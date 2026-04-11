@@ -4,7 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getFundingCirclePermissions } from "@/lib/data/funding";
+import { getFundingCirclePermissions, isFundingEnabledForCircle } from "@/lib/data/funding";
 import { FundingForm } from "@/components/modules/funding/funding-form";
 
 type PageProps = {
@@ -17,7 +17,7 @@ export default async function NewFundingAskPage(props: PageProps) {
     if (!circle) {
         notFound();
     }
-    if (!circle.enabledModules?.includes("funding")) {
+    if (!isFundingEnabledForCircle(circle)) {
         notFound();
     }
 
@@ -32,7 +32,7 @@ export default async function NewFundingAskPage(props: PageProps) {
             <div className="formatted mx-auto flex w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 py-10 text-center">
                 <h1 className="text-2xl font-bold">Access denied</h1>
                 <p className="text-sm text-slate-600">
-                    Only circle admins, or verified users on their own user circle, can create funding asks in this MVP.
+                    Only Super Admins can create funding requests in this MVP.
                 </p>
                 <Button asChild variant="outline">
                     <Link href={`/circles/${circle.handle}/funding`}>Back to Funding Needs</Link>

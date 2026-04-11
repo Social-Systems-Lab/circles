@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, CircleDollarSign, Pencil, ShieldCheck, UserRound } from "lucide-react";
+import { CheckCircle2, ListChecks, Pencil, ShieldCheck, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,26 +18,28 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { claimFundingAskAction, closeFundingAskAction, completeFundingAskAction } from "@/app/circles/[handle]/funding/actions";
+import { closeFundingAskAction, completeFundingAskAction } from "@/app/circles/[handle]/funding/actions";
 import type { Circle, FundingAskDisplay } from "@/models/models";
 import {
     FundingProxyBadge,
     FundingStatusPill,
     FundingTrustBadge,
     fundingBeneficiaryTypeLabels,
+    fundingCategoryLabels,
+    fundingItemStatusLabels,
     formatFundingAmount,
-    formatFundingItemSummary,
+    formatFundingOpenItemTotals,
+    getFundingOpenItemCount,
 } from "./funding-shared";
+import { FundingDemoButton } from "./funding-demo-button";
 
 type FundingDetailProps = {
     circle: Circle;
     ask: FundingAskDisplay;
     canManageAsk: boolean;
-    canClaimAsk: boolean;
-    isActiveSupporter: boolean;
 };
 
-export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActiveSupporter }: FundingDetailProps) {
+export function FundingDetail({ circle, ask, canManageAsk }: FundingDetailProps) {
     const router = useRouter();
     const { toast } = useToast();
     const [isPending, startTransition] = React.useTransition();
@@ -57,7 +59,7 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
             }
 
             toast({
-                title: "Funding ask updated",
+                title: "Funding request updated",
                 description: result.message,
             });
             router.refresh();
@@ -65,6 +67,7 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
     };
 
     const showManageActions = canManageAsk && ask.status !== "completed" && ask.status !== "closed";
+    const openItemCount = getFundingOpenItemCount(ask);
 
     return (
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pb-10">
@@ -78,108 +81,104 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                     <div className="flex flex-wrap items-center gap-2">
                         <FundingStatusPill status={ask.status} />
                         <FundingTrustBadge trustBadgeType={ask.trustBadgeType} />
-                        {ask.isProxy && <FundingProxyBadge />}
+                        {ask.isProxy ? <FundingProxyBadge /> : null}
                     </div>
 
                     <div className="space-y-3">
                         <h1 className="m-0 text-3xl font-bold text-slate-900">{ask.title}</h1>
-                        <div className="text-2xl font-semibold text-slate-900">
-                            {formatFundingAmount(ask.amount, ask.currency)}
+                        <div className="text-sm font-medium text-slate-700">
+                            {openItemCount} open item{openItemCount === 1 ? "" : "s"} • {formatFundingOpenItemTotals(ask)}
                         </div>
                         <p className="max-w-3xl text-base text-slate-700">{ask.shortStory}</p>
                     </div>
 
-                    <div className="flex flex-wrap gap-3">
-                        {ask.status === "open" && canClaimAsk && (
-                            <Button onClick={() => runAction(() => claimFundingAskAction(circle.handle!, ask._id.toString()))} disabled={isPending}>
-                                I will fund this
+                    {showManageActions ? (
+                        <div className="flex flex-wrap gap-3">
+                            <Button asChild variant="outline">
+                                <Link href={`/circles/${circle.handle}/funding/${ask._id}/edit`}>
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    Edit
+                                </Link>
                             </Button>
-                        )}
 
-                        {showManageActions && (
-                            <>
-                                <Button asChild variant="outline">
-                                    <Link href={`/circles/${circle.handle}/funding/${ask._id}/edit`}>
-                                        <Pencil className="mr-2 h-4 w-4" />
-                                        Edit
-                                    </Link>
+                            {ask.status === "open" ? (
+                                <Button type="button" variant="outline" onClick={() => setCompletionDialogOpen(true)} disabled={isPending}>
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    Mark completed
                                 </Button>
+                            ) : null}
 
-                                {ask.status === "in_progress" && (
-                                    <Button type="button" variant="outline" onClick={() => setCompletionDialogOpen(true)} disabled={isPending}>
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                        Mark completed
-                                    </Button>
-                                )}
-
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => runAction(() => closeFundingAskAction(circle.handle!, ask._id.toString()))}
-                                    disabled={isPending}
-                                >
-                                    Close
-                                </Button>
-                            </>
-                        )}
-                    </div>
-
-                    {ask.status === "in_progress" && (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                            {isActiveSupporter ? (
-                                <p>You are supporting this ask.</p>
-                            ) : ask.activeSupporter?.handle ? (
-                                <p>Currently being supported by @{ask.activeSupporter.handle}.</p>
-                            ) : ask.activeSupporterHandleSnapshot ? (
-                                <p>Currently being supported by @{ask.activeSupporterHandleSnapshot}.</p>
-                            ) : (
-                                <p>This ask is currently in progress.</p>
-                            )}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => runAction(() => closeFundingAskAction(circle.handle!, ask._id.toString()))}
+                                disabled={isPending}
+                            >
+                                Close
+                            </Button>
                         </div>
-                    )}
+                    ) : null}
 
-                    {ask.status === "completed" && ask.completionNote && (
+                    {ask.status === "completed" && ask.completionNote ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                             <div className="font-medium">Completion note</div>
                             <p className="mt-2 whitespace-pre-wrap">{ask.completionNote}</p>
                         </div>
-                    )}
+                    ) : null}
                 </CardContent>
             </Card>
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr),minmax(280px,1fr)]">
                 <Card className="rounded-[18px] border-slate-200 shadow-sm">
                     <CardHeader>
-                        <CardTitle>Details</CardTitle>
+                        <CardTitle>Request details</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <section>
-                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Description</div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Project context</div>
                             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                {ask.description || "No extra description provided."}
+                                {ask.description || "No extra project context provided."}
                             </p>
                         </section>
 
                         <section>
-                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                                How donors will know this was fulfilled
-                            </div>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{ask.completionPlan}</p>
-                        </section>
+                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Funding items</div>
+                            <div className="mt-3 space-y-3">
+                                {(ask.items || []).map((item, index) => (
+                                    <div
+                                        key={`${item.title}-${index}`}
+                                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                                    >
+                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div className="space-y-1">
+                                                <div className="font-medium text-slate-900">{item.title}</div>
+                                                <div className="text-xs uppercase tracking-wide text-slate-500">
+                                                    {fundingCategoryLabels[item.category]}
+                                                </div>
+                                                <div className="text-sm text-slate-600">
+                                                    {fundingItemStatusLabels[item.status]}
+                                                </div>
+                                            </div>
 
-                        {ask.items?.length ? (
-                            <section>
-                                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Items included</div>
-                                <div className="mt-3 space-y-3">
-                                    {ask.items.map((item, index) => (
-                                        <div key={`${item.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                            <div className="font-medium text-slate-900">{formatFundingItemSummary(item)}</div>
-                                            {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
+                                            <div className="flex items-start gap-4">
+                                                <div className="text-sm font-medium text-slate-900">
+                                                    {formatFundingAmount(item.price, item.currency)}
+                                                </div>
+                                                {item.status === "open" ? <FundingDemoButton /> : null}
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
-                            </section>
-                        ) : null}
+
+                                        {item.quantity || item.unitLabel ? (
+                                            <div className="mt-2 text-sm text-slate-600">
+                                                {[item.quantity ? String(item.quantity) : undefined, item.unitLabel].filter(Boolean).join(" ")}
+                                            </div>
+                                        ) : null}
+
+                                        {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
 
                         {ask.isProxy && ask.proxyNote ? (
                             <section>
@@ -193,14 +192,17 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                 <div className="space-y-6">
                     <Card className="rounded-[18px] border-slate-200 shadow-sm">
                         <CardHeader>
-                            <CardTitle>Ask summary</CardTitle>
+                            <CardTitle>Request summary</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm text-slate-700">
                             <div className="flex items-start gap-3">
-                                <CircleDollarSign className="mt-0.5 h-4 w-4 text-slate-500" />
+                                <ListChecks className="mt-0.5 h-4 w-4 text-slate-500" />
                                 <div>
-                                    <div className="font-medium">Total amount</div>
-                                    <div>{formatFundingAmount(ask.amount, ask.currency)}</div>
+                                    <div className="font-medium">Open items</div>
+                                    <div>
+                                        {openItemCount} open item{openItemCount === 1 ? "" : "s"}
+                                    </div>
+                                    <div>{formatFundingOpenItemTotals(ask)}</div>
                                 </div>
                             </div>
 
@@ -217,16 +219,6 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                                 </div>
                             </div>
 
-                            {ask.items?.length ? (
-                                <div className="flex items-start gap-3">
-                                    <CircleDollarSign className="mt-0.5 h-4 w-4 text-slate-500" />
-                                    <div>
-                                        <div className="font-medium">Items</div>
-                                        <div>{ask.items.length} item{ask.items.length === 1 ? "" : "s"} included in this ask</div>
-                                    </div>
-                                </div>
-                            ) : null}
-
                             <div className="flex items-start gap-3">
                                 <ShieldCheck className="mt-0.5 h-4 w-4 text-slate-500" />
                                 <div>
@@ -236,16 +228,16 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                                             ? `@${ask.creator.handle}`
                                             : ask.createdByHandleSnapshot
                                               ? `@${ask.createdByHandleSnapshot}`
-                                              : "Circle member"}
+                                              : "Super Admin"}
                                     </div>
                                 </div>
                             </div>
 
-                            {ask.updatedAt && (
+                            {ask.updatedAt ? (
                                 <div className="text-xs text-slate-500">
                                     Updated {formatDistanceToNow(new Date(ask.updatedAt), { addSuffix: true })}
                                 </div>
-                            )}
+                            ) : null}
                         </CardContent>
                     </Card>
                 </div>
@@ -254,16 +246,16 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
             <Dialog open={completionDialogOpen} onOpenChange={setCompletionDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Mark funding ask completed</DialogTitle>
+                        <DialogTitle>Mark funding request completed</DialogTitle>
                         <DialogDescription>
-                            Add a short outcome note so members can see how this ask was fulfilled.
+                            Add a short outcome note so members can see how this funding request was completed.
                         </DialogDescription>
                     </DialogHeader>
                     <Textarea
-                        rows={6}
                         value={completionNote}
                         onChange={(event) => setCompletionNote(event.target.value)}
-                        placeholder="Explain what was delivered and how it was confirmed."
+                        rows={6}
+                        placeholder="Add a short update about the outcome."
                     />
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCompletionDialogOpen(false)}>
@@ -271,8 +263,8 @@ export function FundingDetail({ circle, ask, canManageAsk, canClaimAsk, isActive
                         </Button>
                         <Button
                             onClick={() => {
-                                setCompletionDialogOpen(false);
                                 runAction(() => completeFundingAskAction(circle.handle!, ask._id.toString(), completionNote));
+                                setCompletionDialogOpen(false);
                             }}
                             disabled={isPending}
                         >

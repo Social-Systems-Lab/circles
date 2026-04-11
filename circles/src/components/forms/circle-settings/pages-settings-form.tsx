@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { savePages } from "@/app/circles/[handle]/settings/pages/actions";
-import { features, modules } from "@/lib/data/constants";
+import { modules } from "@/lib/data/constants";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { getUserPrivateAction } from "@/components/modules/home/actions";
@@ -23,7 +23,7 @@ interface PagesSettingsFormProps {
 export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
     const router = useRouter();
-    const [, setUser] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Get all available modules from features
@@ -90,11 +90,24 @@ export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.Rea
                                     <Switch
                                         checked={enabledModules.includes(module.handle)}
                                         onCheckedChange={(checked) => handleToggle(module.handle, checked)}
-                                        disabled={module.readOnly}
-                                        aria-readonly={module.readOnly}
+                                        disabled={
+                                            module.readOnly ||
+                                            (module.handle === "funding" && (!user?.isAdmin || circle.circleType !== "circle"))
+                                        }
+                                        aria-readonly={
+                                            module.readOnly ||
+                                            (module.handle === "funding" && (!user?.isAdmin || circle.circleType !== "circle"))
+                                        }
                                     />
                                 </div>
-                                <CardDescription>{module.description}</CardDescription>
+                                <CardDescription>
+                                    {module.description}
+                                    {module.handle === "funding" ? (
+                                        <span className="mt-2 block">
+                                            Funding Needs can only be enabled on circles, and only Super Admins can change this setting in the MVP.
+                                        </span>
+                                    ) : null}
+                                </CardDescription>
                             </CardHeader>
                         </Card>
                     ))}

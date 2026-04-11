@@ -25,13 +25,13 @@
 ### Funding Asks MVP
 
 - Added the demo-safe `Funding Needs` home-page panel and dedicated funding routes under `/circles/[handle]/funding`.
-- Added a dedicated `fundingAsks` collection with explicit MVP fields for status, beneficiary, proxy state, trust badge, and single active supporter.
-- Added a step-based create/edit flow, manual `I will fund this` claim action, and admin/owner completion with required outcome note.
-- Added optional ask line items, draft discovery for creators/admins, and form-state preservation across Back/Next and draft reloads.
-- Funding is now hidden by default and only appears when the circle enables the `funding` module through existing page/module settings.
-- Funding routes are members-only, support `ZAR`/`USD`/`EUR`, and use clearer fulfillment wording in create/edit/detail flows.
-- Proxy asks remain clearly labeled, including the new `project` beneficiary type.
-- Deferred payment processing, pooled crowdfunding, profile support summaries, and map/explore rollout.
+- Reshaped funding into parent `Funding Request` records with multiple child `Funding Item` entries, where each child item has its own category and price.
+- Added a request-first create/edit flow, draft save/reload, and preserved Back/Next state for parent fields, child items, and image uploads.
+- Replaced live funding actions with demo-only child-item `Fund` buttons that show contextual feedback instead of starting a payment flow.
+- Restricted funding activation and all funding management to Super Admins in this MVP, while keeping viewing members-only on enabled circles.
+- Funding is hidden by default, only available on circle funding surfaces, and excluded from user/profile circles in this pass.
+- Updated the home-page panel to a compact expandable request list instead of stacked full cards.
+- Deferred payment processing, pooled crowdfunding, paid membership gating, notifications rollout, and map/explore rollout.
 
 ## 0.8.16 - 2026-03-28
 - Fixed profile header CTA alignment by anchoring action buttons (Message, Follow, etc.) to the title row instead of the full text column.
