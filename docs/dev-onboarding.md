@@ -1,3 +1,14 @@
+> **Legacy note**
+> This document is being phased out.
+> For current setup, use:
+> - `docs/LOCAL_DEVELOPMENT.md`
+> - `docs/ENVIRONMENT.md`
+> - `docs/DEPLOYMENT.md`
+> - `docs/ARCHITECTURE.md`
+>
+> Kamooni’s current main chat/DM system is Mongo-native. Older Matrix-based setup notes should be treated as historical unless explicitly marked otherwise.
+
+
 # Circles Onboarding
 
 This document is designed to guide you through setting up your development environment for Circles.
