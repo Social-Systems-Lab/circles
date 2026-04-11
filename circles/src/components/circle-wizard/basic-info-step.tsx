@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback, useMemo } from "react"; // Added useMemo
+import { useState, useTransition, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added
@@ -19,6 +19,19 @@ import {
     CreatableItemKey, // Added
 } from "@/components/global-create/global-create-dialog-content"; // Added
 
+const CIRCLE_LEVEL_OPTIONS = [
+    {
+        value: "profile_child" as const,
+        title: "Profile circle",
+        description: "A circle connected to your profile. This is the standard option.",
+    },
+    {
+        value: "top_level" as const,
+        title: "Independent circle",
+        description: "A standalone circle not attached to your profile.",
+    },
+];
+
 export default function BasicInfoStep({
     circleData,
     setCircleData,
@@ -30,12 +43,20 @@ export default function BasicInfoStep({
     const [nameError, setNameError] = useState("");
     const [handleError, setHandleError] = useState("");
     const [parentCircleId, setParentCircleId] = useState<string | undefined>(initialParentCircleId);
+    const [circleLevelError, setCircleLevelError] = useState("");
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
+    const canCreateIndependentCircle = Boolean(user?.isAdmin || user?.isMember);
+    const shouldShowCircleLevelChoice = circleData.circleType === "circle" && !initialParentCircleId;
+    const effectiveCircleLevel = shouldShowCircleLevelChoice ? circleData.circleLevel || "profile_child" : "profile_child";
     const entityLabel = circleData.circleType === "project" ? "Project" : "Circle";
     const entityLabelLower = entityLabel.toLowerCase();
     const handlePlaceholder = circleData.circleType === "project" ? "project-handle" : "community-handle";
+    const selectorItemType = useMemo(() => {
+        const typeToFind = circleData.circleType === "circle" ? "community" : circleData.circleType;
+        return creatableItemsList.find((item) => item.key === (typeToFind as CreatableItemKey)) as CreatableItemDetail;
+    }, [circleData.circleType]);
 
     // This effect is now handled by onCircleSelected callback
     // useEffect(() => {
@@ -57,8 +78,30 @@ export default function BasicInfoStep({
 
     const handleParentCircleSelected = useCallback((circle: Circle | null) => {
         console.log("Setting parent circle id:", circle ? circle._id : undefined);
+        setCircleLevelError("");
         setParentCircleId(circle ? circle._id : undefined);
-    }, []); // Wrapped with useCallback
+        setCircleData((prev) => ({
+            ...prev,
+            parentCircleId: circle ? circle._id : undefined,
+        }));
+    }, [setCircleData]);
+
+    const handleCircleLevelChange = (value: "profile_child" | "top_level") => {
+        if (value === "top_level" && !canCreateIndependentCircle) {
+            return;
+        }
+
+        setCircleLevelError("");
+        setCircleData((prev) => ({
+            ...prev,
+            circleLevel: value,
+            parentCircleId: value === "profile_child" ? prev.parentCircleId : undefined,
+        }));
+
+        if (value === "top_level") {
+            setParentCircleId(undefined);
+        }
+    };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -98,6 +141,11 @@ export default function BasicInfoStep({
             isValid = false;
         }
 
+        if (shouldShowCircleLevelChoice && effectiveCircleLevel === "profile_child" && !parentCircleId) {
+            setCircleLevelError("Choose the profile this circle should be created under");
+            isValid = false;
+        }
+
         return isValid;
     };
 
@@ -114,13 +162,19 @@ export default function BasicInfoStep({
                 circleData._id,
                 parentCircleId, // parentCircleId is now set by handleParentCircleSelected
                 circleData.circleType,
+                effectiveCircleLevel,
             );
 
             if (result.success) {
                 // If we created a new circle, store its ID
                 if (result.data && result.data.circle) {
                     const circle = result.data.circle;
-                    setCircleData((prev) => ({ ...prev, _id: circle._id }));
+                    setCircleData((prev) => ({
+                        ...prev,
+                        _id: circle._id,
+                        parentCircleId: circle.parentCircleId,
+                        circleLevel: circle.circleLevel || effectiveCircleLevel,
+                    }));
                 }
                 nextStep();
             } else {
@@ -144,23 +198,68 @@ export default function BasicInfoStep({
             </div>
 
             <div className="space-y-4">
-                {/* Add CircleSelector here */}
-                <div>
-                    <CircleSelector
-                        itemType={useMemo(() => {
-                            const typeToFind = circleData.circleType === "circle" ? "community" : circleData.circleType;
-                            return creatableItemsList.find(
-                                (item) => item.key === (typeToFind as CreatableItemKey),
-                            ) as CreatableItemDetail;
-                        }, [circleData.circleType])}
-                        onCircleSelected={handleParentCircleSelected}
-                        initialSelectedCircleId={initialParentCircleId}
-                        // selectedCircle and setSelectedCircle are not direct props of CircleSelector
-                    />
-                    <p className="text-xs text-gray-500">
-                        {`Select where this ${entityLabelLower} will be created. Defaults to your profile.`}
-                    </p>
-                </div>
+                {shouldShowCircleLevelChoice && (
+                    <div className="space-y-3">
+                        <div>
+                            <Label>Circle Type</Label>
+                            <p className="text-sm text-gray-500">Choose how this circle should be created.</p>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {CIRCLE_LEVEL_OPTIONS.map((option) => {
+                                const isDisabled = option.value === "top_level" && !canCreateIndependentCircle;
+                                const isSelected = effectiveCircleLevel === option.value;
+
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => handleCircleLevelChange(option.value)}
+                                        disabled={isDisabled}
+                                        className={`rounded-xl border p-4 text-left transition ${
+                                            isSelected
+                                                ? "border-gray-900 bg-gray-900 text-white"
+                                                : "border-gray-200 bg-white text-gray-900"
+                                        } ${isDisabled ? "cursor-not-allowed opacity-60" : "hover:border-gray-400"}`}
+                                    >
+                                        <div className="font-semibold">{option.title}</div>
+                                        <div
+                                            className={`mt-1 text-sm ${
+                                                isSelected ? "text-gray-100" : "text-gray-500"
+                                            }`}
+                                        >
+                                            {option.description}
+                                        </div>
+                                        {option.value === "top_level" && isDisabled && (
+                                            <div className="mt-2 text-xs text-amber-700">
+                                                Independent circles are currently limited to founding members and admins.
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {(effectiveCircleLevel === "profile_child" || circleData.circleType === "project") && (
+                    <div>
+                        <CircleSelector
+                            itemType={selectorItemType}
+                            onCircleSelected={handleParentCircleSelected}
+                            initialSelectedCircleId={initialParentCircleId}
+                        />
+                        <p className="text-xs text-gray-500">
+                            {`Select where this ${entityLabelLower} will be created. Defaults to your profile.`}
+                        </p>
+                        {circleLevelError && <p className="text-sm text-red-500">{circleLevelError}</p>}
+                    </div>
+                )}
+
+                {effectiveCircleLevel === "top_level" && circleData.circleType === "circle" && (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                        This will create a standalone top-level circle. Its URL structure stays the same for now.
+                    </div>
+                )}
 
                 <div className="space-y-2">
                     <Label htmlFor="name">{entityLabel} Name</Label>

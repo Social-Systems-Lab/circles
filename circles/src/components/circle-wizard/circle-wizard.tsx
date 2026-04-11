@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
-import { Cause, CircleType, Skill } from "@/models/models";
+import { Cause, CircleLevel, CircleType, Skill } from "@/models/models";
 import { useRouter, useSearchParams } from "next/navigation";
 import BasicInfoStep from "./basic-info-step";
 import MissionStep from "./mission-step";
@@ -31,6 +31,7 @@ export type CircleData = {
     // cover: string; // Remove cover string
     images: any[]; // Add images array
     parentCircleId?: string;
+    circleLevel?: CircleLevel;
     pictureFile?: File; // Keep profile picture file for now
     // coverFile?: File; // Remove cover file
     circleType?: CircleType; // Should default to "circle"
@@ -68,6 +69,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
         picture: "/images/default-picture.png",
         images: [], // Initialize images as empty array
         parentCircleId: undefined, // Initialized as undefined, BasicInfoStep will set it
+        circleLevel: initialParentCircleId ? "profile_child" : "profile_child",
         circleType: initialCircleType || "circle", // Default based on prop
     });
 
@@ -87,6 +89,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
                 picture: "/images/default-picture.png",
                 images: [],
                 parentCircleId: initialParentCircleId, // Set initial parentCircleId
+                circleLevel: initialParentCircleId ? "profile_child" : "profile_child",
                 circleType: initialCircleType || "circle",
                 _id: undefined,
                 pictureFile: undefined,

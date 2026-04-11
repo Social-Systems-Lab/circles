@@ -8,7 +8,7 @@ import {
     getCircleByHandle,
     getCirclePath,
 } from "@/lib/data/circle";
-import { Circle, CircleType, Media, FileInfo } from "@/models/models";
+import { Circle, CircleLevel, CircleType, Media, FileInfo, UserPrivate } from "@/models/models";
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUser, getUserPrivate } from "@/lib/data/user"; // Corrected import for getUserPrivate
@@ -19,6 +19,34 @@ import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
+const canCreateIndependentCircle = (user: UserPrivate | undefined) => Boolean(user?.isAdmin || user?.isMember);
+
+const getCircleLevelForCreate = (circleLevel?: CircleLevel, parentCircleId?: string) => {
+    if (circleLevel) {
+        return circleLevel;
+    }
+    return parentCircleId ? "profile_child" : "top_level";
+};
+
+async function authorizeCircleCreation(
+    currentUser: UserPrivate,
+    userDid: string,
+    circleType: CircleType,
+    circleLevel: CircleLevel,
+    parentCircleId?: string,
+) {
+    if (circleLevel === "top_level") {
+        return canCreateIndependentCircle(currentUser);
+    }
+
+    if (!parentCircleId) {
+        return false;
+    }
+
+    const createFeature = circleType === "project" ? features.projects.create : features.communities.create;
+    return isAuthorized(userDid, parentCircleId, createFeature);
+}
+
 // This action handles both creating a new circle (when circleId is null)
 // and updating the basic info of an existing one.
 export async function saveBasicInfoAction(
@@ -28,6 +56,7 @@ export async function saveBasicInfoAction(
     circleId?: string,
     parentCircleId?: string,
     circleType?: CircleType,
+    circleLevel?: CircleLevel,
 ) {
     try {
         console.log("saveBasicInfoAction called with parentCircleId:", parentCircleId);
@@ -52,8 +81,15 @@ export async function saveBasicInfoAction(
             if (!canPerformRestrictedAction(currentUser)) {
                 return { success: false, message: getRestrictedActionMessage("create circles") };
             }
-            const createFeature = circleType === "project" ? features.projects.create : features.communities.create;
-            const authorized = await isAuthorized(userDid, parentCircleId ?? "", createFeature);
+            const resolvedCircleType = circleType || "circle";
+            const resolvedCircleLevel = getCircleLevelForCreate(circleLevel, parentCircleId);
+            const authorized = await authorizeCircleCreation(
+                currentUser,
+                userDid,
+                resolvedCircleType,
+                resolvedCircleLevel,
+                resolvedCircleLevel === "profile_child" ? parentCircleId : undefined,
+            );
             if (!authorized) {
                 return { success: false, message: "You are not authorized to create new circles" };
             }
@@ -72,9 +108,10 @@ export async function saveBasicInfoAction(
                 description: "",
                 content: "",
                 mission: "",
-                circleType: circleType || "circle",
+                circleType: resolvedCircleType,
+                circleLevel: resolvedCircleLevel,
                 createdBy: userDid,
-                parentCircleId,
+                parentCircleId: resolvedCircleLevel === "profile_child" ? parentCircleId : undefined,
                 picture: { url: "/images/default-picture.png" }, // Default picture
                 causes: [],
                 skills: [],
@@ -85,8 +122,8 @@ export async function saveBasicInfoAction(
             await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
 
             // 3. Ensure the relevant module is enabled on the parent circle (so the tab appears)
-            if (parentCircleId) {
-                const moduleToEnable = circleType === "project" ? "projects" : "communities";
+            if (resolvedCircleLevel === "profile_child" && parentCircleId) {
+                const moduleToEnable = resolvedCircleType === "project" ? "projects" : "communities";
                 await ensureModuleIsEnabledOnCircle(parentCircleId, moduleToEnable, userDid);
             }
 
@@ -107,18 +144,33 @@ export async function createCircleAction(circleData: CircleData, userDid: string
         if (!canPerformRestrictedAction(currentUser)) {
             return { success: false, message: getRestrictedActionMessage("create circles") };
         }
-        const createFeature =
-            circleData.circleType === "project" ? features.projects.create : features.communities.create;
-        const authorized = await isAuthorized(userDid, circleData.parentCircleId ?? "", createFeature);
+        const resolvedCircleType = circleData.circleType || "circle";
+        const resolvedCircleLevel = getCircleLevelForCreate(circleData.circleLevel, circleData.parentCircleId);
+        const authorized = await authorizeCircleCreation(
+            currentUser,
+            userDid,
+            resolvedCircleType,
+            resolvedCircleLevel,
+            resolvedCircleLevel === "profile_child" ? circleData.parentCircleId : undefined,
+        );
         if (!authorized) {
             return { success: false, message: "You are not authorized to create new circles" };
         }
 
-        const newCircle = await createCircle({ ...circleData, picture: { url: circleData.picture } }, userDid);
+        const newCircle = await createCircle(
+            {
+                ...circleData,
+                circleType: resolvedCircleType,
+                circleLevel: resolvedCircleLevel,
+                parentCircleId: resolvedCircleLevel === "profile_child" ? circleData.parentCircleId : undefined,
+                picture: { url: circleData.picture },
+            },
+            userDid,
+        );
         await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
 
-        if (circleData.parentCircleId) {
-            const moduleToEnable = circleData.circleType === "project" ? "projects" : "communities";
+        if (resolvedCircleLevel === "profile_child" && circleData.parentCircleId) {
+            const moduleToEnable = resolvedCircleType === "project" ? "projects" : "communities";
             await ensureModuleIsEnabledOnCircle(circleData.parentCircleId, moduleToEnable, userDid);
         }
 

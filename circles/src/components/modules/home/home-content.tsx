@@ -42,6 +42,9 @@ type HomeContentProps = {
 
 export default function HomeContent({ circle, authorizedToEdit, parentCircle, adminLeaders = [] }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
+    const isKamooniRootCircle = circle?.handle === "default";
+    const resolvedCircleLevel =
+        circle.circleLevel || (circle.parentCircleId && parentCircle?.circleType === "user" ? "profile_child" : undefined);
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -221,15 +224,26 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                             )}
                         </div>
 
-                        {parentCircle && parentCircle.circleType !== "user" && (
-                            <div className="mt-2 text-sm text-gray-500">
-                                {circle.circleType === "project" ? "Project by " : "Child circle of "}
-                                <Link
-                                    href={`/circles/${parentCircle.handle}`}
-                                    className="text-blue-500 hover:underline"
-                                >
-                                    {parentCircle.name}
-                                </Link>
+                        {!isKamooniRootCircle && parentCircle && (
+                            <div className="mt-3">
+                                {resolvedCircleLevel === "profile_child" ? (
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
+                                        <span className="font-medium">Created by</span>
+                                        <Link href={`/circles/${parentCircle.handle}`} className="font-semibold text-gray-900 hover:underline">
+                                            {parentCircle.name}
+                                        </Link>
+                                    </div>
+                                ) : parentCircle.circleType !== "user" ? (
+                                    <div className="text-sm text-gray-500">
+                                        {circle.circleType === "project" ? "Project by " : "Part of "}
+                                        <Link
+                                            href={`/circles/${parentCircle.handle}`}
+                                            className="text-blue-500 hover:underline"
+                                        >
+                                            {parentCircle.name}
+                                        </Link>
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                         <div className="flex items-center gap-2 pt-1">

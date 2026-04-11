@@ -15,6 +15,7 @@ export const handleSchema = z
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle", "project"]);
+export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
@@ -71,6 +72,7 @@ export type RegistryInfo = z.infer<typeof registryInfoSchema>;
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export type CircleType = z.infer<typeof circleTypeSchema>;
+export type CircleLevel = z.infer<typeof circleLevelSchema>;
 
 export const memberSchema = z.object({
     _id: z.any().optional(),
@@ -479,6 +481,7 @@ export const circleSchema = z.object({
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
     parentCircleId: z.string().optional(),
+    circleLevel: circleLevelSchema.optional(),
     createdBy: didSchema.optional(),
     createdAt: z.date().optional(),
     circleType: circleTypeSchema.optional(),
