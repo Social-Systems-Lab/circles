@@ -18,7 +18,6 @@ import { SidePanel } from "@/components/layout/side-panel";
 import { Metadata } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { MapboxInitializer } from "@/components/map/map-initializer";
-import { SupportButton } from "@/components/layout/support-button";
 import { FeedPostDialog } from "@/components/global-create/feed-post-dialog"; // Import FeedPostDialog
 
 // Disable caching for this layout to prevent the "hard refresh bug"
@@ -70,7 +69,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <UnreadCountCalculator /> {/* Calculates unread counts for notifications */}
                         <BackgroundMessagePoller /> {/* Polls for messages in all chat rooms */}
                         <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
-                        <SupportButton />
                         <FeedPostDialog /> {/* Add FeedPostDialog here */}
                     </main>
                     <Script id="version-check">
