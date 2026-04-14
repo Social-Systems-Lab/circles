@@ -53,20 +53,6 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
                             )}
                         </div>
                     </div>
-                    <div>
-                        <p className="font-medium">Needs</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                            {circleData.selectedSkills.length > 0 ? (
-                                circleData.selectedSkills.map((skill) => (
-                                    <span key={skill.handle} className="rounded-full bg-gray-200 px-2 py-1 text-xs">
-                                        {skill.name}
-                                    </span>
-                                ))
-                            ) : (
-                                <p className="text-sm text-gray-600">No needs selected</p>
-                            )}
-                        </div>
-                    </div>
                 </div>
             </div>
 
