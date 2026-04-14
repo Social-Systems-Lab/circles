@@ -12,7 +12,6 @@ import LocationStep from "./location-step";
 import SdgsStep from "./sdgs-step";
 import SkillsStep from "./skills-step";
 import FinalStep from "./final-step";
-import CircleSummary from "./circle-summary";
 import { Location, Media } from "@/models/models";
 import { Card, CardContent } from "../ui/card";
 
@@ -181,31 +180,26 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
         <div className={`${!isOpen ? "hidden" : ""} flex items-center justify-center p-0`}>
             <Card className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border-0 bg-[#f9f9f9] shadow-xl backdrop-blur-sm">
                 <CardContent className="max-h-[calc(90vh-2rem)] overflow-y-auto p-6">
-                    <div className="flex gap-6">
-                        <div className="hidden md:block">
-                            <CircleSummary circleData={circleData} />
-                        </div>
-                        <div className="flex-1">
-                            <Progress value={((currentStepIndex + 1) / totalSteps) * 100} className="mb-6" />
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={steps[currentStepIndex].id}
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    transition={{ duration: 0.3 }}
-                                >
-                                    <CurrentStepComponent
-                                        circleData={circleData}
-                                        setCircleData={setCircleData}
-                                        nextStep={nextStep}
-                                        prevStep={prevStep}
-                                        onComplete={onComplete}
-                                        initialParentCircleId={initialParentCircleId}
-                                    />
-                                </motion.div>
-                            </AnimatePresence>
-                        </div>
+                    <div className="mx-auto w-full max-w-3xl">
+                        <Progress value={((currentStepIndex + 1) / totalSteps) * 100} className="mb-6" />
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={steps[currentStepIndex].id}
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                <CurrentStepComponent
+                                    circleData={circleData}
+                                    setCircleData={setCircleData}
+                                    nextStep={nextStep}
+                                    prevStep={prevStep}
+                                    onComplete={onComplete}
+                                    initialParentCircleId={initialParentCircleId}
+                                />
+                            </motion.div>
+                        </AnimatePresence>
                     </div>
                 </CardContent>
             </Card>

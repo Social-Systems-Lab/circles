@@ -42,7 +42,7 @@ type HomeContentProps = {
 
 export default function HomeContent({ circle, authorizedToEdit, parentCircle, adminLeaders = [] }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
-    const isKamooniRootCircle = circle?.handle === "default";
+    const isKamooniRootCircle = circle?.handle === "default" || circle?.handle === "kamooni";
     const resolvedCircleLevel =
         circle.circleLevel || (circle.parentCircleId && parentCircle?.circleType === "user" ? "profile_child" : undefined);
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
@@ -233,9 +233,9 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                             {parentCircle.name}
                                         </Link>
                                     </div>
-                                ) : parentCircle.circleType !== "user" ? (
+                                ) : (
                                     <div className="text-sm text-gray-500">
-                                        {circle.circleType === "project" ? "Project by " : "Part of "}
+                                        Child circle of{" "}
                                         <Link
                                             href={`/circles/${parentCircle.handle}`}
                                             className="text-blue-500 hover:underline"
@@ -243,7 +243,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                             {parentCircle.name}
                                         </Link>
                                     </div>
-                                ) : null}
+                                )}
                             </div>
                         )}
                         <div className="flex items-center gap-2 pt-1">
