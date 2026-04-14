@@ -1,6 +1,6 @@
 import { Circle, CircleType, WithMetric } from "@/models/models";
 import { Circles } from "./db";
-import { SAFE_CIRCLE_PROJECTION } from "./circle";
+import { getPublishedCircleQuery, isCirclePublished, SAFE_CIRCLE_PROJECTION } from "./circle";
 
 const SEARCHABLE_TYPES: CircleType[] = ["circle", "project", "user"];
 const SEARCHABLE_FIELDS = [
@@ -149,7 +149,7 @@ const buildCandidateQuery = (query: string, circleTypes: CircleType[], sdgHandle
 
     const clauses: Record<string, unknown>[] = [
         {
-            $or: discoverableTypeClauses,
+            $and: [{ $or: discoverableTypeClauses }, getPublishedCircleQuery()],
         },
     ];
 
@@ -193,7 +193,7 @@ export const searchDiscoverableCircles = async ({
             return { circle, score };
         })
         .filter(({ circle, score }) => {
-            if (!circle._id || !isDiscoverableCircle(circle) || !matchesCircleTypes(circle, normalizedTypes)) {
+            if (!circle._id || !isCirclePublished(circle) || !isDiscoverableCircle(circle) || !matchesCircleTypes(circle, normalizedTypes)) {
                 return false;
             }
 

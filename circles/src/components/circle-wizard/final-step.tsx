@@ -1,21 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { CircleWizardStepProps } from "./circle-wizard";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
-import { createCircleAction } from "./actions";
-import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
-import { useRouter } from "next/navigation";
 
-export default function FinalStep({ circleData, setCircleData, prevStep, onComplete }: CircleWizardStepProps) {
-    const [isPending, setIsPending] = useState(false);
-    const [error, setError] = useState("");
-    const [user] = useAtom(userAtom);
-    const router = useRouter();
+export default function FinalStep({ circleData, prevStep, onComplete }: CircleWizardStepProps) {
     const entityLabel = circleData.circleType === "project" ? "Project" : "Community";
     const entityLabelLower = entityLabel.toLowerCase();
 
-    const handleCreateCircle = () => {
+    const handleSaveDraft = () => {
         if (onComplete) {
             onComplete(circleData._id, circleData.handle);
         }
@@ -23,9 +13,9 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
 
     return (
         <div className="space-y-6">
-            <h2 className="text-center text-3xl font-bold">Ready to Launch?</h2>
+            <h2 className="text-center text-3xl font-bold">Save your draft</h2>
             <p className="text-center text-gray-600">
-                {`You've done a great job setting up your ${entityLabelLower}. Here's a final look at what you've created.`}
+                {`Your ${entityLabelLower} will be saved as a draft so you can keep editing it before it goes live.`}
             </p>
 
             <div className="rounded-lg border bg-white p-6 shadow-sm">
@@ -55,22 +45,12 @@ export default function FinalStep({ circleData, setCircleData, prevStep, onCompl
                     </div>
                 </div>
             </div>
-
-            {error && <p className="text-center text-sm text-red-500">{error}</p>}
-
             <div className="flex items-center justify-between pt-4">
-                <Button onClick={prevStep} variant="outline" className="rounded-full" disabled={isPending}>
+                <Button onClick={prevStep} variant="outline" className="rounded-full">
                     Back
                 </Button>
-                <Button onClick={handleCreateCircle} className="rounded-full" disabled={isPending}>
-                    {isPending ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Creating...
-                        </>
-                    ) : (
-                        <>Create {entityLabel}</>
-                    )}
+                <Button onClick={handleSaveDraft} className="rounded-full">
+                    Save draft
                 </Button>
             </div>
         </div>

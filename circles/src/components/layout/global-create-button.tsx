@@ -87,7 +87,7 @@ export function GlobalCreateButton() {
             const pathSegment = pathSegmentMap[itemKey];
             // For community and project, the ID is the handle itself; navigate directly to the circle
             if (itemKey === "community" || itemKey === "project") {
-                router.push(`/circles/${circleHandle ?? id}`);
+                router.push(`/circles/${circleHandle ?? id}/settings/about`);
             } else if (pathSegment && circleHandle) {
                 router.push(`/circles/${circleHandle}/${pathSegment}/${id}`);
             }

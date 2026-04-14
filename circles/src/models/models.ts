@@ -16,6 +16,7 @@ export const handleSchema = z
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
+export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
@@ -73,6 +74,7 @@ export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export type CircleType = z.infer<typeof circleTypeSchema>;
 export type CircleLevel = z.infer<typeof circleLevelSchema>;
+export type CirclePublishStatus = z.infer<typeof circlePublishStatusSchema>;
 
 export const memberSchema = z.object({
     _id: z.any().optional(),
@@ -485,6 +487,7 @@ export const circleSchema = z.object({
     createdBy: didSchema.optional(),
     createdAt: z.date().optional(),
     circleType: circleTypeSchema.optional(),
+    publishStatus: circlePublishStatusSchema.optional(),
     interests: z.array(z.string()).optional(),
     offers_needs: z.array(z.string()).optional(),
     location: locationSchema.optional(),

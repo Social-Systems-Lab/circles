@@ -111,6 +111,7 @@ export async function saveBasicInfoAction(
                 circleType: resolvedCircleType,
                 circleLevel: resolvedCircleLevel,
                 createdBy: userDid,
+                publishStatus: "draft",
                 parentCircleId: resolvedCircleLevel === "profile_child" ? parentCircleId : undefined,
                 picture: { url: "/images/default-picture.png" }, // Default picture
                 causes: [],
@@ -162,6 +163,7 @@ export async function createCircleAction(circleData: CircleData, userDid: string
                 ...circleData,
                 circleType: resolvedCircleType,
                 circleLevel: resolvedCircleLevel,
+                publishStatus: "draft",
                 parentCircleId: resolvedCircleLevel === "profile_child" ? circleData.parentCircleId : undefined,
                 picture: { url: circleData.picture },
             },

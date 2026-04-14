@@ -1,6 +1,15 @@
 // circle.ts - circle creation and management
 
-import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
+import {
+    Circle,
+    CirclePublishStatus,
+    CircleType,
+    PlatformMetrics,
+    Post,
+    ServerSettings,
+    SortingOptions,
+    WithMetric,
+} from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
@@ -39,6 +48,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     createdBy: 1,
     createdAt: 1,
     circleType: 1,
+    publishStatus: 1,
     interests: 1,
     offers_needs: 1,
     location: 1,
@@ -100,14 +110,28 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
     return circle;
 };
 
+export const getCirclePublishStatus = (circle?: Partial<Circle> | null): CirclePublishStatus =>
+    circle?.publishStatus ?? "published";
+
+export const isCirclePublished = (circle?: Partial<Circle> | null): boolean => getCirclePublishStatus(circle) === "published";
+
+export const getPublishedCircleQuery = (): any => ({
+    $or: [{ publishStatus: "published" as const }, { publishStatus: { $exists: false } }],
+});
+
 export const getSwipeCircles = async (): Promise<Circle[]> => {
     let circles: Circle[] = [];
 
     circles = await Circles.find(
         {
-            $or: [
-                { circleType: { $ne: "user" } },
-                { $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }] },
+            $and: [
+                getPublishedCircleQuery(),
+                {
+                    $or: [
+                        { circleType: { $ne: "user" } },
+                        { $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }] },
+                    ],
+                },
             ],
         },
         { projection: SAFE_CIRCLE_PROJECTION },
@@ -130,12 +154,12 @@ export const getCircles = async (
     includeCreated?: boolean,
     includeMember?: boolean,
 ): Promise<Circle[]> => {
-    let query: any = { circleType: circleType ?? "circle" };
+    let query: any = { $and: [{ circleType: circleType ?? "circle" }, getPublishedCircleQuery()] };
     if (parentCircleId) {
-        query.parentCircleId = parentCircleId;
+        query.$and.push({ parentCircleId });
     }
     if (sdgHandles && sdgHandles.length > 0) {
-        query.causes = { $in: sdgHandles };
+        query.$and.push({ causes: { $in: sdgHandles } });
     }
 
     if (userDid && circleType === "circle") {
@@ -153,9 +177,13 @@ export const getCircles = async (
 
             if (userQueries.length > 0) {
                 query = {
-                    $and: [{ circleType: "circle" }, { $or: [{ parentCircleId }, ...userQueries] }],
+                    $and: [
+                        { circleType: "circle" },
+                        {
+                            $or: [{ $and: [{ parentCircleId }, getPublishedCircleQuery()] }, ...userQueries],
+                        },
+                    ],
                 };
-                delete query.$and[0].parentCircleId;
             }
         }
     }
@@ -254,6 +282,7 @@ export const createDefaultCircle = (): Circle => {
         isPublic: true,
         circleType: "circle",
         circleLevel: "top_level",
+        publishStatus: "published",
     };
     return circle;
 };
@@ -287,6 +316,7 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";
     circle.circleLevel = circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
+    circle.publishStatus = circle.publishStatus || (circle.circleType === "user" ? "published" : "draft");
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();

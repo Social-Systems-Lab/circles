@@ -1,4 +1,4 @@
-import { getCircleByHandle } from "@/lib/data/circle";
+import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
@@ -19,6 +19,14 @@ export async function POST(req: Request) {
 
         if (!circle) {
             return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
+        }
+
+        if (!isCirclePublished(circle)) {
+            const membership = userDid ? await getMember(userDid, circle._id) : null;
+            const canViewUnpublished = circle.createdBy === userDid || membership?.userGroups?.includes("admins");
+            if (!canViewUnpublished) {
+                return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
+            }
         }
 
         const isFundingRoute = moduleHandle === "funding";

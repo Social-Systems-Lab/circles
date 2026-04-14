@@ -1,5 +1,5 @@
 import { Events } from "@/lib/data/db";
-import { getCircleByHandle } from "@/lib/data/circle";
+import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 
 // Helpers for ICS formatting
 function pad(n: number): string {
@@ -73,7 +73,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ handle: string 
         }
 
         const circle = await getCircleByHandle(handle);
-        if (!circle || !circle._id) {
+        if (!circle || !circle._id || !isCirclePublished(circle)) {
             return new Response("Circle not found", { status: 404 });
         }
 

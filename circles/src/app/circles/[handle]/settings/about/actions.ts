@@ -8,6 +8,72 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 
+async function updateCirclePublishStatus(circleId: string, publishStatus: "published" | "pending_verification") {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to edit circle settings" };
+    }
+
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    if (circle.circleType === "user") {
+        return { success: false, message: "User profiles do not support this workflow" };
+    }
+
+    await updateCircle({ _id: circleId, publishStatus }, userDid);
+
+    const circlePath = await getCirclePath(circle);
+    revalidatePath(circlePath);
+    revalidatePath(`${circlePath}settings/about`);
+    revalidatePath("/circles");
+
+    return { success: true, message: "Circle workflow updated successfully" };
+}
+
+export async function publishCircleAction(formData: FormData) {
+    const circleId = String(formData.get("circleId") || "");
+    if (!circleId) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    if (circle.circleLevel !== "profile_child") {
+        return { success: false, message: "Only profile circles can be published directly" };
+    }
+
+    return updateCirclePublishStatus(circleId, "published");
+}
+
+export async function submitCircleForVerificationAction(formData: FormData) {
+    const circleId = String(formData.get("circleId") || "");
+    if (!circleId) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    if (circle.circleLevel === "profile_child") {
+        return { success: false, message: "Profile circles should be published directly" };
+    }
+
+    return updateCirclePublishStatus(circleId, "pending_verification");
+}
+
 export async function saveAbout(values: {
     _id: any;
     name?: string;

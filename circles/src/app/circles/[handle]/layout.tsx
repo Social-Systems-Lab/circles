@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCircleByHandle, getDefaultCircle, getCircleById } from "@/lib/data/circle";
+import { getCircleByHandle, getDefaultCircle, getCircleById, isCirclePublished } from "@/lib/data/circle";
 import { redirect } from "next/navigation";
 import HomeCover from "@/components/modules/home/home-cover";
 import HomeContent from "@/components/modules/home/home-content";
@@ -28,6 +28,10 @@ export default async function RootLayout(props: Props) {
     let authorizedToEdit = false;
     let userDid = await getAuthenticatedUserDid();
     authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
+    const canViewCircle = isCirclePublished(circle) || authorizedToEdit || circle.createdBy === userDid;
+    if (!canViewCircle) {
+        redirect("/not-found");
+    }
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
     const adminLeaders =
         circle.circleType !== "user" && circle._id
