@@ -537,7 +537,10 @@ export default function KamooniLandingPage({
             {/* Footer */}
             <footer className="bg-kam-gray-dark py-8 text-white">
                 <div className="container mx-auto flex flex-col items-center justify-between px-4 text-center text-sm sm:flex-row sm:text-left">
-                    <p>© {new Date().getFullYear()} Kamooni. All rights reserved.</p>
+                    <p>
+                        © {new Date().getFullYear()} Kamooni. Platform code is open source under the MIT License. The
+                        Kamooni brand is a trademark of the Social Systems Foundation.
+                    </p>
                     <div className="mt-4 flex space-x-4 sm:mt-0">
                         <Link href="https://socialsystems.io" className="hover:underline">
                             Social Systems Lab
