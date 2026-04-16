@@ -545,10 +545,7 @@ export default function KamooniLandingPage({
                         <Link href="https://socialsystems.io" className="hover:underline">
                             Social Systems Lab
                         </Link>
-                        <Link href="https://instagram.com/kamooni.network" className="hover:underline">
-                            Instagram
-                        </Link>
-                        <Link href="mailto:info@kamooni.org" className="hover:underline">
+                        <Link href="mailto:hello@socialsystems.io" className="hover:underline">
                             Contact
                         </Link>
                     </div>
