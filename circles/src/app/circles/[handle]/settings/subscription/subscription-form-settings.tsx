@@ -4,14 +4,47 @@ import { useState, useTransition } from "react";
 import { Circle } from "@/models/models";
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
-import { updateMissedMessageEmailSetting } from "./actions";
+import { updateEmailPreferenceSetting } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 
+type EmailPreferenceKey = "emailMissedMessages" | "emailTaskAssigned" | "emailTaskUpdates" | "emailVerificationUpdates";
+
+const emailPreferenceOptions: { key: EmailPreferenceKey; label: string; description: string }[] = [
+    {
+        key: "emailMissedMessages",
+        label: "Email me if I miss a message",
+        description: "Sends a delayed reminder email if you have not read a direct message yet.",
+    },
+    {
+        key: "emailTaskAssigned",
+        label: "Email me when I am assigned a task",
+        description: "Sends an email when someone assigns you a task.",
+    },
+    {
+        key: "emailTaskUpdates",
+        label: "Email me about updates to tasks assigned to me",
+        description: "Sends an email when assigned work changes, needs revision, or is verified.",
+    },
+    {
+        key: "emailVerificationUpdates",
+        label: "Email me about verification or admin thread updates that need my response",
+        description: "Sends an email when your verification thread needs attention.",
+    },
+];
+
+const getInitialEmailPreferences = (user: Circle): Record<EmailPreferenceKey, boolean> => ({
+    emailMissedMessages: user.emailMissedMessages !== false,
+    emailTaskAssigned: user.emailTaskAssigned === true,
+    emailTaskUpdates: user.emailTaskUpdates === true,
+    emailVerificationUpdates: user.emailVerificationUpdates === true,
+});
+
 export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     const [subscriptionAttempted, setSubscriptionAttempted] = useState(false);
+    const initialEmailPreferences = getInitialEmailPreferences(user);
 
     const handleDialogClose = () => {
         setSubscriptionAttempted(true);
@@ -21,7 +54,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
         return (
             <div className="space-y-8">
                 <VerificationSettingsCard />
-                <MissedMessageEmailSettingsCard initialValue={user.emailMissedMessages !== false} />
+                <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
                 <section className="space-y-4">
                     <div className="space-y-1 px-1">
                         <h2 className="text-lg font-semibold tracking-tight">Membership</h2>
@@ -43,7 +76,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     return (
         <div className="space-y-8">
             <VerificationSettingsCard />
-            <MissedMessageEmailSettingsCard initialValue={user.emailMissedMessages !== false} />
+            <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
             <section className="space-y-4">
                 <div className="space-y-1 px-1">
                     <h2 className="text-lg font-semibold tracking-tight">Membership</h2>
@@ -57,14 +90,14 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     );
 }
 
-function MissedMessageEmailSettingsCard({ initialValue }: { initialValue: boolean }) {
-    const [emailMissedMessages, setEmailMissedMessages] = useState(initialValue);
+function EmailPreferencesSettingsCard({ initialValues }: { initialValues: Record<EmailPreferenceKey, boolean> }) {
+    const [emailPreferences, setEmailPreferences] = useState(initialValues);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
 
-    const handleCheckedChange = (checked: boolean) => {
+    const handleCheckedChange = (preference: EmailPreferenceKey, checked: boolean) => {
         startTransition(async () => {
-            const result = await updateMissedMessageEmailSetting(checked);
+            const result = await updateEmailPreferenceSetting(preference, checked);
 
             if (!result.success) {
                 toast({
@@ -74,7 +107,10 @@ function MissedMessageEmailSettingsCard({ initialValue }: { initialValue: boolea
                 return;
             }
 
-            setEmailMissedMessages(checked);
+            setEmailPreferences((current) => ({
+                ...current,
+                [preference]: checked,
+            }));
             toast({
                 title: result.message,
             });
@@ -84,28 +120,31 @@ function MissedMessageEmailSettingsCard({ initialValue }: { initialValue: boolea
     return (
         <Card>
             <CardHeader className="space-y-2 pb-5">
-                <CardTitle className="text-2xl font-semibold tracking-tight">Message reminders</CardTitle>
+                <CardTitle className="text-2xl font-semibold tracking-tight">Email Preferences</CardTitle>
                 <CardDescription className="max-w-2xl text-sm leading-6">
-                    Delayed email reminders for unread direct messages are on by default. Turn this off if you do not
-                    want them.
+                    Actionable email notifications are on by default. Turn off anything you do not want to receive.
                 </CardDescription>
             </CardHeader>
-            <CardContent>
-                <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
-                    <div className="space-y-1">
-                        <Label htmlFor="email-missed-messages">Email me if I miss a message</Label>
-                        <p className="text-sm text-muted-foreground">
-                            Sends a delayed reminder email if you have not read a direct message yet.
-                        </p>
-                    </div>
-                    <Switch
-                        id="email-missed-messages"
-                        checked={emailMissedMessages}
-                        onCheckedChange={handleCheckedChange}
-                        disabled={isPending}
-                        aria-label="Email me if I miss a message"
-                    />
-                </div>
+            <CardContent className="space-y-3">
+                {emailPreferenceOptions.map((option) => {
+                    const switchId = option.key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+
+                    return (
+                        <div key={option.key} className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                            <div className="space-y-1">
+                                <Label htmlFor={switchId}>{option.label}</Label>
+                                <p className="text-sm text-muted-foreground">{option.description}</p>
+                            </div>
+                            <Switch
+                                id={switchId}
+                                checked={emailPreferences[option.key]}
+                                onCheckedChange={(checked) => handleCheckedChange(option.key, checked)}
+                                disabled={isPending}
+                                aria-label={option.label}
+                            />
+                        </div>
+                    );
+                })}
             </CardContent>
         </Card>
     );

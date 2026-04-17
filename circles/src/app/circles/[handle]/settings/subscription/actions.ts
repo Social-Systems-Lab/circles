@@ -7,6 +7,14 @@ import { redirect } from "next/navigation";
 
 const DONORBOX_API_KEY = process.env.DONORBOX_API_KEY;
 const DONORBOX_API_URL = "https://donorbox.org/api/v1";
+const emailPreferenceLabels = {
+    emailMissedMessages: "Missed-message email reminders",
+    emailTaskAssigned: "Task assignment emails",
+    emailTaskUpdates: "Task update emails",
+    emailVerificationUpdates: "Verification update emails",
+} as const;
+
+type EmailPreferenceKey = keyof typeof emailPreferenceLabels;
 
 export async function createSubscription(circleId: string, planId: string) {
     const userDid = await getAuthenticatedUserDid();
@@ -55,11 +63,11 @@ export async function getPlans() {
     return response.json();
 }
 
-export async function updateMissedMessageEmailSetting(enabled: boolean) {
-    if (typeof enabled !== "boolean") {
+export async function updateEmailPreferenceSetting(preference: EmailPreferenceKey, enabled: boolean) {
+    if (!(preference in emailPreferenceLabels) || typeof enabled !== "boolean") {
         return {
             success: false,
-            message: "Invalid missed-message email setting.",
+            message: "Invalid email preference setting.",
         };
     }
 
@@ -83,7 +91,7 @@ export async function updateMissedMessageEmailSetting(enabled: boolean) {
         await updateUser(
             {
                 _id: user._id,
-                emailMissedMessages: enabled,
+                [preference]: enabled,
             },
             userDid,
         );
@@ -94,16 +102,15 @@ export async function updateMissedMessageEmailSetting(enabled: boolean) {
 
         return {
             success: true,
-            message: enabled
-                ? "Missed-message email reminders enabled."
-                : "Missed-message email reminders disabled.",
-            emailMissedMessages: enabled,
+            message: `${emailPreferenceLabels[preference]} ${enabled ? "enabled" : "disabled"}.`,
+            preference,
+            enabled,
         };
     } catch (error) {
-        console.error("Error updating missed-message email setting:", error);
+        console.error("Error updating email preference setting:", error);
         return {
             success: false,
-            message: error instanceof Error ? error.message : "Failed to update missed-message email setting.",
+            message: error instanceof Error ? error.message : "Failed to update email preference setting.",
         };
     }
 }

@@ -1,5 +1,6 @@
 import { buildVerifiedUserSet } from "@/lib/auth/verification";
 import { Circles, db } from "@/lib/data/db";
+import { sendEmail } from "@/lib/data/email";
 import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
 import {
@@ -24,6 +25,41 @@ export type ActiveVerificationRequestStatus = (typeof ACTIVE_VERIFICATION_REQUES
 
 const verificationRequestsCollection = () => db.collection<VerificationRequest>("verifications");
 const verificationMessagesCollection = () => db.collection<VerificationMessage>("verificationMessages");
+const getEmailBaseUrl = (): string => (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
+
+const sendVerificationUpdateEmail = async ({
+    recipient,
+    subject,
+    actionUrl,
+}: {
+    recipient: UserPrivate;
+    subject: string;
+    actionUrl: string;
+}) => {
+    if (recipient.emailVerificationUpdates !== true || !recipient.email) {
+        return;
+    }
+
+    const baseUrl = getEmailBaseUrl();
+    try {
+        await sendEmail({
+            to: recipient.email,
+            templateAlias: "notification-reminder",
+            templateModel: {
+                name: recipient.name || recipient.handle || "there",
+                notifications: [subject],
+                actionUrl: `${baseUrl}${actionUrl}`,
+                productUrl: baseUrl,
+                introText: subject,
+                bodyText: "Click the button below to review this on Kamooni.",
+                summaryText: subject,
+                actionText: "Review Update",
+            },
+        });
+    } catch (error) {
+        console.error("Failed to send verification update email:", error);
+    }
+};
 
 export const normalizeVerificationRequestStatus = (
     status?: VerificationRequestStatus,
@@ -522,6 +558,12 @@ export async function notifyApplicantVerificationClarification(applicant: UserPr
         messageBody: `${admin.name || "An admin"} requested more information for your verification.`,
         url: `/circles/${applicant.handle}/settings/subscription`,
     });
+
+    await sendVerificationUpdateEmail({
+        recipient: applicant,
+        subject: `${admin.name || "An admin"} requested more information for your verification.`,
+        actionUrl: `/circles/${applicant.handle}/settings/subscription`,
+    });
 }
 
 export async function notifyAdminsOfApplicantVerificationReply(
@@ -537,6 +579,16 @@ export async function notifyAdminsOfApplicantVerificationReply(
         messageBody: `${applicant.name || "An applicant"} replied in a verification request.`,
         url: "/admin?tab=verification-requests",
     });
+
+    await Promise.all(
+        admins.map((admin) =>
+            sendVerificationUpdateEmail({
+                recipient: admin,
+                subject: `${applicant.name || "An applicant"} replied in a verification request.`,
+                actionUrl: "/admin?tab=verification-requests",
+            }),
+        ),
+    );
 }
 
 export async function notifyApplicantOfVerificationApproval(applicant: UserPrivate): Promise<void> {
