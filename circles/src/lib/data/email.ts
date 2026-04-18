@@ -3,6 +3,7 @@ import crypto from "crypto";
 
 const POSTMARK_API_TOKEN = process.env.POSTMARK_API_TOKEN;
 const POSTMARK_SENDER_EMAIL = process.env.POSTMARK_SENDER_EMAIL;
+const SOCIAL_SYSTEMS_LAB_URL = "https://www.socialsystems.io/";
 
 if (!POSTMARK_API_TOKEN) {
     console.warn("POSTMARK_API_TOKEN is not set. Email functionality will be disabled.");
@@ -32,6 +33,46 @@ const getTemplateString = (templateModel: Record<string, any>, ...keys: string[]
     return undefined;
 };
 
+export const applyEmailTemplateDefaults = (templateModel: Record<string, any>): Record<string, any> => {
+    const productUrl =
+        getTemplateString(templateModel, "productUrl", "product_url") || process.env.CIRCLES_URL || "http://localhost:3000";
+    const actionUrl = getTemplateString(templateModel, "actionUrl", "action_url");
+    const actionText = getTemplateString(templateModel, "actionText", "action_text", "buttonText", "button_text");
+    const introText = getTemplateString(templateModel, "introText", "intro_text");
+    const bodyText = getTemplateString(templateModel, "bodyText", "body_text");
+    const summaryText = getTemplateString(templateModel, "summaryText", "summary_text");
+    const defaults = { ...templateModel };
+
+    defaults.product_url = productUrl;
+    defaults.product_name = "Kamooni";
+    defaults.company_name = "Social Systems Lab";
+    defaults.company_url = SOCIAL_SYSTEMS_LAB_URL;
+    defaults.company_address = "";
+    defaults.email_signoff_html =
+        `Thanks for being part of Kamooni!<br><br>The Kamooni Team at <a href="${SOCIAL_SYSTEMS_LAB_URL}">Social Systems Lab</a>`;
+    defaults.email_signoff_text =
+        `Thanks for being part of Kamooni!\n\nThe Kamooni Team at Social Systems Lab\n${SOCIAL_SYSTEMS_LAB_URL}`;
+    defaults.name = templateModel.name || "User";
+    defaults.action_url = actionUrl;
+    if (actionText) {
+        defaults.action_text = actionText;
+        defaults.button_text = actionText;
+    }
+    if (introText) {
+        defaults.intro_text = introText;
+    }
+    if (bodyText) {
+        defaults.body_text = bodyText;
+    }
+    if (summaryText) {
+        defaults.summary_text = summaryText;
+    }
+    defaults.support_email = "hello@socialsystems.io";
+    defaults.current_year = new Date().getFullYear().toString();
+
+    return defaults;
+};
+
 /**
  * Sends an email using Postmark.
  * @param options - Email sending options.
@@ -53,36 +94,7 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
 
     const { to, templateAlias, templateModel } = options;
 
-    const message = new TemplatedMessage(POSTMARK_SENDER_EMAIL, templateAlias, templateModel, to);
-    const productUrl = getTemplateString(templateModel, "productUrl", "product_url") || process.env.CIRCLES_URL || "http://localhost:3000";
-    const actionUrl = getTemplateString(templateModel, "actionUrl", "action_url");
-    const actionText = getTemplateString(templateModel, "actionText", "action_text", "buttonText", "button_text");
-    const introText = getTemplateString(templateModel, "introText", "intro_text");
-    const bodyText = getTemplateString(templateModel, "bodyText", "body_text");
-    const summaryText = getTemplateString(templateModel, "summaryText", "summary_text");
-
-    // Add common variables that might be useful in all templates
-    (message.TemplateModel as any).product_url = productUrl;
-    (message.TemplateModel as any).product_name = "Kamooni";
-    (message.TemplateModel as any).company_name = "Social Systems Lab";
-    (message.TemplateModel as any).company_address = "Illerstigen 8, 170 71 Solna, Sweden";
-    (message.TemplateModel as any).name = templateModel.name || "User"; // Default to "User" if not provided
-    (message.TemplateModel as any).action_url = actionUrl;
-    if (actionText) {
-        (message.TemplateModel as any).action_text = actionText;
-        (message.TemplateModel as any).button_text = actionText;
-    }
-    if (introText) {
-        (message.TemplateModel as any).intro_text = introText;
-    }
-    if (bodyText) {
-        (message.TemplateModel as any).body_text = bodyText;
-    }
-    if (summaryText) {
-        (message.TemplateModel as any).summary_text = summaryText;
-    }
-    (message.TemplateModel as any).support_email = "hello@socialsystems.io";
-    (message.TemplateModel as any).current_year = new Date().getFullYear().toString();
+    const message = new TemplatedMessage(POSTMARK_SENDER_EMAIL, templateAlias, applyEmailTemplateDefaults(templateModel), to);
 
     try {
         console.log(`Attempting to send email to ${to} using template ${templateAlias}`);

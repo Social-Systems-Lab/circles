@@ -116,9 +116,6 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                         product_name: "Kamooni", // Or from process.env
                         product_url: baseUrl,
                         support_url: `${baseUrl}/support`, // Example, adjust as needed
-                        company_name: "Social Systems Lab", // Or from process.env
-                        company_address: "Illerstigen 8, 170 71 Solna, Sweden", // Or from process.env
-                        current_year: new Date().getFullYear().toString(),
                         // For operating_system and browser_name, you'd need to find a way to pass these
                         // from the client if desired, or extract from request headers if possible in server actions.
                         // For now, they will be omitted or you can pass placeholder values.
