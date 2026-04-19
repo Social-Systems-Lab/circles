@@ -3,6 +3,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
 import Image from "next/image";
 import { useToast } from "@/components/ui/use-toast";
@@ -85,18 +93,21 @@ export default function SubscriptionForm({
                         <CardTitle className="text-2xl font-bold">Free</CardTitle>
                         <CardDescription>€0 / forever</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-grow space-y-4">
-                        <ul className="space-y-2 text-left">
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Basic features
-                            </li>
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Verify your account to unlock access
-                            </li>
-                        </ul>
+                    <CardContent className="flex flex-grow flex-col space-y-4">
+                        <div className="space-y-4 text-left text-sm text-muted-foreground">
+                            <p>Everything you need to contribute, connect, and be an active part of the Kamooni community.</p>
+                            <p>You can also become a full member after volunteering for three months.</p>
+                            <p>
+                                If demand is high, there may be a waiting list until enough members are available to
+                                support new free users.
+                            </p>
+                        </div>
+
+                        <div className="mt-auto pt-2">
+                            <FreeMembershipDialog />
+                        </div>
                     </CardContent>
+
                     {!isMember && (
                         <div className="p-6 pt-0">
                             <Button variant="outline" className="w-full">
@@ -115,21 +126,14 @@ export default function SubscriptionForm({
                         <CardDescription>€5/month or €50/year</CardDescription>
                     </CardHeader>
 
-                    <CardContent className="flex-grow space-y-4">
-                        <ul className="space-y-2 text-left">
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                All features from the Free plan
-                            </li>
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Member badge
-                            </li>
-                            <li className="flex items-center">
-                                <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Supports Kamooni development
-                            </li>
-                        </ul>
+                    <CardContent className="flex flex-grow flex-col space-y-4">
+                        <div className="space-y-4 text-left text-sm text-muted-foreground">
+                            <p>Members help sustain Kamooni and keep it open to others.</p>
+                            <p>
+                                As a thank you, members receive a few extra benefits, can invite five friends, and are
+                                invited to join the member circle to help shape Kamooni.
+                            </p>
+                        </div>
 
                         {isMember && (
                             <div className="rounded-xl border bg-white/70 p-3 text-sm text-muted-foreground">
@@ -137,6 +141,10 @@ export default function SubscriptionForm({
                                 {membershipState && <div className="mt-1">State: {membershipState.replace("_", " ")}</div>}
                             </div>
                         )}
+
+                        <div className="mt-auto pt-2">
+                            <MemberBenefitsDialog />
+                        </div>
                     </CardContent>
 
                     <div className="space-y-3 p-6 pt-0">
@@ -171,6 +179,87 @@ export default function SubscriptionForm({
                 </Card>
             </div>
         </div>
+    );
+}
+
+function FreeMembershipDialog() {
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button variant="ghost" className="w-full justify-center">
+                    Find out more
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[640px]">
+                <DialogHeader>
+                    <DialogTitle>How volunteering membership works</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Learn how volunteering can lead to full Kamooni membership.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 text-sm text-muted-foreground">
+                    <p>
+                        While Kamooni needs funding to stay open and accessible to as many people as possible, we also
+                        want to recognise the important work volunteers do and the value this brings to everyone.
+                    </p>
+                    <p>
+                        If you volunteer for at least five hours per month for three consecutive months, you will be
+                        invited to join Kamooni as a member, with all the benefits that membership includes.
+                    </p>
+                    <p>
+                        Volunteering membership is renewed monthly. Hours from one month cannot be carried over to the
+                        next. However, if you fall short one month, we offer a grace period so you can make up the
+                        missing hours the following month and keep your membership status.
+                    </p>
+                    <p>
+                        Kamooni wants to recognise the contributions our volunteers make, and thank them in some small
+                        way.
+                    </p>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function MemberBenefitsDialog() {
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button variant="ghost" className="w-full justify-center">
+                    Find out more
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[680px]">
+                <DialogHeader>
+                    <DialogTitle>Why become a member</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Learn about the benefits of Kamooni Membership.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 text-sm text-muted-foreground">
+                    <p>Kamooni Membership helps keep the platform open, healthy, and available to others.</p>
+                    <div>
+                        <p className="mb-3">As a thank you, members receive a few extra benefits. Members can:</p>
+                        <ul className="list-disc space-y-2 pl-5">
+                            <li>invite five friends who can join right away, even if there is a waiting list</li>
+                            <li>test new features before everyone else and help shape how they develop</li>
+                            <li>vote on the Kamooni roadmap and suggest what to build or improve next</li>
+                            <li>create independent community circles with more options</li>
+                            <li>activate funding through their circles</li>
+                            <li>help allocate any surplus Kamooni generates through their Altruistic Wallets</li>
+                        </ul>
+                    </div>
+                    <p>
+                        Over time, we hope to make these functions available to everyone. But until Kamooni can fully
+                        sustain itself, we want to show our paying members a little extra appreciation.
+                    </p>
+                    <p>
+                        Membership is not only about access. It is also a way to actively support the wider community
+                        and make space for more people to take part.
+                    </p>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
