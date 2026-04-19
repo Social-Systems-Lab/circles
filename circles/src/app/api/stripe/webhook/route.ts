@@ -85,6 +85,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId
         return;
     }
 
+    const interval =
+        session.metadata?.interval === "year" || session.metadata?.interval === "month"
+            ? (session.metadata.interval as "month" | "year")
+            : undefined;
+
     await applyStripeMembershipUpdate({
         userId: user._id.toString(),
         stripeCustomerId: typeof session.customer === "string" ? session.customer : undefined,
@@ -93,6 +98,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId
         status: "active",
         membershipState: "active",
         membershipSource: "stripe",
+        interval,
         lastWebhookEventId: eventId,
     });
 }
@@ -162,15 +168,19 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
     });
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription, eventId: string) {
+async function handleSubscriptionUpsert(
+    subscription: Stripe.Subscription,
+    eventId: string,
+    eventType: "customer.subscription.created" | "customer.subscription.updated",
+) {
     const user = await resolveUserFromEvent({
         id: eventId,
-        type: "customer.subscription.updated",
+        type: eventType,
         data: { object: subscription },
     } as Stripe.Event);
 
     if (!user?._id) {
-        console.warn("Stripe customer.subscription.updated: user not found");
+        console.warn(`${eventType}: user not found`);
         return;
     }
 
@@ -276,8 +286,19 @@ export async function POST(req: NextRequest) {
             case "invoice.payment_failed":
                 await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice, event.id);
                 break;
+            case "customer.subscription.created":
+                await handleSubscriptionUpsert(
+                    event.data.object as Stripe.Subscription,
+                    event.id,
+                    "customer.subscription.created",
+                );
+                break;
             case "customer.subscription.updated":
-                await handleSubscriptionUpdated(event.data.object as Stripe.Subscription, event.id);
+                await handleSubscriptionUpsert(
+                    event.data.object as Stripe.Subscription,
+                    event.id,
+                    "customer.subscription.updated",
+                );
                 break;
             case "customer.subscription.deleted":
                 await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, event.id);
