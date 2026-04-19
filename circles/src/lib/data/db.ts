@@ -77,6 +77,7 @@ let ChatMessageDocs: Collection<ChatMessageDoc>;
 let ChatReadStates: Collection<ChatReadState>;
 let MessageEmailReminders: Collection<MessageEmailReminder>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
+let StripeWebhookEvents: Collection<any>;
 let UserRelationships: Collection<any>;
 
 // Only initialize the database connection if not in build mode
@@ -122,6 +123,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
     MessageEmailReminders = db.collection<MessageEmailReminder>("messageEmailReminders");
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
+    StripeWebhookEvents = db.collection("stripeWebhookEvents");
     UserRelationships = db.collection("userRelationships");
 }
 export async function getDb() {
@@ -167,5 +169,6 @@ export {
     ChatReadStates,
     MessageEmailReminders,
     PlatformBroadcastMessages,
+    StripeWebhookEvents,
     UserRelationships,
 };

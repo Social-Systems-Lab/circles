@@ -96,6 +96,7 @@
         "rrule": "^2.8.1",
         "sharp": "^0.33.5",
         "sonner": "^1.7.4",
+        "stripe": "^22.0.2",
         "tailwind-merge": "^2.6.0",
         "tailwindcss-animate": "^1.0.7",
         "uuid": "^10.0.0",

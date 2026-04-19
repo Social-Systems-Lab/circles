@@ -1,50 +1,79 @@
 "use client";
-import { useEffect, useState } from "react";
-import Script from "next/script";
-import { createSubscription } from "./actions";
+
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogPortal,
-    DialogOverlay,
-} from "@/components/ui/dialog";
 import { Circle } from "@/models/models";
 import Image from "next/image";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function SubscriptionForm({
     circle: user,
-    onDialogClose,
 }: {
     circle: Circle;
     onDialogClose?: () => void;
 }) {
-    const [showDonorbox, setShowDonorbox] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    const foundingMemberPlan = {
-        id: "the-founding-campaign?", // From the iframe src
-        campaign: {
-            name: "Founding Member",
-        },
-        formatted_amount: "$1+",
-        interval: "monthly",
-    };
+    const { toast } = useToast();
+    const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
+    const [isLoadingYearly, setIsLoadingYearly] = useState(false);
+    const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
     const isMember = user.isMember;
+    const membershipState = user.subscription?.membershipState;
+    const isStripeMember = user.subscription?.provider === "stripe";
 
-    const handleManageSubscription = () => {
-        const donorboxDonorId = user?.subscription?.donorboxDonorId;
-        console.log(JSON.stringify(user?.subscription, null, 2));
-        if (donorboxDonorId) {
-            window.open(`https://donorbox.org/user_session/new?donor_id=${donorboxDonorId}`, "_blank");
+    async function startCheckout(interval: "month" | "year") {
+        const setLoading = interval === "year" ? setIsLoadingYearly : setIsLoadingMonthly;
+        setLoading(true);
+
+        try {
+            const response = await fetch("/api/stripe/create-checkout-session", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ interval }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data?.url) {
+                throw new Error(data?.error || "Failed to start checkout");
+            }
+
+            window.location.href = data.url;
+        } catch (error) {
+            toast({
+                title: error instanceof Error ? error.message : "Failed to start checkout",
+                variant: "destructive",
+            });
+            setLoading(false);
         }
-    };
+    }
+
+    async function openPortal() {
+        setIsLoadingPortal(true);
+
+        try {
+            const response = await fetch("/api/stripe/create-portal-session", {
+                method: "POST",
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data?.url) {
+                throw new Error(data?.error || "Failed to open billing portal");
+            }
+
+            window.location.href = data.url;
+        } catch (error) {
+            toast({
+                title: error instanceof Error ? error.message : "Failed to open billing portal",
+                variant: "destructive",
+            });
+            setIsLoadingPortal(false);
+        }
+    }
 
     return (
         <div className="formatted w-full">
@@ -52,7 +81,7 @@ export default function SubscriptionForm({
                 <Card className="flex flex-col rounded-3xl p-4">
                     <CardHeader>
                         <CardTitle className="text-2xl font-bold">Free</CardTitle>
-                        <CardDescription>$0 / forever</CardDescription>
+                        <CardDescription>€0 / forever</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-grow space-y-4">
                         <ul className="space-y-2 text-left">
@@ -74,14 +103,16 @@ export default function SubscriptionForm({
                         </div>
                     )}
                 </Card>
+
                 <Card className="relative flex flex-col rounded-3xl bg-purple-50 p-4">
                     <CardHeader>
-                        <CardTitle className="text-2xl font-bold">Founding Member</CardTitle>
+                        <CardTitle className="text-2xl font-bold">Kamooni Membership</CardTitle>
                         <div className="absolute right-4 top-4">
                             <Image src="/images/member-badge.png" alt="Member Badge" width={32} height={32} />
                         </div>
-                        <CardDescription>Donate monthly ($1 or more)</CardDescription>
+                        <CardDescription>€5/month or €50/year</CardDescription>
                     </CardHeader>
+
                     <CardContent className="flex-grow space-y-4">
                         <ul className="space-y-2 text-left">
                             <li className="flex items-center">
@@ -90,81 +121,53 @@ export default function SubscriptionForm({
                             </li>
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Founder Badge
+                                Member badge
                             </li>
                             <li className="flex items-center">
                                 <CheckIcon className="mr-2 h-5 w-5 text-green-500" />
-                                Early access to new features
+                                Supports Kamooni development
                             </li>
                         </ul>
+
+                        {isMember && (
+                            <div className="rounded-xl border bg-white/70 p-3 text-sm text-muted-foreground">
+                                <div className="font-medium text-foreground">Membership active</div>
+                                {membershipState && <div className="mt-1">State: {membershipState.replace("_", " ")}</div>}
+                            </div>
+                        )}
                     </CardContent>
-                    <div className="p-6 pt-0">
-                        {isMember ? (
-                            <Button variant="outline" className="w-full" onClick={handleManageSubscription}>
-                                Manage Subscription
+
+                    <div className="space-y-3 p-6 pt-0">
+                        {isStripeMember ? (
+                            <Button variant="outline" className="w-full" onClick={openPortal} disabled={isLoadingPortal}>
+                                {isLoadingPortal ? "Opening portal..." : "Manage Membership"}
+                            </Button>
+                        ) : isMember ? (
+                            <Button variant="outline" className="w-full" disabled>
+                                Membership Active
                             </Button>
                         ) : (
-                            <Dialog
-                                open={showDonorbox}
-                                onOpenChange={(isOpen) => {
-                                    setShowDonorbox(isOpen);
-                                    if (!isOpen) {
-                                        if (onDialogClose) {
-                                            onDialogClose();
-                                        }
-                                    }
-                                }}
-                            >
-                                <DialogTrigger asChild>
-                                    <Button className="w-full bg-purple-600 text-white hover:bg-purple-700">
-                                        Become a Member
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogPortal>
-                                    <DialogOverlay className="z-[550] bg-black/60" />
-                                    <DialogContent className="z-[600] max-w-lg">
-                                        <DialogHeader>
-                                            <DialogTitle>Become a Founding Member</DialogTitle>
-                                        </DialogHeader>
-                                        <div className="mt-4">
-                                            <Script src="https://donorbox.org/widget.js" strategy="lazyOnload" />
-                                            <iframe
-                                                src={`https://donorbox.org/embed/${
-                                                    foundingMemberPlan.id
-                                                }&email=${encodeURIComponent(
-                                                    user.email!,
-                                                )}&custom_fields[circleId]=${user._id!}`}
-                                                name="donorbox"
-                                                allowFullScreen
-                                                seamless={true}
-                                                frameBorder="0"
-                                                scrolling="no"
-                                                height="900px"
-                                                width="100%"
-                                                style={{
-                                                    maxWidth: "500px",
-                                                    minWidth: "250px",
-                                                    maxHeight: "none!important",
-                                                }}
-                                                allow="payment"
-                                            ></iframe>
-                                        </div>
-                                    </DialogContent>
-                                </DialogPortal>
-                            </Dialog>
+                            <>
+                                <Button
+                                    className="w-full bg-purple-600 text-white hover:bg-purple-700"
+                                    onClick={() => startCheckout("month")}
+                                    disabled={isLoadingMonthly || isLoadingYearly}
+                                >
+                                    {isLoadingMonthly ? "Redirecting..." : "Join Monthly"}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => startCheckout("year")}
+                                    disabled={isLoadingMonthly || isLoadingYearly}
+                                >
+                                    {isLoadingYearly ? "Redirecting..." : "Join Yearly"}
+                                </Button>
+                            </>
                         )}
                     </div>
                 </Card>
             </div>
-            {/* {isMember && (
-                <div className="mt-16 text-center">
-                    <h2 className="text-2xl font-bold">Your Current Plan</h2>
-                    <p className="mt-4 text-lg">
-                        You are a <span className="font-bold">Founding Member</span>.
-                    </p>
-                    <p className="mt-2 text-muted-foreground">Thank you for your support!</p>
-                </div>
-            )} */}
         </div>
     );
 }

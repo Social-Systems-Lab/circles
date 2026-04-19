@@ -541,16 +541,31 @@ export const circleSchema = z.object({
     // Subscription fields
     subscription: z
         .object({
+            provider: z.enum(["donorbox", "stripe"]).optional(),
             donorboxPlanId: z.string().optional(),
             donorboxSubscriptionId: z.string().optional(),
             donorboxDonationId: z.string().optional(),
             donorboxDonorId: z.string().optional(),
-            status: z.enum(["active", "inactive", "cancelled"]).optional(),
+            stripeCustomerId: z.string().optional(),
+            stripeSubscriptionId: z.string().optional(),
+            stripePriceId: z.string().optional(),
+            stripeCheckoutSessionId: z.string().optional(),
+            status: z.enum(["active", "inactive", "cancelled", "past_due", "unpaid", "trialing"]).optional(),
+            membershipState: z
+                .enum(["inactive", "active", "grace_period", "cancelled", "past_due", "unpaid"])
+                .optional(),
+            membershipSource: z.enum(["donorbox", "stripe", "manual", "admin"]).optional(),
             endsAt: z.date().optional(),
+            membershipExpiresAt: z.date().optional(),
+            membershipGraceUntil: z.date().optional(),
+            stripeCurrentPeriodEnd: z.date().optional(),
+            cancelAtPeriodEnd: z.boolean().optional(),
             amount: z.number().optional(),
             currency: z.string().optional(),
+            interval: z.enum(["month", "year"]).optional(),
             startDate: z.date().optional(),
             lastPaymentDate: z.date().optional(),
+            lastWebhookEventId: z.string().optional(),
         })
         .optional(),
     manualMember: z.boolean().optional(),
