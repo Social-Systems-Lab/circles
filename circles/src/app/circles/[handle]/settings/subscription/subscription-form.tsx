@@ -20,7 +20,9 @@ export default function SubscriptionForm({
 
     const isMember = user.isMember;
     const membershipState = user.subscription?.membershipState;
-    const isStripeMember = user.subscription?.provider === "stripe";
+    const canManageStripeMembership =
+        user.subscription?.provider === "stripe" &&
+        (membershipState === "active" || membershipState === "grace_period");
 
     async function startCheckout(interval: "month" | "year") {
         const setLoading = interval === "year" ? setIsLoadingYearly : setIsLoadingMonthly;
@@ -138,7 +140,7 @@ export default function SubscriptionForm({
                     </CardContent>
 
                     <div className="space-y-3 p-6 pt-0">
-                        {isStripeMember ? (
+                        {canManageStripeMembership ? (
                             <Button variant="outline" className="w-full" onClick={openPortal} disabled={isLoadingPortal}>
                                 {isLoadingPortal ? "Opening portal..." : "Manage Membership"}
                             </Button>
