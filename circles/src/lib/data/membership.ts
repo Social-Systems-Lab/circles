@@ -50,31 +50,42 @@ export async function getUserByEmail(email: string) {
 export async function applyStripeMembershipUpdate(input: ApplyStripeMembershipUpdateInput) {
     const isActiveMember = input.membershipState === "active" || input.membershipState === "grace_period";
 
+    const setFields: Record<string, any> = {
+        isMember: isActiveMember,
+        isVerified: isActiveMember,
+        "subscription.provider": "stripe",
+        "subscription.membershipState": input.membershipState,
+        "subscription.membershipSource": input.membershipSource || "stripe",
+    };
+
+    const optionalFields: Record<string, any> = {
+        "subscription.stripeCustomerId": input.stripeCustomerId,
+        "subscription.stripeSubscriptionId": input.stripeSubscriptionId,
+        "subscription.stripePriceId": input.stripePriceId,
+        "subscription.stripeCheckoutSessionId": input.stripeCheckoutSessionId,
+        "subscription.status": input.status,
+        "subscription.membershipExpiresAt": input.membershipExpiresAt,
+        "subscription.membershipGraceUntil": input.membershipGraceUntil,
+        "subscription.stripeCurrentPeriodEnd": input.stripeCurrentPeriodEnd,
+        "subscription.cancelAtPeriodEnd": input.cancelAtPeriodEnd,
+        "subscription.amount": input.amount,
+        "subscription.currency": input.currency,
+        "subscription.interval": input.interval,
+        "subscription.startDate": input.startDate,
+        "subscription.lastPaymentDate": input.lastPaymentDate,
+        "subscription.lastWebhookEventId": input.lastWebhookEventId,
+    };
+
+    for (const [key, value] of Object.entries(optionalFields)) {
+        if (value !== undefined) {
+            setFields[key] = value;
+        }
+    }
+
     await Circles.updateOne(
         { _id: new ObjectId(input.userId), circleType: "user" as any },
         {
-            $set: {
-                isMember: isActiveMember,
-                isVerified: isActiveMember,
-                "subscription.provider": "stripe",
-                "subscription.stripeCustomerId": input.stripeCustomerId,
-                "subscription.stripeSubscriptionId": input.stripeSubscriptionId,
-                "subscription.stripePriceId": input.stripePriceId,
-                "subscription.stripeCheckoutSessionId": input.stripeCheckoutSessionId,
-                "subscription.status": input.status,
-                "subscription.membershipState": input.membershipState,
-                "subscription.membershipSource": input.membershipSource || "stripe",
-                "subscription.membershipExpiresAt": input.membershipExpiresAt,
-                "subscription.membershipGraceUntil": input.membershipGraceUntil,
-                "subscription.stripeCurrentPeriodEnd": input.stripeCurrentPeriodEnd,
-                "subscription.cancelAtPeriodEnd": input.cancelAtPeriodEnd,
-                "subscription.amount": input.amount,
-                "subscription.currency": input.currency,
-                "subscription.interval": input.interval,
-                "subscription.startDate": input.startDate,
-                "subscription.lastPaymentDate": input.lastPaymentDate,
-                "subscription.lastWebhookEventId": input.lastWebhookEventId,
-            },
+            $set: setFields,
         },
     );
 }
