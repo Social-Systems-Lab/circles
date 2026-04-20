@@ -34,7 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
 import { WELCOME_MESSAGE } from "@/config/welcome-message";
-import { followCircle } from "../home/actions";
+import { getProfileRelationshipStateAction, sendConnectRequestAction } from "../home/actions";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -902,9 +902,13 @@ export const ChatRoomComponent: React.FC<{
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-    const [isConnecting, setIsConnecting] = useState(false);
+    const [dmRelationshipState, setDmRelationshipState] = useState<{
+        connectStatus: "none" | "pending_sent" | "pending_received" | "accepted";
+        connectLabel: "Connect" | "Add Contact" | "Requested" | "Requested You" | null;
+    } | null>(null);
+    const [isSendingConnectRequest, setIsSendingConnectRequest] = useState(false);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
-    const [user, setUser] = useAtom(userAtom);
+    const [user] = useAtom(userAtom);
     const router = useRouter();
     const params = useParams<{ handle?: string | string[] }>();
     const routeHandleParam = params?.handle;
@@ -919,52 +923,71 @@ export const ChatRoomComponent: React.FC<{
             conversationMetadata.source === WELCOME_MESSAGE.source ||
             conversationMetadata.repliesDisabled === true
         );
-    const dmRecipient = chatRoom.isDirect ? chatRoom.dmRecipient : undefined;
-    const dmRecipientId = dmRecipient?._id ? String(dmRecipient._id) : "";
-    const dmConnectionState = useMemo(() => {
-        if (!dmRecipientId) return "unknown";
-        if (user?.memberships?.some((membership) => String(membership.circleId) === dmRecipientId)) {
-            return "connected";
-        }
-        if (user?.pendingRequests?.some((request) => String(request.circleId) === dmRecipientId)) {
-            return "pending";
-        }
-        return "none";
-    }, [dmRecipientId, user?.memberships, user?.pendingRequests]);
-    const showConnectBanner = !!dmRecipient && dmConnectionState !== "connected";
+    const otherDmParticipantDid = useMemo(() => {
+        if (!chatRoom.isDirect || !user?.did) return null;
+        const participantDids = Array.isArray(chatRoom.dmParticipantDids)
+            ? chatRoom.dmParticipantDids
+            : Array.isArray((chatRoom as any)?.participantDids)
+              ? (chatRoom as any).participantDids
+              : [];
+
+        return participantDids.find((participantDid: string) => participantDid && participantDid !== user.did) || null;
+    }, [chatRoom, user?.did]);
+    const showConnectBanner =
+        !!otherDmParticipantDid && !!dmRelationshipState && dmRelationshipState.connectStatus !== "accepted";
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadDmRelationshipState = async () => {
+            if (!otherDmParticipantDid) {
+                setDmRelationshipState(null);
+                return;
+            }
+
+            try {
+                const state = await getProfileRelationshipStateAction(otherDmParticipantDid);
+                if (!cancelled) {
+                    setDmRelationshipState(
+                        state
+                            ? {
+                                  connectStatus: state.connectStatus,
+                                  connectLabel: state.connectLabel,
+                              }
+                            : null,
+                    );
+                }
+            } catch (error) {
+                console.error("Failed to load DM relationship state:", error);
+                if (!cancelled) {
+                    setDmRelationshipState(null);
+                }
+            }
+        };
+
+        void loadDmRelationshipState();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [otherDmParticipantDid]);
 
     const handleConnectFromDm = async () => {
-        if (!dmRecipient || isConnecting) return;
-        setIsConnecting(true);
+        if (!otherDmParticipantDid || isSendingConnectRequest) return;
+        setIsSendingConnectRequest(true);
         try {
-            const result = await followCircle(dmRecipient);
+            const result = await sendConnectRequestAction(otherDmParticipantDid);
             if (!result.success) {
                 alert(result.message || "Failed to connect");
                 return;
             }
 
-            setUser((prevUser) => {
-                if (!prevUser || !dmRecipient._id) return prevUser;
-                if (result.pending) {
-                    return {
-                        ...prevUser,
-                        pendingRequests: [
-                            ...(prevUser.pendingRequests || []),
-                            { circleId: dmRecipient._id, status: "pending", userDid: prevUser.did!, requestedAt: new Date() },
-                        ],
-                    };
-                }
-
-                return {
-                    ...prevUser,
-                    memberships: [
-                        ...(prevUser.memberships || []),
-                        { circleId: dmRecipient._id, circle: dmRecipient, userGroups: ["members"], joinedAt: new Date() },
-                    ],
-                };
+            setDmRelationshipState({
+                connectStatus: "pending_sent",
+                connectLabel: "Requested",
             });
         } finally {
-            setIsConnecting(false);
+            setIsSendingConnectRequest(false);
         }
     };
 
@@ -1218,21 +1241,31 @@ export const ChatRoomComponent: React.FC<{
                         >
                             <div className="flex items-center justify-between gap-3 text-sm text-gray-700">
                                 <span>
-                                    {dmConnectionState === "pending"
-                                        ? `Connection request sent to ${dmRecipient.name}.`
-                                        : `You can message ${dmRecipient.name} now. Connect to add them to your network.`}
+                                    {dmRelationshipState.connectStatus === "pending_sent"
+                                        ? "Connection request sent."
+                                        : dmRelationshipState.connectStatus === "pending_received"
+                                          ? "This person has already asked to connect."
+                                          : "You're not connected yet."}
                                 </span>
-                                {dmConnectionState !== "pending" && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="shrink-0 rounded-full"
-                                        onClick={handleConnectFromDm}
-                                        disabled={isConnecting}
-                                    >
-                                        {isConnecting ? "Connecting..." : "Connect"}
-                                    </Button>
-                                )}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 rounded-full"
+                                    onClick={handleConnectFromDm}
+                                    disabled={
+                                        isSendingConnectRequest ||
+                                        dmRelationshipState.connectStatus === "pending_sent" ||
+                                        dmRelationshipState.connectStatus === "pending_received"
+                                    }
+                                >
+                                    {isSendingConnectRequest
+                                        ? "Sending..."
+                                        : dmRelationshipState.connectStatus === "pending_sent"
+                                          ? "Requested"
+                                          : dmRelationshipState.connectStatus === "pending_received"
+                                            ? "Requested You"
+                                            : dmRelationshipState.connectLabel || "Connect"}
+                                </Button>
                             </div>
                         </div>
                     )}

@@ -13,6 +13,8 @@ import { revalidatePath } from "next/cache";
 import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
+import { UserRelationships } from "@/lib/data/db";
+import { getProfileRelationshipState } from "@/lib/data/relationships";
 
 type CircleActionResponse = {
     success: boolean;
@@ -353,3 +355,90 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
         return null;
     }
 }
+
+export const getProfileRelationshipStateAction = async (targetDid: string) => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid || !targetDid || viewerDid === targetDid) {
+        return null;
+    }
+
+    return await getProfileRelationshipState(viewerDid, targetDid);
+};
+
+export const sendConnectRequestAction = async (
+    targetDid: string,
+): Promise<{ success: boolean; message: string }> => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid) {
+        return { success: false, message: "You need to be logged in to add a contact" };
+    }
+
+    if (!targetDid || viewerDid === targetDid) {
+        return { success: false, message: "Invalid contact request" };
+    }
+
+    try {
+        const targetUser = await getCircleByDid(targetDid);
+        if (!targetUser || targetUser.circleType !== "user") {
+            return { success: false, message: "Recipient not found" };
+        }
+
+        const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
+        if (relationshipState.connectStatus === "accepted") {
+            return { success: false, message: "Contact is already established" };
+        }
+
+        if (relationshipState.connectStatus === "pending_sent") {
+            return { success: true, message: "Contact request already sent" };
+        }
+
+        if (relationshipState.connectStatus === "pending_received") {
+            return { success: false, message: "This user already requested to connect" };
+        }
+
+        const now = new Date();
+
+        await UserRelationships.updateOne(
+            { fromDid: viewerDid, toDid: targetDid },
+            {
+                $set: {
+                    connectStatus: "pending_sent",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: viewerDid,
+                    toDid: targetDid,
+                    isFollowing: false,
+                    dmPermission: "none",
+                    dmPermissionSource: "none",
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        await UserRelationships.updateOne(
+            { fromDid: targetDid, toDid: viewerDid },
+            {
+                $set: {
+                    connectStatus: "pending_received",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: targetDid,
+                    toDid: viewerDid,
+                    isFollowing: false,
+                    dmPermission: "none",
+                    dmPermissionSource: "none",
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        return { success: true, message: "Contact request sent" };
+    } catch (error) {
+        console.error("Failed to send connect request", error);
+        return { success: false, message: "Failed to send contact request" };
+    }
+};
