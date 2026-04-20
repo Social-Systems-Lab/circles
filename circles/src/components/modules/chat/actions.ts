@@ -304,12 +304,15 @@ export const toggleMongoReactionAction = async (messageId: string, emoji: string
     return await toggleMongoReactionActionInternal(messageId, emoji);
 };
 
-export const findOrCreateDMConversationAction = async (inRecipient: Circle) => {
+export const findOrCreateDMConversationAction = async (
+    inRecipient: Circle,
+    options?: { source?: "profile" | "composer" },
+) => {
     const provider = getChatProvider();
     if (provider !== "mongo") {
         return { success: false, message: "Mongo chat is disabled in this environment." };
     }
-    return await findOrCreateDMConversationActionInternal(inRecipient);
+    return await findOrCreateDMConversationActionInternal(inRecipient, options);
 };
 
 export const createMongoGroupChatAction = async (formData: FormData) => {

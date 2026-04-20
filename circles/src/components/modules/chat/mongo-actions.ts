@@ -8,6 +8,7 @@ import {
     deleteMessage,
     fetchMessagesSince,
     findConversationById,
+    findDmConversation,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
     markConversationRead,
@@ -436,6 +437,7 @@ export const toggleMongoReactionAction = async (
 
 export const findOrCreateDMConversationAction = async (
     inRecipient: Circle,
+    options?: { source?: "profile" | "composer" },
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoomDisplay }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -450,6 +452,14 @@ export const findOrCreateDMConversationAction = async (
     const currentUser = await getCircleByDid(userDid);
     if (!currentUser || currentUser._id === recipient._id) {
         return { success: false, message: "You cannot send a message to yourself" };
+    }
+
+    const existingConversation = await findDmConversation(currentUser, recipient);
+    if (!existingConversation && options?.source !== "profile") {
+        return {
+            success: false,
+            message: "Start a new direct message from the user's profile first.",
+        };
     }
 
     await findOrCreateDmConversation(currentUser, recipient);

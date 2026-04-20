@@ -31,25 +31,41 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
         setLoading(true);
 
         try {
-            const result = await findOrCreateDMConversationAction(recipient);
+            const result = await findOrCreateDMConversationAction(recipient, { source: "profile" });
             const conversationId = result.chatRoom?._id || result.chatRoom?.handle;
             if (!result.success || !conversationId) {
                 toast({
                     title: "Send Error",
-                    description: "Failed to send chat message: " + result.message,
+                    description: result.message || "Failed to create direct message",
                     variant: "destructive",
                     icon: "error",
                 });
                 return;
             }
 
-            await sendMongoMessageAction(conversationId, message);
+            const sendResult = await sendMongoMessageAction(conversationId, message);
+            if (!sendResult.success) {
+                toast({
+                    title: "Send Error",
+                    description: sendResult.message || "Failed to send direct message",
+                    variant: "destructive",
+                    icon: "error",
+                });
+                return;
+            }
+
             router.push("/chat/" + conversationId);
+            onClose();
         } catch (error) {
             console.error("Error sending DM:", error);
+            toast({
+                title: "Send Error",
+                description: error instanceof Error ? error.message : "Failed to send direct message",
+                variant: "destructive",
+                icon: "error",
+            });
         } finally {
             setLoading(false);
-            onClose();
         }
     };
 

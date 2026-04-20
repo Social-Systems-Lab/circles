@@ -62,7 +62,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
             const users = await getAllUsersAction();
             setAllUsers(users || []);
 
-            // Restrict "New Chat" list to users with an existing DM conversation
+            // Restrict "New Chat" to users with an existing DM conversation.
             try {
                 const res = await listChatRoomsAction();
                 const rooms = (res as any)?.rooms || [];
@@ -113,9 +113,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                 return false;
             }
 
-            // Only restrict the default (non-search) New Chat list.
-            // If the user is searching, show normal search results.
-            if (step === "select-type" && !term) {
+            if (step === "select-type") {
                 // Mongo DM participants are identified by DID (not Mongo _id)
                 if (!u.did) return false;
                 return dmContactIds.has(String(u.did));
@@ -132,9 +130,15 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
         if (step === "select-type") {
             onClose();
             setTimeout(async () => {
-                const result = await findOrCreateDMConversationAction(clickedUser);
+                const result = await findOrCreateDMConversationAction(clickedUser, { source: "composer" });
                 if (result.success && result.chatRoom?._id) {
                     router.push("/chat/" + result.chatRoom._id);
+                } else {
+                    toast({
+                        title: "Error",
+                        description: result.message || "Failed to open direct message",
+                        variant: "destructive",
+                    });
                 }
             }, 0);
             return;

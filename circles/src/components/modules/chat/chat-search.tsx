@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { useRouter } from "next/navigation";
-import { findOrCreateDMConversationAction, getAllUsersAction } from "../chat/actions";
+import { findOrCreateDMConversationAction, getAllUsersAction, listChatRoomsAction } from "../chat/actions";
 import { Loader2 } from "lucide-react";
 
 export function ChatSearch() {
@@ -19,6 +19,7 @@ export function ChatSearch() {
     const [allUsers, setAllUsers] = useState<Circle[]>([]);
     const [showResults, setShowResults] = useState(false);
     const [isLoadingAllUsers, setIsLoadingAllUsers] = useState(false);
+    const [dmContactIds, setDmContactIds] = useState<Set<string>>(new Set());
 
     // Only fetch all users once, e.g. when user focuses the input
     const fetchAllUsers = async () => {
@@ -27,6 +28,18 @@ export function ChatSearch() {
                 setIsLoadingAllUsers(true);
                 const users = await getAllUsersAction();
                 setAllUsers(users || []);
+                const roomsResult = await listChatRoomsAction();
+                const contactIds = new Set<string>();
+                for (const room of roomsResult.rooms || []) {
+                    if (!room.isDirect) continue;
+                    const dids = room.dmParticipantDids || [];
+                    for (const did of dids) {
+                        if (did && did !== user?.did) {
+                            contactIds.add(did);
+                        }
+                    }
+                }
+                setDmContactIds(contactIds);
             } catch (err) {
                 console.error("Error fetching users:", err);
             } finally {
@@ -43,14 +56,14 @@ export function ChatSearch() {
         return allUsers.filter((u) => {
             const nameMatch = u.name?.toLowerCase().includes(term);
             const handleMatch = u.handle?.toLowerCase().includes(term);
-            return nameMatch || handleMatch;
+            return !!u.did && dmContactIds.has(u.did) && (nameMatch || handleMatch);
         });
-    }, [allUsers, searchTerm]);
+    }, [allUsers, dmContactIds, searchTerm]);
 
     // Called when user clicks a result
     const handleUserClick = async (clickedUser: Circle) => {
         try {
-            const result = await findOrCreateDMConversationAction(clickedUser);
+            const result = await findOrCreateDMConversationAction(clickedUser, { source: "composer" });
             const conversationId = (result as any)?.chatRoom?._id || (result as any)?.roomId || null;
             if (result?.success && conversationId) {
                 router.push("/chat/" + conversationId);

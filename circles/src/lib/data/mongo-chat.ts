@@ -182,6 +182,17 @@ export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): 
     });
 };
 
+export const findDmConversation = async (userA: Circle, userB: Circle): Promise<ChatConversation | null> => {
+    const participants = [userA.did!, userB.did!].sort();
+    const existing = (await ChatConversations.findOne({
+        type: "dm",
+        participants: { $all: participants },
+        archived: { $ne: true },
+    })) as ChatConversation | null;
+
+    return existing ? normalizeConversation(existing) : null;
+};
+
 export const ensureWelcomeMessageForNewUser = async (
     userDid: string,
     config: WelcomeMessageConfig = WELCOME_MESSAGE,
@@ -359,6 +370,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
                   .filter(Boolean)
                   .map((id) => id as string)
             : undefined;
+        const dmParticipantDids = isDirect ? conversation.participants : undefined;
 
         return {
             _id: conversation._id.toString(),
@@ -372,6 +384,8 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
             picture: conversation.picture || circle?.picture || otherCircle?.picture,
             isDirect,
             dmParticipants,
+            dmParticipantDids,
+            dmRecipient: otherCircle,
             circle,
             metadata: conversation.metadata,
         } as ChatRoomDisplay;

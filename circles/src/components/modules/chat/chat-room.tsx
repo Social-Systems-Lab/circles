@@ -34,6 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
 import { WELCOME_MESSAGE } from "@/config/welcome-message";
+import { followCircle } from "../home/actions";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -901,7 +902,9 @@ export const ChatRoomComponent: React.FC<{
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+    const [isConnecting, setIsConnecting] = useState(false);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
+    const [user, setUser] = useAtom(userAtom);
     const router = useRouter();
     const params = useParams<{ handle?: string | string[] }>();
     const routeHandleParam = params?.handle;
@@ -916,6 +919,54 @@ export const ChatRoomComponent: React.FC<{
             conversationMetadata.source === WELCOME_MESSAGE.source ||
             conversationMetadata.repliesDisabled === true
         );
+    const dmRecipient = chatRoom.isDirect ? chatRoom.dmRecipient : undefined;
+    const dmRecipientId = dmRecipient?._id ? String(dmRecipient._id) : "";
+    const dmConnectionState = useMemo(() => {
+        if (!dmRecipientId) return "unknown";
+        if (user?.memberships?.some((membership) => String(membership.circleId) === dmRecipientId)) {
+            return "connected";
+        }
+        if (user?.pendingRequests?.some((request) => String(request.circleId) === dmRecipientId)) {
+            return "pending";
+        }
+        return "none";
+    }, [dmRecipientId, user?.memberships, user?.pendingRequests]);
+    const showConnectBanner = !!dmRecipient && dmConnectionState !== "connected";
+
+    const handleConnectFromDm = async () => {
+        if (!dmRecipient || isConnecting) return;
+        setIsConnecting(true);
+        try {
+            const result = await followCircle(dmRecipient);
+            if (!result.success) {
+                alert(result.message || "Failed to connect");
+                return;
+            }
+
+            setUser((prevUser) => {
+                if (!prevUser || !dmRecipient._id) return prevUser;
+                if (result.pending) {
+                    return {
+                        ...prevUser,
+                        pendingRequests: [
+                            ...(prevUser.pendingRequests || []),
+                            { circleId: dmRecipient._id, status: "pending", userDid: prevUser.did!, requestedAt: new Date() },
+                        ],
+                    };
+                }
+
+                return {
+                    ...prevUser,
+                    memberships: [
+                        ...(prevUser.memberships || []),
+                        { circleId: dmRecipient._id, circle: dmRecipient, userGroups: ["members"], joinedAt: new Date() },
+                    ],
+                };
+            });
+        } finally {
+            setIsConnecting(false);
+        }
+    };
 
     useEffect(() => {
         if (process.env.NODE_ENV === "production") return;
@@ -1154,6 +1205,35 @@ export const ChatRoomComponent: React.FC<{
                                     chatProvider={provider}
                                 />
                             )}
+                        </div>
+                    )}
+
+                    {showConnectBanner && (
+                        <div
+                            className="fixed border-t border-gray-200 bg-white px-3 py-2 shadow-sm"
+                            style={{
+                                width: inputWidth ? `${inputWidth}px` : "100%",
+                                bottom: showComposer ? (isMobile ? "122px" : "50px") : isMobile ? "72px" : "0px",
+                            }}
+                        >
+                            <div className="flex items-center justify-between gap-3 text-sm text-gray-700">
+                                <span>
+                                    {dmConnectionState === "pending"
+                                        ? `Connection request sent to ${dmRecipient.name}.`
+                                        : `You can message ${dmRecipient.name} now. Connect to add them to your network.`}
+                                </span>
+                                {dmConnectionState !== "pending" && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="shrink-0 rounded-full"
+                                        onClick={handleConnectFromDm}
+                                        disabled={isConnecting}
+                                    >
+                                        {isConnecting ? "Connecting..." : "Connect"}
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     )}
 
