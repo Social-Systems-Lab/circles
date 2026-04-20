@@ -304,13 +304,20 @@ function MemberBenefitsPanel({
             </div>
 
             {canManageStripeMembership && (
-                <div className="rounded-xl border bg-white p-4">
-                    <div className="flex items-center justify-between gap-3">
+                <div className="rounded-xl border bg-gray-50 p-4">
+                    <div className="space-y-4">
                         <div>
                             <div className="font-semibold text-foreground">Membership active</div>
-                            <div className="text-sm text-muted-foreground">Update your plan, payment details, or cancel at any time in Stripe.</div>
+                            <div className="text-sm text-muted-foreground">
+                                Update your plan, payment details, or cancel at any time in Stripe.
+                            </div>
                         </div>
-                        <Button variant="outline" onClick={onManageMembership} disabled={isLoadingPortal}>
+                        <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={onManageMembership}
+                            disabled={isLoadingPortal}
+                        >
                             {isLoadingPortal ? "Opening..." : "Open Stripe settings"}
                         </Button>
                     </div>
