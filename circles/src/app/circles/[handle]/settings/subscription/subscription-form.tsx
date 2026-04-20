@@ -154,7 +154,7 @@ export default function SubscriptionForm({
                         <div className="space-y-3 p-6 pt-0">
                             {canManageStripeMembership ? (
                                 <Button variant="outline" className="w-full" onClick={openPortal} disabled={isLoadingPortal}>
-                                    {isLoadingPortal ? "Opening portal..." : "Manage Membership"}
+                                    {isLoadingPortal ? "Opening Stripe..." : "Manage or cancel membership"}
                                 </Button>
                             ) : isMember ? (
                                 <Button variant="outline" className="w-full" disabled>
@@ -308,10 +308,10 @@ function MemberBenefitsPanel({
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <div className="font-semibold text-foreground">Membership active</div>
-                            <div className="text-sm text-muted-foreground">Manage your plan and billing details.</div>
+                            <div className="text-sm text-muted-foreground">Update your plan, payment details, or cancel at any time in Stripe.</div>
                         </div>
                         <Button variant="outline" onClick={onManageMembership} disabled={isLoadingPortal}>
-                            {isLoadingPortal ? "Opening..." : "Manage"}
+                            {isLoadingPortal ? "Opening..." : "Open Stripe settings"}
                         </Button>
                     </div>
                 </div>
