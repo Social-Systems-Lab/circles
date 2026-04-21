@@ -23,6 +23,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { TbMessage } from "react-icons/tb";
 import { useRouter } from "next/navigation";
 import { findOrCreateDMConversationAction } from "../chat/actions";
+import { canPerformRestrictedAction } from "@/lib/auth/verification";
 
 type MessageButtonProps = {
     circle: Circle;
@@ -156,6 +157,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         resolvedRelationshipState.connectLabelReason === "pending_sent" ||
         resolvedRelationshipState.connectLabelReason === "pending_received";
     const isRespondingToConnect = isAcceptingConnect || isDecliningConnect;
+    const canSendConnectRequest = canPerformRestrictedAction(user);
 
     const handleConnectRequest = async () => {
         if (!circle?.did || isSendingConnect || isRespondingToConnect || isConnectPresentationOnly) {
@@ -327,7 +329,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                ) : (
+                ) : canSendConnectRequest ? (
                     <Button
                         variant="ghost"
                         size={compact ? "sm" : "default"}
@@ -338,7 +340,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                     >
                         {isSendingConnect ? "Sending..." : resolvedRelationshipState.connectLabel || "Add Contact"}
                     </Button>
-                )
+                ) : null
             )}
         </div>
     );

@@ -36,11 +36,18 @@ import { useRouter } from "next/navigation";
 type HomeContentProps = {
     circle: Circle;
     authorizedToEdit: boolean;
+    viewerDid?: string | null;
     parentCircle?: Circle;
     adminLeaders?: MemberDisplay[];
 };
 
-export default function HomeContent({ circle, authorizedToEdit, parentCircle, adminLeaders = [] }: HomeContentProps) {
+export default function HomeContent({
+    circle,
+    authorizedToEdit,
+    viewerDid,
+    parentCircle,
+    adminLeaders = [],
+}: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const isKamooniRootCircle = circle?.handle === "default" || circle?.handle === "kamooni";
     const resolvedCircleLevel =
@@ -52,6 +59,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
     const [user] = useAtom(userAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const isOwnUserProfile = isUser && (user?.did === circle.did || viewerDid === circle.did);
 
     const isMember = useMemo(() => {
         if (!user) return false;
@@ -256,9 +264,9 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                         Founding Member
                                     </span>
                                 </Link>
-                            ) : (
+                            ) : isOwnUserProfile ? (
                                 <VerifyAccountButton />
-                            )}
+                            ) : null}
                         </div>
                         {(circle.description || circle.mission) && (
                             <div className="line-clamp-1 pb-1 text-gray-600">

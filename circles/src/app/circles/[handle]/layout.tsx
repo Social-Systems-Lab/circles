@@ -48,6 +48,7 @@ export default async function RootLayout(props: Props) {
                 <HomeContent
                     circle={plainCircle}
                     authorizedToEdit={authorizedToEdit}
+                    viewerDid={userDid}
                     parentCircle={plainParentCircle}
                     adminLeaders={plainAdminLeaders}
                 />
