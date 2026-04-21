@@ -23,6 +23,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { TbMessage } from "react-icons/tb";
 import { useRouter } from "next/navigation";
 import { findOrCreateDMConversationAction } from "../chat/actions";
+import { canPerformRestrictedAction } from "@/lib/auth/verification";
 
 type MessageButtonProps = {
     circle: Circle;
@@ -156,6 +157,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         resolvedRelationshipState.connectLabelReason === "pending_sent" ||
         resolvedRelationshipState.connectLabelReason === "pending_received";
     const isRespondingToConnect = isAcceptingConnect || isDecliningConnect;
+    const canUseContactActions = canPerformRestrictedAction(user);
 
     const handleConnectRequest = async () => {
         if (!circle?.did || isSendingConnect || isRespondingToConnect || isConnectPresentationOnly) {
@@ -303,7 +305,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 {isOpeningMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <TbMessage className="h-4 w-4" />}
                 {isOpeningMessage ? "Opening..." : "Message"}
             </Button>
-            {!resolvedRelationshipState.dmAllowed && resolvedRelationshipState.showConnect && (
+            {!resolvedRelationshipState.dmAllowed && resolvedRelationshipState.showConnect && canUseContactActions && (
                 resolvedRelationshipState.connectLabelReason === "pending_received" ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
