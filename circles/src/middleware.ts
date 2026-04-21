@@ -1,4 +1,5 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
+import { getAuthCookieNamesForClearing, readAuthToken } from "@/lib/auth/cookie";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function middleware(request: NextRequest) {
     }
 
     try {
-        const token = request.cookies.get("token")?.value;
+        const token = readAuthToken(request.cookies);
         if (token) {
             let payload = await verifyUserToken(token);
             userDid = payload.userDid;
@@ -38,7 +39,9 @@ export async function middleware(request: NextRequest) {
         // If a user has an old/invalid cookie (e.g. after a deploy or secret change),
         // clear it automatically and reload the same URL once.
         const res = NextResponse.redirect(request.nextUrl);
-        res.cookies.set("token", "", { maxAge: 0, path: "/" });
+        for (const cookieName of getAuthCookieNamesForClearing()) {
+            res.cookies.set(cookieName, "", { maxAge: 0, path: "/" });
+        }
         return res;
     }
 

@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import { getCircleById, getCirclePath, updateCircle, getCircleByDid, getCirclesByIds } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
+import { readAuthToken } from "@/lib/auth/cookie";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
@@ -34,7 +35,7 @@ export const getUserPrivateAction = async (): Promise<UserPrivate | undefined> =
 
 export const followCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -94,7 +95,7 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
 
 export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -129,7 +130,7 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
 };
 
 export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionResponse> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -153,7 +154,7 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
  * Toggle bookmark for a circle. Returns the updated UserPrivate on success.
  */
 export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivate | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -192,7 +193,7 @@ export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivat
 export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
     try {
         // Prefer server-side auth util if available
-        const token = (await cookies()).get("token")?.value;
+        const token = readAuthToken(await cookies());
         if (!token) {
             return [];
         }
@@ -219,7 +220,7 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
  * Pin a circle for the current user. Returns updated UserPrivate.
  */
 export const pinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
         const payload = await verifyUserToken(token);
@@ -239,7 +240,7 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
  * Unpin a circle for the current user. Returns updated UserPrivate.
  */
 export const unpinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
         const payload = await verifyUserToken(token);

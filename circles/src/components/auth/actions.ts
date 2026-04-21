@@ -2,9 +2,10 @@
 "use server";
 
 import { verifyUserToken } from "@/lib/auth/jwt";
+import { getAuthCookieNamesForClearing, readAuthToken, shouldUseSecureAuthCookie } from "@/lib/auth/cookie";
 import { getUserPrivate } from "@/lib/data/user";
 import { Challenge, UserPrivate } from "@/models/models";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 type CheckAuthResponse = {
@@ -14,7 +15,7 @@ type CheckAuthResponse = {
 };
 
 export async function checkAuth(): Promise<CheckAuthResponse> {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (token) {
@@ -35,13 +36,19 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
 
 export async function logOut(): Promise<void> {
     // clear session
-    (await cookies()).set("token", "", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-    });
+    const cookieStore = await cookies();
+    const headerStore = await headers();
+    const host = headerStore.get("host");
+    const protocol = headerStore.get("x-forwarded-proto");
+    for (const cookieName of getAuthCookieNamesForClearing()) {
+        cookieStore.set(cookieName, "", {
+            httpOnly: true,
+            secure: shouldUseSecureAuthCookie(host, protocol),
+            sameSite: "lax",
+            path: "/",
+            maxAge: 0,
+        });
+    }
 
     // clear cache
     revalidatePath(`/`);
