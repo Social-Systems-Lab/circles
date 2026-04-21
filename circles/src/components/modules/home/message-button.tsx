@@ -94,7 +94,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
     }, [mapRelationshipState]);
 
     const reloadRelationshipState = useCallback(async () => {
-        if (!user?.did || !circle?.did || circle._id === user._id || circle.circleType !== "user") {
+        if (!user?.did || !circle?.did || circle.did === user.did || circle.circleType !== "user") {
             relationshipRequestRef.current += 1;
             setRelationshipState(null);
             return;
@@ -102,13 +102,13 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
 
         const requestId = ++relationshipRequestRef.current;
         await loadRelationshipState(requestId, circle.did);
-    }, [circle?._id, circle?.circleType, circle?.did, loadRelationshipState, user?._id, user?.did]);
+    }, [circle?.circleType, circle?.did, loadRelationshipState, user?.did]);
 
     useEffect(() => {
         relationshipRequestRef.current += 1;
         setRelationshipState(null);
 
-        if (!user?.did || !circle?.did || circle._id === user._id || circle.circleType !== "user") {
+        if (!user?.did || !circle?.did || circle.did === user.did || circle.circleType !== "user") {
             return;
         }
 
@@ -118,7 +118,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         return () => {
             relationshipRequestRef.current += 1;
         };
-    }, [circle?._id, circle?.did, circle?.circleType, loadRelationshipState, user?._id, user?.did]);
+    }, [circle?.did, circle?.circleType, loadRelationshipState, user?.did]);
 
     useEffect(() => {
         const handleVisibilityRefresh = () => {
@@ -140,13 +140,21 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         };
     }, [reloadRelationshipState]);
 
-    if (!circle || circle._id === user?._id || circle.circleType !== "user" || !relationshipState) {
+    if (!circle || !user?.did || circle.did === user.did || circle.circleType !== "user") {
         return null;
     }
 
+    const resolvedRelationshipState: RelationshipState = relationshipState || {
+        dmAllowed: false,
+        showConnect: false,
+        connectLabel: null,
+        messageVisibilityReason: "dm_not_allowed",
+        connectLabelReason: "contact_not_established",
+    };
+
     const isConnectPresentationOnly =
-        relationshipState.connectLabelReason === "pending_sent" ||
-        relationshipState.connectLabelReason === "pending_received";
+        resolvedRelationshipState.connectLabelReason === "pending_sent" ||
+        resolvedRelationshipState.connectLabelReason === "pending_received";
     const isRespondingToConnect = isAcceptingConnect || isDecliningConnect;
 
     const handleConnectRequest = async () => {
@@ -160,7 +168,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
 
             if (!result.success) {
                 toast({
-                    title: relationshipState.connectLabel || "Add Contact",
+                    title: resolvedRelationshipState.connectLabel || "Add Contact",
                     description: result.message,
                 });
                 return;
@@ -176,7 +184,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         } catch (error) {
             console.error("Failed to send connect request:", error);
             toast({
-                title: relationshipState.connectLabel || "Add Contact",
+                title: resolvedRelationshipState.connectLabel || "Add Contact",
                 description: "Failed to send contact request",
             });
         } finally {
@@ -288,15 +296,15 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
             <Button
                 variant="outline"
                 className="gap-2 rounded-full"
-                data-message-reason={relationshipState.messageVisibilityReason}
+                data-message-reason={resolvedRelationshipState.messageVisibilityReason}
                 disabled={isOpeningMessage}
                 onClick={() => void handleMessageClick()}
             >
                 {isOpeningMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <TbMessage className="h-4 w-4" />}
                 {isOpeningMessage ? "Opening..." : "Message"}
             </Button>
-            {!relationshipState.dmAllowed && relationshipState.showConnect && (
-                relationshipState.connectLabelReason === "pending_received" ? (
+            {!resolvedRelationshipState.dmAllowed && resolvedRelationshipState.showConnect && (
+                resolvedRelationshipState.connectLabelReason === "pending_received" ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
@@ -324,11 +332,11 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                         variant="ghost"
                         size={compact ? "sm" : "default"}
                         className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
-                        data-connect-reason={relationshipState.connectLabelReason}
+                        data-connect-reason={resolvedRelationshipState.connectLabelReason}
                         disabled={isSendingConnect || isRespondingToConnect || isConnectPresentationOnly}
                         onClick={handleConnectRequest}
                     >
-                        {isSendingConnect ? "Sending..." : relationshipState.connectLabel || "Add Contact"}
+                        {isSendingConnect ? "Sending..." : resolvedRelationshipState.connectLabel || "Add Contact"}
                     </Button>
                 )
             )}
