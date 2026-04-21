@@ -148,9 +148,9 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                     </div>
                     {isCompact && (
                         <>
-                            {isUser && circle._id !== user?._id && (
+                            {isUser && (
                                 <div className={`absolute left-0 top-0 flex flex-row gap-1 pt-2`}>
-                                    {user && <MessageButton circle={circle} renderCompact={false} />}
+                                    <MessageButton circle={circle} renderCompact={false} />
                                 </div>
                             )}
 
@@ -205,9 +205,7 @@ export default function HomeContent({ circle, authorizedToEdit, parentCircle, ad
                                     <div className="pr-4 pt-2">
                                         <SocialLinks circle={circle} />
                                     </div>
-                                    {user && isUser && circle._id !== user?._id && (
-                                        <MessageButton circle={circle} renderCompact={false} />
-                                    )}
+                                    {isUser && <MessageButton circle={circle} renderCompact={false} />}
                                     {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
                                     {!isUser && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
