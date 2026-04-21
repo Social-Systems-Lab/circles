@@ -421,7 +421,7 @@ export const sendConnectRequestAction = async (
         }
 
         const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
-        if (relationshipState.dmAllowed || relationshipState.connectStatus === "accepted") {
+        if (relationshipState.connectStatus === "accepted") {
             return { success: false, message: "Contact is already established" };
         }
 

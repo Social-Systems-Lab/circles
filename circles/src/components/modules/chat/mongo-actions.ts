@@ -692,6 +692,7 @@ export const toggleMongoReactionAction = async (
 
 export const findOrCreateDMConversationAction = async (
     inRecipient: Circle,
+    options?: { source?: "composer" | "profile" },
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoomDisplay }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -712,8 +713,9 @@ export const findOrCreateDMConversationAction = async (
         return { success: false, message: "You cannot send a message to yourself" };
     }
 
+    const source = options?.source || "composer";
     const dmEligibility = await getDmEligibility(userDid, recipient.did!);
-    if (!dmEligibility.isAllowed) {
+    if (source !== "profile" && !dmEligibility.isAllowed) {
         return {
             success: false,
             message: "Messaging is only available for existing conversations and contacts right now.",

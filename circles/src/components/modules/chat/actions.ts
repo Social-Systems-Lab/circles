@@ -257,8 +257,11 @@ export const toggleMongoReactionAction = async (messageId: string, emoji: string
     return await toggleMongoReactionActionInternal(messageId, emoji);
 };
 
-export const findOrCreateDMConversationAction = async (inRecipient: Circle) => {
-    return await findOrCreateDMConversationActionInternal(inRecipient);
+export const findOrCreateDMConversationAction = async (
+    inRecipient: Circle,
+    options?: { source?: "composer" | "profile" },
+) => {
+    return await findOrCreateDMConversationActionInternal(inRecipient, options);
 };
 
 export const createMongoGroupChatAction = async (formData: FormData) => {

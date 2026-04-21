@@ -90,6 +90,12 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                 const result = await findOrCreateDMConversationAction(clickedUser);
                 if (result.success && result.chatRoom?._id) {
                     router.push("/chat/" + result.chatRoom._id);
+                } else {
+                    toast({
+                        title: "Could not start chat",
+                        description: result.message || "Failed to start the direct message",
+                        variant: "destructive",
+                    });
                 }
             }, 0);
             return;

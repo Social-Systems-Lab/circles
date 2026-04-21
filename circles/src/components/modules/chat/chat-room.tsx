@@ -34,6 +34,13 @@ import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
+import {
+    acceptConnectRequestAction,
+    declineConnectRequestAction,
+    getProfileRelationshipStateAction,
+    sendConnectRequestAction,
+} from "@/components/modules/home/actions";
+import { useToast } from "@/components/ui/use-toast";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -66,6 +73,8 @@ type MentionSuggestion = {
     picture?: string;
     handle?: string;
 };
+
+type DmConnectBannerState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
 
 const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
     message.system?.messageType === "system" &&
@@ -143,6 +152,136 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
             </div>
         );
     }
+};
+
+const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | null }> = ({ chatRoom, user }) => {
+    const { toast } = useToast();
+    const [state, setState] = useState<DmConnectBannerState>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isActing, setIsActing] = useState(false);
+
+    const otherParticipant = useMemo(() => {
+        if (!(chatRoom as any)?.isDirect || !user?.did) {
+            return null;
+        }
+
+        const participants = Array.isArray((chatRoom as any)?.participantCircles)
+            ? ((chatRoom as any).participantCircles as Circle[])
+            : [];
+        return participants.find((participant) => participant?.did && participant.did !== user.did) || null;
+    }, [chatRoom, user?.did]);
+
+    const loadState = useCallback(async () => {
+        if (!otherParticipant?.did) {
+            setState(null);
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            setState(await getProfileRelationshipStateAction(otherParticipant.did));
+        } catch (error) {
+            console.error("Failed to load DM contact state:", error);
+            setState(null);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [otherParticipant?.did]);
+
+    useEffect(() => {
+        void loadState();
+    }, [loadState]);
+
+    if (!otherParticipant?.did || !state || state.connectStatus === "accepted") {
+        return null;
+    }
+
+    const runContactAction = async (
+        action: () => Promise<{ success: boolean; message: string }>,
+        title: string,
+    ) => {
+        setIsActing(true);
+        try {
+            const result = await action();
+            if (!result.success) {
+                toast({ title, description: result.message, variant: "destructive" });
+                return;
+            }
+            await loadState();
+            toast({ title, description: result.message });
+        } catch (error) {
+            console.error("Failed to update DM contact state:", error);
+            toast({
+                title,
+                description: error instanceof Error ? error.message : "Failed to update contact request",
+                variant: "destructive",
+            });
+        } finally {
+            setIsActing(false);
+        }
+    };
+
+    const contactName = otherParticipant.name || "this person";
+
+    return (
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                    {state.connectStatus === "pending_sent"
+                        ? `Contact request sent to ${contactName}.`
+                        : state.connectStatus === "pending_received"
+                          ? `${contactName} sent you a contact request.`
+                          : `You can message ${contactName}. Connect to add them as a contact.`}
+                </span>
+                {state.connectStatus === "pending_received" ? (
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            className="rounded-full"
+                            disabled={isActing || isLoading}
+                            onClick={() =>
+                                void runContactAction(
+                                    () => acceptConnectRequestAction(otherParticipant.did!),
+                                    "Accept contact request",
+                                )
+                            }
+                        >
+                            Accept
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-full"
+                            disabled={isActing || isLoading}
+                            onClick={() =>
+                                void runContactAction(
+                                    () => declineConnectRequestAction(otherParticipant.did!),
+                                    "Decline contact request",
+                                )
+                            }
+                        >
+                            Decline
+                        </Button>
+                    </div>
+                ) : (
+                    <Button
+                        size="sm"
+                        variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
+                        className="rounded-full"
+                        disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
+                        onClick={() =>
+                            void runContactAction(
+                                () => sendConnectRequestAction(otherParticipant.did!),
+                                "Connect",
+                            )
+                        }
+                    >
+                        {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
 };
 
 // Renderer for different message types
@@ -1378,6 +1517,7 @@ export const ChatRoomComponent: React.FC<{
                                 height: "calc(100vh - 300px)",
                             }}
                         >
+                            <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
                                 <ChatMessages
@@ -1397,6 +1537,7 @@ export const ChatRoomComponent: React.FC<{
                             onScroll={handleScroll}
                             className="flex-grow overflow-y-auto p-4 pb-[144px]"
                         >
+                            <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
                                 <ChatMessages

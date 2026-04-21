@@ -21,8 +21,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { TbMessage } from "react-icons/tb";
-import { DmChatModal } from "../chat/dm-chat-modal";
 import { useRouter } from "next/navigation";
+import { findOrCreateDMConversationAction } from "../chat/actions";
 
 type MessageButtonProps = {
     circle: Circle;
@@ -53,8 +53,8 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
     const router = useRouter();
     const isCompact = useIsCompact();
     const compact = isCompact || renderCompact;
-    const [showDM, setShowDM] = useState(false);
     const [relationshipState, setRelationshipState] = useState<RelationshipState | null>(null);
+    const [isOpeningMessage, setIsOpeningMessage] = useState(false);
     const [isSendingConnect, setIsSendingConnect] = useState(false);
     const [isAcceptingConnect, setIsAcceptingConnect] = useState(false);
     const [isDecliningConnect, setIsDecliningConnect] = useState(false);
@@ -252,14 +252,51 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
         }
     };
 
-    if (!relationshipState.dmAllowed) {
-        if (!relationshipState.showConnect) {
-            return null;
+    const handleMessageClick = async () => {
+        if (!circle?.did || isOpeningMessage) {
+            return;
         }
 
-        if (relationshipState.connectLabelReason === "pending_received") {
-            return (
-                <div className="flex flex-wrap items-center gap-2" data-connect-reason={relationshipState.connectLabelReason}>
+        setIsOpeningMessage(true);
+        try {
+            const result = await findOrCreateDMConversationAction(circle, { source: "profile" });
+            const conversationId = result.chatRoom?._id || result.chatRoom?.handle;
+            if (!result.success || !conversationId) {
+                toast({
+                    title: "Message",
+                    description: result.message || "Could not open the direct message",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            router.push(`/chat/${conversationId}`);
+        } catch (error) {
+            console.error("Failed to open profile DM:", error);
+            toast({
+                title: "Message",
+                description: error instanceof Error ? error.message : "Could not open the direct message",
+                variant: "destructive",
+            });
+        } finally {
+            setIsOpeningMessage(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <Button
+                variant="outline"
+                className="gap-2 rounded-full"
+                data-message-reason={relationshipState.messageVisibilityReason}
+                disabled={isOpeningMessage}
+                onClick={() => void handleMessageClick()}
+            >
+                {isOpeningMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <TbMessage className="h-4 w-4" />}
+                {isOpeningMessage ? "Opening..." : "Message"}
+            </Button>
+            {!relationshipState.dmAllowed && relationshipState.showConnect && (
+                relationshipState.connectLabelReason === "pending_received" ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
@@ -273,9 +310,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => void handleAcceptRequest()}>
-                                Accept
-                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => void handleAcceptRequest()}>Accept</DropdownMenuItem>
                             <DropdownMenuItem
                                 className="text-red-600 focus:text-red-600"
                                 onSelect={() => void handleDeclineRequest()}
@@ -284,37 +319,20 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                </div>
-            );
-        }
-
-        return (
-            <Button
-                variant="ghost"
-                size={compact ? "sm" : "default"}
-                className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
-                data-connect-reason={relationshipState.connectLabelReason}
-                disabled={isSendingConnect || isRespondingToConnect || isConnectPresentationOnly}
-                onClick={handleConnectRequest}
-            >
-                {isSendingConnect ? "Sending..." : relationshipState.connectLabel || "Add Contact"}
-            </Button>
-        );
-    }
-
-    return (
-        <>
-            <Button
-                variant="outline"
-                className="gap-2 rounded-full"
-                data-message-reason={relationshipState.messageVisibilityReason}
-                onClick={() => setShowDM(true)}
-            >
-                <TbMessage className="h-4 w-4" />
-                Message
-            </Button>
-            {showDM && <DmChatModal recipient={circle} onClose={() => setShowDM(false)} />}
-        </>
+                ) : (
+                    <Button
+                        variant="ghost"
+                        size={compact ? "sm" : "default"}
+                        className={compact ? "rounded-full px-3" : "rounded-full text-muted-foreground"}
+                        data-connect-reason={relationshipState.connectLabelReason}
+                        disabled={isSendingConnect || isRespondingToConnect || isConnectPresentationOnly}
+                        onClick={handleConnectRequest}
+                    >
+                        {isSendingConnect ? "Sending..." : relationshipState.connectLabel || "Add Contact"}
+                    </Button>
+                )
+            )}
+        </div>
     );
 };
 
