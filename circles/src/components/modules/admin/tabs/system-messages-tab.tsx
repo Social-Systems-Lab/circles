@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import {
+    type Dispatch,
+    type RefObject,
+    type SetStateAction,
+    useEffect,
+    useRef,
+    useState,
+    useTransition,
+} from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { toast } from "sonner";
 import {
     broadcastPlatformBroadcastMessageAction,
@@ -45,25 +54,29 @@ export default function SystemMessagesTab() {
     const [bannerSource, setBannerSource] = useState<"db" | "fallback">("fallback");
     const [bannerUpdatedAt, setBannerUpdatedAt] = useState<string | null>(null);
     const [isSavingBanner, startSavingBanner] = useTransition();
+    const bodyMarkdownRef = useRef<HTMLTextAreaElement>(null);
     const broadcastBodyRef = useRef<HTMLTextAreaElement>(null);
 
-    const insertBroadcastMarkdown = (
+    const insertMarkdown = (
+        textareaRef: RefObject<HTMLTextAreaElement | null>,
+        value: string,
+        setValue: Dispatch<SetStateAction<string>>,
         formatter: (selectedText: string) => {
             insertText: string;
             selectionStartOffset?: number;
             selectionEndOffset?: number;
         },
     ) => {
-        const textarea = broadcastBodyRef.current;
+        const textarea = textareaRef.current;
         if (!textarea) {
             return;
         }
 
         const start = textarea.selectionStart ?? 0;
         const end = textarea.selectionEnd ?? 0;
-        const selectedText = broadcastBody.slice(start, end);
-        const before = broadcastBody.slice(0, start);
-        const after = broadcastBody.slice(end);
+        const selectedText = value.slice(start, end);
+        const before = value.slice(0, start);
+        const after = value.slice(end);
         const { insertText, selectionStartOffset, selectionEndOffset } = formatter(selectedText);
         const nextValue = `${before}${insertText}${after}`;
         const nextSelectionStart =
@@ -71,7 +84,7 @@ export default function SystemMessagesTab() {
         const nextSelectionEnd =
             selectionEndOffset === undefined ? nextSelectionStart : before.length + selectionEndOffset;
 
-        setBroadcastBody(nextValue);
+        setValue(nextValue);
 
         requestAnimationFrame(() => {
             textarea.focus();
@@ -79,8 +92,15 @@ export default function SystemMessagesTab() {
         });
     };
 
-    const wrapBroadcastSelection = (prefix: string, suffix: string, placeholder: string) => {
-        insertBroadcastMarkdown((selectedText) => {
+    const wrapSelection = (
+        textareaRef: RefObject<HTMLTextAreaElement | null>,
+        value: string,
+        setValue: Dispatch<SetStateAction<string>>,
+        prefix: string,
+        suffix: string,
+        placeholder: string,
+    ) => {
+        insertMarkdown(textareaRef, value, setValue, (selectedText) => {
             const value = selectedText || placeholder;
             return {
                 insertText: `${prefix}${value}${suffix}`,
@@ -90,8 +110,12 @@ export default function SystemMessagesTab() {
         });
     };
 
-    const insertBroadcastBulletList = () => {
-        insertBroadcastMarkdown((selectedText) => {
+    const insertBulletList = (
+        textareaRef: RefObject<HTMLTextAreaElement | null>,
+        value: string,
+        setValue: Dispatch<SetStateAction<string>>,
+    ) => {
+        insertMarkdown(textareaRef, value, setValue, (selectedText) => {
             if (!selectedText) {
                 const listText = "- item 1\n- item 2";
                 return { insertText: listText };
@@ -101,6 +125,22 @@ export default function SystemMessagesTab() {
             const listText = lines.map((line) => (line.trim() ? `- ${line}` : "- ")).join("\n");
             return { insertText: listText };
         });
+    };
+
+    const wrapWelcomeSelection = (prefix: string, suffix: string, placeholder: string) => {
+        wrapSelection(bodyMarkdownRef, bodyMarkdown, setBodyMarkdown, prefix, suffix, placeholder);
+    };
+
+    const insertWelcomeBulletList = () => {
+        insertBulletList(bodyMarkdownRef, bodyMarkdown, setBodyMarkdown);
+    };
+
+    const wrapBroadcastSelection = (prefix: string, suffix: string, placeholder: string) => {
+        wrapSelection(broadcastBodyRef, broadcastBody, setBroadcastBody, prefix, suffix, placeholder);
+    };
+
+    const insertBroadcastBulletList = () => {
+        insertBulletList(broadcastBodyRef, broadcastBody, setBroadcastBody);
     };
 
     const loadData = async () => {
@@ -329,13 +369,49 @@ export default function SystemMessagesTab() {
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="welcome-body">Body (Markdown)</Label>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => wrapWelcomeSelection("**", "**", "bold text")}
+                        >
+                            Bold
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => wrapWelcomeSelection("*", "*", "italic text")}
+                        >
+                            Italic
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => wrapWelcomeSelection("[", "](https://example.com)", "link text")}
+                        >
+                            Link
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={insertWelcomeBulletList}>
+                            Bullet List
+                        </Button>
+                    </div>
                     <Textarea
+                        ref={bodyMarkdownRef}
                         id="welcome-body"
                         rows={18}
                         value={bodyMarkdown}
                         onChange={(event) => setBodyMarkdown(event.target.value)}
                         className="font-mono text-sm"
                     />
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+                    <div className="prose prose-sm max-w-none text-sm">
+                        <MemoizedReactMarkdown>{bodyMarkdown || "Welcome message preview"}</MemoizedReactMarkdown>
+                    </div>
                 </div>
                 <div className="flex items-center justify-between rounded-md border p-3">
                     <div className="space-y-1">
