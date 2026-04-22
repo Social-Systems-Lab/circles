@@ -130,6 +130,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                 )}
                 {isMarkdown || hasMentionMarkup ? (
                     <MemoizedReactMarkdown
+                        className={shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : undefined}
                         components={{
                             a: ({ href, className, ...props }) => (
                                 <a
@@ -360,6 +361,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
             if (isMarkdown) {
                 return (
                     <MemoizedReactMarkdown
+                        className={shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : undefined}
                         components={{
                             a: ({ href, className, ...props }) => (
                                 <a

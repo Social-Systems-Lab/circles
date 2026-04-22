@@ -127,6 +127,37 @@ export default function SystemMessagesTab() {
         });
     };
 
+    const insertWelcomeHeader = () => {
+        insertMarkdown(bodyMarkdownRef, bodyMarkdown, setBodyMarkdown, (selectedText) => {
+            const value = selectedText || "Section heading";
+            return {
+                insertText: `## ${value}`,
+                selectionStartOffset: 3,
+                selectionEndOffset: 3 + value.length,
+            };
+        });
+    };
+
+    const insertWelcomeLink = () => {
+        insertMarkdown(bodyMarkdownRef, bodyMarkdown, setBodyMarkdown, (selectedText) => {
+            const value = selectedText || "link text";
+            const selectedTextIsUrl = /^https?:\/\//i.test(value.trim());
+            const linkText = selectedTextIsUrl ? "link text" : value;
+            const url = selectedTextIsUrl ? value : "https://example.com";
+            const urlSelectionStart = linkText.length + 3;
+
+            return {
+                insertText: `[${linkText}](${url})`,
+                selectionStartOffset: selectedTextIsUrl ? 1 : urlSelectionStart,
+                selectionEndOffset: selectedTextIsUrl ? 1 + linkText.length : urlSelectionStart + url.length,
+            };
+        });
+    };
+
+    const insertWelcomeParagraphBreak = () => {
+        insertMarkdown(bodyMarkdownRef, bodyMarkdown, setBodyMarkdown, () => ({ insertText: "\n\n" }));
+    };
+
     const wrapWelcomeSelection = (prefix: string, suffix: string, placeholder: string) => {
         wrapSelection(bodyMarkdownRef, bodyMarkdown, setBodyMarkdown, prefix, suffix, placeholder);
     };
@@ -370,6 +401,9 @@ export default function SystemMessagesTab() {
                 <div className="space-y-2">
                     <Label htmlFor="welcome-body">Body (Markdown)</Label>
                     <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={insertWelcomeHeader}>
+                            Header
+                        </Button>
                         <Button
                             type="button"
                             variant="outline"
@@ -390,12 +424,15 @@ export default function SystemMessagesTab() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => wrapWelcomeSelection("[", "](https://example.com)", "link text")}
+                            onClick={insertWelcomeLink}
                         >
                             Link
                         </Button>
                         <Button type="button" variant="outline" size="sm" onClick={insertWelcomeBulletList}>
                             Bullet List
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={insertWelcomeParagraphBreak}>
+                            Paragraph
                         </Button>
                     </div>
                     <Textarea
@@ -409,7 +446,7 @@ export default function SystemMessagesTab() {
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
-                    <div className="prose prose-sm max-w-none text-sm">
+                    <div className="formatted max-w-none text-sm">
                         <MemoizedReactMarkdown>{bodyMarkdown || "Welcome message preview"}</MemoizedReactMarkdown>
                     </div>
                 </div>
