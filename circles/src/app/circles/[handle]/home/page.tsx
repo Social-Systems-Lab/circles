@@ -9,6 +9,7 @@ import { features } from "@/lib/data/constants";
 import type { TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
+import { getMembers } from "@/lib/data/member";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -32,6 +33,10 @@ export default async function CircleHomePage(props: PageProps) {
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
     const showFundingPanel = isFundingEnabledForCircle(circle);
+    const adminLeaders =
+        circle.circleType !== "user" && circle._id
+            ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
+            : [];
 
     if (circle.circleType === "user" && circle.did) {
         const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);
@@ -89,6 +94,7 @@ export default async function CircleHomePage(props: PageProps) {
             fundingPanelVisibility={fundingPanelVisibility}
             canCreateFundingAsk={canCreateFundingAsk}
             showFundingPanel={showFundingPanel}
+            adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}
         />
     );
 }

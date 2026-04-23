@@ -1,22 +1,17 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
-import { Circle } from "@/models/models";
-import { Card, CardContent } from "@/components/ui/card";
+import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Quote, ExternalLink } from "lucide-react";
-import { CirclePicture } from "@/components/modules/circles/circle-picture";
-import CircleTags from "@/components/modules/circles/circle-tags";
+import { MapPin, ExternalLink } from "lucide-react";
 import { getInterestLabel } from "@/lib/data/interests";
-import { sdgs } from "@/lib/data/sdgs";
 import { getSkillDefinitionByHandle, skillCategoryLabels } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
 import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,9 +33,9 @@ import NeedsCard from "./needs-card";
 import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
 import { FundingPanel } from "@/components/modules/funding/funding-panel";
 import type { FundingAskDisplay } from "@/models/models";
-
-// Helper mappings for quick lookup
-const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserPicture } from "../members/user-picture";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 interface AboutPageProps {
     circle: Circle;
@@ -50,6 +45,7 @@ interface AboutPageProps {
     fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
     canCreateFundingAsk?: boolean;
     showFundingPanel?: boolean;
+    adminLeaders?: MemberDisplay[];
 }
 
 export default function AboutPage({
@@ -60,11 +56,15 @@ export default function AboutPage({
     fundingPanelVisibility = "sign_in",
     canCreateFundingAsk = false,
     showFundingPanel = false,
+    adminLeaders = [],
 }: AboutPageProps) {
     const isCompact = useIsCompact();
+    const isMobile = useIsMobile();
     const router = useRouter();
     const { toast } = useToast();
     const [user] = useAtom(userAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
     const [isInterestsExpanded, setIsInterestsExpanded] = React.useState(false);
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
@@ -103,11 +103,7 @@ export default function AboutPage({
     const remainingInterestsCount = Math.max(profileInterests.length - 6, 0);
     const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
 
-    const renderSkillPopoverBadge = (
-        handle: string,
-        key: string,
-        variant: "skill" | "need" = "skill",
-    ) => {
+    const renderSkillPopoverBadge = (handle: string, key: string, variant: "skill" | "need" = "skill") => {
         const skill = getSkillDefinitionByHandle(handle);
         const skillName = skill?.name || handle;
         const categoryLabel = skill?.category ? skillCategoryLabels[skill.category] : null;
@@ -120,10 +116,7 @@ export default function AboutPage({
                         className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         aria-label={`View details for ${skillName}`}
                     >
-                        <Badge
-                            variant={variant}
-                            className="cursor-pointer text-sm font-medium"
-                        >
+                        <Badge variant={variant} className="cursor-pointer text-sm font-medium">
                             {skillName}
                         </Badge>
                     </button>
@@ -132,9 +125,7 @@ export default function AboutPage({
                     <div className="space-y-1.5">
                         <p className="text-sm font-semibold">{skillName}</p>
                         {categoryLabel && (
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                                {categoryLabel}
-                            </p>
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{categoryLabel}</p>
                         )}
                         <p className="text-xs leading-relaxed text-muted-foreground">
                             {skill?.description || "Description not available for this skill yet."}
@@ -145,20 +136,52 @@ export default function AboutPage({
         );
     };
 
-    const hasProfileSidebarDetails =
+    const hasOverviewDetails =
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
-        !!(!isUserProfile && circleNeeds.length > 0) ||
-        !!hasMatchingOfferNeeds ||
         !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
         !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
+    const hasNeedsMatchingDetails = !isUserProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
+    const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
     const shouldShowVerifiedContributions = isUserProfile;
     const shouldShowFundingPanel = showFundingPanel;
-    const hasSidebarContent = hasProfileSidebarDetails || shouldShowVerifiedContributions || shouldShowFundingPanel;
+    const hasSidebarContent =
+        hasOverviewDetails ||
+        hasAdminDetails ||
+        hasNeedsMatchingDetails ||
+        shouldShowVerifiedContributions ||
+        shouldShowFundingPanel;
 
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
+
+    const getLeaderRole = (leader: MemberDisplay) => {
+        if (leader.userGroups?.includes("admins")) return "Admin";
+        if (leader.userGroups?.includes("moderators")) return "Moderator";
+        return "Member";
+    };
+
+    const openLeaderPreview = (leader: MemberDisplay) => {
+        if (isMobile) {
+            if (leader.handle) {
+                router.push(`/circles/${leader.handle}`);
+            }
+            return;
+        }
+
+        const contentPreviewData: ContentPreviewData = {
+            type: "member",
+            content: leader,
+        };
+
+        setContentPreview((current) => {
+            const isSameLeader =
+                current?.type === "member" &&
+                (current.content as MemberDisplay | undefined)?.userDid === leader.userDid;
+            return isSameLeader && sidePanelContentVisible === "content" ? undefined : contentPreviewData;
+        });
+    };
 
     const openContactDialog = (nextContactType: "offer_help" | "ask_question" = "offer_help") => {
         setContactType(nextContactType);
@@ -276,6 +299,292 @@ export default function AboutPage({
                 {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="space-y-6">
+                            {hasOverviewDetails && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Overview
+                                    </div>
+                                    {circle.mission && (
+                                        <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
+                                            <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                                Mission
+                                            </div>
+                                            <div className="text-[15px] text-foreground">{circle.mission}</div>
+                                        </div>
+                                    )}
+
+                                    {circle.location &&
+                                        (circle.location.city || circle.location.region || circle.location.country) && (
+                                            <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
+                                                <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                                    Location
+                                                </div>
+                                                <div className="flex flex-row items-center text-foreground">
+                                                    <MapPin className="mr-1.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                                                    <span className="text-[15px]">
+                                                        {[
+                                                            circle.location.city,
+                                                            circle.location.region,
+                                                            circle.location.country,
+                                                        ]
+                                                            .filter(Boolean)
+                                                            .join(", ")}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    {!isUserProfile && circle.causes && circle.causes.length > 0 && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                SDGs
+                                            </div>
+                                            <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
+                                        </div>
+                                    )}
+
+                                    {isUserProfile && visibleSkills.length > 0 && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Top Skills & Offers
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleSkills.map((handle) => {
+                                                    return renderSkillPopoverBadge(handle, handle);
+                                                })}
+                                                {hasMoreSkills && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isSkillsExpanded}
+                                                        aria-label={
+                                                            isSkillsExpanded
+                                                                ? "Show fewer skills"
+                                                                : `Show ${remainingSkillsCount} more skills`
+                                                        }
+                                                        onClick={() => setIsSkillsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsSkillsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isSkillsExpanded
+                                                            ? "Show less"
+                                                            : `+${remainingSkillsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isUserProfile && visibleInterests.length > 0 && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Interests
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleInterests.map((handle) => (
+                                                    <Badge
+                                                        key={handle}
+                                                        variant="interest"
+                                                        className="px-3 py-1 text-sm font-medium"
+                                                    >
+                                                        {getInterestLabel(handle)}
+                                                    </Badge>
+                                                ))}
+                                                {hasMoreInterests && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isInterestsExpanded}
+                                                        aria-label={
+                                                            isInterestsExpanded
+                                                                ? "Show fewer interests"
+                                                                : `Show ${remainingInterestsCount} more interests`
+                                                        }
+                                                        onClick={() => setIsInterestsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsInterestsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isInterestsExpanded
+                                                            ? "Show less"
+                                                            : `+${remainingInterestsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {circle.websiteUrl && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Website
+                                            </div>
+                                            <a
+                                                href={circle.websiteUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-2 break-all text-[15px] text-foreground underline"
+                                            >
+                                                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                                <span>{circle.websiteUrl}</span>
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {hasAdminDetails && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Admins
+                                    </div>
+                                    <TooltipProvider>
+                                        <div className="space-y-3">
+                                            {adminLeaders.map((leader) => {
+                                                const role = getLeaderRole(leader);
+                                                return (
+                                                    <Tooltip key={leader.userDid}>
+                                                        <TooltipTrigger asChild>
+                                                            <button
+                                                                type="button"
+                                                                className="flex w-full items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                                onClick={() => openLeaderPreview(leader)}
+                                                                aria-label={`Open ${leader.name}'s profile`}
+                                                            >
+                                                                <div className="shrink-0 rounded-full border-2 border-white bg-white">
+                                                                    <UserPicture
+                                                                        name={leader.name}
+                                                                        picture={leader.picture?.url}
+                                                                        size="34px"
+                                                                    />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate text-[15px] font-medium text-foreground">
+                                                                        {leader.name}
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground">
+                                                                        {role}
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="bottom" className="text-xs">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-semibold">{leader.name}</span>
+                                                                <span className="text-muted-foreground">{role}</span>
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                );
+                                            })}
+                                        </div>
+                                    </TooltipProvider>
+                                </div>
+                            )}
+
+                            {hasNeedsMatchingDetails && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Needs / Matching
+                                    </div>
+
+                                    {visibleNeeds.length > 0 && (
+                                        <div className={hasMatchingOfferNeeds ? "mb-6 w-full" : "w-full"}>
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Needs
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleNeeds.map((handle, index) => {
+                                                    return renderSkillPopoverBadge(
+                                                        handle,
+                                                        `${handle}-${index}`,
+                                                        "need",
+                                                    );
+                                                })}
+                                                {hasMoreNeeds && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isNeedsExpanded}
+                                                        aria-label={
+                                                            isNeedsExpanded
+                                                                ? "Show fewer needs"
+                                                                : `Show ${remainingNeedsCount} more needs`
+                                                        }
+                                                        onClick={() => setIsNeedsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsNeedsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {hasMatchingOfferNeeds && (
+                                        <div className="w-full rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-3">
+                                            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8f5a2a]">
+                                                You can help here
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {matchingOfferNeedHandles.map((handle, index) => {
+                                                    return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
+                                                })}
+                                            </div>
+                                            {canContactCircle && (
+                                                <div className="mt-3 flex flex-col items-center">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        className="rounded-full border border-[#c8793a] bg-transparent text-[#c8793a] hover:bg-[#f3e4d6] hover:text-[#b86c31]"
+                                                        onClick={() => openContactDialog("offer_help")}
+                                                    >
+                                                        Offer Help
+                                                    </Button>
+                                                    <button
+                                                        type="button"
+                                                        className="mt-2 text-xs text-[#8f5a2a] underline-offset-2 hover:underline"
+                                                        onClick={() => openContactDialog("ask_question")}
+                                                    >
+                                                        Not sure yet? Ask a question first.
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {shouldShowFundingPanel && (
                                 <FundingPanel
                                     circleHandle={circle.handle || ""}
@@ -283,257 +592,6 @@ export default function AboutPage({
                                     canCreate={canCreateFundingAsk}
                                     visibility={fundingPanelVisibility}
                                 />
-                            )}
-                            {hasProfileSidebarDetails && (
-                                <div
-                                    className={`flex flex-col items-center bg-white p-6
-                        ${isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"}
-                        `}
-                                >
-                            {/* Mission */}
-                            {circle.mission && (
-                                <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
-                                    {" "}
-                                    {/* Increased mb */}
-                                    <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
-                                        Mission
-                                    </div>
-                                    <div className="text-[15px] text-foreground">{circle.mission}</div>{" "}
-                                    {/* Increased text size */}
-                                </div>
-                            )}
-
-                            {/* Location */}
-                            {circle.location &&
-                                (circle.location.city || circle.location.region || circle.location.country) && (
-                                    <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
-                                        {" "}
-                                        {/* Increased mb */}
-                                        <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
-                                            Location
-                                        </div>
-                                        <div className="flex flex-row items-center text-foreground">
-                                            {" "}
-                                            {/* Added text-foreground */}
-                                            <MapPin className="mr-1.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />{" "}
-                                            {/* Increased icon size & color */}
-                                            <span className="text-[15px]">
-                                                {" "}
-                                                {/* Increased text size */}
-                                                {[circle.location.city, circle.location.region, circle.location.country]
-                                                    .filter(Boolean)
-                                                    .join(", ")}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-
-                            {/* Needs */}
-                            {!isUserProfile && visibleNeeds.length > 0 && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        Needs
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {visibleNeeds.map((handle, index) => {
-                                            return renderSkillPopoverBadge(handle, `${handle}-${index}`, "need");
-                                        })}
-                                        {hasMoreNeeds && (
-                                            <Badge
-                                                variant="outline"
-                                                className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
-                                                role="button"
-                                                tabIndex={0}
-                                                aria-expanded={isNeedsExpanded}
-                                                aria-label={
-                                                    isNeedsExpanded
-                                                        ? "Show fewer needs"
-                                                        : `Show ${remainingNeedsCount} more needs`
-                                                }
-                                                onClick={() => setIsNeedsExpanded((prev) => !prev)}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === "Enter" || event.key === " ") {
-                                                        event.preventDefault();
-                                                        setIsNeedsExpanded((prev) => !prev);
-                                                    }
-                                                }}
-                                            >
-                                                {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {hasMatchingOfferNeeds && (
-                                <div className="mb-6 w-full rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-3">
-                                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8f5a2a]">
-                                        You can help here
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {matchingOfferNeedHandles.map((handle, index) => {
-                                            return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
-                                        })}
-                                    </div>
-                                    {canContactCircle && (
-                                        <div className="mt-3 flex flex-col items-center">
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                className="rounded-full border border-[#c8793a] bg-transparent text-[#c8793a] hover:bg-[#f3e4d6] hover:text-[#b86c31]"
-                                                onClick={() => openContactDialog("offer_help")}
-                                            >
-                                                Offer Help
-                                            </Button>
-                                            <button
-                                                type="button"
-                                                className="mt-2 text-xs text-[#8f5a2a] underline-offset-2 hover:underline"
-                                                onClick={() => openContactDialog("ask_question")}
-                                            >
-                                                Not sure yet? Ask a question first.
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* SDGs */}
-                            {!isUserProfile && circle.causes && circle.causes.length > 0 && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">SDGs</div>
-                                    <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
-                                </div>
-                            )}
-
-                            {/* Top Skills & Offers */}
-                            {isUserProfile && visibleSkills.length > 0 && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        Top Skills & Offers
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {visibleSkills.map((handle) => {
-                                            return renderSkillPopoverBadge(handle, handle);
-                                        })}
-                                        {hasMoreSkills && (
-                                            <Badge
-                                                variant="outline"
-                                                className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
-                                                role="button"
-                                                tabIndex={0}
-                                                aria-expanded={isSkillsExpanded}
-                                                aria-label={
-                                                    isSkillsExpanded
-                                                        ? "Show fewer skills"
-                                                        : `Show ${remainingSkillsCount} more skills`
-                                                }
-                                                onClick={() => setIsSkillsExpanded((prev) => !prev)}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === "Enter" || event.key === " ") {
-                                                        event.preventDefault();
-                                                        setIsSkillsExpanded((prev) => !prev);
-                                                    }
-                                                }}
-                                            >
-                                                {isSkillsExpanded ? "Show less" : `+${remainingSkillsCount} more`}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {isUserProfile && visibleInterests.length > 0 && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        Interests
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {visibleInterests.map((handle) => (
-                                            <Badge
-                                                key={handle}
-                                                variant="interest"
-                                                className="px-3 py-1 text-sm font-medium"
-                                            >
-                                                {getInterestLabel(handle)}
-                                            </Badge>
-                                        ))}
-                                        {hasMoreInterests && (
-                                            <Badge
-                                                variant="outline"
-                                                className="cursor-pointer border-gray-300 bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200"
-                                                role="button"
-                                                tabIndex={0}
-                                                aria-expanded={isInterestsExpanded}
-                                                aria-label={
-                                                    isInterestsExpanded
-                                                        ? "Show fewer interests"
-                                                        : `Show ${remainingInterestsCount} more interests`
-                                                }
-                                                onClick={() => setIsInterestsExpanded((prev) => !prev)}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === "Enter" || event.key === " ") {
-                                                        event.preventDefault();
-                                                        setIsInterestsExpanded((prev) => !prev);
-                                                    }
-                                                }}
-                                            >
-                                                {isInterestsExpanded ? "Show less" : `+${remainingInterestsCount} more`}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Website */}
-                            {circle.websiteUrl && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        Website
-                                    </div>
-                                    <a
-                                        href={circle.websiteUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 break-all text-[15px] text-foreground underline"
-                                    >
-                                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                                        <span>{circle.websiteUrl}</span>
-                                    </a>
-                                </div>
-                            )}
-
-                                    {/* Skills/Needs */}
-                                    {/* {circle.skills && circle.skills.length > 0 && (
-                                        <div className="w-full">
-                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                                {" "}
-                                                {circle.circleType === "user" ? "Skills" : "Needs"}
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                {circle.skills.map((handle) => {
-                                                    const skill = skillMap.get(handle);
-                                                    if (!skill) return null;
-                                                    return (
-                                                        <Badge
-                                                            key={handle}
-                                                            variant="outline"
-                                                            className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
-                                                        >
-                                                            <Image
-                                                                src={skill.picture.url}
-                                                                alt=""
-                                                                width={20} // Increased size
-                                                                height={20} // Increased size
-                                                                className="h-5 w-5 rounded-full object-cover" // Increased size
-                                                            />
-                                                            <span className="text-sm font-medium">{skill.name}</span>{" "}
-                                                        </Badge>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )} */}
-                                </div>
                             )}
 
                             {shouldShowVerifiedContributions && (

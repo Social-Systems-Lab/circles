@@ -6,7 +6,6 @@ import HomeContent from "@/components/modules/home/home-content";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
-import { getMembers } from "@/lib/data/member";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -33,13 +32,8 @@ export default async function RootLayout(props: Props) {
         redirect("/not-found");
     }
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
-    const adminLeaders =
-        circle.circleType !== "user" && circle._id
-            ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
-            : [];
     const plainCircle = JSON.parse(JSON.stringify(circle));
     const plainParentCircle = parentCircle ? JSON.parse(JSON.stringify(parentCircle)) : undefined;
-    const plainAdminLeaders = JSON.parse(JSON.stringify(adminLeaders));
 
     return (
         <>
@@ -50,7 +44,6 @@ export default async function RootLayout(props: Props) {
                     authorizedToEdit={authorizedToEdit}
                     viewerDid={userDid}
                     parentCircle={plainParentCircle}
-                    adminLeaders={plainAdminLeaders}
                 />
             </>
             <CircleTabs circle={plainCircle} />
