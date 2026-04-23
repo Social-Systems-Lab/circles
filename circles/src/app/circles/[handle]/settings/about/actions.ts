@@ -85,6 +85,7 @@ export async function saveAbout(values: {
     // cover?: any; // Removed cover
     images?: ImageItem[]; // Added images
     isPublic?: boolean;
+    showAdminsPublicly?: boolean;
     location?: any;
     socialLinks?: any;
     websiteUrl?: string;
@@ -107,6 +108,7 @@ export async function saveAbout(values: {
         content: values.content,
         mission: values.mission,
         isPublic: values.isPublic,
+        showAdminsPublicly: values.showAdminsPublicly,
         location: values.location,
         socialLinks: values.socialLinks,
     };

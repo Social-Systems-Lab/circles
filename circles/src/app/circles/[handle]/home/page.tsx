@@ -33,8 +33,9 @@ export default async function CircleHomePage(props: PageProps) {
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
     const showFundingPanel = isFundingEnabledForCircle(circle);
+    const showAdminsPublicly = circle.showAdminsPublicly !== false;
     const adminLeaders =
-        circle.circleType !== "user" && circle._id
+        showAdminsPublicly && circle.circleType !== "user" && circle._id
             ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
             : [];
 

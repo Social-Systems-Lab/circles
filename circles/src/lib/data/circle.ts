@@ -36,6 +36,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     content: 1,
     mission: 1,
     isPublic: 1,
+    showAdminsPublicly: 1,
     isVerified: 1,
     isMember: 1,
     userGroups: 1,
@@ -280,6 +281,7 @@ export const createDefaultCircle = (): Circle => {
         accessRules: getDefaultAccessRules(),
         questionnaire: [],
         isPublic: true,
+        showAdminsPublicly: false,
         circleType: "circle",
         circleLevel: "top_level",
         publishStatus: "published",
@@ -317,6 +319,7 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
     circle.circleType = circle.circleType || "circle";
     circle.circleLevel = circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
     circle.publishStatus = circle.publishStatus || (circle.circleType === "user" ? "published" : "draft");
+    circle.showAdminsPublicly = circle.showAdminsPublicly ?? false;
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();

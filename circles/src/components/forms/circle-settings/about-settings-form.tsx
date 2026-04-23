@@ -55,6 +55,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     }),
                 ) || [], // Initialize images state
             isPublic: circle.isPublic !== false, // Default to true if not set
+            showAdminsPublicly: circle.showAdminsPublicly !== false, // Keep existing circles visible unless explicitly turned off
             location: circle.location || {},
             socialLinks: circle.socialLinks || [],
             websiteUrl: circle.websiteUrl || "",
@@ -72,6 +73,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
         // cover?: any; // Remove cover
         images?: ImageItem[]; // Add images
         isPublic?: boolean;
+        showAdminsPublicly?: boolean;
         location?: any;
         socialLinks?: any;
         websiteUrl?: string;
@@ -252,6 +254,26 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         description: {
                                             circle: "When set to public, users can follow the circle without requiring approval from admins.",
                                             user: "When set to public people can follow you without requiring your approval.",
+                                        },
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
+                            )}
+                        />
+
+                        <Controller
+                            name="showAdminsPublicly"
+                            control={form.control as unknown as Control}
+                            render={({ field }) => (
+                                <DynamicSwitchField
+                                    field={{
+                                        name: "showAdminsPublicly",
+                                        type: "switch",
+                                        label: "Show admins publicly",
+                                        description: {
+                                            circle: "Show the Admins panel on your circle home page.",
+                                            user: "Show the Admins panel on your circle home page.",
                                         },
                                     }}
                                     formField={field}
