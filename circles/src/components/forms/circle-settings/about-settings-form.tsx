@@ -242,6 +242,14 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             )}
                         />
 
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Visibility</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                         <Controller
                             name="isPublic"
                             control={form.control as unknown as Control}
