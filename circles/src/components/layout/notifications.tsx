@@ -32,6 +32,7 @@ type Notification = {
     id: string;
     type: string;
     message: string;
+    url?: string;
     time: string;
     createdAt: Date;
     isRead: boolean;
@@ -218,6 +219,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     id: record._id,
                     type: record.type,
                     message: content.body || "New notification",
+                    url: typeof content.url === "string" ? content.url : undefined,
                     time: timeSince(createdAt, false),
                     createdAt,
                     isRead: !!record.isRead,
@@ -430,6 +432,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
 
     const getNotificationHref = useCallback(
         (notification: Notification): string | null => {
+            if (notification.url) {
+                return notification.url;
+            }
+
             const circleHandle = notification.circle?.handle || "default";
 
             const getParentItemUrl = (notif: Notification): string | null => {
@@ -521,6 +527,11 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_assigned":
             case "task_shift_signup":
                 return "Review";
+            case "user_verification_request":
+            case "user_verification_reply_received":
+                return "Review";
+            case "user_verification_clarification_requested":
+                return "Respond";
             case "task_shift_confirmed":
                 return "Open";
             case "task_accepted":

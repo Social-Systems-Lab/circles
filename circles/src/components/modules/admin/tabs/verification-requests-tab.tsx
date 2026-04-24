@@ -10,6 +10,7 @@ import {
     requestMoreVerificationInfoAction,
 } from "@/components/modules/admin/verification-actions";
 import { UserPicture } from "../../members/user-picture";
+import { VerificationThreadMessageList } from "@/components/modules/verification/verification-thread-message-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,52 +49,6 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
     profile: "Profile",
     independent_circle: "Independent circle",
 };
-
-function AttachmentList({
-    attachments,
-}: {
-    attachments: Array<{ url: string; fileName?: string; originalName?: string }>;
-}) {
-    if (!attachments.length) {
-        return null;
-    }
-
-    return (
-        <div className="mt-3 space-y-2">
-            {attachments.map((attachment) => {
-                const label = attachment.originalName || attachment.fileName || attachment.url;
-                const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(label);
-
-                if (isImage) {
-                    return (
-                        <a
-                            key={attachment.url}
-                            href={attachment.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block overflow-hidden rounded-md border"
-                        >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={attachment.url} alt={label} className="max-h-64 w-full object-contain bg-slate-50" />
-                        </a>
-                    );
-                }
-
-                return (
-                    <a
-                        key={attachment.url}
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
-                    >
-                        {label}
-                    </a>
-                );
-            })}
-        </div>
-    );
-}
 
 export default function VerificationRequestsTab() {
     const [requests, setRequests] = useState<VerificationQueueItem[]>([]);
@@ -392,32 +347,16 @@ export default function VerificationRequestsTab() {
                         ) : null}
 
                         <div className="space-y-4">
-                            {detail.messages.length ? (
-                                detail.messages.map((message) => (
-                                    <div key={message.id} className="rounded-lg border p-4">
-                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                            <div className="font-medium">
-                                                {message.senderRole === "admin"
-                                                    ? `${message.senderName} (admin)`
-                                                    : `${message.senderName} (applicant)`}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {formatDate(message.createdAt)}
-                                            </div>
-                                        </div>
-                                        <p className="mt-3 whitespace-pre-wrap text-sm">
-                                            {message.body || "Attachment only"}
-                                        </p>
-                                        <AttachmentList attachments={message.attachments} />
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                                    {detail.request.requestType === "profile"
+                            <VerificationThreadMessageList
+                                messages={detail.messages}
+                                viewerRole="admin"
+                                applicantPictureUrl={detail.applicant.picture?.url}
+                                emptyMessage={
+                                    detail.request.requestType === "profile"
                                         ? "No clarification messages yet."
-                                        : "No clarification messages yet. Use the request-more-info action if this circle needs more detail before approval."}
-                                </div>
-                            )}
+                                        : "No clarification messages yet. Use the request-more-info action if this circle needs more detail before approval."
+                                }
+                            />
                         </div>
 
                         <div className="grid gap-6 lg:grid-cols-2">

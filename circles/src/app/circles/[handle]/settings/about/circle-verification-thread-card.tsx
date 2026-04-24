@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { VerificationThreadMessageList } from "@/components/modules/verification/verification-thread-message-list";
 import {
     getIndependentCircleVerificationThreadAction,
     replyToIndependentCircleVerificationThreadAction,
@@ -35,52 +36,6 @@ const formatDate = (value?: string | null) => {
     }
 
     return new Date(value).toLocaleString();
-};
-
-const MessageAttachments = ({
-    attachments,
-}: {
-    attachments: Array<{ url: string; fileName?: string; originalName?: string }>;
-}) => {
-    if (!attachments.length) {
-        return null;
-    }
-
-    return (
-        <div className="mt-3 space-y-2">
-            {attachments.map((attachment) => {
-                const label = attachment.originalName || attachment.fileName || attachment.url;
-                const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(label);
-
-                if (isImage) {
-                    return (
-                        <a
-                            key={attachment.url}
-                            href={attachment.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block overflow-hidden rounded-md border"
-                        >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={attachment.url} alt={label} className="max-h-64 w-full object-contain bg-slate-50" />
-                        </a>
-                    );
-                }
-
-                return (
-                    <a
-                        key={attachment.url}
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
-                    >
-                        {label}
-                    </a>
-                );
-            })}
-        </div>
-    );
 };
 
 export function CircleVerificationThreadCard({
@@ -195,24 +150,11 @@ export function CircleVerificationThreadCard({
                             Admin clarification requests and your replies will appear here in order.
                         </p>
                     </div>
-                    {thread.messages.length ? (
-                        thread.messages.map((message) => (
-                            <div key={message.id} className="rounded-lg border p-5">
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="font-medium">
-                                        {message.senderRole === "admin" ? "Admin" : "You"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">{formatDate(message.createdAt)}</div>
-                                </div>
-                                <p className="mt-3 whitespace-pre-wrap text-sm">{message.body || "Attachment only"}</p>
-                                <MessageAttachments attachments={message.attachments} />
-                            </div>
-                        ))
-                    ) : (
-                        <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                            No clarification messages yet. Admin updates will appear here.
-                        </div>
-                    )}
+                    <VerificationThreadMessageList
+                        messages={thread.messages}
+                        viewerRole="applicant"
+                        emptyMessage="No clarification messages yet. Admin updates will appear here."
+                    />
                 </div>
 
                 {canReply ? (
