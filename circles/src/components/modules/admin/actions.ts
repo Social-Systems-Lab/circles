@@ -61,6 +61,10 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
                     members: 1,
                     isAdmin: 1,
                     isVerified: 1,
+                    parentCircleId: 1,
+                    circleLevel: 1,
+                    publishStatus: 1,
+                    verificationStatus: 1,
                 },
             },
         ).toArray();

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getEntitiesByType, deleteEntity } from "../actions";
 import { Circle } from "@/models/models";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2, RefreshCw, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -22,10 +23,38 @@ import { useSetAtom } from "jotai";
 import { contentPreviewAtom } from "@/lib/data/atoms";
 import { getCircleByIdAction } from "../actions";
 
+const getCircleLevel = (circle: Circle) => circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
+
+const getCircleKindLabel = (circle: Circle) =>
+    getCircleLevel(circle) === "profile_child" ? "Profile circle" : "Independent circle";
+
+const getPublishStatus = (circle: Circle) => circle.publishStatus || "published";
+
+const getPublishStatusLabel = (circle: Circle) => {
+    const publishStatus = getPublishStatus(circle);
+
+    return publishStatus === "draft"
+        ? "Draft"
+        : publishStatus === "pending_verification"
+          ? "Pending verification"
+          : "Published";
+};
+
+const getPublishStatusBadgeClassName = (circle: Circle) => {
+    const publishStatus = getPublishStatus(circle);
+
+    return publishStatus === "draft"
+        ? "border-amber-200 bg-amber-100 text-amber-900"
+        : publishStatus === "pending_verification"
+          ? "border-sky-200 bg-sky-100 text-sky-900"
+          : "border-emerald-200 bg-emerald-100 text-emerald-900";
+};
+
 export default function CirclesTab() {
     const [circles, setCircles] = useState<Circle[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
+    const [showPendingOnly, setShowPendingOnly] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
     const { toast } = useToast();
@@ -88,12 +117,17 @@ export default function CirclesTab() {
         }
     };
 
-    const filteredCircles = circles.filter(
-        (circle) =>
+    const pendingVerificationCount = circles.filter((circle) => getPublishStatus(circle) === "pending_verification").length;
+
+    const filteredCircles = circles.filter((circle) => {
+        const matchesSearch =
             circle.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             circle.handle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            circle.description?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+            circle.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesPendingFilter = !showPendingOnly || getPublishStatus(circle) === "pending_verification";
+
+        return matchesSearch && matchesPendingFilter;
+    });
 
     const handlePreview = async (id: string) => {
         const circle = await getCircleByIdAction(id);
@@ -112,10 +146,22 @@ export default function CirclesTab() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchCircles} disabled={loading}>
-                    {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    <span className="ml-2">Refresh</span>
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant={showPendingOnly ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setShowPendingOnly((current) => !current)}
+                    >
+                        Pending verification
+                        <span className="ml-2 rounded-full bg-black/10 px-2 py-0.5 text-xs text-current">
+                            {pendingVerificationCount}
+                        </span>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={fetchCircles} disabled={loading}>
+                        {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        <span className="ml-2">Refresh</span>
+                    </Button>
+                </div>
             </div>
 
             {loading ? (
@@ -128,6 +174,8 @@ export default function CirclesTab() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Kind</TableHead>
+                                <TableHead>Workflow</TableHead>
                                 <TableHead>Handle</TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead>Members</TableHead>
@@ -138,10 +186,12 @@ export default function CirclesTab() {
                         <TableBody>
                             {filteredCircles.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                                         {searchTerm
                                             ? "No circles found matching your search"
-                                            : "No circles found"}
+                                            : showPendingOnly
+                                              ? "No circles pending verification"
+                                              : "No circles found"}
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -165,6 +215,14 @@ export default function CirclesTab() {
                                                     Preview
                                                 </Button>
                                             </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline">{getCircleKindLabel(circle)}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge className={getPublishStatusBadgeClassName(circle)}>
+                                                {getPublishStatusLabel(circle)}
+                                            </Badge>
                                         </TableCell>
                                         <TableCell>{circle.handle}</TableCell>
                                         <TableCell className="max-w-xs truncate">
