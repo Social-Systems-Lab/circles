@@ -8,6 +8,7 @@ type VerificationThreadMessage = {
     id: string;
     senderRole: "admin" | "applicant";
     senderName: string;
+    senderPictureUrl?: string | null;
     body?: string;
     createdAt?: string | null;
     attachments: Array<{ url: string; fileName?: string; originalName?: string }>;
@@ -97,7 +98,7 @@ export function VerificationThreadMessageList({
                         <div className="pt-1">
                             <UserPicture
                                 name={message.senderName}
-                                picture={message.senderRole === "applicant" ? applicantPictureUrl : undefined}
+                                picture={message.senderPictureUrl ?? (message.senderRole === "applicant" ? applicantPictureUrl : undefined)}
                                 size="40px"
                             />
                         </div>

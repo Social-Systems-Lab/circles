@@ -118,12 +118,17 @@ export const serializeVerificationRequest = (request: VerificationRequest) => ({
     decisionReason: request.decisionReason ?? null,
 });
 
-export const serializeVerificationMessage = (message: VerificationMessage, senderName: string) => ({
+export const serializeVerificationMessage = (
+    message: VerificationMessage,
+    senderName: string,
+    senderPictureUrl?: string,
+) => ({
     id: message._id?.toString?.() ?? "",
     requestId: message.requestId,
     senderDid: message.senderDid,
     senderRole: message.senderRole,
     senderName,
+    senderPictureUrl: senderPictureUrl ?? null,
     body: message.body,
     attachments: (message.attachments ?? []).map(serializeFileInfo),
     createdAt: message.createdAt.toISOString(),
@@ -710,6 +715,9 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
     const senderNames = new Map<string, string>([
         [applicant.did!, applicant.name ?? "Applicant"],
     ]);
+    const senderPictures = new Map<string, string | undefined>([
+        [applicant.did!, applicant.picture?.url],
+    ]);
 
     await Promise.all(
         messages.map(async (message) => {
@@ -720,6 +728,7 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
             try {
                 const sender = await getUserPrivate(message.senderDid);
                 senderNames.set(message.senderDid, sender.name ?? "Admin");
+                senderPictures.set(message.senderDid, sender.picture?.url);
             } catch {
                 senderNames.set(message.senderDid, message.senderRole === "admin" ? "Admin" : "Applicant");
             }
@@ -752,7 +761,11 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
                 }
               : null,
         messages: messages.map((message) =>
-            serializeVerificationMessage(message, senderNames.get(message.senderDid) ?? "Unknown user"),
+            serializeVerificationMessage(
+                message,
+                senderNames.get(message.senderDid) ?? "Unknown user",
+                senderPictures.get(message.senderDid),
+            ),
         ),
     };
 }
@@ -771,6 +784,7 @@ export async function getApplicantVerificationThread(userDid: string) {
 
     const messages = await getVerificationMessagesForRequest(request._id!.toString());
     const senderNames = new Map<string, string>([[applicant.did!, applicant.name ?? "You"]]);
+    const senderPictures = new Map<string, string | undefined>([[applicant.did!, applicant.picture?.url]]);
 
     await Promise.all(
         messages.map(async (message) => {
@@ -781,6 +795,7 @@ export async function getApplicantVerificationThread(userDid: string) {
             try {
                 const sender = await getUserPrivate(message.senderDid);
                 senderNames.set(message.senderDid, sender.name ?? "Admin");
+                senderPictures.set(message.senderDid, sender.picture?.url);
             } catch {
                 senderNames.set(message.senderDid, message.senderRole === "admin" ? "Admin" : "You");
             }
@@ -793,6 +808,7 @@ export async function getApplicantVerificationThread(userDid: string) {
             serializeVerificationMessage(
                 message,
                 senderNames.get(message.senderDid) ?? (message.senderRole === "admin" ? "Admin" : "You"),
+                senderPictures.get(message.senderDid),
             ),
         ),
         canReply: canApplicantReplyToVerificationRequest(request),
@@ -813,6 +829,7 @@ export async function getIndependentCircleVerificationThread(circleId: string, u
 
     const messages = await getVerificationMessagesForRequest(request._id!.toString());
     const senderNames = new Map<string, string>([[applicant.did!, applicant.name ?? "You"]]);
+    const senderPictures = new Map<string, string | undefined>([[applicant.did!, applicant.picture?.url]]);
 
     await Promise.all(
         messages.map(async (message) => {
@@ -823,6 +840,7 @@ export async function getIndependentCircleVerificationThread(circleId: string, u
             try {
                 const sender = await getUserPrivate(message.senderDid);
                 senderNames.set(message.senderDid, sender.name ?? "Admin");
+                senderPictures.set(message.senderDid, sender.picture?.url);
             } catch {
                 senderNames.set(message.senderDid, message.senderRole === "admin" ? "Admin" : "You");
             }
@@ -835,6 +853,7 @@ export async function getIndependentCircleVerificationThread(circleId: string, u
             serializeVerificationMessage(
                 message,
                 senderNames.get(message.senderDid) ?? (message.senderRole === "admin" ? "Admin" : "You"),
+                senderPictures.get(message.senderDid),
             ),
         ),
         canReply: canApplicantReplyToVerificationRequest(request),
