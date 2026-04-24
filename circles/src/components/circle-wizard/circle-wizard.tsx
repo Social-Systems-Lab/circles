@@ -34,6 +34,10 @@ export type CircleData = {
     pictureFile?: File; // Keep profile picture file for now
     // coverFile?: File; // Remove cover file
     circleType?: CircleType; // Should default to "circle"
+    websiteUrl?: string;
+    representsOrganization?: boolean;
+    organizationName?: string;
+    officialEmail?: string;
 };
 
 export type CircleWizardStepProps = {
@@ -70,6 +74,10 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
         parentCircleId: undefined, // Initialized as undefined, BasicInfoStep will set it
         circleLevel: initialParentCircleId ? "profile_child" : "profile_child",
         circleType: initialCircleType || "circle", // Default based on prop
+        websiteUrl: "",
+        representsOrganization: false,
+        organizationName: "",
+        officialEmail: "",
     });
 
     // Effect to reset state if key props change (indicating a new wizard session)
@@ -92,6 +100,10 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
                 circleType: initialCircleType || "circle",
                 _id: undefined,
                 pictureFile: undefined,
+                websiteUrl: "",
+                representsOrganization: false,
+                organizationName: "",
+                officialEmail: "",
             });
             setCurrentStepIndex(0);
         }

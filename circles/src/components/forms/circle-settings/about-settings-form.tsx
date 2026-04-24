@@ -169,26 +169,28 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             )}
                         />
 
-                        <Controller
-                            name="websiteUrl"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicTextField
-                                    field={{
-                                        name: "websiteUrl",
-                                        type: "text",
-                                        label: "Website",
-                                        placeholder: "https://your-website.org",
-                                        description: {
-                                            circle: "Your community or organization website.",
-                                            user: "Your personal website.",
-                                        },
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
+                        {!isIndependentCircle || !representsOrganization ? (
+                            <Controller
+                                name="websiteUrl"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicTextField
+                                        field={{
+                                            name: "websiteUrl",
+                                            type: "text",
+                                            label: "Website",
+                                            placeholder: "https://your-website.org",
+                                            description: {
+                                                circle: "Your community or organization website.",
+                                                user: "Your personal website.",
+                                            },
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )}
+                            />
+                        ) : null}
 
                         {isIndependentCircle ? (
                             <div className="space-y-4 rounded-lg border bg-slate-50 p-4">
@@ -226,10 +228,29 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                     field={{
                                                         name: "organizationName",
                                                         type: "text",
-                                                        label: "Organization name",
+                                                        label: "Official organization name",
                                                         placeholder: "Official organization name",
                                                         description:
-                                                            "Leave blank if the organization name matches the circle name.",
+                                                            "Store the formal organization name exactly as admins should review it.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+
+                                        <Controller
+                                            name="websiteUrl"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicTextField
+                                                    field={{
+                                                        name: "websiteUrl",
+                                                        type: "text",
+                                                        label: "Official website",
+                                                        placeholder: "https://organization.org",
+                                                        description:
+                                                            "This website is used as organization-claim evidence during verification review.",
                                                     }}
                                                     formField={field}
                                                     control={form.control as unknown as Control}

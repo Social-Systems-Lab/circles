@@ -44,6 +44,9 @@ export default function BasicInfoStep({
     const [handleError, setHandleError] = useState("");
     const [parentCircleId, setParentCircleId] = useState<string | undefined>(initialParentCircleId);
     const [circleLevelError, setCircleLevelError] = useState("");
+    const [organizationNameError, setOrganizationNameError] = useState("");
+    const [websiteUrlError, setWebsiteUrlError] = useState("");
+    const [officialEmailError, setOfficialEmailError] = useState("");
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
@@ -96,6 +99,10 @@ export default function BasicInfoStep({
             ...prev,
             circleLevel: value,
             parentCircleId: value === "profile_child" ? prev.parentCircleId : undefined,
+            representsOrganization: value === "top_level" ? prev.representsOrganization : false,
+            organizationName: value === "top_level" ? prev.organizationName : "",
+            websiteUrl: value === "top_level" ? prev.websiteUrl : "",
+            officialEmail: value === "top_level" ? prev.officialEmail : "",
         }));
 
         if (value === "top_level") {
@@ -109,6 +116,9 @@ export default function BasicInfoStep({
         // Clear any previous errors
         if (name === "name") setNameError("");
         if (name === "handle") setHandleError("");
+        if (name === "organizationName") setOrganizationNameError("");
+        if (name === "websiteUrl") setWebsiteUrlError("");
+        if (name === "officialEmail") setOfficialEmailError("");
 
         // Update the circle data
         setCircleData((prev) => ({ ...prev, [name]: value }));
@@ -121,6 +131,19 @@ export default function BasicInfoStep({
 
     const handleSwitchChange = (checked: boolean) => {
         setCircleData((prev) => ({ ...prev, isPublic: checked }));
+    };
+
+    const handleOrganizationClaimChange = (checked: boolean) => {
+        setOrganizationNameError("");
+        setWebsiteUrlError("");
+        setOfficialEmailError("");
+        setCircleData((prev) => ({
+            ...prev,
+            representsOrganization: checked,
+            organizationName: checked ? prev.organizationName || "" : "",
+            websiteUrl: checked ? prev.websiteUrl || "" : "",
+            officialEmail: checked ? prev.officialEmail || "" : "",
+        }));
     };
 
     const validateForm = (): boolean => {
@@ -146,6 +169,23 @@ export default function BasicInfoStep({
             isValid = false;
         }
 
+        if (effectiveCircleLevel === "top_level" && circleData.circleType === "circle" && circleData.representsOrganization) {
+            if (!circleData.organizationName?.trim()) {
+                setOrganizationNameError("Official organization name is required");
+                isValid = false;
+            }
+
+            if (!circleData.websiteUrl?.trim()) {
+                setWebsiteUrlError("Official website is required");
+                isValid = false;
+            }
+
+            if (!circleData.officialEmail?.trim()) {
+                setOfficialEmailError("Official email is required");
+                isValid = false;
+            }
+        }
+
         return isValid;
     };
 
@@ -163,6 +203,10 @@ export default function BasicInfoStep({
                 parentCircleId, // parentCircleId is now set by handleParentCircleSelected
                 circleData.circleType,
                 effectiveCircleLevel,
+                circleData.websiteUrl,
+                circleData.representsOrganization,
+                circleData.organizationName,
+                circleData.officialEmail,
             );
 
             if (result.success) {
@@ -256,8 +300,85 @@ export default function BasicInfoStep({
                 )}
 
                 {effectiveCircleLevel === "top_level" && circleData.circleType === "circle" && (
-                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                        This will create a standalone top-level circle. Its URL structure stays the same for now.
+                    <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                        <div className="text-sm text-gray-600">
+                            This will create a standalone top-level circle. Its URL structure stays the same for now.
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="representsOrganization">Organization Claim</Label>
+                            <p className="text-sm text-gray-500">
+                                If this circle represents an existing organization, add the official name, website, and
+                                email here so verification review starts with the right evidence.
+                            </p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="representsOrganization"
+                                checked={circleData.representsOrganization === true}
+                                onCheckedChange={handleOrganizationClaimChange}
+                            />
+                            <Label htmlFor="representsOrganization">
+                                This circle represents an existing organization
+                            </Label>
+                        </div>
+                        {circleData.representsOrganization ? (
+                            <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="organizationName">Official Organization Name</Label>
+                                    <Input
+                                        id="organizationName"
+                                        name="organizationName"
+                                        value={circleData.organizationName || ""}
+                                        onChange={handleInputChange}
+                                        placeholder="Official organization name"
+                                    />
+                                    {organizationNameError ? (
+                                        <p className="text-sm text-red-500">{organizationNameError}</p>
+                                    ) : (
+                                        <p className="text-xs text-gray-500">
+                                            Use the formal name admins should verify against.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="websiteUrl">Official Website</Label>
+                                    <Input
+                                        id="websiteUrl"
+                                        name="websiteUrl"
+                                        value={circleData.websiteUrl || ""}
+                                        onChange={handleInputChange}
+                                        placeholder="https://organization.org"
+                                    />
+                                    {websiteUrlError ? (
+                                        <p className="text-sm text-red-500">{websiteUrlError}</p>
+                                    ) : (
+                                        <p className="text-xs text-gray-500">
+                                            This saves to the circle website field and will be shown in verification
+                                            review.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="officialEmail">Official Email</Label>
+                                    <Input
+                                        id="officialEmail"
+                                        name="officialEmail"
+                                        value={circleData.officialEmail || ""}
+                                        onChange={handleInputChange}
+                                        placeholder="name@organization.org"
+                                    />
+                                    {officialEmailError ? (
+                                        <p className="text-sm text-red-500">{officialEmailError}</p>
+                                    ) : (
+                                        <p className="text-xs text-gray-500">
+                                            Use an address connected to the organization when possible.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 )}
 

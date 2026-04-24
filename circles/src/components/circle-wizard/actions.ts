@@ -21,6 +21,19 @@ import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/au
 
 const canCreateIndependentCircle = (user: UserPrivate | undefined) => Boolean(user?.isAdmin || user?.isMember);
 
+const normalizeWebsiteUrl = (url?: string) => {
+    if (!url) return undefined;
+    const trimmed = url.trim();
+    if (!trimmed) return undefined;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+};
+
+const normalizeOfficialEmail = (email?: string) => {
+    const normalized = email?.trim().toLowerCase();
+    return normalized ? normalized : undefined;
+};
+
 const getCircleLevelForCreate = (circleLevel?: CircleLevel, parentCircleId?: string) => {
     if (circleLevel) {
         return circleLevel;
@@ -57,6 +70,10 @@ export async function saveBasicInfoAction(
     parentCircleId?: string,
     circleType?: CircleType,
     circleLevel?: CircleLevel,
+    websiteUrl?: string,
+    representsOrganization?: boolean,
+    organizationName?: string,
+    officialEmail?: string,
 ) {
     try {
         console.log("saveBasicInfoAction called with parentCircleId:", parentCircleId);
@@ -65,6 +82,17 @@ export async function saveBasicInfoAction(
             return { success: false, message: "You need to be logged in" };
         }
 
+        const normalizedWebsiteUrl = normalizeWebsiteUrl(websiteUrl);
+        const normalizedOfficialEmail = normalizeOfficialEmail(officialEmail);
+        const shouldStoreOrganizationClaim =
+            circleType !== "user" && circleLevel === "top_level" && representsOrganization === true;
+        const organizationClaimData = {
+            websiteUrl: normalizedWebsiteUrl,
+            representsOrganization: shouldStoreOrganizationClaim,
+            organizationName: shouldStoreOrganizationClaim ? organizationName?.trim() || undefined : undefined,
+            officialEmail: shouldStoreOrganizationClaim ? normalizedOfficialEmail : undefined,
+        };
+
         if (circleId) {
             // --- UPDATE EXISTING CIRCLE ---
             const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
@@ -72,7 +100,7 @@ export async function saveBasicInfoAction(
                 return { success: false, message: "You are not authorized to update the circle" };
             }
 
-            await updateCircle({ _id: circleId, name, handle, isPublic }, userDid);
+            await updateCircle({ _id: circleId, name, handle, isPublic, ...organizationClaimData }, userDid);
             const updatedCircle = await getCircleById(circleId); // Re-fetch to get latest data
             return { success: true, message: "Basic info updated successfully", data: { circle: updatedCircle } };
         } else {
@@ -116,6 +144,7 @@ export async function saveBasicInfoAction(
                 picture: { url: "/images/default-picture.png" }, // Default picture
                 causes: [],
                 skills: [],
+                ...organizationClaimData,
             };
             const newCircle = await createCircle(initialCircleData, userDid); // Pass userDid here
 

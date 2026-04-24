@@ -95,6 +95,13 @@ export async function submitCircleForVerificationAction(formData: FormData) {
     }
 
     if (circle.representsOrganization) {
+        if (!circle.organizationName?.trim()) {
+            return {
+                success: false,
+                message: "Add the official organization name before submitting this circle for verification.",
+            };
+        }
+
         if (!normalizeWebsiteUrl(circle.websiteUrl)) {
             return {
                 success: false,
