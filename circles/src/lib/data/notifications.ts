@@ -351,7 +351,11 @@ export async function notifyNewMember(userDid: string, circle: Circle, followReq
     }
 }
 
-export async function sendVerificationRequestNotification(user: Circle, admins: UserPrivate[]): Promise<void> {
+export async function sendVerificationRequestNotification(
+    user: Circle,
+    admins: UserPrivate[],
+    options?: { messageBody?: string; url?: string },
+): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verification_request to ${admins.length} admins`);
         await sendNotifications(
@@ -359,8 +363,8 @@ export async function sendVerificationRequestNotification(user: Circle, admins: 
             admins,
             sanitizeObjectForJSON({
                 user,
-                messageBody: `User ${user.name} (@${user.handle}) has requested account verification.`,
-                url: `/admin?tab=verification-requests`,
+                messageBody: options?.messageBody || `User ${user.name} (@${user.handle}) has requested account verification.`,
+                url: options?.url || `/admin?tab=verification-requests`,
             }),
         );
     } catch (error) {

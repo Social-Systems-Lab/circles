@@ -584,11 +584,14 @@ export const verificationRequestStatusSchema = z.enum([
     "approved",
     "rejected",
 ]);
+export const verificationRequestTypeSchema = z.enum(["profile", "independent_circle"]);
 export const verificationMessageSenderRoleSchema = z.enum(["admin", "applicant"]);
 
 export const verificationRequestSchema = z.object({
     _id: z.any().optional(),
     userDid: didSchema,
+    requestType: verificationRequestTypeSchema.optional(),
+    targetCircleId: z.string().optional(),
     status: verificationRequestStatusSchema.default("submitted"),
     requestedAt: z.date().optional(), // Legacy field retained for older records.
     submittedAt: z.date().optional(),
@@ -601,6 +604,7 @@ export const verificationRequestSchema = z.object({
 
 export type VerificationRequest = z.infer<typeof verificationRequestSchema>;
 export type VerificationRequestStatus = z.infer<typeof verificationRequestStatusSchema>;
+export type VerificationRequestType = z.infer<typeof verificationRequestTypeSchema>;
 
 export const verificationMessageSchema = z.object({
     _id: z.any().optional(),

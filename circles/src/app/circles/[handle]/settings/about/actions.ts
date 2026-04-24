@@ -1,10 +1,13 @@
 "use server";
 
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import { getUserPrivate } from "@/lib/data/user";
+import { getVerificationAdmins, getActiveVerificationRequestForIndependentCircle, createVerificationRequest } from "@/lib/data/verification-workflow";
+import { sendVerificationRequestNotification } from "@/lib/data/notifications";
 import { Circle, FileInfo, FormSubmitResponse, Media } from "@/models/models"; // Added Media, FileInfo
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 
@@ -69,6 +72,39 @@ export async function submitCircleForVerificationAction(formData: FormData) {
 
     if (circle.circleLevel === "profile_child") {
         return { success: false, message: "Profile circles should be published directly" };
+    }
+
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to edit circle settings" };
+    }
+
+    const existingRequest = await getActiveVerificationRequestForIndependentCircle(circleId);
+    if (existingRequest) {
+        if (circle.publishStatus !== "pending_verification") {
+            await updateCirclePublishStatus(circleId, "pending_verification");
+        }
+        return { success: true, message: "A verification request for this circle is already pending review." };
+    }
+
+    await createVerificationRequest({
+        userDid,
+        requestType: "independent_circle",
+        targetCircleId: circleId,
+    });
+
+    const submitter = await getUserPrivate(userDid);
+    const admins = await getVerificationAdmins();
+    if (admins.length > 0) {
+        await sendVerificationRequestNotification(submitter, admins, {
+            messageBody: `${submitter.name || "A user"} submitted ${circle.name || "an independent circle"} for verification.`,
+            url: "/admin?tab=verification-requests",
+        });
     }
 
     return updateCirclePublishStatus(circleId, "pending_verification");

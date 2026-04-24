@@ -84,7 +84,7 @@ export async function requestVerification(
             return { message: "You already have a pending verification request." };
         }
 
-        const newRequest = await createVerificationRequest(user.did!);
+        const newRequest = await createVerificationRequest({ userDid: user.did! });
 
         console.log("[requestVerification] verification request inserted", {
             userDid,

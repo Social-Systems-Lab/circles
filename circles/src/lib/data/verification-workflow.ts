@@ -10,9 +10,11 @@ import {
     VerificationMessage,
     VerificationRequest,
     VerificationRequestStatus,
+    VerificationRequestType,
 } from "@/models/models";
 import { ObjectId } from "mongodb";
 import { getUserPrivate } from "./user";
+import { getCircleById } from "./circle";
 
 export const ACTIVE_VERIFICATION_REQUEST_STATUSES = [
     "pending",
@@ -71,6 +73,15 @@ export const normalizeVerificationRequestStatus = (
     return status;
 };
 
+export const normalizeVerificationRequestType = (
+    requestType?: VerificationRequestType,
+): VerificationRequestType => requestType === "independent_circle" ? "independent_circle" : "profile";
+
+const getProfileVerificationRequestQuery = (userDid: string) => ({
+    userDid,
+    $or: [{ requestType: "profile" as const }, { requestType: { $exists: false } }],
+});
+
 export const getVerificationRequestSubmittedAt = (request: VerificationRequest): Date =>
     request.submittedAt ?? request.requestedAt ?? request.updatedAt ?? request.reviewedAt ?? new Date();
 
@@ -96,6 +107,8 @@ const serializeFileInfo = (file: FileInfo): FileInfo => ({
 export const serializeVerificationRequest = (request: VerificationRequest) => ({
     id: request._id?.toString?.() ?? "",
     userDid: request.userDid,
+    requestType: normalizeVerificationRequestType(request.requestType),
+    targetCircleId: request.targetCircleId ?? null,
     status: normalizeVerificationRequestStatus(request.status),
     submittedAt: getVerificationRequestSubmittedAt(request).toISOString(),
     updatedAt: getVerificationRequestUpdatedAt(request).toISOString(),
@@ -130,7 +143,7 @@ export async function getVerificationAdmins(excludeDid?: string): Promise<UserPr
 
 export async function getLatestVerificationRequestForUser(userDid: string): Promise<VerificationRequest | null> {
     return await verificationRequestsCollection()
-        .find({ userDid })
+        .find(getProfileVerificationRequestQuery(userDid))
         .sort({ submittedAt: -1, requestedAt: -1, updatedAt: -1, reviewedAt: -1, _id: -1 })
         .limit(1)
         .next();
@@ -139,7 +152,21 @@ export async function getLatestVerificationRequestForUser(userDid: string): Prom
 export async function getActiveVerificationRequestForUser(userDid: string): Promise<VerificationRequest | null> {
     return await verificationRequestsCollection()
         .find({
-            userDid,
+            ...getProfileVerificationRequestQuery(userDid),
+            status: { $in: [...ACTIVE_VERIFICATION_REQUEST_STATUSES] },
+        })
+        .sort({ submittedAt: -1, requestedAt: -1, updatedAt: -1, _id: -1 })
+        .limit(1)
+        .next();
+}
+
+export async function getActiveVerificationRequestForIndependentCircle(
+    circleId: string,
+): Promise<VerificationRequest | null> {
+    return await verificationRequestsCollection()
+        .find({
+            requestType: "independent_circle",
+            targetCircleId: circleId,
             status: { $in: [...ACTIVE_VERIFICATION_REQUEST_STATUSES] },
         })
         .sort({ submittedAt: -1, requestedAt: -1, updatedAt: -1, _id: -1 })
@@ -154,8 +181,16 @@ export async function getVerificationMessagesForRequest(requestId: string): Prom
         .toArray();
 }
 
-export async function createVerificationRequest(userDid: string): Promise<VerificationRequest> {
-    const existingRequest = await getActiveVerificationRequestForUser(userDid);
+export async function createVerificationRequest(params: {
+    userDid: string;
+    requestType?: VerificationRequestType;
+    targetCircleId?: string;
+}): Promise<VerificationRequest> {
+    const requestType = normalizeVerificationRequestType(params.requestType);
+    const existingRequest =
+        requestType === "independent_circle" && params.targetCircleId
+            ? await getActiveVerificationRequestForIndependentCircle(params.targetCircleId)
+            : await getActiveVerificationRequestForUser(params.userDid);
     if (existingRequest) {
         return existingRequest;
     }
@@ -163,7 +198,11 @@ export async function createVerificationRequest(userDid: string): Promise<Verifi
     const now = new Date();
     const request: VerificationRequest = {
         _id: new ObjectId(),
-        userDid,
+        userDid: params.userDid,
+        requestType,
+        ...(requestType === "independent_circle" && params.targetCircleId
+            ? { targetCircleId: params.targetCircleId }
+            : {}),
         status: "submitted",
         requestedAt: now,
         submittedAt: now,
@@ -266,6 +305,9 @@ export async function addAdminVerificationMessage(params: {
     if (!request) {
         throw new Error("Verification request not found.");
     }
+    if (normalizeVerificationRequestType(request.requestType) !== "profile") {
+        throw new Error("Independent circle requests are visible here, but their review actions are not wired yet.");
+    }
 
     const status = normalizeVerificationRequestStatus(request.status);
     if (status === "approved" || status === "rejected") {
@@ -327,6 +369,9 @@ export async function approveVerificationRequest(params: {
     if (!request) {
         throw new Error("Verification request not found.");
     }
+    if (normalizeVerificationRequestType(request.requestType) !== "profile") {
+        throw new Error("Independent circle requests are visible here, but their approval flow is not wired yet.");
+    }
 
     const admin = await getUserPrivate(params.adminDid);
     if (!admin.isAdmin) {
@@ -374,6 +419,9 @@ export async function rejectVerificationRequest(params: {
     const request = await getVerificationRequestById(params.requestId);
     if (!request) {
         throw new Error("Verification request not found.");
+    }
+    if (normalizeVerificationRequestType(request.requestType) !== "profile") {
+        throw new Error("Independent circle requests are visible here, but their rejection flow is not wired yet.");
     }
 
     const admin = await getUserPrivate(params.adminDid);
@@ -437,9 +485,26 @@ export async function listAdminVerificationRequests() {
     );
 
     const applicantMap = new Map(applicants);
+    const targetCircleIds = Array.from(
+        new Set(
+            requests
+                .map((request) =>
+                    normalizeVerificationRequestType(request.requestType) === "independent_circle"
+                        ? request.targetCircleId
+                        : null,
+                )
+                .filter((circleId): circleId is string => Boolean(circleId)),
+        ),
+    );
+    const targetCircles = await Promise.all(
+        targetCircleIds.map(async (circleId) => [circleId, await getCircleById(circleId)] as const),
+    );
+    const targetCircleMap = new Map(targetCircles);
 
     return requests.map((request) => {
         const applicant = applicantMap.get(request.userDid);
+        const requestType = normalizeVerificationRequestType(request.requestType);
+        const targetCircle = requestType === "independent_circle" ? targetCircleMap.get(request.targetCircleId ?? "") : null;
         return {
             request: serializeVerificationRequest(request),
             applicant: applicant
@@ -457,6 +522,19 @@ export async function listAdminVerificationRequests() {
                       email: "",
                       picture: { url: "/images/default-user-picture.png" },
                   },
+            targetCircle: targetCircle
+                ? {
+                      id: targetCircle._id?.toString?.() ?? "",
+                      name: targetCircle.name ?? "Untitled circle",
+                      handle: targetCircle.handle ?? "",
+                  }
+                : requestType === "independent_circle"
+                  ? {
+                        id: request.targetCircleId ?? "",
+                        name: "Unknown circle",
+                        handle: "",
+                    }
+                  : null,
         };
     });
 }
@@ -468,6 +546,11 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
     }
 
     const applicant = await getUserPrivate(request.userDid);
+    const requestType = normalizeVerificationRequestType(request.requestType);
+    const targetCircle =
+        requestType === "independent_circle" && request.targetCircleId
+            ? await getCircleById(request.targetCircleId)
+            : null;
     const messages = await getVerificationMessagesForRequest(request._id!.toString());
 
     const senderNames = new Map<string, string>([
@@ -499,6 +582,19 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
             picture: applicant.picture ?? { url: "/images/default-user-picture.png" },
             isVerified: applicant.isVerified === true,
         },
+        targetCircle: targetCircle
+            ? {
+                  id: targetCircle._id?.toString?.() ?? "",
+                  name: targetCircle.name ?? "Untitled circle",
+                  handle: targetCircle.handle ?? "",
+              }
+            : requestType === "independent_circle"
+              ? {
+                    id: request.targetCircleId ?? "",
+                    name: "Unknown circle",
+                    handle: "",
+                }
+              : null,
         messages: messages.map((message) =>
             serializeVerificationMessage(message, senderNames.get(message.senderDid) ?? "Unknown user"),
         ),

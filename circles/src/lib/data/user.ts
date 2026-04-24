@@ -20,6 +20,7 @@ import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSe
 import { VerificationRequest } from "@/models/models";
 import { db } from "./db";
 import { isVerifiedUser } from "@/lib/auth/verification";
+import { ACTIVE_VERIFICATION_REQUEST_STATUSES } from "./verification-workflow";
 
 export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
     const user = await getUserByDid(userDid);
@@ -29,8 +30,9 @@ export const getVerificationStatus = async (userDid: string): Promise<"verified"
 
     const verificationCollection = db.collection<VerificationRequest>("verifications");
     const existingRequest = await verificationCollection.findOne({
-        userDid: userDid,
-        status: { $in: ["pending", "submitted", "awaiting_admin", "awaiting_applicant"] },
+        userDid,
+        $or: [{ requestType: "profile" }, { requestType: { $exists: false } }],
+        status: { $in: [...ACTIVE_VERIFICATION_REQUEST_STATUSES] },
     });
 
     if (existingRequest) {
