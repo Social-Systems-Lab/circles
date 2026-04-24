@@ -8,6 +8,8 @@ import {
     approveVerificationRequest,
     getAdminVerificationRequestDetail,
     listAdminVerificationRequests,
+    notifyApplicantOfIndependentCircleApproval,
+    notifyApplicantOfIndependentCircleRejection,
     notifyApplicantOfVerificationApproval,
     notifyApplicantOfVerificationRejection,
     notifyApplicantVerificationClarification,
@@ -62,10 +64,23 @@ export async function approveVerificationRequestAction(requestId: string) {
     try {
         const adminDid = await requireAdminDid();
         const result = await approveVerificationRequest({ requestId, adminDid });
-        await notifyApplicantOfVerificationApproval(result.applicant);
+        if (result.request.requestType === "independent_circle" && result.targetCircle) {
+            await notifyApplicantOfIndependentCircleApproval({
+                applicant: result.applicant,
+                targetCircle: result.targetCircle,
+            });
 
-        if (result.applicant.handle) {
-            revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
+            if (result.targetCircle.handle) {
+                revalidatePath(`/circles/${result.targetCircle.handle}`);
+                revalidatePath(`/circles/${result.targetCircle.handle}/settings/about`);
+            }
+            revalidatePath("/circles");
+        } else {
+            await notifyApplicantOfVerificationApproval(result.applicant);
+
+            if (result.applicant.handle) {
+                revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
+            }
         }
         revalidatePath("/admin");
 
@@ -82,10 +97,24 @@ export async function rejectVerificationRequestAction(requestId: string, reason:
     try {
         const adminDid = await requireAdminDid();
         const result = await rejectVerificationRequest({ requestId, adminDid, reason });
-        await notifyApplicantOfVerificationRejection(result.applicant, reason);
+        if (result.request.requestType === "independent_circle" && result.targetCircle) {
+            await notifyApplicantOfIndependentCircleRejection({
+                applicant: result.applicant,
+                targetCircle: result.targetCircle,
+                reason,
+            });
 
-        if (result.applicant.handle) {
-            revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
+            if (result.targetCircle.handle) {
+                revalidatePath(`/circles/${result.targetCircle.handle}`);
+                revalidatePath(`/circles/${result.targetCircle.handle}/settings/about`);
+            }
+            revalidatePath("/circles");
+        } else {
+            await notifyApplicantOfVerificationRejection(result.applicant, reason);
+
+            if (result.applicant.handle) {
+                revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
+            }
         }
         revalidatePath("/admin");
 

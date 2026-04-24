@@ -389,92 +389,103 @@ export default function VerificationRequestsTab() {
                             </div>
                         ) : null}
 
-                        {detail.request.requestType === "profile" ? (
-                            <>
-                                <div className="space-y-4">
-                                    {detail.messages.length ? (
-                                        detail.messages.map((message) => (
-                                            <div key={message.id} className="rounded-lg border p-4">
-                                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                                    <div className="font-medium">
-                                                        {message.senderRole === "admin"
-                                                            ? `${message.senderName} (admin)`
-                                                            : `${message.senderName} (applicant)`}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {formatDate(message.createdAt)}
-                                                    </div>
+                        <div className="space-y-4">
+                            {detail.request.requestType === "profile" ? (
+                                detail.messages.length ? (
+                                    detail.messages.map((message) => (
+                                        <div key={message.id} className="rounded-lg border p-4">
+                                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="font-medium">
+                                                    {message.senderRole === "admin"
+                                                        ? `${message.senderName} (admin)`
+                                                        : `${message.senderName} (applicant)`}
                                                 </div>
-                                                <p className="mt-3 whitespace-pre-wrap text-sm">
-                                                    {message.body || "Attachment only"}
-                                                </p>
-                                                <AttachmentList attachments={message.attachments} />
+                                                <div className="text-xs text-muted-foreground">
+                                                    {formatDate(message.createdAt)}
+                                                </div>
                                             </div>
-                                        ))
-                                    ) : (
-                                        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                                            No clarification messages yet.
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid gap-6 lg:grid-cols-2">
-                                    <div className="space-y-3 rounded-lg border p-4">
-                                        <div>
-                                            <div className="font-medium">Request more info</div>
-                                            <p className="text-sm text-muted-foreground">
-                                                Ask the applicant for clarification. Their next reply will move the request back
-                                                into the admin queue.
+                                            <p className="mt-3 whitespace-pre-wrap text-sm">
+                                                {message.body || "Attachment only"}
                                             </p>
+                                            <AttachmentList attachments={message.attachments} />
                                         </div>
-                                        <Textarea
-                                            value={clarificationBody}
-                                            onChange={(event) => setClarificationBody(event.target.value)}
-                                            rows={5}
-                                            placeholder="Explain what the applicant still needs to provide..."
-                                        />
-                                        <Button
-                                            onClick={handleRequestMoreInfo}
-                                            disabled={isPending || !clarificationBody.trim()}
-                                        >
-                                            {isPending ? "Sending..." : "Send request"}
-                                        </Button>
+                                    ))
+                                ) : (
+                                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                                        No clarification messages yet.
                                     </div>
-
-                                    <div className="space-y-4 rounded-lg border p-4">
-                                        <div>
-                                            <div className="font-medium">Decision</div>
-                                            <p className="text-sm text-muted-foreground">
-                                                Approve the account now, or reject it with a reason that the applicant can see.
-                                            </p>
-                                        </div>
-                                        <Textarea
-                                            value={rejectionReason}
-                                            onChange={(event) => setRejectionReason(event.target.value)}
-                                            rows={5}
-                                            placeholder="Required if rejecting..."
-                                        />
-                                        <div className="flex flex-wrap gap-3">
-                                            <Button onClick={handleApprove} disabled={isPending}>
-                                                {isPending ? "Working..." : "Approve"}
-                                            </Button>
-                                            <Button
-                                                variant="destructive"
-                                                onClick={handleReject}
-                                                disabled={isPending || !rejectionReason.trim()}
-                                            >
-                                                {isPending ? "Working..." : "Reject"}
-                                            </Button>
-                                        </div>
-                                    </div>
+                                )
+                            ) : (
+                                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                                    Independent-circle requests do not use the clarification thread in this MVP. Approve
+                                    to publish the circle, or reject to return it to draft for edits and later
+                                    resubmission.
                                 </div>
-                            </>
-                        ) : (
-                            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                                This request now appears in the shared verification inbox and notifies admins. Review
-                                actions for independent circles are intentionally not wired in this MVP.
+                            )}
+                        </div>
+
+                        <div className="grid gap-6 lg:grid-cols-2">
+                            <div className="space-y-3 rounded-lg border p-4">
+                                <div>
+                                    <div className="font-medium">Request more info</div>
+                                    <p className="text-sm text-muted-foreground">
+                                        {detail.request.requestType === "profile"
+                                            ? "Ask the applicant for clarification. Their next reply will move the request back into the admin queue."
+                                            : "Clarification threading is not wired for independent-circle requests in this MVP."}
+                                    </p>
+                                </div>
+                                <Textarea
+                                    value={clarificationBody}
+                                    onChange={(event) => setClarificationBody(event.target.value)}
+                                    rows={5}
+                                    placeholder="Explain what the applicant still needs to provide..."
+                                    disabled={detail.request.requestType !== "profile"}
+                                />
+                                <Button
+                                    onClick={handleRequestMoreInfo}
+                                    disabled={
+                                        detail.request.requestType !== "profile" ||
+                                        isPending ||
+                                        !clarificationBody.trim()
+                                    }
+                                >
+                                    {isPending ? "Sending..." : "Send request"}
+                                </Button>
                             </div>
-                        )}
+
+                            <div className="space-y-4 rounded-lg border p-4">
+                                <div>
+                                    <div className="font-medium">Decision</div>
+                                    <p className="text-sm text-muted-foreground">
+                                        {detail.request.requestType === "profile"
+                                            ? "Approve the account now, or reject it with a reason that the applicant can see."
+                                            : "Approve to publish this circle. Reject to keep it non-public and return it to draft."}
+                                    </p>
+                                </div>
+                                <Textarea
+                                    value={rejectionReason}
+                                    onChange={(event) => setRejectionReason(event.target.value)}
+                                    rows={5}
+                                    placeholder="Required if rejecting..."
+                                />
+                                <div className="flex flex-wrap gap-3">
+                                    <Button onClick={handleApprove} disabled={isPending}>
+                                        {isPending
+                                            ? "Working..."
+                                            : detail.request.requestType === "profile"
+                                              ? "Approve"
+                                              : "Approve and publish"}
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={handleReject}
+                                        disabled={isPending || !rejectionReason.trim()}
+                                    >
+                                        {isPending ? "Working..." : "Reject"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             ) : requests.length ? (

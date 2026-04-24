@@ -364,13 +364,14 @@ export async function addAdminVerificationMessage(params: {
 export async function approveVerificationRequest(params: {
     requestId: string;
     adminDid: string;
-}): Promise<{ request: VerificationRequest; applicant: UserPrivate }> {
+}): Promise<{
+    request: VerificationRequest;
+    applicant: UserPrivate;
+    targetCircle?: { id: string; handle?: string; name?: string } | null;
+}> {
     const request = await getVerificationRequestById(params.requestId);
     if (!request) {
         throw new Error("Verification request not found.");
-    }
-    if (normalizeVerificationRequestType(request.requestType) !== "profile") {
-        throw new Error("Independent circle requests are visible here, but their approval flow is not wired yet.");
     }
 
     const admin = await getUserPrivate(params.adminDid);
@@ -385,8 +386,34 @@ export async function approveVerificationRequest(params: {
 
     const applicant = await getUserPrivate(request.userDid);
     const now = new Date();
+    const requestType = normalizeVerificationRequestType(request.requestType);
 
-    await Circles.updateOne({ did: request.userDid }, { $set: buildVerifiedUserSet(admin.did!) });
+    let targetCircle: { id: string; handle?: string; name?: string } | null = null;
+
+    if (requestType === "independent_circle") {
+        if (!request.targetCircleId) {
+            throw new Error("Independent circle request is missing a target circle.");
+        }
+
+        const circle = await getCircleById(request.targetCircleId);
+        if (!circle) {
+            throw new Error("Target circle not found.");
+        }
+
+        await Circles.updateOne(
+            { _id: new ObjectId(request.targetCircleId) },
+            { $set: { publishStatus: "published" } },
+        );
+
+        targetCircle = {
+            id: request.targetCircleId,
+            handle: circle.handle ?? "",
+            name: circle.name ?? "Untitled circle",
+        };
+    } else {
+        await Circles.updateOne({ did: request.userDid }, { $set: buildVerifiedUserSet(admin.did!) });
+    }
+
     await verificationRequestsCollection().updateOne(
         { _id: request._id },
         {
@@ -408,6 +435,7 @@ export async function approveVerificationRequest(params: {
             reviewedBy: admin.did,
         },
         applicant,
+        targetCircle,
     };
 }
 
@@ -415,13 +443,15 @@ export async function rejectVerificationRequest(params: {
     requestId: string;
     adminDid: string;
     reason: string;
-}): Promise<{ request: VerificationRequest; applicant: UserPrivate; admin: UserPrivate }> {
+}): Promise<{
+    request: VerificationRequest;
+    applicant: UserPrivate;
+    admin: UserPrivate;
+    targetCircle?: { id: string; handle?: string; name?: string } | null;
+}> {
     const request = await getVerificationRequestById(params.requestId);
     if (!request) {
         throw new Error("Verification request not found.");
-    }
-    if (normalizeVerificationRequestType(request.requestType) !== "profile") {
-        throw new Error("Independent circle requests are visible here, but their rejection flow is not wired yet.");
     }
 
     const admin = await getUserPrivate(params.adminDid);
@@ -441,6 +471,31 @@ export async function rejectVerificationRequest(params: {
 
     const applicant = await getUserPrivate(request.userDid);
     const now = new Date();
+    const requestType = normalizeVerificationRequestType(request.requestType);
+
+    let targetCircle: { id: string; handle?: string; name?: string } | null = null;
+
+    if (requestType === "independent_circle") {
+        if (!request.targetCircleId) {
+            throw new Error("Independent circle request is missing a target circle.");
+        }
+
+        const circle = await getCircleById(request.targetCircleId);
+        if (!circle) {
+            throw new Error("Target circle not found.");
+        }
+
+        await Circles.updateOne(
+            { _id: new ObjectId(request.targetCircleId) },
+            { $set: { publishStatus: "draft" } },
+        );
+
+        targetCircle = {
+            id: request.targetCircleId,
+            handle: circle.handle ?? "",
+            name: circle.name ?? "Untitled circle",
+        };
+    }
 
     await verificationRequestsCollection().updateOne(
         { _id: request._id },
@@ -466,6 +521,7 @@ export async function rejectVerificationRequest(params: {
         },
         applicant,
         admin,
+        targetCircle,
     };
 }
 
@@ -712,5 +768,50 @@ export async function notifyApplicantOfVerificationRejection(
         user: applicant,
         messageBody: `Your account verification request was rejected.${suffix}`,
         url: `/circles/${applicant.handle}/settings/subscription`,
+    });
+}
+
+export async function notifyApplicantOfIndependentCircleApproval(params: {
+    applicant: UserPrivate;
+    targetCircle: { handle?: string; name?: string };
+}): Promise<void> {
+    const circlePath = params.targetCircle.handle
+        ? `/circles/${params.targetCircle.handle}/settings/about`
+        : "/";
+
+    await sendNotifications("user_verified", [params.applicant], {
+        user: params.applicant,
+        messageBody: `${params.targetCircle.name || "Your circle"} was approved and is now public.`,
+        url: circlePath,
+    });
+
+    await sendVerificationUpdateEmail({
+        recipient: params.applicant,
+        subject: `${params.targetCircle.name || "Your circle"} was approved and is now public.`,
+        actionUrl: circlePath,
+    });
+}
+
+export async function notifyApplicantOfIndependentCircleRejection(params: {
+    applicant: UserPrivate;
+    targetCircle: { handle?: string; name?: string };
+    reason: string;
+}): Promise<void> {
+    const circlePath = params.targetCircle.handle
+        ? `/circles/${params.targetCircle.handle}/settings/about`
+        : "/";
+    const suffix = params.reason.trim() ? ` Reason: ${params.reason.trim()}` : "";
+    const messageBody = `${params.targetCircle.name || "Your circle"} was not approved yet and remains non-public. You can update it and submit again later.${suffix}`;
+
+    await sendNotifications("user_verification_rejected", [params.applicant], {
+        user: params.applicant,
+        messageBody,
+        url: circlePath,
+    });
+
+    await sendVerificationUpdateEmail({
+        recipient: params.applicant,
+        subject: `${params.targetCircle.name || "Your circle"} was not approved yet.`,
+        actionUrl: circlePath,
     });
 }
