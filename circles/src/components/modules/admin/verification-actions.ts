@@ -8,6 +8,7 @@ import {
     approveVerificationRequest,
     getAdminVerificationRequestDetail,
     listAdminVerificationRequests,
+    notifyApplicantIndependentCircleClarification,
     notifyApplicantOfIndependentCircleApproval,
     notifyApplicantOfIndependentCircleRejection,
     notifyApplicantOfVerificationApproval,
@@ -44,10 +45,24 @@ export async function requestMoreVerificationInfoAction(requestId: string, body:
     try {
         const adminDid = await requireAdminDid();
         const result = await addAdminVerificationMessage({ requestId, adminDid, body });
-        await notifyApplicantVerificationClarification(result.applicant, result.admin);
+        if (result.request.requestType === "independent_circle" && result.targetCircle) {
+            await notifyApplicantIndependentCircleClarification({
+                applicant: result.applicant,
+                admin: result.admin,
+                targetCircle: result.targetCircle,
+            });
 
-        if (result.applicant.handle) {
-            revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
+            if (result.targetCircle.handle) {
+                revalidatePath(`/circles/${result.targetCircle.handle}`);
+                revalidatePath(`/circles/${result.targetCircle.handle}/settings/about`);
+            }
+            revalidatePath("/circles");
+        } else {
+            await notifyApplicantVerificationClarification(result.applicant, result.admin);
+
+            if (result.applicant.handle) {
+                revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
+            }
         }
         revalidatePath("/admin");
 

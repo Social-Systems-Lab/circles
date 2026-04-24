@@ -376,7 +376,9 @@ export default function VerificationRequestsTab() {
                                     </div>
                                     <div>
                                         <div className="font-medium">Current workflow state</div>
-                                        <div className="text-muted-foreground">Pending verification</div>
+                                        <div className="text-muted-foreground">
+                                            {STATUS_LABELS[detail.request.status] ?? detail.request.status}
+                                        </div>
                                     </div>
                                 </>
                             ) : null}
@@ -390,36 +392,30 @@ export default function VerificationRequestsTab() {
                         ) : null}
 
                         <div className="space-y-4">
-                            {detail.request.requestType === "profile" ? (
-                                detail.messages.length ? (
-                                    detail.messages.map((message) => (
-                                        <div key={message.id} className="rounded-lg border p-4">
-                                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                                <div className="font-medium">
-                                                    {message.senderRole === "admin"
-                                                        ? `${message.senderName} (admin)`
-                                                        : `${message.senderName} (applicant)`}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {formatDate(message.createdAt)}
-                                                </div>
+                            {detail.messages.length ? (
+                                detail.messages.map((message) => (
+                                    <div key={message.id} className="rounded-lg border p-4">
+                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="font-medium">
+                                                {message.senderRole === "admin"
+                                                    ? `${message.senderName} (admin)`
+                                                    : `${message.senderName} (applicant)`}
                                             </div>
-                                            <p className="mt-3 whitespace-pre-wrap text-sm">
-                                                {message.body || "Attachment only"}
-                                            </p>
-                                            <AttachmentList attachments={message.attachments} />
+                                            <div className="text-xs text-muted-foreground">
+                                                {formatDate(message.createdAt)}
+                                            </div>
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                                        No clarification messages yet.
+                                        <p className="mt-3 whitespace-pre-wrap text-sm">
+                                            {message.body || "Attachment only"}
+                                        </p>
+                                        <AttachmentList attachments={message.attachments} />
                                     </div>
-                                )
+                                ))
                             ) : (
                                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                                    Independent-circle requests do not use the clarification thread in this MVP. Approve
-                                    to publish the circle, or reject to return it to draft for edits and later
-                                    resubmission.
+                                    {detail.request.requestType === "profile"
+                                        ? "No clarification messages yet."
+                                        : "No clarification messages yet. Use the request-more-info action if this circle needs more detail before approval."}
                                 </div>
                             )}
                         </div>
@@ -431,7 +427,7 @@ export default function VerificationRequestsTab() {
                                     <p className="text-sm text-muted-foreground">
                                         {detail.request.requestType === "profile"
                                             ? "Ask the applicant for clarification. Their next reply will move the request back into the admin queue."
-                                            : "Clarification threading is not wired for independent-circle requests in this MVP."}
+                                            : "Ask the circle owner for clarification. Their next reply will move the request back into the admin queue."}
                                     </p>
                                 </div>
                                 <Textarea
@@ -439,15 +435,10 @@ export default function VerificationRequestsTab() {
                                     onChange={(event) => setClarificationBody(event.target.value)}
                                     rows={5}
                                     placeholder="Explain what the applicant still needs to provide..."
-                                    disabled={detail.request.requestType !== "profile"}
                                 />
                                 <Button
                                     onClick={handleRequestMoreInfo}
-                                    disabled={
-                                        detail.request.requestType !== "profile" ||
-                                        isPending ||
-                                        !clarificationBody.trim()
-                                    }
+                                    disabled={isPending || !clarificationBody.trim()}
                                 >
                                     {isPending ? "Sending..." : "Send request"}
                                 </Button>

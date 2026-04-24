@@ -47,9 +47,13 @@ export async function replyToVerificationThreadAction(formData: FormData) {
         const admins = await getVerificationAdmins(userDid);
         await notifyAdminsOfApplicantVerificationReply(result.applicant, admins);
 
-        if (result.applicant.handle) {
+        if (result.request.requestType === "independent_circle" && result.targetCircle?.handle) {
+            revalidatePath(`/circles/${result.targetCircle.handle}`);
+            revalidatePath(`/circles/${result.targetCircle.handle}/settings/about`);
+        } else if (result.applicant.handle) {
             revalidatePath(`/circles/${result.applicant.handle}/settings/subscription`);
         }
+        revalidatePath("/circles");
         revalidatePath("/admin");
 
         return { success: true, message: "Reply sent." };

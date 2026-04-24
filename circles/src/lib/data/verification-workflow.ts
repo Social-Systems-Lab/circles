@@ -174,6 +174,21 @@ export async function getActiveVerificationRequestForIndependentCircle(
         .next();
 }
 
+export async function getLatestVerificationRequestForIndependentCircle(
+    circleId: string,
+    userDid: string,
+): Promise<VerificationRequest | null> {
+    return await verificationRequestsCollection()
+        .find({
+            requestType: "independent_circle",
+            targetCircleId: circleId,
+            userDid,
+        })
+        .sort({ submittedAt: -1, requestedAt: -1, updatedAt: -1, reviewedAt: -1, _id: -1 })
+        .limit(1)
+        .next();
+}
+
 export async function getVerificationMessagesForRequest(requestId: string): Promise<VerificationMessage[]> {
     return await verificationMessagesCollection()
         .find({ requestId })
@@ -242,7 +257,12 @@ export async function addApplicantVerificationMessage(params: {
     applicantDid: string;
     body: string;
     files?: File[];
-}): Promise<{ request: VerificationRequest; message: VerificationMessage; applicant: UserPrivate }> {
+}): Promise<{
+    request: VerificationRequest;
+    message: VerificationMessage;
+    applicant: UserPrivate;
+    targetCircle?: { id: string; handle?: string; name?: string } | null;
+}> {
     const request = await getVerificationRequestById(params.requestId);
     if (!request) {
         throw new Error("Verification request not found.");
@@ -255,6 +275,20 @@ export async function addApplicantVerificationMessage(params: {
     }
 
     const applicant = await getUserPrivate(params.applicantDid);
+    const requestType = normalizeVerificationRequestType(request.requestType);
+    let targetCircle: { id: string; handle?: string; name?: string } | null = null;
+
+    if (requestType === "independent_circle" && request.targetCircleId) {
+        const circle = await getCircleById(request.targetCircleId);
+        if (circle) {
+            targetCircle = {
+                id: request.targetCircleId,
+                handle: circle.handle ?? "",
+                name: circle.name ?? "Untitled circle",
+            };
+        }
+    }
+
     const trimmedBody = params.body.trim();
     const attachments = await saveVerificationAttachments(params.files ?? [], applicant._id as string);
     if (!trimmedBody && attachments.length === 0) {
@@ -293,6 +327,7 @@ export async function addApplicantVerificationMessage(params: {
         },
         message,
         applicant,
+        targetCircle,
     };
 }
 
@@ -300,13 +335,16 @@ export async function addAdminVerificationMessage(params: {
     requestId: string;
     adminDid: string;
     body: string;
-}): Promise<{ request: VerificationRequest; message: VerificationMessage; admin: UserPrivate; applicant: UserPrivate }> {
+}): Promise<{
+    request: VerificationRequest;
+    message: VerificationMessage;
+    admin: UserPrivate;
+    applicant: UserPrivate;
+    targetCircle?: { id: string; handle?: string; name?: string } | null;
+}> {
     const request = await getVerificationRequestById(params.requestId);
     if (!request) {
         throw new Error("Verification request not found.");
-    }
-    if (normalizeVerificationRequestType(request.requestType) !== "profile") {
-        throw new Error("Independent circle requests are visible here, but their review actions are not wired yet.");
     }
 
     const status = normalizeVerificationRequestStatus(request.status);
@@ -325,6 +363,26 @@ export async function addAdminVerificationMessage(params: {
     }
 
     const applicant = await getUserPrivate(request.userDid);
+    const requestType = normalizeVerificationRequestType(request.requestType);
+    let targetCircle: { id: string; handle?: string; name?: string } | null = null;
+
+    if (requestType === "independent_circle") {
+        if (!request.targetCircleId) {
+            throw new Error("Independent circle request is missing a target circle.");
+        }
+
+        const circle = await getCircleById(request.targetCircleId);
+        if (!circle) {
+            throw new Error("Target circle not found.");
+        }
+
+        targetCircle = {
+            id: request.targetCircleId,
+            handle: circle.handle ?? "",
+            name: circle.name ?? "Untitled circle",
+        };
+    }
+
     const now = new Date();
     const message: VerificationMessage = {
         _id: new ObjectId(),
@@ -358,6 +416,7 @@ export async function addAdminVerificationMessage(params: {
         message,
         admin,
         applicant,
+        targetCircle,
     };
 }
 
@@ -700,6 +759,47 @@ export async function getApplicantVerificationThread(userDid: string) {
     };
 }
 
+export async function getIndependentCircleVerificationThread(circleId: string, userDid: string) {
+    const applicant = await getUserPrivate(userDid);
+    const request = await getLatestVerificationRequestForIndependentCircle(circleId, userDid);
+    if (!request) {
+        return {
+            request: null,
+            messages: [],
+            canReply: false,
+        };
+    }
+
+    const messages = await getVerificationMessagesForRequest(request._id!.toString());
+    const senderNames = new Map<string, string>([[applicant.did!, applicant.name ?? "You"]]);
+
+    await Promise.all(
+        messages.map(async (message) => {
+            if (senderNames.has(message.senderDid)) {
+                return;
+            }
+
+            try {
+                const sender = await getUserPrivate(message.senderDid);
+                senderNames.set(message.senderDid, sender.name ?? "Admin");
+            } catch {
+                senderNames.set(message.senderDid, message.senderRole === "admin" ? "Admin" : "You");
+            }
+        }),
+    );
+
+    return {
+        request: serializeVerificationRequest(request),
+        messages: messages.map((message) =>
+            serializeVerificationMessage(
+                message,
+                senderNames.get(message.senderDid) ?? (message.senderRole === "admin" ? "Admin" : "You"),
+            ),
+        ),
+        canReply: canApplicantReplyToVerificationRequest(request),
+    };
+}
+
 export async function notifyApplicantVerificationClarification(applicant: UserPrivate, admin: UserPrivate): Promise<void> {
     if (!applicant.handle) {
         return;
@@ -715,6 +815,29 @@ export async function notifyApplicantVerificationClarification(applicant: UserPr
         recipient: applicant,
         subject: `${admin.name || "An admin"} requested more information for your verification.`,
         actionUrl: `/circles/${applicant.handle}/settings/subscription`,
+    });
+}
+
+export async function notifyApplicantIndependentCircleClarification(params: {
+    applicant: UserPrivate;
+    admin: UserPrivate;
+    targetCircle: { handle?: string; name?: string };
+}): Promise<void> {
+    const circlePath = params.targetCircle.handle
+        ? `/circles/${params.targetCircle.handle}/settings/about`
+        : "/";
+    const subject = `${params.admin.name || "An admin"} requested more information for ${params.targetCircle.name || "your circle"}.`;
+
+    await sendNotifications("user_verification_clarification_requested", [params.applicant], {
+        user: params.admin,
+        messageBody: subject,
+        url: circlePath,
+    });
+
+    await sendVerificationUpdateEmail({
+        recipient: params.applicant,
+        subject,
+        actionUrl: circlePath,
     });
 }
 

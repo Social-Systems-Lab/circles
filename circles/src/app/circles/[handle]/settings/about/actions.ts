@@ -3,7 +3,14 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
-import { getVerificationAdmins, getActiveVerificationRequestForIndependentCircle, createVerificationRequest } from "@/lib/data/verification-workflow";
+import {
+    addApplicantVerificationMessage,
+    createVerificationRequest,
+    getActiveVerificationRequestForIndependentCircle,
+    getIndependentCircleVerificationThread,
+    getVerificationAdmins,
+    notifyAdminsOfApplicantVerificationReply,
+} from "@/lib/data/verification-workflow";
 import { sendVerificationRequestNotification } from "@/lib/data/notifications";
 import { Circle, FileInfo, FormSubmitResponse, Media } from "@/models/models"; // Added Media, FileInfo
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
@@ -108,6 +115,77 @@ export async function submitCircleForVerificationAction(formData: FormData) {
     }
 
     return updateCirclePublishStatus(circleId, "pending_verification");
+}
+
+export async function getIndependentCircleVerificationThreadAction(circleId: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        throw new Error("Unauthorized");
+    }
+
+    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
+    if (!authorized) {
+        throw new Error("Unauthorized");
+    }
+
+    return await getIndependentCircleVerificationThread(circleId, userDid);
+}
+
+export async function replyToIndependentCircleVerificationThreadAction(formData: FormData) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "Unauthorized" };
+    }
+
+    const circleIdValue = formData.get("circleId");
+    const requestIdValue = formData.get("requestId");
+    const bodyValue = formData.get("body");
+    const files = formData
+        .getAll("attachments")
+        .filter((value): value is File => value instanceof File && value.size > 0);
+
+    if (typeof circleIdValue !== "string" || !circleIdValue) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    const authorized = await isAuthorized(userDid, circleIdValue, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to edit circle settings" };
+    }
+
+    if (typeof requestIdValue !== "string" || !requestIdValue) {
+        return { success: false, message: "Verification request not found." };
+    }
+
+    const body = typeof bodyValue === "string" ? bodyValue : "";
+
+    try {
+        const result = await addApplicantVerificationMessage({
+            requestId: requestIdValue,
+            applicantDid: userDid,
+            body,
+            files,
+        });
+
+        const admins = await getVerificationAdmins(userDid);
+        await notifyAdminsOfApplicantVerificationReply(result.applicant, admins);
+
+        const circle = await getCircleById(circleIdValue);
+        const circlePath = circle ? await getCirclePath(circle) : null;
+        if (circlePath) {
+            revalidatePath(circlePath);
+            revalidatePath(`${circlePath}settings/about`);
+        }
+        revalidatePath("/circles");
+        revalidatePath("/admin");
+
+        return { success: true, message: "Reply sent." };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not send reply.",
+        };
+    }
 }
 
 export async function saveAbout(values: {

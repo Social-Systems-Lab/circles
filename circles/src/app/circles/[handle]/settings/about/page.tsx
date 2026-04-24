@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCircleByHandle, getCirclePublishStatus } from "@/lib/data/circle";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
+import { CircleVerificationThreadCard } from "./circle-verification-thread-card";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -74,6 +75,9 @@ export default async function AboutSettingsPage(props: PageProps) {
                         ) : null}
                     </div>
                 </div>
+            ) : null}
+            {showWorkflowCard && !isProfileCircle && publishStatus === "pending_verification" ? (
+                <CircleVerificationThreadCard circleId={String(circle._id)} />
             ) : null}
             <AboutSettingsForm circle={circle} />
         </div>
