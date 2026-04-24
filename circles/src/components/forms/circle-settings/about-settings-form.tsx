@@ -35,6 +35,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isIndependentCircle = circle.circleType !== "user" && circle.circleLevel !== "profile_child";
 
     const form = useForm({
         defaultValues: {
@@ -59,8 +60,13 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
             location: circle.location || {},
             socialLinks: circle.socialLinks || [],
             websiteUrl: circle.websiteUrl || "",
+            representsOrganization: circle.representsOrganization === true,
+            organizationName: circle.organizationName || "",
+            officialEmail: circle.officialEmail || "",
         },
     });
+
+    const representsOrganization = form.watch("representsOrganization");
 
     const onSubmit = async (data: {
         _id: any;
@@ -77,6 +83,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
         location?: any;
         socialLinks?: any;
         websiteUrl?: string;
+        representsOrganization?: boolean;
+        organizationName?: string;
+        officialEmail?: string;
     }) => {
         setIsSubmitting(true);
         try {
@@ -180,6 +189,76 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                 />
                             )}
                         />
+
+                        {isIndependentCircle ? (
+                            <div className="space-y-4 rounded-lg border bg-slate-50 p-4">
+                                <div className="space-y-1">
+                                    <h3 className="font-medium">Organization Claim</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Independent circles that represent an existing organization may require extra
+                                        verification, such as an official email tied to that organization.
+                                    </p>
+                                </div>
+
+                                <Controller
+                                    name="representsOrganization"
+                                    control={form.control as unknown as Control}
+                                    render={({ field }) => (
+                                        <DynamicSwitchField
+                                            field={{
+                                                name: "representsOrganization",
+                                                type: "switch",
+                                                label: "This circle represents an existing organization",
+                                            }}
+                                            formField={field}
+                                            control={form.control as unknown as Control}
+                                        />
+                                    )}
+                                />
+
+                                {representsOrganization ? (
+                                    <div className="space-y-4">
+                                        <Controller
+                                            name="organizationName"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicTextField
+                                                    field={{
+                                                        name: "organizationName",
+                                                        type: "text",
+                                                        label: "Organization name",
+                                                        placeholder: "Official organization name",
+                                                        description:
+                                                            "Leave blank if the organization name matches the circle name.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+
+                                        <Controller
+                                            name="officialEmail"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicTextField
+                                                    field={{
+                                                        name: "officialEmail",
+                                                        type: "text",
+                                                        label: "Official email",
+                                                        placeholder: "name@organization.org",
+                                                        description:
+                                                            "Use an email address connected to the organization if available.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
 
                         <Controller
                             name="description"

@@ -57,6 +57,12 @@ export default async function AboutSettingsPage(props: PageProps) {
                                       ? "This circle is waiting for verification and is not publicly live yet."
                                       : "This circle is live and behaves like existing published circles."}
                             </p>
+                            {!isProfileCircle && circle.representsOrganization ? (
+                                <p className="text-sm text-muted-foreground">
+                                    This verification will be reviewed as an organization claim using the website and
+                                    official email you provided.
+                                </p>
+                            ) : null}
                         </div>
                         {isDraft ? (
                             isProfileCircle ? (

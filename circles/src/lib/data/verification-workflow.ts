@@ -129,6 +129,45 @@ export const serializeVerificationMessage = (message: VerificationMessage, sende
     createdAt: message.createdAt.toISOString(),
 });
 
+const getNormalizedHostname = (value?: string | null): string | null => {
+    if (!value) {
+        return null;
+    }
+
+    try {
+        const url = /^https?:\/\//i.test(value) ? new URL(value) : new URL(`https://${value}`);
+        return url.hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+        return null;
+    }
+};
+
+const getNormalizedEmailDomain = (value?: string | null): string | null => {
+    const domain = value?.trim().toLowerCase().split("@")[1];
+    return domain ? domain.replace(/^www\./, "") : null;
+};
+
+const getOrganizationClaimReview = (circle?: Partial<Circle> | null) => {
+    if (!circle || circle.representsOrganization !== true) {
+        return null;
+    }
+
+    const websiteDomain = getNormalizedHostname(circle.websiteUrl);
+    const emailDomain = getNormalizedEmailDomain(circle.officialEmail);
+    const domainsAlign =
+        websiteDomain && emailDomain ? emailDomain === websiteDomain || emailDomain.endsWith(`.${websiteDomain}`) : null;
+
+    return {
+        representsOrganization: true,
+        organizationName: circle.organizationName?.trim() || circle.name || "",
+        websiteUrl: circle.websiteUrl ?? "",
+        officialEmail: circle.officialEmail ?? "",
+        websiteDomain,
+        emailDomain,
+        domainsAlign,
+    };
+};
+
 export async function getVerificationAdmins(excludeDid?: string): Promise<UserPrivate[]> {
     const query: Record<string, unknown> = { isAdmin: true, circleType: "user" };
     if (excludeDid) {
@@ -702,12 +741,14 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
                   id: targetCircle._id?.toString?.() ?? "",
                   name: targetCircle.name ?? "Untitled circle",
                   handle: targetCircle.handle ?? "",
+                  organizationClaimReview: getOrganizationClaimReview(targetCircle),
               }
             : requestType === "independent_circle"
               ? {
                     id: request.targetCircleId ?? "",
                     name: "Unknown circle",
                     handle: "",
+                    organizationClaimReview: null,
                 }
               : null,
         messages: messages.map((message) =>

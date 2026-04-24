@@ -339,6 +339,55 @@ export default function VerificationRequestsTab() {
                             ) : null}
                         </div>
 
+                        {detail.request.requestType === "independent_circle" && detail.targetCircle?.organizationClaimReview ? (
+                            <div className="space-y-3 rounded-lg border p-4 text-sm">
+                                <div className="font-medium">Organization claim</div>
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <div className="text-muted-foreground">Organization</div>
+                                        <div>{detail.targetCircle.organizationClaimReview.organizationName || "Unknown"}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-muted-foreground">Official email</div>
+                                        <div>{detail.targetCircle.organizationClaimReview.officialEmail || "Not provided"}</div>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <div className="text-muted-foreground">Website</div>
+                                        {detail.targetCircle.organizationClaimReview.websiteUrl ? (
+                                            <a
+                                                href={detail.targetCircle.organizationClaimReview.websiteUrl}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="underline"
+                                            >
+                                                {detail.targetCircle.organizationClaimReview.websiteUrl}
+                                            </a>
+                                        ) : (
+                                            <div>Not provided</div>
+                                        )}
+                                    </div>
+                                </div>
+                                {detail.targetCircle.organizationClaimReview.websiteDomain &&
+                                detail.targetCircle.organizationClaimReview.emailDomain ? (
+                                    <div
+                                        className={
+                                            detail.targetCircle.organizationClaimReview.domainsAlign
+                                                ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900"
+                                                : "rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900"
+                                        }
+                                    >
+                                        {detail.targetCircle.organizationClaimReview.domainsAlign
+                                            ? "Website and official email domains appear to align."
+                                            : `Website domain ${detail.targetCircle.organizationClaimReview.websiteDomain} does not appear to align with email domain ${detail.targetCircle.organizationClaimReview.emailDomain}.`}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                                        Domain comparison is unavailable because the website URL or official email is incomplete.
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+
                         {detail.request.decisionReason ? (
                             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                                 <div className="font-medium">Decision note</div>

@@ -18,6 +18,19 @@ import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 
+const normalizeWebsiteUrl = (url?: string) => {
+    if (!url) return undefined;
+    const trimmed = url.trim();
+    if (!trimmed) return undefined;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+};
+
+const normalizeOfficialEmail = (email?: string) => {
+    const normalized = email?.trim().toLowerCase();
+    return normalized ? normalized : undefined;
+};
+
 async function updateCirclePublishStatus(circleId: string, publishStatus: "published" | "pending_verification") {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -79,6 +92,22 @@ export async function submitCircleForVerificationAction(formData: FormData) {
 
     if (circle.circleLevel === "profile_child") {
         return { success: false, message: "Profile circles should be published directly" };
+    }
+
+    if (circle.representsOrganization) {
+        if (!normalizeWebsiteUrl(circle.websiteUrl)) {
+            return {
+                success: false,
+                message: "Add an organization website before submitting this circle for verification.",
+            };
+        }
+
+        if (!normalizeOfficialEmail(circle.officialEmail)) {
+            return {
+                success: false,
+                message: "Add an official organization email before submitting this circle for verification.",
+            };
+        }
     }
 
     const userDid = await getAuthenticatedUserDid();
@@ -203,16 +232,11 @@ export async function saveAbout(values: {
     location?: any;
     socialLinks?: any;
     websiteUrl?: string;
+    representsOrganization?: boolean;
+    organizationName?: string;
+    officialEmail?: string;
 }): Promise<FormSubmitResponse> {
     console.log("Saving circle about with values (images length):", values.images?.length);
-
-    const ensureProtocol = (url?: string) => {
-        if (!url) return undefined;
-        const trimmed = url.trim();
-        if (!trimmed) return undefined;
-        if (/^https?:\/\//i.test(trimmed)) return trimmed;
-        return `https://${trimmed}`;
-    };
 
     let circleUpdateData: Partial<Circle> = {
         _id: values._id,
@@ -228,10 +252,12 @@ export async function saveAbout(values: {
     };
 
     // Normalize website URL and include if present
-    const normalizedWebsite = ensureProtocol(values.websiteUrl);
-    if (normalizedWebsite) {
-        circleUpdateData.websiteUrl = normalizedWebsite;
-    }
+    const normalizedWebsite = normalizeWebsiteUrl(values.websiteUrl);
+    circleUpdateData.websiteUrl = normalizedWebsite;
+    const representsOrganization = values.representsOrganization === true;
+    circleUpdateData.representsOrganization = representsOrganization;
+    circleUpdateData.organizationName = representsOrganization ? values.organizationName?.trim() || undefined : undefined;
+    circleUpdateData.officialEmail = representsOrganization ? normalizeOfficialEmail(values.officialEmail) : undefined;
 
     // check if user is authorized to edit circle settings
     const userDid = await getAuthenticatedUserDid();
@@ -249,6 +275,12 @@ export async function saveAbout(values: {
         let existingCircle = await getCircleById(values._id);
         if (!existingCircle) {
             throw new Error("Circle not found");
+        }
+
+        if (existingCircle.circleType !== "user" && existingCircle.circleLevel === "profile_child") {
+            circleUpdateData.representsOrganization = undefined;
+            circleUpdateData.organizationName = undefined;
+            circleUpdateData.officialEmail = undefined;
         }
 
         // Handle picture upload (keeping existing logic for profile picture)
