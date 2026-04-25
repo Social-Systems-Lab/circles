@@ -298,7 +298,7 @@ export default function UsersTab() {
                                 <TableHead>Subscription</TableHead>
                                 <TableHead>Admin</TableHead>
                                 <TableHead>Verified</TableHead>
-                                <TableHead>Manual Member</TableHead>
+                                <TableHead>Member</TableHead>
                                 <TableHead>Created</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -410,8 +410,8 @@ export default function UsersTab() {
                                                 disabled={isTogglingMember}
                                                 title={
                                                     user.manualMember
-                                                        ? "Remove Manual Membership"
-                                                        : "Make Manual Member"
+                                                        ? "Remove Membership"
+                                                        : "Make Member"
                                                 }
                                             >
                                                 {isTogglingMember ? (
