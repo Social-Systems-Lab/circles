@@ -53,7 +53,8 @@ CRITICAL RULES:
 - Investigate first
 - Then implement
 - Then test locally
-- Then commit
+- Then stop for human local browser check
+- Only after explicit approval may Codex commit, merge, push, or deploy
 
 3. Repository Rules
 - ALL changes must end in ~/circles/circles

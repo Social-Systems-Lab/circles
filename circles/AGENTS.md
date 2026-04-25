@@ -45,7 +45,10 @@ Preferred workflow:
 1. Investigate (read code first)
 2. Implement using Codex
 3. Test locally
-4. Then commit
+4. Stop for human local browser check
+5. Only after explicit approval: commit, merge, push, deploy
+
+Codex must NOT merge, push, or deploy after local checks until the human has completed a local browser test and explicitly approved proceeding.
 
 Avoid manual editing unless absolutely necessary.
 
