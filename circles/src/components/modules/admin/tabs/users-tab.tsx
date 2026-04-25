@@ -293,13 +293,8 @@ export default function UsersTab() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Handle</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>Subscription</TableHead>
-                                <TableHead>Admin</TableHead>
-                                <TableHead>Verified</TableHead>
-                                <TableHead>Member</TableHead>
-                                <TableHead>Created</TableHead>
+                                <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -332,44 +327,19 @@ export default function UsersTab() {
                                                 </Button>
                                             </div>
                                         </TableCell>
-                                        <TableCell>{user.handle}</TableCell>
                                         <TableCell>{user.email || "No email"}</TableCell>
-                                        <TableCell>{user.subscription?.status ?? "Inactive"}</TableCell>
                                         <TableCell>
-                                            {user.isAdmin ? (
-                                                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                                    Yes
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                                    No
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.isVerified ? (
-                                                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                                                    Yes
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                                    No
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.manualMember ? (
-                                                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                                    Yes
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                                    No
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Unknown"}
+                                            <div className="flex flex-wrap gap-1">
+                                                {user.isAdmin && (
+                                                    <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-800">Admin</span>
+                                                )}
+                                                {user.isVerified && (
+                                                    <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">Verified</span>
+                                                )}
+                                                {user.manualMember && (
+                                                    <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-800">Member</span>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell className="space-x-1 text-right">
                                             {/* Reset Password Button */}
