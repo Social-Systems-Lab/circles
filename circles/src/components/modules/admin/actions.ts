@@ -61,6 +61,9 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
                     members: 1,
                     isAdmin: 1,
                     isVerified: 1,
+                    isMember: 1,
+                    manualMember: 1,
+                    subscription: 1,
                     parentCircleId: 1,
                     circleLevel: 1,
                     publishStatus: 1,
@@ -946,7 +949,7 @@ export async function getUserByDidAction(did: string) {
 export async function toggleManualMembership(userId: string, manualMember: boolean) {
     try {
         const users = await db.collection("circles");
-        const result = await users.updateOne({ _id: new ObjectId(userId) }, { $set: { manualMember } });
+        const result = await users.updateOne({ _id: new ObjectId(userId) }, { $set: { manualMember, isMember: manualMember } });
 
         if (result.modifiedCount === 0) {
             return { success: false, message: "User not found or membership status unchanged." };
