@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, CheckSquare, ChevronDown, Circle as CircleIcon, Loader2, Users } from "lucide-react";
+import { Bell, ChevronDown, Circle as CircleIcon, Loader2, Users } from "lucide-react";
 import { MdOutlineLogout } from "react-icons/md";
 import { LuClipboardCheck, LuMail, LuSettings } from "react-icons/lu";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
-import { Circle, UserToolboxTab, EventDisplay, TaskPermissions, ChatRoomDisplay } from "@/models/models";
+import { Circle, UserToolboxTab, EventDisplay, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
 import { VerifyAccountButton } from "../modules/auth/verify-account-button";
@@ -31,7 +31,6 @@ import Link from "next/link";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { ChatList } from "../modules/chat/chat-list";
-import TasksList from "../modules/tasks/tasks-list";
 import EventTimeline from "../modules/events/event-timeline";
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
@@ -128,23 +127,6 @@ export const UserToolbox = () => {
         },
         [setEvents],
     );
-
-    const initialTasksData = {
-        tasks: [],
-        hasUserRanked: false,
-        totalRankers: 0,
-        unrankedCount: 0,
-        userRankUpdatedAt: null as Date | null,
-        userRankBecameStaleAt: null as Date | null,
-    };
-
-    const defaultTaskPermissions: TaskPermissions = {
-        canModerate: false,
-        canReview: false,
-        canAssign: false,
-        canResolve: false,
-        canComment: true,
-    };
 
     useEffect(() => {
         const fetchTimelineItems = async () => {
@@ -314,11 +296,6 @@ export const UserToolbox = () => {
             closeToolbox();
         });
         // Do not scroll to top as we use hash navigation for events
-    }, [closeToolbox]);
-
-    const handleTaskNavigate = useCallback(() => {
-        closeToolbox();
-        // Do not scroll to top as we use hash navigation for tasks
     }, [closeToolbox]);
 
     const signOut = async () => {
@@ -531,7 +508,7 @@ export const UserToolbox = () => {
                     onValueChange={handleTabChange}
                     className="flex h-full flex-col"
                 >
-                    <TabsList className="grid h-auto w-full grid-cols-8 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
+                    <TabsList className="grid h-auto w-full grid-cols-7 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
                         {/* Existing TabsTriggers */}
                         <TabsTrigger
                             value="chat"
@@ -562,12 +539,6 @@ export const UserToolbox = () => {
                             className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
                         >
                             <Users className="h-5 w-5" />
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="tasks"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
-                        >
-                            <CheckSquare className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="settings"
@@ -656,27 +627,6 @@ export const UserToolbox = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                                 No connections yet
-                            </div>
-                        )}
-                    </TabsContent>
-
-                    <TabsContent value="tasks" className="m-0 flex-grow overflow-auto pt-1 flex flex-col">
-                        {isLoading ? (
-                            <div className="flex flex-1 items-center justify-center">
-                                <LoadingSpinner />
-                            </div>
-                        ) : user ? (
-                            <TasksList
-                                tasksData={initialTasksData as any}
-                                circle={user as any}
-                                permissions={defaultTaskPermissions}
-                                hideRank={true}
-                                inToolbox={true}
-                                onTaskNavigate={handleTaskNavigate}
-                            />
-                        ) : (
-                            <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
-                                Loading tasks...
                             </div>
                         )}
                     </TabsContent>

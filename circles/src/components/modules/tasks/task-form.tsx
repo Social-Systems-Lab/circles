@@ -91,6 +91,14 @@ const taskFormSchema = z
         priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
     })
     .superRefine((data, context) => {
+        if (data.priority === "critical" && !data.targetDate) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["targetDate"],
+                message: "Due date is required for Critical tasks",
+            });
+        }
+
         if (data.taskType === "shift") {
             if (!data.targetDate) {
                 context.addIssue({

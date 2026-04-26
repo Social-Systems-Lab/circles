@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, MapPin, Users, Pencil } from "lucide-react";
+import { CalendarIcon, CheckSquare, Clock, MapPin, Users, Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
@@ -261,7 +261,14 @@ const MilestoneRow: React.FC<{
     onNavigate?: () => void;
     isOverdue?: boolean;
 }> = ({ m, circleHandle, onNavigate, isOverdue }) => {
-    const icon = m.type === "goal" ? "🎯" : m.type === "task" ? "🧩" : "🐞";
+    const icon =
+        m.type === "goal" ? (
+            <span className="select-none">🎯</span>
+        ) : m.type === "task" ? (
+            <CheckSquare className="h-4 w-4 shrink-0 rounded-sm bg-emerald-50 p-[1px] text-emerald-700 ring-1 ring-emerald-200" />
+        ) : (
+            <span className="select-none">🐞</span>
+        );
     const targetCircleHandle = m.circleHandle || circleHandle;
     const href =
         m.type === "goal"
@@ -288,7 +295,7 @@ const MilestoneRow: React.FC<{
                     "flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40",
                     isOverdue && "border-red-200 bg-red-50 hover:bg-red-100/50"
                 )}>
-                    <span className="select-none">{icon}</span>
+                    {icon}
                     <span className="truncate flex-grow">{m.title}</span>
                     <span className={cn(
                         "ml-auto inline-flex items-center",

@@ -8,6 +8,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import { EventClickArg } from "@fullcalendar/core";
 import { useRouter } from "next/navigation";
+import { CheckSquare } from "lucide-react";
 import { EventDisplay } from "@/models/models";
 
 // FullCalendar styles (plugin CSS)
@@ -47,7 +48,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
         const milestoneItems =
             (milestones || []).map((m) => ({
                 id: `m:${m.type}:${m.id}`,
-                title: (m.type === "goal" ? "🎯 " : m.type === "task" ? "🧩 " : "🐞 ") + m.title,
+                title: m.title,
                 start: m.date ? new Date(m.date) : undefined,
                 end: undefined,
                 allDay: true,
@@ -97,9 +98,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
 
         // Condensed rendering for milestones (goal/task/issue)
         if (type === "goal" || type === "task" || type === "issue") {
+            const icon =
+                type === "goal" ? (
+                    <span className="select-none">🎯</span>
+                ) : type === "task" ? (
+                    <CheckSquare className="h-3.5 w-3.5 shrink-0 rounded-sm bg-emerald-50 p-[1px] text-emerald-700 ring-1 ring-emerald-200" />
+                ) : (
+                    <span className="select-none">🐞</span>
+                );
+
             return (
-                <div className="max-w-full truncate text-xs" title={arg.event.title}>
-                    {arg.event.title}
+                <div className="flex max-w-full items-center gap-1 truncate text-xs" title={arg.event.title}>
+                    {icon}
+                    <span className="truncate">{arg.event.title}</span>
                 </div>
             );
         }

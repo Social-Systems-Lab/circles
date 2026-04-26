@@ -126,7 +126,15 @@ const taskPrioritySortOrder: Record<TaskPriority, number> = {
 };
 const getSortableCircleLabel = (circle?: Circle) =>
     circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
-const sortableTaskColumnIds = new Set(["title", "priority", "stage", "assignee", "createdAt"]);
+const sortableTaskColumnIds = new Set([
+    "title",
+    "priority",
+    "stage",
+    "assignee",
+    "circle",
+    "targetDate",
+    "createdAt",
+]);
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -299,6 +307,14 @@ const sanitizePersistedTasksListViewState = (value: unknown): PersistedTasksList
     };
 };
 
+const formatTaskDate = (value?: Date | null) => {
+    if (!value) {
+        return "No due date";
+    }
+
+    return new Date(value).toLocaleDateString();
+};
+
 const TasksList: React.FC<TasksListProps> = ({
     tasksData,
     circle,
@@ -347,6 +363,9 @@ const TasksList: React.FC<TasksListProps> = ({
     } | null>(null);
     const [hiddenVerificationTaskIds, setHiddenVerificationTaskIds] = useState<string[]>([]);
     const shouldPersistViewState = persistViewState && !inToolbox;
+    const showProfileCircleColumn = circle.circleType === "user" && user?.did === circle.did && !inToolbox;
+    const showProfileAuthorColumn = circle.circleType === "user" && user?.did === circle.did && !inToolbox;
+    const showProfileCircleAvatarColumn = showProfileCircleColumn;
     const tasksListViewStateStorageKey = useMemo(() => {
         if (!shouldPersistViewState) {
             return null;
@@ -469,6 +488,37 @@ const TasksList: React.FC<TasksListProps> = ({
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
             {
+                id: "circleAvatar",
+                header: () => <span className="sr-only">Circle</span>,
+                cell: (info) => {
+                    const taskCircle = info.row.original.circle;
+
+                    if (!showProfileCircleAvatarColumn || !taskCircle) {
+                        return null;
+                    }
+
+                    const avatar = <CirclePicture circle={taskCircle} size="24px" />;
+
+                    if (!taskCircle.handle) {
+                        return <div className="flex w-8 justify-center">{avatar}</div>;
+                    }
+
+                    return (
+                        <div className="flex w-8 justify-center">
+                            <Link
+                                href={`/circles/${taskCircle.handle}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                aria-label={taskCircle.name || taskCircle.handle}
+                            >
+                                {avatar}
+                            </Link>
+                        </div>
+                    );
+                },
+                enableSorting: false,
+            },
+            {
                 accessorKey: "title",
                 header: ({ column }) => (
                     <Button variant="ghost" onClick={() => column.toggleSorting()}>
@@ -479,11 +529,12 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => {
                     const task = info.row.original; // Renamed variable
                     const isShiftTask = isShiftTaskItem(task);
+                    const taskCircleHandle = task.circle?.handle || circle.handle;
                     return (
                         <div className="flex min-w-0 flex-col gap-1">
                             <div className="flex min-w-0 items-center gap-2">
                                 <Link
-                                    href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
+                                    href={`/circles/${taskCircleHandle}/tasks/${task._id}#circle-tabs`}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (inToolbox) {
@@ -494,9 +545,6 @@ const TasksList: React.FC<TasksListProps> = ({
                                 >
                                     {info.getValue() as string}
                                 </Link>
-                                {task.circle && task.circle._id !== circle._id && (
-                                    <CirclePicture circle={task.circle} size="24px" />
-                                )}
                             </div>
                             {isShiftTask && (
                                 <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -509,6 +557,30 @@ const TasksList: React.FC<TasksListProps> = ({
                             )}
                         </div>
                     );
+                },
+            },
+            {
+                accessorKey: "circle",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Circle / Project
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const taskCircle = info.getValue() as Circle | undefined;
+
+                    if (!taskCircle) {
+                        return <span className="text-gray-500">Unknown</span>;
+                    }
+
+                    return <span>{taskCircle.name}</span>;
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const circleA = getSortableCircleLabel(rowA.getValue(id) as Circle | undefined);
+                    const circleB = getSortableCircleLabel(rowB.getValue(id) as Circle | undefined);
+
+                    return circleA.localeCompare(circleB);
                 },
             },
             {
@@ -655,6 +727,27 @@ const TasksList: React.FC<TasksListProps> = ({
                 },
             },
             {
+                accessorKey: "targetDate",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Due Date
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const targetDate = info.getValue() as Date | null | undefined;
+                    return <span className={targetDate ? "" : "text-gray-500"}>{formatTaskDate(targetDate)}</span>;
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const valueA = rowA.getValue(id) as Date | null | undefined;
+                    const valueB = rowB.getValue(id) as Date | null | undefined;
+                    const timeA = valueA ? new Date(valueA).getTime() : Number.POSITIVE_INFINITY;
+                    const timeB = valueB ? new Date(valueB).getTime() : Number.POSITIVE_INFINITY;
+
+                    return timeA - timeB;
+                },
+            },
+            {
                 accessorKey: "author", // Assuming 'author' is populated in TaskDisplay
                 header: ({ column }) => (
                     <Button variant="ghost" onClick={() => column.toggleSorting()}>
@@ -697,7 +790,16 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate, permissions.canModerate],
+        [
+            isCompact,
+            circle.handle,
+            openAssignee,
+            openAuthor,
+            inToolbox,
+            onTaskNavigate,
+            permissions.canModerate,
+            showProfileCircleAvatarColumn,
+        ],
     );
 
     const table = useReactTable({
@@ -712,12 +814,15 @@ const TasksList: React.FC<TasksListProps> = ({
             sorting,
             columnFilters,
             columnVisibility: {
+                circleAvatar: showProfileCircleAvatarColumn && !isCompact,
                 title: true,
+                circle: showProfileCircleColumn && !isCompact,
                 priority: true,
                 stage: true,
                 assignee: !isCompact && !inToolbox,
-                author: !isCompact && !inToolbox,
-                createdAt: !isCompact && !inToolbox,
+                targetDate: !isCompact && !inToolbox,
+                author: showProfileAuthorColumn && !isCompact,
+                createdAt: false,
             },
         },
     });
@@ -785,14 +890,17 @@ const TasksList: React.FC<TasksListProps> = ({
 
     const handleRowClick = (task: TaskDisplay) => {
         // Renamed param, type
+        const taskCircleHandle = task.circle?.handle || circle.handle;
+        const taskCircle = task.circle || circle;
+
         if (inToolbox) {
-            router.push(`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`); // Updated path
+            router.push(`/circles/${taskCircleHandle}/tasks/${task._id}#circle-tabs`);
             onTaskNavigate?.();
             return;
         }
 
         if (isCompact) {
-            router.push(`/circles/${circle.handle}/tasks/${task._id}`); // Updated path
+            router.push(`/circles/${taskCircleHandle}/tasks/${task._id}`);
             return;
         }
 
@@ -800,7 +908,7 @@ const TasksList: React.FC<TasksListProps> = ({
         let contentPreviewData: ContentPreviewData = {
             type: "task", // Use the correct type
             content: task, // Renamed param
-            props: { circle, permissions }, // Pass required props
+            props: { circle: taskCircle, permissions }, // Pass required props
         };
         setContentPreview((x) => {
             // Toggle behavior: if clicking the same task again while preview is open, close it.
@@ -1148,7 +1256,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                     checked={includeAssigned}
                                     onCheckedChange={(checked) => setIncludeAssigned(Boolean(checked))}
                                 />
-                                <Label htmlFor="includeAssigned">Show assigned</Label>
+                                <Label htmlFor="includeAssigned">Show assigned / participating</Label>
                             </div>
                         </div>
                     )}

@@ -164,6 +164,13 @@ export const getTasksByCircleId = async (
             }
             if (includeAssigned) {
                 userQueries.push({ assignedTo: userDid });
+                userQueries.push({
+                    participants: {
+                        $elemMatch: {
+                            userDid,
+                        },
+                    },
+                });
             }
 
             if (userQueries.length > 0) {

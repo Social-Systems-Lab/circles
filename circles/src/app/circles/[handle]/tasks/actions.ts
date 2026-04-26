@@ -243,6 +243,14 @@ const baseTaskSchema = z.object({
 });
 
 const createTaskSchema = baseTaskSchema.superRefine((data, context) => {
+    if (data.priority === "critical" && !data.targetDate) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["targetDate"],
+            message: "Due date is required for Critical tasks",
+        });
+    }
+
     if (data.taskType === "shift") {
         if (!data.targetDate) {
             context.addIssue({
@@ -282,6 +290,14 @@ const updateTaskSchema = baseTaskSchema.extend({
     eventId: z.string().optional().nullable(),
     priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
 }).superRefine((data, context) => {
+    if (data.priority === "critical" && !data.targetDate) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["targetDate"],
+            message: "Due date is required for Critical tasks",
+        });
+    }
+
     if (data.taskType === "shift") {
         if (!data.targetDate) {
             context.addIssue({
