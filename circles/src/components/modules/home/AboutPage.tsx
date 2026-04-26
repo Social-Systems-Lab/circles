@@ -299,6 +299,15 @@ export default function AboutPage({
                 {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="space-y-6">
+                            {shouldShowFundingPanel && (
+                                <FundingPanel
+                                    circleHandle={circle.handle || ""}
+                                    asks={fundingPreviewAsks}
+                                    canCreate={canCreateFundingAsk}
+                                    visibility={fundingPanelVisibility}
+                                />
+                            )}
+
                             {hasOverviewDetails && (
                                 <div
                                     className={`flex flex-col bg-white p-6 ${
@@ -583,15 +592,6 @@ export default function AboutPage({
                                         </div>
                                     )}
                                 </div>
-                            )}
-
-                            {shouldShowFundingPanel && (
-                                <FundingPanel
-                                    circleHandle={circle.handle || ""}
-                                    asks={fundingPreviewAsks}
-                                    canCreate={canCreateFundingAsk}
-                                    visibility={fundingPanelVisibility}
-                                />
                             )}
 
                             {shouldShowVerifiedContributions && (
