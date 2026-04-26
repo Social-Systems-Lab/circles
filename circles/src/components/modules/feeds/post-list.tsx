@@ -398,6 +398,7 @@ export const PostItem = ({
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const searchParams = useSearchParams();
+    const isFundingPreviewPost = post.internalPreviewType === "funding" && Boolean(post.internalPreviewUrl);
 
     useEffect(() => {
         if (searchParams?.get("editPostId") === post._id) {
@@ -916,7 +917,7 @@ export const PostItem = ({
         </Dialog>
 
         {/* Media carousel (moved to top) */}
-        {!hideContent && post.media && post.media.length > 0 && (
+        {!hideContent && !isFundingPreviewPost && post.media && post.media.length > 0 && (
             <div className="relative h-64 w-full rounded-lg pl-4 pr-4 pt-4">
                 <Carousel setApi={setCarouselApi}>
                     <CarouselContent>
@@ -951,7 +952,7 @@ export const PostItem = ({
         )}
 
         {/* Title */}
-            {!hideContent && post.title && (
+            {!hideContent && !isFundingPreviewPost && post.title && (
                 <div className="pl-4 pr-4 pt-4">
                     <div className="text-xl font-semibold">{post.title}</div>
                 </div>
@@ -1164,7 +1165,7 @@ export const PostItem = ({
             )}
 
             {/* Post content - using TruncatedPostContent for See More functionality */}
-            {!hideContent && (
+            {!hideContent && !isFundingPreviewPost && (
                 <TruncatedPostContent
                     content={post.content}
                     mentions={post.mentionsDisplay}

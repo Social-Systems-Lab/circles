@@ -87,6 +87,7 @@ const fundingFormSchema = z
     });
 
 type FundingFormValues = z.infer<typeof fundingFormSchema>;
+type FundingFormSubmissionValues = FundingFormValues & { publishToNoticeboard: boolean };
 
 type FundingFormProps = {
     circle: Circle;
@@ -131,7 +132,7 @@ const getEmptyFundingItem = (): FundingFormValues["items"][number] =>
         note: "",
     }) as FundingFormValues["items"][number];
 
-const getDefaultValues = (ask?: FundingAskDisplay): FundingFormValues => ({
+const getDefaultValues = (ask?: FundingAskDisplay): FundingFormSubmissionValues => ({
     title: ask?.title || "",
     shortStory: ask?.shortStory || "",
     description: ask?.description || "",
@@ -152,6 +153,7 @@ const getDefaultValues = (ask?: FundingAskDisplay): FundingFormValues => ({
     beneficiaryType: ask?.beneficiaryType || "self",
     beneficiaryName: ask?.beneficiaryName || "",
     proxyNote: ask?.proxyNote || "",
+    publishToNoticeboard: true,
 });
 
 export function FundingForm({ circle, ask }: FundingFormProps) {
@@ -164,7 +166,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
     const isEditing = Boolean(ask);
     const defaultValues = React.useMemo(() => getDefaultValues(ask), [ask]);
 
-    const form = useForm<FundingFormValues>({
+    const form = useForm<FundingFormSubmissionValues>({
         resolver: zodResolver(fundingFormSchema),
         defaultValues,
         shouldUnregister: false,
@@ -179,7 +181,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
         form.reset(defaultValues);
         setCoverImageItems(getInitialCoverImageItems(ask));
         setStepIndex(0);
-    }, [ask?._id, defaultValues, form]);
+    }, [ask, defaultValues, form]);
 
     const isProxy = form.watch("isProxy");
     const values = form.watch();
@@ -224,6 +226,7 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
         formData.append("beneficiaryName", formValues.beneficiaryName || "");
         formData.append("proxyNote", formValues.proxyNote || "");
         formData.append("submissionIntent", submissionIntent);
+        formData.append("publishToNoticeboard", String(formValues.publishToNoticeboard));
 
         const primaryCoverImage = coverImageItems[0];
         if (primaryCoverImage?.file) {
@@ -722,6 +725,28 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         </CardContent>
                                     </Card>
                                 </div>
+
+                                <FormField
+                                    control={form.control}
+                                    name="publishToNoticeboard"
+                                    render={({ field }) => (
+                                        <FormItem className="rounded-xl border border-slate-200 p-4">
+                                            <div className="flex items-start gap-3">
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+                                                />
+                                                <div>
+                                                    <FormLabel>Publish to Noticeboard</FormLabel>
+                                                    <p className="mt-1 text-sm text-slate-600">
+                                                        Create one linked Noticeboard post when this funding request is published.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
                             </div>
 
                             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-6">

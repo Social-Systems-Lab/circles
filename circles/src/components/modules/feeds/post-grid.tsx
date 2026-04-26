@@ -17,6 +17,7 @@ import emptyFeed from "@images/empty-feed.png";
 import { PostItem } from "./post-list";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import InternalLinkPreview from "./InternalLinkPreview";
 
 interface PostGridProps {
     posts: PostDisplay[];
@@ -135,6 +136,10 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                         const postImage = getPostImage(post);
                         const formattedDate = getPublishTime(post.createdAt);
                         const author = post.author as Circle;
+                        const isFundingPreviewPost =
+                            post.internalPreviewType === "funding" &&
+                            Boolean(post.internalPreviewUrl) &&
+                            Boolean(post.internalPreviewData);
 
                         return (
                             <motion.div
@@ -150,34 +155,43 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                                 } relative shadow-lg transition-shadow duration-200 hover:shadow-md`}
                                 onClick={() => handlePostClick(post)}
                             >
-                                {/* Post Image */}
-                                <div className="relative h-[200px] w-full overflow-hidden bg-gray-100">
-                                    {postImage ? (
-                                        <Image
-                                            src={postImage}
-                                            alt="Post image"
-                                            className="object-cover"
-                                            fill
-                                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                        />
-                                    ) : (
-                                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                                            <MessageCircle className="h-12 w-12 text-gray-400" />
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Post Content */}
                                 <div className="flex flex-1 flex-col px-4 pb-4 pt-2">
-                                    {/* Title (if exists) */}
-                                    {post.title && (
-                                        <h3 className="mb-2 text-lg font-bold text-gray-900">{post.title}</h3>
-                                    )}
+                                    {isFundingPreviewPost ? (
+                                        <div className="mb-4 pt-2">
+                                            <InternalLinkPreview
+                                                url={post.internalPreviewUrl!}
+                                                initialData={post.internalPreviewData}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Post Image */}
+                                            <div className="relative mb-4 h-[200px] w-full overflow-hidden rounded-[15px] bg-gray-100">
+                                                {postImage ? (
+                                                    <Image
+                                                        src={postImage}
+                                                        alt="Post image"
+                                                        className="object-cover"
+                                                        fill
+                                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                                    />
+                                                ) : (
+                                                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                                                        <MessageCircle className="h-12 w-12 text-gray-400" />
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                    {/* Post Preview Text */}
-                                    <p className="mb-4 line-clamp-3 flex-1 text-sm text-gray-700">
-                                        {getPreviewText(post.content)}
-                                    </p>
+                                            {/* Post Content */}
+                                            {post.title && (
+                                                <h3 className="mb-2 text-lg font-bold text-gray-900">{post.title}</h3>
+                                            )}
+
+                                            <p className="mb-4 line-clamp-3 flex-1 text-sm text-gray-700">
+                                                {getPreviewText(post.content)}
+                                            </p>
+                                        </>
+                                    )}
 
                                     {/* Author Info and Date at Bottom Right */}
                                     <div className="flex items-center justify-between gap-2">

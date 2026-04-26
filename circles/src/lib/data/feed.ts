@@ -12,6 +12,7 @@ import {
     SortingOptions,
     ProposalDisplay,
     IssueDisplay,
+    FundingAskDisplay,
     TaskDisplay, // Added TaskDisplay
 } from "@/models/models";
 import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle";
@@ -20,6 +21,7 @@ import { getMetrics } from "../utils/metrics";
 import { deleteVbdPost, upsertVbdPosts } from "./vdb";
 import { getProposalById } from "./proposal";
 import { getIssueById } from "./issue";
+import { getFundingAskDocumentById } from "./funding";
 import { getTaskById } from "./task"; // Added getTaskById
 import { sdgs } from "./sdgs";
 
@@ -1375,7 +1377,7 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
     const postsWithInternalLinks = posts.filter((p) => p.internalPreviewType && p.internalPreviewId);
     if (postsWithInternalLinks.length === 0) return;
 
-    const previewDataMap = new Map<string, Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay>(); // Added TaskDisplay
+    const previewDataMap = new Map<string, Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay>();
 
     // Group IDs by type
     const idsByType = postsWithInternalLinks.reduce(
@@ -1481,6 +1483,15 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         const taskWithStringId = { ...t, _id: t._id.toString() };
                         // TODO: Also convert author/assignee/circle _id if populated here
                         previewDataMap.set(`task-${t._id.toString()}`, taskWithStringId as TaskDisplay);
+                    });
+                    break;
+                case "funding":
+                    const asks = await Promise.all(ids.map(async (id) => await getFundingAskDocumentById(id)));
+                    asks.forEach((ask) => {
+                        if (!ask?._id) {
+                            return;
+                        }
+                        previewDataMap.set(`funding-${ask._id.toString()}`, ask as FundingAskDisplay);
                     });
                     break;
             }

@@ -24,6 +24,7 @@ import {
     UserPrivate,
     ProposalDisplay,
     IssueDisplay,
+    FundingAskDisplay,
     TaskDisplay,
     Cause as SDG,
 } from "@/models/models";
@@ -102,10 +103,10 @@ type LinkPreviewData = {
 };
 
 type InternalPreviewDisplayData = {
-    type: "circle" | "post" | "proposal" | "issue" | "task";
+    type: "circle" | "post" | "proposal" | "issue" | "task" | "funding";
     id: string;
     url: string;
-    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay;
+    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay;
 };
 
 const postMentionsInputStyle = {

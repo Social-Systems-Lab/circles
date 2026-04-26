@@ -234,7 +234,7 @@ export const postSchema = z.object({
     linkPreviewDescription: z.string().optional(),
     linkPreviewImage: fileInfoSchema.optional(),
     // Internal Link Preview Fields
-    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal", "event"]).optional(),
+    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal", "event", "funding"]).optional(),
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
     sdgs: z.array(z.string()).optional(),
@@ -256,7 +256,7 @@ export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     circle?: Circle;
     feed?: Feed;
     // Populated internal preview data
-    internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | null;
+    internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | FundingAskDisplay | null;
     sdgs?: Cause[];
 }
 
@@ -1531,6 +1531,7 @@ export const fundingAskSchema = z.object({
     activeSupporterDid: didSchema.optional(),
     activeSupporterHandleSnapshot: z.string().optional(),
     activeSupportStartedAt: z.date().optional(),
+    noticeboardPostId: z.string().optional(),
     completedAt: z.date().optional(),
     closedAt: z.date().optional(),
     createdAt: z.date(),

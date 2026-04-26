@@ -34,10 +34,12 @@ import { features } from "@/lib/data/constants";
 import { sdgs } from "@/lib/data/sdgs";
 import { getProposalById } from "@/lib/data/proposal";
 import { getIssueById } from "@/lib/data/issue";
+import { getFundingAskById } from "@/lib/data/funding";
 import {
     Media,
     ProposalDisplay,
     IssueDisplay,
+    FundingAskDisplay,
     Post,
     postSchema,
     Comment,
@@ -263,6 +265,7 @@ export type InternalLinkPreviewResult =
     | { type: "post"; data: PostDisplay }
     | { type: "proposal"; data: ProposalDisplay }
     | { type: "issue"; data: IssueDisplay }
+    | { type: "funding"; data: FundingAskDisplay }
     | { error: string }; // For not found, unauthorized, or other errors
 
 export async function getInternalLinkPreviewData(url: string): Promise<InternalLinkPreviewResult> {
@@ -279,11 +282,13 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
         const postRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/post\/([a-zA-Z0-9]+)$/;
         const proposalRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/proposals\/([a-zA-Z0-9]+)$/;
         const issueRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/issues\/([a-zA-Z0-9]+)$/;
+        const fundingRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/funding\/([a-zA-Z0-9]+)$/;
         const circleRegex = /^\/circles\/([a-zA-Z0-9\-]+)(?:\/.*)?$/; // Matches base circle URL and subpaths
 
         const postMatch = pathname.match(postRegex);
         const proposalMatch = pathname.match(proposalRegex);
         const issueMatch = pathname.match(issueRegex);
+        const fundingMatch = pathname.match(fundingRegex);
         const circleMatch = pathname.match(circleRegex);
 
         if (postMatch) {
@@ -346,6 +351,13 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
             // if (issue.assignedTo && !issue.assignee) issue.assignee = await getUserByDid(issue.assignedTo); // Likely not needed anymore
             if (!issue.circle) issue.circle = circle;
             return { type: "issue", data: issue };
+        } else if (fundingMatch) {
+            const [, handle, askId] = fundingMatch;
+            const circle = await getCircleByHandle(handle);
+            if (!circle) return { error: "Circle not found" };
+            const ask = await getFundingAskById(circle, askId, userDid);
+            if (!ask) return { error: "Funding request not found" };
+            return { type: "funding", data: ask };
         } else if (circleMatch) {
             const [, handle] = circleMatch;
             const circle = await getCircleByHandle(handle);

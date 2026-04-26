@@ -1,25 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
-import { getInternalLinkPreviewData, InternalLinkPreviewResult } from "./actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Circle, PostDisplay, ProposalDisplay, IssueDisplay, TaskDisplay } from "@/models/models"; // Added TaskDisplay
+import { Button } from "@/components/ui/button";
+import { Circle, FundingAskDisplay, PostDisplay, ProposalDisplay, IssueDisplay, TaskDisplay } from "@/models/models";
 import { truncateText } from "@/lib/utils";
 import {
-    FileText,
-    MessageSquare,
     Users,
-    CheckSquare,
     AlertCircle,
-    CircleDotDashed,
     CircleHelp,
     ListTodo,
-} from "lucide-react"; // Added ListTodo for tasks
+} from "lucide-react";
+import Image from "next/image";
+import { FundingStatusPill, getFundingRequestSummaryLine } from "@/components/modules/funding/funding-shared";
 
 // Define the type for the data prop more explicitly
-type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay; // Added TaskDisplay
+type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay;
 
 type InternalLinkPreviewProps = {
     url: string; // Keep URL for the link itself
@@ -27,34 +24,36 @@ type InternalLinkPreviewProps = {
 };
 
 const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialData }) => {
+    const href = React.useMemo(() => {
+        try {
+            const parsed = new URL(url, "http://dummybase");
+            return `${parsed.pathname}${parsed.search}${parsed.hash}` || url;
+        } catch {
+            return url;
+        }
+    }, [url]);
+
     // Removed useState and useEffect for fetching data
 
     // If no initial data, render a simple link (or potentially a loading state/fetch later if needed)
     if (!initialData) {
         return (
-            <Link href={url} className="my-2 block text-blue-600 hover:underline">
-                {url}
+            <Link href={href} className="my-2 block text-blue-600 hover:underline">
+                {href}
             </Link>
         );
     }
 
     // Determine the type based on the structure of initialData
     // This is a basic check; more robust type guards might be needed if structures overlap significantly
-    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | "task" | null => {
-        // Added "task"
+    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | "task" | "funding" | null => {
+        if ("shortStory" in data && "trustBadgeType" in data) return "funding";
         if ("circleType" in data && data.circleType === "post") return "post";
         if ("stage" in data && "decisionText" in data) return "proposal";
-        // Check for task before issue, assuming tasks might have similar fields but maybe a unique one later?
-        // For now, rely on the order or add a specific task field check if needed.
-        // Let's assume for now that if it has 'stage' and 'title' but not 'decisionText', it could be issue OR task.
-        // We'll differentiate based on how the data is passed or add a specific field later.
-        // For now, let's add a placeholder check or rely on the order in the switch.
-        // A better approach would be to add a distinguishing property in the model if needed.
-        // Let's refine the issue check slightly and add task check
         if ("stage" in data && "title" in data && !("decisionText" in data) && !("taskSpecificField" in data))
-            return "issue"; // Placeholder
+            return "issue";
         if ("stage" in data && "title" in data && !("decisionText" in data) /* && "taskSpecificField" in data */)
-            return "task"; // Placeholder for task check
+            return "task";
         if ("handle" in data && "members" in data) return "circle";
         return null;
     };
@@ -172,19 +171,59 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                         </div>
                     </>
                 );
+            case "funding":
+                const ask = initialData as FundingAskDisplay;
+                return (
+                    <div className="overflow-hidden rounded-[15px] border border-slate-200 bg-white">
+                        {ask.coverImage?.url ? (
+                            <div className="relative h-40 w-full bg-slate-100">
+                                <Image src={ask.coverImage.url} alt={ask.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 480px" />
+                            </div>
+                        ) : null}
+                        <div className="space-y-3 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                    Funding request
+                                </div>
+                                <FundingStatusPill status={ask.status} />
+                            </div>
+                            <div>
+                                <div className="text-lg font-semibold text-slate-900">{ask.title}</div>
+                                <p className="mt-1 text-sm text-slate-600">{ask.shortStory}</p>
+                                <div className="mt-2 text-sm font-medium text-slate-700">
+                                    {getFundingRequestSummaryLine(ask)}
+                                </div>
+                            </div>
+                            <Button asChild size="sm" className="w-fit">
+                                <Link
+                                    href={href}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                    }}
+                                >
+                                    View request
+                                </Link>
+                            </Button>
+                        </div>
+                    </div>
+                );
             default:
                 return (
-                    <Link href={url} className="text-blue-600 hover:underline">
-                        {url}
+                    <Link href={href} className="text-blue-600 hover:underline">
+                        {href}
                     </Link>
                 );
         }
     };
 
     return (
-        <Link href={url} className="my-2 block rounded-md border transition-colors hover:bg-gray-50">
-            <div className="flex items-center space-x-3 p-3">{renderPreviewContent()}</div>
-        </Link>
+        dataType === "funding" ? (
+            <div className="my-2">{renderPreviewContent()}</div>
+        ) : (
+            <Link href={href} className="my-2 block rounded-md border transition-colors hover:bg-gray-50">
+                <div className="flex items-center space-x-3 p-3">{renderPreviewContent()}</div>
+            </Link>
+        )
     );
 };
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle } from "@/lib/data/circle";
+import { createDefaultFeed, createPost, getFeedByHandle } from "@/lib/data/feed";
 import { deleteFile, isFile, saveFile } from "@/lib/data/storage";
 import {
     deriveFundingTrustBadgeType,
@@ -16,10 +17,13 @@ import {
 import { Circles } from "@/lib/data/db";
 import {
     fileInfoSchema,
+    postSchema,
     fundingAskCurrencySchema,
     fundingAskBeneficiaryTypeSchema,
     fundingAskItemSchema,
     fundingAskSchema,
+    type Circle,
+    type FundingAsk,
 } from "@/models/models";
 
 const submissionIntentSchema = z.enum(["draft", "publish", "update"]);
@@ -156,6 +160,53 @@ const normalizeFundingItemsForStorage = (
         status,
     }));
 
+const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") !== "false";
+
+const buildFundingNoticeboardPostContent = (ask: FundingAsk) => ask.shortStory;
+const getFundingInternalPreviewUrl = (circleHandle: string, askId: string) => {
+    const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
+    return `${baseUrl}/circles/${circleHandle}/funding/${askId}`;
+};
+
+const maybeCreateFundingNoticeboardPost = async ({
+    circle,
+    circleHandle,
+    ask,
+}: {
+    circle: Circle;
+    circleHandle: string;
+    ask: FundingAsk;
+}): Promise<string | null> => {
+    if (!circle._id || !ask._id || ask.status === "draft" || ask.noticeboardPostId) {
+        return ask.noticeboardPostId ?? null;
+    }
+
+    let feed = await getFeedByHandle(circle._id.toString(), "default");
+    if (!feed) {
+        feed = await createDefaultFeed(circle._id.toString());
+    }
+    if (!feed?._id) {
+        throw new Error("Noticeboard feed not found.");
+    }
+
+    const post = await postSchema.parseAsync({
+        title: ask.title,
+        content: buildFundingNoticeboardPostContent(ask),
+        feedId: feed._id.toString(),
+        createdBy: ask.createdByDid,
+        createdAt: new Date(),
+        reactions: {},
+        comments: 0,
+        userGroups: ["admins", "moderators", "members"],
+        internalPreviewType: "funding",
+        internalPreviewId: ask._id.toString(),
+        internalPreviewUrl: getFundingInternalPreviewUrl(circleHandle, ask._id.toString()),
+    });
+
+    const createdPost = await createPost(post);
+    return createdPost._id?.toString?.() ?? createdPost._id ?? null;
+};
+
 export async function createFundingAskAction(circleHandle: string, formData: FormData): Promise<FundingActionResult> {
     try {
         const userDid = await getAuthenticatedUserDid();
@@ -216,6 +267,31 @@ export async function createFundingAskAction(circleHandle: string, formData: For
                 updatedAt: now,
             }),
         );
+
+        if (shouldPublishToNoticeboard(formData) && requestStatus !== "draft") {
+            try {
+                const noticeboardPostId = await maybeCreateFundingNoticeboardPost({
+                    circle,
+                    circleHandle,
+                    ask: createdAsk,
+                });
+                if (noticeboardPostId) {
+                    await updateFundingAskDocument(createdAsk._id.toString(), {
+                        noticeboardPostId,
+                    });
+                    createdAsk.noticeboardPostId = noticeboardPostId;
+                    revalidatePath(`/circles/${circleHandle}/feed`);
+                }
+            } catch (error) {
+                console.error("Failed to create linked noticeboard post for funding request:", error);
+                revalidateFundingPaths(circleHandle, createdAsk._id?.toString?.() ?? createdAsk._id);
+                return {
+                    success: true,
+                    message: "Funding request published, but Noticeboard post could not be created.",
+                    askId: createdAsk._id?.toString?.() ?? createdAsk._id,
+                };
+            }
+        }
 
         revalidateFundingPaths(circleHandle, createdAsk._id?.toString?.() ?? createdAsk._id);
         return {
@@ -314,6 +390,35 @@ export async function updateFundingAskAction(
 
         if (!updated) {
             return { success: false, message: "Funding request update failed." };
+        }
+
+        if (shouldPublishToNoticeboard(formData) && nextStatus !== "draft" && !existingAsk.noticeboardPostId) {
+            try {
+                const noticeboardPostId = await maybeCreateFundingNoticeboardPost({
+                    circle,
+                    circleHandle,
+                    ask: {
+                        ...existingAsk,
+                        _id: askId,
+                        title: parsed.data.title,
+                        shortStory: parsed.data.shortStory,
+                        status: nextStatus,
+                        noticeboardPostId: undefined,
+                    },
+                });
+                if (noticeboardPostId) {
+                    await updateFundingAskDocument(askId, { noticeboardPostId });
+                    revalidatePath(`/circles/${circleHandle}/feed`);
+                }
+            } catch (error) {
+                console.error("Failed to create linked noticeboard post for funding request:", error);
+                revalidateFundingPaths(circleHandle, askId);
+                return {
+                    success: true,
+                    message: "Funding request updated, but Noticeboard post could not be created.",
+                    askId,
+                };
+            }
         }
 
         if (shouldDeleteExisting && existingAsk.coverImage?.url) {
