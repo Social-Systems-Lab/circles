@@ -192,6 +192,19 @@ Current MVP form behavior:
 - the cover image persists across step navigation and draft reload
 - the publish review clearly separates parent request context from child funding items
 
+## Noticeboard Promotion
+
+Funding requests can also be promoted to the circle Noticeboard.
+
+- the funding form includes a `Publish to Noticeboard` option
+- the option defaults on
+- publishing can create one linked Noticeboard post in the same circle
+- the funding ask remains the source of truth
+- the linked Noticeboard post renders as a funding preview card using the ask&apos;s image, title, short story, status, and amount summary
+- the CTA button says `View request` and links directly to `/circles/[handle]/funding/[askId]`
+- duplicate prevention uses the stored `noticeboardPostId` on the funding ask
+- the linked Noticeboard post should not expose the funding ask more broadly than intended by funding visibility rules
+
 ## Home Panel
 
 The circle home-page `Funding Needs` panel is compact and action-oriented:

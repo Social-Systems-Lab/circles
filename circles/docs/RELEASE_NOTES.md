@@ -31,6 +31,8 @@
 - Restricted funding activation and all funding management to Super Admins in this MVP, while keeping viewing members-only on enabled circles.
 - Funding is hidden by default, only available on circle funding surfaces, and excluded from user/profile circles in this pass.
 - Updated the home-page panel to a compact expandable request list instead of stacked full cards.
+- Published funding requests can optionally create linked Noticeboard posts in the same circle.
+- Linked funding posts render as funding preview cards with image, status, amount summary, and a direct `View request` CTA.
 - Deferred payment processing, pooled crowdfunding, paid membership gating, notifications rollout, and map/explore rollout.
 
 ## 0.8.16 - 2026-03-28
