@@ -407,6 +407,7 @@ type ChatMessagesProps = {
     handleEdit: (message: ChatMessage) => void;
     canReply?: boolean;
     chatProvider?: "matrix" | "mongo";
+    isDirect?: boolean;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -422,6 +423,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     handleDelete,
     handleEdit,
     canReply = true,
+    isDirect = false,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -602,33 +604,35 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     acc.push(
                         <div
                             key={message.id}
-                            className={`group relative mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"} ${hoveredMessageId === message.id ? "z-10" : ""}`}
+                            className={`group relative mb-1 flex gap-2 ${isFirstInChain ? "mt-4" : "mt-1"} ${hoveredMessageId === message.id ? "z-10" : ""} ${isOwnMessage ? "justify-end" : "justify-start"}`}
                             onMouseEnter={() => !isMobile && setHoveredMessageId(message.id)}
                             onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
                             onTouchStart={() => handleTouchStart(message)}
                             onTouchEnd={handleTouchEnd}
                         >
-                            {isFirstInChain ? (
-                                <CirclePicture
-                                    circle={message.author!}
-                                    size="40px"
-                                    className="pt-2"
-                                    openPreview={!isNonPreviewSender}
-                                />
-                            ) : (
-                                <div className="h-10 w-10 flex-shrink-0"></div>
+                            {!isDirect && !isOwnMessage && (
+                                isLastInChain ? (
+                                    <CirclePicture
+                                        circle={message.author!}
+                                        size="28px"
+                                        className="self-end mb-1 flex-shrink-0"
+                                        openPreview={!isNonPreviewSender}
+                                    />
+                                ) : (
+                                    <div className="w-7 flex-shrink-0" />
+                                )
                             )}
 
-                            <div className="relative flex min-w-[100px] max-w-full flex-col overflow-hidden">
-                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
-                                    {isFirstInChain && (
+                            <div className="relative flex min-w-[100px] max-w-[75%] flex-col overflow-hidden">
+                                <div className={`${isOwnMessage ? "bg-blue-100" : "bg-white"} p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
+                                    {isFirstInChain && !isOwnMessage && !isDirect && (
                                         <div
                                             className="text-xs font-semibold"
                                             style={{ color: generateColorFromString(senderLabel || "") }}
                                         >
                                             {senderLabel}
                                         </div>
-                                        )}
+                                    )}
                                     <MessageRenderer message={message} />
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div className="mt-1 flex flex-wrap gap-1">
@@ -652,7 +656,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     )}
                                 </div>
                                 {isLastInChain && (
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                    <div className={`mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 ${isOwnMessage ? "justify-end" : "justify-start"}`}>
                                         <span>{formatChatDate(new Date(message.createdAt))}</span>
                                         {isOwnMessage && message.status === "pending" && (
                                             <span className="flex items-center gap-1 text-blue-500">
@@ -670,7 +674,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                 )}
 
                                 {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                    <div className="absolute bottom-1 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                    <div className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}>
                                         {isOwnMessage && (
                                             <>
                                                 {canEditMessage && (
@@ -728,6 +732,19 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     </div>
                                 )}
                             </div>
+
+                            {!isDirect && isOwnMessage && (
+                                isLastInChain ? (
+                                    <CirclePicture
+                                        circle={message.author!}
+                                        size="28px"
+                                        className="self-end mb-1 flex-shrink-0"
+                                        openPreview={false}
+                                    />
+                                ) : (
+                                    <div className="w-7 flex-shrink-0" />
+                                )
+                            )}
                         </div>,
                     );
                 }
@@ -1530,6 +1547,7 @@ export const ChatRoomComponent: React.FC<{
                                     handleEdit={handleEdit}
                                     canReply={!isAnnouncementConversation}
                                     chatProvider={provider}
+                                    isDirect={!!(chatRoom as any)?.isDirect}
                                 />
                             )}
                         </div>
@@ -1550,6 +1568,7 @@ export const ChatRoomComponent: React.FC<{
                                     handleEdit={handleEdit}
                                     canReply={!isAnnouncementConversation}
                                     chatProvider={provider}
+                                    isDirect={!!(chatRoom as any)?.isDirect}
                                 />
                             )}
                         </div>
