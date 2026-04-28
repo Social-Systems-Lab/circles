@@ -23,6 +23,7 @@ import {
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
+import { HiLightBulb } from "react-icons/hi";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { GrEdit, GrTrash } from "react-icons/gr";
@@ -408,6 +409,8 @@ type ChatMessagesProps = {
     canReply?: boolean;
     chatProvider?: "matrix" | "mongo";
     isDirect?: boolean;
+    conversationId?: string;
+    currentUser?: any;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -424,6 +427,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     handleEdit,
     canReply = true,
     isDirect = false,
+    conversationId,
+    currentUser,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -549,7 +554,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const orderedMessages = [...messages]
         .filter(
             (message) =>
-                message.type === "m.room.message" || message.type === "m.room.member" || message.type === "m.room.notice",
+                (message.type === "m.room.message" || message.type === "m.room.member" || message.type === "m.room.notice") &&
+                !(message as any).threadId,
         )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
@@ -623,6 +629,17 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                 )
                             )}
 
+                            {/* Topic card — renders inline for topic-starter messages */}
+                            {(message as any).thread ? (
+                                <div className="w-full">
+                                    <TopicCard
+                                        message={message}
+                                        conversationId={conversationId || ""}
+                                        user={currentUser}
+                                    />
+                                </div>
+                            ) : null}
+                            {!(message as any).thread && (
                             <div className="relative flex min-w-[100px] max-w-[75%] flex-col overflow-hidden">
                                 <div className={`${isOwnMessage ? "bg-blue-100" : "bg-white"} p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
                                     {isFirstInChain && !isOwnMessage && !isDirect && (
@@ -732,6 +749,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     </div>
                                 )}
                             </div>
+                            )}
 
                             {!isDirect && isOwnMessage && (
                                 isLastInChain ? (
@@ -1201,6 +1219,343 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
     );
 };
 
+// ─── Topic inline card (self-contained, expands in place) ──────────────────
+
+const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
+
+const getOpenTopicIds = (conversationId: string): Set<string> => {
+    try {
+        const raw = localStorage.getItem(getTopicStorageKey(conversationId));
+        return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+        return new Set();
+    }
+};
+
+const setOpenTopicIds = (conversationId: string, ids: Set<string>) => {
+    try {
+        localStorage.setItem(getTopicStorageKey(conversationId), JSON.stringify(Array.from(ids)));
+    } catch {
+        // localStorage unavailable — fail silently
+    }
+};
+
+const TopicCard: React.FC<{
+    message: any;
+    conversationId: string;
+    user: any;
+}> = ({ message, conversationId, user }) => {
+    const thread = message.thread;
+    const messageId = message.id || message._id;
+
+    const [isOpen, setIsOpen] = useState<boolean>(() => {
+        const openIds = getOpenTopicIds(conversationId);
+        return openIds.has(messageId);
+    });
+
+    const [replies, setReplies] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [replyText, setReplyText] = useState("");
+    const [isSending, setIsSending] = useState(false);
+
+    if (!thread) return null;
+
+    const loadReplies = async () => {
+        setIsLoading(true);
+        try {
+            const { fetchThreadRepliesAction } = await import("./mongo-actions");
+            const result = await fetchThreadRepliesAction(messageId);
+            if (result.success && result.replies) {
+                const mapped = result.replies.map((r: any) => ({
+                    id: r._id?.toString(),
+                    content: { body: r.body },
+                    createdAt: r.createdAt,
+                    createdBy: r.senderDid,
+                }));
+                setReplies(mapped);
+            }
+        } catch (e) {
+            console.error("Failed to load topic replies:", e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleToggle = () => {
+        const next = !isOpen;
+        if (next) {
+            void loadReplies();
+        }
+        setIsOpen(next);
+        const openIds = getOpenTopicIds(conversationId);
+        if (next) {
+            openIds.add(messageId);
+        } else {
+            openIds.delete(messageId);
+        }
+        setOpenTopicIds(conversationId, openIds);
+    };
+
+    // Load replies on mount if topic starts open
+    useEffect(() => {
+        if (isOpen) {
+            void loadReplies();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleSendReply = async () => {
+        const trimmed = replyText.trim();
+        if (!trimmed || isSending) return;
+        setIsSending(true);
+        try {
+            const { sendThreadReplyAction } = await import("./mongo-actions");
+            const result = await sendThreadReplyAction(
+                messageId,
+                conversationId,
+                trimmed,
+            );
+            if (result.success) {
+                setReplyText("");
+                await loadReplies();
+            }
+        } catch (e) {
+            console.error("Failed to send topic reply:", e);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void handleSendReply();
+        }
+    };
+
+    // Opening message rendered as first bubble
+    const openingAuthorIsOwn = message.createdBy === user?.did;
+
+    return (
+        <div className={`my-2 w-full rounded-xl border shadow-sm transition-all ${isOpen ? "border-gray-300 bg-white" : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"}`}>
+            {/* Header row — always visible, click to toggle */}
+            <div
+                className="flex cursor-pointer items-start justify-between gap-2 p-3"
+                onClick={handleToggle}
+            >
+                <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{thread.title}</p>
+                    {thread.hashtags && thread.hashtags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                            {thread.hashtags.map((tag: string) => (
+                                <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                    #{tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {!isOpen && (
+                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">{message.content?.body || ""}</p>
+                    )}
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-blue-500" : "text-gray-400"}`} />
+                    <span className="text-xs text-gray-400">
+                        {isOpen ? "Collapse" : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
+                    </span>
+                </div>
+            </div>
+
+            {/* Expanded body */}
+            {isOpen && (
+                <div className="border-t border-gray-200">
+                    {/* Opening message as first bubble */}
+                    <div className="px-3 pt-3 pb-1">
+                        <div className={`flex ${openingAuthorIsOwn ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm shadow-sm ${openingAuthorIsOwn ? "bg-blue-100 text-gray-900" : "bg-gray-100 text-gray-900"}`}>
+                                <p>{message.content?.body || ""}</p>
+                                <p className="mt-0.5 text-xs text-gray-400">
+                                    {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Replies */}
+                    <div className="px-3 py-2 space-y-2">
+                        {isLoading && (
+                            <p className="text-center text-xs text-gray-400 py-2">Loading replies...</p>
+                        )}
+                        {!isLoading && replies.length === 0 && (
+                            <p className="text-center text-xs text-gray-400 py-2">No replies yet. Be the first.</p>
+                        )}
+                        {replies.map((reply) => {
+                            const isOwn = reply.createdBy === user?.did;
+                            return (
+                                <div key={reply.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                                    <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm shadow-sm ${isOwn ? "bg-blue-100 text-gray-900" : "bg-gray-100 text-gray-900"}`}>
+                                        <p>{reply.content?.body}</p>
+                                        <p className="mt-0.5 text-xs text-gray-400">
+                                            {new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Reply input */}
+                    <div className="flex gap-2 items-end px-3 pb-3">
+                        <textarea
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Reply in topic..."
+                            rows={1}
+                            className="flex-1 resize-none rounded-2xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300"
+                        />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 rounded-full text-blue-600 hover:bg-blue-100"
+                            onClick={() => void handleSendReply()}
+                            disabled={!replyText.trim() || isSending}
+                        >
+                            <IoSend className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─── New Thread Modal ───────────────────────────────────────────────────────
+
+const NewThreadModal: React.FC<{
+    conversationId: string;
+    onClose: () => void;
+    onCreated: () => void;
+}> = ({ conversationId, onClose, onCreated }) => {
+    const [title, setTitle] = useState("");
+    const [body, setBody] = useState("");
+    const [hashtagInput, setHashtagInput] = useState("");
+    const [hashtags, setHashtags] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const addHashtag = () => {
+        const tag = hashtagInput.trim().replace(/^#/, "").toLowerCase();
+        if (tag && !hashtags.includes(tag)) {
+            setHashtags([...hashtags, tag]);
+        }
+        setHashtagInput("");
+    };
+
+    const removeHashtag = (tag: string) => {
+        setHashtags(hashtags.filter((t) => t !== tag));
+    };
+
+    const handleCreate = async () => {
+        if (!title.trim()) { setError("Title is required"); return; }
+        if (!body.trim()) { setError("Opening message is required"); return; }
+        setIsSaving(true);
+        setError("");
+        try {
+            const { createThreadAction } = await import("./mongo-actions");
+            const result = await createThreadAction(conversationId, title.trim(), body.trim(), hashtags);
+            if (result.success) {
+                onCreated();
+                onClose();
+            } else {
+                setError(result.message || "Failed to create thread");
+            }
+        } catch (e) {
+            setError("Failed to create thread");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col gap-4 p-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">New Topic</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+                        <IoClose className="h-5 w-5" />
+                    </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                    <input
+                        type="text"
+                        placeholder="Topic title (required)"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <textarea
+                        placeholder="Opening message (required)"
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        rows={3}
+                        className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+
+                    {/* Hashtags */}
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Add hashtag (optional)"
+                            value={hashtagInput}
+                            onChange={(e) => setHashtagInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addHashtag(); } }}
+                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                            onClick={addHashtag}
+                            className="px-3 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
+                        >
+                            Add
+                        </button>
+                    </div>
+                    {hashtags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                            {hashtags.map((tag) => (
+                                <span key={tag} className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                                    #{tag}
+                                    <button onClick={() => removeHashtag(tag)} className="hover:text-red-500">
+                                        <IoClose className="h-3 w-3" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {error && <p className="text-sm text-red-500">{error}</p>}
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => void handleCreate()}
+                        disabled={isSaving}
+                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {isSaving ? "Creating..." : "Create Topic"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const ChatRoomComponent: React.FC<{
     chatRoom: ChatRoomDisplay;
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
@@ -1225,6 +1580,7 @@ export const ChatRoomComponent: React.FC<{
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+    const [showNewThreadModal, setShowNewThreadModal] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
@@ -1538,18 +1894,20 @@ export const ChatRoomComponent: React.FC<{
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
-                            {!isLoadingMessages && (
-                                <ChatMessages
-                                    messages={messages}
-                                    messagesEndRef={messagesEndRef}
-                                    onMessagesRendered={handleMessagesRendered}
-                                    handleDelete={handleDelete}
-                                    handleEdit={handleEdit}
-                                    canReply={!isAnnouncementConversation}
-                                    chatProvider={provider}
-                                    isDirect={!!(chatRoom as any)?.isDirect}
-                                />
-                            )}
+                        {!isLoadingMessages && (
+                            <ChatMessages
+                                messages={messages}
+                                messagesEndRef={messagesEndRef}
+                                onMessagesRendered={handleMessagesRendered}
+                                handleDelete={handleDelete}
+                                handleEdit={handleEdit}
+                                canReply={!isAnnouncementConversation}
+                                chatProvider={provider}
+                                isDirect={!!(chatRoom as any)?.isDirect}
+                                conversationId={roomId || ""}
+                                currentUser={user}
+                            />
+                        )}
                         </div>
                     ) : (
                         <div
@@ -1569,6 +1927,8 @@ export const ChatRoomComponent: React.FC<{
                                     canReply={!isAnnouncementConversation}
                                     chatProvider={provider}
                                     isDirect={!!(chatRoom as any)?.isDirect}
+                                    conversationId={roomId || ""}
+                                    currentUser={user}
                                 />
                             )}
                         </div>
@@ -1599,13 +1959,29 @@ export const ChatRoomComponent: React.FC<{
                                     Replies are disabled for this system conversation.
                                 </div>
                             ) : (
-                                <ChatInput
-                                    roomId={roomId}
-                                    editingMessage={editingMessage}
-                                    setEditingMessage={setEditingMessage}
-                                    mentionCandidates={mentionCandidates}
-                                    chatProvider={provider}
-                                />
+                                <div className="flex w-full items-end gap-1">
+                                    {!isAnnouncementConversation && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+                                            onClick={() => setShowNewThreadModal(true)}
+                                            disabled={false}
+                                            title="New topic"
+                                        >
+                                            <HiLightBulb className="h-5 w-5" />
+                                        </Button>
+                                    )}
+                                    <div className="flex-1">
+                                        <ChatInput
+                                            roomId={roomId}
+                                            editingMessage={editingMessage}
+                                            setEditingMessage={setEditingMessage}
+                                            mentionCandidates={mentionCandidates}
+                                            chatProvider={provider}
+                                        />
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -1621,6 +1997,13 @@ export const ChatRoomComponent: React.FC<{
                     <IoArrowBack className="h-5 w-5" />
                 </Button>
             )}
+        {showNewThreadModal && roomId && (
+            <NewThreadModal
+                conversationId={roomId}
+                onClose={() => setShowNewThreadModal(false)}
+                onCreated={() => {}}
+            />
+        )}
         </>
     );
 };

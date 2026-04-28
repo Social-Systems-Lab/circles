@@ -58,6 +58,8 @@ export type ChatMessageDoc = {
     source?: string;
     version?: string;
     system?: SystemMessageMetadata;
+    thread?: ChatThreadMeta;
+    threadId?: string;
 };
 
 export type ChatReadState = {
@@ -86,4 +88,12 @@ export type MessageEmailReminder = {
     processingStartedAt?: Date;
     skipReason?: string;
     failureReason?: string;
+};
+
+export type ChatThreadMeta = {
+    title: string;
+    hashtags?: string[];
+    createdAt: Date;
+    updatedAt: Date;
+    replyCount: number;
 };

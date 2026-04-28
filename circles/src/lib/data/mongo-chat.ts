@@ -718,3 +718,73 @@ export async function listConversationMedia(
 
     return media;
 }
+
+export const createThread = async (
+    conversationId: string,
+    senderDid: string,
+    title: string,
+    body: string,
+    hashtags: string[],
+): Promise<ChatMessageDoc | null> => {
+    const now = new Date();
+    const doc: ChatMessageDoc = {
+        conversationId,
+        senderDid,
+        body,
+        createdAt: now,
+        thread: {
+            title,
+            hashtags,
+            createdAt: now,
+            updatedAt: now,
+            replyCount: 0,
+        },
+    };
+    const result = await ChatMessageDocs.insertOne(doc);
+    await ChatConversations.updateOne(
+        { _id: new (await import("mongodb")).ObjectId(conversationId) },
+        { $set: { updatedAt: now } },
+    );
+    return { ...doc, _id: result.insertedId.toString() };
+};
+
+export const sendThreadReply = async (
+    threadId: string,
+    conversationId: string,
+    senderDid: string,
+    body: string,
+): Promise<ChatMessageDoc | null> => {
+    const { ObjectId } = await import("mongodb");
+    const now = new Date();
+    const doc: ChatMessageDoc = {
+        conversationId,
+        senderDid,
+        body,
+        createdAt: now,
+        threadId,
+    };
+    const result = await ChatMessageDocs.insertOne(doc);
+    await ChatMessageDocs.updateOne(
+        { _id: new ObjectId(threadId) },
+        {
+            $set: { "thread.updatedAt": now },
+            $inc: { "thread.replyCount": 1 },
+        },
+    );
+    return { ...doc, _id: result.insertedId.toString() };
+};
+
+export const fetchThreadReplies = async (threadId: string): Promise<ChatMessageDoc[]> => {
+    const docs = await ChatMessageDocs.find({ threadId }).sort({ createdAt: 1 }).toArray();
+    return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
+};
+
+export const listThreadsForConversation = async (conversationId: string): Promise<ChatMessageDoc[]> => {
+    const docs = await ChatMessageDocs.find({
+        conversationId,
+        thread: { $exists: true },
+    })
+        .sort({ "thread.updatedAt": -1 })
+        .toArray();
+    return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
+};

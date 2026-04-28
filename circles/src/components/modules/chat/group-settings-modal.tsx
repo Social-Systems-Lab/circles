@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
+import { HiLightBulb } from "react-icons/hi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
@@ -69,7 +70,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                 </DialogHeader>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className={`grid w-full ${chatRoom.isDirect ? "grid-cols-3" : "grid-cols-4"}`}>
+                    <TabsList className={`grid w-full ${chatRoom.isDirect ? "grid-cols-4" : "grid-cols-5"}`}>
                         <TabsTrigger value="info" className="flex items-center gap-2">
                             <Info className="h-4 w-4" />
                             <span className="hidden sm:inline">Info</span>
@@ -80,6 +81,10 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                                 <span className="hidden sm:inline">Members</span>
                             </TabsTrigger>
                         )}
+                        <TabsTrigger value="threads" className="flex items-center gap-2">
+                            <HiLightBulb className="h-4 w-4" />
+                            <span className="hidden sm:inline">Topics</span>
+                        </TabsTrigger>
                         <TabsTrigger value="media" className="flex items-center gap-2">
                             <ImageIcon className="h-4 w-4" />
                             <span className="hidden sm:inline">Media</span>
@@ -101,6 +106,9 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                             </TabsContent>
                         )}
 
+                        <TabsContent value="threads" className="mt-0">
+                            <ThreadsTab chatRoom={chatRoom} isActive={activeTab === "threads"} />
+                        </TabsContent>
                         <TabsContent value="media" className="mt-0">
                             <MediaTab chatRoom={chatRoom} isActive={activeTab === "media"} />
                         </TabsContent>
@@ -1021,6 +1029,67 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
                     {isDeleting ? "Deleting..." : "Delete Group"}
                 </button>
             )}
+        </div>
+    );
+}
+
+function ThreadsTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive: boolean }) {
+    const [threads, setThreads] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isActive || !chatRoom?._id) return;
+        let cancelled = false;
+
+        const loadThreads = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const { listThreadsAction } = await import("./mongo-actions");
+                const result = await listThreadsAction(chatRoom._id as string);
+                if (cancelled) return;
+                if (result.success) {
+                    setThreads(result.threads || []);
+                } else {
+                    setError(result.message || "Failed to load threads");
+                }
+            } catch (e) {
+                if (!cancelled) setError("Failed to load threads");
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
+        };
+
+        void loadThreads();
+        return () => { cancelled = true; };
+    }, [isActive, chatRoom?._id]);
+
+    if (isLoading) return <p className="text-center text-sm text-gray-500 py-8">Loading threads...</p>;
+    if (error) return <p className="text-center text-sm text-red-500 py-8">{error}</p>;
+    if (threads.length === 0) return <p className="text-center text-sm text-gray-500 py-8">No threads yet</p>;
+
+    return (
+        <div className="space-y-3">
+            {threads.map((thread) => (
+                <div key={thread._id} className="rounded-xl border border-gray-200 p-3 hover:bg-gray-50">
+                    <p className="font-semibold text-gray-900">{thread.thread?.title}</p>
+                    {thread.thread?.hashtags && thread.thread.hashtags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                            {thread.thread.hashtags.map((tag: string) => (
+                                <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                    #{tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <p className="mt-1 text-sm text-gray-500 line-clamp-2">{thread.body}</p>
+                    <p className="mt-2 text-xs text-gray-400">
+                        {thread.thread?.replyCount || 0} {thread.thread?.replyCount === 1 ? "reply" : "replies"} ·{" "}
+                        {new Date(thread.thread?.updatedAt || thread.createdAt).toLocaleDateString()}
+                    </p>
+                </div>
+            ))}
         </div>
     );
 }

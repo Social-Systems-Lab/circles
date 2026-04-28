@@ -477,6 +477,8 @@ export const fetchMongoMessagesAction = async (
             (message as any).version = doc.version;
             (message as any).system = systemMetadata;
             (message as any).broadcastId = (doc as any).broadcastId;
+            (message as any).thread = (doc as any).thread;
+            (message as any).threadId = (doc as any).threadId;
 
             return message;
         });
@@ -1054,4 +1056,90 @@ export const markConversationReadAction = async (
 
     await markConversationRead(userDid, conversationId, effectiveLastSeen);
     return { success: true };
+};
+
+export const createThreadAction = async (
+    conversationId: string,
+    title: string,
+    body: string,
+    hashtags: string[],
+): Promise<{ success: boolean; message?: string; threadId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (!title.trim()) return { success: false, message: "Thread title is required" };
+    if (!body.trim()) return { success: false, message: "Opening message is required" };
+    try {
+        const { createThread } = await import("@/lib/data/mongo-chat");
+        const doc = await createThread(conversationId, userDid, title.trim(), body.trim(), hashtags);
+        if (!doc?._id) return { success: false, message: "Failed to create thread" };
+        return { success: true, threadId: doc._id.toString() };
+    } catch (error) {
+        console.error("createThreadAction error:", error);
+        return { success: false, message: "Failed to create thread" };
+    }
+};
+
+export const sendThreadReplyAction = async (
+    threadId: string,
+    conversationId: string,
+    body: string,
+): Promise<{ success: boolean; message?: string; messageId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (!body.trim()) return { success: false, message: "Reply cannot be empty" };
+    try {
+        const { sendThreadReply } = await import("@/lib/data/mongo-chat");
+        const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim());
+        if (!doc?._id) return { success: false, message: "Failed to send reply" };
+        // Fire notifications (DM and circle-contact conversations only for now)
+        try {
+            const { findConversationById } = await import("@/lib/data/mongo-chat");
+            const conversation = await findConversationById(conversationId);
+            if (conversation) {
+                await sendConversationMessageNotifications({
+                    conversationId,
+                    conversation,
+                    senderDid: userDid,
+                    messageBody: body.trim(),
+                    messageId: doc._id.toString(),
+                });
+            }
+        } catch (notifError) {
+            console.error("sendThreadReplyAction notification error:", notifError);
+        }
+        return { success: true, messageId: doc._id.toString() };
+    } catch (error) {
+        console.error("sendThreadReplyAction error:", error);
+        return { success: false, message: "Failed to send reply" };
+    }
+};
+
+export const fetchThreadRepliesAction = async (
+    threadId: string,
+): Promise<{ success: boolean; message?: string; replies?: any[] }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    try {
+        const { fetchThreadReplies } = await import("@/lib/data/mongo-chat");
+        const docs = await fetchThreadReplies(threadId);
+        return { success: true, replies: docs };
+    } catch (error) {
+        console.error("fetchThreadRepliesAction error:", error);
+        return { success: false, message: "Failed to fetch replies" };
+    }
+};
+
+export const listThreadsAction = async (
+    conversationId: string,
+): Promise<{ success: boolean; message?: string; threads?: any[] }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    try {
+        const { listThreadsForConversation } = await import("@/lib/data/mongo-chat");
+        const threads = await listThreadsForConversation(conversationId);
+        return { success: true, threads };
+    } catch (error) {
+        console.error("listThreadsAction error:", error);
+        return { success: false, message: "Failed to list threads" };
+    }
 };

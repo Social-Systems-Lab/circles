@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"w-7 flex-shrink-0\\\\|isLastInChain.*CirclePicture\\\\|openPreview={false}\\\\|acc\\\\.push\\\\|</div>,\" /Users/timmidnightmac/circles/circles/src/components/modules/chat/chat-room.tsx)",
+      "Bash(grep -v \"^.*//.*$\")"
+    ]
+  }
+}
