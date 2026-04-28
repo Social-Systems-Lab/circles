@@ -1258,6 +1258,14 @@ const TopicCard: React.FC<{
     const [replyText, setReplyText] = useState("");
     const [isSending, setIsSending] = useState(false);
 
+    // Load replies on mount if topic starts open
+    useEffect(() => {
+        if (isOpen) {
+            void loadReplies();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     if (!thread) return null;
 
     const loadReplies = async () => {
@@ -1295,14 +1303,6 @@ const TopicCard: React.FC<{
         }
         setOpenTopicIds(conversationId, openIds);
     };
-
-    // Load replies on mount if topic starts open
-    useEffect(() => {
-        if (isOpen) {
-            void loadReplies();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const handleSendReply = async () => {
         const trimmed = replyText.trim();
