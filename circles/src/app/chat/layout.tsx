@@ -1,7 +1,7 @@
 // chat/layout.tsx - chat layout component, lists all chat rooms and shows selected chat room
 "use client";
 
-import { PropsWithChildren, useEffect, useMemo, useState } from "react";
+import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -13,7 +13,7 @@ import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
 import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
 import { SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { chatSettingsModalAtom } from "@/lib/data/atoms";
+import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
 import { listChatRoomsAction, markConversationReadAction } from "@/components/modules/chat/actions";
 
@@ -24,8 +24,10 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [chatSearchTerm, setChatSearchTerm] = useState("");
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
+    const [, setUnreadCounts] = useAtom(unreadCountsAtom);
 
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+    const openChatIdRef = useRef<string | null>(null);
     const [isChatRoomsLoading, setIsChatRoomsLoading] = useState(true);
     const [hasLoadedChatRooms, setHasLoadedChatRooms] = useState(false);
 
@@ -46,7 +48,26 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             try {
                 const result = await listChatRoomsAction();
                 if (isMounted && result.success && result.rooms) {
-                    setChatRooms(result.rooms);
+                    setChatRooms((prev) => {
+                        return result.rooms!.map((room) => {
+                            if (room._id && room._id === openChatIdRef.current) {
+                                return { ...room, unreadCount: 0 };
+                            }
+                            return room;
+                        });
+                    });
+                    // Sync server unread counts into the atom so Messages icon stays accurate
+                    // This covers topic replies which are not in roomMessages client state
+                    const serverCounts: Record<string, number> = {};
+                    for (const room of result.rooms) {
+                        const roomId = String(room._id || room.handle || "");
+                        if (roomId) {
+                            serverCounts[roomId] = room._id === openChatIdRef.current
+                                ? 0
+                                : (room as any).unreadCount || 0;
+                        }
+                    }
+                    setUnreadCounts((prev) => ({ ...prev, ...serverCounts }));
                 }
             } catch (error) {
                 console.error("Failed to load chat rooms:", error);
@@ -135,17 +156,15 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             isLoading={isChatRoomsLoading || !hasLoadedChatRooms}
                             searchTerm={chatSearchTerm}
                             totalChatsCount={chatRooms.length}
-                            onChatClick={async (chat) => {
-                                // Optimistic UI: clear immediately
+                            onChatClick={(chat) => {
+                                // Track which chat is open so polling doesn't flash the badge
+                                openChatIdRef.current = chat._id as string || null;
+                                // Optimistic UI: clear sidebar badge immediately
                                 setChatRooms((prev) =>
                                     prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)),
                                 );
-
-                                // Persist: mark conversation as read on the server (mongo only)
-                                const convoId = String(chat._id || chat.handle || "");
-                                if (convoId) {
-                                    await markConversationReadAction(convoId, null); // null = mark up to latest
-                                }
+                                // Read state is persisted by useMongoChat after messages load
+                                // with the actual latest message ID — no need to mark here.
                             }}
                         />
                     </div>

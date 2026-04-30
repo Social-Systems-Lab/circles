@@ -541,6 +541,27 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
     return mapConversationsToChatRoomDisplays(userDid, visibleConversations);
 };
 
+export const fetchRecentMessages = async (
+    conversationId: string,
+    limit: number = 50,
+): Promise<ChatMessageDoc[]> => {
+    // Fetch the most recent messages by sorting descending, then reverse for display order
+    const messages = (await ChatMessageDocs.find({ conversationId, threadId: { $exists: false } })
+        .sort({ _id: -1 })
+        .limit(limit)
+        .toArray()) as ChatMessageDoc[];
+
+    // Reverse so oldest-first for display
+    messages.reverse();
+
+    return messages.map((message) => {
+        if (message._id) {
+            message._id = message._id.toString();
+        }
+        return message;
+    });
+};
+
 export const fetchMessagesSince = async (
     conversationId: string,
     sinceId?: string,
@@ -654,7 +675,16 @@ export const getUnreadCountsForUser = async (
 
     const counts: Record<string, number> = {};
     for (const conversationId of conversationIds) {
+        const hasReadState = lastReadByConversation.has(conversationId);
         const lastReadId = lastReadByConversation.get(conversationId);
+
+        // If a read state record exists with null lastReadMessageId, the user has
+        // explicitly marked this conversation as fully read — return 0.
+        if (hasReadState && !lastReadId) {
+            counts[conversationId] = 0;
+            continue;
+        }
+
         const query: any = { conversationId, senderDid: { $ne: userDid } };
         const lastReadObjectId = toObjectId(lastReadId);
         if (lastReadObjectId) {

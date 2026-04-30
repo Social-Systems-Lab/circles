@@ -21,6 +21,7 @@ import { listDmEligibleContactsForUserDid } from "@/lib/data/relationships";
 import {
     listChatRoomsAction as listMongoChatRoomsAction,
     fetchMongoMessagesAction as fetchMongoMessagesActionInternal,
+    fetchRecentMessagesAction as fetchRecentMessagesActionInternal,
     sendMongoMessageAction as sendMongoMessageActionInternal,
     sendMongoAttachmentAction as sendMongoAttachmentActionInternal,
     editMongoMessageAction as editMongoMessageActionInternal,
@@ -230,6 +231,13 @@ export const fetchMongoMessagesAction = async (
     limit: number = 50,
 ) => {
     return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
+};
+
+export const fetchRecentMessagesAction = async (
+    conversationId: string,
+    limit?: number,
+) => {
+    return await fetchRecentMessagesActionInternal(conversationId, limit);
 };
 
 export const sendMongoMessageAction = async (

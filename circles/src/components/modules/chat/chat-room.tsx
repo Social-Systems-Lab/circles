@@ -412,6 +412,7 @@ type ChatMessagesProps = {
     conversationId?: string;
     currentUser?: any;
     onTopicOpen?: () => void;
+    onTopicLoaded?: () => void;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -431,6 +432,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     conversationId,
     currentUser,
     onTopicOpen,
+    onTopicLoaded,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -639,6 +641,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         conversationId={conversationId || ""}
                                         user={currentUser}
                                         onTopicOpen={onTopicOpen}
+                                        onTopicLoaded={onTopicLoaded}
                                     />
                                 </div>
                             ) : null}
@@ -1266,7 +1269,8 @@ const TopicCard: React.FC<{
     conversationId: string;
     user: any;
     onTopicOpen?: () => void;
-}> = ({ message, conversationId, user, onTopicOpen }) => {
+    onTopicLoaded?: () => void;
+}> = ({ message, conversationId, user, onTopicOpen, onTopicLoaded }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
 
@@ -1292,6 +1296,7 @@ const TopicCard: React.FC<{
     useEffect(() => {
         if (isOpen) {
             void loadReplies();
+            onTopicOpen?.();
         } else {
             void computeUnreadCount();
         }
@@ -1366,6 +1371,8 @@ const TopicCard: React.FC<{
             console.error("Failed to load topic replies:", e);
         } finally {
             setIsLoading(false);
+            // Notify parent that topic has finished loading so it can scroll to bottom
+            onTopicLoaded?.();
         }
     };
 
@@ -1502,7 +1509,7 @@ const TopicCard: React.FC<{
                     <div className="relative">
                         <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-blue-500" : "text-gray-400"}`} />
                         {!isOpen && unreadCount > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-500 px-0.5 text-[10px] font-bold text-white">
+                            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
                                 {unreadCount}
                             </span>
                         )}
@@ -1826,7 +1833,26 @@ export const ChatRoomComponent: React.FC<{
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
+    const hasInitiallyScrolledRef = useRef(false);
+    const [userHasScrolledUp, setUserHasScrolledUp] = useState<boolean>(() => {
+        // If any topics are open for this conversation, start with scroll suppressed
+        // so the page doesn't jump to bottom before open topics render
+        try {
+            const roomKey = typeof window !== "undefined"
+                ? window.location.pathname.split("/").pop() || ""
+                : "";
+            if (roomKey) {
+                const raw = localStorage.getItem(`kamooni_open_topics_${roomKey}`);
+                if (raw) {
+                    const ids = JSON.parse(raw);
+                    if (Array.isArray(ids) && ids.length > 0) return true;
+                }
+            }
+        } catch {
+            // fail silently
+        }
+        return false;
+    });
     const isCompact = useIsCompact();
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
@@ -1840,6 +1866,8 @@ export const ChatRoomComponent: React.FC<{
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+    const [hasOlderMessages, setHasOlderMessages] = useState(true);
     const [showNewThreadModal, setShowNewThreadModal] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -1947,6 +1975,46 @@ export const ChatRoomComponent: React.FC<{
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
     });
+
+    const loadOlderMessages = async () => {
+        if (!roomId || isLoadingOlder || !hasOlderMessages) return;
+        const currentMessages = roomMessages[roomId] || [];
+        if (currentMessages.length === 0) return;
+        const oldestId = currentMessages[0]?.id;
+        if (!oldestId) return;
+        setIsLoadingOlder(true);
+        try {
+            const { fetchMongoMessagesAction } = await import("./actions");
+            // Fetch messages before the oldest currently loaded one
+            // We use a custom approach: fetch 50 messages with _id < oldestId
+            const result = await fetchMongoMessagesAction(roomId, undefined, 50);
+            if (result.success && result.messages) {
+                const olderMessages = result.messages.filter(
+                    (msg) => msg.id < oldestId && !currentMessages.some((m) => m.id === msg.id)
+                );
+                if (olderMessages.length === 0) {
+                    setHasOlderMessages(false);
+                } else {
+                    setRoomMessages((prev) => {
+                        const current = prev[roomId] || [];
+                        const existingIds = new Set(current.map((m) => m.id));
+                        const newOld = olderMessages.filter((m) => !existingIds.has(m.id));
+                        return {
+                            ...prev,
+                            [roomId]: [...newOld, ...current],
+                        };
+                    });
+                    if (olderMessages.length < 50) {
+                        setHasOlderMessages(false);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load older messages:", e);
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    };
 
     const handleDelete = async (message: ChatMessage) => {
         if (window.confirm("Are you sure you want to delete this message?")) {
@@ -2066,10 +2134,23 @@ export const ChatRoomComponent: React.FC<{
     };
 
     useEffect(() => {
+        if (messages.length === 0) return;
+        if (!hasInitiallyScrolledRef.current) {
+            // First load — wait for DOM to paint before scrolling
+            hasInitiallyScrolledRef.current = true;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    scrollToBottom("auto");
+                });
+            });
+            return;
+        }
+        // Subsequent updates — only scroll if user hasn't scrolled up
         if (!userHasScrolledUp) {
             scrollToBottom("smooth");
         }
     }, [messages, userHasScrolledUp]);
+
 
     useEffect(() => {
     if (!roomId) return;
@@ -2153,6 +2234,17 @@ export const ChatRoomComponent: React.FC<{
                             }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!isLoadingMongo && hasOlderMessages && (
+                                <div className="flex justify-center py-2">
+                                    <button
+                                        onClick={() => void loadOlderMessages()}
+                                        disabled={isLoadingOlder}
+                                        className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs text-gray-500 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                                    >
+                                        {isLoadingOlder ? "Loading..." : "Load older messages"}
+                                    </button>
+                                </div>
+                            )}
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                         {!isLoadingMessages && (
                             <ChatMessages
@@ -2167,6 +2259,9 @@ export const ChatRoomComponent: React.FC<{
                                 conversationId={roomId || ""}
                                 currentUser={user}
                                 onTopicOpen={() => setUserHasScrolledUp(true)}
+                                onTopicLoaded={() => {
+                                    requestAnimationFrame(() => scrollToBottom("auto"));
+                                }}
                             />
                         )}
                         </div>
@@ -2177,6 +2272,17 @@ export const ChatRoomComponent: React.FC<{
                             className="flex-grow overflow-y-auto p-4 pb-[144px]"
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!isLoadingMongo && hasOlderMessages && (
+                                <div className="flex justify-center py-2">
+                                    <button
+                                        onClick={() => void loadOlderMessages()}
+                                        disabled={isLoadingOlder}
+                                        className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs text-gray-500 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                                    >
+                                        {isLoadingOlder ? "Loading..." : "Load older messages"}
+                                    </button>
+                                </div>
+                            )}
                             {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
                             {!isLoadingMessages && (
                                 <ChatMessages
@@ -2191,6 +2297,9 @@ export const ChatRoomComponent: React.FC<{
                                     conversationId={roomId || ""}
                                     currentUser={user}
                                     onTopicOpen={() => setUserHasScrolledUp(true)}
+                                    onTopicLoaded={() => {
+                                        requestAnimationFrame(() => scrollToBottom("auto"));
+                                    }}
                                 />
                             )}
                         </div>
