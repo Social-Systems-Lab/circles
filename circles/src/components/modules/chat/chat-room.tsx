@@ -411,6 +411,7 @@ type ChatMessagesProps = {
     isDirect?: boolean;
     conversationId?: string;
     currentUser?: any;
+    onTopicOpen?: () => void;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -429,6 +430,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     isDirect = false,
     conversationId,
     currentUser,
+    onTopicOpen,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -636,6 +638,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         message={message}
                                         conversationId={conversationId || ""}
                                         user={currentUser}
+                                        onTopicOpen={onTopicOpen}
                                     />
                                 </div>
                             ) : null}
@@ -1262,7 +1265,8 @@ const TopicCard: React.FC<{
     message: any;
     conversationId: string;
     user: any;
-}> = ({ message, conversationId, user }) => {
+    onTopicOpen?: () => void;
+}> = ({ message, conversationId, user, onTopicOpen }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
 
@@ -1369,6 +1373,7 @@ const TopicCard: React.FC<{
         const next = !isOpen;
         if (next) {
             void loadReplies();
+            onTopicOpen?.();
         }
         setIsOpen(next);
         const openIds = getOpenTopicIds(conversationId);
@@ -2161,6 +2166,7 @@ export const ChatRoomComponent: React.FC<{
                                 isDirect={!!(chatRoom as any)?.isDirect}
                                 conversationId={roomId || ""}
                                 currentUser={user}
+                                onTopicOpen={() => setUserHasScrolledUp(true)}
                             />
                         )}
                         </div>
@@ -2184,6 +2190,7 @@ export const ChatRoomComponent: React.FC<{
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
                                     currentUser={user}
+                                    onTopicOpen={() => setUserHasScrolledUp(true)}
                                 />
                             )}
                         </div>
