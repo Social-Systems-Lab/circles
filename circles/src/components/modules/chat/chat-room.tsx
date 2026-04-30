@@ -1222,6 +1222,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
 // ─── Topic inline card (self-contained, expands in place) ──────────────────
 
 const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
+const getTopicLastSeenKey = (conversationId: string, topicId: string) => `kamooni_topic_lastseen_${conversationId}_${topicId}`;
 
 const getOpenTopicIds = (conversationId: string): Set<string> => {
     try {
@@ -1235,6 +1236,23 @@ const getOpenTopicIds = (conversationId: string): Set<string> => {
 const setOpenTopicIds = (conversationId: string, ids: Set<string>) => {
     try {
         localStorage.setItem(getTopicStorageKey(conversationId), JSON.stringify(Array.from(ids)));
+    } catch {
+        // localStorage unavailable — fail silently
+    }
+};
+
+const getTopicLastSeen = (conversationId: string, topicId: string): number => {
+    try {
+        const raw = localStorage.getItem(getTopicLastSeenKey(conversationId, topicId));
+        return raw ? parseInt(raw, 10) : 0;
+    } catch {
+        return 0;
+    }
+};
+
+const setTopicLastSeen = (conversationId: string, topicId: string, timestamp: number) => {
+    try {
+        localStorage.setItem(getTopicLastSeenKey(conversationId, topicId), String(timestamp));
     } catch {
         // localStorage unavailable — fail silently
     }
@@ -1257,16 +1275,51 @@ const TopicCard: React.FC<{
     const [isLoading, setIsLoading] = useState(false);
     const [replyText, setReplyText] = useState("");
     const [isSending, setIsSending] = useState(false);
+    const [unreadCount, setUnreadCount] = useState<number>(0);
+    const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+    const [editingReplyText, setEditingReplyText] = useState("");
+    const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
+    const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const isMobile = useIsMobile();
 
     // Load replies on mount if topic starts open
     useEffect(() => {
         if (isOpen) {
             void loadReplies();
+        } else {
+            void computeUnreadCount();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Re-check unread count whenever replyCount changes (picks up new replies without refresh)
+    useEffect(() => {
+        if (!isOpen) {
+            void computeUnreadCount();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [thread?.replyCount]);
+
     if (!thread) return null;
+
+    const computeUnreadCount = async () => {
+        try {
+            const { fetchThreadRepliesAction } = await import("./mongo-actions");
+            const result = await fetchThreadRepliesAction(messageId);
+            if (result.success && result.replies) {
+                const lastSeen = getTopicLastSeen(conversationId, messageId);
+                const unseen = result.replies.filter((r: any) => {
+                    const ts = new Date(r.createdAt).getTime();
+                    return ts > lastSeen;
+                }).length;
+                setUnreadCount(unseen);
+            }
+        } catch {
+            // fail silently
+        }
+    };
 
     const loadReplies = async () => {
         setIsLoading(true);
@@ -1274,13 +1327,36 @@ const TopicCard: React.FC<{
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
             const result = await fetchThreadRepliesAction(messageId);
             if (result.success && result.replies) {
-                const mapped = result.replies.map((r: any) => ({
-                    id: r._id?.toString(),
-                    content: { body: r.body },
-                    createdAt: r.createdAt,
-                    createdBy: r.senderDid,
-                }));
+                const mapped = result.replies.map((r: any) => {
+                    // Convert raw reactions array [{emoji, userDid}] to keyed map {emoji: [{sender, eventId}]}
+                    const rawReactions = Array.isArray(r.reactions) ? r.reactions : [];
+                    const reactionMap = rawReactions.reduce((acc: Record<string, any[]>, reaction: any) => {
+                        const key = reaction.emoji;
+                        if (!key) return acc;
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push({
+                            sender: reaction.userDid,
+                            eventId: `${r._id}:${reaction.userDid}:${key}`,
+                        });
+                        return acc;
+                    }, {});
+
+                    return {
+                        id: r._id?.toString(),
+                        content: { body: r.body },
+                        attachments: r.attachments,
+                        reactions: reactionMap,
+                        createdAt: r.createdAt,
+                        createdBy: r.senderDid,
+                        authorName: r.authorName && !r.authorName.includes(":") && r.authorName.length < 40 ? r.authorName : null,
+                        authorPicture: r.authorPicture || null,
+                    };
+                });
                 setReplies(mapped);
+                // Mark all as seen
+                const now = Date.now();
+                setTopicLastSeen(conversationId, messageId, now);
+                setUnreadCount(0);
             }
         } catch (e) {
             console.error("Failed to load topic replies:", e);
@@ -1298,6 +1374,9 @@ const TopicCard: React.FC<{
         const openIds = getOpenTopicIds(conversationId);
         if (next) {
             openIds.add(messageId);
+            // Mark as seen when opening
+            setTopicLastSeen(conversationId, messageId, Date.now());
+            setUnreadCount(0);
         } else {
             openIds.delete(messageId);
         }
@@ -1333,6 +1412,62 @@ const TopicCard: React.FC<{
         }
     };
 
+    const handleEditSubmit = async (replyId: string) => {
+        const trimmed = editingReplyText.trim();
+        if (!trimmed) return;
+        try {
+            const { editMessageAction } = await import("./actions");
+            const result = await editMessageAction(conversationId, replyId, trimmed);
+            if (result.success) {
+                setEditingReplyId(null);
+                setEditingReplyText("");
+                await loadReplies();
+            }
+        } catch (e) {
+            console.error("Failed to edit topic reply:", e);
+        }
+    };
+
+    const handleReaction = async (replyId: string, emoji: string) => {
+        try {
+            const { toggleMongoReactionAction } = await import("./actions");
+            await toggleMongoReactionAction(replyId, emoji);
+            await loadReplies();
+        } catch (e) {
+            console.error("Failed to toggle reaction:", e);
+        }
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = "";
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File size exceeds 5MB limit.");
+            return;
+        }
+        setIsUploading(true);
+        try {
+            const { sendAttachmentAction } = await import("./actions");
+            const formData = new FormData();
+            formData.append("roomId", conversationId);
+            formData.append("file", file);
+            // Pass threadId so the attachment reply is linked to this topic
+            formData.append("threadId", messageId);
+            const result = await sendAttachmentAction(formData);
+            if (result.success) {
+                await loadReplies();
+            } else {
+                alert(`Failed to send attachment: ${result.message}`);
+            }
+        } catch (e) {
+            console.error("Failed to send attachment:", e);
+            alert("An error occurred while uploading the file.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     // Opening message rendered as first bubble
     const openingAuthorIsOwn = message.createdBy === user?.did;
 
@@ -1359,7 +1494,14 @@ const TopicCard: React.FC<{
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-blue-500" : "text-gray-400"}`} />
+                    <div className="relative">
+                        <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-blue-500" : "text-gray-400"}`} />
+                        {!isOpen && unreadCount > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-500 px-0.5 text-[10px] font-bold text-white">
+                                {unreadCount}
+                            </span>
+                        )}
+                    </div>
                     <span className="text-xs text-gray-400">
                         {isOpen ? "Collapse" : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
                     </span>
@@ -1370,13 +1512,18 @@ const TopicCard: React.FC<{
             {isOpen && (
                 <div className="border-t border-gray-200">
                     {/* Opening message as first bubble */}
-                    <div className="px-3 pt-3 pb-1">
-                        <div className={`flex ${openingAuthorIsOwn ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm shadow-sm ${openingAuthorIsOwn ? "bg-blue-100 text-gray-900" : "bg-gray-100 text-gray-900"}`}>
+                    <div className={`flex px-3 pt-3 pb-1 ${openingAuthorIsOwn ? "justify-end" : "justify-start"}`}>
+                        <div className="flex flex-col max-w-[75%]">
+                            <div className={`p-2 pr-4 shadow-md rounded-lg ${openingAuthorIsOwn ? "bg-blue-100" : "bg-white"}`}>
+                                {!openingAuthorIsOwn && message.author?.name && (
+                                    <p className="text-xs font-semibold mb-0.5" style={{ color: "#6366f1" }}>
+                                        {(message.author.name as string).trim().split(" ")[0] || message.author.handle}
+                                    </p>
+                                )}
                                 <p>{message.content?.body || ""}</p>
-                                <p className="mt-0.5 text-xs text-gray-400">
-                                    {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                </p>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             </div>
                         </div>
                     </div>
@@ -1391,13 +1538,101 @@ const TopicCard: React.FC<{
                         )}
                         {replies.map((reply) => {
                             const isOwn = reply.createdBy === user?.did;
+                            const isEditing = editingReplyId === reply.id;
+                            const attachments = reply.attachments as { url: string; name: string; mimeType?: string; size?: number }[] | undefined;
                             return (
-                                <div key={reply.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                                    <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm shadow-sm ${isOwn ? "bg-blue-100 text-gray-900" : "bg-gray-100 text-gray-900"}`}>
-                                        <p>{reply.content?.body}</p>
-                                        <p className="mt-0.5 text-xs text-gray-400">
-                                            {new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                        </p>
+                                <div
+                                    key={reply.id}
+                                    className={`relative mb-1 flex gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
+                                    onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
+                                    onMouseLeave={() => { if (!isMobile) { setHoveredReplyId(null); } }}
+                                >
+                                    {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) && !isEditing && (
+                                        <div className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}>
+                                            {isOwn && (
+                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingReplyId(reply.id); setEditingReplyText(reply.content?.body || ""); }}>
+                                                    <GrEdit className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyText((prev) => prev + `@${reply.authorName || ""} `)}>
+                                                <MdReply className="h-4 w-4" />
+                                            </Button>
+                                            <Popover open={pickerOpenForReply === reply.id} onOpenChange={(open) => setPickerOpenForReply(open ? reply.id : null)}>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                    <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => { void handleReaction(reply.id, data.emoji); setPickerOpenForReply(null); }} />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    )}
+                                    <div className="relative flex max-w-[75%] flex-col overflow-hidden">
+                                        <div className={`p-2 pr-4 shadow-md rounded-lg ${isOwn ? "bg-blue-100" : "bg-white"}`}>
+                                            {!isOwn && reply.authorName && (
+                                                <p className="text-xs font-semibold mb-0.5" style={{ color: "#6366f1" }}>{reply.authorName}</p>
+                                            )}
+                                            {isEditing ? (
+                                                <div className="flex flex-col gap-1">
+                                                    <textarea
+                                                        value={editingReplyText}
+                                                        onChange={(e) => setEditingReplyText(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleEditSubmit(reply.id); }
+                                                            if (e.key === "Escape") { setEditingReplyId(null); setEditingReplyText(""); }
+                                                        }}
+                                                        rows={2}
+                                                        className="w-full resize-none rounded-lg bg-white border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                                    />
+                                                    <div className="flex gap-1 justify-end">
+                                                        <button onClick={() => { setEditingReplyId(null); setEditingReplyText(""); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                                                        <button onClick={() => void handleEditSubmit(reply.id)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Save</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <p>{reply.content?.body}</p>
+                                                    {Array.isArray(attachments) && attachments.length > 0 && (
+                                                        <div className="mt-2 space-y-1">
+                                                            {attachments.map((att, i) => {
+                                                                const isImage = att.mimeType?.startsWith("image/");
+                                                                if (isImage) {
+                                                                    return (
+                                                                        <img key={i} src={att.url} alt={att.name} className="max-h-40 rounded-lg object-contain cursor-pointer hover:opacity-90" onClick={() => window.open(att.url, "_blank")} />
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-600 underline">
+                                                                        <IoDocumentText className="h-3 w-3" />{att.name}
+                                                                    </a>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                            {reply.reactions && Object.keys(reply.reactions).length > 0 && (
+                                                <div className="mt-1 flex flex-wrap gap-1">
+                                                    {Object.entries(reply.reactions as Record<string, any>).map(([emoji, reactors]) => {
+                                                        const reactorList = Array.isArray(reactors) ? reactors : [];
+                                                        return (
+                                                            <button
+                                                                key={emoji}
+                                                                onClick={() => void handleReaction(reply.id, emoji)}
+                                                                className={`flex items-center rounded-full border px-1.5 py-0.5 text-xs ${reactorList.some((r: any) => r.sender === user?.did) ? "border-blue-400 bg-white" : "border-gray-300 bg-white"}`}
+                                                            >
+                                                                {emoji} <span className="ml-0.5 text-gray-500">{reactorList.length}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className={`mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 ${isOwn ? "justify-end" : "justify-start"}`}>
+                                            <span>{new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -1405,7 +1640,27 @@ const TopicCard: React.FC<{
                     </div>
 
                     {/* Reply input */}
-                    <div className="flex gap-2 items-end px-3 pb-3">
+                    <div className="flex gap-1 items-end px-3 pb-3">
+                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                        >
+                            {isUploading ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" /> : <IoAttach className="h-4 w-4" />}
+                        </Button>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                                    <BsEmojiSmile className="h-4 w-4" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)} />
+                            </PopoverContent>
+                        </Popover>
                         <textarea
                             value={replyText}
                             onChange={(e) => setReplyText(e.target.value)}

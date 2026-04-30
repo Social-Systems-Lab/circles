@@ -558,6 +558,7 @@ export const sendMongoAttachmentAction = async (
     const replyToMessageId =
         (formData.get("replyToMessageId") as string | undefined) ||
         (formData.get("replyToEventId") as string | undefined);
+    const threadId = (formData.get("threadId") as string | undefined) || undefined;
 
     if (!conversationId || !file) {
         return { success: false, message: "Missing room ID or file" };
@@ -605,6 +606,7 @@ export const sendMongoAttachmentAction = async (
             createdAt: new Date(),
             replyToMessageId,
             attachments: [attachment],
+            ...(threadId ? { threadId } : {}),
         });
         await sendConversationMessageNotifications({
             conversationId,
@@ -1122,7 +1124,26 @@ export const fetchThreadRepliesAction = async (
     try {
         const { fetchThreadReplies } = await import("@/lib/data/mongo-chat");
         const docs = await fetchThreadReplies(threadId);
-        return { success: true, replies: docs };
+        if (!docs.length) return { success: true, replies: [] };
+
+        // Enrich with author info
+        const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
+        const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
+        const senderByDid = new Map(senders.map((circle) => [circle.did, circle]));
+
+        const enriched = docs.map((doc) => {
+            const circle = senderByDid.get(doc.senderDid);
+            const fullName = circle?.name || "";
+            const firstName = fullName.trim().split(" ")[0] || circle?.handle || doc.senderDid;
+            return {
+                ...doc,
+                _id: doc._id?.toString(),
+                authorName: firstName,
+                authorPicture: circle?.picture?.url || null,
+            };
+        });
+
+        return { success: true, replies: enriched };
     } catch (error) {
         console.error("fetchThreadRepliesAction error:", error);
         return { success: false, message: "Failed to fetch replies" };
