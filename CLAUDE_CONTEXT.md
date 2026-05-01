@@ -78,11 +78,12 @@ Important files:
 
 ## Production Environment
 
-- Server: Genesis2
-- App directory on server: `/root/circles/circles`
-- Deploy command: `deploykamooni` (runs `./deploy-genesis2.sh main`)
-- Verify deployment: `curl -sS https://kamooni.org/api/version && echo`
-- The returned gitSha must match the deployed commit
+- Server: Cleura (kamooniorg)
+- SSH: `ssh ubuntu@91.123.202.241` then `sudo -i`
+- App directory on server: `/root/circles/circles/circles`
+- Deploy: `git pull --ff-only origin main` then `docker compose up -d --build circles nginx cron`
+- Verify deployment: `curl -s https://kamooni.org/api/version`
+- Note: gitSha may show as unknown on Cleura — verify by checking `git rev-parse --short HEAD` and live UI
 
 ---
 
@@ -91,7 +92,7 @@ Important files:
 1. Make changes on a feature branch (never directly on main)
 2. Test locally at localhost
 3. If happy, merge to main (fast-forward preferred)
-4. Run `deploykamooni` on Genesis2
+4. SSH into Cleura, pull main, rebuild with docker compose
 5. Verify with `/api/version`
 6. Update SESSION_LOG.md
 
@@ -127,7 +128,7 @@ Priority order for all changes:
 Instruction rules:
 - Provide exact commands only
 - Commands must be copy-paste safe
-- Specify where each command runs (local Mac terminal / Genesis2 server / Docker container)
+- Specify where each command runs (local Mac terminal / Cleura server / Docker container)
 - One step at a time: human runs → pastes output → Claude analyzes → next step
 
 Coding philosophy:

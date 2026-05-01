@@ -120,3 +120,55 @@ At the end of each session, append a new entry:
 ### Files changed
 ### Deployed?
 ### What's next
+
+---
+
+## Session 004 — 2026-05-01
+
+### What we did
+- Fixed scroll-to-bottom arrow button: changed from `absolute` to `fixed` positioning so it appears above the input bar on both mobile and desktop
+- Added avatars to topic reply chains: shows avatar only on last message in a chain (matching main chat behaviour), with spacer div for non-last messages
+- Topic reply chain polish: timestamps only on last in chain, tighter spacing, `isFirstInChain` and `isLastInChain` computed for replies
+- Switched all timestamps to 24h clock (`hour12: false`) across main chat, topic replies, and `formatChatDate`
+- Moved timestamps inside bubbles (WhatsApp style) — main chat and topic replies
+- Timestamps always right-aligned inside bubble to avoid clash with reaction badges
+- `formatChatDate` simplified to time-only (date handled by existing date pill)
+- Fixed `sameAuthor()` to compare `createdBy` DID string instead of `author._id` ObjectId — this was preventing chain detection from working
+- Main chat bubble corner rounding via inline `borderRadius` style (bypasses Tailwind JIT) — WhatsApp-style 12px uniform radius
+- Topic reply bubble corner radius matched to main chat (12px uniform)
+- Added emoji picker button to main chat input bar (matching Topic input bar)
+- Reaction badges: hide count when only 1 of a kind
+- Reaction badges: removed blue border, unified styling across main chat and topics
+- Topic reply reactions moved inside bubble column, compact styling
+- Updated CLAUDE_CONTEXT.md: replaced Genesis2 references with Cleura deployment details
+- Updated AGENTS.md context: Cleura is now the production server
+
+### Decisions made
+- Uniform 12px border radius on all bubbles (not WhatsApp-style variable corners) — simpler and avoids Tailwind JIT issues
+- Timestamps always right-aligned inside bubble regardless of sender
+- Reaction count hidden when count is 1 (less noise)
+- Topic reply avatars only on last in chain, matching main chat pattern
+- Emoji picker in input bar (not hover toolbar) — more discoverable, works on mobile
+
+### Files changed
+- `circles/src/components/modules/chat/chat-room.tsx`
+- `CLAUDE_CONTEXT.md`
+
+### Deployed?
+Yes — pushed to main, deployed to Cleura via `git pull` + `docker compose up -d --build circles nginx cron`
+Commit: 19e72db
+
+### Known issues / future tasks
+- Topic reply reaction badge alignment: currently inside bubble (functional but not floating over bubble edge like main chat) — revisit in future session
+- Dependabot: 59 vulnerabilities (3 critical, 19 high) — needs dedicated session
+- Nested repo path on Cleura (/root/circles/circles/circles) — future cleanup
+- Group chat topic notifications not yet implemented
+- LiveKit video meeting integration pending
+
+### What's next (candidates for session 005)
+- Mobile UX review of all chat changes
+- Topic reaction badge floating (WhatsApp style) — clean implementation
+- Group chat topic notifications
+- LiveKit video meeting integration
+- Altruistic Wallet feature work
+- Dependabot vulnerability review
