@@ -416,9 +416,9 @@ type ChatMessagesProps = {
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
-    if (!message1?.author || !message2?.author) return false;
+    if (!message1?.createdBy || !message2?.createdBy) return false;
     if (message1.type !== "m.room.message" || message2.type !== "m.room.message") return false;
-    return message1.author._id === message2.author._id;
+    return message1.createdBy === message2.createdBy;
 };
 
 const ChatMessages: React.FC<ChatMessagesProps> = ({
@@ -542,17 +542,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     }, [messages, onMessagesRendered]);
 
     const formatChatDate = (chatDate: Date) => {
-        const now = new Date();
-
-        if (isSameDay(chatDate, now)) {
-            return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        } else {
-            return (
-                chatDate.toLocaleDateString() +
-                " " +
-                chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            );
-        }
+        return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
     };
 
     const orderedMessages = [...messages]
@@ -586,11 +576,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                         </div>,
                     );
                 }
-                const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${
-                    isLastInChain ? "rounded-b-lg" : ""
-                } ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
                 const selfIdentifier = user?.did;
                 const isOwnMessage = message.createdBy === selfIdentifier;
+                const borderRadiusClass = "";
+                const bubbleRadius = "12px";
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
                 const bubbleStatusClasses =
@@ -646,8 +635,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                 </div>
                             ) : null}
                             {!(message as any).thread && (
-                            <div className="relative flex min-w-[100px] max-w-[75%] flex-col overflow-hidden">
-                                <div className={`${isOwnMessage ? "bg-blue-100" : "bg-white"} p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
+                            <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
+                                <div className={`${isOwnMessage ? "bg-blue-100" : "bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`} style={{ borderRadius: bubbleRadius }}>
                                     {isFirstInChain && !isOwnMessage && !isDirect && (
                                         <div
                                             className="text-xs font-semibold"
@@ -657,42 +646,38 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         </div>
                                     )}
                                     <MessageRenderer message={message} />
-                                    {message.reactions && Object.keys(message.reactions).length > 0 && (
-                                        <div className="mt-1 flex flex-wrap gap-1">
-                                            {Object.entries(message.reactions).map(([reaction, reactions]) => (
-                                                <div
-                                                    key={reaction}
-                                                    className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
-                                                        reactions.some((r) =>
-                                                            r.sender === user?.did,
-                                                        )
-                                                            ? "border-blue-500"
-                                                            : "border-gray-300"
-                                                    }`}
-                                                    onClick={() => handleReaction(message, reaction)}
-                                                >
-                                                    <span>{reaction}</span>
-                                                    <span className="ml-1 text-gray-600">{reactions.length}</span>
-                                                </div>
-                                            ))}
+                                    {isLastInChain && (
+                                        <div className="mt-0 flex items-center gap-1 text-[9px] text-gray-400 justify-end">
+                                            <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                            {isOwnMessage && message.status === "pending" && (
+                                                <span className="flex items-center gap-1 text-blue-400">
+                                                    <IoTimeOutline className="h-2.5 w-2.5" />
+                                                </span>
+                                            )}
+                                            {isOwnMessage && message.status === "failed" && (
+                                                <span className="flex items-center gap-1 text-red-400">
+                                                    <IoWarningOutline className="h-2.5 w-2.5" />
+                                                </span>
+                                            )}
                                         </div>
                                     )}
                                 </div>
-                                {isLastInChain && (
-                                    <div className={`mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 ${isOwnMessage ? "justify-end" : "justify-start"}`}>
-                                        <span>{formatChatDate(new Date(message.createdAt))}</span>
-                                        {isOwnMessage && message.status === "pending" && (
-                                            <span className="flex items-center gap-1 text-blue-500">
-                                                <IoTimeOutline className="h-3 w-3" />
-                                                Sending…
-                                            </span>
-                                        )}
-                                        {isOwnMessage && message.status === "failed" && (
-                                            <span className="flex items-center gap-1 text-red-500">
-                                                <IoWarningOutline className="h-3 w-3" />
-                                                {message.errorMessage || "Failed to send"}
-                                            </span>
-                                        )}
+                                {message.reactions && Object.keys(message.reactions).length > 0 && (
+                                    <div className={`relative -mt-3 z-10 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}>
+                                        {Object.entries(message.reactions).map(([reaction, reactions]) => (
+                                            <div
+                                                key={reaction}
+                                                className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
+                                                    reactions.some((r) => r.sender === user?.did)
+                                                        ? "border-gray-200"
+                                                        : "border-gray-200"
+                                                }`}
+                                                onClick={() => handleReaction(message, reaction)}
+                                            >
+                                                <span>{reaction}</span>
+                                                {reactions.length > 1 && <span className="ml-1 text-gray-600">{reactions.length}</span>}
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
 
@@ -1185,7 +1170,18 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                         <IoAttach className="h-6 w-6" />
                     )}
                 </Button>
-                
+
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200">
+                            <BsEmojiSmile className="h-5 w-5" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto border-none bg-transparent p-0">
+                        <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => setNewMessage((prev) => prev + data.emoji)} />
+                    </PopoverContent>
+                </Popover>
+
                 <MentionsInput
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
@@ -1535,7 +1531,7 @@ const TopicCard: React.FC<{
                                 <p>{message.content?.body || ""}</p>
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                                <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
                             </div>
                         </div>
                     </div>
@@ -1548,14 +1544,23 @@ const TopicCard: React.FC<{
                         {!isLoading && replies.length === 0 && (
                             <p className="text-center text-xs text-gray-400 py-2">No replies yet. Be the first.</p>
                         )}
-                        {replies.map((reply) => {
+                        {replies.map((reply, replyIndex) => {
                             const isOwn = reply.createdBy === user?.did;
                             const isEditing = editingReplyId === reply.id;
+                            const nextReply = replies[replyIndex + 1];
+                            const isLastInChain =
+                                !nextReply ||
+                                nextReply.createdBy !== reply.createdBy ||
+                                new Date(nextReply.createdAt).getTime() - new Date(reply.createdAt).getTime() > 5 * 60 * 1000;
+                            const isFirstInChain =
+                                replyIndex === 0 ||
+                                replies[replyIndex - 1].createdBy !== reply.createdBy ||
+                                new Date(reply.createdAt).getTime() - new Date(replies[replyIndex - 1].createdAt).getTime() > 5 * 60 * 1000;
                             const attachments = reply.attachments as { url: string; name: string; mimeType?: string; size?: number }[] | undefined;
                             return (
                                 <div
                                     key={reply.id}
-                                    className={`relative mb-1 flex gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
+                                    className={`relative flex gap-2 ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
                                     onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
                                     onMouseLeave={() => { if (!isMobile) { setHoveredReplyId(null); } }}
                                 >
@@ -1581,11 +1586,22 @@ const TopicCard: React.FC<{
                                             </Popover>
                                         </div>
                                     )}
-                                    <div className="relative flex max-w-[75%] flex-col overflow-hidden">
-                                        <div className={`p-2 pr-4 shadow-md rounded-lg ${isOwn ? "bg-blue-100" : "bg-white"}`}>
-                                            {!isOwn && reply.authorName && (
-                                                <p className="text-xs font-semibold mb-0.5" style={{ color: "#6366f1" }}>{reply.authorName}</p>
-                                            )}
+                                    {!isOwn && (
+                                        isLastInChain ? (
+                                            <CirclePicture
+                                                circle={{ picture: reply.authorPicture ? { url: reply.authorPicture } : undefined, name: reply.authorName || "" } as any}
+                                                size="28px"
+                                                className="self-end mb-1 flex-shrink-0"
+                                            />
+                                        ) : (
+                                            <div className="w-7 flex-shrink-0" />
+                                        )
+                                    )}
+                                    <div
+                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${isOwn ? "bg-blue-100" : "bg-white"}`}
+                                        style={{ borderRadius: "12px" }}
+                                    >
+                                        <div className="px-3 py-1.5">
                                             {isEditing ? (
                                                 <div className="flex flex-col gap-1">
                                                     <textarea
@@ -1625,26 +1641,28 @@ const TopicCard: React.FC<{
                                                     )}
                                                 </>
                                             )}
-                                            {reply.reactions && Object.keys(reply.reactions).length > 0 && (
-                                                <div className="mt-1 flex flex-wrap gap-1">
-                                                    {Object.entries(reply.reactions as Record<string, any>).map(([emoji, reactors]) => {
-                                                        const reactorList = Array.isArray(reactors) ? reactors : [];
-                                                        return (
-                                                            <button
-                                                                key={emoji}
-                                                                onClick={() => void handleReaction(reply.id, emoji)}
-                                                                className={`flex items-center rounded-full border px-1.5 py-0.5 text-xs ${reactorList.some((r: any) => r.sender === user?.did) ? "border-blue-400 bg-white" : "border-gray-300 bg-white"}`}
-                                                            >
-                                                                {emoji} <span className="ml-0.5 text-gray-500">{reactorList.length}</span>
-                                                            </button>
-                                                        );
-                                                    })}
+                                            {isLastInChain && (
+                                                <div className="mt-0.5 text-right text-[8px] leading-none text-gray-300">
+                                                    {new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
                                                 </div>
                                             )}
                                         </div>
-                                        <div className={`mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 ${isOwn ? "justify-end" : "justify-start"}`}>
-                                            <span>{new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                        </div>
+                                        {reply.reactions && Object.keys(reply.reactions).length > 0 && (
+                                            <div className={`-mb-1 flex flex-wrap gap-1 px-2 pb-1 ${isOwn ? "justify-end" : "justify-start"}`}>
+                                                {Object.entries(reply.reactions as Record<string, any>).map(([emoji, reactors]) => {
+                                                    const reactorList = Array.isArray(reactors) ? reactors : [];
+                                                    return (
+                                                        <button
+                                                            key={emoji}
+                                                            onClick={() => void handleReaction(reply.id, emoji)}
+                                                            className="flex items-center rounded-full border border-gray-200 bg-white px-1 py-0 text-sm leading-none"
+                                                        >
+                                                            {emoji} {reactorList.length > 1 && <span className="ml-0.5 text-gray-500">{reactorList.length}</span>}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -2309,7 +2327,7 @@ export const ChatRoomComponent: React.FC<{
                         <Button
                             variant="secondary"
                             size="icon"
-                            className="absolute bottom-20 right-4 h-10 w-10 rounded-full shadow-lg"
+                            className="fixed right-4 h-10 w-10 rounded-full shadow-lg z-20" style={{ bottom: isMobile ? "132px" : "60px" }}
                             onClick={() => scrollToBottom("smooth")}
                         >
                             <IoArrowDown className="h-6 w-6" />
