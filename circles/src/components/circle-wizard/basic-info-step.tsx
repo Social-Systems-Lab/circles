@@ -50,7 +50,10 @@ export default function BasicInfoStep({
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
-    const canCreateIndependentCircle = Boolean(user?.isAdmin || user?.isMember);
+    const canCreateIndependentCircle = Boolean(user?.isMember);
+    const circleLevelOptions = canCreateIndependentCircle
+        ? CIRCLE_LEVEL_OPTIONS
+        : CIRCLE_LEVEL_OPTIONS.filter((option) => option.value === "profile_child");
     const shouldShowCircleLevelChoice = circleData.circleType === "circle" && !initialParentCircleId;
     const effectiveCircleLevel = shouldShowCircleLevelChoice ? circleData.circleLevel || "profile_child" : "profile_child";
     const entityLabel = circleData.circleType === "project" ? "Project" : "Circle";
@@ -249,7 +252,7 @@ export default function BasicInfoStep({
                             <p className="text-sm text-gray-500">Choose how this circle should be created.</p>
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
-                            {CIRCLE_LEVEL_OPTIONS.map((option) => {
+                            {circleLevelOptions.map((option) => {
                                 const isDisabled = option.value === "top_level" && !canCreateIndependentCircle;
                                 const isSelected = effectiveCircleLevel === option.value;
 
@@ -273,15 +276,15 @@ export default function BasicInfoStep({
                                         >
                                             {option.description}
                                         </div>
-                                        {option.value === "top_level" && isDisabled && (
-                                            <div className="mt-2 text-xs text-amber-700">
-                                                Independent circles are currently limited to founding members and admins.
-                                            </div>
-                                        )}
                                     </button>
                                 );
                             })}
                         </div>
+                        {!canCreateIndependentCircle && (
+                            <div className="text-xs text-amber-700">
+                                Independent circles are currently limited to verified members.
+                            </div>
+                        )}
                     </div>
                 )}
 

@@ -19,7 +19,7 @@ import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
-const canCreateIndependentCircle = (user: UserPrivate | undefined) => Boolean(user?.isAdmin || user?.isMember);
+const canCreateIndependentCircle = (user: UserPrivate | undefined) => Boolean(user?.isMember);
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
