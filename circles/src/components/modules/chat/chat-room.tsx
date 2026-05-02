@@ -2264,6 +2264,23 @@ export const ChatRoomComponent: React.FC<{
         return () => observer.disconnect();
     }, [replyToMessage]);
 
+    useEffect(() => {
+        const viewport = window.visualViewport;
+        if (!viewport) return;
+        const handler = () => {
+            const offset = window.innerHeight - viewport.height - viewport.offsetTop;
+            if (inputBarRef.current) {
+                inputBarRef.current.style.bottom = `${(isMobile ? 72 : 0) + Math.max(0, offset)}px`;
+            }
+        };
+        viewport.addEventListener("resize", handler);
+        viewport.addEventListener("scroll", handler);
+        return () => {
+            viewport.removeEventListener("resize", handler);
+            viewport.removeEventListener("scroll", handler);
+        };
+    }, [isMobile]);
+
     return (
         <>
             <div
@@ -2291,6 +2308,7 @@ export const ChatRoomComponent: React.FC<{
                             className="overflow-y-auto p-4"
                             style={{
                                 height: "calc(100vh - 300px)",
+                                paddingBottom: inputBarHeight + 16,
                             }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
@@ -2320,7 +2338,9 @@ export const ChatRoomComponent: React.FC<{
                                 currentUser={user}
                                 onTopicOpen={() => { userHasScrolledUpRef.current = true; setUserHasScrolledUp(true); }}
                                 onTopicLoaded={() => {
-                                    requestAnimationFrame(() => scrollToBottom("auto"));
+                                    if (!userHasScrolledUpRef.current) {
+                                        requestAnimationFrame(() => scrollToBottom("auto"));
+                                    }
                                 }}
                             />
                         )}
