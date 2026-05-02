@@ -2,6 +2,8 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import { Circles } from "@/lib/data/db";
+import { countAdmins, getMember } from "@/lib/data/member";
 import { getUserPrivate } from "@/lib/data/user";
 import {
     addApplicantVerificationMessage,
@@ -17,6 +19,7 @@ import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; //
 import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
+import { ObjectId } from "mongodb";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -151,6 +154,83 @@ export async function submitCircleForVerificationAction(formData: FormData) {
     }
 
     return updateCirclePublishStatus(circleId, "pending_verification");
+}
+
+export async function convertProfileChildCircleToIndependentAction(circleId: string): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    if (circle.circleType === "user") {
+        return { success: false, message: "User profiles cannot be converted into independent circles" };
+    }
+
+    if (circle.circleType !== "circle") {
+        return { success: false, message: "Only standard circles can be converted in this stage" };
+    }
+
+    if (circle.circleLevel !== "profile_child" || !circle.parentCircleId) {
+        return {
+            success: false,
+            message: "Only circles that currently sit under a personal/profile circle can be converted in this stage",
+        };
+    }
+
+    const parentCircle = await getCircleById(circle.parentCircleId);
+    if (!parentCircle) {
+        return { success: false, message: "Parent profile circle not found" };
+    }
+
+    if (parentCircle.circleType !== "user") {
+        return {
+            success: false,
+            message: "Only circles under a personal/profile circle can be converted in this stage",
+        };
+    }
+
+    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to convert this circle" };
+    }
+
+    const member = await getMember(userDid, circleId);
+    if (!member?.userGroups?.includes("admins")) {
+        return { success: false, message: "Only circle admins can convert this circle" };
+    }
+
+    const adminCount = await countAdmins(circleId);
+    if (adminCount < 1) {
+        return { success: false, message: "This circle must have at least one admin before conversion" };
+    }
+
+    await Circles.updateOne(
+        { _id: new ObjectId(circleId) },
+        {
+            $set: { circleLevel: "top_level" },
+            $unset: { parentCircleId: "" },
+        },
+    );
+
+    const circlePath = await getCirclePath(circle);
+    const parentCirclePath = await getCirclePath(parentCircle);
+
+    revalidatePath(circlePath);
+    revalidatePath(`${circlePath}settings/about`);
+    revalidatePath(parentCirclePath);
+    revalidatePath(`${parentCirclePath}communities`);
+    revalidatePath("/circles");
+
+    return {
+        success: true,
+        message: "Circle converted to an independent circle",
+        data: { redirectTo: `${circlePath}settings/about` },
+    };
 }
 
 export async function getIndependentCircleVerificationThreadAction(circleId: string) {

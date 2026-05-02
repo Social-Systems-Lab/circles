@@ -1,9 +1,10 @@
 import { AboutSettingsForm } from "@/components/forms/circle-settings/about-settings-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getCircleByHandle, getCirclePublishStatus } from "@/lib/data/circle";
+import { getCircleByHandle, getCircleById, getCirclePublishStatus } from "@/lib/data/circle";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
 import { CircleVerificationThreadCard } from "./circle-verification-thread-card";
+import { ConvertProfileChildCircleCard } from "./convert-profile-child-circle-card";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -19,10 +20,14 @@ export default async function AboutSettingsPage(props: PageProps) {
         return <div>Circle not found</div>;
     }
 
+    const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
+
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";
     const isDraft = publishStatus === "draft";
     const isProfileCircle = circle.circleLevel === "profile_child";
+    const canConvertToIndependent =
+        circle.circleType === "circle" && circle.circleLevel === "profile_child" && parentCircle?.circleType === "user";
     const statusCopy =
         publishStatus === "draft"
             ? "Draft"
@@ -84,6 +89,9 @@ export default async function AboutSettingsPage(props: PageProps) {
             ) : null}
             {showWorkflowCard && !isProfileCircle && publishStatus === "pending_verification" ? (
                 <CircleVerificationThreadCard circleId={String(circle._id)} />
+            ) : null}
+            {canConvertToIndependent && circle._id ? (
+                <ConvertProfileChildCircleCard circleId={String(circle._id)} parentCircleName={parentCircle.name || "this profile"} />
             ) : null}
             <AboutSettingsForm circle={circle} />
         </div>
