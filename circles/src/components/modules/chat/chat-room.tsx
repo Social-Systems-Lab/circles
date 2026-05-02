@@ -1852,6 +1852,9 @@ export const ChatRoomComponent: React.FC<{
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
+    const userHasScrolledUpRef = useRef(false);
+    const inputBarRef = useRef<HTMLDivElement>(null);
+    const [inputBarHeight, setInputBarHeight] = useState(56);
     const [userHasScrolledUp, setUserHasScrolledUp] = useState<boolean>(() => {
         // If any topics are open for this conversation, start with scroll suppressed
         // so the page doesn't jump to bottom before open topics render
@@ -1993,6 +1996,33 @@ export const ChatRoomComponent: React.FC<{
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
     });
+
+    const hasLoadedTopicsRef = useRef(false);
+    useEffect(() => {
+        if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
+        hasLoadedTopicsRef.current = true;
+        const loadTopics = async () => {
+            try {
+                const { fetchTopicStartersAction } = await import("./mongo-actions");
+                const result = await fetchTopicStartersAction(roomId);
+                if (result.success && result.messages && result.messages.length > 0) {
+                    setRoomMessages((prev) => {
+                        const existing = prev[roomId] || [];
+                        const existingIds = new Set(existing.map((m) => m.id));
+                        const newTopics = result.messages!.filter((m) => !existingIds.has(m.id));
+                        if (newTopics.length === 0) return prev;
+                        const merged = [...existing, ...newTopics].sort(
+                            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+                        );
+                        return { ...prev, [roomId]: merged };
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to load topic starters:", error);
+            }
+        };
+        void loadTopics();
+    }, [isLoadingMongo, roomId, setRoomMessages]);
 
     const loadOlderMessages = async () => {
         if (!roomId || isLoadingOlder || !hasOlderMessages) return;
@@ -2144,8 +2174,10 @@ export const ChatRoomComponent: React.FC<{
             const { scrollTop, scrollHeight, clientHeight } = container;
             // A threshold to decide if the user has scrolled up significantly
             if (scrollHeight - scrollTop - clientHeight > 150) {
+                userHasScrolledUpRef.current = true;
                 setUserHasScrolledUp(true);
             } else {
+                userHasScrolledUpRef.current = false;
                 setUserHasScrolledUp(false);
             }
         }
@@ -2164,10 +2196,10 @@ export const ChatRoomComponent: React.FC<{
             return;
         }
         // Subsequent updates — only scroll if user hasn't scrolled up
-        if (!userHasScrolledUp) {
+        if (!userHasScrolledUpRef.current) {
             scrollToBottom("smooth");
         }
-    }, [messages, userHasScrolledUp]);
+    }, [messages]);
 
 
     useEffect(() => {
@@ -2217,10 +2249,20 @@ export const ChatRoomComponent: React.FC<{
     }, [messages]);
 
     const handleMessagesRendered = () => {
-        if (!userHasScrolledUp) {
+        if (!userHasScrolledUpRef.current) {
             scrollToBottom();
         }
     };
+
+    useEffect(() => {
+        const el = inputBarRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => {
+            setInputBarHeight(el.offsetHeight);
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [replyToMessage]);
 
     return (
         <>
@@ -2276,7 +2318,7 @@ export const ChatRoomComponent: React.FC<{
                                 isDirect={!!(chatRoom as any)?.isDirect}
                                 conversationId={roomId || ""}
                                 currentUser={user}
-                                onTopicOpen={() => setUserHasScrolledUp(true)}
+                                onTopicOpen={() => { userHasScrolledUpRef.current = true; setUserHasScrolledUp(true); }}
                                 onTopicLoaded={() => {
                                     requestAnimationFrame(() => scrollToBottom("auto"));
                                 }}
@@ -2287,7 +2329,8 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto p-4 pb-[144px]"
+                            className="flex-grow overflow-y-auto p-4"
+                            style={{ paddingBottom: inputBarHeight + 16 }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {!isLoadingMongo && hasOlderMessages && (
@@ -2314,7 +2357,7 @@ export const ChatRoomComponent: React.FC<{
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
                                     currentUser={user}
-                                    onTopicOpen={() => setUserHasScrolledUp(true)}
+                                    onTopicOpen={() => { userHasScrolledUpRef.current = true; setUserHasScrolledUp(true); }}
                                     onTopicLoaded={() => {
                                         requestAnimationFrame(() => scrollToBottom("auto"));
                                     }}
@@ -2335,14 +2378,15 @@ export const ChatRoomComponent: React.FC<{
                     )}
 
                     <div
-                        className="fixed h-[50px]"
+                        ref={inputBarRef}
+                        className="fixed"
                         style={{
                             width: `${inputWidth}px`,
                             bottom: isMobile ? "72px" : "0px",
                             opacity: hideInput ? 0 : 1,
                         }}
                     >
-                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                        <div className="flex items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
                             {isAnnouncementConversation ? (
                                 <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
                                     Replies are disabled for this system conversation.

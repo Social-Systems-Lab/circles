@@ -562,6 +562,18 @@ export const fetchRecentMessages = async (
     });
 };
 
+export const fetchTopicStarters = async (conversationId: string): Promise<ChatMessageDoc[]> => {
+    const docs = (await ChatMessageDocs.find({ conversationId, thread: { $exists: true } })
+        .sort({ createdAt: 1 })
+        .toArray()) as ChatMessageDoc[];
+    return docs.map((message) => {
+        if (message._id) {
+            message._id = message._id.toString();
+        }
+        return message;
+    });
+};
+
 export const fetchMessagesSince = async (
     conversationId: string,
     sinceId?: string,

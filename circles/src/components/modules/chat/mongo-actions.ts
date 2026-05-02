@@ -8,6 +8,7 @@ import {
     deleteMessage,
     fetchMessagesSince,
     fetchRecentMessages,
+    fetchTopicStarters,
     findConversationById,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
@@ -1289,5 +1290,107 @@ export const listThreadsAction = async (
     } catch (error) {
         console.error("listThreadsAction error:", error);
         return { success: false, message: "Failed to list threads" };
+    }
+};
+
+export const fetchTopicStartersAction = async (
+    conversationId: string,
+): Promise<{ success: boolean; messages?: ChatMessage[]; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to fetch messages" };
+    }
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) {
+        return { success: false, message: access.message };
+    }
+
+    try {
+        const docs = await fetchTopicStarters(conversationId);
+        if (!docs.length) {
+            return { success: true, messages: [] };
+        }
+
+        const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
+        const fallbackSystemAuthor = getSystemTemplateAuthor(conversationMetadata);
+        const conversationRepliesDisabled = conversationMetadata?.repliesDisabled === true;
+
+        const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
+        const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
+        const senderByDid = new Map(senders.map((circle) => [circle.did, circle]));
+        for (const senderDid of senderDids) {
+            if (!senderByDid.has(senderDid)) {
+                const byHandle = await getCircleByHandle(senderDid);
+                if (byHandle?.did) senderByDid.set(senderDid, byHandle);
+            }
+        }
+
+        const messages = docs.map((doc) => {
+            const systemMetadata = normalizeSystemMessageMetadata({
+                source: doc.source,
+                version: doc.version,
+                system: (doc as any).system,
+                repliesDisabled: conversationRepliesDisabled,
+            });
+            const isTemplateSystemMessage = systemMetadata.messageType === "system";
+            const isWelcomeSystemMessage = systemMetadata.systemType === "welcome";
+            const isPlatformAnnouncementMessage =
+                systemMetadata.systemType === "announcement" &&
+                (systemMetadata.source === "platform_admin" ||
+                    (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
+            const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const author =
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                (isTemplateSystemMessage
+                    ? fallbackSystemAuthor
+                    : ({
+                          _id: doc.senderDid,
+                          name: doc.senderDid,
+                          picture: { url: "/placeholder.svg" },
+                      } as Circle));
+
+            const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {
+                if (!acc[reaction.emoji]) acc[reaction.emoji] = [];
+                acc[reaction.emoji].push({
+                    sender: reaction.userDid,
+                    eventId: `${doc._id}:${reaction.userDid}:${reaction.emoji}`,
+                });
+                return acc;
+            }, {});
+
+            const message: ChatMessage = {
+                id: doc._id as string,
+                roomId: conversationId,
+                type: "m.room.message",
+                content: { msgtype: "m.text", body: doc.body },
+                createdBy: doc.senderDid,
+                createdAt: doc.createdAt,
+                author,
+                reactions,
+            };
+
+            const normalizedAttachments = Array.isArray(doc.attachments)
+                ? doc.attachments.map((attachment) => ({
+                      ...attachment,
+                      url: normalizeMediaUrl(attachment?.url) || attachment?.url,
+                  }))
+                : doc.attachments;
+            (message as any).attachments = normalizedAttachments;
+            (message as any).editedAt = doc.editedAt;
+            (message as any).format = doc.format;
+            (message as any).source = doc.source;
+            (message as any).version = doc.version;
+            (message as any).system = systemMetadata;
+            (message as any).thread = (doc as any).thread;
+            (message as any).threadId = (doc as any).threadId;
+
+            return message;
+        });
+
+        return { success: true, messages };
+    } catch (error) {
+        console.error("fetchTopicStartersAction error:", error);
+        return { success: false, message: "Failed to fetch topic starters" };
     }
 };
