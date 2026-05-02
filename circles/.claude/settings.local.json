@@ -5,7 +5,9 @@
       "Bash(grep -v \"^.*//.*$\")",
       "Bash(grep -n \"conversationId?: string;\\\\|currentUser?: any;\\\\|isDirect = false,\\\\|conversationId,\\\\|currentUser,\\\\|}\\) => {\" /Users/timmidnightmac/circles/circles/src/components/modules/chat/chat-room.tsx)",
       "Bash(bun run *)",
-      "Bash(grep -v \"^\\\\s*$\")"
+      "Bash(grep -v \"^\\\\s*$\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -v \"^$\\\\| ƒ \\\\| ○ \\\\|chunks\\\\|First Load\\\\|Middleware\\\\|Static\\\\|Dynamic\\\\|kB\\\\|├\\\\|└\\\\|+\")"
     ]
   }
 }

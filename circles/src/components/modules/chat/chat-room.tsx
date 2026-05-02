@@ -760,7 +760,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
 };
@@ -1143,7 +1143,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                 <div className="mb-2 flex max-w-full items-center justify-between overflow-hidden rounded-lg bg-gray-200 p-2">
                     <div className="flex-grow overflow-hidden">
                         <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
-                        <p className="truncate text-sm text-gray-600">{replyToMessage.content.body as string}</p>
+                        <p className="line-clamp-3 text-sm text-gray-600">{replyToMessage.content.body as string}</p>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
                         <IoClose className="h-5 w-5" />
@@ -1997,6 +1997,7 @@ export const ChatRoomComponent: React.FC<{
                         return { ...prev, [roomId]: merged };
                     });
                 }
+
             } catch (error) {
                 console.error("Failed to load topic starters:", error);
             }
@@ -2160,6 +2161,9 @@ export const ChatRoomComponent: React.FC<{
         }
     }, [messages]);
 
+    useEffect(() => {
+        hasInitiallyScrolledRef.current = false;
+    }, [roomId]);
 
     useEffect(() => {
     if (!roomId) return;
@@ -2245,8 +2249,9 @@ export const ChatRoomComponent: React.FC<{
                             ref={scrollContainerRef}
                             className="overflow-y-auto p-4"
                             style={{
+                                overflowAnchor: "auto",
                                 height: "calc(100vh - 300px)",
-                                paddingBottom: inputBarHeight + 16,
+                                paddingBottom: inputBarHeight + (isMobile ? 72 : 16),
                             }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
@@ -2275,6 +2280,10 @@ export const ChatRoomComponent: React.FC<{
                                 conversationId={roomId || ""}
                                 currentUser={user}
                                 onTopicOpen={() => {}}
+                                onTopicLoaded={() => {
+                                    if (!hasInitiallyScrolledRef.current) return;
+                                    scrollToBottom("auto");
+                                }}
                             />
                         )}
                         </div>
@@ -2282,7 +2291,7 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             className="flex-grow overflow-y-auto p-4"
-                            style={{ paddingBottom: inputBarHeight + 16 }}
+                            style={{ overflowAnchor: "auto", paddingBottom: inputBarHeight + 16 }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {!isLoadingMongo && hasOlderMessages && (
@@ -2310,6 +2319,10 @@ export const ChatRoomComponent: React.FC<{
                                     conversationId={roomId || ""}
                                     currentUser={user}
                                     onTopicOpen={() => {}}
+                                    onTopicLoaded={() => {
+                                        if (!hasInitiallyScrolledRef.current) return;
+                                        scrollToBottom("auto");
+                                    }}
                                 />
                             )}
                         </div>
@@ -2317,7 +2330,7 @@ export const ChatRoomComponent: React.FC<{
 
                     <div
                         ref={inputBarRef}
-                        className="fixed overflow-hidden"
+                        className="fixed z-10"
                         style={{
                             width: `${inputWidth}px`,
                             bottom: isMobile ? "72px" : "0px",
