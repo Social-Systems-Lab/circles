@@ -1140,7 +1140,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                 </div>
             )}
             {replyToMessage && !editingMessage && (
-                <div className="mb-2 flex items-center justify-between rounded-lg bg-gray-200 p-2">
+                <div className="mb-2 flex max-w-full items-center justify-between overflow-hidden rounded-lg bg-gray-200 p-2">
                     <div className="flex-grow overflow-hidden">
                         <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
                         <p className="truncate text-sm text-gray-600">{replyToMessage.content.body as string}</p>
@@ -2317,7 +2317,7 @@ export const ChatRoomComponent: React.FC<{
 
                     <div
                         ref={inputBarRef}
-                        className="fixed"
+                        className="fixed overflow-hidden"
                         style={{
                             width: `${inputWidth}px`,
                             bottom: isMobile ? "72px" : "0px",
