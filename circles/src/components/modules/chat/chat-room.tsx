@@ -795,9 +795,10 @@ type ChatInputProps = {
     setEditingMessage: (message: ChatMessage | null) => void;
     mentionCandidates: Circle[];
     chatProvider?: "matrix" | "mongo";
+    onMessageSent?: () => void;
 };
 
-const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidates }: ChatInputProps) => {
+const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidates, onMessageSent }: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -954,6 +955,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
 
         setNewMessage("");
         setReplyToMessage(null);
+        onMessageSent?.();
 
         const rollbackOptimisticMessage = (reason?: string) => {
             console.error("Failed to send message:", reason);
@@ -1100,6 +1102,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
 
             if (result.success) {
                 setReplyToMessage(null);
+                onMessageSent?.();
             } else {
                 console.error("Failed to send attachment:", result.message);
                 alert(`Failed to send attachment: ${result.message}`);
@@ -1852,6 +1855,7 @@ export const ChatRoomComponent: React.FC<{
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
+    const userHasScrolledUpRef = useRef(false);
     const inputBarRef = useRef<HTMLDivElement>(null);
     const [inputBarHeight, setInputBarHeight] = useState(56);
     const isCompact = useIsCompact();
@@ -2149,6 +2153,13 @@ export const ChatRoomComponent: React.FC<{
         }
     };
 
+    const handleScroll = () => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        userHasScrolledUpRef.current = scrollHeight - scrollTop - clientHeight > 150;
+    };
+
     useEffect(() => {
         if (messages.length === 0) return;
         if (!hasInitiallyScrolledRef.current) {
@@ -2158,6 +2169,8 @@ export const ChatRoomComponent: React.FC<{
                     scrollToBottom("auto");
                 });
             });
+        } else if (!userHasScrolledUpRef.current) {
+            scrollToBottom("smooth");
         }
     }, [messages]);
 
@@ -2247,6 +2260,7 @@ export const ChatRoomComponent: React.FC<{
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
+                            onScroll={handleScroll}
                             className="overflow-y-auto p-4"
                             style={{
                                 overflowAnchor: "auto",
@@ -2290,6 +2304,7 @@ export const ChatRoomComponent: React.FC<{
                     ) : (
                         <div
                             ref={scrollContainerRef}
+                            onScroll={handleScroll}
                             className="flex-grow overflow-y-auto p-4"
                             style={{ overflowAnchor: "auto", paddingBottom: inputBarHeight + 16 }}
                         >
@@ -2363,6 +2378,10 @@ export const ChatRoomComponent: React.FC<{
                                             setEditingMessage={setEditingMessage}
                                             mentionCandidates={mentionCandidates}
                                             chatProvider={provider}
+                                            onMessageSent={() => {
+                                                userHasScrolledUpRef.current = false;
+                                                scrollToBottom("smooth");
+                                            }}
                                         />
                                     </div>
                                 </div>
