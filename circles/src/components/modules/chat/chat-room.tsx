@@ -22,7 +22,7 @@ import {
     toggleMongoReactionAction,
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
+import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
 import { HiLightBulb } from "react-icons/hi";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
@@ -1852,28 +1852,8 @@ export const ChatRoomComponent: React.FC<{
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
-    const userHasScrolledUpRef = useRef(false);
     const inputBarRef = useRef<HTMLDivElement>(null);
     const [inputBarHeight, setInputBarHeight] = useState(56);
-    const [userHasScrolledUp, setUserHasScrolledUp] = useState<boolean>(() => {
-        // If any topics are open for this conversation, start with scroll suppressed
-        // so the page doesn't jump to bottom before open topics render
-        try {
-            const roomKey = typeof window !== "undefined"
-                ? window.location.pathname.split("/").pop() || ""
-                : "";
-            if (roomKey) {
-                const raw = localStorage.getItem(`kamooni_open_topics_${roomKey}`);
-                if (raw) {
-                    const ids = JSON.parse(raw);
-                    if (Array.isArray(ids) && ids.length > 0) return true;
-                }
-            }
-        } catch {
-            // fail silently
-        }
-        return false;
-    });
     const isCompact = useIsCompact();
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
@@ -2006,7 +1986,6 @@ export const ChatRoomComponent: React.FC<{
                 const { fetchTopicStartersAction } = await import("./mongo-actions");
                 const result = await fetchTopicStartersAction(roomId);
                 if (result.success && result.messages && result.messages.length > 0) {
-                    userHasScrolledUpRef.current = true;
                     setRoomMessages((prev) => {
                         const existing = prev[roomId] || [];
                         const existingIds = new Set(existing.map((m) => m.id));
@@ -2169,36 +2148,15 @@ export const ChatRoomComponent: React.FC<{
         }
     };
 
-    const handleScroll = () => {
-        const container = scrollContainerRef.current;
-        if (container) {
-            const { scrollTop, scrollHeight, clientHeight } = container;
-            // A threshold to decide if the user has scrolled up significantly
-            if (scrollHeight - scrollTop - clientHeight > 150) {
-                userHasScrolledUpRef.current = true;
-                setUserHasScrolledUp(true);
-            } else {
-                userHasScrolledUpRef.current = false;
-                setUserHasScrolledUp(false);
-            }
-        }
-    };
-
     useEffect(() => {
         if (messages.length === 0) return;
         if (!hasInitiallyScrolledRef.current) {
-            // First load — wait for DOM to paint before scrolling
             hasInitiallyScrolledRef.current = true;
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     scrollToBottom("auto");
                 });
             });
-            return;
-        }
-        // Subsequent updates — only scroll if user hasn't scrolled up
-        if (!userHasScrolledUpRef.current) {
-            scrollToBottom("smooth");
         }
     }, [messages]);
 
@@ -2249,11 +2207,7 @@ export const ChatRoomComponent: React.FC<{
         return () => window.removeEventListener("resize", calculatePillPosition);
     }, [messages]);
 
-    const handleMessagesRendered = () => {
-        if (!userHasScrolledUpRef.current) {
-            scrollToBottom();
-        }
-    };
+    const handleMessagesRendered = () => {};
 
     useEffect(() => {
         const el = inputBarRef.current;
@@ -2289,7 +2243,6 @@ export const ChatRoomComponent: React.FC<{
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
-                            onScroll={handleScroll}
                             className="overflow-y-auto p-4"
                             style={{
                                 height: "calc(100vh - 300px)",
@@ -2321,19 +2274,13 @@ export const ChatRoomComponent: React.FC<{
                                 isDirect={!!(chatRoom as any)?.isDirect}
                                 conversationId={roomId || ""}
                                 currentUser={user}
-                                onTopicOpen={() => { userHasScrolledUpRef.current = true; setUserHasScrolledUp(true); }}
-                                onTopicLoaded={() => {
-                                    if (!userHasScrolledUpRef.current) {
-                                        requestAnimationFrame(() => scrollToBottom("auto"));
-                                    }
-                                }}
+                                onTopicOpen={() => {}}
                             />
                         )}
                         </div>
                     ) : (
                         <div
                             ref={scrollContainerRef}
-                            onScroll={handleScroll}
                             className="flex-grow overflow-y-auto p-4"
                             style={{ paddingBottom: inputBarHeight + 16 }}
                         >
@@ -2362,26 +2309,10 @@ export const ChatRoomComponent: React.FC<{
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
                                     currentUser={user}
-                                    onTopicOpen={() => { userHasScrolledUpRef.current = true; setUserHasScrolledUp(true); }}
-                                    onTopicLoaded={() => {
-                                        if (!userHasScrolledUpRef.current) {
-                                            requestAnimationFrame(() => scrollToBottom("auto"));
-                                        }
-                                    }}
+                                    onTopicOpen={() => {}}
                                 />
                             )}
                         </div>
-                    )}
-
-                    {userHasScrolledUp && (
-                        <Button
-                            variant="secondary"
-                            size="icon"
-                            className="fixed right-4 h-10 w-10 rounded-full shadow-lg z-20" style={{ bottom: isMobile ? "132px" : "60px" }}
-                            onClick={() => scrollToBottom("smooth")}
-                        >
-                            <IoArrowDown className="h-6 w-6" />
-                        </Button>
                     )}
 
                     <div
