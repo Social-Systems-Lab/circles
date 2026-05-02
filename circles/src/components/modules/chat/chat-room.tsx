@@ -2006,6 +2006,7 @@ export const ChatRoomComponent: React.FC<{
                 const { fetchTopicStartersAction } = await import("./mongo-actions");
                 const result = await fetchTopicStartersAction(roomId);
                 if (result.success && result.messages && result.messages.length > 0) {
+                    userHasScrolledUpRef.current = true;
                     setRoomMessages((prev) => {
                         const existing = prev[roomId] || [];
                         const existingIds = new Set(existing.map((m) => m.id));
