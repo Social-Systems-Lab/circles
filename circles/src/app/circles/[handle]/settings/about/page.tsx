@@ -1,7 +1,9 @@
 import { AboutSettingsForm } from "@/components/forms/circle-settings/about-settings-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle, getCircleById, getCirclePublishStatus } from "@/lib/data/circle";
+import { getUserPrivate } from "@/lib/data/user";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
 import { CircleVerificationThreadCard } from "./circle-verification-thread-card";
 import { ConvertProfileChildCircleCard } from "./convert-profile-child-circle-card";
@@ -20,6 +22,8 @@ export default async function AboutSettingsPage(props: PageProps) {
         return <div>Circle not found</div>;
     }
 
+    const userDid = await getAuthenticatedUserDid();
+    const user = userDid ? await getUserPrivate(userDid) : undefined;
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
 
     const publishStatus = getCirclePublishStatus(circle);
@@ -27,7 +31,10 @@ export default async function AboutSettingsPage(props: PageProps) {
     const isDraft = publishStatus === "draft";
     const isProfileCircle = circle.circleLevel === "profile_child";
     const canConvertToIndependent =
-        circle.circleType === "circle" && circle.circleLevel === "profile_child" && parentCircle?.circleType === "user";
+        user?.isMember === true &&
+        circle.circleType === "circle" &&
+        circle.circleLevel === "profile_child" &&
+        parentCircle?.circleType === "user";
     const statusCopy =
         publishStatus === "draft"
             ? "Draft"

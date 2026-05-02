@@ -162,6 +162,11 @@ export async function convertProfileChildCircleToIndependentAction(circleId: str
         return { success: false, message: "You need to be logged in to edit circle settings" };
     }
 
+    const user = await getUserPrivate(userDid);
+    if (!user?.isMember) {
+        return { success: false, message: "Only verified members can convert a circle into an independent circle" };
+    }
+
     const circle = await getCircleById(circleId);
     if (!circle) {
         return { success: false, message: "Circle not found" };
