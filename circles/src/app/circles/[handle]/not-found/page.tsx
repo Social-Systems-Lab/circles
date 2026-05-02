@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCircleByHandle } from "@/lib/data/circle";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -13,10 +14,10 @@ export default async function CircleNotFoundPage({ params, searchParams }: PageP
 
     // Extract context provided by middleware
     const moduleHandle = (sp.module as string) || undefined;
-    const redirectTo = (sp.redirectTo as string) || `/circles/${handle}`;
-
     // Load circle so the layout renders with proper context
     const circle = await getCircleByHandle(handle);
+    const fallbackHref = circle ? getCircleDefaultPath(circle) : `/circles/${handle}/home`;
+    const fallbackText = circle?.enabledModules?.includes("home") ? "Go to Home" : "Open Circle";
 
     const title = "Not found";
     const moduleText = moduleHandle ? `“${moduleHandle}”` : "this page";
@@ -32,6 +33,14 @@ export default async function CircleNotFoundPage({ params, searchParams }: PageP
                     We couldn&apos;t find {moduleText} in <span className="font-medium">{circle?.name}</span>.
                 </p>
                 <p className="mt-1 text-gray-600">{description}</p>
+                <div className="mt-6">
+                    <Link
+                        href={fallbackHref}
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-800 hover:bg-gray-50"
+                    >
+                        {fallbackText}
+                    </Link>
+                </div>
             </div>
         </div>
     );

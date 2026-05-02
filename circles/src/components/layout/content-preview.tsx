@@ -43,6 +43,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import SdgList from "../modules/sdgs/SdgList";
 import SocialLinks from "../modules/home/social-links";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 const skillMap = new Map(skills.map((s) => [s.handle, s]));
@@ -128,7 +129,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                 e.stopPropagation();
                                 setContentPreview(undefined);
                                 window.setTimeout(() => {
-                                    router.push(`/circles/${circle.handle}`);
+                                    router.push(getCircleDefaultPath(circle));
                                 }, closeDelayMs);
                             }}
                         >

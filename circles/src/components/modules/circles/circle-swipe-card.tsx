@@ -22,6 +22,7 @@ import { getSkillByHandle } from "@/lib/data/skills";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge"; // Import Badge for pills
 import SdgList from "../sdgs/SdgList";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
@@ -364,7 +365,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 {circle.handle && (
                     <div className="pointer-events-auto absolute bottom-0 right-4">
                         <Button
-                            onClick={() => router.push(`/circles/${circle.handle}`)}
+                            onClick={() => router.push(getCircleDefaultPath(circle))}
                             variant="outline"
                             size="icon"
                             className="h-10 w-10 rounded-full border-blue-300 bg-white hover:bg-blue-50 hover:text-blue-600" // Smaller size

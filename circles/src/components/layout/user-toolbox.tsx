@@ -45,6 +45,7 @@ import {
 const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { useToast } from "../ui/use-toast";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string };
 type ToolboxTab = UserToolboxTab | "connections";
@@ -92,7 +93,7 @@ export const UserToolbox = () => {
     const openCircle = (circle: Circle) => {
         console.log("openCircle", circle.circleType, circle.parentCircleId);
         closeToolbox();
-        router.push(`/circles/${circle.handle}`);
+        router.push(getCircleDefaultPath(circle));
     };
 
     const circles =
