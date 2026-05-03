@@ -1856,6 +1856,10 @@ export const ChatRoomComponent: React.FC<{
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
     const userHasScrolledUpRef = useRef(false);
+    const lastRenderedMessageRef = useRef<{ count: number; latestCreatedAt: number | null }>({
+        count: 0,
+        latestCreatedAt: null,
+    });
     const inputBarRef = useRef<HTMLDivElement>(null);
     const [inputBarHeight, setInputBarHeight] = useState(56);
     const isCompact = useIsCompact();
@@ -2162,6 +2166,18 @@ export const ChatRoomComponent: React.FC<{
 
     useEffect(() => {
         if (messages.length === 0) return;
+
+        const latestMessage = messages[messages.length - 1];
+        const latestCreatedAt =
+            latestMessage.createdAt instanceof Date
+                ? latestMessage.createdAt.getTime()
+                : new Date(latestMessage.createdAt).getTime();
+        const previousSnapshot = lastRenderedMessageRef.current;
+        const hasNewLatestMessage =
+            previousSnapshot.count > 0 &&
+            (messages.length > previousSnapshot.count ||
+                (previousSnapshot.latestCreatedAt !== null && latestCreatedAt > previousSnapshot.latestCreatedAt));
+
         if (!hasInitiallyScrolledRef.current) {
             hasInitiallyScrolledRef.current = true;
             requestAnimationFrame(() => {
@@ -2169,13 +2185,22 @@ export const ChatRoomComponent: React.FC<{
                     scrollToBottom("auto");
                 });
             });
-        } else if (!userHasScrolledUpRef.current) {
+        } else if (hasNewLatestMessage && !userHasScrolledUpRef.current) {
             scrollToBottom("smooth");
         }
+
+        lastRenderedMessageRef.current = {
+            count: messages.length,
+            latestCreatedAt,
+        };
     }, [messages]);
 
     useEffect(() => {
         hasInitiallyScrolledRef.current = false;
+        lastRenderedMessageRef.current = {
+            count: 0,
+            latestCreatedAt: null,
+        };
     }, [roomId]);
 
     useEffect(() => {
