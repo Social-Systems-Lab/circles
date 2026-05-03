@@ -22,7 +22,7 @@ import {
     toggleMongoReactionAction,
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
+import { IoArrowBack, IoArrowDown, IoClose, IoSend, IoAddCircleOutline, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
 import { HiLightBulb } from "react-icons/hi";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
@@ -64,6 +64,7 @@ export const renderCircleSuggestion = (
 const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
 const CHAT_MENTION_MARKUP_TEST_REGEX = /\[[^\]]+\]\(\/circles\/[^)]+\)/;
 const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
+const CHAT_BOTTOM_THRESHOLD_PX = 150;
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
@@ -1866,6 +1867,8 @@ export const ChatRoomComponent: React.FC<{
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
     const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
+    const [jumpButtonRight, setJumpButtonRight] = useState(16);
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false);
     const isMobile = useIsMobile();
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
@@ -2157,11 +2160,27 @@ export const ChatRoomComponent: React.FC<{
         }
     };
 
-    const handleScroll = () => {
+    const getBottomDistance = useCallback(() => {
         const container = scrollContainerRef.current;
-        if (!container) return;
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        userHasScrolledUpRef.current = scrollHeight - scrollTop - clientHeight > 150;
+        if (container) {
+            const containerDistance = container.scrollHeight - container.scrollTop - container.clientHeight;
+            if (containerDistance > 0) {
+                return containerDistance;
+            }
+        }
+
+        const doc = document.documentElement;
+        return doc.scrollHeight - (window.scrollY + window.innerHeight);
+    }, []);
+
+    const updateScrollPositionState = useCallback(() => {
+        const isAwayFromBottom = getBottomDistance() > CHAT_BOTTOM_THRESHOLD_PX;
+        userHasScrolledUpRef.current = isAwayFromBottom;
+        setShowJumpToLatest(isAwayFromBottom);
+    }, [getBottomDistance]);
+
+    const handleScroll = () => {
+        updateScrollPositionState();
     };
 
     useEffect(() => {
@@ -2210,6 +2229,25 @@ export const ChatRoomComponent: React.FC<{
     setMessages(roomMessagesForChat);   
     }, [roomId, roomMessages]);
 
+    useEffect(() => {
+        requestAnimationFrame(() => {
+            updateScrollPositionState();
+        });
+    }, [messages, updateScrollPositionState]);
+
+    useEffect(() => {
+        const handleWindowScroll = () => {
+            updateScrollPositionState();
+        };
+
+        window.addEventListener("scroll", handleWindowScroll, { passive: true });
+        window.addEventListener("resize", handleWindowScroll);
+        return () => {
+            window.removeEventListener("scroll", handleWindowScroll);
+            window.removeEventListener("resize", handleWindowScroll);
+        };
+    }, [updateScrollPositionState]);
+
     const messagesRef = useRef<ChatMessage[]>([]);
     useEffect(() => {
         messagesRef.current = messages;
@@ -2241,6 +2279,7 @@ export const ChatRoomComponent: React.FC<{
                     left: `${rect.left + rect.width / 2}px`,
                     transform: "translateX(-50%)",
                 });
+                setJumpButtonRight(Math.max(16, window.innerWidth - rect.right + 16));
             }
         };
 
@@ -2368,6 +2407,27 @@ export const ChatRoomComponent: React.FC<{
                         </div>
                     )}
 
+                    {showJumpToLatest && (
+                        <Button
+                            type="button"
+                            size="icon"
+                            onClick={() => {
+                                userHasScrolledUpRef.current = false;
+                                setShowJumpToLatest(false);
+                                scrollToBottom("smooth");
+                            }}
+                            className="fixed z-20 h-10 w-10 rounded-full border border-blue-200 bg-blue-50 text-blue-700 shadow-lg hover:bg-blue-100"
+                            style={{
+                                right: `${jumpButtonRight}px`,
+                                bottom: `${inputBarHeight + (isMobile ? 84 : 20)}px`,
+                            }}
+                            title="Jump to latest"
+                            aria-label="Jump to latest"
+                        >
+                            <IoArrowDown className="h-5 w-5" />
+                        </Button>
+                    )}
+
                     <div
                         ref={inputBarRef}
                         className="fixed z-10"
@@ -2405,6 +2465,7 @@ export const ChatRoomComponent: React.FC<{
                                             chatProvider={provider}
                                             onMessageSent={() => {
                                                 userHasScrolledUpRef.current = false;
+                                                setShowJumpToLatest(false);
                                                 scrollToBottom("smooth");
                                             }}
                                         />
