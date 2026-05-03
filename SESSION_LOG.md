@@ -172,3 +172,55 @@ Commit: 19e72db
 - LiveKit video meeting integration
 - Altruistic Wallet feature work
 - Dependabot vulnerability review
+
+## Session 005 — 2026-05-02
+
+### What we did
+- Fixed auto-scroll fighting user scroll: removed entire userHasScrolledUp state system,
+  replaced with ref-only approach
+- Fixed topic starters not appearing in chat: fetchTopicStartersAction fetches all topic
+  starters regardless of the 50-message recency limit, merges into message list on load
+- Fixed reply preview bar too wide: overflow-hidden on input bar container, max-w-full on
+  reply preview div
+- Fixed reply preview text truncation: truncate → line-clamp-3
+- Fixed content scrolling behind input bar: z-10 on fixed input bar container
+- Fixed chat not opening at last message on room switch: reset hasInitiallyScrolledRef on
+  roomId change
+- Fixed mobile scroll container padding: paddingBottom now accounts for 72px mobile nav
+- Added CSS scroll anchoring (overflowAnchor: auto) to scroll containers so topic reply
+  loads don't jump the viewport
+- Restored onTopicLoaded callbacks to re-fire scrollToBottom after each topic loads replies
+- Restored auto-scroll on send: userHasScrolledUpRef (ref only, no state/button) tracks
+  whether user has scrolled up; sending always scrolls to bottom; new incoming messages
+  scroll to bottom only if user is already there
+- Removed broken visualViewport effect (was corrupted to markdown hyperlink by Claude UI)
+
+### Decisions made
+- No scroll-to-bottom button for now — removed entirely, can re-add cleanly later
+- Topic layout unchanged — opens downward, jumpiness on load acceptable for now
+- Smooth scroll animation on send is a nice UX win — consider for page loads in future
+
+### Files changed
+- circles/src/components/modules/chat/chat-room.tsx
+- circles/src/lib/data/mongo-chat.ts
+
+### Deployed?
+Yes — deployed to Cleura, confirmed working on prod
+
+### Known issues / future tasks
+- Occasional missed scroll to latest message on first load (low priority)
+- Topic reply load jumpiness on initial page load (acceptable for now)
+- Smooth scroll animation on page load (future session)
+- Mobile reply panel keyboard viewport fix (removed broken version, not yet replaced)
+- Down arrow scroll button (removed, can be re-added cleanly)
+- Group chat topic notifications not yet implemented
+- LiveKit video meeting integration pending
+- Dependabot: 59 vulnerabilities (3 critical, 19 high)
+
+### What's next (candidates for session 006)
+- Mobile UX review
+- Re-add scroll-to-bottom button cleanly
+- Group chat topic notifications
+- LiveKit integration
+- Altruistic Wallet feature work
+

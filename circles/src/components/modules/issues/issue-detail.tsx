@@ -11,7 +11,7 @@ import { formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { cn, getFullLocationName } from "@/lib/utils";
 import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, userAtom } from "@/lib/data/atoms";
 import {
     Dialog,
     DialogClose,
@@ -42,6 +42,7 @@ import {
     changeIssueStageAction,
     assignIssueAction,
     deleteIssueAction,
+    getIssueAction,
     getMembersAction,
 } from "@/app/circles/[handle]/issues/actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -85,6 +86,7 @@ interface IssueDetailProps {
 
 const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, currentUserDid, isPreview = false }) => {
     const [user] = useAtom(userAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [isPending, startTransition] = useTransition();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [stageChangeDialogOpen, setStageChangeDialogOpen] = useState(false);
@@ -97,6 +99,28 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
 
     const isAuthor = currentUserDid === issue.createdBy;
     const isAssignee = currentUserDid === issue.assignedTo;
+
+    const refreshOpenIssuePreview = async () => {
+        if (!isPreview || !circle.handle) {
+            return;
+        }
+
+        const updatedIssue = await getIssueAction(circle.handle, issue._id as string);
+        if (!updatedIssue) {
+            return;
+        }
+
+        setContentPreview((currentPreview) => {
+            if (currentPreview?.type !== "issue" || currentPreview.content._id !== updatedIssue._id) {
+                return currentPreview;
+            }
+
+            return {
+                ...currentPreview,
+                content: updatedIssue,
+            };
+        });
+    };
 
     // Fetch members when assign dialog opens
     useEffect(() => {
@@ -164,6 +188,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
             const result = await changeIssueStageAction(circle.handle!, issue._id as string, targetStage);
             if (result.success) {
                 toast({ title: "Success", description: result.message });
+                await refreshOpenIssuePreview();
                 router.refresh(); // Refresh to show the new stage
             } else {
                 toast({

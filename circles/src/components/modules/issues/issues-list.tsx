@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import {
     ArrowDown,
     ArrowUp,
+    ChevronDown,
     Loader2,
     MoreHorizontal,
     Plus,
@@ -72,6 +73,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Define Permissions type based on what IssuesModule passes
 type IssuePermissions = {
@@ -133,9 +135,14 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeAssigned, setIncludeAssigned] = useState(true);
     const [filteredIssues, setFilteredIssues] = useState(issues);
+    const [isResolvedSectionOpen, setIsResolvedSectionOpen] = useState(false);
     const displayedIssues = React.useMemo(() => filteredIssues, [filteredIssues]);
     // Add assignee filter state if needed later
     // const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+
+    useEffect(() => {
+        setFilteredIssues(issues);
+    }, [issues]);
 
     useEffect(() => {
         const fetchIssues = async () => {
@@ -318,6 +325,12 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
         }
     }, [stageFilter, table]);
 
+    useEffect(() => {
+        if (stageFilter === "resolved") {
+            setIsResolvedSectionOpen(true);
+        }
+    }, [stageFilter]);
+
     const onConfirmDeleteIssue = async () => {
         if (!selectedIssue) return;
 
@@ -478,6 +491,11 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
         </div>
     );
 
+    const allRows = table.getRowModel().rows;
+    const activeRows = allRows.filter((row) => row.original.stage !== "resolved");
+    const resolvedRows = allRows.filter((row) => row.original.stage === "resolved");
+    const activeEmptyMessage = stageFilter === "resolved" ? "No active issues match the current filters." : "No issues found.";
+
     return (
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
@@ -535,7 +553,33 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                         </div>
                     )}
 
-                    <div className="mt-3">{renderIssueTable(table.getRowModel().rows, "No issues found.")}</div>
+                    <div className="mt-3">{renderIssueTable(activeRows, activeEmptyMessage)}</div>
+
+                    {resolvedRows.length > 0 && (
+                        <Collapsible
+                            open={isResolvedSectionOpen}
+                            onOpenChange={setIsResolvedSectionOpen}
+                            className="mt-6 overflow-hidden rounded-[15px] border border-gray-200 bg-white shadow-lg"
+                        >
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="flex w-full items-center justify-between rounded-none px-4 py-6 text-left text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                    <span>Resolved issues ({resolvedRows.length})</span>
+                                    <ChevronDown
+                                        className={`h-4 w-4 transition-transform ${
+                                            isResolvedSectionOpen ? "rotate-180" : ""
+                                        }`}
+                                    />
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="border-t border-gray-200 p-4 pt-0">
+                                <div className="pt-4">{renderIssueTable(resolvedRows, "No resolved issues found.")}</div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    )}
+
                     <Dialog open={deleteIssueDialogOpen} onOpenChange={setDeleteIssueDialogOpen}>
                         <DialogContent
                             onInteractOutside={(e) => {
