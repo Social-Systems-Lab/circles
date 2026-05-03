@@ -211,6 +211,12 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
         setStageChangeDialogOpen(true);
     };
 
+    const openAcknowledgeDialog = () => {
+        setSelectedUrgency(issue.urgency ?? "not_set");
+        setSelectedTargetDate(issue.targetDate ? new Date(issue.targetDate) : undefined);
+        setAcknowledgeDialogOpen(true);
+    };
+
     const confirmStageChange = () => {
         if (!targetStage) return;
         startTransition(async () => {
@@ -306,7 +312,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
         // Stage change actions
         if (permissions.canReview && issue.stage === "review") {
             actions.push(
-                <Button key="approve" onClick={() => setAcknowledgeDialogOpen(true)} disabled={isPending}>
+                <Button key="approve" onClick={openAcknowledgeDialog} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Acknowledge (Open)
                 </Button>,
             );

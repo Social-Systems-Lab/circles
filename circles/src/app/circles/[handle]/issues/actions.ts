@@ -715,9 +715,10 @@ export async function acknowledgeIssueAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const rawTargetDate = formData.get("targetDate");
         const validatedData = acknowledgeIssueSchema.safeParse({
             urgency: formData.get("urgency") ?? undefined,
-            targetDate: formData.get("targetDate") ?? undefined,
+            targetDate: rawTargetDate ?? undefined,
         });
 
         if (!validatedData.success) {
@@ -761,12 +762,14 @@ export async function acknowledgeIssueAction(
             return { success: false, message: "Not authorized to acknowledge issues" };
         }
 
-        let targetDate: Date | null | undefined = null;
+        let targetDate: Date | null | undefined = undefined;
         if (validatedData.data.targetDate) {
             const parsedTargetDate = new Date(validatedData.data.targetDate);
             if (!isNaN(parsedTargetDate.getTime())) {
                 targetDate = parsedTargetDate;
             }
+        } else if (rawTargetDate === "") {
+            targetDate = null;
         }
 
         const success = await updateIssue(issueId, {
