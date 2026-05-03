@@ -797,14 +797,58 @@ type ChatInputProps = {
     mentionCandidates: Circle[];
     chatProvider?: "matrix" | "mongo";
     onMessageSent?: () => void;
+    onMobileComposerExpandedChange?: (expanded: boolean) => void;
 };
 
-const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidates, onMessageSent }: ChatInputProps) => {
+const ChatInput = ({
+    roomId,
+    editingMessage,
+    setEditingMessage,
+    mentionCandidates,
+    onMessageSent,
+    onMobileComposerExpandedChange,
+}: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+    const [isComposerFocused, setIsComposerFocused] = useState(false);
+    const [isMobileActionMenuOpen, setIsMobileActionMenuOpen] = useState(false);
+    const isExpandedMobileComposer = !!isMobile && (isComposerFocused || isMobileActionMenuOpen);
+
+    const chatMentionsInputStyle = useMemo(() => {
+        if (!isMobile) {
+            return defaultMentionsInputStyle;
+        }
+
+        const mobilePadding = "0.75rem 0.875rem";
+        const mobileHeight = {
+            minHeight: "44px",
+            maxHeight: isExpandedMobileComposer ? "160px" : "120px",
+        };
+
+        return {
+            ...defaultMentionsInputStyle,
+            control: {
+                ...defaultMentionsInputStyle.control,
+                ...mobileHeight,
+            },
+            input: {
+                ...defaultMentionsInputStyle.input,
+                ...mobileHeight,
+                padding: mobilePadding,
+                lineHeight: 1.45,
+                overflowY: "auto" as const,
+            },
+            highlighter: {
+                ...defaultMentionsInputStyle.highlighter,
+                ...mobileHeight,
+                padding: mobilePadding,
+                lineHeight: 1.45,
+            },
+        };
+    }, [isExpandedMobileComposer, isMobile]);
 
     const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
         const seen = new Set<string>();
@@ -864,6 +908,10 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
             setNewMessage(editingMessage.content.body as string);
         }
     }, [editingMessage]);
+
+    useEffect(() => {
+        onMobileComposerExpandedChange?.(isExpandedMobileComposer);
+    }, [isExpandedMobileComposer, onMobileComposerExpandedChange]);
 
     const handleSendMessage = async () => {
         const trimmedMessage = newMessage.trim();
@@ -1154,7 +1202,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                     </Button>
                 </div>
             )}
-            <div className="flex w-full items-end gap-2">
+            <div className={`flex w-full items-end gap-2 ${isMobile ? "gap-1.5" : ""}`}>
                 <input
                     type="file"
                     ref={fileInputRef}
@@ -1164,7 +1212,7 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+                    className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
                 >
@@ -1177,7 +1225,11 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
 
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
+                        >
                             <BsEmojiSmile className="h-5 w-5" />
                         </Button>
                     </PopoverTrigger>
@@ -1190,9 +1242,11 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleCommentKeyDown}
+                    onFocus={() => setIsComposerFocused(true)}
+                    onBlur={() => setIsComposerFocused(false)}
                     placeholder="Type message and click icon or return to send..."
-                    className="flex-grow rounded-[20px] bg-gray-100"
-                    style={defaultMentionsInputStyle}
+                    className="min-w-0 flex-1 rounded-[20px] bg-gray-100 text-base"
+                    style={chatMentionsInputStyle}
                     allowSuggestionsAboveCursor={true}
                     forceSuggestionsAboveCursor={true}
                 >
@@ -1205,18 +1259,56 @@ const ChatInput = ({ roomId, editingMessage, setEditingMessage, mentionCandidate
                         markup="[__display__](/circles/__id__)"
                     />
                 </MentionsInput>
+
+                {isMobile && isExpandedMobileComposer && (
+                    <Popover open={isMobileActionMenuOpen} onOpenChange={setIsMobileActionMenuOpen}>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+                                title="More actions"
+                                aria-label="More actions"
+                            >
+                                <IoAddCircleOutline className="h-6 w-6" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" side="top" className="w-[280px] rounded-2xl p-3">
+                            <div className="mb-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full justify-start rounded-full"
+                                    onClick={() => {
+                                        setIsMobileActionMenuOpen(false);
+                                        fileInputRef.current?.click();
+                                    }}
+                                    disabled={isUploading}
+                                >
+                                    <IoAttach className="mr-2 h-4 w-4" />
+                                    Attach file
+                                </Button>
+                            </div>
+                            <LazyEmojiPicker
+                                onEmojiClick={(data: EmojiClickData) => {
+                                    setNewMessage((prev) => prev + data.emoji);
+                                }}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                )}
                 
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-10 w-10 shrink-0 rounded-full text-blue-600 hover:bg-blue-50"
+                    className="hidden h-10 w-10 shrink-0 rounded-full text-blue-600 hover:bg-blue-50 md:inline-flex"
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
                 >
                     <IoSend className="h-5 w-5" />
                 </Button>
                 {isMobile && (
-                    <Button onClick={handleSendMessage} className="ml-2 rounded-full text-white">
+                    <Button onClick={handleSendMessage} className="ml-1 shrink-0 rounded-full text-white">
                         <IoSend />
                     </Button>
                 )}
@@ -1881,6 +1973,7 @@ export const ChatRoomComponent: React.FC<{
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [hasOlderMessages, setHasOlderMessages] = useState(true);
     const [showNewThreadModal, setShowNewThreadModal] = useState(false);
+    const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
@@ -2448,7 +2541,9 @@ export const ChatRoomComponent: React.FC<{
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+                                            className={`h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${
+                                                isMobile && isMobileComposerExpanded ? "hidden" : "inline-flex"
+                                            }`}
                                             onClick={() => setShowNewThreadModal(true)}
                                             disabled={false}
                                             title="New topic"
@@ -2463,6 +2558,7 @@ export const ChatRoomComponent: React.FC<{
                                             setEditingMessage={setEditingMessage}
                                             mentionCandidates={mentionCandidates}
                                             chatProvider={provider}
+                                            onMobileComposerExpandedChange={setIsMobileComposerExpanded}
                                             onMessageSent={() => {
                                                 userHasScrolledUpRef.current = false;
                                                 setShowJumpToLatest(false);
