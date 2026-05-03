@@ -8,6 +8,7 @@ import {
     Issue,
     IssueDisplay,
     IssueStage,
+    IssueUrgency,
     mediaSchema,
     locationSchema, // Import locationSchema
     didSchema, // Import didSchema for assignedTo validation
@@ -161,6 +162,10 @@ const createIssueSchema = z.object({
         ),
     targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
     userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    urgency: z.preprocess(
+        (value) => (value === "" || value == null ? undefined : value),
+        z.enum(["low", "medium", "high", "critical"]).optional(),
+    ),
 });
 
 const updateIssueSchema = createIssueSchema.extend({
@@ -170,6 +175,27 @@ const updateIssueSchema = createIssueSchema.extend({
 const assignIssueSchema = z.object({
     assigneeDid: didSchema.optional(), // Allow unassigning by passing undefined/null
 });
+
+const acknowledgeIssueSchema = z
+    .object({
+        urgency: z.preprocess(
+            (value) => (value === "" || value == null ? undefined : value),
+            z.enum(["low", "medium", "high", "critical"]).optional(),
+        ),
+        targetDate: z.preprocess(
+            (value) => (value === "" || value == null ? undefined : value),
+            z.string().datetime({ offset: true }).optional(),
+        ),
+    })
+    .superRefine((data, ctx) => {
+        if (data.urgency === "critical" && !data.targetDate) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["targetDate"],
+                message: "Target date is required for Critical issues",
+            });
+        }
+    });
 
 // --- Action Functions ---
 
@@ -192,6 +218,7 @@ export async function createIssueAction(
             location: formData.get("location") ?? undefined,
             targetDate: formData.get("targetDate") ?? undefined,
             userGroups: formData.getAll("userGroups"), // Assuming multi-select or similar
+            urgency: formData.get("urgency") ?? undefined,
         });
 
         if (!validatedData.success) {
@@ -224,6 +251,14 @@ export async function createIssueAction(
         if (!canCreate) {
             return { success: false, message: "Not authorized to create issues" };
         }
+        const canControlTargetDate =
+            (await isAuthorized(userDid, circle._id as string, features.issues.review)) ||
+            (await isAuthorized(userDid, circle._id as string, features.issues.moderate));
+        const canUseCriticalUrgency = canControlTargetDate;
+
+        if (data.urgency === "critical" && !canUseCriticalUrgency) {
+            return { success: false, message: "Not authorized to submit Critical urgency" };
+        }
 
         // --- Parse Location ---
         let locationData: Issue["location"] = undefined;
@@ -233,7 +268,7 @@ export async function createIssueAction(
 
         // --- Parse Target Date ---
         let targetDateData: Issue["targetDate"] = undefined;
-        if (data.targetDate) {
+        if (data.targetDate && canControlTargetDate) {
             try {
                 const d = new Date(data.targetDate);
                 if (!isNaN(d.getTime())) {
@@ -281,6 +316,7 @@ export async function createIssueAction(
             images: uploadedImages,
             location: locationData,
             targetDate: targetDateData,
+            urgency: data.urgency,
             circleId: circle._id as string,
             createdBy: userDid,
             createdAt: new Date(),
@@ -349,6 +385,7 @@ export async function updateIssueAction(
             location: formData.get("location") ?? undefined,
             userGroups: formData.getAll("userGroups"),
             targetDate: formData.get("targetDate") ?? undefined,
+            urgency: formData.get("urgency") ?? undefined,
         });
 
         if (!validatedData.success) {
@@ -385,6 +422,9 @@ export async function updateIssueAction(
             circle._id as string,
             features.issues?.moderate || "issues_moderate",
         ); // Placeholder
+        const canControlTargetDate =
+            (await isAuthorized(userDid, circle._id as string, features.issues.review)) || canModerate;
+        const canUseCriticalUrgency = canControlTargetDate;
 
         // Define who can edit and when
         // Example: Author can edit in 'review', Moderator can edit anytime before 'resolved'
@@ -392,6 +432,10 @@ export async function updateIssueAction(
 
         if (!canEdit) {
             return { success: false, message: "Not authorized to update this issue at its current stage" };
+        }
+
+        if (data.urgency === "critical" && !canUseCriticalUrgency) {
+            return { success: false, message: "Not authorized to set Critical urgency" };
         }
 
         // --- Parse Location ---
@@ -405,7 +449,7 @@ export async function updateIssueAction(
         // --- Parse Target Date (support unsetting with empty string) ---
         const rawTargetDate = formData.get("targetDate");
         let targetDateForUpdate: Date | null | undefined = undefined;
-        if (typeof rawTargetDate === "string") {
+        if (canControlTargetDate && typeof rawTargetDate === "string") {
             if (rawTargetDate.trim() === "") {
                 targetDateForUpdate = null; // unset
             } else {
@@ -474,6 +518,7 @@ export async function updateIssueAction(
             images: finalImages,
             location: locationData,
             targetDate: targetDateForUpdate,
+            urgency: data.urgency as IssueUrgency | undefined,
             userGroups: data.userGroups || issue.userGroups, // Keep existing if not provided
             updatedAt: new Date(),
         };
@@ -661,6 +706,92 @@ export async function changeIssueStageAction(
     } catch (error) {
         console.error("Error changing issue stage:", error);
         return { success: false, message: "Failed to change issue stage" };
+    }
+}
+
+export async function acknowledgeIssueAction(
+    circleHandle: string,
+    issueId: string,
+    formData: FormData,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const validatedData = acknowledgeIssueSchema.safeParse({
+            urgency: formData.get("urgency") ?? undefined,
+            targetDate: formData.get("targetDate") ?? undefined,
+        });
+
+        if (!validatedData.success) {
+            return {
+                success: false,
+                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+            };
+        }
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+        const user = await getUserByDid(userDid);
+        if (!user) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const issue = await getIssueById(issueId, userDid);
+        if (!issue) {
+            return { success: false, message: "Issue not found" };
+        }
+
+        if (issue.stage !== "review") {
+            return { success: false, message: "Only review-stage issues can be acknowledged" };
+        }
+
+        const canReview = await isAuthorized(userDid, circle._id as string, features.issues?.review || "issues_review");
+        const canModerate = await isAuthorized(
+            userDid,
+            circle._id as string,
+            features.issues?.moderate || "issues_moderate",
+        );
+
+        if (!canReview && !canModerate) {
+            return { success: false, message: "Not authorized to acknowledge issues" };
+        }
+
+        let targetDate: Date | null | undefined = null;
+        if (validatedData.data.targetDate) {
+            const parsedTargetDate = new Date(validatedData.data.targetDate);
+            if (!isNaN(parsedTargetDate.getTime())) {
+                targetDate = parsedTargetDate;
+            }
+        }
+
+        const success = await updateIssue(issueId, {
+            stage: "open",
+            urgency: validatedData.data.urgency as IssueUrgency | undefined,
+            targetDate,
+            updatedAt: new Date(),
+        });
+
+        if (!success) {
+            return { success: false, message: "Failed to acknowledge issue" };
+        }
+
+        const updatedIssue = await getIssueById(issueId, userDid);
+        if (updatedIssue) {
+            notifyIssueApproved(updatedIssue, user);
+        }
+
+        revalidatePath(`/circles/${circleHandle}/issues`);
+        revalidatePath(`/circles/${circleHandle}/issues/${issueId}`);
+
+        return { success: true, message: "Issue acknowledged and opened" };
+    } catch (error) {
+        console.error("Error acknowledging issue:", error);
+        return { success: false, message: "Failed to acknowledge issue" };
     }
 }
 

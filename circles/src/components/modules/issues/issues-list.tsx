@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent } from "react";
+import React, { useEffect, useState, useTransition } from "react";
+import { format } from "date-fns";
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -17,13 +18,11 @@ import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
-    SelectGroup,
     SelectItem,
-    SelectLabel,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select"; // Added SelectGroup, SelectLabel
-import { Circle, ContentPreviewData, IssueDisplay, IssueStage } from "@/models/models"; // Use Issue types, Added ContentPreviewData
+} from "@/components/ui/select";
+import { Circle, ContentPreviewData, IssueDisplay, IssueStage, IssueUrgency } from "@/models/models"; // Use Issue types, Added ContentPreviewData
 import { Button } from "@/components/ui/button";
 import {
     ArrowDown,
@@ -33,10 +32,8 @@ import {
     MoreHorizontal,
     Plus,
     CheckCircle,
-    XCircle,
     Clock,
     Play,
-    User,
 } from "lucide-react"; // Added icons
 import {
     DropdownMenu,
@@ -117,6 +114,21 @@ const getStageInfo = (stage: IssueStage) => {
     }
 };
 
+const getUrgencyInfo = (urgency?: IssueUrgency) => {
+    switch (urgency) {
+        case "low":
+            return { label: "Low", badgeClassName: "bg-green-100 text-green-800" };
+        case "medium":
+            return { label: "Medium", badgeClassName: "bg-blue-100 text-blue-800" };
+        case "high":
+            return { label: "High", badgeClassName: "bg-orange-100 text-orange-800" };
+        case "critical":
+            return { label: "Critical", badgeClassName: "bg-red-100 text-red-800" };
+        default:
+            return { label: "Not set", badgeClassName: "bg-slate-100 text-slate-700" };
+    }
+};
+
 const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) => {
     // Removed currentUserDid from props
     const [user] = useAtom(userAtom); // Get user from atom
@@ -191,17 +203,26 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                 ),
                 cell: (info) => {
                     const issue = info.row.original;
+                    const urgencyInfo = getUrgencyInfo(issue.urgency);
                     return (
                         <Link
                             href={`/circles/${circle.handle}/issues/${issue._id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="font-medium text-blue-600 hover:underline"
+                            className="flex flex-col gap-1 font-medium text-blue-600 hover:underline"
                         >
-                            {info.getValue() as string}
-                            {issue.circle && issue.circle._id !== circle._id && (
-                                <div className="ml-2">
-                                    <CirclePicture circle={issue.circle} size="24px" />
-                                </div>
+                            <div className="flex items-center gap-2">
+                                <span>{info.getValue() as string}</span>
+                                <Badge className={`shrink-0 ${urgencyInfo.badgeClassName}`}>{urgencyInfo.label}</Badge>
+                                {issue.circle && issue.circle._id !== circle._id && (
+                                    <div className="ml-2">
+                                        <CirclePicture circle={issue.circle} size="24px" />
+                                    </div>
+                                )}
+                            </div>
+                            {issue.targetDate && (
+                                <span className="text-xs text-muted-foreground">
+                                    Target date {format(new Date(issue.targetDate), "PPP")}
+                                </span>
                             )}
                         </Link>
                     );

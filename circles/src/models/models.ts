@@ -1351,6 +1351,8 @@ export interface ProposalDisplay extends Proposal {
 // Issue stages
 export const issueStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
 export type IssueStage = z.infer<typeof issueStageSchema>;
+export const issueUrgencySchema = z.enum(["low", "medium", "high", "critical"]);
+export type IssueUrgency = z.infer<typeof issueUrgencySchema>;
 
 // Issue model
 export const issueSchema = z.object({
@@ -1369,6 +1371,7 @@ export const issueSchema = z.object({
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the issue
     targetDate: z.date().nullable().optional(), // Target date for issue (optional)
+    urgency: issueUrgencySchema.optional(),
 });
 
 export type Issue = z.infer<typeof issueSchema>;
