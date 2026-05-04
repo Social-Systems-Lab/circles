@@ -181,7 +181,7 @@ export async function convertProfileChildCircleToIndependentAction(circleId: str
         return { success: false, message: "Only standard circles can be converted in this stage" };
     }
 
-    if (circle.circleLevel !== "profile_child" || !circle.parentCircleId) {
+    if (!circle.parentCircleId) {
         return {
             success: false,
             message: "Only circles that currently sit under a personal/profile circle can be converted in this stage",

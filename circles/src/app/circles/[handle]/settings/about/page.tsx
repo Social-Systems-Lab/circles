@@ -33,7 +33,7 @@ export default async function AboutSettingsPage(props: PageProps) {
     const canConvertToIndependent =
         user?.isMember === true &&
         circle.circleType === "circle" &&
-        circle.circleLevel === "profile_child" &&
+        Boolean(circle.parentCircleId) &&
         parentCircle?.circleType === "user";
     const statusCopy =
         publishStatus === "draft"
