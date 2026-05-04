@@ -20,6 +20,7 @@ import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 import { ObjectId } from "mongodb";
+import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -340,7 +341,7 @@ export async function saveAbout(values: {
         isPublic: values.isPublic,
         showAdminsPublicly: values.showAdminsPublicly,
         location: values.location,
-        socialLinks: values.socialLinks,
+        socialLinks: sanitizeSocialLinks(values.socialLinks),
     };
 
     // Normalize website URL and include if present

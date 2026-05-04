@@ -448,6 +448,8 @@ export const socialLinkSchema = z.object({
     url: z.string().url(),
 });
 
+export type SocialLink = z.infer<typeof socialLinkSchema>;
+
 export const communityGuidelineRuleIdSchema = z.enum(COMMUNITY_GUIDELINE_RULE_IDS);
 
 export const communityGuidelineAgreementSchema = z.object({
