@@ -222,7 +222,7 @@ export const LikeButton = ({ isLiked, onClick }: LikeButtonProps) => {
 
 const MemoizedPostContent = memo(({ content, mentions }: { content: string; mentions?: MentionDisplay[] }) => (
     // Use break-words (overflow-wrap) and min-w-0
-    <div className="formatted min-w-0 break-words pl-4 pr-4 text-lg">
+    <div className="formatted min-w-0 break-words whitespace-pre-wrap pl-4 pr-4 text-lg">
         <RichText content={content} mentions={mentions} />
     </div>
 ));
@@ -244,7 +244,7 @@ const TruncatedPostContent = memo(({ content, mentions, shouldTruncate }: { cont
         : content;
 
     return (
-        <div className="formatted min-w-0 break-words pl-4 pr-4 text-lg">
+        <div className="formatted min-w-0 break-words whitespace-pre-wrap pl-4 pr-4 text-lg">
             <RichText content={displayedContent} mentions={mentions} />
             {needsTruncation && !isExpanded && (
                 <button 
