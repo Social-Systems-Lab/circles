@@ -201,7 +201,8 @@ export const deleteFile = async (fileUrl: string): Promise<void> => {
         const urlPrefix = "/storage/";
         const objectNameIndex = fileUrl.indexOf(urlPrefix);
         if (objectNameIndex === -1) {
-            throw new Error(`Invalid file URL format: ${fileUrl}`);
+            console.log(`Skipping non-MinIO file delete: ${fileUrl}`);
+            return;
         }
         const objectName = fileUrl.substring(objectNameIndex + urlPrefix.length);
 

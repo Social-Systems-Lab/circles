@@ -21,6 +21,7 @@ import { createDefaultFeed } from "./feed";
 import path from "path";
 import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
+import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -323,6 +324,9 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
     circle.circleLevel = circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
     circle.publishStatus = circle.publishStatus || (circle.circleType === "user" ? "published" : "draft");
     circle.showAdminsPublicly = circle.showAdminsPublicly ?? false;
+    if (!hasCircleImages(circle.images)) {
+        circle.images = [getDefaultHeroImage(circle.handle || circle.did || circle.name)];
+    }
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();

@@ -11,6 +11,14 @@ import { saveProfileAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import MultiImageUploader
+import { Media } from "@/models/models";
+
+const toExistingImageItems = (images?: Media[]): ImageItem[] =>
+    images?.map((media) => ({
+        id: media.fileInfo.url,
+        preview: media.fileInfo.url,
+        existingMediaUrl: media.fileInfo.url,
+    })) || [];
 
 // Create a custom image upload component for the circle wizard (KEEPING FOR PROFILE PICTURE FOR NOW)
 function CircleImageUpload({
@@ -198,7 +206,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             content: circle.content || prev.content,
                             picture: circle.picture?.url || prev.picture, // Update picture URL if changed
                             pictureFile: undefined,
-                            images: circle.images || prev.images, // Update images array if changed
+                            images: circle.images ? toExistingImageItems(circle.images) : prev.images,
                         }));
                     }
                 }
@@ -258,9 +266,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             // Pass images from circleData (parent state)
                             initialImages={
                                 circleData.images
-                                    ?.filter((item) => item.existingMediaUrl) // Filter out potential non-Media items if needed
+                                    ?.filter((item) => item.existingMediaUrl)
                                     .map((item) => ({
-                                        // Reconstruct Media structure for initialImages prop
                                         name: "Existing Image",
                                         type: "image/jpeg",
                                         fileInfo: { url: item.existingMediaUrl! },

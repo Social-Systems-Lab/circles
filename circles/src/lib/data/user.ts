@@ -21,6 +21,7 @@ import { VerificationRequest } from "@/models/models";
 import { db } from "./db";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ACTIVE_VERIFICATION_REQUEST_STATUSES } from "./verification-workflow";
+import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 
 export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
     const user = await getUserByDid(userDid);
@@ -133,6 +134,9 @@ export const createNewUser = (
         questionnaire: [],
         isPublic: true,
     };
+    if (!hasCircleImages(user.images)) {
+        user.images = [getDefaultHeroImage(handle || did)];
+    }
     return user;
 };
 

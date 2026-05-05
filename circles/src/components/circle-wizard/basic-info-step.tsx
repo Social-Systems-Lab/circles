@@ -219,6 +219,12 @@ export default function BasicInfoStep({
                     setCircleData((prev) => ({
                         ...prev,
                         _id: circle._id,
+                        images:
+                            circle.images?.map((media: { fileInfo: { url: string } }) => ({
+                                id: media.fileInfo.url,
+                                preview: media.fileInfo.url,
+                                existingMediaUrl: media.fileInfo.url,
+                            })) || prev.images,
                         parentCircleId: circle.parentCircleId,
                         circleLevel: circle.circleLevel || effectiveCircleLevel,
                     }));
