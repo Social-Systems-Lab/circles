@@ -65,6 +65,7 @@ import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import InternalLinkPreview from "./InternalLinkPreview";
+import SharedPostPreview from "./SharedPostPreview";
 import RichText from "./RichText";
 import { truncateText } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -177,6 +178,7 @@ type PostFormProps = {
     createFeatureHandle: string;
     itemKey: CreatableItemKey;
     initialSelectedCircleId?: string;
+    sharedPost?: PostDisplay | null;
 };
 
 export function PostForm({
@@ -189,6 +191,7 @@ export function PostForm({
     createFeatureHandle,
     itemKey,
     initialSelectedCircleId,
+    sharedPost,
 }: PostFormProps) {
     const [postContent, setPostContent] = useState(initialPost?.content || "");
     const [title, setTitle] = useState(initialPost?.title || "");
@@ -213,6 +216,8 @@ export function PostForm({
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>(initialPost?.sdgs || []);
     const [isPreviewStep, setIsPreviewStep] = useState(false);
     const { toast } = useToast();
+    const sharePreviewPost = sharedPost ?? initialPost?.sharedPostData ?? null;
+    const isShareMode = Boolean(sharedPost || initialPost?.sharedPostId);
 
     const itemDetail: CreatableItemDetail | undefined = useMemo(
         () => creatableItemsList.find((item) => item.key === itemKey),
@@ -495,7 +500,7 @@ export function PostForm({
     const handleSubmit = async () => {
         startTransition(async () => {
             const formData = new FormData();
-            if (!title.trim()) {
+            if (!isShareMode && !title.trim()) {
                 toast({
                     title: "Error",
                     description: "Please enter a title for your post.",
@@ -510,6 +515,9 @@ export function PostForm({
                     variant: "destructive",
                 });
                 return;
+            }
+            if (sharedPost?._id) {
+                formData.append("sharedPostId", sharedPost._id);
             }
             formData.append("title", title.trim());
             formData.append("content", postContent);
@@ -550,7 +558,7 @@ export function PostForm({
     };
 
     const handlePreview = () => {
-        if (!title.trim()) {
+        if (!isShareMode && !title.trim()) {
             toast({
                 title: "Error",
                 description: "Please enter a title for your post.",
@@ -629,26 +637,36 @@ export function PostForm({
                                         </div>
                                     </div>
                                 )}
-                                <div className="mb-3">
-                                    <Label className="mb-1 block text-sm font-medium text-gray-600">Title</Label>
-                                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
-                                        <Input
-                                            value={title}
-                                            onChange={(e) => setTitle(e.target.value)}
-                                            placeholder="Enter a clear post title..."
-                                            className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
-                                        />
+                                {!isShareMode && (
+                                    <div className="mb-3">
+                                        <Label className="mb-1 block text-sm font-medium text-gray-600">Title</Label>
+                                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                            <Input
+                                                value={title}
+                                                onChange={(e) => setTitle(e.target.value)}
+                                                placeholder="Enter a clear post title..."
+                                                className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                                <Label className="mb-1 block text-sm font-medium text-gray-600">Content</Label>
+                                )}
+                                <Label className="mb-1 block text-sm font-medium text-gray-600">
+                                    {isShareMode ? "Comment (optional)" : "Content"}
+                                </Label>
                                 {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
                                 <Textarea
                                     value={postContent}
                                     onChange={(e) => setPostContent(e.target.value)}
-                                    placeholder="Write your post..."
+                                    placeholder={isShareMode ? "Add a comment to your share..." : "Write your post..."}
                                     className="min-h-[200px] resize-none rounded-xl border-gray-200 px-3 py-3 text-[1.25rem] leading-[1.875rem] shadow-none focus-visible:ring-0"
                                     autoFocus
                                 />
+                                {isShareMode && (
+                                    <div className="mt-4">
+                                        <Label className="mb-2 block text-sm font-medium text-gray-600">Sharing</Label>
+                                        <SharedPostPreview post={sharePreviewPost} fallbackText="Original post unavailable." />
+                                    </div>
+                                )}
                                 {isPreviewLoading && (
                                     <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
                                         <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
@@ -898,18 +916,23 @@ export function PostForm({
                                             </div>
 
                                             <div className="space-y-3">
-                                                <h2 className="text-2xl font-semibold leading-tight text-gray-900">
-                                                    {title.trim()}
-                                                </h2>
+                                                {!isShareMode && title.trim() ? (
+                                                    <h2 className="text-2xl font-semibold leading-tight text-gray-900">
+                                                        {title.trim()}
+                                                    </h2>
+                                                ) : null}
                                                 {postContent.trim() ? (
                                                     <div className="formatted min-w-0 break-words whitespace-pre-wrap text-base leading-7 text-gray-800">
                                                         <RichText content={postContent} />
                                                     </div>
                                                 ) : (
                                                     <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-500">
-                                                        No body content.
+                                                        {isShareMode ? "No comment added." : "No body content."}
                                                     </div>
                                                 )}
+                                                {isShareMode ? (
+                                                    <SharedPostPreview post={sharePreviewPost} fallbackText="Original post unavailable." />
+                                                ) : null}
                                             </div>
 
                                             {(location || selectedSdgs.length > 0) && (

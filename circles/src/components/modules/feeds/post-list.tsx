@@ -15,7 +15,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Trash2, Users, X, MapPin } from "lucide-react"; // Added Users, MapPin
+import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Repeat2, Trash2, Users, X, MapPin } from "lucide-react"; // Added Users, MapPin
 import { Badge } from "@/components/ui/badge"; // Added Badge import
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import React, {
@@ -36,6 +36,7 @@ import {
     contentPreviewAtom,
     focusPostAtom,
     imageGalleryAtom,
+    createPostDialogAtom,
     sidePanelContentVisibleAtom,
     userAtom,
     feedPanelDockedAtom,
@@ -98,6 +99,7 @@ import Image from "next/image"; // Import Next Image
 import { Card, CardContent } from "@/components/ui/card"; // Import Card components
 import Link from "next/link"; // Import Next Link
 import InternalLinkPreview from "./InternalLinkPreview"; // Import InternalLinkPreview
+import SharedPostPreview from "./SharedPostPreview";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -353,6 +355,7 @@ export const PostItem = ({
     const { toast } = useToast();
     const [, setImageGallery] = useAtom(imageGalleryAtom);
     const [focusPost, setFocusPost] = useAtom(focusPostAtom);
+    const [, setCreatePostDialogState] = useAtom(createPostDialogAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [feedPanelDocked, setFeedPanelDocked] = useAtom(feedPanelDockedAtom);
     const router = useRouter();
@@ -767,6 +770,19 @@ export const PostItem = ({
         router.push(targetUrl);
     }, [circleHandle, postId, router, setContentPreview, setFeedPanelDocked]);
 
+    const handleSharePost = useCallback(() => {
+        if (!user) {
+            return;
+        }
+
+        setCreatePostDialogState({
+            isOpen: true,
+            circle,
+            feed,
+            sharedPost: post,
+        });
+    }, [user, setCreatePostDialogState, circle, feed, post]);
+
     return (
         // Added min-w-0 and overflow-hidden to allow shrinking and clip content
         <div
@@ -1165,12 +1181,18 @@ export const PostItem = ({
             )}
 
             {/* Post content - using TruncatedPostContent for See More functionality */}
-            {!hideContent && !isFundingPreviewPost && (
+            {!hideContent && !isFundingPreviewPost && (post.content.trim() || !post.sharedPostId) && (
                 <TruncatedPostContent
                     content={post.content}
                     mentions={post.mentionsDisplay}
                     shouldTruncate={!isDetailView && !inPreview}
                 />
+            )}
+
+            {!hideContent && post.sharedPostId && (
+                <div className="pl-4 pr-4">
+                    <SharedPostPreview post={post.sharedPostData} fallbackText="Original post unavailable." />
+                </div>
             )}
 
             {/* --- Link Preview --- */}
@@ -1316,6 +1338,20 @@ export const PostItem = ({
                                 />
                             ))}
                         </div>
+                    )}
+                    {user && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 rounded-full px-3 text-xs text-gray-500 hover:text-gray-700"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleSharePost();
+                            }}
+                        >
+                            <Repeat2 className="mr-1 h-4 w-4" />
+                            Share
+                        </Button>
                     )}
                 </div>
 

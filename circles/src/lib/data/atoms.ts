@@ -71,6 +71,7 @@ export type CreatePostDialogAtomProps = {
     isOpen: boolean;
     circle?: Circle; // The circle context for the post
     feed?: Feed; // The feed context for the post
+    sharedPost?: PostDisplay | null;
 };
 
 export const createPostDialogAtom = atom<CreatePostDialogAtomProps>({ isOpen: false });

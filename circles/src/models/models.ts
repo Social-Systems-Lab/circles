@@ -224,6 +224,7 @@ export const postSchema = z.object({
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
+    sharedPostId: z.string().optional(),
     postType: z.enum(["post", "goal", "task", "issue", "proposal", "event", "discussion"]).optional(), // Added discussion
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
     parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
@@ -257,6 +258,7 @@ export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     feed?: Feed;
     // Populated internal preview data
     internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | FundingAskDisplay | null;
+    sharedPostData?: PostDisplay | null;
     sdgs?: Cause[];
 }
 

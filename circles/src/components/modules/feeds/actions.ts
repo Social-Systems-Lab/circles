@@ -27,6 +27,7 @@ import {
     getPublicUserFeed, // Added getPublicUserFeed
     createFeed,
     createDefaultFeed,
+    getShareablePostPreview,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -416,6 +417,7 @@ export async function createPostAction(
         const content = formData.get("content") as string;
         const title = (formData.get("title") as string) || "";
         const circleId = formData.get("circleId") as string;
+        const sharedPostId = (formData.get("sharedPostId") as string) || undefined;
         const locationStr = formData.get("location") as string;
         const postType = (formData.get("postType") as string) || undefined;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
@@ -423,8 +425,8 @@ export async function createPostAction(
         // Get user groups from form data
         const userGroups = formData.getAll("userGroups") as string[];
 
-        // Title is required for posts
-        if (!title || !title.trim()) {
+        // Title is required for normal posts, but shares can be comment-only.
+        if (!sharedPostId && (!title || !title.trim())) {
             return { success: false, message: "Title is required" };
         }
 
@@ -468,8 +470,15 @@ export async function createPostAction(
             return { success: false, message: "You are not authorized to create posts on the noticeboard" };
         }
 
+        if (sharedPostId) {
+            const shareablePost = await getShareablePostPreview(sharedPostId, userDid);
+            if (!shareablePost) {
+                return { success: false, message: "Original post unavailable." };
+            }
+        }
+
         let post: Post = {
-            title: title.trim(),
+            title: title.trim() || undefined,
             content,
             feedId,
             createdBy: userDid,
@@ -477,6 +486,7 @@ export async function createPostAction(
             reactions: {},
             comments: 0,
             location,
+            sharedPostId,
             userGroups: userGroups.length > 0 ? userGroups : ["everyone"], // Use provided user groups or default to everyone
             // --- Add Link Preview Fields ---
             linkPreviewUrl: linkPreviewUrl || undefined,

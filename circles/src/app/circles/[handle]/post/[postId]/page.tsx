@@ -1,6 +1,6 @@
 // /src/app/circles/[handle]/post/[postId]/page.tsx
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getFeed, getPost, getAllComments } from "@/lib/data/feed";
+import { getFeed, getPost, getAllComments, getShareablePostPreview } from "@/lib/data/feed";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { CommentDisplay, PostDisplay } from "@/models/models";
@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { PostItem } from "@/components/modules/feeds/post-list";
+import { getUserByDid } from "@/lib/data/user";
 
 type SinglePostPageProps = {
     params: Promise<{ handle: string; postId: string }>;
@@ -48,10 +49,13 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
 
     // Get all comments for the post
     const comments = (await getAllComments(postId, userDid)) as CommentDisplay[];
+    const author = await getUserByDid(post.createdBy);
+    const sharedPostData = post.sharedPostId ? await getShareablePostPreview(post.sharedPostId, userDid) : null;
 
     const postWithComments: PostDisplay = {
         ...post,
-        author: circle,
+        author: author || circle,
+        sharedPostData,
     } as PostDisplay;
 
     return (

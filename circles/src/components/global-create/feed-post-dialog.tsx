@@ -79,6 +79,7 @@ export function FeedPostDialog() {
                     createFeatureHandle="post"
                     initialSelectedCircleId={dialogState.circle._id} // Pre-select the circle from the atom
                     isSubmitting={isPending}
+                    sharedPost={dialogState.sharedPost}
                 />
             </DialogContent>
         </Dialog>

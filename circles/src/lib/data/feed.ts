@@ -24,6 +24,8 @@ import { getIssueById } from "./issue";
 import { getFundingAskDocumentById } from "./funding";
 import { getTaskById } from "./task"; // Added getTaskById
 import { sdgs } from "./sdgs";
+import { isAuthorized } from "@/lib/auth/auth";
+import { features } from "./constants";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -176,6 +178,89 @@ export const getPost = async (postId: string): Promise<Post | null> => {
         post._id = post._id.toString();
     }
     return post;
+};
+
+export const canUserViewPost = async (post: Post, userDid?: string): Promise<boolean> => {
+    const feed = await getFeed(post.feedId);
+    if (!feed) {
+        return false;
+    }
+
+    const canViewFeed = await isAuthorized(userDid, feed.circleId, features.feed.view);
+    if (!canViewFeed) {
+        return false;
+    }
+
+    const author = await getUserByDid(post.createdBy);
+    if (!author) {
+        return false;
+    }
+
+    if (!author.isVerified && !author.isMember && post.createdBy !== userDid) {
+        return false;
+    }
+
+    if (!post.userGroups || post.userGroups.length === 0 || post.userGroups.includes("everyone")) {
+        return true;
+    }
+
+    if (!userDid) {
+        return false;
+    }
+
+    const membership = await Members.findOne({ userDid, circleId: feed.circleId });
+    if (!membership) {
+        return false;
+    }
+
+    const memberGroups = membership.userGroups ?? [];
+    return post.userGroups.some((group) => memberGroups.includes(group));
+};
+
+async function buildPostDisplayPreview(post: Post): Promise<PostDisplay | null> {
+    const author = await getUserByDid(post.createdBy);
+    const feed = await getFeed(post.feedId);
+    if (!author || !feed) {
+        return null;
+    }
+
+    const circle = await getCircleById(feed.circleId);
+    if (!circle) {
+        return null;
+    }
+
+    const { sdgs: sdgIds, ...restOfPost } = post;
+    const populatedSdgs = sdgIds ? sdgs.filter((sdg) => sdgIds.includes(sdg._id)) : [];
+
+    return {
+        ...restOfPost,
+        author,
+        circle,
+        feed,
+        circleType: "post",
+        sdgs: populatedSdgs,
+        sharedPostData: null,
+    };
+}
+
+export const getShareablePostPreview = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
+    const post = await getPost(postId);
+    if (!post) {
+        return null;
+    }
+
+    const canView = await canUserViewPost(post, userDid);
+    if (!canView) {
+        return null;
+    }
+
+    const postDisplay = await buildPostDisplayPreview(post);
+    if (!postDisplay) {
+        return null;
+    }
+
+    await fetchAndAttachInternalPreviewData([postDisplay]);
+    return postDisplay;
 };
 
 export const getFullPost = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
@@ -357,6 +442,7 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                 internalPreviewUrl: 1,
                 internalPreviewType: 1,
                 internalPreviewId: 1,
+                sharedPostId: 1,
                 sdgs: 1,
                 postType: 1,
                 circleType: { $literal: "post" },
@@ -469,6 +555,7 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
     }
 
     await fetchAndAttachInternalPreviewData(posts);
+    await fetchAndAttachSharedPostData(posts, userDid);
 
     return posts[0];
 };
@@ -787,6 +874,7 @@ export async function getPostsFromMultipleFeeds(
                 internalPreviewUrl: 1,
                 internalPreviewType: 1,
                 internalPreviewId: 1,
+                sharedPostId: 1,
                 sdgs: 1,
                 circleType: { $literal: "post" },
 
@@ -944,6 +1032,7 @@ export async function getPostsFromMultipleFeeds(
 
         // --- Fetch Internal Preview Data (Post-Processing for logged-in user) ---
         await fetchAndAttachInternalPreviewData(filteredPosts);
+        await fetchAndAttachSharedPostData(filteredPosts, userDid);
         // --- End Fetch Internal Preview Data ---
 
         return filteredPosts;
@@ -956,6 +1045,7 @@ export async function getPostsFromMultipleFeeds(
 
     // --- Fetch Internal Preview Data (Post-Processing) ---
     await fetchAndAttachInternalPreviewData(publicPosts);
+    await fetchAndAttachSharedPostData(publicPosts, userDid);
     // --- End Fetch Internal Preview Data ---
 
     return publicPosts; // Restored return statement
@@ -1213,6 +1303,7 @@ export const getPosts = async (
                 internalPreviewUrl: 1,
                 internalPreviewType: 1,
                 internalPreviewId: 1,
+                sharedPostId: 1,
                 sdgs: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
@@ -1355,6 +1446,7 @@ export const getPosts = async (
 
         // --- Fetch Internal Preview Data (Post-Processing for logged-in user) ---
         await fetchAndAttachInternalPreviewData(filteredPosts);
+        await fetchAndAttachSharedPostData(filteredPosts, userDid);
         // --- End Fetch Internal Preview Data ---
 
         return filteredPosts;
@@ -1367,6 +1459,7 @@ export const getPosts = async (
 
     // --- Fetch Internal Preview Data (Post-Processing) ---
     await fetchAndAttachInternalPreviewData(publicPostsForFeed); // Fetch for the correct list
+    await fetchAndAttachSharedPostData(publicPostsForFeed, userDid);
     // --- End Fetch Internal Preview Data ---
 
     return publicPostsForFeed; // Return the correct list
@@ -1506,6 +1599,25 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
     postsWithInternalLinks.forEach((post) => {
         const key = `${post.internalPreviewType}-${post.internalPreviewId}`;
         post.internalPreviewData = previewDataMap.get(key) || null; // Set to null if not found
+    });
+}
+
+async function fetchAndAttachSharedPostData(posts: PostDisplay[], userDid?: string): Promise<void> {
+    const postsWithShares = posts.filter((post) => post.sharedPostId);
+    if (postsWithShares.length === 0) {
+        return;
+    }
+
+    const sharedPosts = await Promise.all(
+        postsWithShares.map(async (post) => ({
+            ownerPostId: post._id,
+            sharedPost: await getShareablePostPreview(post.sharedPostId!, userDid),
+        })),
+    );
+
+    const sharedPostMap = new Map(sharedPosts.map((entry) => [entry.ownerPostId, entry.sharedPost]));
+    postsWithShares.forEach((post) => {
+        post.sharedPostData = sharedPostMap.get(post._id) ?? null;
     });
 }
 
