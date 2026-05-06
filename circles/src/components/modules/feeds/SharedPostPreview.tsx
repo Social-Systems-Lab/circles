@@ -3,13 +3,22 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PostDisplay } from "@/models/models";
+import { FundingAskDisplay, PostDisplay } from "@/models/models";
 import { truncateText } from "@/lib/utils";
 
 type SharedPostPreviewProps = {
     post?: PostDisplay | null;
     fallbackText?: string;
 };
+
+function getFundingPreviewImageUrl(post: PostDisplay): string | undefined {
+    if (post.internalPreviewType !== "funding" || !post.internalPreviewData) {
+        return undefined;
+    }
+
+    const fundingPreview = post.internalPreviewData as FundingAskDisplay;
+    return fundingPreview.coverImage?.url;
+}
 
 export default function SharedPostPreview({
     post,
@@ -40,10 +49,7 @@ export default function SharedPostPreview({
         return undefined;
     })();
     const previewImage = post.media?.[0];
-    const fundingPreviewImage =
-        post.internalPreviewType === "funding" && "coverImage" in (post.internalPreviewData ?? {})
-            ? post.internalPreviewData?.coverImage?.url
-            : undefined;
+    const fundingPreviewImage = getFundingPreviewImageUrl(post);
     const content = (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100/80">
             {previewImage?.fileInfo?.url || fundingPreviewImage ? (
