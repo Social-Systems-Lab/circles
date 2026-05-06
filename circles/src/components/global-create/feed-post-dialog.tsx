@@ -8,18 +8,20 @@ import { PostForm } from "@/components/modules/feeds/post-form";
 import { UserPrivate } from "@/models/models";
 import { createPostAction } from "@/components/modules/feeds/actions";
 import { useToast } from "@/components/ui/use-toast";
+import { useRouter } from "next/navigation";
 
 export function FeedPostDialog() {
     const [dialogState, setDialogState] = useAtom(createPostDialogAtom);
     const [user] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
+    const router = useRouter();
 
     const handleClose = () => {
         setDialogState({ isOpen: false });
     };
 
-    const handleSubmit = async (formData: FormData, targetCircleId?: string) => {
+    const handleSubmit = async (formData: FormData, targetCircleId?: string, targetCircleHandle?: string) => {
         // Added targetCircleId parameter
         const finalCircleId = targetCircleId || dialogState.circle?._id; // Use targetCircleId if available
 
@@ -47,6 +49,9 @@ export function FeedPostDialog() {
                 });
             }
             handleClose();
+            if (targetCircleHandle) {
+                router.push(`/circles/${targetCircleHandle}/feed`);
+            }
         });
     };
 

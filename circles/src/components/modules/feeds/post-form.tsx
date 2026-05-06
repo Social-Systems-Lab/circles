@@ -65,6 +65,7 @@ import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import InternalLinkPreview from "./InternalLinkPreview";
+import RichText from "./RichText";
 import { truncateText } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, CircleHelp, Info } from "lucide-react";
@@ -169,7 +170,7 @@ type ImageItem = {
 type PostFormProps = {
     user: UserPrivate;
     initialPost?: PostDisplay;
-    onSubmit: (formData: FormData, targetCircleId: string) => Promise<void>;
+    onSubmit: (formData: FormData, targetCircleId: string, targetCircleHandle?: string) => Promise<void>;
     onCancel: () => void;
     isSubmitting?: boolean;
     moduleHandle: string;
@@ -210,6 +211,7 @@ export function PostForm({
     const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]);
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>(initialPost?.sdgs || []);
+    const [isPreviewStep, setIsPreviewStep] = useState(false);
     const { toast } = useToast();
 
     const itemDetail: CreatableItemDetail | undefined = useMemo(
@@ -543,8 +545,28 @@ export function PostForm({
                     formData.append("sdgs", JSON.stringify(validSdgs));
                 }
             }
-            await onSubmit(formData, selectedCircleId);
+            await onSubmit(formData, selectedCircleId, selectedCircle?.handle);
         });
+    };
+
+    const handlePreview = () => {
+        if (!title.trim()) {
+            toast({
+                title: "Error",
+                description: "Please enter a title for your post.",
+                variant: "destructive",
+            });
+            return;
+        }
+        if (!selectedCircleId) {
+            toast({
+                title: "Error",
+                description: "Please select a circle to create a post in.",
+                variant: "destructive",
+            });
+            return;
+        }
+        setIsPreviewStep(true);
     };
 
     return (
@@ -595,313 +617,443 @@ export function PostForm({
                 {selectedCircleId && (
                     <>
                         <div className="flex-grow overflow-y-auto pr-2">
-                            {!user.isVerified && (
-                                <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                                    <div className="flex items-center">
-                                        <Info className="mr-2 h-5 w-5 flex-shrink-0" />
-                                        <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
-                                            Your account is not verified. Noticeboard posts from unverified accounts are
-                                            not shown to other users until the account is verified.
-                                        </p>
+                            <div className={isPreviewStep ? "hidden" : ""}>
+                                {!user.isVerified && (
+                                    <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                                        <div className="flex items-center">
+                                            <Info className="mr-2 h-5 w-5 flex-shrink-0" />
+                                            <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
+                                                Your account is not verified. Noticeboard posts from unverified accounts are
+                                                not shown to other users until the account is verified.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="mb-3">
+                                    <Label className="mb-1 block text-sm font-medium text-gray-600">Title</Label>
+                                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
+                                        <Input
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            placeholder="Enter a clear post title..."
+                                            className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
+                                        />
                                     </div>
                                 </div>
-                            )}
-                            <div className="mb-3">
-                                <Label className="mb-1 block text-sm font-medium text-gray-600">Title</Label>
-                                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
-                                    <Input
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        placeholder="Enter a clear post title..."
-                                        className="border-0 p-0 text-2xl font-semibold shadow-none placeholder:text-gray-400 focus-visible:ring-0"
-                                    />
-                                </div>
-                            </div>
-                            <Label className="mb-1 block text-sm font-medium text-gray-600">Content</Label>
-                            {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
-                            <Textarea
-                                value={postContent}
-                                onChange={(e) => setPostContent(e.target.value)}
-                                placeholder="Write your post..."
-                                className="min-h-[200px] resize-none rounded-xl border-gray-200 px-3 py-3 text-[1.25rem] leading-[1.875rem] shadow-none focus-visible:ring-0"
-                                autoFocus
-                            />
-                            {isPreviewLoading && (
-                                <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
-                                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
-                                    <span className="text-gray-500">Loading preview...</span>
-                                </div>
-                            )}
-                            {linkPreview && !isPreviewLoading && !internalPreview && (
-                                <Card className="relative mt-4 overflow-hidden">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                                        onClick={removeLinkPreview}
-                                        aria-label="Remove link preview"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                    <a
-                                        href={linkPreview.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block"
-                                    >
-                                        <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
-                                            {linkPreview.image && (
-                                                <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
-                                                    <Image
-                                                        src={linkPreview.image}
-                                                        alt={linkPreview.title || "Link preview image"}
-                                                        fill
-                                                        className="object-cover"
-                                                        sizes="(max-width: 768px) 100vw, 160px"
-                                                    />
+                                <Label className="mb-1 block text-sm font-medium text-gray-600">Content</Label>
+                                {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
+                                <Textarea
+                                    value={postContent}
+                                    onChange={(e) => setPostContent(e.target.value)}
+                                    placeholder="Write your post..."
+                                    className="min-h-[200px] resize-none rounded-xl border-gray-200 px-3 py-3 text-[1.25rem] leading-[1.875rem] shadow-none focus-visible:ring-0"
+                                    autoFocus
+                                />
+                                {isPreviewLoading && (
+                                    <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
+                                        <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
+                                        <span className="text-gray-500">Loading preview...</span>
+                                    </div>
+                                )}
+                                {linkPreview && !isPreviewLoading && !internalPreview && (
+                                    <Card className="relative mt-4 overflow-hidden">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                                            onClick={removeLinkPreview}
+                                            aria-label="Remove link preview"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                        <a
+                                            href={linkPreview.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block"
+                                        >
+                                            <CardContent className="flex flex-col gap-2 p-0 md:flex-row">
+                                                {linkPreview.image && (
+                                                    <div className="relative h-32 w-full flex-shrink-0 md:h-auto md:w-40">
+                                                        <Image
+                                                            src={linkPreview.image}
+                                                            alt={linkPreview.title || "Link preview image"}
+                                                            fill
+                                                            className="object-cover"
+                                                            sizes="(max-width: 768px) 100vw, 160px"
+                                                        />
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col justify-center p-3">
+                                                    <div className="text-sm font-semibold text-gray-600">
+                                                        {new URL(linkPreview.url).hostname}
+                                                    </div>
+                                                    <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
+                                                    {linkPreview.description && (
+                                                        <div className="mt-1 line-clamp-2 text-sm text-gray-500">
+                                                            {linkPreview.description}
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            </CardContent>
+                                        </a>
+                                    </Card>
+                                )}
+                                {internalPreview && !isInternalPreviewLoading && !linkPreview && (
+                                    <Card className="relative mt-4 overflow-hidden">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
+                                            onClick={removeLinkPreview}
+                                            aria-label="Remove link preview"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                        <div className="flex items-center space-x-3 p-3">
+                                            {internalPreview.type === "circle" && (
+                                                <>
+                                                    <Avatar className="h-10 w-10 rounded-md">
+                                                        <AvatarImage
+                                                            src={(internalPreview.data as Circle).picture?.url}
+                                                            alt={(internalPreview.data as Circle).name}
+                                                        />
+                                                        <AvatarFallback>
+                                                            <Users className="h-5 w-5" />
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <div className="text-xs text-gray-500">Circle</div>
+                                                        <div className="font-medium">
+                                                            {(internalPreview.data as Circle).name}
+                                                        </div>
+                                                    </div>
+                                                </>
                                             )}
-                                            <div className="flex flex-col justify-center p-3">
-                                                <div className="text-sm font-semibold text-gray-600">
-                                                    {new URL(linkPreview.url).hostname}
+                                            {internalPreview.type === "post" && (
+                                                <>
+                                                    <Avatar className="h-10 w-10 rounded-full">
+                                                        <AvatarImage
+                                                            src={(internalPreview.data as PostDisplay).author?.picture?.url}
+                                                            alt={(internalPreview.data as PostDisplay).author?.name}
+                                                        />
+                                                        <AvatarFallback>
+                                                            {(internalPreview.data as PostDisplay).author?.name?.charAt(
+                                                                0,
+                                                            ) || "?"}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <div className="text-xs text-gray-500">
+                                                            Post by {(internalPreview.data as PostDisplay).author?.name}
+                                                        </div>
+                                                        <p className="text-sm text-gray-800">
+                                                            {truncateText(
+                                                                (internalPreview.data as PostDisplay).content!,
+                                                                100,
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {internalPreview.type === "proposal" && (
+                                                <>
+                                                    <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                                                        <CircleHelp className="h-5 w-5" />
+                                                    </Avatar>
+                                                    <div>
+                                                        <div className="text-xs text-gray-500">Proposal</div>
+                                                        <div className="font-medium">
+                                                            {(internalPreview.data as ProposalDisplay).name}
+                                                        </div>
+                                                        <p className="text-sm text-gray-600">
+                                                            Status:{" "}
+                                                            <span className="font-semibold">
+                                                                {(internalPreview.data as ProposalDisplay).stage}
+                                                            </span>
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {internalPreview.type === "issue" && (
+                                                <>
+                                                    <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
+                                                        <AlertCircle className="h-5 w-5" />
+                                                    </Avatar>
+                                                    <div>
+                                                        <div className="text-xs text-gray-500">Issue</div>
+                                                        <div className="font-medium">
+                                                            {(internalPreview.data as IssueDisplay).title}
+                                                        </div>
+                                                        <p className="text-sm text-gray-600">
+                                                            Status:{" "}
+                                                            <span className="font-semibold">
+                                                                {(internalPreview.data as IssueDisplay).stage}
+                                                            </span>
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </Card>
+                                )}
+                                {images.length > 0 && (
+                                    <div className="relative mt-4">
+                                        <Carousel setApi={setCarouselApi}>
+                                            <CarouselContent>
+                                                {images.map((image, index) => (
+                                                    <CarouselItem key={index} className="relative">
+                                                        <img
+                                                            src={image.preview}
+                                                            alt={`Uploaded image ${index + 1}`}
+                                                            className="h-48 w-full rounded-lg object-cover"
+                                                        />
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="icon"
+                                                            className="absolute right-2 top-2 rounded-full"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                removeImage(index);
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </CarouselItem>
+                                                ))}
+                                            </CarouselContent>
+                                            <CarouselPrevious />
+                                            <CarouselNext />
+                                        </Carousel>
+                                        <div className="mt-2 flex justify-center">
+                                            {images.map((_, index) => (
+                                                <button
+                                                    key={index}
+                                                    onClick={() => carouselApi?.scrollTo(index)}
+                                                    className={`mx-1 h-2 w-2 rounded-full ${
+                                                        index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
+                                                    }`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {location && (
+                                    <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
+                                        <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
+                                        {getFullLocationName(location)}
+                                    </div>
+                                )}
+                                {showPollCreator && (
+                                    <div className="mt-4 rounded-lg bg-gray-100 p-4">
+                                        <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
+                                    </div>
+                                )}
+                            </div>
+                            {isPreviewStep && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="text-sm font-medium text-gray-600">Preview</div>
+                                        <div className="mt-1 text-sm text-gray-500">
+                                            Review how this noticeboard post will appear before publishing.
+                                        </div>
+                                    </div>
+
+                                    <div className="overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-sm">
+                                        {images[0] && (
+                                            <div className="relative h-56 w-full overflow-hidden bg-gray-100">
+                                                <Image
+                                                    src={images[0].preview}
+                                                    alt={title.trim() || "Post preview image"}
+                                                    fill
+                                                    className="object-cover"
+                                                    sizes="(max-width: 768px) 100vw, 700px"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-4 p-5">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-center gap-3">
+                                                    <UserPicture
+                                                        name={user?.name}
+                                                        picture={user?.picture?.url}
+                                                        size="40px"
+                                                        circleType={user?.circleType}
+                                                    />
+                                                    <div>
+                                                        <div className="text-sm font-semibold text-gray-900">
+                                                            {user?.name}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2 pt-1 text-xs text-gray-500">
+                                                            {selectedCircle?.name && <span>in {selectedCircle.name}</span>}
+                                                            <span>
+                                                                {userGroups.includes("everyone")
+                                                                    ? "Visible to everyone"
+                                                                    : `Visible to ${getUserGroupName(userGroups[0])}`}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
-                                                {linkPreview.description && (
-                                                    <div className="mt-1 line-clamp-2 text-sm text-gray-500">
-                                                        {linkPreview.description}
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <h2 className="text-2xl font-semibold leading-tight text-gray-900">
+                                                    {title.trim()}
+                                                </h2>
+                                                {postContent.trim() ? (
+                                                    <div className="formatted min-w-0 break-words whitespace-pre-wrap text-base leading-7 text-gray-800">
+                                                        <RichText content={postContent} />
+                                                    </div>
+                                                ) : (
+                                                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-500">
+                                                        No body content.
                                                     </div>
                                                 )}
                                             </div>
-                                        </CardContent>
-                                    </a>
-                                </Card>
-                            )}
-                            {internalPreview && !isInternalPreviewLoading && !linkPreview && (
-                                <Card className="relative mt-4 overflow-hidden">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute right-1 top-1 z-10 h-6 w-6 rounded-full bg-gray-900/50 text-white hover:bg-gray-700/70 hover:text-white"
-                                        onClick={removeLinkPreview}
-                                        aria-label="Remove link preview"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                    <div className="flex items-center space-x-3 p-3">
-                                        {internalPreview.type === "circle" && (
-                                            <>
-                                                <Avatar className="h-10 w-10 rounded-md">
-                                                    <AvatarImage
-                                                        src={(internalPreview.data as Circle).picture?.url}
-                                                        alt={(internalPreview.data as Circle).name}
-                                                    />
-                                                    <AvatarFallback>
-                                                        <Users className="h-5 w-5" />
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <div className="text-xs text-gray-500">Circle</div>
-                                                    <div className="font-medium">
-                                                        {(internalPreview.data as Circle).name}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-                                        {internalPreview.type === "post" && (
-                                            <>
-                                                <Avatar className="h-10 w-10 rounded-full">
-                                                    <AvatarImage
-                                                        src={(internalPreview.data as PostDisplay).author?.picture?.url}
-                                                        alt={(internalPreview.data as PostDisplay).author?.name}
-                                                    />
-                                                    <AvatarFallback>
-                                                        {(internalPreview.data as PostDisplay).author?.name?.charAt(
-                                                            0,
-                                                        ) || "?"}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <div className="text-xs text-gray-500">
-                                                        Post by {(internalPreview.data as PostDisplay).author?.name}
-                                                    </div>
-                                                    <p className="text-sm text-gray-800">
-                                                        {truncateText(
-                                                            (internalPreview.data as PostDisplay).content!,
-                                                            100,
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </>
-                                        )}
-                                        {internalPreview.type === "proposal" && (
-                                            <>
-                                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                                                    <CircleHelp className="h-5 w-5" />
-                                                </Avatar>
-                                                <div>
-                                                    <div className="text-xs text-gray-500">Proposal</div>
-                                                    <div className="font-medium">
-                                                        {(internalPreview.data as ProposalDisplay).name}
-                                                    </div>
-                                                    <p className="text-sm text-gray-600">
-                                                        Status:{" "}
-                                                        <span className="font-semibold">
-                                                            {(internalPreview.data as ProposalDisplay).stage}
+
+                                            {(location || selectedSdgs.length > 0) && (
+                                                <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                                                    {location && (
+                                                        <span className="rounded-full bg-gray-100 px-3 py-1">
+                                                            {getFullLocationName(location)}
                                                         </span>
-                                                    </p>
-                                                </div>
-                                            </>
-                                        )}
-                                        {internalPreview.type === "issue" && (
-                                            <>
-                                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-100 text-orange-700">
-                                                    <AlertCircle className="h-5 w-5" />
-                                                </Avatar>
-                                                <div>
-                                                    <div className="text-xs text-gray-500">Issue</div>
-                                                    <div className="font-medium">
-                                                        {(internalPreview.data as IssueDisplay).title}
-                                                    </div>
-                                                    <p className="text-sm text-gray-600">
-                                                        Status:{" "}
-                                                        <span className="font-semibold">
-                                                            {(internalPreview.data as IssueDisplay).stage}
+                                                    )}
+                                                    {selectedSdgs.map((sdg) => (
+                                                        <span
+                                                            key={sdg._id || sdg.handle}
+                                                            className="rounded-full bg-gray-100 px-3 py-1"
+                                                        >
+                                                            {sdg.name}
                                                         </span>
-                                                    </p>
+                                                    ))}
                                                 </div>
-                                            </>
-                                        )}
+                                            )}
+
+                                            {linkPreview && (
+                                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                                                    <div className="font-medium text-gray-900">
+                                                        {linkPreview.title || new URL(linkPreview.url).hostname}
+                                                    </div>
+                                                    <div className="mt-1 break-all text-xs text-gray-500">
+                                                        {linkPreview.url}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {internalPreview && (
+                                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                                                    Internal preview attached:{" "}
+                                                    <span className="font-medium capitalize text-gray-900">
+                                                        {internalPreview.type}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </Card>
-                            )}
-                            {images.length > 0 && (
-                                <div className="relative mt-4">
-                                    <Carousel setApi={setCarouselApi}>
-                                        <CarouselContent>
-                                            {images.map((image, index) => (
-                                                <CarouselItem key={index} className="relative">
-                                                    <img
-                                                        src={image.preview}
-                                                        alt={`Uploaded image ${index + 1}`}
-                                                        className="h-48 w-full rounded-lg object-cover"
-                                                    />
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="icon"
-                                                        className="absolute right-2 top-2 rounded-full"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            removeImage(index);
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </CarouselItem>
-                                            ))}
-                                        </CarouselContent>
-                                        <CarouselPrevious />
-                                        <CarouselNext />
-                                    </Carousel>
-                                    <div className="mt-2 flex justify-center">
-                                        {images.map((_, index) => (
-                                            <button
-                                                key={index}
-                                                onClick={() => carouselApi?.scrollTo(index)}
-                                                className={`mx-1 h-2 w-2 rounded-full ${
-                                                    index === currentImageIndex ? "bg-blue-500" : "bg-gray-300"
-                                                }`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {location && (
-                                <div className="mt-4 flex flex-row items-center justify-center rounded-lg bg-gray-100 p-4 pl-3">
-                                    <MapPin className={`mr-3 h-5 w-5`} style={{ color: "#c3224d" }} />
-                                    {getFullLocationName(location)}
-                                </div>
-                            )}
-                            {showPollCreator && (
-                                <div className="mt-4 rounded-lg bg-gray-100 p-4">
-                                    <p className="text-sm text-gray-600">📊 Poll creator placeholder</p>
                                 </div>
                             )}
                         </div>
                         <div className="mt-auto flex items-center justify-between border-t pt-4">
-                            <div className="flex space-x-2">
-                                <div>
-                                    <input {...getInputProps()} className="hidden" id="image-picker-input" />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="rounded-full"
-                                        onClick={() => {
-                                            document.getElementById("image-picker-input")?.click();
-                                        }}
-                                    >
-                                        <ImageIcon className="h-5 w-5 text-gray-500" />
-                                    </Button>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="rounded-full"
-                                    onClick={() => setIsLocationDialogOpen(true)}
-                                >
-                                    <MapPinIcon className="h-5 w-5 text-gray-500" />
-                                </Button>
-                                <SdgFilter
-                                    displayAs="popover"
-                                    selectedSdgs={selectedSdgs}
-                                    onSelectionChange={setSelectedSdgs}
-                                    popoverContentClassName="z-[11000]"
-                                    gridCols="grid-cols-4"
-                                    trigger={
-                                        <Button variant="ghost" size="icon" className="rounded-full">
-                                            {selectedSdgs.length === 0 ? (
-                                                <Image
-                                                    src="/images/sdgs/SDG_Wheel_WEB.png"
-                                                    alt="SDG Wheel"
-                                                    width={20}
-                                                    height={20}
-                                                />
-                                            ) : (
-                                                <div className="flex -space-x-2">
-                                                    {selectedSdgs.slice(0, 3).map((sdg) => (
+                            {!isPreviewStep ? (
+                                <>
+                                    <div className="flex space-x-2">
+                                        <div>
+                                            <input {...getInputProps()} className="hidden" id="image-picker-input" />
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="rounded-full"
+                                                onClick={() => {
+                                                    document.getElementById("image-picker-input")?.click();
+                                                }}
+                                            >
+                                                <ImageIcon className="h-5 w-5 text-gray-500" />
+                                            </Button>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="rounded-full"
+                                            onClick={() => setIsLocationDialogOpen(true)}
+                                        >
+                                            <MapPinIcon className="h-5 w-5 text-gray-500" />
+                                        </Button>
+                                        <SdgFilter
+                                            displayAs="popover"
+                                            selectedSdgs={selectedSdgs}
+                                            onSelectionChange={setSelectedSdgs}
+                                            popoverContentClassName="z-[11000]"
+                                            gridCols="grid-cols-4"
+                                            trigger={
+                                                <Button variant="ghost" size="icon" className="rounded-full">
+                                                    {selectedSdgs.length === 0 ? (
                                                         <Image
-                                                            key={sdg.handle}
-                                                            src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                                            alt={sdg.name}
+                                                            src="/images/sdgs/SDG_Wheel_WEB.png"
+                                                            alt="SDG Wheel"
                                                             width={20}
                                                             height={20}
-                                                            className="h-5 w-5 rounded-full border-2 border-white object-cover"
                                                         />
-                                                    ))}
-                                                </div>
-                                            )}
+                                                    ) : (
+                                                        <div className="flex -space-x-2">
+                                                            {selectedSdgs.slice(0, 3).map((sdg) => (
+                                                                <Image
+                                                                    key={sdg.handle}
+                                                                    src={
+                                                                        sdg.picture?.url ??
+                                                                        "/images/default-picture.png"
+                                                                    }
+                                                                    alt={sdg.name}
+                                                                    width={20}
+                                                                    height={20}
+                                                                    className="h-5 w-5 rounded-full border-2 border-white object-cover"
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </Button>
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-x-2">
+                                        <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
+                                            Cancel
                                         </Button>
-                                    }
-                                />
-                            </div>
-                            <div className="space-x-2">
-                                <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
-                                    onClick={handleSubmit}
-                                    disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading}
-                                >
-                                    {isActuallySubmitting ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            {initialPost ? "Updating..." : "Announcing..."}
-                                        </>
-                                    ) : (
-                                        <>{initialPost ? "Update" : "Post"}</>
-                                    )}
-                                </Button>
-                            </div>
+                                        <Button
+                                            className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
+                                            onClick={initialPost ? handleSubmit : handlePreview}
+                                            disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading}
+                                        >
+                                            {initialPost ? "Update" : "Review post"}
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="space-x-2">
+                                        <Button variant="ghost" className="text-gray-500" onClick={onCancel}>
+                                            Cancel
+                                        </Button>
+                                        <Button variant="outline" onClick={() => setIsPreviewStep(false)}>
+                                            Back to edit
+                                        </Button>
+                                    </div>
+                                    <Button
+                                        className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
+                                        onClick={handleSubmit}
+                                        disabled={isActuallySubmitting}
+                                    >
+                                        {isActuallySubmitting ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                {initialPost ? "Updating..." : "Posting..."}
+                                            </>
+                                        ) : (
+                                            <>Post and go to noticeboard</>
+                                        )}
+                                    </Button>
+                                </>
+                            )}
                         </div>
                         {dragging && (
                             <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-200 bg-opacity-50">
