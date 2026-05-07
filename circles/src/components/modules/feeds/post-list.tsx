@@ -15,7 +15,7 @@ import { sdgs } from "@/lib/data/sdgs";
 import { UserPicture } from "../members/user-picture";
 import { CirclePicture } from "../circles/circle-picture";
 import { Button } from "@/components/ui/button";
-import { Edit, Heart, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Repeat2, Trash2, Users, X, MapPin } from "lucide-react"; // Added Users, MapPin
+import { Edit, Heart, Link2, Loader2, MessageCircle, MoreHorizontal, MoreVertical, Repeat2, Trash2, Users, X, MapPin } from "lucide-react"; // Added Users, MapPin
 import { Badge } from "@/components/ui/badge"; // Added Badge import
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import React, {
@@ -783,6 +783,32 @@ export const PostItem = ({
         });
     }, [user, setCreatePostDialogState, circle, feed, post]);
 
+    const handleCopyPostLink = useCallback(async () => {
+        if (!circleHandle || !postId || typeof window === "undefined") {
+            toast({
+                title: "Failed to copy",
+                description: "This post link is unavailable right now.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            const postUrl = `${window.location.origin}/circles/${circleHandle}/post/${postId}`;
+            await navigator.clipboard.writeText(postUrl);
+            toast({
+                title: "Link copied",
+                description: "Post link has been copied to clipboard",
+            });
+        } catch (error) {
+            toast({
+                title: "Failed to copy",
+                description: "An error occurred while copying the link",
+                variant: "destructive",
+            });
+        }
+    }, [circleHandle, postId, toast]);
+
     return (
         // Added min-w-0 and overflow-hidden to allow shrinking and clip content
         <div
@@ -1351,6 +1377,20 @@ export const PostItem = ({
                         >
                             <Repeat2 className="mr-1 h-4 w-4" />
                             Share
+                        </Button>
+                    )}
+                    {circleHandle && postId && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 rounded-full px-3 text-xs text-gray-500 hover:text-gray-700"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCopyPostLink();
+                            }}
+                        >
+                            <Link2 className="mr-1 h-4 w-4" />
+                            Copy link
                         </Button>
                     )}
                 </div>
