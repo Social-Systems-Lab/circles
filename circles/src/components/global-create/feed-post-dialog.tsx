@@ -59,6 +59,8 @@ export function FeedPostDialog() {
         return null;
     }
 
+    const initialSelectedCircleId = dialogState.sharedPost ? user._id : dialogState.circle._id;
+
     return (
         <Dialog open={dialogState.isOpen} onOpenChange={handleClose}>
             <DialogContent
@@ -77,7 +79,7 @@ export function FeedPostDialog() {
                     itemKey="post" // This is for the PostForm's internal logic for CircleSelector
                     moduleHandle="feed"
                     createFeatureHandle="post"
-                    initialSelectedCircleId={dialogState.circle._id} // Pre-select the circle from the atom
+                    initialSelectedCircleId={initialSelectedCircleId}
                     isSubmitting={isPending}
                     sharedPost={dialogState.sharedPost}
                 />

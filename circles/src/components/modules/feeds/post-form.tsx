@@ -218,6 +218,14 @@ export function PostForm({
     const { toast } = useToast();
     const sharePreviewPost = sharedPost ?? initialPost?.sharedPostData ?? null;
     const isShareMode = Boolean(sharedPost || initialPost?.sharedPostId);
+    const showRestrictedShareWarning = Boolean(
+        isShareMode &&
+            sharePreviewPost &&
+            ((sharePreviewPost.userGroups?.length ?? 0) > 0 &&
+                !sharePreviewPost.userGroups?.includes("everyone") ||
+                ((sharePreviewPost.feed?.userGroups?.length ?? 0) > 0 &&
+                    !sharePreviewPost.feed?.userGroups?.includes("everyone"))),
+    );
 
     const itemDetail: CreatableItemDetail | undefined = useMemo(
         () => creatableItemsList.find((item) => item.key === itemKey),
@@ -661,6 +669,12 @@ export function PostForm({
                                     className="min-h-[200px] resize-none rounded-xl border-gray-200 px-3 py-3 text-[1.25rem] leading-[1.875rem] shadow-none focus-visible:ring-0"
                                     autoFocus
                                 />
+                                {showRestrictedShareWarning && (
+                                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                        This original post may not be visible to everyone. People who cannot access it
+                                        will see &quot;Original post unavailable.&quot;
+                                    </div>
+                                )}
                                 {isShareMode && (
                                     <div className="mt-4">
                                         <Label className="mb-2 block text-sm font-medium text-gray-600">Sharing</Label>
@@ -930,6 +944,12 @@ export function PostForm({
                                                         {isShareMode ? "No comment added." : "No body content."}
                                                     </div>
                                                 )}
+                                                {showRestrictedShareWarning ? (
+                                                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                                        This original post may not be visible to everyone. People who
+                                                        cannot access it will see &quot;Original post unavailable.&quot;
+                                                    </div>
+                                                ) : null}
                                                 {isShareMode ? (
                                                     <SharedPostPreview post={sharePreviewPost} fallbackText="Original post unavailable." />
                                                 ) : null}

@@ -4,13 +4,13 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { Circle, UserPrivate, Feature } from "@/models/models";
+import { Circle, UserPrivate } from "@/models/models";
 import { CreatableItemDetail } from "./global-create-dialog-content";
-import { features, modules as moduleInfos } from "@/lib/data/constants";
-import { isAuthorized } from "@/lib/auth/client-auth";
+import { modules as moduleInfos } from "@/lib/data/constants";
 import { Label } from "../ui/label"; // Re-imported Label
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { ChevronDown } from "lucide-react";
+import { getSelectableCirclesAction } from "./actions";
 
 interface CircleSelectorProps {
     itemType: CreatableItemDetail;
@@ -48,6 +48,8 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
     };
 
     useEffect(() => {
+        let cancelled = false;
+
         if (!user || !itemType) {
             setIsLoading(false);
             setSelectableCircles([]);
@@ -59,77 +61,41 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
 
         setIsLoading(true);
         const currentUserCircle = user as UserPrivate;
-        const allUserMemberships = currentUserCircle.memberships || [];
-        const potentialCircles: Circle[] = allUserMemberships
-            .map((mem) => mem.circle)
-            .filter((circle): circle is Circle => {
-                if (!circle) return false;
-                // Keep the user's own circle regardless of its type
-                if (circle._id === currentUserCircle._id) return true;
-                // For other circles, only include those of type 'circle'
-                return circle.circleType === "circle" || circle.circleType === "project";
-            });
 
-        const featureToAuth = (features[itemType.moduleHandle as keyof typeof features] as any)?.[
-            itemType.createFeatureHandle
-        ];
+        const loadSelectableCircles = async () => {
+            const result = await getSelectableCirclesAction(itemType.moduleHandle, itemType.createFeatureHandle);
+            if (cancelled) {
+                return;
+            }
 
-        if (!featureToAuth) {
-            console.warn(`Feature definition not found for ${itemType.moduleHandle} - ${itemType.createFeatureHandle}`);
-            setSelectableCircles([]);
-            setSelectedCircleId(undefined);
-            onCircleSelected(null);
-            setShowEnableModuleMessage(false);
+            const availableCircles = result.success ? result.circles : [];
+            setSelectableCircles(availableCircles);
+
+            let initialSelectedCircle: Circle | null = null;
+
+            if (initialSelectedCircleId) {
+                const preselected = availableCircles.find((circle) => circle._id === initialSelectedCircleId);
+                if (preselected) {
+                    initialSelectedCircle = preselected;
+                }
+            }
+
+            if (!initialSelectedCircle && availableCircles.length > 0) {
+                initialSelectedCircle =
+                    availableCircles.find((circle) => circle._id === currentUserCircle._id) || availableCircles[0];
+            }
+
+            setSelectedCircleId(initialSelectedCircle?._id);
+            onCircleSelected(initialSelectedCircle);
+            updateModuleEnableMessage(initialSelectedCircle, currentUserCircle);
             setIsLoading(false);
-            return;
-        }
+        };
 
-        const filteredAndProcessedCircles = potentialCircles.filter((circle) => {
-            if (!circle || !circle.handle) return false;
+        void loadSelectableCircles();
 
-            if (circle._id === currentUserCircle._id) {
-                return true;
-            } else {
-                const moduleEnabled = circle.enabledModules?.includes(itemType.moduleHandle);
-                if (!moduleEnabled) return false;
-                return isAuthorized(user, circle, featureToAuth as Feature);
-            }
-        });
-
-        setSelectableCircles(filteredAndProcessedCircles);
-
-        let initialSelectedCircle: Circle | null = null;
-
-        if (initialSelectedCircleId) {
-            const preselected = filteredAndProcessedCircles.find((c) => c._id === initialSelectedCircleId);
-            if (preselected) {
-                initialSelectedCircle = preselected;
-            }
-        }
-
-        if (!initialSelectedCircle && filteredAndProcessedCircles.length > 0) {
-            const userOwnCircleIsSelectable = filteredAndProcessedCircles.find((c) => c._id === currentUserCircle._id);
-            if (userOwnCircleIsSelectable) {
-                initialSelectedCircle = userOwnCircleIsSelectable;
-            } else {
-                initialSelectedCircle = filteredAndProcessedCircles[0];
-            }
-        }
-
-        if (initialSelectedCircle) {
-            setSelectedCircleId(initialSelectedCircle._id);
-        } else {
-            if (!initialSelectedCircleId && filteredAndProcessedCircles.length > 0) {
-                initialSelectedCircle = filteredAndProcessedCircles[0];
-                setSelectedCircleId(initialSelectedCircle._id);
-            } else if (!initialSelectedCircleId) {
-                setSelectedCircleId(undefined);
-            }
-        }
-
-        onCircleSelected(initialSelectedCircle);
-        updateModuleEnableMessage(initialSelectedCircle, currentUserCircle);
-        setIsLoading(false);
+        return () => {
+            cancelled = true;
+        };
     }, [user, itemType, onCircleSelected, initialSelectedCircleId]);
 
     const handleSelectionChange = (circleId: string) => {
@@ -156,6 +122,12 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
     }
 
     const moduleName = moduleInfos.find((m) => m.handle === itemType.moduleHandle)?.name || itemType.moduleHandle;
+    const showVerificationHint =
+        selectableCircles.length === 1 &&
+        selectableCircles[0]?._id === user?._id &&
+        itemType.moduleHandle === "feed" &&
+        itemType.createFeatureHandle === "post" &&
+        !user?.isVerified;
 
     if (selectableCircles.length === 0) {
         return <div className="p-1 text-xs text-red-500">{`No circles to create ${itemType.key}.`}</div>;
@@ -193,7 +165,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
                         <SelectValue placeholder="Select circle..." />
                     )}
                 </SelectTrigger>
-                <SelectContent className="z-[120]">
+                <SelectContent>
                     {selectableCircles.map((circle) => (
                         <SelectItem key={circle._id} value={circle._id} className="text-xs">
                             <div className="flex items-center gap-2">
@@ -210,6 +182,11 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
             {showModuleEnableMessage && showEnableModuleMessage && (
                 <p className={`mt-1 text-xs text-blue-600 ${variant === "condensed" ? "text-center" : ""}`}>
                     The &quot;{moduleName}&quot; module will be enabled.
+                </p>
+            )}
+            {showVerificationHint && (
+                <p className={`mt-1 text-xs text-amber-700 ${variant === "condensed" ? "text-center" : ""}`}>
+                    Verify your account to post in other circles where you have noticeboard access.
                 </p>
             )}
         </div>
