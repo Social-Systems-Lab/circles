@@ -27,6 +27,7 @@ import {
     EventRsvp,
     EventInvitation,
     Notification,
+    HumanityVerification,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
@@ -79,6 +80,7 @@ let MessageEmailReminders: Collection<MessageEmailReminder>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 let StripeWebhookEvents: Collection<any>;
 let UserRelationships: Collection<any>;
+let HumanityVerifications: Collection<HumanityVerification>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -125,6 +127,7 @@ if (process.env.IS_BUILD !== "true") {
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
     StripeWebhookEvents = db.collection("stripeWebhookEvents");
     UserRelationships = db.collection("userRelationships");
+    HumanityVerifications = db.collection<HumanityVerification>("humanityVerifications");
 }
 export async function getDb() {
   if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
@@ -171,4 +174,5 @@ export {
     PlatformBroadcastMessages,
     StripeWebhookEvents,
     UserRelationships,
+    HumanityVerifications,
 };

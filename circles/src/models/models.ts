@@ -18,6 +18,7 @@ export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
 export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
+export const humanityVerificationLevelSchema = z.enum(["real_person", "met_in_real_life"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
@@ -75,6 +76,7 @@ export type AccountType = z.infer<typeof accountTypeSchema>;
 export type CircleType = z.infer<typeof circleTypeSchema>;
 export type CircleLevel = z.infer<typeof circleLevelSchema>;
 export type CirclePublishStatus = z.infer<typeof circlePublishStatusSchema>;
+export type HumanityVerificationLevel = z.infer<typeof humanityVerificationLevelSchema>;
 
 export const memberSchema = z.object({
     _id: z.any().optional(),
@@ -1085,6 +1087,7 @@ export type NotificationType =
     | "user_verification_reply_received" // Applicant replied in verification workflow
     | "user_verification_rejected" // User has requested verification - REJECTED
     | "user_becomes_member" // User becomes a platform member
+    | "proof_of_humanity_verified" // A user received a public proof of humanity verification
     | "pm_received" // A private message has been received
     | "contact_request_received" // A user received a contact request
     // Consolidated Summary Notification Types
@@ -1150,6 +1153,7 @@ export const notificationTypeValues = [
     "user_verification_reply_received",
     "user_verification_rejected",
     "user_becomes_member",
+    "proof_of_humanity_verified",
     "pm_received",
     "contact_request_received",
     // Summary Types (for user configuration)
@@ -1703,6 +1707,23 @@ export interface GoalDisplay extends Goal {
     // resultSummary?: string;
     // resultImages?: Media[];
     // resultPostId?: string;
+}
+
+export const humanityVerificationSchema = z.object({
+    _id: z.any().optional(),
+    verifierDid: didSchema,
+    subjectDid: didSchema,
+    level: humanityVerificationLevelSchema,
+    note: z.string().optional(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    revokedAt: z.date().nullable().optional(),
+});
+
+export type HumanityVerification = z.infer<typeof humanityVerificationSchema>;
+
+export interface HumanityVerificationDisplay extends HumanityVerification {
+    verifier?: Circle | null;
 }
 
 export const notificationSchema = z.object({

@@ -222,6 +222,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return "Your account verification request was rejected";
         case "user_becomes_member":
             return "You are now a founding member";
+        case "proof_of_humanity_verified":
+            return payload?.messageBody || `${actorName} publicly verified your profile`;
         case "pm_received":
             if (payload?.contactType === "ask_question") {
                 return `${actorName} asked for help in ${circleName}`;

@@ -36,6 +36,8 @@ import type { FundingAskDisplay } from "@/models/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserPicture } from "../members/user-picture";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { ProofOfHumanityCard } from "./proof-of-humanity-card";
+import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 
 interface AboutPageProps {
     circle: Circle;
@@ -46,6 +48,7 @@ interface AboutPageProps {
     canCreateFundingAsk?: boolean;
     showFundingPanel?: boolean;
     adminLeaders?: MemberDisplay[];
+    proofOfHumanitySummary?: HumanityVerificationSummary | null;
 }
 
 export default function AboutPage({
@@ -57,6 +60,7 @@ export default function AboutPage({
     canCreateFundingAsk = false,
     showFundingPanel = false,
     adminLeaders = [],
+    proofOfHumanitySummary = null,
 }: AboutPageProps) {
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -145,11 +149,13 @@ export default function AboutPage({
     const hasNeedsMatchingDetails = !isUserProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
     const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
     const shouldShowVerifiedContributions = isUserProfile;
+    const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary;
     const shouldShowFundingPanel = showFundingPanel;
     const hasSidebarContent =
         hasOverviewDetails ||
         hasAdminDetails ||
         hasNeedsMatchingDetails ||
+        shouldShowProofOfHumanity ||
         shouldShowVerifiedContributions ||
         shouldShowFundingPanel;
 
@@ -296,18 +302,9 @@ export default function AboutPage({
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
-                {hasSidebarContent && (
+                        {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="space-y-6">
-                            {shouldShowFundingPanel && (
-                                <FundingPanel
-                                    circleHandle={circle.handle || ""}
-                                    asks={fundingPreviewAsks}
-                                    canCreate={canCreateFundingAsk}
-                                    visibility={fundingPanelVisibility}
-                                />
-                            )}
-
                             {hasOverviewDetails && (
                                 <div
                                     className={`flex flex-col bg-white p-6 ${
@@ -457,6 +454,23 @@ export default function AboutPage({
                                 </div>
                             )}
 
+                            {shouldShowVerifiedContributions && (
+                                <div
+                                    className={`bg-white p-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <VerifiedContributionsPanel
+                                        items={verifiedContributions}
+                                        totalPublicCount={verifiedContributionPublicCount}
+                                    />
+                                </div>
+                            )}
+
+                            {shouldShowProofOfHumanity && proofOfHumanitySummary && (
+                                <ProofOfHumanityCard circle={circle} summary={proofOfHumanitySummary} />
+                            )}
+
                             {hasAdminDetails && (
                                 <div
                                     className={`flex flex-col bg-white p-6 ${
@@ -594,17 +608,13 @@ export default function AboutPage({
                                 </div>
                             )}
 
-                            {shouldShowVerifiedContributions && (
-                                <div
-                                    className={`bg-white p-6 ${
-                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
-                                    }`}
-                                >
-                                    <VerifiedContributionsPanel
-                                        items={verifiedContributions}
-                                        totalPublicCount={verifiedContributionPublicCount}
-                                    />
-                                </div>
+                            {shouldShowFundingPanel && (
+                                <FundingPanel
+                                    circleHandle={circle.handle || ""}
+                                    asks={fundingPreviewAsks}
+                                    canCreate={canCreateFundingAsk}
+                                    visibility={fundingPanelVisibility}
+                                />
                             )}
                         </div>
                     </div>

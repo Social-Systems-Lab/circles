@@ -10,6 +10,7 @@ import type { TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
 import { getMembers } from "@/lib/data/member";
+import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -32,6 +33,8 @@ export default async function CircleHomePage(props: PageProps) {
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
+    const proofOfHumanitySummary =
+        circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, viewerDid) : null;
     const showFundingPanel = isFundingEnabledForCircle(circle);
     const showAdminsPublicly = circle.showAdminsPublicly !== false;
     const adminLeaders =
@@ -96,6 +99,7 @@ export default async function CircleHomePage(props: PageProps) {
             canCreateFundingAsk={canCreateFundingAsk}
             showFundingPanel={showFundingPanel}
             adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}
+            proofOfHumanitySummary={proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null}
         />
     );
 }

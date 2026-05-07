@@ -28,15 +28,24 @@ import { MoreHorizontal, Settings } from "lucide-react";
 import Link from "next/link";
 import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
+import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
+import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 
 type HomeContentProps = {
     circle: Circle;
     authorizedToEdit: boolean;
     viewerDid?: string | null;
     parentCircle?: Circle;
+    proofOfHumanitySummary?: HumanityVerificationSummary | null;
 };
 
-export default function HomeContent({ circle, authorizedToEdit, viewerDid, parentCircle }: HomeContentProps) {
+export default function HomeContent({
+    circle,
+    authorizedToEdit,
+    viewerDid,
+    parentCircle,
+    proofOfHumanitySummary,
+}: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const isKamooniRootCircle = circle?.handle === "default" || circle?.handle === "kamooni";
     const resolvedCircleLevel =
@@ -156,6 +165,9 @@ export default function HomeContent({ circle, authorizedToEdit, viewerDid, paren
                                         circle.name
                                     )}
                                 </h4>
+                                {proofOfHumanitySummary && (
+                                    <ProofOfHumanityHeaderAction circle={circle} summary={proofOfHumanitySummary} />
+                                )}
                                 {!isUser && authorizedToEdit && circle.handle && (
                                     <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-gray-500">
                                         <Link
