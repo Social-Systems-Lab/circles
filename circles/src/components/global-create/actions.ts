@@ -3,7 +3,7 @@
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { canPerformRestrictedAction } from "@/lib/auth/verification";
 import { features } from "@/lib/data/constants";
-import { getCircles, getCirclesByIds } from "@/lib/data/circle";
+import { getCirclesByIds } from "@/lib/data/circle";
 import { Members } from "@/lib/data/db";
 import { getUserPrivate } from "@/lib/data/user";
 import { Circle, Feature } from "@/models/models";
@@ -41,9 +41,7 @@ export async function getSelectableCirclesAction(
             .map((membership) => membership.circleId)
             .filter((circleId): circleId is string => Boolean(circleId && circleId !== user._id)),
     );
-    const createdCircles = await getCircles(user._id, "circle", undefined, userDid, true, false);
-
-    const candidateCircles = [user as Circle, ...memberCircles, ...createdCircles].filter(
+    const candidateCircles = [user as Circle, ...memberCircles].filter(
         (circle, index, circles) => circles.findIndex((candidate) => candidate._id === circle._id) === index,
     );
 
