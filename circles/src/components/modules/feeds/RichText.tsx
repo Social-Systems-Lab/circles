@@ -3,6 +3,7 @@
 import { ContentPreviewData, MentionDisplay } from "@/models/models";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm"; // Handles GitHub Flavored Markdown, including autolinking
+import remarkBreaks from "remark-breaks"; // Preserve single newlines as visible line breaks
 import React, { memo, useMemo, useCallback, ComponentProps } from "react"; // Import React and ComponentProps
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { useRouter } from "next/navigation";
@@ -171,7 +172,7 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
             // Ensure paragraphs and other block elements allow word breaks
             // Destructure node separately
             // Use break-words (overflow-wrap)
-            p: ({ node, ...props }: { node?: any; [key: string]: any }) => <p className="break-words" {...props} />,
+            p: ({ node, ...props }: { node?: any; [key: string]: any }) => <p className="break-words mb-3 last:mb-0" {...props} />,
             li: ({ node, ...props }: { node?: any; [key: string]: any }) => <li className="break-words" {...props} />,
             // Add other block elements as needed (e.g., blockquote, pre)
             blockquote: ({ node, ...props }: { node?: any; [key: string]: any }) => (
@@ -187,7 +188,7 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
     // Keep min-w-0 on the root, break-words is handled by parent or specific elements
     return (
         <div className="min-w-0">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
                 {content}
             </ReactMarkdown>
         </div>
