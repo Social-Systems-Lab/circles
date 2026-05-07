@@ -53,6 +53,10 @@ export async function getSelectableCirclesAction(
                 return false;
             }
 
+            if (circle.circleType === "user") {
+                return circle._id === user._id;
+            }
+
             return isAuthorized(userDid, circle._id, featureToAuth);
         }),
     );

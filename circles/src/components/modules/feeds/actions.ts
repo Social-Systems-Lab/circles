@@ -450,6 +450,16 @@ export async function createPostAction(
         const sdgsStr = formData.get("sdgs") as string;
         const sdgs = sdgsStr ? JSON.parse(sdgsStr) : undefined;
 
+        const targetCircle = await getCircleById(circleId);
+        if (!targetCircle) {
+            return { success: false, message: "Target circle not found" };
+        }
+
+        const isOwnProfileFeed = targetCircle.circleType === "user" && targetCircle._id === currentUser._id;
+        if (targetCircle.circleType === "user" && !isOwnProfileFeed) {
+            return { success: false, message: "You are not authorized to create posts on this profile" };
+        }
+
         // Get the default feed for this circle
         let feed = await getFeedByHandle(circleId, "default"); // Changed to let
 
@@ -465,7 +475,7 @@ export async function createPostAction(
         console.log("Creating post in feed", feed._id, "for circle", circleId, "by user", userDid);
 
         const feedId = feed._id.toString();
-        const authorized = await isAuthorized(userDid, circleId, features.feed.post);
+        const authorized = isOwnProfileFeed ? true : await isAuthorized(userDid, circleId, features.feed.post);
         if (!authorized) {
             return { success: false, message: "You are not authorized to create posts on the noticeboard" };
         }
@@ -567,8 +577,7 @@ export async function createPostAction(
 
         // Ensure 'feed' module is enabled if posting to user's own circle
         try {
-            const targetCircle = await getCircleById(circleId);
-            if (targetCircle && targetCircle.circleType === "user" && targetCircle.did === userDid) {
+            if (isOwnProfileFeed) {
                 await ensureModuleIsEnabledOnCircle(circleId, "feed", userDid);
             }
         } catch (moduleEnableError) {
