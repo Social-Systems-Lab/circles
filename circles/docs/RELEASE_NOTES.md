@@ -22,6 +22,15 @@
 - Added the `Verified Contributions` panel on user profiles with a public contribution count separated from the viewer-visible contribution list.
 - Fixed task preview refresh after Accept Task, Start Progress, Submit for Review, Request Changes, and Mark Verified so the open side panel updates immediately without a manual browser refresh.
 
+### Proof of Humanity MVP
+
+- Added public profile-to-profile human verification with two levels: `real_person` and `met_in_real_life`.
+- Added the `✓ Human` / `Verify Human` profile header control and the sidebar `Proof of Humanity` panel below `Verified Contributions`.
+- Added public verifier visibility, viewer-owned verify/update/remove actions, and hash-linked panel open behavior via `#proof-of-humanity`.
+- Added the `humanityVerifications` Mongo collection with revocation via `revokedAt` instead of hard deletion.
+- Added bell notifications for new verifications and upgrades, with no notification on removal and no notification to the verifier.
+- Deferred trust scores, cluster analysis, avatar badges, reviews/endorsements, and admin moderation UI in this MVP.
+
 ### Funding Asks MVP
 
 - Added the demo-safe `Funding Needs` home-page panel and dedicated funding routes under `/circles/[handle]/funding`.
