@@ -1165,14 +1165,7 @@ const ChatInput = ({
     };
 
     const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (editingMessage) {
-                handleEditSubmit();
-            } else {
-                handleSendMessage();
-            }
-        } else if (e.key === "Escape" && editingMessage) {
+        if (e.key === "Escape" && editingMessage) {
             setEditingMessage(null);
             setNewMessage("");
         }
@@ -1244,7 +1237,7 @@ const ChatInput = ({
                     onKeyDown={handleCommentKeyDown}
                     onFocus={() => setIsComposerFocused(true)}
                     onBlur={() => setIsComposerFocused(false)}
-                    placeholder="Type message and click icon or return to send..."
+                    placeholder="Type a message. Use return for a new line."
                     className="min-w-0 flex-1 rounded-[20px] bg-gray-100 text-base"
                     style={chatMentionsInputStyle}
                     allowSuggestionsAboveCursor={true}
