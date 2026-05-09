@@ -5,11 +5,13 @@ import { ChatMessage, ChatRoomDisplay, Circle } from "@/models/models";
 import {
     createConversation,
     createMessage,
+    createThreadReply,
     deleteMessage,
     fetchMessagesSince,
     fetchRecentMessages,
     fetchTopicStarters,
     findConversationById,
+    findThreadStarter,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
     listConversationsForUser,
@@ -727,15 +729,26 @@ export const sendMongoAttachmentAction = async (
             size: file.size,
         };
 
-        const doc = await createMessage({
-            conversationId,
-            senderDid: userDid,
-            body: file.name,
-            createdAt: new Date(),
-            replyToMessageId,
-            attachments: [attachment],
-            ...(threadId ? { threadId } : {}),
-        });
+        const doc = threadId
+            ? await createThreadReply(threadId, conversationId, userDid, {
+                  body: file.name,
+                  attachments: [attachment],
+                  replyToMessageId,
+              })
+            : await createMessage({
+                  conversationId,
+                  senderDid: userDid,
+                  body: file.name,
+                  createdAt: new Date(),
+                  replyToMessageId,
+                  attachments: [attachment],
+              });
+        if (!doc?._id) {
+            return {
+                success: false,
+                message: threadId ? "Topic not found for this conversation" : "Failed to send attachment",
+            };
+        }
         await sendConversationMessageNotifications({
             conversationId,
             conversation: access.conversation,
@@ -1198,6 +1211,11 @@ export const createThreadAction = async (
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!title.trim()) return { success: false, message: "Thread title is required" };
     if (!body.trim()) return { success: false, message: "Opening message is required" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    if (access.conversation?.type === "announcement") {
+        return { success: false, message: "Replies are disabled for this conversation." };
+    }
     try {
         const { createThread } = await import("@/lib/data/mongo-chat");
         const doc = await createThread(conversationId, userDid, title.trim(), body.trim(), hashtags);
@@ -1217,23 +1235,24 @@ export const sendThreadReplyAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!body.trim()) return { success: false, message: "Reply cannot be empty" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    if (access.conversation?.type === "announcement") {
+        return { success: false, message: "Replies are disabled for this conversation." };
+    }
     try {
         const { sendThreadReply } = await import("@/lib/data/mongo-chat");
         const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim());
-        if (!doc?._id) return { success: false, message: "Failed to send reply" };
+        if (!doc?._id) return { success: false, message: "Topic not found for this conversation" };
         // Fire notifications (DM and circle-contact conversations only for now)
         try {
-            const { findConversationById } = await import("@/lib/data/mongo-chat");
-            const conversation = await findConversationById(conversationId);
-            if (conversation) {
-                await sendConversationMessageNotifications({
-                    conversationId,
-                    conversation,
-                    senderDid: userDid,
-                    messageBody: body.trim(),
-                    messageId: doc._id.toString(),
-                });
-            }
+            await sendConversationMessageNotifications({
+                conversationId,
+                conversation: access.conversation,
+                senderDid: userDid,
+                messageBody: body.trim(),
+                messageId: doc._id.toString(),
+            });
         } catch (notifError) {
             console.error("sendThreadReplyAction notification error:", notifError);
         }
@@ -1246,12 +1265,17 @@ export const sendThreadReplyAction = async (
 
 export const fetchThreadRepliesAction = async (
     threadId: string,
+    conversationId: string,
 ): Promise<{ success: boolean; message?: string; replies?: any[] }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
     try {
         const { fetchThreadReplies } = await import("@/lib/data/mongo-chat");
-        const docs = await fetchThreadReplies(threadId);
+        const threadStarter = await findThreadStarter(threadId, conversationId);
+        if (!threadStarter) return { success: false, message: "Topic not found for this conversation" };
+        const docs = await fetchThreadReplies(threadId, conversationId);
         if (!docs.length) return { success: true, replies: [] };
 
         // Enrich with author info
@@ -1283,6 +1307,8 @@ export const listThreadsAction = async (
 ): Promise<{ success: boolean; message?: string; threads?: any[] }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
     try {
         const { listThreadsForConversation } = await import("@/lib/data/mongo-chat");
         const threads = await listThreadsForConversation(conversationId);

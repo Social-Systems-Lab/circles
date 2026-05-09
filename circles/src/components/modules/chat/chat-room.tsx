@@ -1401,7 +1401,7 @@ const TopicCard: React.FC<{
     const computeUnreadCount = async () => {
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
-            const result = await fetchThreadRepliesAction(messageId);
+            const result = await fetchThreadRepliesAction(messageId, conversationId);
             if (result.success && result.replies) {
                 const lastSeen = getTopicLastSeen(conversationId, messageId);
                 const unseen = result.replies.filter((r: any) => {
@@ -1419,7 +1419,7 @@ const TopicCard: React.FC<{
         setIsLoading(true);
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
-            const result = await fetchThreadRepliesAction(messageId);
+            const result = await fetchThreadRepliesAction(messageId, conversationId);
             if (result.success && result.replies) {
                 const mapped = result.replies.map((r: any) => {
                     // Convert raw reactions array [{emoji, userDid}] to keyed map {emoji: [{sender, eventId}]}

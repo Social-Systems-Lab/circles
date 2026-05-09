@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
-import { ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
+import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
 import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-sender";
@@ -790,34 +790,74 @@ export const createThread = async (
     return { ...doc, _id: result.insertedId.toString() };
 };
 
+export const findThreadStarter = async (
+    threadId: string,
+    conversationId: string,
+): Promise<ChatMessageDoc | null> => {
+    const objectId = toObjectId(threadId);
+    if (!objectId) return null;
+
+    const doc = (await ChatMessageDocs.findOne({
+        _id: objectId,
+        conversationId,
+        thread: { $exists: true },
+    })) as ChatMessageDoc | null;
+
+    if (!doc) return null;
+    return { ...doc, _id: doc._id?.toString() };
+};
+
+export const createThreadReply = async (
+    threadId: string,
+    conversationId: string,
+    senderDid: string,
+    payload: {
+        body: string;
+        attachments?: ChatAttachment[];
+        replyToMessageId?: string;
+    },
+): Promise<ChatMessageDoc | null> => {
+    const threadStarter = await findThreadStarter(threadId, conversationId);
+    if (!threadStarter) return null;
+
+    const now = new Date();
+    const doc: ChatMessageDoc = {
+        conversationId,
+        senderDid,
+        body: payload.body,
+        createdAt: now,
+        threadId,
+        ...(payload.attachments ? { attachments: payload.attachments } : {}),
+        ...(payload.replyToMessageId ? { replyToMessageId: payload.replyToMessageId } : {}),
+    };
+    const result = await ChatMessageDocs.insertOne(doc);
+    await Promise.all([
+        ChatMessageDocs.updateOne(
+            { _id: new ObjectId(threadId), conversationId, thread: { $exists: true } },
+            {
+                $set: { "thread.updatedAt": now },
+                $inc: { "thread.replyCount": 1 },
+            },
+        ),
+        ChatConversations.updateOne(
+            { _id: new ObjectId(conversationId) },
+            { $set: { updatedAt: now } },
+        ),
+    ]);
+    return { ...doc, _id: result.insertedId.toString() };
+};
+
 export const sendThreadReply = async (
     threadId: string,
     conversationId: string,
     senderDid: string,
     body: string,
 ): Promise<ChatMessageDoc | null> => {
-    const { ObjectId } = await import("mongodb");
-    const now = new Date();
-    const doc: ChatMessageDoc = {
-        conversationId,
-        senderDid,
-        body,
-        createdAt: now,
-        threadId,
-    };
-    const result = await ChatMessageDocs.insertOne(doc);
-    await ChatMessageDocs.updateOne(
-        { _id: new ObjectId(threadId) },
-        {
-            $set: { "thread.updatedAt": now },
-            $inc: { "thread.replyCount": 1 },
-        },
-    );
-    return { ...doc, _id: result.insertedId.toString() };
+    return createThreadReply(threadId, conversationId, senderDid, { body });
 };
 
-export const fetchThreadReplies = async (threadId: string): Promise<ChatMessageDoc[]> => {
-    const docs = await ChatMessageDocs.find({ threadId }).sort({ createdAt: 1 }).toArray();
+export const fetchThreadReplies = async (threadId: string, conversationId: string): Promise<ChatMessageDoc[]> => {
+    const docs = await ChatMessageDocs.find({ threadId, conversationId }).sort({ createdAt: 1 }).toArray();
     return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
 };
 
