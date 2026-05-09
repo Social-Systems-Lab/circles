@@ -1722,11 +1722,10 @@ const TopicCard: React.FC<{
                                                         value={editingReplyText}
                                                         onChange={(e) => setEditingReplyText(e.target.value)}
                                                         onKeyDown={(e) => {
-                                                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleEditSubmit(reply.id); }
                                                             if (e.key === "Escape") { setEditingReplyId(null); setEditingReplyText(""); }
                                                         }}
-                                                        rows={2}
-                                                        className="w-full resize-none rounded-lg bg-white border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                                        rows={5}
+                                                        className="min-h-[120px] w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
                                                     />
                                                     <div className="flex gap-1 justify-end">
                                                         <button onClick={() => { setEditingReplyId(null); setEditingReplyText(""); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
@@ -2473,10 +2472,7 @@ export const ChatRoomComponent: React.FC<{
                                 conversationId={roomId || ""}
                                 currentUser={user}
                                 onTopicOpen={() => {}}
-                                onTopicLoaded={() => {
-                                    if (!hasInitiallyScrolledRef.current) return;
-                                    scrollToBottom("auto");
-                                }}
+                                onTopicLoaded={() => {}}
                             />
                         )}
                         </div>
@@ -2513,10 +2509,7 @@ export const ChatRoomComponent: React.FC<{
                                     conversationId={roomId || ""}
                                     currentUser={user}
                                     onTopicOpen={() => {}}
-                                    onTopicLoaded={() => {
-                                        if (!hasInitiallyScrolledRef.current) return;
-                                        scrollToBottom("auto");
-                                    }}
+                                    onTopicLoaded={() => {}}
                                 />
                             )}
                         </div>
