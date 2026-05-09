@@ -435,6 +435,7 @@ type ChatMessagesProps = {
     currentUser?: any;
     onTopicOpen?: () => void;
     onTopicLoaded?: () => void;
+    topicNavigationRequest?: TopicNavigationRequest | null;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -455,6 +456,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     currentUser,
     onTopicOpen,
     onTopicLoaded,
+    topicNavigationRequest,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -653,6 +655,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         user={currentUser}
                                         onTopicOpen={onTopicOpen}
                                         onTopicLoaded={onTopicLoaded}
+                                        navigationRequest={topicNavigationRequest}
                                     />
                                 </div>
                             ) : null}
@@ -1335,6 +1338,12 @@ const ChatInput = ({
 
 const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
 const getTopicLastSeenKey = (conversationId: string, topicId: string) => `kamooni_topic_lastseen_${conversationId}_${topicId}`;
+const OPEN_TOPIC_EVENT = "kamooni:open-topic";
+
+type TopicNavigationRequest = {
+    topicId: string;
+    nonce: number;
+};
 
 const getOpenTopicIds = (conversationId: string): Set<string> => {
     try {
@@ -1376,9 +1385,11 @@ const TopicCard: React.FC<{
     user: any;
     onTopicOpen?: () => void;
     onTopicLoaded?: () => void;
-}> = ({ message, conversationId, user, onTopicOpen, onTopicLoaded }) => {
+    navigationRequest?: TopicNavigationRequest | null;
+}> = ({ message, conversationId, user, onTopicOpen, onTopicLoaded, navigationRequest }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
+    const cardRef = useRef<HTMLDivElement>(null);
 
     const [isOpen, setIsOpen] = useState<boolean>(() => {
         const openIds = getOpenTopicIds(conversationId);
@@ -1397,7 +1408,16 @@ const TopicCard: React.FC<{
     const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const pendingScrollIntoViewRef = useRef(false);
     const isMobile = useIsMobile();
+
+    const autoGrowReplyTextarea = () => {
+        const textarea = replyTextareaRef.current;
+        if (!textarea) return;
+        textarea.style.height = "0px";
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 224)}px`;
+    };
 
     // Load replies on mount if topic starts open
     useEffect(() => {
@@ -1418,7 +1438,9 @@ const TopicCard: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [thread?.replyCount]);
 
-    if (!thread) return null;
+    useEffect(() => {
+        autoGrowReplyTextarea();
+    }, [replyText]);
 
     const computeUnreadCount = async () => {
         try {
@@ -1487,10 +1509,47 @@ const TopicCard: React.FC<{
             console.error("Failed to load topic replies:", e);
         } finally {
             setIsLoading(false);
-            // Notify parent that topic has finished loading so it can scroll to bottom
+            if (pendingScrollIntoViewRef.current) {
+                pendingScrollIntoViewRef.current = false;
+                requestAnimationFrame(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                });
+            }
             onTopicLoaded?.();
         }
     };
+
+    useEffect(() => {
+        if (navigationRequest?.topicId !== messageId) {
+            return;
+        }
+
+        pendingScrollIntoViewRef.current = true;
+
+        if (!isOpen) {
+            setIsOpen(true);
+            const openIds = getOpenTopicIds(conversationId);
+            openIds.add(messageId);
+            setOpenTopicIds(conversationId, openIds);
+            setTopicLastSeen(conversationId, messageId, Date.now());
+            setUnreadCount(0);
+            void loadReplies();
+            onTopicOpen?.();
+            return;
+        }
+
+        if (replies.length === 0 && !isLoading) {
+            void loadReplies();
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navigationRequest?.nonce]);
+
+    if (!thread) return null;
 
     const handleToggle = () => {
         const next = !isOpen;
@@ -1620,7 +1679,7 @@ const TopicCard: React.FC<{
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
 
     return (
-        <div className={`my-2 w-full rounded-xl border shadow-sm transition-all ${isOpen ? "border-gray-300 bg-white" : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"}`}>
+        <div ref={cardRef} className={`my-2 w-full rounded-xl border shadow-sm transition-all ${isOpen ? "border-gray-300 bg-white" : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"}`}>
             {/* Header row — always visible, click to toggle */}
             <div
                 className="flex cursor-pointer items-start justify-between gap-2 p-3"
@@ -1836,11 +1895,15 @@ const TopicCard: React.FC<{
                             )}
                             <div className="flex items-end gap-1">
                                 <textarea
+                                    ref={replyTextareaRef}
                                     value={replyText}
-                                    onChange={(e) => setReplyText(e.target.value)}
+                                    onChange={(e) => {
+                                        setReplyText(e.target.value);
+                                        autoGrowReplyTextarea();
+                                    }}
                                     placeholder="Write a reply. Use return for a new line."
                                     rows={1}
-                                    className="flex-1 resize-none rounded-2xl bg-gray-50 border border-gray-200 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                    className="min-h-[44px] max-h-56 flex-1 overflow-y-auto resize-none rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
                                 />
                                 <Button
                                     variant="ghost"
@@ -2130,6 +2193,29 @@ export const ChatRoomComponent: React.FC<{
     });
 
     const hasLoadedTopicsRef = useRef(false);
+    const [topicNavigationRequest, setTopicNavigationRequest] = useState<TopicNavigationRequest | null>(null);
+
+    useEffect(() => {
+        const handleOpenTopic = (event: Event) => {
+            const customEvent = event as CustomEvent<{ conversationId?: string; topicId?: string }>;
+            const targetConversationId = customEvent.detail?.conversationId;
+            const topicId = customEvent.detail?.topicId;
+            if (!roomId || !targetConversationId || !topicId || targetConversationId !== roomId) {
+                return;
+            }
+
+            setTopicNavigationRequest({
+                topicId,
+                nonce: Date.now(),
+            });
+        };
+
+        window.addEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
+        return () => {
+            window.removeEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
+        };
+    }, [roomId]);
+
     useEffect(() => {
         if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
         hasLoadedTopicsRef.current = true;
@@ -2500,6 +2586,7 @@ export const ChatRoomComponent: React.FC<{
                                 currentUser={user}
                                 onTopicOpen={() => {}}
                                 onTopicLoaded={() => {}}
+                                topicNavigationRequest={topicNavigationRequest}
                             />
                         )}
                         </div>
@@ -2537,6 +2624,7 @@ export const ChatRoomComponent: React.FC<{
                                     currentUser={user}
                                     onTopicOpen={() => {}}
                                     onTopicLoaded={() => {}}
+                                    topicNavigationRequest={topicNavigationRequest}
                                 />
                             )}
                         </div>

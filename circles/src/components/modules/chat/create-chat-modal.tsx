@@ -185,7 +185,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                             </Button>
                         )}
                         <DialogTitle>
-                            {step === "select-type" && "New Chat"}
+                            {step === "select-type" && "New Message"}
                             {step === "select-members" && "Add Members"}
                             {step === "group-details" && "New Group"}
                         </DialogTitle>

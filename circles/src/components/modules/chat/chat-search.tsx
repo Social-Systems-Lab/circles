@@ -13,7 +13,7 @@ export function ChatSearch({ value, onChange }: ChatSearchProps) {
             <input
                 type="text"
                 className="w-full rounded border px-2 py-1"
-                placeholder="Search chats..."
+                placeholder="Search messages..."
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
             />

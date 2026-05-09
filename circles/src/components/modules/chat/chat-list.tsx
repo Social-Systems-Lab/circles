@@ -154,17 +154,17 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                         </p>
                     ) : isMobile ? (
                         <div className="flex flex-col items-center justify-center gap-4 p-4">
-                            <Image src={emptyFeed} alt="No chats yet" width={230} />
-                            <h4 className="text-lg font-semibold">No Chat Rooms</h4>
+                            <Image src={emptyFeed} alt="No messages yet" width={230} />
+                            <h4 className="text-lg font-semibold">No Messages Yet</h4>
                             <p className="max-w-md text-center text-sm text-gray-500">
-                                You haven&apos;t joined any chat rooms yet. Try discover new circles to chat in.
+                                You haven&apos;t joined any message groups yet. Try discover new circles to message in.
                             </p>
                             <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
                                 Discover
                             </Button>
                         </div>
                     ) : searchTerm?.trim() && totalChatsCount > 0 ? (
-                        "No chats found"
+                        "No messages found"
                     ) : (
                         "Messages loading..."
                     )}

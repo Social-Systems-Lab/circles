@@ -144,7 +144,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     } flex flex-col bg-white p-2`}
                 >
                     <div className="mb-4 mt-2 flex items-center justify-between pl-2 pt-0">
-                        <h2 className="text-xl font-semibold">Chats</h2>
+                        <h2 className="text-xl font-semibold">Messages</h2>
                         <Button variant="ghost" size="icon" onClick={() => setIsCreateModalOpen(true)}>
                             <SquarePen className="h-5 w-5" />
                         </Button>

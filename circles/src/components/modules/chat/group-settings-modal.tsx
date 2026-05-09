@@ -19,6 +19,8 @@ interface GroupSettingsModalProps {
     isAdmin: boolean;
 }
 
+const OPEN_TOPIC_EVENT = "kamooni:open-topic";
+
 export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: GroupSettingsModalProps) {
     const [activeTab, setActiveTab] = useState("info");
     const [canEditInfo, setCanEditInfo] = useState(false);
@@ -107,7 +109,21 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                         )}
 
                         <TabsContent value="threads" className="mt-0">
-                            <ThreadsTab chatRoom={chatRoom} isActive={activeTab === "threads"} />
+                            <ThreadsTab
+                                chatRoom={chatRoom}
+                                isActive={activeTab === "threads"}
+                                onOpenTopic={(topicId) => {
+                                    window.dispatchEvent(
+                                        new CustomEvent(OPEN_TOPIC_EVENT, {
+                                            detail: {
+                                                conversationId: chatRoom._id as string,
+                                                topicId,
+                                            },
+                                        }),
+                                    );
+                                    onOpenChange(false);
+                                }}
+                            />
                         </TabsContent>
                         <TabsContent value="media" className="mt-0">
                             <MediaTab chatRoom={chatRoom} isActive={activeTab === "media"} />
@@ -1033,7 +1049,15 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
     );
 }
 
-function ThreadsTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive: boolean }) {
+function ThreadsTab({
+    chatRoom,
+    isActive,
+    onOpenTopic,
+}: {
+    chatRoom: ChatRoomDisplay;
+    isActive: boolean;
+    onOpenTopic: (topicId: string) => void;
+}) {
     const [threads, setThreads] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -1072,23 +1096,35 @@ function ThreadsTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActiv
     return (
         <div className="space-y-3">
             {threads.map((thread) => (
-                <div key={thread._id} className="rounded-xl border border-gray-200 p-3 hover:bg-gray-50">
-                    <p className="font-semibold text-gray-900">{thread.thread?.title}</p>
-                    {thread.thread?.hashtags && thread.thread.hashtags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                            {thread.thread.hashtags.map((tag: string) => (
-                                <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
-                                    #{tag}
-                                </span>
-                            ))}
+                <button
+                    key={thread._id}
+                    type="button"
+                    className="w-full rounded-xl border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50"
+                    onClick={() => onOpenTopic(thread._id)}
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-gray-900">{thread.thread?.title}</p>
+                            {thread.thread?.hashtags && thread.thread.hashtags.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                    {thread.thread.hashtags.map((tag: string) => (
+                                        <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {thread.body ? (
+                                <p className="mt-1 text-sm text-gray-500 line-clamp-2">{thread.body}</p>
+                            ) : null}
+                            <p className="mt-2 text-xs text-gray-400">
+                                {thread.thread?.replyCount || 0} {thread.thread?.replyCount === 1 ? "reply" : "replies"} ·{" "}
+                                {new Date(thread.thread?.updatedAt || thread.createdAt).toLocaleDateString()}
+                            </p>
                         </div>
-                    )}
-                    <p className="mt-1 text-sm text-gray-500 line-clamp-2">{thread.body}</p>
-                    <p className="mt-2 text-xs text-gray-400">
-                        {thread.thread?.replyCount || 0} {thread.thread?.replyCount === 1 ? "reply" : "replies"} ·{" "}
-                        {new Date(thread.thread?.updatedAt || thread.createdAt).toLocaleDateString()}
-                    </p>
-                </div>
+                        <span className="shrink-0 text-xs font-medium text-blue-600">Open</span>
+                    </div>
+                </button>
             ))}
         </div>
     );

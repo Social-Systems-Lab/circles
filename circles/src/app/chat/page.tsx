@@ -52,14 +52,14 @@ export default function ChatPage() {
         return null;
     }
 
-    // If no chats => Show full screen "No chats" message
+    // If no messages => Show full screen empty-state message
     if (chatRooms.length <= 0) {
         return (
             <div className="flex h-screen flex-col items-center justify-center gap-4 p-4">
-                <Image src={emptyFeed} alt="No chats yet" width={300} />
-                <h4 className="text-lg font-semibold">No Chat Rooms</h4>
+                <Image src={emptyFeed} alt="No messages yet" width={300} />
+                <h4 className="text-lg font-semibold">No Messages Yet</h4>
                 <p className="max-w-md text-center text-sm text-gray-500">
-                    You haven&apos;t joined any chat rooms yet. Try discover new circles to chat in.
+                    You haven&apos;t joined any message groups yet. Try discover new circles to message in.
                 </p>
                 <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
                     Discover
@@ -70,7 +70,7 @@ export default function ChatPage() {
 
     return (
         <div className="flex h-full items-center justify-center text-gray-500">
-            {!isMobile && "Select a chat to start messaging"}
+            {!isMobile && "Select a message thread to start messaging"}
         </div>
     );
 }
