@@ -157,7 +157,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         return (
             <div className="max-w-full overflow-hidden">
                 {isReply && (
-                    <div className="mb-2 rounded-md border-l-4 border-gray-400 bg-[#f3f3f3] p-2 pl-2">
+                    <div className="mb-2 rounded-md border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 p-2 pl-2">
                         <div
                             className="text-xs font-semibold"
                             style={{ color: originalAuthorColor }}
@@ -661,7 +661,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             ) : null}
                             {!(message as any).thread && (
                             <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
-                                <div className={`${isOwnMessage ? "bg-blue-100" : "bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`} style={{ borderRadius: bubbleRadius }}>
+                                <div className={`${isOwnMessage ? "border border-sky-100 bg-sky-50" : "border border-gray-200 bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`} style={{ borderRadius: bubbleRadius }}>
                                     {isFirstInChain && !isOwnMessage && !isDirect && (
                                         <div
                                             className="text-xs font-semibold"
@@ -1682,13 +1682,13 @@ const TopicCard: React.FC<{
         <div ref={cardRef} className={`my-2 w-full rounded-xl border shadow-sm transition-all ${isOpen ? "border-gray-300 bg-white" : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"}`}>
             {/* Header row — always visible, click to toggle */}
             <div
-                className="flex cursor-pointer items-start justify-between gap-2 p-3"
+                className="flex cursor-pointer flex-col items-center gap-2 p-3 text-center"
                 onClick={handleToggle}
             >
-                <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{thread.title}</p>
+                <div className="min-w-0">
+                    <p className="font-semibold text-gray-900">{thread.title}</p>
                     {thread.hashtags && thread.hashtags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
+                        <div className="mt-1 flex flex-wrap justify-center gap-1">
                             {thread.hashtags.map((tag: string) => (
                                 <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
                                     #{tag}
@@ -1700,16 +1700,16 @@ const TopicCard: React.FC<{
                         <p className="mt-1 text-sm text-gray-600 line-clamp-2">{topicDescription}</p>
                     )}
                 </div>
-                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
                     <div className="relative">
-                        <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-blue-500" : "text-gray-400"}`} />
+                        <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-amber-500" : "text-gray-400"}`} />
                         {!isOpen && unreadCount > 0 && (
                             <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
                                 {unreadCount}
                             </span>
                         )}
                     </div>
-                    <span className="text-xs text-gray-400">
+                    <span>
                         {isOpen ? "Collapse" : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
                     </span>
                 </div>
@@ -1719,14 +1719,14 @@ const TopicCard: React.FC<{
             {isOpen && (
                 <div className="border-t border-gray-200">
                     {topicDescription && (
-                        <div className="px-3 pt-3 pb-2">
-                            <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                        <div className="px-6 pt-3 pb-2 text-center">
+                            <div className="text-sm leading-relaxed text-gray-600">
                                 {renderFormattedChatBody(topicDescription, {
                                     format: (message as any)?.format,
-                                    markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
+                                    markdownClassName: "formatted mx-auto max-w-none text-sm leading-relaxed text-gray-600",
                                 })}
                             </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
                                 <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
                             </div>
                         </div>
@@ -1798,7 +1798,7 @@ const TopicCard: React.FC<{
                                         )
                                     )}
                                     <div
-                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${isOwn ? "bg-blue-100" : "bg-white"}`}
+                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${isOwn ? "border border-sky-100 bg-sky-50" : "border border-gray-200 bg-white"}`}
                                         style={{ borderRadius: "12px" }}
                                     >
                                         <div className="px-3 py-1.5">
@@ -1873,7 +1873,7 @@ const TopicCard: React.FC<{
                         </Popover>
                         <div className="flex-1">
                             {replyToMessage && (
-                                <div className="mb-2 rounded-lg border-l-4 border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                                <div className="mb-2 rounded-lg border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
                                             <div className="font-semibold text-gray-700">
