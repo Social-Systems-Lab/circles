@@ -1561,6 +1561,28 @@ const TopicCard: React.FC<{
         }
     };
 
+    const handleDeleteReply = async (replyId: string) => {
+        if (!window.confirm("Are you sure you want to delete this reply?")) {
+            return;
+        }
+
+        try {
+            const result = await deleteMongoMessageAction(replyId);
+            if (result.success) {
+                if (replyToMessage?.id === replyId) {
+                    setReplyToMessage(null);
+                }
+                await loadReplies();
+                return;
+            }
+
+            alert(`Failed to delete reply: ${result.message}`);
+        } catch (e) {
+            console.error("Failed to delete topic reply:", e);
+            alert("Failed to delete reply. Please try again.");
+        }
+    };
+
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -1681,9 +1703,14 @@ const TopicCard: React.FC<{
                                     {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) && !isEditing && (
                                         <div className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}>
                                             {isOwn && (
-                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingReplyId(reply.id); setEditingReplyText((reply.content?.body as string) || ""); }}>
-                                                    <GrEdit className="h-4 w-4" />
-                                                </Button>
+                                                <>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingReplyId(reply.id); setEditingReplyText((reply.content?.body as string) || ""); }}>
+                                                        <GrEdit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => void handleDeleteReply(reply.id)}>
+                                                        <GrTrash className="h-4 w-4" />
+                                                    </Button>
+                                                </>
                                             )}
                                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyToMessage(reply)}>
                                                 <MdReply className="h-4 w-4" />
@@ -1813,7 +1840,7 @@ const TopicCard: React.FC<{
                                     onChange={(e) => setReplyText(e.target.value)}
                                     placeholder="Write a reply. Use return for a new line."
                                     rows={1}
-                                    className="flex-1 resize-none rounded-2xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                    className="flex-1 resize-none rounded-2xl bg-gray-50 border border-gray-200 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
                                 />
                                 <Button
                                     variant="ghost"

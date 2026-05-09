@@ -626,7 +626,30 @@ export const updateMessage = async (
 export const deleteMessage = async (messageId: string, userDid: string): Promise<boolean> => {
     const objectId = toObjectId(messageId);
     if (!objectId) return false;
+    const message = (await ChatMessageDocs.findOne({
+        _id: objectId,
+        senderDid: userDid,
+    })) as ChatMessageDoc | null;
+    if (!message) return false;
+
     const result = await ChatMessageDocs.deleteOne({ _id: objectId, senderDid: userDid });
+    if (result.deletedCount > 0 && message.threadId && message.conversationId) {
+        const threadStarter = (await ChatMessageDocs.findOne(
+            { _id: new ObjectId(message.threadId), conversationId: message.conversationId, thread: { $exists: true } },
+            { projection: { thread: 1 } },
+        )) as ChatMessageDoc | null;
+        const nextReplyCount = Math.max(((threadStarter?.thread?.replyCount as number | undefined) || 0) - 1, 0);
+
+        await ChatMessageDocs.updateOne(
+            { _id: new ObjectId(message.threadId), conversationId: message.conversationId, thread: { $exists: true } },
+            {
+                $set: {
+                    "thread.updatedAt": new Date(),
+                    "thread.replyCount": nextReplyCount,
+                },
+            },
+        );
+    }
     return result.deletedCount > 0;
 };
 
