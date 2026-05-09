@@ -852,8 +852,9 @@ export const sendThreadReply = async (
     conversationId: string,
     senderDid: string,
     body: string,
+    replyToMessageId?: string,
 ): Promise<ChatMessageDoc | null> => {
-    return createThreadReply(threadId, conversationId, senderDid, { body });
+    return createThreadReply(threadId, conversationId, senderDid, { body, replyToMessageId });
 };
 
 export const fetchThreadReplies = async (threadId: string, conversationId: string): Promise<ChatMessageDoc[]> => {

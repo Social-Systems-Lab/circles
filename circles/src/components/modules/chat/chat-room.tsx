@@ -90,6 +90,47 @@ const isNonPreviewSystemSenderMessage = (message: ChatMessage): boolean => {
     return isPlatformAnnouncementMessage(message);
 };
 
+const renderFormattedChatBody = (
+    body: string,
+    options?: {
+        format?: string;
+        shouldEmphasizeLinks?: boolean;
+        markdownClassName?: string;
+    },
+) => {
+    const isMarkdown = options?.format === "markdown";
+    const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(body);
+    const shouldEmphasizeLinks = options?.shouldEmphasizeLinks === true;
+
+    if (isMarkdown || hasMentionMarkup) {
+        return (
+            <MemoizedReactMarkdown
+                className={
+                    options?.markdownClassName ||
+                    (shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : undefined)
+                }
+                components={{
+                    a: ({ href, className, ...props }) => (
+                        <a
+                            href={href}
+                            className={
+                                isChatMentionLinkHref(href)
+                                    ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
+                                    : `${shouldEmphasizeLinks ? "text-blue-700 underline underline-offset-2 hover:text-blue-800" : ""} ${className ?? ""}`.trim()
+                            }
+                            {...props}
+                        />
+                    ),
+                }}
+            >
+                {body}
+            </MemoizedReactMarkdown>
+        );
+    }
+
+    return <RichText content={body} />;
+};
+
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     if (preview) {
         return (
@@ -111,8 +152,6 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
             ? originalMessage.substring(1, originalMessage.indexOf(">"))
             : replyTo?.author?.name || replyTo?.author?._id || "";
         const originalAuthorColor = generateColorFromString(originalAuthor);
-        const isMarkdown = (message as any)?.format === "markdown";
-        const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(replyText);
         const shouldEmphasizeLinks = isNonPreviewSystemSenderMessage(message);
 
         return (
@@ -130,28 +169,10 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                         </p>
                     </div>
                 )}
-                {isMarkdown || hasMentionMarkup ? (
-                    <MemoizedReactMarkdown
-                        className={shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : undefined}
-                        components={{
-                            a: ({ href, className, ...props }) => (
-                                <a
-                                    href={href}
-                                    className={
-                                        isChatMentionLinkHref(href)
-                                            ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
-                                            : `${shouldEmphasizeLinks ? "text-blue-700 underline underline-offset-2 hover:text-blue-800" : ""} ${className ?? ""}`.trim()
-                                    }
-                                    {...props}
-                                />
-                            ),
-                        }}
-                    >
-                        {replyText}
-                    </MemoizedReactMarkdown>
-                ) : (
-                    <RichText content={replyText} />
-                )}
+                {renderFormattedChatBody(replyText, {
+                    format: (message as any)?.format,
+                    shouldEmphasizeLinks,
+                })}
             </div>
         );
     }
@@ -1364,11 +1385,12 @@ const TopicCard: React.FC<{
         return openIds.has(messageId);
     });
 
-    const [replies, setReplies] = useState<any[]>([]);
+    const [replies, setReplies] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [replyText, setReplyText] = useState("");
     const [isSending, setIsSending] = useState(false);
     const [unreadCount, setUnreadCount] = useState<number>(0);
+    const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
     const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
@@ -1437,13 +1459,22 @@ const TopicCard: React.FC<{
 
                     return {
                         id: r._id?.toString(),
-                        content: { body: r.body },
+                        roomId: conversationId,
+                        type: "m.room.message",
+                        content: { msgtype: "m.text", body: r.body },
                         attachments: r.attachments,
                         reactions: reactionMap,
                         createdAt: r.createdAt,
                         createdBy: r.senderDid,
-                        authorName: r.authorName && !r.authorName.includes(":") && r.authorName.length < 40 ? r.authorName : null,
-                        authorPicture: r.authorPicture || null,
+                        author: {
+                            _id: r.senderDid,
+                            name:
+                                r.authorName && !r.authorName.includes(":") && r.authorName.length < 40
+                                    ? r.authorName
+                                    : r.senderDid,
+                            picture: r.authorPicture ? { url: r.authorPicture } : { url: "/placeholder.svg" },
+                        } as Circle,
+                        replyTo: r.replyTo,
                     };
                 });
                 setReplies(mapped);
@@ -1490,22 +1521,17 @@ const TopicCard: React.FC<{
                 messageId,
                 conversationId,
                 trimmed,
+                replyToMessage?.id,
             );
             if (result.success) {
                 setReplyText("");
+                setReplyToMessage(null);
                 await loadReplies();
             }
         } catch (e) {
             console.error("Failed to send topic reply:", e);
         } finally {
             setIsSending(false);
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void handleSendReply();
         }
     };
 
@@ -1551,8 +1577,12 @@ const TopicCard: React.FC<{
             formData.append("file", file);
             // Pass threadId so the attachment reply is linked to this topic
             formData.append("threadId", messageId);
+            if (replyToMessage?.id) {
+                formData.append("replyToMessageId", replyToMessage.id);
+            }
             const result = await sendAttachmentAction(formData);
             if (result.success) {
+                setReplyToMessage(null);
                 await loadReplies();
             } else {
                 alert(`Failed to send attachment: ${result.message}`);
@@ -1565,8 +1595,7 @@ const TopicCard: React.FC<{
         }
     };
 
-    // Opening message rendered as first bubble
-    const openingAuthorIsOwn = message.createdBy === user?.did;
+    const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
 
     return (
         <div className={`my-2 w-full rounded-xl border shadow-sm transition-all ${isOpen ? "border-gray-300 bg-white" : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"}`}>
@@ -1586,8 +1615,8 @@ const TopicCard: React.FC<{
                             ))}
                         </div>
                     )}
-                    {!isOpen && (
-                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">{message.content?.body || ""}</p>
+                    {!isOpen && topicDescription && (
+                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">{topicDescription}</p>
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -1608,22 +1637,19 @@ const TopicCard: React.FC<{
             {/* Expanded body */}
             {isOpen && (
                 <div className="border-t border-gray-200">
-                    {/* Opening message as first bubble */}
-                    <div className={`flex px-3 pt-3 pb-1 ${openingAuthorIsOwn ? "justify-end" : "justify-start"}`}>
-                        <div className="flex flex-col max-w-[75%]">
-                            <div className={`p-2 pr-4 shadow-md rounded-lg ${openingAuthorIsOwn ? "bg-blue-100" : "bg-white"}`}>
-                                {!openingAuthorIsOwn && message.author?.name && (
-                                    <p className="text-xs font-semibold mb-0.5" style={{ color: "#6366f1" }}>
-                                        {(message.author.name as string).trim().split(" ")[0] || message.author.handle}
-                                    </p>
-                                )}
-                                <p>{message.content?.body || ""}</p>
+                    {topicDescription && (
+                        <div className="px-3 pt-3 pb-2">
+                            <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                                {renderFormattedChatBody(topicDescription, {
+                                    format: (message as any)?.format,
+                                    markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
+                                })}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                                 <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Replies */}
                     <div className="px-3 py-2 space-y-2">
@@ -1645,7 +1671,6 @@ const TopicCard: React.FC<{
                                 replyIndex === 0 ||
                                 replies[replyIndex - 1].createdBy !== reply.createdBy ||
                                 new Date(reply.createdAt).getTime() - new Date(replies[replyIndex - 1].createdAt).getTime() > 5 * 60 * 1000;
-                            const attachments = reply.attachments as { url: string; name: string; mimeType?: string; size?: number }[] | undefined;
                             return (
                                 <div
                                     key={reply.id}
@@ -1656,11 +1681,11 @@ const TopicCard: React.FC<{
                                     {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) && !isEditing && (
                                         <div className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}>
                                             {isOwn && (
-                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingReplyId(reply.id); setEditingReplyText(reply.content?.body || ""); }}>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingReplyId(reply.id); setEditingReplyText((reply.content?.body as string) || ""); }}>
                                                     <GrEdit className="h-4 w-4" />
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyText((prev) => prev + `@${reply.authorName || ""} `)}>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyToMessage(reply)}>
                                                 <MdReply className="h-4 w-4" />
                                             </Button>
                                             <Popover open={pickerOpenForReply === reply.id} onOpenChange={(open) => setPickerOpenForReply(open ? reply.id : null)}>
@@ -1678,7 +1703,7 @@ const TopicCard: React.FC<{
                                     {!isOwn && (
                                         isLastInChain ? (
                                             <CirclePicture
-                                                circle={{ picture: reply.authorPicture ? { url: reply.authorPicture } : undefined, name: reply.authorName || "" } as any}
+                                                circle={reply.author}
                                                 size="28px"
                                                 className="self-end mb-1 flex-shrink-0"
                                             />
@@ -1709,26 +1734,7 @@ const TopicCard: React.FC<{
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <>
-                                                    <p>{reply.content?.body}</p>
-                                                    {Array.isArray(attachments) && attachments.length > 0 && (
-                                                        <div className="mt-2 space-y-1">
-                                                            {attachments.map((att, i) => {
-                                                                const isImage = att.mimeType?.startsWith("image/");
-                                                                if (isImage) {
-                                                                    return (
-                                                                        <img key={i} src={att.url} alt={att.name} className="max-h-40 rounded-lg object-contain cursor-pointer hover:opacity-90" onClick={() => window.open(att.url, "_blank")} />
-                                                                    );
-                                                                }
-                                                                return (
-                                                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-600 underline">
-                                                                        <IoDocumentText className="h-3 w-3" />{att.name}
-                                                                    </a>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </>
+                                                <MessageRenderer message={reply} />
                                             )}
                                             {isLastInChain && (
                                                 <div className="mt-0.5 text-right text-[8px] leading-none text-gray-300">
@@ -1780,23 +1786,47 @@ const TopicCard: React.FC<{
                                 <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)} />
                             </PopoverContent>
                         </Popover>
-                        <textarea
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Reply in topic..."
-                            rows={1}
-                            className="flex-1 resize-none rounded-2xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300"
-                        />
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 shrink-0 rounded-full text-blue-600 hover:bg-blue-100"
-                            onClick={() => void handleSendReply()}
-                            disabled={!replyText.trim() || isSending}
-                        >
-                            <IoSend className="h-4 w-4" />
-                        </Button>
+                        <div className="flex-1">
+                            {replyToMessage && (
+                                <div className="mb-2 rounded-lg border-l-4 border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-gray-700">
+                                                Replying to {replyToMessage.author?.name || "message"}
+                                            </div>
+                                            <div className="truncate">
+                                                {renderMentionsAsDisplayText((replyToMessage.content?.body as string) || "")}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="text-gray-400 hover:text-gray-600"
+                                            onClick={() => setReplyToMessage(null)}
+                                        >
+                                            <IoClose className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex items-end gap-1">
+                                <textarea
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    placeholder="Write a reply. Use return for a new line."
+                                    rows={1}
+                                    className="flex-1 resize-none rounded-2xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0 rounded-full text-blue-600 hover:bg-blue-100"
+                                    onClick={() => void handleSendReply()}
+                                    disabled={!replyText.trim() || isSending}
+                                >
+                                    <IoSend className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1832,7 +1862,6 @@ const NewThreadModal: React.FC<{
 
     const handleCreate = async () => {
         if (!title.trim()) { setError("Title is required"); return; }
-        if (!body.trim()) { setError("Opening message is required"); return; }
         setIsSaving(true);
         setError("");
         try {
@@ -1870,7 +1899,7 @@ const NewThreadModal: React.FC<{
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <textarea
-                        placeholder="Opening message (required)"
+                        placeholder="Topic description (optional)"
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
                         rows={3}

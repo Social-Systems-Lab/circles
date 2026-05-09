@@ -1210,7 +1210,6 @@ export const createThreadAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!title.trim()) return { success: false, message: "Thread title is required" };
-    if (!body.trim()) return { success: false, message: "Opening message is required" };
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) return { success: false, message: access.message };
     if (access.conversation?.type === "announcement") {
@@ -1231,6 +1230,7 @@ export const sendThreadReplyAction = async (
     threadId: string,
     conversationId: string,
     body: string,
+    replyToMessageId?: string,
 ): Promise<{ success: boolean; message?: string; messageId?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
@@ -1240,9 +1240,13 @@ export const sendThreadReplyAction = async (
     if (access.conversation?.type === "announcement") {
         return { success: false, message: "Replies are disabled for this conversation." };
     }
+    const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
+    if (!replyValidation.ok) {
+        return { success: false, message: replyValidation.message };
+    }
     try {
         const { sendThreadReply } = await import("@/lib/data/mongo-chat");
-        const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim());
+        const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim(), replyToMessageId);
         if (!doc?._id) return { success: false, message: "Topic not found for this conversation" };
         // Fire notifications (DM and circle-contact conversations only for now)
         try {
@@ -1282,16 +1286,38 @@ export const fetchThreadRepliesAction = async (
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
         const senderByDid = new Map(senders.map((circle) => [circle.did, circle]));
+        const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
+        const replyObjectIds = replyIds.map((id) => new ObjectId(id));
+        const replyDocs = replyObjectIds.length
+            ? ((await ChatMessageDocs.find({ _id: { $in: replyObjectIds }, conversationId }).toArray()) as any[])
+            : [];
+        const replyById = new Map(
+            replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
+        );
 
         const enriched = docs.map((doc) => {
             const circle = senderByDid.get(doc.senderDid);
             const fullName = circle?.name || "";
             const firstName = fullName.trim().split(" ")[0] || circle?.handle || doc.senderDid;
+            const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
+            const replyAuthorCircle = replyDoc ? senderByDid.get(replyDoc.senderDid) : undefined;
             return {
                 ...doc,
                 _id: doc._id?.toString(),
                 authorName: firstName,
                 authorPicture: circle?.picture?.url || null,
+                replyTo: replyDoc
+                    ? {
+                          id: replyDoc._id,
+                          author:
+                              replyAuthorCircle || {
+                                  _id: replyDoc.senderDid,
+                                  name: replyDoc.senderDid,
+                                  picture: { url: "/placeholder.svg" },
+                              },
+                          content: { msgtype: "m.text", body: replyDoc.body },
+                      }
+                    : undefined,
             };
         });
 
