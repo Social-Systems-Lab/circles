@@ -1266,16 +1266,41 @@ export async function verifyAccount(userId: string) {
     if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
 
     try {
-        const { buildVerifiedUserSet } = await import("@/lib/auth/verification");
-        await Circles.updateOne(
-            { _id: new ObjectId(userId) },
-            { $set: { ...buildVerifiedUserSet(adminUser.did!), accountStatus: "active" } },
-        );
+        const target = await Circles.findOne(
+            { _id: new ObjectId(userId), circleType: "user" },
+            { projection: { accountStatus: 1, foundingMemberNumber: 1 } },
+        ) as UserPrivate | null;
+        if (!target) return { success: false, message: "User not found" };
 
-        const target = (await Circles.findOne({ _id: new ObjectId(userId), circleType: "user" })) as UserPrivate | null;
-        if (target) {
-            await sendUserVerifiedNotification(target);
+        const { buildVerifiedUserSet } = await import("@/lib/auth/verification");
+        const updateSet: Record<string, any> = {
+            ...buildVerifiedUserSet(adminUser.did!),
+            accountStatus: "active",
+        };
+
+        // Auto-grant founding member when window is open, only on first activation.
+        // Backfill of existing active users at deploy time is the migration's responsibility
+        // (scripts/migrate-account-lifecycle.ts). If this guard is absent, re-verification
+        // of an already-active account would incorrectly consume a founding number.
+        if (target.accountStatus !== "active") {
+            const { getPlatformSettings, getNextFoundingMemberNumber } = await import("@/lib/data/platform-settings");
+            const settings = await getPlatformSettings();
+            if (settings.foundingMemberWindowOpen) {
+                const cap = settings.foundingMemberCap ?? 1000;
+                const activeCount = await Circles.countDocuments({ isFoundingMember: true, circleType: "user" });
+                if (activeCount < cap) {
+                    updateSet.isFoundingMember = true;
+                    updateSet.foundingMemberGrantedAt = new Date();
+                    if (!target.foundingMemberNumber) {
+                        updateSet.foundingMemberNumber = await getNextFoundingMemberNumber();
+                    }
+                    // Re-grant: foundingMemberNumber already exists, restore flag only
+                }
+            }
         }
+
+        await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: updateSet });
+        await sendUserVerifiedNotification(target);
 
         revalidatePath("/admin");
         return { success: true, message: "Account verified and activated" };
@@ -1321,26 +1346,35 @@ export async function grantFoundingMember(userId: string) {
             return { success: false, message: "Founding member window is not currently open" };
         }
 
-        const cap = settings.foundingMemberCap ?? 100;
+        const cap = settings.foundingMemberCap ?? 1000;
         const currentCount = await Circles.countDocuments({ isFoundingMember: true, circleType: "user" });
         if (currentCount >= cap) {
             return { success: false, message: `Founding member cap of ${cap} has been reached` };
         }
 
-        const foundingMemberNumber = currentCount + 1;
-        await Circles.updateOne(
+        const target = await Circles.findOne(
             { _id: new ObjectId(userId) },
-            {
-                $set: {
-                    isFoundingMember: true,
-                    foundingMemberNumber,
-                    foundingMemberGrantedAt: new Date(),
-                },
-            },
+            { projection: { foundingMemberNumber: 1 } },
         );
+        if (!target) return { success: false, message: "User not found" };
 
+        const now = new Date();
+        const updateSet: Record<string, any> = { isFoundingMember: true, foundingMemberGrantedAt: now };
+
+        let assignedNumber: number;
+        if (target.foundingMemberNumber) {
+            // Re-grant: user was previously revoked — restore flag, keep original number
+            assignedNumber = target.foundingMemberNumber;
+        } else {
+            // New grant: claim next number atomically from counter
+            const { getNextFoundingMemberNumber } = await import("@/lib/data/platform-settings");
+            assignedNumber = await getNextFoundingMemberNumber();
+            updateSet.foundingMemberNumber = assignedNumber;
+        }
+
+        await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: updateSet });
         revalidatePath("/admin");
-        return { success: true, message: `Granted founding member #${foundingMemberNumber}` };
+        return { success: true, message: `Granted founding member #${assignedNumber}` };
     } catch (error) {
         console.error("Error granting founding member:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to grant founding member" };
@@ -1355,9 +1389,11 @@ export async function revokeFoundingMember(userId: string) {
     if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
 
     try {
+        // Preserve foundingMemberNumber — permanent monotonic ID, never reused.
+        // Re-grant restores isFoundingMember with the same original number.
         await Circles.updateOne(
             { _id: new ObjectId(userId) },
-            { $unset: { isFoundingMember: "", foundingMemberNumber: "", foundingMemberGrantedAt: "" } },
+            { $unset: { isFoundingMember: "" } },
         );
 
         revalidatePath("/admin");

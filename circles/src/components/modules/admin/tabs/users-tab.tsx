@@ -398,9 +398,6 @@ export default function UsersTab() {
                                                 {user.isVerified && (
                                                     <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">Verified</span>
                                                 )}
-                                                {user.isMember && (
-                                                    <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-800">Member</span>
-                                                )}
                                                 {user.manualMember && (
                                                     <span className="rounded-full bg-teal-100 px-2 py-1 text-xs text-teal-800">Manual</span>
                                                 )}

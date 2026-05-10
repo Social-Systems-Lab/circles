@@ -597,6 +597,7 @@ export const platformSettingsSchema = z.object({
     foundingMemberWindowOpen: z.boolean().optional(),
     foundingMemberCap: z.number().optional(),
     signupOrderCounter: z.number().optional(),
+    foundingMemberCounter: z.number().optional(),
 });
 export type PlatformSettings = z.infer<typeof platformSettingsSchema>;
 export type DonationIntent = NonNullable<Circle["donationIntent"]>;
