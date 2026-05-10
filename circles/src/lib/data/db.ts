@@ -28,6 +28,7 @@ import {
     EventInvitation,
     Notification,
     HumanityVerification,
+    PlatformSettings,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
@@ -47,6 +48,7 @@ let client: MongoClient;
 let db: Db;
 let Circles: Collection<Circle>;
 let ServerSettingsCollection: Collection<ServerSettings>;
+let PlatformSettingsCollection: Collection<PlatformSettings>;
 let Members: Collection<Member>;
 let MembershipRequests: Collection<MembershipRequest>;
 let Feeds: Collection<Feed>;
@@ -128,6 +130,7 @@ if (process.env.IS_BUILD !== "true") {
     StripeWebhookEvents = db.collection("stripeWebhookEvents");
     UserRelationships = db.collection("userRelationships");
     HumanityVerifications = db.collection<HumanityVerification>("humanityVerifications");
+    PlatformSettingsCollection = db.collection<PlatformSettings>("platformSettings");
 }
 export async function getDb() {
   if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
@@ -175,4 +178,5 @@ export {
     StripeWebhookEvents,
     UserRelationships,
     HumanityVerifications,
+    PlatformSettingsCollection,
 };

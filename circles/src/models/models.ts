@@ -18,6 +18,7 @@ export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
 export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
+export const accountStatusSchema = z.enum(["pending_verification", "active", "rejected", "suspended"]);
 export const humanityVerificationLevelSchema = z.enum(["real_person", "met_in_real_life"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
@@ -579,10 +580,25 @@ export const circleSchema = z.object({
         })
         .optional(),
     manualMember: z.boolean().optional(),
+    // Account lifecycle
+    accountStatus: accountStatusSchema.optional(),
+    signupOrder: z.number().optional(),
+    isFoundingMember: z.boolean().optional(),
+    foundingMemberNumber: z.number().optional(),
+    foundingMemberGrantedAt: z.date().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
+
+export const platformSettingsSchema = z.object({
+    _id: z.string().optional(),
+    foundingMemberWindowOpen: z.boolean().optional(),
+    foundingMemberCap: z.number().optional(),
+    signupOrderCounter: z.number().optional(),
+});
+export type PlatformSettings = z.infer<typeof platformSettingsSchema>;
 export type DonationIntent = NonNullable<Circle["donationIntent"]>;
 
 export const verificationRequestStatusSchema = z.enum([

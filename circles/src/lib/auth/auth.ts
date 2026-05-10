@@ -126,8 +126,18 @@ export const createUserAccount = async (
         verificationTokenExpiry, // emailVerificationTokenExpiry
     );
     user.verificationStatus = "unverified";
+    user.accountStatus = "pending_verification";
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
+
+    try {
+        const { getNextSignupOrder } = await import("@/lib/data/platform-settings");
+        const order = await getNextSignupOrder();
+        await Circles.updateOne({ _id: res.insertedId }, { $set: { signupOrder: order } });
+        user.signupOrder = order;
+    } catch (error) {
+        console.error("Failed to set signupOrder:", error);
+    }
 
     // Send verification email
     const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;

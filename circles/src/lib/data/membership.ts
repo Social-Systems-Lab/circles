@@ -53,6 +53,7 @@ export async function applyStripeMembershipUpdate(input: ApplyStripeMembershipUp
     const setFields: Record<string, any> = {
         isMember: isActiveMember,
         isVerified: isActiveMember,
+        ...(isActiveMember ? { accountStatus: "active" } : {}),
         "subscription.provider": "stripe",
         "subscription.membershipState": input.membershipState,
         "subscription.membershipSource": input.membershipSource || "stripe",

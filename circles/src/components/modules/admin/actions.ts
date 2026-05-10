@@ -68,6 +68,13 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
                     circleLevel: 1,
                     publishStatus: 1,
                     verificationStatus: 1,
+                    accountStatus: 1,
+                    signupOrder: 1,
+                    isFoundingMember: 1,
+                    foundingMemberNumber: 1,
+                    foundingMemberGrantedAt: 1,
+                    verifiedAt: 1,
+                    verifiedBy: 1,
                 },
             },
         ).toArray();
@@ -1248,5 +1255,115 @@ export async function refreshSubscriptionStatus(userId: string) {
         console.error("Error refreshing subscription status:", error);
         const message = error instanceof Error ? error.message : "An unexpected error occurred.";
         return { success: false, message };
+    }
+}
+
+// Verify a user account (admin action — sets accountStatus + verificationStatus)
+export async function verifyAccount(userId: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Unauthorized" };
+    const adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
+
+    try {
+        const { buildVerifiedUserSet } = await import("@/lib/auth/verification");
+        await Circles.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { ...buildVerifiedUserSet(adminUser.did!), accountStatus: "active" } },
+        );
+
+        const target = (await Circles.findOne({ _id: new ObjectId(userId), circleType: "user" })) as UserPrivate | null;
+        if (target) {
+            await sendUserVerifiedNotification(target);
+        }
+
+        revalidatePath("/admin");
+        return { success: true, message: "Account verified and activated" };
+    } catch (error) {
+        console.error("Error verifying account:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to verify account" };
+    }
+}
+
+// Reject a user account
+export async function rejectAccount(userId: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Unauthorized" };
+    const adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
+
+    try {
+        await Circles.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { accountStatus: "rejected", isVerified: false, verificationStatus: "unverified" } },
+        );
+
+        revalidatePath("/admin");
+        return { success: true, message: "Account rejected" };
+    } catch (error) {
+        console.error("Error rejecting account:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to reject account" };
+    }
+}
+
+// Grant founding member status to a user
+export async function grantFoundingMember(userId: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Unauthorized" };
+    const adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
+
+    try {
+        const { getPlatformSettings } = await import("@/lib/data/platform-settings");
+        const settings = await getPlatformSettings();
+
+        if (!settings.foundingMemberWindowOpen) {
+            return { success: false, message: "Founding member window is not currently open" };
+        }
+
+        const cap = settings.foundingMemberCap ?? 100;
+        const currentCount = await Circles.countDocuments({ isFoundingMember: true, circleType: "user" });
+        if (currentCount >= cap) {
+            return { success: false, message: `Founding member cap of ${cap} has been reached` };
+        }
+
+        const foundingMemberNumber = currentCount + 1;
+        await Circles.updateOne(
+            { _id: new ObjectId(userId) },
+            {
+                $set: {
+                    isFoundingMember: true,
+                    foundingMemberNumber,
+                    foundingMemberGrantedAt: new Date(),
+                },
+            },
+        );
+
+        revalidatePath("/admin");
+        return { success: true, message: `Granted founding member #${foundingMemberNumber}` };
+    } catch (error) {
+        console.error("Error granting founding member:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to grant founding member" };
+    }
+}
+
+// Revoke founding member status
+export async function revokeFoundingMember(userId: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Unauthorized" };
+    const adminUser = await getUserPrivate(userDid);
+    if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
+
+    try {
+        await Circles.updateOne(
+            { _id: new ObjectId(userId) },
+            { $unset: { isFoundingMember: "", foundingMemberNumber: "", foundingMemberGrantedAt: "" } },
+        );
+
+        revalidatePath("/admin");
+        return { success: true, message: "Founding member status revoked" };
+    } catch (error) {
+        console.error("Error revoking founding member:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to revoke founding member" };
     }
 }

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle, getCircleById, getCirclePublishStatus } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
+import { hasContributorPerks } from "@/lib/auth/perks";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
 import { CircleVerificationThreadCard } from "./circle-verification-thread-card";
 import { ConvertProfileChildCircleCard } from "./convert-profile-child-circle-card";
@@ -31,7 +32,7 @@ export default async function AboutSettingsPage(props: PageProps) {
     const isDraft = publishStatus === "draft";
     const isProfileCircle = circle.circleLevel === "profile_child";
     const canConvertToIndependent =
-        user?.isMember === true &&
+        hasContributorPerks(user) &&
         circle.circleType === "circle" &&
         Boolean(circle.parentCircleId) &&
         parentCircle?.circleType === "user";

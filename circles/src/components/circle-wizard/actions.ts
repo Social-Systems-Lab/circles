@@ -18,8 +18,9 @@ import { addMember } from "@/lib/data/member";
 import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { hasContributorPerks } from "@/lib/auth/perks";
 
-const canCreateIndependentCircle = (user: UserPrivate | undefined) => Boolean(user?.isMember);
+const canCreateIndependentCircle = (user: UserPrivate | undefined) => hasContributorPerks(user);
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;

@@ -1,6 +1,7 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { hasContributorPerks } from "@/lib/auth/perks";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import { Circles } from "@/lib/data/db";
 import { countAdmins, getMember } from "@/lib/data/member";
@@ -164,7 +165,7 @@ export async function convertProfileChildCircleToIndependentAction(circleId: str
     }
 
     const user = await getUserPrivate(userDid);
-    if (!user?.isMember) {
+    if (!hasContributorPerks(user)) {
         return { success: false, message: "Only verified members can convert a circle into an independent circle" };
     }
 

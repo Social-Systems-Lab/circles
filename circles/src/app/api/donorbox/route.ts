@@ -93,6 +93,7 @@ async function handleNewSubscription(donation: any) {
             $set: {
                 isMember: true,
                 isVerified: true,
+                accountStatus: "active",
                 "subscription.donorboxPlanId": donorboxPlanId.toString(),
                 "subscription.donorboxDonationId": donorboxDonationId,
                 "subscription.donorboxDonorId": donorboxDonorId,
@@ -140,17 +141,16 @@ async function handlePlanUpdate(plan: any) {
     const wasMember = user.isMember;
     const isNowMember = status === "active";
 
-    await circles.updateOne(
-        { _id: user._id },
-        {
-            $set: {
-                isMember: isNowMember,
-                isVerified: isNowMember,
-                "subscription.status": status,
-                "subscription.lastPaymentDate": new Date(lastDonationDate),
-            },
-        },
-    );
+    const planUpdateSet: Record<string, unknown> = {
+        isMember: isNowMember,
+        isVerified: isNowMember,
+        "subscription.status": status,
+        "subscription.lastPaymentDate": new Date(lastDonationDate),
+    };
+    if (isNowMember) {
+        planUpdateSet.accountStatus = "active";
+    }
+    await circles.updateOne({ _id: user._id }, { $set: planUpdateSet });
 
     if (isNowMember && !wasMember) {
         const userPrivate = await getUserPrivate(user.did);

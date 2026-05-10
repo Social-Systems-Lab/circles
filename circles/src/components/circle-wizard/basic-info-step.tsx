@@ -50,7 +50,7 @@ export default function BasicInfoStep({
     // selectedParentCircle state is managed by CircleSelector's onCircleSelected callback
     // const [selectedParentCircle, setSelectedParentCircle] = useState<Circle | null>(null);
     const [user] = useAtom(userAtom);
-    const canCreateIndependentCircle = Boolean(user?.isMember);
+    const canCreateIndependentCircle = Boolean(user?.isMember || user?.manualMember);
     const circleLevelOptions = canCreateIndependentCircle
         ? CIRCLE_LEVEL_OPTIONS
         : CIRCLE_LEVEL_OPTIONS.filter((option) => option.value === "profile_child");
@@ -431,7 +431,7 @@ export default function BasicInfoStep({
                     </p>
                 </div>
 
-                {!user?.isMember && (
+                {!(user?.isMember || user?.manualMember) && (
                     <div className="space-y-2 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
                         <h3 className="font-semibold text-yellow-800">Become a Member!</h3>
                         <p className="text-sm text-yellow-700">
