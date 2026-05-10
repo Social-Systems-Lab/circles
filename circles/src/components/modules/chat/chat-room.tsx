@@ -661,7 +661,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             ) : null}
                             {!(message as any).thread && (
                             <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
-                                <div className={`${isOwnMessage ? "border border-sky-100 bg-sky-50" : "border border-gray-200 bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`} style={{ borderRadius: bubbleRadius }}>
+                                <div className={`${isOwnMessage ? "border border-[#DDEBB8] bg-[#F1F6DF]" : "border border-gray-200 bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`} style={{ borderRadius: bubbleRadius }}>
                                     {isFirstInChain && !isOwnMessage && !isDirect && (
                                         <div
                                             className="text-xs font-semibold"
@@ -1798,7 +1798,7 @@ const TopicCard: React.FC<{
                                         )
                                     )}
                                     <div
-                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${isOwn ? "border border-sky-100 bg-sky-50" : "border border-gray-200 bg-white"}`}
+                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${isOwn ? "border border-[#DDEBB8] bg-[#F1F6DF]" : "border border-gray-200 bg-white"}`}
                                         style={{ borderRadius: "12px" }}
                                     >
                                         <div className="px-3 py-1.5">
