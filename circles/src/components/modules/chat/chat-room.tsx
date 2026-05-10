@@ -550,6 +550,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             clearTimeout(longPressTimer.current);
         }
     };
+
+    const toggleMobileMessageActions = (messageId: string) => {
+        if (!isMobile) return;
+        setHoveredMessageId((prev) => (prev === messageId ? null : messageId));
+        setPickerOpenForMessage((prev) => (prev === messageId ? prev : null));
+    };
     const isSameDay = (date1: Date, date2: Date) => {
         return (
             date1.getFullYear() === date2.getFullYear() &&
@@ -661,7 +667,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             ) : null}
                             {!(message as any).thread && (
                             <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
-                                <div className={`${isOwnMessage ? "border border-[#DDEBB8] bg-[#F1F6DF]" : "border border-gray-200 bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`} style={{ borderRadius: bubbleRadius }}>
+                                <div
+                                    className={`${isOwnMessage ? "border border-[#DDEBB8] bg-[#F1F6DF]" : "border border-gray-200 bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`}
+                                    style={{ borderRadius: bubbleRadius }}
+                                    onClick={() => toggleMobileMessageActions(message.id)}
+                                >
                                     {isFirstInChain && !isOwnMessage && !isDirect && (
                                         <div
                                             className="text-xs font-semibold"
@@ -707,7 +717,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                 )}
 
                                 {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                    <div className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}>
+                                    <div
+                                        className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
                                         {isOwnMessage && (
                                             <>
                                                 {canEditMessage && (
@@ -1197,28 +1210,6 @@ const ChatInput = ({
 
     return (
         <div className="flex w-full flex-col">
-            {editingMessage && (
-                <div className="mb-2 flex items-center justify-between rounded-lg bg-blue-100 p-2">
-                    <div className="flex-grow overflow-hidden">
-                        <div className="font-semibold text-blue-700">Editing message</div>
-                        <p className="truncate text-sm text-blue-600">{editingMessage.content.body as string}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => { setEditingMessage(null); setNewMessage(""); }}>
-                        <IoClose className="h-5 w-5" />
-                    </Button>
-                </div>
-            )}
-            {replyToMessage && !editingMessage && (
-                <div className="mb-2 flex max-w-full items-center justify-between overflow-hidden rounded-lg bg-gray-200 p-2">
-                    <div className="flex-grow overflow-hidden">
-                        <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
-                        <p className="line-clamp-3 text-sm text-gray-600">{replyToMessage.content.body as string}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
-                        <IoClose className="h-5 w-5" />
-                    </Button>
-                </div>
-            )}
             <div className={`flex w-full items-end gap-2 ${isMobile ? "gap-1.5" : ""}`}>
                 <input
                     type="file"
@@ -1255,27 +1246,70 @@ const ChatInput = ({
                     </PopoverContent>
                 </Popover>
 
-                <MentionsInput
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={handleCommentKeyDown}
-                    onFocus={() => setIsComposerFocused(true)}
-                    onBlur={() => setIsComposerFocused(false)}
-                    placeholder="Type a message. Use return for a new line."
-                    className="min-w-0 flex-1 rounded-[20px] bg-gray-100 text-base"
-                    style={chatMentionsInputStyle}
-                    allowSuggestionsAboveCursor={true}
-                    forceSuggestionsAboveCursor={true}
-                >
-                    <Mention
-                        trigger="@"
-                        data={handleChatMentionQuery}
-                        style={defaultMentionStyle}
-                        displayTransform={(id, display) => `${display}`}
-                        renderSuggestion={renderCircleSuggestion}
-                        markup="[__display__](/circles/__id__)"
-                    />
-                </MentionsInput>
+                <div className="min-w-0 flex-1">
+                    {editingMessage && (
+                        <div className="mb-2 rounded-lg bg-blue-100 p-2">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-grow overflow-hidden">
+                                    <div className="font-semibold text-blue-700">Editing message</div>
+                                    <p className="line-clamp-2 text-sm text-blue-600">{editingMessage.content.body as string}</p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 rounded-full px-3 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
+                                        onClick={() => { setEditingMessage(null); setNewMessage(""); }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-8 rounded-full px-3"
+                                        onClick={handleSendMessage}
+                                        disabled={!newMessage.trim()}
+                                    >
+                                        Save
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {replyToMessage && !editingMessage && (
+                        <div className="mb-2 flex max-w-full items-center justify-between overflow-hidden rounded-lg bg-gray-200 p-2">
+                            <div className="flex-grow overflow-hidden">
+                                <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
+                                <p className="line-clamp-3 text-sm text-gray-600">{replyToMessage.content.body as string}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
+                                <IoClose className="h-5 w-5" />
+                            </Button>
+                        </div>
+                    )}
+                    <MentionsInput
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={handleCommentKeyDown}
+                        onFocus={() => setIsComposerFocused(true)}
+                        onBlur={() => setIsComposerFocused(false)}
+                        placeholder="Type a message. Use return for a new line."
+                        className="min-w-0 rounded-[20px] bg-gray-100 text-base"
+                        style={chatMentionsInputStyle}
+                        allowSuggestionsAboveCursor={true}
+                        forceSuggestionsAboveCursor={true}
+                    >
+                        <Mention
+                            trigger="@"
+                            data={handleChatMentionQuery}
+                            style={defaultMentionStyle}
+                            displayTransform={(id, display) => `${display}`}
+                            renderSuggestion={renderCircleSuggestion}
+                            markup="[__display__](/circles/__id__)"
+                        />
+                    </MentionsInput>
+                </div>
 
                 {isMobile && isExpandedMobileComposer && (
                     <Popover open={isMobileActionMenuOpen} onOpenChange={setIsMobileActionMenuOpen}>
@@ -1321,12 +1355,18 @@ const ChatInput = ({
                     className="hidden h-10 w-10 shrink-0 rounded-full text-blue-600 hover:bg-blue-50 md:inline-flex"
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
+                    title={editingMessage ? "Save edit" : "Send message"}
+                    aria-label={editingMessage ? "Save edit" : "Send message"}
                 >
                     <IoSend className="h-5 w-5" />
                 </Button>
                 {isMobile && (
-                    <Button onClick={handleSendMessage} className="ml-1 shrink-0 rounded-full text-white">
-                        <IoSend />
+                    <Button
+                        onClick={handleSendMessage}
+                        className="ml-1 shrink-0 rounded-full text-white"
+                        aria-label={editingMessage ? "Save edit" : "Send message"}
+                    >
+                        {editingMessage ? "Save" : <IoSend />}
                     </Button>
                 )}
             </div>
