@@ -18,7 +18,7 @@ export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
 export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
-export const accountStatusSchema = z.enum(["pending_verification", "active", "rejected", "suspended"]);
+export const accountStatusSchema = z.enum(["pending_verification", "active", "rejected"]);
 export const humanityVerificationLevelSchema = z.enum(["real_person", "met_in_real_life"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 

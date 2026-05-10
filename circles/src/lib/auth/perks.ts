@@ -1,15 +1,19 @@
 import type { Circle } from "@/models/models";
 
-type UserSubject = Pick<Circle, "isMember" | "manualMember" | "isAdmin"> | null | undefined;
+type UserSubject =
+    | Pick<Circle, "isMember" | "isFoundingMember" | "manualMember" | "accountStatus" | "isAdmin">
+    | null
+    | undefined;
 
-/** True when the user has paid contributor perks (paid subscription or admin override). */
+/** True when the user has paid contributor perks. manualMember bypasses the status guard. */
 export function hasContributorPerks(user: UserSubject): boolean {
-    return user?.isMember === true || user?.manualMember === true;
+    if (user?.manualMember === true) return true;
+    if (user?.accountStatus !== "active") return false;
+    return user?.isMember === true || user?.isFoundingMember === true;
 }
 
 /** True when the user can post and interact on the platform. */
-export function canInteract(user: UserSubject & Pick<Circle, "isVerified" | "verificationStatus">): boolean {
-    if (user?.isAdmin) return true;
-    if (hasContributorPerks(user)) return true;
-    return user?.verificationStatus === "verified" || user?.isVerified === true;
+export function canInteract(user: UserSubject): boolean {
+    if (user?.isAdmin === true) return true;
+    return user?.accountStatus === "active";
 }

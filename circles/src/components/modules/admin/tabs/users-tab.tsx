@@ -327,7 +327,6 @@ export default function UsersTab() {
                         <option value="pending_verification">Pending verification</option>
                         <option value="active">Active</option>
                         <option value="rejected">Rejected</option>
-                        <option value="suspended">Suspended</option>
                         <option value="no_status">No status (legacy)</option>
                     </select>
                 </div>
@@ -395,9 +394,6 @@ export default function UsersTab() {
                                                 )}
                                                 {(user as any).accountStatus === "rejected" && (
                                                     <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-800">Rejected</span>
-                                                )}
-                                                {(user as any).accountStatus === "suspended" && (
-                                                    <span className="rounded-full bg-orange-100 px-2 py-1 text-xs text-orange-800">Suspended</span>
                                                 )}
                                                 {user.isVerified && (
                                                     <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">Verified</span>

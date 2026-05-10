@@ -50,10 +50,18 @@ export async function getUserByEmail(email: string) {
 export async function applyStripeMembershipUpdate(input: ApplyStripeMembershipUpdateInput) {
     const isActiveMember = input.membershipState === "active" || input.membershipState === "grace_period";
 
+    const existing = await Circles.findOne(
+        { _id: new ObjectId(input.userId), circleType: "user" as any },
+        { projection: { accountStatus: 1 } },
+    );
+    const wasActive = existing?.accountStatus === "active";
+    const now = new Date();
+
     const setFields: Record<string, any> = {
         isMember: isActiveMember,
         isVerified: isActiveMember,
         ...(isActiveMember ? { accountStatus: "active" } : {}),
+        ...(isActiveMember && !wasActive ? { verifiedAt: now, verifiedBy: "system:payment" } : {}),
         "subscription.provider": "stripe",
         "subscription.membershipState": input.membershipState,
         "subscription.membershipSource": input.membershipSource || "stripe",

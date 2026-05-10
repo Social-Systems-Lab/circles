@@ -86,24 +86,27 @@ async function handleNewSubscription(donation: any) {
     console.log(`Found user ${user.name} (${user._id}) for subscription update.`);
 
     const wasMember = user.isMember;
+    const wasActive = user.accountStatus === "active";
+    const now = new Date();
 
-    await circles.updateOne(
-        { _id: user._id },
-        {
-            $set: {
-                isMember: true,
-                isVerified: true,
-                accountStatus: "active",
-                "subscription.donorboxPlanId": donorboxPlanId.toString(),
-                "subscription.donorboxDonationId": donorboxDonationId,
-                "subscription.donorboxDonorId": donorboxDonorId,
-                "subscription.status": "active",
-                "subscription.amount": parseFloat(amount),
-                "subscription.currency": currency,
-                "subscription.startDate": new Date(donationDate),
-            },
-        },
-    );
+    const newSubSet: Record<string, unknown> = {
+        isMember: true,
+        isVerified: true,
+        accountStatus: "active",
+        "subscription.donorboxPlanId": donorboxPlanId.toString(),
+        "subscription.donorboxDonationId": donorboxDonationId,
+        "subscription.donorboxDonorId": donorboxDonorId,
+        "subscription.status": "active",
+        "subscription.amount": parseFloat(amount),
+        "subscription.currency": currency,
+        "subscription.startDate": new Date(donationDate),
+    };
+    if (!wasActive) {
+        newSubSet.verifiedAt = now;
+        newSubSet.verifiedBy = "system:payment";
+    }
+
+    await circles.updateOne({ _id: user._id }, { $set: newSubSet });
 
     if (!wasMember) {
         const userPrivate = await getUserPrivate(user.did);
@@ -139,7 +142,9 @@ async function handlePlanUpdate(plan: any) {
     console.log(`Found user ${user.name} (${user._id}) for plan update.`);
 
     const wasMember = user.isMember;
+    const wasActive = user.accountStatus === "active";
     const isNowMember = status === "active";
+    const now = new Date();
 
     const planUpdateSet: Record<string, unknown> = {
         isMember: isNowMember,
@@ -149,6 +154,10 @@ async function handlePlanUpdate(plan: any) {
     };
     if (isNowMember) {
         planUpdateSet.accountStatus = "active";
+        if (!wasActive) {
+            planUpdateSet.verifiedAt = now;
+            planUpdateSet.verifiedBy = "system:payment";
+        }
     }
     await circles.updateOne({ _id: user._id }, { $set: planUpdateSet });
 
