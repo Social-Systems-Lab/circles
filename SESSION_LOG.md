@@ -10,8 +10,8 @@ Update this file at the end of every session before closing.
 
 Platform version: 0.8.15
 Live at: https://kamooni.org
-Last known stable deploy: 2026-04-28
-Last commit: 383b30e (prod) — local has unpushed session 003 changes
+Last known stable deploy: 2026-05-11 (session 006a)
+Last commit: c95b10e8 (prod)
 
 ---
 
@@ -255,6 +255,8 @@ Yes — deployed to Cleura, confirmed working on prod
 - Migration script: idempotent, dry-run by default, backfills lifecycle
   fields, assigns founding numbers in createdAt order, initialises
   counters via $set, initialises window/cap defaults via $setOnInsert
+- Late-session change: migration now skips signupOrder backfill for legacy
+  accounts (those without a pre-existing signupOrder). Rationale below.
 
 ### Decisions made
 - Founding-member status is admin-only operational metadata: invisible to
@@ -274,6 +276,9 @@ Yes — deployed to Cleura, confirmed working on prod
   auto-grant founding — founding remains admin-only
 - KYC pipeline will slot into the existing verificationStatus field when
   needed; no structural change required from this session
+- signupOrder is meant for the post-006a signup flow only. Legacy accounts
+  that predate the flow are NOT backfilled with signupOrder values. They
+  get accountStatus and (if verified) founding numbers, nothing else.
 
 ### Files changed
 - circles/src/models/models.ts
@@ -316,12 +321,42 @@ Yes — deployed to Cleura, confirmed working on prod
 - Stale Next.js bundle nearly led to misdiagnosing a fixed bug as still
   broken. After any session 006a-style refactor, `rm -rf .next && bun
   dev` before smoke-testing.
+- Cleura production has zero users with `createdAt` set. Migration sorts
+  by `_id` instead, which still gives chronological order (ObjectId has
+  embedded creation timestamp). Future signups should explicitly write
+  `createdAt` for clarity.
+- Production container does not include `scripts/` directory and uses
+  Node + npm, not Bun. Migration had to be copied in via `docker cp` and
+  run via `npx --yes tsx`. For future migrations, either bake the script
+  into the image or document this workaround.
+- Cleura .env has the same MONGO_ROOT_USERNAME / MONGO_ROOT_PASSWORD vs
+  MONGODB_URI mismatch as local — values diverge. Risk if Mongo container
+  ever re-inits from those env vars. Cleanup candidate.
+
+### Cleura deployment notes (2026-05-11)
+- Pulled main on Cleura at c95b10e8.
+- Pre-migration state: 184 user docs (down from ~202 after admin cleanup
+  of test accounts), 0 with accountStatus, 0 with isFoundingMember,
+  no platformSettings doc.
+- Migration applied: 184 users updated. 112 became active + founding
+  (#1 through #112), 72 set to pending_verification, 0 signupOrders
+  assigned (legacy-skip rule fired correctly).
+- platformSettings post-migration: foundingMemberCap=1000,
+  foundingMemberCounter=112, foundingMemberWindowOpen=true,
+  signupOrderCounter not written.
+- Docker rebuild: docker compose up -d --build circles nginx cron.
+  Build took ~3.5 min. All services healthy after.
+- Smoke test: /admin renders correctly with new badges. New signup +
+  Verify and Approve-via-Verification-Requests flows tested separately
+  on local prior to deploy; not re-tested on Cleura but architecturally
+  equivalent.
 
 ### Deployed?
-[Fill in once Cleura deployment is done]
-Local migration applied and verified. Cleura deployment pending — needs
-a fresh dry-run against Cleura DB before --apply, plus manual review of
-any test/inactive accounts that shouldn't claim founding numbers.
+Yes — 2026-05-11, commit c95b10e8.
+Cleura migration applied successfully: 184 users processed, 112 active
+founding members assigned, 72 pending. platformSettings initialised
+with window open at cap 1000. App container rebuilt and serving new
+code; /admin verified.
 
 ### Known issues / future tasks
 - **Interaction-gate audit needed.** Several features still check
@@ -338,9 +373,16 @@ any test/inactive accounts that shouldn't claim founding numbers.
   UI callers anymore; can be deleted in a cleanup pass.
 - **Duplicate `approveVerificationRequest`** in admin/actions.ts:889
   is unused; can be deleted in the same cleanup pass.
+- **Security cleanup session needed.** Production credentials shared in
+  a chat session during deployment; rotate MongoDB admin password and
+  any other secrets handled inline. Also audit .env files for the
+  USERNAME/PASSWORD vs URI mismatch on both local and Cleura.
+- **Migration tooling.** Future migration scripts need a reliable
+  production execution path (current workaround was docker cp + npx
+  tsx). Consider baking scripts into the image, or a separate
+  migration-runner container.
 
 ### What's next
-- 006a Cleura deployment (next)
 - Session 006b: invite credits + accountInvites collection +
   queue-skip flow (priority verification for invitees)
 - Session 007: UI string relabelling Member → Supporter, plus admin
@@ -350,3 +392,6 @@ any test/inactive accounts that shouldn't claim founding numbers.
   map, archive after 1 year)
 - Session 010 (proposed): Interaction gate audit + contact-restriction
   privacy setting (only contributing members can contact me)
+- Security cleanup session (rotate secrets, .env consolidation)
+- Likely some urgent UX fixes between 006a and 006b as real users
+  encounter the new flow
