@@ -191,7 +191,12 @@ export function DiscussionForm({
     const [showPollCreator, setShowPollCreator] = useState(false);
     const [selectedCircleId, setSelectedCircleId] = useState<string | null>(initialSelectedCircleId || null);
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
-    const [images, setImages] = useState<ImageItem[]>([]);
+    const [images, setImages] = useState<ImageItem[]>(
+        initialPost?.media?.map((m) => ({
+            preview: m.fileInfo.url,
+            media: m,
+        })) || [],
+    );
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
@@ -566,7 +571,10 @@ export function DiscussionForm({
                     });
                     return;
                 }
-                const circleHandle = selectedCircle?.handle || initialPost?.circle?.handle;
+                const circleHandle =
+                    initialPost?.circle?.handle ||
+                    selectedCircle?.handle ||
+                    (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
                 if (circleHandle) {
                     window.location.href = `/circles/${circleHandle}/discussions/${initialPost!._id}`;
                 } else {
@@ -584,16 +592,15 @@ export function DiscussionForm({
                     });
                     return;
                 } else {
+                    const circleHandle =
+                        selectedCircle?.handle ||
+                        (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
                     // navigate to the newly created forum post
-                    if (response.post?._id) {
-                        if (selectedCircle?.handle) {
-                            window.location.href = `/circles/${selectedCircle.handle}/discussions/${response.post._id}`;
-                        } else {
-                            window.location.reload();
-                        }
+                    if (response.post?._id && circleHandle) {
+                        window.location.href = `/circles/${circleHandle}/discussions/${response.post._id}`;
                     } else {
-                        if (selectedCircle?.handle) {
-                            window.location.href = `/circles/${selectedCircle.handle}/discussions`;
+                        if (circleHandle) {
+                            window.location.href = `/circles/${circleHandle}/discussions`;
                         } else {
                             window.location.reload();
                         }
@@ -618,8 +625,8 @@ export function DiscussionForm({
     }
 
     return (
-        <div {...getRootProps()} className="flex h-full flex-col">
-            <div className="flex flex-grow flex-col overflow-hidden p-4">
+        <div {...getRootProps()} className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-0 flex-grow flex-col overflow-hidden p-4">
                 {/* Header section */}
                 <div className="mb-[5px] flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -664,7 +671,7 @@ export function DiscussionForm({
                 {/* Conditional Content Area */}
                 {selectedCircleId && (
                     <>
-                        <div className="flex-grow overflow-y-auto pr-2">
+                        <div className="min-h-0 flex-grow overflow-y-auto pr-2">
                             {!user.isVerified && (
                                 <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                                     <div className="flex items-center">
@@ -898,7 +905,7 @@ export function DiscussionForm({
                                 </div>
                             )}
                         </div>
-                        <div className="mt-auto flex items-center justify-between border-t pt-4">
+                        <div className="mt-auto flex shrink-0 items-center justify-between border-t pt-4">
                             <div className="flex space-x-2">
                                 <div>
                                     <input {...getInputProps()} className="hidden" id="image-picker-input" />

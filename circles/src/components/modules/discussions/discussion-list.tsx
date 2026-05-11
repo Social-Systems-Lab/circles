@@ -906,7 +906,7 @@ export const DiscussionItem = ({
                                                 </DropdownMenuItem>
                                             </DialogTrigger>
                                             <DialogContent
-                                                className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                                                className="h-[90vh] w-[95vw] max-w-3xl overflow-hidden rounded-[15px] p-0"
                                                 onInteractOutside={(e) => {
                                                     e.preventDefault();
                                                 }}
