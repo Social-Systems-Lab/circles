@@ -158,7 +158,10 @@ async function main() {
         if (Object.keys(counterPatch).length > 0) {
             await platformSettings.updateOne(
                 { _id: "singleton" as any },
-                { $set: counterPatch },
+                {
+                    $set: counterPatch,
+                    $setOnInsert: { foundingMemberWindowOpen: true, foundingMemberCap: 1000 },
+                },
                 { upsert: true },
             );
         }

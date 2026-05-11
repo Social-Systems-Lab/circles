@@ -14,15 +14,14 @@ const SETTINGS_ID = "singleton";
 
 export async function getPlatformSettings(): Promise<PlatformSettings> {
     const doc = await PlatformSettingsCollection.findOne({ _id: SETTINGS_ID as any });
-    if (!doc) {
-        return {
-            foundingMemberWindowOpen: true,
-            foundingMemberCap: 1000,
-            signupOrderCounter: 0,
-            foundingMemberCounter: 0,
-        };
-    }
-    return { ...doc, _id: doc._id?.toString() };
+    return {
+        foundingMemberWindowOpen: true,
+        foundingMemberCap: 1000,
+        signupOrderCounter: 0,
+        foundingMemberCounter: 0,
+        ...doc,
+        _id: doc?._id?.toString(),
+    };
 }
 
 export async function updatePlatformSettings(patch: Partial<Omit<PlatformSettings, "_id">>): Promise<void> {

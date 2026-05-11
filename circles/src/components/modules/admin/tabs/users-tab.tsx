@@ -4,7 +4,6 @@ import { useState, useEffect, useTransition } from "react"; // Added useTransiti
 import {
     getEntitiesByType,
     deleteEntity,
-    toggleUserVerification,
     toggleManualMembership,
     refreshSubscriptionStatus,
     verifyAccount,
@@ -12,10 +11,11 @@ import {
     grantFoundingMember,
     revokeFoundingMember,
 } from "../actions";
+// toggleUserVerification removed from UI — superseded by verifyAccount. Action retained in actions.ts for future cleanup.
 import { initiatePasswordReset } from "@/lib/auth/actions";
 import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { Trash2, RefreshCw, Search, KeyRound, CheckCircle, XCircle, UserCheck, UserX, RefreshCcw, Star, StarOff, ShieldCheck, ShieldX } from "lucide-react";
+import { Trash2, RefreshCw, Search, KeyRound, UserCheck, UserX, RefreshCcw, Star, StarOff, ShieldCheck, ShieldX } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -53,7 +53,6 @@ export default function UsersTab() {
     const [resetLink, setResetLink] = useState(""); // State to store the reset link
     const [resettingUser, setResettingUser] = useState<Circle | null>(null); // State to store user being reset
     const [isResetting, startResetTransition] = useTransition();
-    const [isVerifying, startVerifyTransition] = useTransition();
     const [isTogglingMember, startMemberToggleTransition] = useTransition();
     const [isRefreshingSub, startRefreshingSubTransition] = useTransition();
     const [isVerifyingAccount, startVerifyAccountTransition] = useTransition();
@@ -118,37 +117,6 @@ export default function UsersTab() {
             setDeleteDialogOpen(false);
             setUserToDelete(null);
         }
-    };
-
-    const handleToggleVerification = async (user: Circle) => {
-        if (!user._id) return;
-
-        startVerifyTransition(async () => {
-            try {
-                const result = await toggleUserVerification(user._id, !user.isVerified);
-
-                if (result.success) {
-                    toast({
-                        title: "Success",
-                        description: result.message,
-                    });
-                    // Update local state
-                    setUsers(users.map((u) => (u._id === user._id ? { ...u, isVerified: !u.isVerified } : u)));
-                } else {
-                    toast({
-                        title: "Error",
-                        description: result.message,
-                        variant: "destructive",
-                    });
-                }
-            } catch (error) {
-                toast({
-                    title: "Error",
-                    description: "Failed to toggle user verification",
-                    variant: "destructive",
-                });
-            }
-        });
     };
 
     const handleToggleMember = async (user: Circle) => {
@@ -426,22 +394,6 @@ export default function UsersTab() {
                                                     <RefreshCw className="h-4 w-4 animate-spin" />
                                                 ) : (
                                                     <KeyRound className="h-4 w-4 text-blue-500" />
-                                                )}
-                                            </Button>
-                                            {/* Verify Button */}
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleToggleVerification(user)}
-                                                disabled={isVerifying}
-                                                title={user.isVerified ? "Unverify User" : "Verify User"}
-                                            >
-                                                {isVerifying ? (
-                                                    <RefreshCw className="h-4 w-4 animate-spin" />
-                                                ) : user.isVerified ? (
-                                                    <XCircle className="h-4 w-4 text-yellow-500" />
-                                                ) : (
-                                                    <CheckCircle className="h-4 w-4 text-green-500" />
                                                 )}
                                             </Button>
                                             {/* Manual Member Button */}
