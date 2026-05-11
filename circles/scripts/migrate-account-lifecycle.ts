@@ -6,9 +6,6 @@
  *
  * Fields written per user (sorted by _id = createdAt):
  *
- *   ALL users without signupOrder:
- *     signupOrder: sequential from 1 (or max_existing + 1 for idempotency)
- *
  *   Users without accountStatus:
  *     "active"               → isMember || verificationStatus === "verified" || isVerified
  *     "pending_verification" → otherwise
@@ -87,14 +84,12 @@ async function main() {
     });
     let activeFoundingCount = existingActiveFounderCount;
 
+    const legacyWithoutSignupOrder = allUsers.filter((u) => !u.signupOrder).length;
+
     const plans: Array<{ user: any; fields: Record<string, unknown> }> = [];
 
     for (const user of allUsers) {
         const fields: Record<string, unknown> = {};
-
-        if (!user.signupOrder) {
-            fields.signupOrder = nextSignupOrder++;
-        }
 
         if (!user.accountStatus) {
             const isActive =
@@ -175,6 +170,8 @@ async function main() {
     ).length;
     const foundingCount = plans.filter((p) => p.fields.isFoundingMember).length;
     const skipped = allUsers.length - plans.length;
+
+    console.log(`Skipped signupOrder backfill for ${legacyWithoutSignupOrder} legacy users.\n`);
 
     console.log(`Summary (${mode}):`);
     console.log(`  users updated:         ${plans.length}`);
