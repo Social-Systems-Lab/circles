@@ -304,10 +304,106 @@ export default function AboutPage({
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
                         {hasSidebarContent && (
                     <div className="md:col-span-1">
-                        <div className="space-y-6">
+                        <div className="flex flex-col gap-6">
+                            {/* TODO(stage 2): insert an existing circle sign-up/tasks panel here when this page already loads it safely. */}
+                            {shouldShowFundingPanel && (
+                                <div className="md:order-1">
+                                    <FundingPanel
+                                        circleHandle={circle.handle || ""}
+                                        asks={fundingPreviewAsks}
+                                        canCreate={canCreateFundingAsk}
+                                        visibility={fundingPanelVisibility}
+                                    />
+                                </div>
+                            )}
+
+                            {hasNeedsMatchingDetails && (
+                                <div
+                                    className={`md:order-2 flex flex-col bg-white p-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Needs / Matching
+                                    </div>
+
+                                    {visibleNeeds.length > 0 && (
+                                        <div className={hasMatchingOfferNeeds ? "mb-6 w-full" : "w-full"}>
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Needs
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleNeeds.map((handle, index) => {
+                                                    return renderSkillPopoverBadge(
+                                                        handle,
+                                                        `${handle}-${index}`,
+                                                        "need",
+                                                    );
+                                                })}
+                                                {hasMoreNeeds && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isNeedsExpanded}
+                                                        aria-label={
+                                                            isNeedsExpanded
+                                                                ? "Show fewer needs"
+                                                                : `Show ${remainingNeedsCount} more needs`
+                                                        }
+                                                        onClick={() => setIsNeedsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsNeedsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {hasMatchingOfferNeeds && (
+                                        <div className="w-full rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-3">
+                                            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8f5a2a]">
+                                                You can help here
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {matchingOfferNeedHandles.map((handle, index) => {
+                                                    return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
+                                                })}
+                                            </div>
+                                            {canContactCircle && (
+                                                <div className="mt-3 flex flex-col items-center">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        className="rounded-full border border-[#c8793a] bg-transparent text-[#c8793a] hover:bg-[#f3e4d6] hover:text-[#b86c31]"
+                                                        onClick={() => openContactDialog("offer_help")}
+                                                    >
+                                                        Offer Help
+                                                    </Button>
+                                                    <button
+                                                        type="button"
+                                                        className="mt-2 text-xs text-[#8f5a2a] underline-offset-2 hover:underline"
+                                                        onClick={() => openContactDialog("ask_question")}
+                                                    >
+                                                        Not sure yet? Ask a question first.
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {hasOverviewDetails && (
                                 <div
-                                    className={`flex flex-col bg-white p-6 ${
+                                    className={`md:order-3 flex flex-col bg-white p-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -456,7 +552,7 @@ export default function AboutPage({
 
                             {shouldShowVerifiedContributions && (
                                 <div
-                                    className={`bg-white p-6 ${
+                                    className={`md:order-4 bg-white p-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -468,12 +564,14 @@ export default function AboutPage({
                             )}
 
                             {shouldShowProofOfHumanity && proofOfHumanitySummary && (
-                                <ProofOfHumanityCard circle={circle} summary={proofOfHumanitySummary} />
+                                <div className="md:order-5">
+                                    <ProofOfHumanityCard circle={circle} summary={proofOfHumanitySummary} />
+                                </div>
                             )}
 
                             {hasAdminDetails && (
                                 <div
-                                    className={`flex flex-col bg-white p-6 ${
+                                    className={`md:order-6 flex flex-col bg-white p-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -522,99 +620,6 @@ export default function AboutPage({
                                         </div>
                                     </TooltipProvider>
                                 </div>
-                            )}
-
-                            {hasNeedsMatchingDetails && (
-                                <div
-                                    className={`flex flex-col bg-white p-6 ${
-                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
-                                    }`}
-                                >
-                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                        Needs / Matching
-                                    </div>
-
-                                    {visibleNeeds.length > 0 && (
-                                        <div className={hasMatchingOfferNeeds ? "mb-6 w-full" : "w-full"}>
-                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                                Needs
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {visibleNeeds.map((handle, index) => {
-                                                    return renderSkillPopoverBadge(
-                                                        handle,
-                                                        `${handle}-${index}`,
-                                                        "need",
-                                                    );
-                                                })}
-                                                {hasMoreNeeds && (
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
-                                                        role="button"
-                                                        tabIndex={0}
-                                                        aria-expanded={isNeedsExpanded}
-                                                        aria-label={
-                                                            isNeedsExpanded
-                                                                ? "Show fewer needs"
-                                                                : `Show ${remainingNeedsCount} more needs`
-                                                        }
-                                                        onClick={() => setIsNeedsExpanded((prev) => !prev)}
-                                                        onKeyDown={(event) => {
-                                                            if (event.key === "Enter" || event.key === " ") {
-                                                                event.preventDefault();
-                                                                setIsNeedsExpanded((prev) => !prev);
-                                                            }
-                                                        }}
-                                                    >
-                                                        {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {hasMatchingOfferNeeds && (
-                                        <div className="w-full rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-3">
-                                            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8f5a2a]">
-                                                You can help here
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {matchingOfferNeedHandles.map((handle, index) => {
-                                                    return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
-                                                })}
-                                            </div>
-                                            {canContactCircle && (
-                                                <div className="mt-3 flex flex-col items-center">
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        className="rounded-full border border-[#c8793a] bg-transparent text-[#c8793a] hover:bg-[#f3e4d6] hover:text-[#b86c31]"
-                                                        onClick={() => openContactDialog("offer_help")}
-                                                    >
-                                                        Offer Help
-                                                    </Button>
-                                                    <button
-                                                        type="button"
-                                                        className="mt-2 text-xs text-[#8f5a2a] underline-offset-2 hover:underline"
-                                                        onClick={() => openContactDialog("ask_question")}
-                                                    >
-                                                        Not sure yet? Ask a question first.
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {shouldShowFundingPanel && (
-                                <FundingPanel
-                                    circleHandle={circle.handle || ""}
-                                    asks={fundingPreviewAsks}
-                                    canCreate={canCreateFundingAsk}
-                                    visibility={fundingPanelVisibility}
-                                />
                             )}
                         </div>
                     </div>
