@@ -1,5 +1,5 @@
-import { buildVerifiedUserSet } from "@/lib/auth/verification";
 import { Circles, db } from "@/lib/data/db";
+import { activateUserAccount } from "@/lib/data/account-lifecycle";
 import { sendEmail } from "@/lib/data/email";
 import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
@@ -514,7 +514,10 @@ export async function approveVerificationRequest(params: {
             name: circle.name ?? "Untitled circle",
         };
     } else {
-        await Circles.updateOne({ did: request.userDid }, { $set: buildVerifiedUserSet(admin.did!) });
+        if (!applicant?._id) {
+            throw new Error("Applicant user record not found.");
+        }
+        await activateUserAccount(applicant._id as string, admin.did!);
     }
 
     await verificationRequestsCollection().updateOne(

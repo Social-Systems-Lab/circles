@@ -32,6 +32,7 @@ import {
     updatePlatformBroadcastMessage,
 } from "@/lib/data/platform-broadcasts";
 import { buildUnverifiedUserUpdate, buildVerifiedUserSet } from "@/lib/auth/verification";
+import { activateUserAccount } from "@/lib/data/account-lifecycle";
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -1266,44 +1267,23 @@ export async function verifyAccount(userId: string) {
     if (!adminUser.isAdmin) return { success: false, message: "Unauthorized" };
 
     try {
-        const target = await Circles.findOne(
-            { _id: new ObjectId(userId), circleType: "user" },
-            { projection: { accountStatus: 1, foundingMemberNumber: 1 } },
-        ) as UserPrivate | null;
-        if (!target) return { success: false, message: "User not found" };
+        const { foundingNumber } = await activateUserAccount(userId, adminUser.did!);
 
-        const { buildVerifiedUserSet } = await import("@/lib/auth/verification");
-        const updateSet: Record<string, any> = {
-            ...buildVerifiedUserSet(adminUser.did!),
-            accountStatus: "active",
-        };
-
-        // Auto-grant founding member when window is open, only on first activation.
-        // Backfill of existing active users at deploy time is the migration's responsibility
-        // (scripts/migrate-account-lifecycle.ts). If this guard is absent, re-verification
-        // of an already-active account would incorrectly consume a founding number.
-        if (target.accountStatus !== "active") {
-            const { getPlatformSettings, getNextFoundingMemberNumber } = await import("@/lib/data/platform-settings");
-            const settings = await getPlatformSettings();
-            if (settings.foundingMemberWindowOpen) {
-                const cap = settings.foundingMemberCap ?? 1000;
-                const activeCount = await Circles.countDocuments({ isFoundingMember: true, circleType: "user" });
-                if (activeCount < cap) {
-                    updateSet.isFoundingMember = true;
-                    updateSet.foundingMemberGrantedAt = new Date();
-                    if (!target.foundingMemberNumber) {
-                        updateSet.foundingMemberNumber = await getNextFoundingMemberNumber();
-                    }
-                    // Re-grant: foundingMemberNumber already exists, restore flag only
-                }
-            }
+        const target = (await Circles.findOne({
+            _id: new ObjectId(userId),
+            circleType: "user",
+        })) as UserPrivate | null;
+        if (target) {
+            await sendUserVerifiedNotification(target);
         }
 
-        await Circles.updateOne({ _id: new ObjectId(userId) }, { $set: updateSet });
-        await sendUserVerifiedNotification(target);
-
         revalidatePath("/admin");
-        return { success: true, message: "Account verified and activated" };
+        return {
+            success: true,
+            message: foundingNumber
+                ? `Account verified and activated — founding #${foundingNumber}`
+                : "Account verified and activated",
+        };
     } catch (error) {
         console.error("Error verifying account:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to verify account" };
