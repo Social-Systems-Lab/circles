@@ -224,3 +224,129 @@ Yes — deployed to Cleura, confirmed working on prod
 - LiveKit integration
 - Altruistic Wallet feature work
 
+## Session 006a — 2026-05-10 to 2026-05-11
+
+### What we did
+- Added platform account lifecycle: `accountStatus` (pending_verification |
+  active | rejected), `signupOrder`, `verifiedAt`, `verifiedBy`
+- Added Founding member fields: `isFoundingMember`, `foundingMemberNumber`,
+  `foundingMemberGrantedAt`
+- New `platformSettings` collection with `foundingMemberWindowOpen` (default
+  true), `foundingMemberCap` (default 1000), and atomic counters
+  `signupOrderCounter` and `foundingMemberCounter`
+- Signup flow assigns pending status + signupOrder atomically (race-safe
+  via $inc on counter doc)
+- New admin actions: verifyAccount, rejectAccount, grantFoundingMember,
+  revokeFoundingMember
+- New `lib/data/account-lifecycle.ts` with shared `activateUserAccount`
+  helper — used by both Users-tab Verify and Verification Requests Approve
+  flows so they stay in lock-step
+- Admin users tab: status filter dropdown, accountStatus / signupOrder /
+  founding-member badges, Verify / Reject / Grant Founding / Revoke
+  Founding action buttons
+- Removed legacy "Verify User" button — superseded by Verify Account
+- Stripe + Donorbox webhooks: auto-activate pending accounts on payment;
+  set verifiedBy: "system:payment" when transitioning from pending to
+  active; do not overwrite on renewals
+- New `lib/auth/perks.ts`: hasContributorPerks (active + isMember OR
+  isFoundingMember OR manualMember), canInteract (active OR admin),
+  canSeeFoundingBadge (self-only visibility rule)
+- Permission gates in 4 files now route through hasContributorPerks
+- Migration script: idempotent, dry-run by default, backfills lifecycle
+  fields, assigns founding numbers in createdAt order, initialises
+  counters via $set, initialises window/cap defaults via $setOnInsert
+
+### Decisions made
+- Founding-member status is admin-only operational metadata: invisible to
+  other users; founding member sees their own badge only as a quiet
+  reminder that perks depend on staying active
+- "Supporter" is the only user-visible perk tier; paid, founding, and
+  manual-override users all render identically (relabel pass scheduled
+  for session 007)
+- `manualMember` bypasses the accountStatus guard in hasContributorPerks
+  (existing admin override; semantics preserved)
+- Founding number issuance uses atomic $inc counter; cap check uses live
+  countDocuments — different semantics on purpose (numbers never reused,
+  revocations free up slots for future grants)
+- Re-grant after revoke restores the original foundingMemberNumber; does
+  not claim a new one
+- Payment paths auto-verify (verifiedBy: "system:payment") but do not
+  auto-grant founding — founding remains admin-only
+- KYC pipeline will slot into the existing verificationStatus field when
+  needed; no structural change required from this session
+
+### Files changed
+- circles/src/models/models.ts
+- circles/src/lib/data/platform-settings.ts (new)
+- circles/src/lib/data/account-lifecycle.ts (new — shared activation)
+- circles/src/lib/auth/auth.ts
+- circles/src/lib/auth/perks.ts (new)
+- circles/src/components/modules/admin/actions.ts
+- circles/src/components/modules/admin/tabs/users-tab.tsx
+- circles/src/lib/data/verification-workflow.ts (Approve flow refactor)
+- circles/src/app/api/stripe/webhook/route.ts
+- circles/src/app/api/donorbox/route.ts
+- circles/src/lib/data/membership.ts
+- circles/src/app/circles/[handle]/settings/about/page.tsx
+- circles/src/app/circles/[handle]/settings/about/actions.ts
+- circles/src/components/circle-wizard/actions.ts
+- circles/src/components/circle-wizard/basic-info-step.tsx
+- circles/scripts/migrate-account-lifecycle.ts (new)
+
+### Bugs found and fixed mid-session
+- Partial settings document caused `getPlatformSettings()` to return
+  `foundingMemberWindowOpen: undefined` (whole-doc default never fired).
+  Fixed with per-field fallback and `$setOnInsert` in migration.
+- Two verify buttons on admin row ("Verify User" legacy and "Verify
+  Account" new) — confusing and dangerous. Legacy button removed.
+- Verification Requests "Approve" called a separate code path that only
+  set isVerified, not accountStatus / founding. Fixed by extracting
+  `activateUserAccount` used by both paths.
+
+### Surprises and notes for future readers
+- Two functions named `approveVerificationRequest` exist in the codebase
+  (admin/actions.ts:889 and lib/data/verification-workflow.ts). Different
+  signatures, only the workflow one is called. The actions.ts version is
+  unused — candidate for deletion in a future cleanup session.
+- Local dev DB was lost mid-session after a Mac freeze and Docker
+  restart: `.env.local` has MONGO_ROOT_USERNAME/PASSWORD empty while
+  MONGODB_URI has credentials inline. docker-compose reads the empty
+  vars on container init, so a fresh-volume init goes wrong. Tighten in
+  a future cleanup by populating both or switching to one source.
+- Stale Next.js bundle nearly led to misdiagnosing a fixed bug as still
+  broken. After any session 006a-style refactor, `rm -rf .next && bun
+  dev` before smoke-testing.
+
+### Deployed?
+[Fill in once Cleura deployment is done]
+Local migration applied and verified. Cleura deployment pending — needs
+a fresh dry-run against Cleura DB before --apply, plus manual review of
+any test/inactive accounts that shouldn't claim founding numbers.
+
+### Known issues / future tasks
+- **Interaction-gate audit needed.** Several features still check
+  `isVerified` / `verificationStatus === "verified"` directly rather
+  than `canInteract` or `hasContributorPerks`. Pending users can
+  currently trigger some features they shouldn't (e.g. "Verify Human"
+  flow surfaced during testing). Needs a dedicated audit pass.
+- **Admin documentation panel needed.** Current admin row has many
+  badges (Admin, Active, Verified, Manual, Founder, signupOrder) and
+  many buttons. New admins won't know what each does. Plan: collapsible
+  help panel above the user list, scheduled for session 007 alongside
+  the Member → Supporter terminology rename.
+- **Legacy `toggleUserVerification` action** in admin/actions.ts has no
+  UI callers anymore; can be deleted in a cleanup pass.
+- **Duplicate `approveVerificationRequest`** in admin/actions.ts:889
+  is unused; can be deleted in the same cleanup pass.
+
+### What's next
+- 006a Cleura deployment (next)
+- Session 006b: invite credits + accountInvites collection +
+  queue-skip flow (priority verification for invitees)
+- Session 007: UI string relabelling Member → Supporter, plus admin
+  documentation panel
+- Session 008: Follow vs Join split for circles
+- Session 009 (proposed): Inactivity lifecycle (3-month email, fade on
+  map, archive after 1 year)
+- Session 010 (proposed): Interaction gate audit + contact-restriction
+  privacy setting (only contributing members can contact me)
