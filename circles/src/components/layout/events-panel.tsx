@@ -252,6 +252,9 @@ export default function EventsPanel() {
         return list;
     }, [events, hideVirtual, userLngLat, sort, selectedSdgs]);
 
+    const totalCount = filteredSorted.length;
+    const mappedCount = filteredSorted.filter((e: any) => !!e?.location?.lngLat).length;
+
     return (
         <div className="flex h-full w-full flex-col">
             <div className="flex items-center justify-between px-3 pb-2 pt-3">
@@ -283,6 +286,11 @@ export default function EventsPanel() {
             <div className="scrollbar-hover stable-scrollbar flex-1 overflow-y-auto p-2 pt-0">
                 {filteredSorted.length === 0 && !loading && (
                     <div className="p-6 text-center text-sm text-muted-foreground">No upcoming events found.</div>
+                )}
+                {mappedCount < totalCount && (
+                    <div className="px-1 pb-2 text-sm text-stone-500">
+                        📍 {mappedCount} pinned · {totalCount - mappedCount} online only
+                    </div>
                 )}
                 <div className="flex flex-col gap-2">
                     {filteredSorted.map((e) => (
