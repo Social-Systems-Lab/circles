@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processDueMessageEmailReminders } from "@/lib/data/message-reminders";
+import { processDailyActionableEmailDigests } from "@/lib/data/actionable-email-digests";
 
 export async function GET(req: NextRequest) {
     const authToken = process.env.CRON_SECRET;
@@ -10,10 +10,10 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const result = await processDueMessageEmailReminders();
+        const result = await processDailyActionableEmailDigests();
         return NextResponse.json({ success: true, ...result });
     } catch (error) {
-        console.error("Error processing message reminder emails:", error);
+        console.error("Error processing actionable email digests:", error);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

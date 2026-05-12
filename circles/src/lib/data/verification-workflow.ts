@@ -873,12 +873,6 @@ export async function notifyApplicantVerificationClarification(applicant: UserPr
         messageBody: `${admin.name || "An admin"} requested more information for your verification.`,
         url: `/circles/${applicant.handle}/settings/subscription`,
     });
-
-    await sendVerificationUpdateEmail({
-        recipient: applicant,
-        subject: `${admin.name || "An admin"} requested more information for your verification.`,
-        actionUrl: `/circles/${applicant.handle}/settings/subscription`,
-    });
 }
 
 export async function notifyApplicantIndependentCircleClarification(params: {
@@ -896,12 +890,6 @@ export async function notifyApplicantIndependentCircleClarification(params: {
         messageBody: subject,
         url: circlePath,
     });
-
-    await sendVerificationUpdateEmail({
-        recipient: params.applicant,
-        subject,
-        actionUrl: circlePath,
-    });
 }
 
 export async function notifyAdminsOfApplicantVerificationReply(
@@ -917,16 +905,6 @@ export async function notifyAdminsOfApplicantVerificationReply(
         messageBody: `${applicant.name || "An applicant"} replied in a verification request.`,
         url: "/admin?tab=verification-requests",
     });
-
-    await Promise.all(
-        admins.map((admin) =>
-            sendVerificationUpdateEmail({
-                recipient: admin,
-                subject: `${applicant.name || "An applicant"} replied in a verification request.`,
-                actionUrl: "/admin?tab=verification-requests",
-            }),
-        ),
-    );
 }
 
 export async function notifyApplicantOfVerificationApproval(applicant: UserPrivate): Promise<void> {

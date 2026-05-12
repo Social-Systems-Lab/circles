@@ -8,10 +8,10 @@ import { redirect } from "next/navigation";
 const DONORBOX_API_KEY = process.env.DONORBOX_API_KEY;
 const DONORBOX_API_URL = "https://donorbox.org/api/v1";
 const emailPreferenceLabels = {
-    emailMissedMessages: "Missed-message email reminders",
-    emailTaskAssigned: "Task assignment emails",
-    emailTaskUpdates: "Task update emails",
-    emailVerificationUpdates: "Verification update emails",
+    emailMissedMessages: "Missed-message digest emails",
+    emailTaskAssigned: "Task assignment digest emails",
+    emailTaskUpdates: "Task update digest emails",
+    emailVerificationUpdates: "Verification update digest emails",
 } as const;
 
 type EmailPreferenceKey = keyof typeof emailPreferenceLabels;

@@ -1,6 +1,12 @@
 # Release Notes
 
 ## Current main - Task UX updates
+### Actionable Email Digests
+
+- Moved preference-gated actionable update emails onto a calmer once-daily digest path.
+- The hourly email cron now checks digest eligibility and sends at most one actionable digest per user per day.
+- Essential transactional emails such as verification, password reset, and membership/payment mail remain immediate.
+
 ### Shift Tasks
 
 - Added Shift Tasks for scheduled participation work alongside ordinary outcome tasks.

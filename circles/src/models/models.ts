@@ -525,6 +525,7 @@ export const circleSchema = z.object({
     emailTaskAssigned: z.boolean().optional(),
     emailTaskUpdates: z.boolean().optional(),
     emailVerificationUpdates: z.boolean().optional(),
+    lastActionableEmailDigestAt: z.date().optional(),
     communityGuidelinesAcceptance: communityGuidelineAgreementStateSchema.optional(),
     communityGuidelinesAcceptedAt: z.date().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId

@@ -16,22 +16,22 @@ const emailPreferenceOptions: { key: EmailPreferenceKey; label: string; descript
     {
         key: "emailMissedMessages",
         label: "Email me if I miss a message",
-        description: "Sends a delayed reminder email if you have not read a direct message yet.",
+        description: "Includes unread direct messages in a once-daily email digest.",
     },
     {
         key: "emailTaskAssigned",
         label: "Email me when I am assigned a task",
-        description: "Sends an email when someone assigns you a task.",
+        description: "Includes new task assignments in a once-daily email digest.",
     },
     {
         key: "emailTaskUpdates",
         label: "Email me about updates to tasks assigned to me",
-        description: "Sends an email when assigned work changes, needs revision, or is verified.",
+        description: "Includes assigned task changes, revision requests, and verification updates in a once-daily email digest.",
     },
     {
         key: "emailVerificationUpdates",
         label: "Email me about verification or admin thread updates that need my response",
-        description: "Sends an email when your verification thread needs attention.",
+        description: "Includes verification and admin thread replies needing your attention in a once-daily email digest.",
     },
 ];
 
@@ -122,7 +122,7 @@ function EmailPreferencesSettingsCard({ initialValues }: { initialValues: Record
             <CardHeader className="space-y-2 pb-5">
                 <CardTitle className="text-2xl font-semibold tracking-tight">Email Preferences</CardTitle>
                 <CardDescription className="max-w-2xl text-sm leading-6">
-                    Actionable email notifications are on by default. Turn off anything you do not want to receive.
+                    Actionable update emails are grouped into a once-daily digest. Turn off anything you do not want to receive.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

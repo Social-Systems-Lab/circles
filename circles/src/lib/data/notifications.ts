@@ -32,59 +32,9 @@ import { getGoalById } from "./goal"; // Import getGoalById
 import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
-import { sendEmail } from "./email";
 
 Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
 Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
-
-const getEmailBaseUrl = (): string => (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
-
-const sendActionableNotificationEmail = async ({
-    recipient,
-    enabled,
-    subject,
-    actionUrl,
-    actionText,
-}: {
-    recipient: UserPrivate;
-    enabled: boolean;
-    subject: string;
-    actionUrl: string;
-    actionText: string;
-}) => {
-    if (!enabled || !recipient.email) {
-        return;
-    }
-
-    const baseUrl = getEmailBaseUrl();
-    try {
-        await sendEmail({
-            to: recipient.email,
-            templateAlias: "notification-reminder",
-            templateModel: {
-                name: recipient.name || recipient.handle || "there",
-                notifications: [subject],
-                actionUrl: `${baseUrl}${actionUrl}`,
-                productUrl: baseUrl,
-                introText: subject,
-                bodyText: "Click the button below to review this on Kamooni.",
-                summaryText: subject,
-                actionText,
-            },
-        });
-    } catch (error) {
-        console.error("Failed to send actionable notification email:", error);
-    }
-};
-
-const getTaskActionUrl = (circle: Circle, task: TaskDisplay): string | null => {
-    const taskId = task._id?.toString();
-    if (!circle.handle || !taskId) {
-        return null;
-    }
-
-    return `/circles/${circle.handle}/tasks/${taskId}`;
-};
 
 const getSummaryNotificationType = (type: string): SummaryNotificationType | null => {
     const directMatch = Object.keys(summaryNotificationTypeDetails).find((summaryType) => summaryType === type);
@@ -1701,16 +1651,6 @@ export async function notifyTaskChangesRequested(
             }),
         );
 
-        const actionUrl = getTaskActionUrl(circle, task);
-        if (actionUrl) {
-            await sendActionableNotificationEmail({
-                recipient: assignee,
-                enabled: assignee.emailTaskUpdates === true,
-                subject: `${requester.name || "Someone"} requested changes to ${task.title}`,
-                actionUrl,
-                actionText: "Review Task",
-            });
-        }
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskChangesRequested:", error);
     }
@@ -1797,16 +1737,6 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
             }),
         );
 
-        const actionUrl = getTaskActionUrl(circle, task);
-        if (actionUrl) {
-            await sendActionableNotificationEmail({
-                recipient: assignee,
-                enabled: assignee.emailTaskAssigned === true,
-                subject: `${assigner.name || "Someone"} assigned you to ${task.title}`,
-                actionUrl,
-                actionText: "Review Task",
-            });
-        }
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
     }
@@ -1939,16 +1869,6 @@ export async function notifyTaskVerified(task: TaskDisplay, verifier: Circle): P
             }),
         );
 
-        const actionUrl = getTaskActionUrl(circle, task);
-        if (actionUrl) {
-            await sendActionableNotificationEmail({
-                recipient: assignee,
-                enabled: assignee.emailTaskUpdates === true,
-                subject: `${task.title} was verified`,
-                actionUrl,
-                actionText: "View Task",
-            });
-        }
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskVerified:", error);
     }
@@ -2012,18 +1932,6 @@ export async function notifyTaskStatusChanged( // Renamed function
             }),
         );
 
-        if (assignee && recipients.some((recipient) => recipient.did === assignee?.did)) {
-            const actionUrl = getTaskActionUrl(circle, task);
-            if (actionUrl) {
-                await sendActionableNotificationEmail({
-                    recipient: assignee,
-                    enabled: assignee.emailTaskUpdates === true,
-                    subject: `${changer.name || "Someone"} updated ${task.title}`,
-                    actionUrl,
-                    actionText: "View Task",
-                });
-            }
-        }
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
     }

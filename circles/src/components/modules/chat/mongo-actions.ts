@@ -24,7 +24,6 @@ import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
-import { enqueueMessageEmailReminders } from "@/lib/data/message-reminders";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
@@ -188,16 +187,6 @@ const sendConversationMessageNotifications = async ({
         return;
     }
 
-    try {
-        await enqueueMessageEmailReminders({
-            messageId,
-            conversation,
-            senderDid,
-            recipientDids,
-        });
-    } catch (error) {
-        console.error("Failed to enqueue message email reminders:", error);
-    }
 };
 
 export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
