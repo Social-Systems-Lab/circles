@@ -95,10 +95,10 @@ export default function SubscriptionForm({
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
                                 <p>Everything you need to contribute, connect, and be an active part of the Kamooni community.</p>
                                 <p>
-                                    If demand is high, there may be a waiting list until enough members are available to
-                                    support new users.
+                                    If demand is high, there may be a waiting list. Supporters help keep Kamooni open to
+                                    new members.
                                 </p>
-                                <p>You can also become a full member after three months of contributing as a volunteer.</p>
+                                <p>You can also become a supporting member after three months of contributing as a volunteer.</p>
                             </div>
 
                             <div className="mt-auto pt-2">
@@ -117,25 +117,25 @@ export default function SubscriptionForm({
 
                     <Card className="relative flex flex-col rounded-3xl p-4">
                         <CardHeader>
-                            <CardTitle className="text-2xl font-bold">Kamooni Membership</CardTitle>
+                            <CardTitle className="text-2xl font-bold">Supporting Kamooni</CardTitle>
                             <div className="absolute right-4 top-4">
-                                <Image src="/images/member-badge.png" alt="Member Badge" width={32} height={32} />
+                                <Image src="/images/member-badge.png" alt="Supporter Badge" width={32} height={32} />
                             </div>
                             <CardDescription>€5/month or €50/year</CardDescription>
                         </CardHeader>
 
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
-                                <p>Members help sustain Kamooni and keep it open to others.</p>
+                                <p>Supporters help sustain Kamooni and keep it open to others.</p>
                                 <p>
-                                    As a thank you, members receive a few extra benefits, can invite five friends, and are
-                                    invited to join the member circle to help shape Kamooni.
+                                    As a thank you, supporters receive a few extra benefits, can invite five friends if
+                                    there is a queue, and are invited to join the Kamoonity circle and help shape Kamooni.
                                 </p>
                             </div>
 
                             {isMember && (
                                 <div className="rounded-xl border bg-white p-3 text-sm text-muted-foreground">
-                                    <div className="font-medium text-foreground">Membership active</div>
+                                    <div className="font-medium text-foreground">Supporting membership active</div>
                                     {membershipState && <div className="mt-1">State: {membershipState.replace("_", " ")}</div>}
                                 </div>
                             )}
@@ -154,11 +154,11 @@ export default function SubscriptionForm({
                         <div className="space-y-3 p-6 pt-0">
                             {canManageStripeMembership ? (
                                 <Button variant="outline" className="w-full" onClick={openPortal} disabled={isLoadingPortal}>
-                                    {isLoadingPortal ? "Opening Stripe..." : "Manage or cancel membership"}
+                                    {isLoadingPortal ? "Opening Stripe..." : "Manage or cancel supporting membership"}
                                 </Button>
                             ) : isMember ? (
                                 <Button variant="outline" className="w-full" disabled>
-                                    Membership Active
+                                    Supporting Membership Active
                                 </Button>
                             ) : null}
                         </div>
@@ -210,7 +210,7 @@ export default function SubscriptionForm({
 function FreeMembershipPanel() {
     return (
         <div className="space-y-5 pr-8">
-            <h3 className="text-2xl font-bold text-foreground">How volunteering membership works</h3>
+            <h3 className="text-2xl font-bold text-foreground">How volunteering to become a supporter works</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>
                     While Kamooni needs funding to stay open and accessible to as many people as possible, we also
@@ -220,12 +220,12 @@ function FreeMembershipPanel() {
                     <strong className="font-semibold text-foreground">
                         Volunteer for at least five hours per month for three consecutive months,
                     </strong>{" "}
-                    and you will be invited to join Kamooni as a member, with all the benefits that membership includes.
+                    and you will be invited to join Kamooni as a supporter, with all the benefits that supporting includes.
                 </p>
                 <p>
-                    <strong className="font-semibold text-foreground">Volunteering membership is renewed monthly.</strong>{" "}
+                    <strong className="font-semibold text-foreground">Supporter status is renewed monthly.</strong>{" "}
                     Hours from one month cannot be carried over to the next. However, if you fall short one month, we
-                    offer a grace period so you can make up the missing hours the following month and keep your membership
+                    offer a grace period so you can make up the missing hours the following month and keep your supporting
                     status.
                 </p>
                 <p>
@@ -255,11 +255,11 @@ function MemberBenefitsPanel({
 }) {
     return (
         <div className="space-y-5 pr-8">
-            <h3 className="text-2xl font-bold text-foreground">Why become a member</h3>
+            <h3 className="text-2xl font-bold text-foreground">Why become a supporter</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
-                <p>Kamooni Membership helps keep the platform open, healthy, and available to others.</p>
+                <p>Supporting Kamooni helps keep the platform open, healthy, and available to others.</p>
                 <div>
-                    <p className="mb-3">As a thank you, members receive a few extra benefits. Members can:</p>
+                    <p className="mb-3">As a thank you, supporters receive a few extra benefits. Supporters can:</p>
                     <ul className="list-disc space-y-2 pl-5">
                         <li>invite <strong className="font-semibold text-foreground">five friends</strong> who can join right away, even if there is a waiting list</li>
                         <li><strong className="font-semibold text-foreground">test new features</strong> before everyone else and help shape how they develop</li>
@@ -295,10 +295,10 @@ function MemberBenefitsPanel({
                 </div>
                 <p>
                     Over time, we hope to make these functions available to everyone. But until Kamooni can fully
-                    sustain itself, we want to show our paying members a little extra appreciation.
+                    sustain itself, we want to show our supporters a little extra appreciation.
                 </p>
                 <p>
-                    Membership is not only about access. It is also a way to actively support the wider community
+                    Being a supporter is not only about access. It is also a way to actively support the wider community
                     and make space for more people to take part.
                 </p>
             </div>
@@ -307,7 +307,7 @@ function MemberBenefitsPanel({
                 <div className="rounded-xl border bg-gray-50 p-4">
                     <div className="space-y-4">
                         <div>
-                            <div className="font-semibold text-foreground">Membership active</div>
+                            <div className="font-semibold text-foreground">Supporting membership active</div>
                             <div className="text-sm text-muted-foreground">
                                 Update your plan, payment details, or cancel at any time in Stripe.
                             </div>
