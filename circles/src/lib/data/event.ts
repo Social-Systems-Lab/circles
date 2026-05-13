@@ -90,6 +90,21 @@ function buildRangeMatch(range?: Range) {
     return clauses.length ? { $and: clauses } : {};
 }
 
+function normalizeRecurringUntil(endDate?: Date | string): Date | undefined {
+    if (!endDate) return undefined;
+    const parsed = new Date(endDate);
+    if (Number.isNaN(parsed.getTime())) return undefined;
+    if (
+        parsed.getUTCHours() === 0 &&
+        parsed.getUTCMinutes() === 0 &&
+        parsed.getUTCSeconds() === 0 &&
+        parsed.getUTCMilliseconds() === 0
+    ) {
+        parsed.setUTCHours(23, 59, 59, 999);
+    }
+    return parsed;
+}
+
 /**
  * Expand a recurring event into multiple instances within a range.
  */
@@ -110,7 +125,7 @@ function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[]
         freq: rruleFreq,
         interval: interval,
         dtstart: new Date(event.startAt),
-        until: endDate ? new Date(endDate) : undefined,
+        until: normalizeRecurringUntil(endDate),
         count: count,
     });
 

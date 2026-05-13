@@ -145,6 +145,21 @@ function parseDate(val: string): Date {
     return d;
 }
 
+function normalizeRecurrenceEndDate(endDate?: Date): Date | undefined {
+    if (!endDate) return undefined;
+    if (
+        endDate.getUTCHours() === 0 &&
+        endDate.getUTCMinutes() === 0 &&
+        endDate.getUTCSeconds() === 0 &&
+        endDate.getUTCMilliseconds() === 0
+    ) {
+        const normalized = new Date(endDate);
+        normalized.setUTCHours(23, 59, 59, 999);
+        return normalized;
+    }
+    return endDate;
+}
+
 // ----- Actions -----
 
 /**
@@ -304,10 +319,9 @@ export async function createEventAction(
         let recurrenceData: EventModel["recurrence"] = undefined;
         if (data.recurrence) {
             recurrenceData = JSON.parse(data.recurrence);
-            // Ensure dates are parsed back to Date objects if needed (though JSON.parse usually keeps strings)
-             if (recurrenceData?.endDate) {
-                 recurrenceData.endDate = new Date(recurrenceData.endDate);
-             }
+            if (recurrenceData?.endDate) {
+                recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
+            }
         }
 
         // Handle images
@@ -446,7 +460,7 @@ export async function updateEventAction(
             try {
                 recurrenceData = JSON.parse(rawRecurrence);
                 if (recurrenceData?.endDate) {
-                    recurrenceData.endDate = new Date(recurrenceData.endDate);
+                    recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
                 }
             } catch (e) { 
                 console.error("[updateEventAction] Failed to parse recurrence:", e);
