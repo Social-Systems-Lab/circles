@@ -621,6 +621,102 @@ export const listToolboxConnectionsForUserDid = async (userDid: string): Promise
     return summary;
 };
 
+const getAcceptedConnectionCirclesForUserDid = async (userDid: string): Promise<Circle[]> => {
+    if (!userDid) {
+        return [];
+    }
+
+    const relationshipEdges = await UserRelationships.find(
+        {
+            fromDid: userDid,
+            connectStatus: "accepted",
+        },
+        {
+            projection: {
+                toDid: 1,
+            },
+        },
+    ).toArray();
+
+    const acceptedDids = Array.from(
+        new Set(
+            relationshipEdges
+                .map((edge) => (typeof edge?.toDid === "string" ? edge.toDid : ""))
+                .filter((did): did is string => did.length > 0 && did !== userDid),
+        ),
+    );
+
+    if (acceptedDids.length === 0) {
+        return [];
+    }
+
+    const circles = await Circles.find(
+        {
+            did: { $in: acceptedDids },
+            circleType: "user",
+        },
+        {
+            projection: {
+                _id: 1,
+                did: 1,
+                handle: 1,
+                name: 1,
+                picture: 1,
+                description: 1,
+                mission: 1,
+                circleType: 1,
+            },
+        },
+    )
+        .sort({ name: 1 })
+        .toArray();
+
+    return circles.map((circle: any) => ({
+        ...circle,
+        _id: circle?._id ? String(circle._id) : circle?._id,
+    }));
+};
+
+export const listAcceptedConnectionsForUserDid = async (userDid: string): Promise<Circle[]> =>
+    getAcceptedConnectionCirclesForUserDid(userDid);
+
+export const searchAcceptedConnectionsForUserDid = async (
+    userDid: string,
+    query: string,
+    limit: number = 10,
+): Promise<Circle[]> => {
+    const connections = await getAcceptedConnectionCirclesForUserDid(userDid);
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const filtered = connections.filter((connection) => {
+        if (!normalizedQuery) return true;
+        const nameMatch = connection.name?.toLowerCase().includes(normalizedQuery);
+        const handleMatch = connection.handle?.toLowerCase().includes(normalizedQuery);
+        return !!(nameMatch || handleMatch);
+    });
+
+    return filtered.slice(0, limit);
+};
+
+export const isAcceptedConnectionForUserDid = async (userDid: string, targetDid: string): Promise<boolean> => {
+    if (!userDid || !targetDid || userDid === targetDid) {
+        return false;
+    }
+
+    const edge = await UserRelationships.findOne(
+        {
+            fromDid: userDid,
+            toDid: targetDid,
+            connectStatus: "accepted",
+        },
+        {
+            projection: { _id: 1 },
+        },
+    );
+
+    return !!edge;
+};
+
 export const migrateLegacyDmRelationships = async ({
     apply,
     limit,

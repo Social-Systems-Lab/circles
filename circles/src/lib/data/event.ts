@@ -9,6 +9,8 @@ import { notifyEventInvitation } from "./notifications";
 import { getUserPrivate } from "./user";
 import { isAuthorized } from "../auth/auth";
 import { features } from "./constants";
+import { getCircleById } from "./circle";
+import { isAcceptedConnectionForUserDid } from "./relationships";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -618,6 +620,11 @@ export const inviteUsersToEvent = async (
         return;
     }
 
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return;
+    }
+
     const existingInvitations = await EventInvitations.find({ eventId, userDid: { $in: userDids } }).toArray();
     const existingUserDids = new Set(existingInvitations.map((inv) => inv.userDid));
     const newUserDids = userDids.filter((did) => !existingUserDids.has(did));
@@ -626,11 +633,20 @@ export const inviteUsersToEvent = async (
         return;
     }
 
-    // Only invite users who are permitted to view events in this circle
-    const permissionChecks = await Promise.all(
-        newUserDids.map((did) => isAuthorized(did, circleId, features.events.view)),
-    );
-    const targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx]);
+    let targetUserDids = newUserDids;
+
+    if (circle.circleType === "user" && inviter.did) {
+        const acceptedChecks = await Promise.all(
+            newUserDids.map((did) => isAcceptedConnectionForUserDid(inviter.did!, did)),
+        );
+        targetUserDids = newUserDids.filter((_, idx) => acceptedChecks[idx]);
+    } else {
+        // Only invite users who are permitted to view events in this circle
+        const permissionChecks = await Promise.all(
+            newUserDids.map((did) => isAuthorized(did, circleId, features.events.view)),
+        );
+        targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx]);
+    }
 
     if (targetUserDids.length === 0) {
         return;

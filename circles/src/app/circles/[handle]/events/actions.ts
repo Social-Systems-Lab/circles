@@ -46,6 +46,10 @@ import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
+import {
+    listAcceptedConnectionsForUserDid,
+    searchAcceptedConnectionsForUserDid,
+} from "@/lib/data/relationships";
 
 // ----- Types -----
 
@@ -949,6 +953,12 @@ export async function getCircleMembersAction(circleHandle: string): Promise<GetC
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return defaultResult;
 
+        if (circle.circleType === "user") {
+            return {
+                members: await listAcceptedConnectionsForUserDid(userDid),
+            };
+        }
+
         const members = await getMembers(circle._id!.toString());
         const memberDids = members.map((m) => m.userDid);
         const users = await getCirclesByDids(memberDids);
@@ -1046,6 +1056,11 @@ export async function searchEligibleUsersAction(
         // Ensure current user can view events in this circle
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return defaultResult;
+
+        if (circle.circleType === "user") {
+            const circles = await searchAcceptedConnectionsForUserDid(userDid, query, limit);
+            return { circles };
+        }
 
         const { circles } = await getCirclesBySearchQueryAction(query, limit, "user");
 
