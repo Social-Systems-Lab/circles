@@ -49,6 +49,10 @@ function formatTime(date: Date) {
     return format(date, "HH:mm");
 }
 
+function toUtcEndOfDayIso(dateOnly: string) {
+    return `${dateOnly}T23:59:59.999Z`;
+}
+
 import CircleSelector from "@/components/global-create/circle-selector";
 import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
 
@@ -244,7 +248,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                     const recurrenceData = {
                         frequency: recurrenceFreq,
                         interval: parseInt(recurrenceInterval) || 1,
-                        endDate: recurrenceEndMode === "date" ? new Date(recurrenceEndDate).toISOString() : undefined,
+                        endDate: recurrenceEndMode === "date" ? toUtcEndOfDayIso(recurrenceEndDate) : undefined,
                         count: recurrenceEndMode === "count" ? parseInt(recurrenceCount) : undefined,
                     };
                     fd.set("recurrence", JSON.stringify(recurrenceData));

@@ -68,12 +68,14 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
     useEffect(() => {
         const fetchEvents = async () => {
             if (circle.circleType === "user" && user?.did === circle.did) {
-                const today = new Date();
-                const nextYear = new Date(today);
-                nextYear.setFullYear(today.getFullYear() + 1);
+                const now = new Date();
+                const lastYear = new Date(now);
+                lastYear.setFullYear(now.getFullYear() - 1);
+                const nextYear = new Date(now);
+                nextYear.setFullYear(now.getFullYear() + 1);
                 const data = await getEventsAction(
                     circle.handle!,
-                    { from: today.toISOString(), to: nextYear.toISOString() },
+                    { from: lastYear.toISOString(), to: nextYear.toISOString() },
                     includeCreated,
                     includeParticipating,
                 );

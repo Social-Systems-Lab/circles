@@ -35,13 +35,15 @@ export default async function EventsModule({ circle }: Props) {
 
     const canCreateEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.create);
 
-    const today = new Date();
-    const nextYear = new Date(today);
-    nextYear.setFullYear(today.getFullYear() + 1);
+    const now = new Date();
+    const lastYear = new Date(now);
+    lastYear.setFullYear(now.getFullYear() - 1);
+    const nextYear = new Date(now);
+    nextYear.setFullYear(now.getFullYear() + 1);
 
     const { events } = await getEventsAction(
         circle.handle!,
-        { from: today.toISOString(), to: nextYear.toISOString() },
+        { from: lastYear.toISOString(), to: nextYear.toISOString() },
         true,
         true
     );

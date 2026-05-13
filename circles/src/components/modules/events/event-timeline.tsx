@@ -375,32 +375,43 @@ export default function EventTimeline({
         [circleHandle, onEventHidden, setUser, toast],
     );
 
-    // Build combined list of future/ongoing entries: events + dated milestones
-    const { upcoming, overdue } = useMemo(() => {
+    // Build combined list of future/ongoing entries, overdue milestones, and past event entries.
+    const { upcoming, overdue, pastEvents } = useMemo(() => {
         const now = new Date();
-        // Reset time part of 'now' to start of day for fair comparison if needed, 
-        // but for strict "overdue" (past date), exact comparison is usually fine.
-        // However, usually "today" isn't overdue. So let's say overdue is < today (start of day).
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-        const eventEntries =
-            (events || [])
-                .filter((e) => {
-                    const id = getCanonicalEventId(e);
-                    if (id && locallyHiddenIds.includes(id)) {
-                        return false;
-                    }
-                    const start = e.startAt ? new Date(e.startAt as any) : undefined;
-                    const end = e.endAt ? new Date(e.endAt as any) : undefined;
-                    if (end) return end >= now; // include ongoing or future (ends in future)
-                    if (start) return start >= now; // include if start is in the future when no end
-                    return false; // exclude undated events
-                })
-                .map((e) => ({
-                    kind: "event" as const,
-                    date: new Date(e.startAt),
-                    event: e,
-                })) || [];
+        const visibleEvents =
+            (events || []).filter((e) => {
+                const id = getCanonicalEventId(e);
+                return !(id && locallyHiddenIds.includes(id));
+            }) || [];
+
+        const upcomingEventEntries = visibleEvents
+            .filter((e) => {
+                const start = e.startAt ? new Date(e.startAt as any) : undefined;
+                const end = e.endAt ? new Date(e.endAt as any) : undefined;
+                if (end) return end >= now;
+                if (start) return start >= now;
+                return false;
+            })
+            .map((e) => ({
+                kind: "event" as const,
+                date: new Date(e.startAt),
+                event: e,
+            }));
+
+        const pastEventEntries = visibleEvents
+            .filter((e) => {
+                const end = e.endAt ? new Date(e.endAt as any) : undefined;
+                const start = e.startAt ? new Date(e.startAt as any) : undefined;
+                if (end) return end < now;
+                if (start) return start < now;
+                return false;
+            })
+            .map((e) => ({
+                date: new Date(e.startAt),
+                event: e,
+            }));
 
         const allMilestones = (milestones || []).filter((m) => m.date).map(m => ({
             kind: "milestone" as const,
@@ -411,13 +422,12 @@ export default function EventTimeline({
         const overdueItems = allMilestones.filter(m => m.date < startOfToday);
         const upcomingMilestones = allMilestones.filter(m => m.date >= startOfToday);
 
-        const upcomingItems = [...eventEntries, ...upcomingMilestones];
+        const upcomingItems = [...upcomingEventEntries, ...upcomingMilestones];
         upcomingItems.sort((a, b) => a.date.getTime() - b.date.getTime());
-        
-        // Sort overdue items by date (oldest first? or newest first? usually oldest first to show most urgent)
         overdueItems.sort((a, b) => a.date.getTime() - b.date.getTime());
+        pastEventEntries.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-        return { upcoming: upcomingItems, overdue: overdueItems };
+        return { upcoming: upcomingItems, overdue: overdueItems, pastEvents: pastEventEntries };
     }, [events, milestones, locallyHiddenIds]);
 
     // Group by Year -> Month
@@ -436,7 +446,22 @@ export default function EventTimeline({
 
     const yearKeys = useMemo(() => Object.keys(grouped).sort((a, b) => Number(a) - Number(b)), [grouped]);
 
-    if (upcoming.length === 0 && overdue.length === 0) {
+    const pastGrouped = useMemo(() => {
+        const g: Record<string, Record<number, typeof pastEvents>> = {};
+        for (const item of pastEvents) {
+            const d = item.date;
+            const year = String(d.getFullYear());
+            const month = d.getMonth();
+            if (!g[year]) g[year] = {};
+            if (!g[year][month]) g[year][month] = [];
+            g[year][month].push(item);
+        }
+        return g;
+    }, [pastEvents]);
+
+    const pastYearKeys = useMemo(() => Object.keys(pastGrouped).sort((a, b) => Number(b) - Number(a)), [pastGrouped]);
+
+    if (upcoming.length === 0 && overdue.length === 0 && pastEvents.length === 0) {
         return <div className="p-8 text-center text-muted-foreground">No upcoming items found.</div>;
     }
 
@@ -522,6 +547,57 @@ export default function EventTimeline({
                     </div>
                 </div>
             ))}
+
+            {pastEvents.length > 0 && (
+                <div className="mt-10">
+                    <div className="mb-4 ml-12 text-lg font-semibold text-muted-foreground">Past Events</div>
+                    {pastYearKeys.map((year) => (
+                        <div key={`past-${year}`} className="relative">
+                            <div className="ml-12">
+                                {Object.entries(pastGrouped[year])
+                                    .sort(([a], [b]) => Number(b) - Number(a))
+                                    .map(([mKey, monthItems]) => {
+                                        const monthNum = Number(mKey);
+                                        const monthDate = new Date(Number(year), monthNum);
+                                        return (
+                                            <div key={`past-${year}-${monthNum}`} className="relative mb-4">
+                                                <div
+                                                    className={cn(
+                                                        "absolute -left-[28px] top-1 h-full w-[4px] rounded-full",
+                                                        monthColorClasses[monthNum] || "bg-gray-400",
+                                                    )}
+                                                />
+                                                <div className="header mb-3 text-lg font-semibold text-foreground">
+                                                    {format(monthDate, "MMMM yyyy")}
+                                                </div>
+                                                <div className={cn("flex flex-col", condensed ? "gap-2" : "gap-4")}>
+                                                    {monthItems.map((it, idx) => {
+                                                        const eventId =
+                                                            ((it.event as any)._id?.toString?.() ||
+                                                                (it.event as any)._id ||
+                                                                "") as string;
+                                                        return (
+                                                            <EventCard
+                                                                key={`past-${(it.event as any)._id}-${idx}`}
+                                                                e={it.event}
+                                                                circleHandle={circleHandle}
+                                                                condensed={condensed}
+                                                                canManageJoinLink={Boolean(user?.did && user.did === it.event.createdBy)}
+                                                                onHideCancelled={handleHideCancelled}
+                                                                hidePending={pendingHideId === eventId}
+                                                                onNavigate={onNavigate}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
