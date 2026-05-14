@@ -641,8 +641,16 @@ export async function listAdminVerificationRequests() {
 
     const applicants = await Promise.all(
         requests.map(async (request) => {
-            const applicant = await getUserPrivate(request.userDid);
-            return [request.userDid, applicant] as const;
+            try {
+                const applicant = await getUserPrivate(request.userDid);
+                return [request.userDid, applicant] as const;
+            } catch (err) {
+                console.warn(
+                    `listAdminVerificationRequests: applicant not found for request ${request._id?.toString()} (did=${request.userDid})`,
+                    err,
+                );
+                return [request.userDid, null] as const;
+            }
         }),
     );
 
@@ -707,7 +715,16 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
         return null;
     }
 
-    const applicant = await getUserPrivate(request.userDid);
+    let applicant;
+    try {
+        applicant = await getUserPrivate(request.userDid);
+    } catch (err) {
+        console.warn(
+            `getAdminVerificationRequestDetail: applicant not found for request ${request._id?.toString()} (did=${request.userDid})`,
+            err,
+        );
+        return null;
+    }
     const requestType = normalizeVerificationRequestType(request.requestType);
     const targetCircle =
         requestType === "independent_circle" && request.targetCircleId
