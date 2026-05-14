@@ -1,7 +1,6 @@
 import { Toast } from "@/components/ui/use-toast";
 import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
 import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
-import { CoreMessage } from "ai";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";
@@ -795,8 +794,13 @@ export const passwordFormSchema = z.object({
 
 export type PasswordFormType = z.infer<typeof passwordFormSchema>;
 
+type AiCoreMessageLike = {
+    role: string;
+    content: unknown;
+};
+
 export type Message = {
-    coreMessage: CoreMessage;
+    coreMessage: AiCoreMessageLike;
     inputProvider?: InputProvider;
     toolCall?: boolean;
     suggestion?: string;
