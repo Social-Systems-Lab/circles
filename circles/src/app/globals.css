@@ -22,7 +22,6 @@
 
 body {
     color: rgb(var(--foreground-rgb));
-    scrollbar-gutter: stable;
 }
 
 /* fixes issue with shadcn/ui adding padding to body  */
