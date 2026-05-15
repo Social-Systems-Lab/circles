@@ -6,8 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { KeyRound, Loader2, Smartphone } from "lucide-react";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
@@ -48,12 +46,13 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
     const [, setAuthInfo] = useAtom(authInfoAtom);
     const [requestData, setRequestData] = useState<VibeIdRequest | null>(null);
     const [isStarting, setIsStarting] = useState(false);
-    const [isCompletingSignup, setIsCompletingSignup] = useState(false);
-    const [needsSignupDetails, setNeedsSignupDetails] = useState(false);
-    const [signupName, setSignupName] = useState("");
-    const [signupEmail, setSignupEmail] = useState("");
     const [statusText, setStatusText] = useState("Waiting for approval in VibeID.");
     const pollTimerRef = useRef<number | null>(null);
+
+    const getRequestIdFromStatusUrl = (statusUrl: string) => {
+        const encodedRequestId = statusUrl.split("/").filter(Boolean).pop();
+        return encodedRequestId ? decodeURIComponent(encodedRequestId) : "";
+    };
 
     const closePrompt = () => {
         if (pollTimerRef.current) {
@@ -61,9 +60,6 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
             pollTimerRef.current = null;
         }
         setRequestData(null);
-        setNeedsSignupDetails(false);
-        setSignupName("");
-        setSignupEmail("");
         setStatusText("Waiting for approval in VibeID.");
     };
 
@@ -101,19 +97,21 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
             }
 
             if (result.status === "needs_signup") {
+                const requestId = activeRequestData?.requestId || getRequestIdFromStatusUrl(statusUrl);
                 if (pollTimerRef.current) {
                     window.clearInterval(pollTimerRef.current);
                     pollTimerRef.current = null;
                 }
-                if (onNeedsSignup && activeRequestData) {
-                    onNeedsSignup({ requestId: activeRequestData.requestId, profile: result.profile });
+
+                if (onNeedsSignup && requestId) {
+                    onNeedsSignup({ requestId, profile: result.profile });
                     closePrompt();
                     return;
                 }
 
-                if (activeRequestData) {
+                if (requestId) {
                     const params = new URLSearchParams();
-                    params.set("vibeIdRequestId", activeRequestData.requestId);
+                    params.set("vibeIdRequestId", requestId);
                     if (result.profile?.displayName) {
                         params.set("vibeIdName", result.profile.displayName);
                     }
@@ -126,9 +124,7 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
                     return;
                 }
 
-                setSignupName((current) => current || result.profile?.displayName || "");
-                setNeedsSignupDetails(true);
-                setStatusText("Add your Kamooni account details to finish signup.");
+                setStatusText("Continue in the Kamooni signup wizard to finish creating your account.");
                 return;
             }
 
@@ -150,40 +146,6 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
             }
         } catch (error) {
             setStatusText(error instanceof Error ? error.message : "Could not check the VibeID request.");
-        }
-    };
-
-    const completeSignup = async () => {
-        if (!requestData) {
-            return;
-        }
-
-        setIsCompletingSignup(true);
-        try {
-            const response = await fetch("/api/vibe-id/complete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                cache: "no-store",
-                body: JSON.stringify({
-                    requestId: requestData.requestId,
-                    name: signupName,
-                    email: signupEmail,
-                }),
-            });
-            const result = (await response.json()) as VibeIdStatusResponse & { success?: boolean };
-            if (!response.ok || result.status !== "approved" || !result.user) {
-                throw new Error(result.message || "Could not complete VibeID signup.");
-            }
-
-            finishAuthentication(result.user);
-        } catch (error) {
-            toast({
-                title: "Signup incomplete",
-                description: error instanceof Error ? error.message : "Please check your details and try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsCompletingSignup(false);
         }
     };
 
@@ -241,41 +203,7 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
                         <DialogDescription>Scan the code or open VibeID on this device.</DialogDescription>
                     </DialogHeader>
 
-                    {requestData && needsSignupDetails ? (
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="vibe-id-signup-name">Name</Label>
-                                <Input
-                                    id="vibe-id-signup-name"
-                                    value={signupName}
-                                    onChange={(event) => setSignupName(event.target.value)}
-                                    placeholder="Your Kamooni name"
-                                    autoComplete="name"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="vibe-id-signup-email">Email</Label>
-                                <Input
-                                    id="vibe-id-signup-email"
-                                    type="email"
-                                    value={signupEmail}
-                                    onChange={(event) => setSignupEmail(event.target.value)}
-                                    placeholder="you@example.com"
-                                    autoComplete="email"
-                                />
-                            </div>
-                            <Button
-                                type="button"
-                                className="w-full"
-                                disabled={isCompletingSignup || !signupName.trim() || !signupEmail.trim()}
-                                onClick={completeSignup}
-                            >
-                                {isCompletingSignup ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Finish signup
-                            </Button>
-                            <p className="text-center text-sm text-muted-foreground">{statusText}</p>
-                        </div>
-                    ) : requestData ? (
+                    {requestData ? (
                         <div className="space-y-5">
                             <div className="mx-auto flex h-56 w-56 items-center justify-center rounded-lg border bg-white p-3">
                                 <QRCode value={requestData.deepLinkUrl} size={196} />
