@@ -130,11 +130,9 @@ function getAccessApiUrls(request: NextRequest, host: string | undefined, port: 
         urls.push(new URL("/api/access", configuredDevOrigin).toString());
     }
 
-    const localDevPort = process.env.CIRCLES_PORT || process.env.PORT || "3006";
-    urls.push(`http://127.0.0.1:${localDevPort}/api/access`);
-
-    if (localDevPort !== "3000") {
-        urls.push("http://127.0.0.1:3000/api/access");
+    const devPorts = [process.env.PORT, process.env.CIRCLES_PORT, "3006", "3000"].filter(Boolean);
+    for (const devPort of devPorts) {
+        urls.push(`http://127.0.0.1:${devPort}/api/access`);
     }
 
     if (!isLocalHostname) {
@@ -152,13 +150,20 @@ async function fetchFirstAccessApi(
 
     for (const accessApiUrl of accessApiUrls) {
         try {
-            return await fetch(accessApiUrl, {
+            const response = await fetch(accessApiUrl, {
                 method: "POST",
                 body: JSON.stringify(body),
                 headers: {
                     "Content-Type": "application/json",
                 },
             });
+
+            if (response.status >= 500) {
+                lastError = new Error(`Access API returned ${response.status} from ${accessApiUrl}`);
+                continue;
+            }
+
+            return response;
         } catch (error) {
             lastError = error;
         }
