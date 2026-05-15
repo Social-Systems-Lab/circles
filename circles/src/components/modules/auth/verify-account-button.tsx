@@ -16,9 +16,11 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { isCommunityGuidelinesCompleted } from "@/lib/community-guidelines";
 import { userAtom } from "@/lib/data/atoms";
+import { getVerificationReadiness } from "@/lib/verification-readiness";
+import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
 import { getVerificationStatus, requestVerification, RequestVerificationResult } from "./actions";
 
-type DialogMode = "guidelines" | "confirm";
+type DialogMode = "readiness" | "guidelines" | "confirm";
 
 const INITIAL_REQUEST_STATE: RequestVerificationResult = {
     message: "",
@@ -36,9 +38,10 @@ export function VerifyAccountButton({
     const [verificationStatus, setVerificationStatus] = useState<"verified" | "pending" | "unverified">("unverified");
     const { toast } = useToast();
     const router = useRouter();
+    const readiness = getVerificationReadiness(user);
 
     const communityGuidelinesCompleted = isCommunityGuidelinesCompleted(user?.communityGuidelinesAcceptance);
-    const activeDialogMode: DialogMode = communityGuidelinesCompleted ? dialogMode : "guidelines";
+    const activeDialogMode: DialogMode = dialogMode;
 
     useEffect(() => {
         const fetchStatus = async () => {
@@ -97,7 +100,11 @@ export function VerifyAccountButton({
             return;
         }
 
-        const nextMode: DialogMode = communityGuidelinesCompleted ? "confirm" : "guidelines";
+        const nextMode: DialogMode = !readiness.isReady
+            ? "readiness"
+            : communityGuidelinesCompleted
+              ? "confirm"
+              : "guidelines";
 
         console.log("[VerifyAccountButton] open", {
             nextMode,
@@ -115,7 +122,7 @@ export function VerifyAccountButton({
         setOpen(nextOpen);
 
         if (!nextOpen) {
-            setDialogMode("confirm");
+            setDialogMode(readiness.isReady ? "confirm" : "readiness");
         }
     };
 
@@ -164,6 +171,16 @@ export function VerifyAccountButton({
                             onUserChange={(nextUser) => setUser(nextUser)}
                             onComplete={handleGuidelinesComplete}
                         />
+                    ) : activeDialogMode === "readiness" ? (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Complete your profile before requesting verification.</DialogTitle>
+                                <DialogDescription>
+                                    Add the missing items below, then try again when your public profile is ready.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <VerificationReadinessChecklist readiness={readiness} />
+                        </>
                     ) : (
                         <>
                             <DialogHeader>
@@ -185,7 +202,10 @@ export function VerifyAccountButton({
 
                             <form action={formAction}>
                                 <DialogFooter>
-                                    <Button type="submit" disabled={isSubmitting || !communityGuidelinesCompleted}>
+                                    <Button
+                                        type="submit"
+                                        disabled={isSubmitting || !communityGuidelinesCompleted || !readiness.isReady}
+                                    >
                                         {isSubmitting ? "Submitting..." : "Confirm"}
                                     </Button>
                                 </DialogFooter>

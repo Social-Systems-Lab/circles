@@ -8,6 +8,8 @@ import { hasContributorPerks } from "@/lib/auth/perks";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
 import { CircleVerificationThreadCard } from "./circle-verification-thread-card";
 import { ConvertProfileChildCircleCard } from "./convert-profile-child-circle-card";
+import { getVerificationReadiness } from "@/lib/verification-readiness";
+import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -36,6 +38,7 @@ export default async function AboutSettingsPage(props: PageProps) {
         circle.circleType === "circle" &&
         Boolean(circle.parentCircleId) &&
         parentCircle?.circleType === "user";
+    const verificationReadiness = getVerificationReadiness(circle);
     const statusCopy =
         publishStatus === "draft"
             ? "Draft"
@@ -76,6 +79,9 @@ export default async function AboutSettingsPage(props: PageProps) {
                                     official email you provided.
                                 </p>
                             ) : null}
+                            {!isProfileCircle && isDraft && !verificationReadiness.isReady ? (
+                                <VerificationReadinessChecklist readiness={verificationReadiness} />
+                            ) : null}
                         </div>
                         {isDraft ? (
                             isProfileCircle ? (
@@ -86,7 +92,7 @@ export default async function AboutSettingsPage(props: PageProps) {
                             ) : (
                                 <form action={submitCircleForVerificationAction}>
                                     <input type="hidden" name="circleId" value={circle._id} />
-                                    <Button type="submit" variant="outline">
+                                    <Button type="submit" variant="outline" disabled={!verificationReadiness.isReady}>
                                         Submit for verification
                                     </Button>
                                 </form>

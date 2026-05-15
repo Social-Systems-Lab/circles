@@ -19,6 +19,7 @@ import {
     ACTIVE_VERIFICATION_REQUEST_STATUSES,
     createVerificationRequest,
 } from "@/lib/data/verification-workflow";
+import { getVerificationReadiness, type VerificationReadiness } from "@/lib/verification-readiness";
 
 export async function getVerificationStatus() {
     const userDid = await getAuthenticatedUserDid();
@@ -33,6 +34,7 @@ export type RequestVerificationResult = {
     success?: boolean;
     emailSent?: boolean;
     requiresCommunityGuidelines?: boolean;
+    readiness?: VerificationReadiness;
 };
 
 export async function requestVerification(
@@ -70,6 +72,15 @@ export async function requestVerification(
                 success: false,
                 requiresCommunityGuidelines: true,
                 message: "Please agree to Kamooni's core community rules before requesting verification.",
+            };
+        }
+
+        const readiness = getVerificationReadiness(user);
+        if (!readiness.isReady) {
+            return {
+                success: false,
+                readiness,
+                message: readiness.title,
             };
         }
 

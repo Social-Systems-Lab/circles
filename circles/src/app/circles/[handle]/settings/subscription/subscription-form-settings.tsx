@@ -53,7 +53,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     if (subscriptionAttempted) {
         return (
             <div className="space-y-8">
-                <VerificationSettingsCard />
+                <VerificationSettingsCard user={user} />
                 <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
                 <section className="space-y-4">
                     <div className="space-y-1 px-1">
@@ -75,7 +75,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
 
     return (
         <div className="space-y-8">
-            <VerificationSettingsCard />
+            <VerificationSettingsCard user={user} />
             <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
             <section className="space-y-4">
                 <div className="space-y-1 px-1">

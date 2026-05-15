@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { Circle } from "@/models/models";
 import { VerifyAccountButton } from "@/components/modules/auth/verify-account-button";
 import { VerificationThreadMessageList } from "@/components/modules/verification/verification-thread-message-list";
+import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
 import {
     getApplicantVerificationThreadAction,
     replyToVerificationThreadAction,
 } from "@/components/modules/auth/verification-thread-actions";
+import { getVerificationReadiness } from "@/lib/verification-readiness";
 
 type ApplicantVerificationThread = Awaited<ReturnType<typeof getApplicantVerificationThreadAction>>;
 
@@ -40,7 +43,11 @@ const formatDate = (value?: string | null) => {
     return new Date(value).toLocaleString();
 };
 
-export function VerificationSettingsCard() {
+export function VerificationSettingsCard({
+    user,
+}: {
+    user: Circle;
+}) {
     const [thread, setThread] = useState<ApplicantVerificationThread | null>(null);
     const [body, setBody] = useState("");
     const [files, setFiles] = useState<File[]>([]);
@@ -110,6 +117,7 @@ export function VerificationSettingsCard() {
     const request = thread?.request;
     const status = request?.status ?? (thread?.isVerified ? "approved" : null);
     const canReply = Boolean(thread?.canReply && request?.id);
+    const readiness = getVerificationReadiness(user);
 
     return (
         <Card>
@@ -138,6 +146,7 @@ export function VerificationSettingsCard() {
                         <p className="text-sm text-muted-foreground">
                             Submit a verification request to start a dedicated review thread with admins.
                         </p>
+                        {!readiness.isReady ? <VerificationReadinessChecklist readiness={readiness} /> : null}
                         <VerifyAccountButton onStatusChange={loadThread} />
                     </div>
                 ) : (

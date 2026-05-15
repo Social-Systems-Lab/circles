@@ -22,6 +22,7 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 import { ObjectId } from "mongodb";
 import { sanitizeSocialLinks } from "@/lib/utils/social-links";
+import { getVerificationReadiness } from "@/lib/verification-readiness";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -97,6 +98,11 @@ export async function submitCircleForVerificationAction(formData: FormData) {
 
     if (circle.circleLevel === "profile_child") {
         return { success: false, message: "Profile circles should be published directly" };
+    }
+
+    const readiness = getVerificationReadiness(circle);
+    if (!readiness.isReady) {
+        return { success: false, message: readiness.title, data: { readiness } };
     }
 
     if (circle.representsOrganization) {
