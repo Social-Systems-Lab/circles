@@ -170,6 +170,14 @@ const getImageReplyPreviewText = (replyTo?: Partial<ChatMessage>) => {
     return body === imageAttachment.name ? "" : body;
 };
 
+const getImageMessageBodyText = (message: ChatMessage) => {
+    const body = renderMentionsAsDisplayText((message?.content?.body as string) || "").trim();
+    const imageAttachment = getFirstImageAttachment(message);
+    if (!body || !imageAttachment?.name) return body;
+
+    return body === imageAttachment.name ? "" : body;
+};
+
 const scrollToMessageElement = (messageId?: string) => {
     const elementId = getMessageElementId(messageId);
     if (!elementId) return;
@@ -243,7 +251,8 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
             </span>
         );
     } else {
-        const body = (message?.content?.body as string) || "";
+        const imageMessageBody = getImageMessageBodyText(message);
+        const body = typeof imageMessageBody === "string" ? imageMessageBody : (message?.content?.body as string) || "";
         const replyTo = message.replyTo;
         const hasInlineReply = body.includes("\n\n") && body.startsWith("> ");
         const isReply = !!replyTo || hasInlineReply;
