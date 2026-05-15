@@ -65,6 +65,8 @@ const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
 const CHAT_MENTION_MARKUP_TEST_REGEX = /\[[^\]]+\]\(\/circles\/[^)]+\)/;
 const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
 const CHAT_BOTTOM_THRESHOLD_PX = 150;
+const CHAT_TOPIC_BACKGROUND_CLASS = "border border-[#DDEBB8] bg-[#F1F6DF]";
+const CHAT_STANDARD_BUBBLE_CLASS = "border border-gray-200 bg-white";
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
@@ -668,7 +670,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             {!(message as any).thread && (
                             <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
                                 <div
-                                    className={`${isOwnMessage ? "border border-[#DDEBB8] bg-[#F1F6DF]" : "border border-gray-200 bg-white"} p-2 pr-4 shadow-md ${bubbleStatusClasses}`}
+                                    className={`${CHAT_STANDARD_BUBBLE_CLASS} p-2 pr-4 shadow-md ${bubbleStatusClasses}`}
                                     style={{ borderRadius: bubbleRadius }}
                                     onClick={() => toggleMobileMessageActions(message.id)}
                                 >
@@ -1719,7 +1721,10 @@ const TopicCard: React.FC<{
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
 
     return (
-        <div ref={cardRef} className={`my-2 w-full rounded-xl border shadow-sm transition-all ${isOpen ? "border-gray-300 bg-white" : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"}`}>
+        <div
+            ref={cardRef}
+            className={`my-2 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
+        >
             {/* Header row — always visible, click to toggle */}
             <div
                 className="flex cursor-pointer flex-col items-center gap-2 p-3 text-center"
@@ -1757,7 +1762,7 @@ const TopicCard: React.FC<{
 
             {/* Expanded body */}
             {isOpen && (
-                <div className="border-t border-gray-200">
+                <div className="border-t border-[#DDEBB8]">
                     {topicDescription && (
                         <div className="px-6 pt-3 pb-2 text-center">
                             <div className="text-sm leading-relaxed text-gray-600">
@@ -1838,7 +1843,7 @@ const TopicCard: React.FC<{
                                         )
                                     )}
                                     <div
-                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${isOwn ? "border border-[#DDEBB8] bg-[#F1F6DF]" : "border border-gray-200 bg-white"}`}
+                                        className={`relative flex max-w-[75%] flex-col overflow-hidden shadow-md ${CHAT_STANDARD_BUBBLE_CLASS}`}
                                         style={{ borderRadius: "12px" }}
                                     >
                                         <div className="px-3 py-1.5">
