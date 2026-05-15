@@ -162,6 +162,14 @@ const getReplyPreviewLabel = (replyTo?: Partial<ChatMessage>) => {
     return firstAttachment.name || "Attachment";
 };
 
+const getImageReplyPreviewText = (replyTo?: Partial<ChatMessage>) => {
+    const body = renderMentionsAsDisplayText((replyTo?.content?.body as string) || "").trim();
+    const imageAttachment = getFirstImageAttachment(replyTo);
+    if (!body || !imageAttachment?.name) return body;
+
+    return body === imageAttachment.name ? "" : body;
+};
+
 const scrollToMessageElement = (messageId?: string) => {
     const elementId = getMessageElementId(messageId);
     if (!elementId) return;
@@ -186,6 +194,7 @@ const ReplyReferencePreview: React.FC<{
     const originalAuthor = inlineAuthor || replyTo?.author?.name || replyTo?.author?._id || "";
     const imageAttachment = getFirstImageAttachment(replyTo);
     const previewLabel = inlineText || getReplyPreviewLabel(replyTo);
+    const imagePreviewText = inlineText || getImageReplyPreviewText(replyTo);
     const isClickable = !!replyTo?.id;
     const Wrapper = isClickable ? "button" : "div";
 
@@ -216,7 +225,7 @@ const ReplyReferencePreview: React.FC<{
                         alt={imageAttachment.name || "Reply image preview"}
                         className="h-10 w-10 shrink-0 rounded-md object-cover"
                     />
-                    <p className="truncate text-sm text-gray-600">{previewLabel}</p>
+                    {imagePreviewText ? <p className="truncate text-sm text-gray-600">{imagePreviewText}</p> : null}
                 </div>
             ) : (
                 <p className="truncate text-sm text-gray-600">{previewLabel}</p>
