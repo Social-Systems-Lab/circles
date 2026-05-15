@@ -207,6 +207,7 @@ export async function createVibeIdRequest(request: NextRequest): Promise<NextRes
     await getRequestsCollection().insertOne({
         requestId,
         intent,
+        linkUserDid,
         challenge: challenge.payload,
         origin,
         status: "pending",
