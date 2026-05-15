@@ -29,6 +29,7 @@ import { featuredSkills } from "@/lib/data/skills";
 import { cn } from "@/lib/utils";
 import OnboardingCompleteAnimation from "@/components/onboarding/onboarding-complete-animation";
 import DonationIntentCard from "@/components/onboarding/donation-intent-card";
+import { VibeIdAuthButton } from "@/components/auth/vibe-id-auth-button";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -750,6 +751,17 @@ export function OnboardingSignupFlow() {
                                             {errors.handle && <p className="text-sm text-red-600">{errors.handle}</p>}
                                         </div>
                                     </div>
+
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <span className="w-full border-t border-[#d7bf94]" />
+                                        </div>
+                                        <div className="relative flex justify-center text-xs uppercase">
+                                            <span className="bg-[#fffaf2] px-2 text-kam-gray-dark/55">or</span>
+                                        </div>
+                                    </div>
+
+                                    <VibeIdAuthButton label="Sign up with VibeID" />
 
                                     <div className="flex flex-col gap-3 pt-3 sm:flex-row">
                                         <Button
