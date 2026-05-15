@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Circle } from "@/models/models";
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
+import { VibeIdSettingsCard } from "./vibe-id-settings-card";
 import { updateEmailPreferenceSetting } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -53,6 +54,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     if (subscriptionAttempted) {
         return (
             <div className="space-y-8">
+                <VibeIdSettingsCard user={user} />
                 <VerificationSettingsCard user={user} />
                 <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
                 <section className="space-y-4">
@@ -75,6 +77,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
 
     return (
         <div className="space-y-8">
+            <VibeIdSettingsCard user={user} />
             <VerificationSettingsCard user={user} />
             <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
             <section className="space-y-4">
