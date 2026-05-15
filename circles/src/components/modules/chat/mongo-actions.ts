@@ -1,6 +1,7 @@
 "use server";
 
 import { ObjectId } from "mongodb";
+import type { ChatAttachment } from "@/lib/chat/mongo-types";
 import { ChatMessage, ChatRoomDisplay, Circle } from "@/models/models";
 import {
     createConversation,
@@ -414,6 +415,12 @@ export const fetchRecentMessagesAction = async (
             const replyAuthor = replyDoc
                 ? senderByDid.get(replyDoc.senderDid) || { _id: replyDoc.senderDid, name: replyDoc.senderDid }
                 : undefined;
+            const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
+                ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
+                      ...attachment,
+                      url: normalizeMediaUrl(attachment?.url) || attachment?.url,
+                  }))
+                : replyDoc?.attachments;
 
             const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {
                 if (!acc[reaction.emoji]) acc[reaction.emoji] = [];
@@ -438,6 +445,7 @@ export const fetchRecentMessagesAction = async (
                           id: replyDoc._id,
                           author: replyAuthor,
                           content: { msgtype: "m.text", body: replyDoc.body },
+                          attachments: normalizedReplyAttachments,
                       }
                     : undefined,
             };
@@ -547,6 +555,12 @@ export const fetchMongoMessagesAction = async (
                             picture: { url: "/placeholder.svg" },
                         } as Circle))
                 : undefined;
+            const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
+                ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
+                      ...attachment,
+                      url: normalizeMediaUrl(attachment?.url) || attachment?.url,
+                  }))
+                : replyDoc?.attachments;
 
             const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {
                 if (!acc[reaction.emoji]) {
@@ -579,6 +593,7 @@ export const fetchMongoMessagesAction = async (
                               msgtype: "m.text",
                               body: replyDoc.body,
                           },
+                          attachments: normalizedReplyAttachments,
                       }
                     : undefined,
             };
@@ -1290,6 +1305,12 @@ export const fetchThreadRepliesAction = async (
             const firstName = fullName.trim().split(" ")[0] || circle?.handle || doc.senderDid;
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthorCircle = replyDoc ? senderByDid.get(replyDoc.senderDid) : undefined;
+            const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
+                ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
+                      ...attachment,
+                      url: normalizeMediaUrl(attachment?.url) || attachment?.url,
+                  }))
+                : replyDoc?.attachments;
             return {
                 ...doc,
                 _id: doc._id?.toString(),
@@ -1305,6 +1326,7 @@ export const fetchThreadRepliesAction = async (
                                   picture: { url: "/placeholder.svg" },
                               },
                           content: { msgtype: "m.text", body: replyDoc.body },
+                          attachments: normalizedReplyAttachments,
                       }
                     : undefined,
             };

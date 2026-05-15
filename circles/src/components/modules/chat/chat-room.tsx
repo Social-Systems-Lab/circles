@@ -67,6 +67,8 @@ const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
 const CHAT_BOTTOM_THRESHOLD_PX = 150;
 const CHAT_TOPIC_BACKGROUND_CLASS = "border border-[#DDEBB8] bg-[#F1F6DF]";
 const CHAT_STANDARD_BUBBLE_CLASS = "border border-gray-200 bg-white";
+const CHAT_MESSAGE_ELEMENT_ID_PREFIX = "chat-message-";
+const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-2", "ring-offset-white"];
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
@@ -133,6 +135,96 @@ const renderFormattedChatBody = (
     return <RichText content={body} />;
 };
 
+type ChatAttachmentLike = {
+    url: string;
+    name?: string;
+    mimeType?: string;
+};
+
+const getMessageElementId = (messageId?: string) =>
+    messageId ? `${CHAT_MESSAGE_ELEMENT_ID_PREFIX}${messageId}` : undefined;
+
+const getMessageAttachments = (message?: Partial<ChatMessage>) =>
+    ((((message as any)?.attachments as ChatAttachmentLike[] | undefined) || []).filter(
+        (attachment) => attachment?.url,
+    ));
+
+const getFirstImageAttachment = (message?: Partial<ChatMessage>) =>
+    getMessageAttachments(message).find((attachment) => attachment.mimeType?.startsWith("image/"));
+
+const getReplyPreviewLabel = (replyTo?: Partial<ChatMessage>) => {
+    const body = renderMentionsAsDisplayText((replyTo?.content?.body as string) || "").trim();
+    if (body) return body;
+
+    const firstAttachment = getMessageAttachments(replyTo)[0];
+    if (!firstAttachment) return "";
+    if (firstAttachment.mimeType?.startsWith("image/")) return "Photo";
+    return firstAttachment.name || "Attachment";
+};
+
+const scrollToMessageElement = (messageId?: string) => {
+    const elementId = getMessageElementId(messageId);
+    if (!elementId) return;
+
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.classList.add(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+    window.setTimeout(() => {
+        element.classList.remove(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+    }, 1800);
+};
+
+const ReplyReferencePreview: React.FC<{
+    replyTo?: Partial<ChatMessage>;
+    inlineAuthor?: string;
+    inlineText?: string;
+    authorColor: string;
+    className?: string;
+}> = ({ replyTo, inlineAuthor, inlineText, authorColor, className }) => {
+    const originalAuthor = inlineAuthor || replyTo?.author?.name || replyTo?.author?._id || "";
+    const imageAttachment = getFirstImageAttachment(replyTo);
+    const previewLabel = inlineText || getReplyPreviewLabel(replyTo);
+    const isClickable = !!replyTo?.id;
+    const Wrapper = isClickable ? "button" : "div";
+
+    return (
+        <Wrapper
+            type={isClickable ? "button" : undefined}
+            className={`mb-2 w-full rounded-md border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 p-2 pl-2 text-left ${isClickable ? "cursor-pointer transition-colors hover:bg-slate-50 focus:outline-none" : ""} ${className ?? ""}`.trim()}
+            onClick={
+                isClickable
+                    ? (event) => {
+                          event.stopPropagation();
+                          scrollToMessageElement(replyTo?.id);
+                      }
+                    : undefined
+            }
+        >
+            <div
+                className="text-xs font-semibold"
+                style={{ color: authorColor }}
+            >
+                {originalAuthor}
+            </div>
+            {imageAttachment ? (
+                <div className="mt-1 flex items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={imageAttachment.url}
+                        alt={imageAttachment.name || "Reply image preview"}
+                        className="h-10 w-10 shrink-0 rounded-md object-cover"
+                    />
+                    <p className="truncate text-sm text-gray-600">{previewLabel}</p>
+                </div>
+            ) : (
+                <p className="truncate text-sm text-gray-600">{previewLabel}</p>
+            )}
+        </Wrapper>
+    );
+};
+
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     if (preview) {
         return (
@@ -149,7 +241,7 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         const replyText = hasInlineReply ? body.substring(body.indexOf("\n\n") + 2) : body;
         const originalMessage = hasInlineReply
             ? renderMentionsAsDisplayText(body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")))
-            : renderMentionsAsDisplayText((replyTo?.content?.body as string) || "");
+            : getReplyPreviewLabel(replyTo);
         const originalAuthor = hasInlineReply
             ? originalMessage.substring(1, originalMessage.indexOf(">"))
             : replyTo?.author?.name || replyTo?.author?._id || "";
@@ -159,17 +251,12 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
         return (
             <div className="max-w-full overflow-hidden">
                 {isReply && (
-                    <div className="mb-2 rounded-md border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 p-2 pl-2">
-                        <div
-                            className="text-xs font-semibold"
-                            style={{ color: originalAuthorColor }}
-                        >
-                            {originalAuthor}
-                        </div>
-                        <p className="truncate text-sm text-gray-600">
-                            {hasInlineReply ? originalMessage.substring(originalMessage.indexOf(">") + 2) : originalMessage}
-                        </p>
-                    </div>
+                    <ReplyReferencePreview
+                        replyTo={hasInlineReply ? undefined : replyTo}
+                        inlineAuthor={hasInlineReply ? originalAuthor : undefined}
+                        inlineText={hasInlineReply ? originalMessage.substring(originalMessage.indexOf(">") + 2) : undefined}
+                        authorColor={originalAuthorColor}
+                    />
                 )}
                 {renderFormattedChatBody(replyText, {
                     format: (message as any)?.format,
@@ -635,6 +722,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     acc.push(
                         <div
                             key={message.id}
+                            id={getMessageElementId(message.id)}
+                            data-message-id={message.id}
                             className={`group relative mb-1 flex gap-2 ${isFirstInChain ? "mt-4" : "mt-1"} ${hoveredMessageId === message.id ? "z-10" : ""} ${isOwnMessage ? "justify-end" : "justify-start"}`}
                             onMouseEnter={() => !isMobile && setHoveredMessageId(message.id)}
                             onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
@@ -1723,6 +1812,8 @@ const TopicCard: React.FC<{
     return (
         <div
             ref={cardRef}
+            id={getMessageElementId(messageId)}
+            data-message-id={messageId}
             className={`my-2 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
         >
             {/* Header row — always visible, click to toggle */}
@@ -1800,6 +1891,8 @@ const TopicCard: React.FC<{
                             return (
                                 <div
                                     key={reply.id}
+                                    id={getMessageElementId(reply.id)}
+                                    data-message-id={reply.id}
                                     className={`relative flex gap-2 ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
                                     onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
                                     onMouseLeave={() => { if (!isMobile) { setHoveredReplyId(null); } }}

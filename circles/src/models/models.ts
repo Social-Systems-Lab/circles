@@ -1,4 +1,5 @@
 import { Toast } from "@/components/ui/use-toast";
+import type { ChatAttachment } from "@/lib/chat/mongo-types";
 import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
 import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
@@ -351,6 +352,7 @@ export interface ChatMessage {
     stateKey?: string; // Optional for state events
     unsigned?: Record<string, unknown>; // Optional extra event metadata
     author: Circle; // User data from your database
+    attachments?: ChatAttachment[];
     replyTo?: Partial<ChatMessage>; // The message this is a reply to
     reactions?: Record<string, ReactionAggregation[]>; // { [emoji]: [{sender, eventId}, ...] }
     isRedacted?: boolean;
