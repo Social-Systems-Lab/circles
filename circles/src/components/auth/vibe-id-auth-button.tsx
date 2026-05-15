@@ -90,7 +90,7 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
         router.refresh();
     };
 
-    const pollStatus = async (statusUrl: string) => {
+    const pollStatus = async (statusUrl: string, activeRequestData = requestData) => {
         try {
             const response = await fetch(statusUrl, { cache: "no-store" });
             const result = (await response.json()) as VibeIdStatusResponse;
@@ -105,15 +105,15 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
                     window.clearInterval(pollTimerRef.current);
                     pollTimerRef.current = null;
                 }
-                if (onNeedsSignup && requestData) {
-                    onNeedsSignup({ requestId: requestData.requestId, profile: result.profile });
+                if (onNeedsSignup && activeRequestData) {
+                    onNeedsSignup({ requestId: activeRequestData.requestId, profile: result.profile });
                     closePrompt();
                     return;
                 }
 
-                if (requestData) {
+                if (activeRequestData) {
                     const params = new URLSearchParams();
-                    params.set("vibeIdRequestId", requestData.requestId);
+                    params.set("vibeIdRequestId", activeRequestData.requestId);
                     if (result.profile?.displayName) {
                         params.set("vibeIdName", result.profile.displayName);
                     }
@@ -207,9 +207,9 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
                 window.clearInterval(pollTimerRef.current);
             }
             pollTimerRef.current = window.setInterval(() => {
-                void pollStatus(nextRequest.statusUrl);
+                void pollStatus(nextRequest.statusUrl, nextRequest);
             }, 1500);
-            void pollStatus(nextRequest.statusUrl);
+            void pollStatus(nextRequest.statusUrl, nextRequest);
         } catch (error) {
             toast({
                 title: "VibeID unavailable",
