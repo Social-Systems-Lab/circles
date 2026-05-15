@@ -50,7 +50,7 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
     independent_circle: "Independent circle",
 };
 
-export default function VerificationRequestsTab() {
+export default function VerificationRequestsTab({ initialCircleId }: { initialCircleId?: string }) {
     const [requests, setRequests] = useState<VerificationQueueItem[]>([]);
     const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
     const [detail, setDetail] = useState<VerificationRequestDetail | null>(null);
@@ -75,7 +75,9 @@ export default function VerificationRequestsTab() {
             const nextSelectedId =
                 preferredRequestId && nextRequests.some((item) => item.request.id === preferredRequestId)
                     ? preferredRequestId
-                    : nextRequests[0].request.id;
+                    : initialCircleId
+                      ? nextRequests.find((item) => item.targetCircle?.id === initialCircleId)?.request.id || nextRequests[0].request.id
+                      : nextRequests[0].request.id;
             setSelectedRequestId(nextSelectedId);
         } catch (error) {
             toast({
@@ -85,7 +87,7 @@ export default function VerificationRequestsTab() {
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, [initialCircleId, toast]);
 
     const loadDetail = useCallback(async (requestId: string) => {
         try {

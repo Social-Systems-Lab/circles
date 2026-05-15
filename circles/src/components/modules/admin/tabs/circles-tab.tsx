@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { getEntitiesByType, deleteEntity } from "../actions";
 import { Circle } from "@/models/models";
@@ -235,9 +236,18 @@ export default function CirclesTab() {
                                                 : "Unknown"}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(circle)}>
-                                                <Trash2 className="h-4 w-4 text-red-500" />
-                                            </Button>
+                                            <div className="flex justify-end gap-2">
+                                                {getPublishStatus(circle) === "pending_verification" ? (
+                                                    <Button variant="outline" size="sm" asChild>
+                                                        <Link href={`/admin?tab=verification-requests&circleId=${circle._id}`}>
+                                                            Review
+                                                        </Link>
+                                                    </Button>
+                                                ) : null}
+                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(circle)}>
+                                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))

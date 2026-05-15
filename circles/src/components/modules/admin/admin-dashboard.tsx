@@ -31,10 +31,30 @@ interface AdminDashboardProps {
     serverSettings: ServerSettings;
     circles: Circle[];
     onboardingMcpStats: OnboardingMcpStats;
+    initialTab?: string;
+    initialVerificationCircleId?: string;
 }
 
-export default function AdminDashboard({ serverSettings, circles, onboardingMcpStats }: AdminDashboardProps) {
-    const [activeTab, setActiveTab] = useState("server-settings");
+const ADMIN_TABS = new Set([
+    "server-settings",
+    "operations",
+    "circles",
+    "users",
+    "verification-requests",
+    "super-admins",
+    "system-messages",
+]);
+
+const normalizeAdminTab = (tab?: string) => (tab && ADMIN_TABS.has(tab) ? tab : "server-settings");
+
+export default function AdminDashboard({
+    serverSettings,
+    circles,
+    onboardingMcpStats,
+    initialTab,
+    initialVerificationCircleId,
+}: AdminDashboardProps) {
+    const [activeTab, setActiveTab] = useState(() => normalizeAdminTab(initialTab));
     const [isReindexing, setIsReindexing] = useState(false);
     const [reindexStatusMessage, setReindexStatusMessage] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -140,7 +160,7 @@ export default function AdminDashboard({ serverSettings, circles, onboardingMcpS
     const formatMonthlyAmount = (amount: number) => `${monthlyAmountFormatter.format(amount)} / month`;
 
     return (
-        <Tabs defaultValue="server-settings" className="w-full" onValueChange={setActiveTab}>
+        <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
             <TabsList className="mb-6">
                 <TabsTrigger value="server-settings">Server Settings</TabsTrigger>
                 <TabsTrigger value="operations">Server Operations</TabsTrigger> {/* New Tab Trigger */}
@@ -237,7 +257,7 @@ export default function AdminDashboard({ serverSettings, circles, onboardingMcpS
             <TabsContent value="verification-requests" className="space-y-4">
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Verification Requests</h2>
-                    <VerificationRequestsTab />
+                    <VerificationRequestsTab initialCircleId={initialVerificationCircleId} />
                 </div>
             </TabsContent>
 

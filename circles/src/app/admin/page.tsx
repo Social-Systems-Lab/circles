@@ -6,7 +6,11 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { getCircles } from "@/lib/data/circle";
 
-export default async function AdminPage() {
+type AdminPageProps = {
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+};
+
+export default async function AdminPage({ searchParams }: AdminPageProps) {
     let serverSettings = await getServerSettings();
 
     // check if user is admin
@@ -21,6 +25,11 @@ export default async function AdminPage() {
     }
 
     const [circles, onboardingMcpStats] = await Promise.all([getCircles(), getOnboardingMcpStats()]);
+    const resolvedSearchParams = searchParams ? await searchParams : {};
+    const initialTab =
+        typeof resolvedSearchParams.tab === "string" ? resolvedSearchParams.tab : undefined;
+    const initialVerificationCircleId =
+        typeof resolvedSearchParams.circleId === "string" ? resolvedSearchParams.circleId : undefined;
 
     return (
         <div className="container mx-auto p-4">
@@ -31,6 +40,8 @@ export default async function AdminPage() {
                     serverSettings={serverSettings}
                     circles={circles}
                     onboardingMcpStats={onboardingMcpStats}
+                    initialTab={initialTab}
+                    initialVerificationCircleId={initialVerificationCircleId}
                 />
             </Suspense>
         </div>
