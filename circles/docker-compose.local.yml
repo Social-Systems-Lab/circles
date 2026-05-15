@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
     db:
-        image: mongo:latest
+        image: mongo:7.0
         env_file:
             - .env
             - .env.local
@@ -13,7 +13,7 @@ services:
         ports:
             - "${MONGO_PORT}:${MONGO_PORT}"
         volumes:
-            - db:/data/db
+            - db_mongo7:/data/db
         restart: always
         networks:
             - webnet
@@ -117,7 +117,7 @@ services:
             - webnet
 
 volumes:
-    db:
+    db_mongo7:
     storage:
     qdrant_data:
     postgres_data:
