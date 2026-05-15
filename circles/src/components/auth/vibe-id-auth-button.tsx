@@ -8,13 +8,7 @@ import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import type { UserPrivate } from "@/models/models";
@@ -36,7 +30,17 @@ type VibeIdStatusResponse = {
     error?: string;
 };
 
-export function VibeIdAuthButton({ label = "Continue with VibeID" }: { label?: string }) {
+type VibeIdNeedsSignupDetails = {
+    requestId: string;
+    profile?: VibeIdStatusResponse["profile"];
+};
+
+type VibeIdAuthButtonProps = {
+    label?: string;
+    onNeedsSignup?: (details: VibeIdNeedsSignupDetails) => void;
+};
+
+export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup }: VibeIdAuthButtonProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -100,6 +104,11 @@ export function VibeIdAuthButton({ label = "Continue with VibeID" }: { label?: s
                 if (pollTimerRef.current) {
                     window.clearInterval(pollTimerRef.current);
                     pollTimerRef.current = null;
+                }
+                if (onNeedsSignup && requestData) {
+                    onNeedsSignup({ requestId: requestData.requestId, profile: result.profile });
+                    closePrompt();
+                    return;
                 }
                 setSignupName((current) => current || result.profile?.displayName || "");
                 setNeedsSignupDetails(true);

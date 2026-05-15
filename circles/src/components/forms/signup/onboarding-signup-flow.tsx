@@ -97,8 +97,9 @@ function sanitizeHandle(value: string) {
     return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/_/g, "-");
 }
 
-function getAccountErrors(state: SignupState): SignupErrors {
+function getAccountErrors(state: SignupState, options?: { passwordRequired?: boolean }): SignupErrors {
     const errors: SignupErrors = {};
+    const passwordRequired = options?.passwordRequired ?? true;
 
     if (!state.name.trim()) {
         errors.name = "Name is required.";
@@ -110,10 +111,12 @@ function getAccountErrors(state: SignupState): SignupErrors {
         errors.email = "Enter a valid email address.";
     }
 
-    if (!state.password) {
-        errors.password = "Password is required.";
-    } else if (state.password.length < 8) {
-        errors.password = "Password must be at least 8 characters.";
+    if (passwordRequired) {
+        if (!state.password) {
+            errors.password = "Password is required.";
+        } else if (state.password.length < 8) {
+            errors.password = "Password must be at least 8 characters.";
+        }
     }
 
     const handle = sanitizeHandle(state.handle);
@@ -128,10 +131,12 @@ function getAccountErrors(state: SignupState): SignupErrors {
         errors.handle = "Use lowercase letters, numbers, and hyphens only.";
     }
 
-    if (!state.confirmPassword) {
-        errors.confirmPassword = "Please repeat your password.";
-    } else if (state.password !== state.confirmPassword) {
-        errors.confirmPassword = "Passwords do not match.";
+    if (passwordRequired) {
+        if (!state.confirmPassword) {
+            errors.confirmPassword = "Please repeat your password.";
+        } else if (state.password !== state.confirmPassword) {
+            errors.confirmPassword = "Passwords do not match.";
+        }
     }
 
     return errors;
@@ -171,12 +176,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
                     >
                         Kamooni
                     </div>
-                    <div
-                        className={cn(
-                            "mt-1 text-kam-gray-dark/72",
-                            compact ? "text-sm" : "text-base sm:text-lg",
-                        )}
-                    >
+                    <div className={cn("text-kam-gray-dark/72 mt-1", compact ? "text-sm" : "text-base sm:text-lg")}>
                         Find the others
                     </div>
                 </div>
@@ -203,6 +203,8 @@ export function OnboardingSignupFlow() {
     const [isInterestsExpanded, setIsInterestsExpanded] = useState(false);
     const [completionRedirectUrl, setCompletionRedirectUrl] = useState<string | null>(null);
     const [donationIntent, setDonationIntent] = useState<DonationIntentValue>(initialDonationIntent);
+    const [vibeIdSignupRequestId, setVibeIdSignupRequestId] = useState<string | null>(null);
+    const isVibeIdSignup = Boolean(vibeIdSignupRequestId);
 
     const visibleSkillOptions = isSkillsExpanded ? featuredSkills : featuredSkills.slice(0, INITIAL_VISIBLE_OPTIONS);
     const visibleInterestOptions = isInterestsExpanded
@@ -225,14 +227,24 @@ export function OnboardingSignupFlow() {
     const toggleSelection = (field: MultiSelectField, value: string) => {
         updateField(
             field,
-            state[field].includes(value)
-                ? state[field].filter((item) => item !== value)
-                : [...state[field], value],
+            state[field].includes(value) ? state[field].filter((item) => item !== value) : [...state[field], value],
         );
     };
 
+    const continueWithVibeIdSignup = (details: { requestId: string; profile?: { displayName?: string } }) => {
+        setVibeIdSignupRequestId(details.requestId);
+        setState((prev) => ({
+            ...prev,
+            name: prev.name || details.profile?.displayName || "",
+            password: "",
+            confirmPassword: "",
+        }));
+        setErrors({});
+        setStepIndex(1);
+    };
+
     useEffect(() => {
-    return () => {
+        return () => {
             if (profilePicturePreview.startsWith("blob:")) {
                 URL.revokeObjectURL(profilePicturePreview);
             }
@@ -247,7 +259,7 @@ export function OnboardingSignupFlow() {
         const timeoutId = window.setTimeout(() => {
             router.push(completionRedirectUrl);
         }, 2800);
-    return () => {
+        return () => {
             window.clearTimeout(timeoutId);
         };
     }, [completionRedirectUrl, router]);
@@ -268,7 +280,7 @@ export function OnboardingSignupFlow() {
 
     const goToNextStep = () => {
         if (stepIndex === 1) {
-            const nextErrors = getAccountErrors(state);
+            const nextErrors = getAccountErrors(state, { passwordRequired: !isVibeIdSignup });
             if (Object.keys(nextErrors).length > 0) {
                 setErrors(nextErrors);
                 return;
@@ -281,6 +293,9 @@ export function OnboardingSignupFlow() {
 
     const goToPreviousStep = () => {
         setErrors({});
+        if (stepIndex === 1 && isVibeIdSignup) {
+            setVibeIdSignupRequestId(null);
+        }
         setStepIndex((prev) => Math.max(prev - 1, 0));
     };
 
@@ -310,18 +325,40 @@ export function OnboardingSignupFlow() {
         setIsSubmitting(true);
 
         try {
-            const result = await submitSignupFormAction({
-                name: state.name.trim(),
-                handle: sanitizeHandle(state.handle),
-                type: "user",
-                _email: state.email.trim(),
-                _password: state.password,
-                skills: state.skills,
-                interests: state.interests,
-                metadata: {
-                    onboardingFlow: ONBOARDING_FLOW,
-                },
-            });
+            const result = vibeIdSignupRequestId
+                ? await fetch("/api/vibe-id/complete", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      cache: "no-store",
+                      body: JSON.stringify({
+                          requestId: vibeIdSignupRequestId,
+                          name: state.name.trim(),
+                          handle: sanitizeHandle(state.handle),
+                          email: state.email.trim(),
+                          skills: state.skills,
+                          interests: state.interests,
+                          metadata: {
+                              onboardingFlow: ONBOARDING_FLOW,
+                          },
+                      }),
+                  }).then(async (response) => {
+                      const data = await response.json();
+                      return response.ok && data.status === "approved" && data.user
+                          ? { success: true, data: { user: data.user } }
+                          : { success: false, message: data.message || "Could not complete VibeID signup." };
+                  })
+                : await submitSignupFormAction({
+                      name: state.name.trim(),
+                      handle: sanitizeHandle(state.handle),
+                      type: "user",
+                      _email: state.email.trim(),
+                      _password: state.password,
+                      skills: state.skills,
+                      interests: state.interests,
+                      metadata: {
+                          onboardingFlow: ONBOARDING_FLOW,
+                      },
+                  });
 
             if (!result.success) {
                 const message = result.message || "An error occurred during signup.";
@@ -346,6 +383,7 @@ export function OnboardingSignupFlow() {
             setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
             setCreatedUserId(String(result.data.user._id || ""));
             setCreatedUserHandle(result.data.user.handle || sanitizeHandle(state.handle));
+            setVibeIdSignupRequestId(null);
 
             toast({
                 title: "Account created",
@@ -625,7 +663,7 @@ export function OnboardingSignupFlow() {
                                         {stepIndex === 4 && "Set up your profile"}
                                         {stepIndex === 5 && "Support projects through Kamooni"}
                                     </h1>
-                                    <p className="mt-3 max-w-2xl text-sm leading-6 text-kam-gray-dark/72 sm:text-base">
+                                    <p className="text-kam-gray-dark/72 mt-3 max-w-2xl text-sm leading-6 sm:text-base">
                                         {stepIndex === 0 &&
                                             "Join people building communities, projects, and practical alternatives together."}
                                         {stepIndex === 1 &&
@@ -703,44 +741,54 @@ export function OnboardingSignupFlow() {
                                             {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="signup-password">Password</Label>
-                                            <Input
-                                                id="signup-password"
-                                                type="password"
-                                                value={state.password}
-                                                onChange={(event) => updateField("password", event.target.value)}
-                                                autoComplete="new-password"
-                                                placeholder="At least 8 characters"
-                                                className="h-12 border-[#d9c7a0] bg-white/80"
-                                            />
-                                            {errors.password && (
-                                                <p className="text-sm text-red-600">{errors.password}</p>
-                                            )}
-                                        </div>
+                                        {!isVibeIdSignup && (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="signup-password">Password</Label>
+                                                    <Input
+                                                        id="signup-password"
+                                                        type="password"
+                                                        value={state.password}
+                                                        onChange={(event) =>
+                                                            updateField("password", event.target.value)
+                                                        }
+                                                        autoComplete="new-password"
+                                                        placeholder="At least 8 characters"
+                                                        className="h-12 border-[#d9c7a0] bg-white/80"
+                                                    />
+                                                    {errors.password && (
+                                                        <p className="text-sm text-red-600">{errors.password}</p>
+                                                    )}
+                                                </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="signup-confirm-password">Repeat password</Label>
-                                            <Input
-                                                id="signup-confirm-password"
-                                                type="password"
-                                                value={state.confirmPassword}
-                                                onChange={(event) => updateField("confirmPassword", event.target.value)}
-                                                autoComplete="new-password"
-                                                placeholder="Repeat password"
-                                                className="h-12 border-[#d9c7a0] bg-white/80"
-                                            />
-                                            {errors.confirmPassword && (
-                                                <p className="text-sm text-red-600">{errors.confirmPassword}</p>
-                                            )}
-                                        </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="signup-confirm-password">Repeat password</Label>
+                                                    <Input
+                                                        id="signup-confirm-password"
+                                                        type="password"
+                                                        value={state.confirmPassword}
+                                                        onChange={(event) =>
+                                                            updateField("confirmPassword", event.target.value)
+                                                        }
+                                                        autoComplete="new-password"
+                                                        placeholder="Repeat password"
+                                                        className="h-12 border-[#d9c7a0] bg-white/80"
+                                                    />
+                                                    {errors.confirmPassword && (
+                                                        <p className="text-sm text-red-600">{errors.confirmPassword}</p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
 
                                         <div className="space-y-2 sm:col-span-2">
                                             <Label htmlFor="signup-handle">Handle</Label>
                                             <Input
                                                 id="signup-handle"
                                                 value={state.handle}
-                                                onChange={(event) => updateField("handle", sanitizeHandle(event.target.value))}
+                                                onChange={(event) =>
+                                                    updateField("handle", sanitizeHandle(event.target.value))
+                                                }
                                                 autoComplete="nickname"
                                                 placeholder="your-handle"
                                                 className="h-12 border-[#d9c7a0] bg-white/80"
@@ -752,16 +800,23 @@ export function OnboardingSignupFlow() {
                                         </div>
                                     </div>
 
-                                    <div className="relative">
-                                        <div className="absolute inset-0 flex items-center">
-                                            <span className="w-full border-t border-[#d7bf94]" />
+                                    {!isVibeIdSignup && (
+                                        <div className="relative">
+                                            <div className="absolute inset-0 flex items-center">
+                                                <span className="w-full border-t border-[#d7bf94]" />
+                                            </div>
+                                            <div className="relative flex justify-center text-xs uppercase">
+                                                <span className="bg-[#fffaf2] px-2 text-kam-gray-dark/55">or</span>
+                                            </div>
                                         </div>
-                                        <div className="relative flex justify-center text-xs uppercase">
-                                            <span className="bg-[#fffaf2] px-2 text-kam-gray-dark/55">or</span>
-                                        </div>
-                                    </div>
+                                    )}
 
-                                    <VibeIdAuthButton label="Sign up with VibeID" />
+                                    {!isVibeIdSignup && (
+                                        <VibeIdAuthButton
+                                            label="Sign up with VibeID"
+                                            onNeedsSignup={continueWithVibeIdSignup}
+                                        />
+                                    )}
 
                                     <div className="flex flex-col gap-3 pt-3 sm:flex-row">
                                         <Button
@@ -785,7 +840,7 @@ export function OnboardingSignupFlow() {
                             {stepIndex === 2 && (
                                 <div className="space-y-6">
                                     <div className="flex items-center justify-between gap-3">
-                                        <p className="text-sm text-kam-gray-dark/62">
+                                        <p className="text-kam-gray-dark/62 text-sm">
                                             {hasMinimumSkills ? SKILLS_PROMPT_TEXT : SKILLS_HELPER_TEXT}
                                         </p>
                                         <p className="text-sm font-medium text-[#9d5a21]">
@@ -796,7 +851,7 @@ export function OnboardingSignupFlow() {
                                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleSkillOptions.map((skill) => {
                                             const selected = state.skills.includes(skill.handle);
-    return (
+                                            return (
                                                 <button
                                                     key={skill.handle}
                                                     type="button"
@@ -805,7 +860,7 @@ export function OnboardingSignupFlow() {
                                                         "min-h-[72px] rounded-[20px] border px-4 py-3 text-left text-sm font-medium transition-colors",
                                                         selected
                                                             ? "border-[#c77733] bg-[#c77733] text-white"
-                                                            : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#c77733]/60",
+                                                            : "bg-white/72 border-[#d8c7a0] text-kam-gray-dark hover:border-[#c77733]/60",
                                                     )}
                                                 >
                                                     {skill.label}
@@ -857,7 +912,7 @@ export function OnboardingSignupFlow() {
                             {stepIndex === 3 && (
                                 <div className="space-y-6">
                                     <div className="flex items-center justify-between gap-3">
-                                        <p className="text-sm text-kam-gray-dark/62">
+                                        <p className="text-kam-gray-dark/62 text-sm">
                                             {hasMinimumInterests ? INTERESTS_PROMPT_TEXT : INTERESTS_HELPER_TEXT}
                                         </p>
                                         <p className="text-sm font-medium text-[#9d5a21]">
@@ -868,7 +923,7 @@ export function OnboardingSignupFlow() {
                                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         {visibleInterestOptions.map((interest) => {
                                             const selected = state.interests.includes(interest.value);
-    return (
+                                            return (
                                                 <button
                                                     key={interest.value}
                                                     type="button"
@@ -877,7 +932,7 @@ export function OnboardingSignupFlow() {
                                                         "min-h-[72px] rounded-[20px] border px-4 py-3 text-left text-sm font-medium transition-colors",
                                                         selected
                                                             ? "border-[#6f7a34] bg-[#6f7a34] text-white"
-                                                            : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#6f7a34]/60",
+                                                            : "bg-white/72 border-[#d8c7a0] text-kam-gray-dark hover:border-[#6f7a34]/60",
                                                     )}
                                                 >
                                                     {interest.label}
@@ -1007,10 +1062,11 @@ export function OnboardingSignupFlow() {
                                                     maxLength={SHORT_BIO_MAX_LENGTH}
                                                     className="min-h-[140px] border-[#d9c7a0] bg-white/80"
                                                 />
-                                                <p className="text-sm text-kam-gray-dark/62">
-                                                    A short introduction, up to {SHORT_BIO_MAX_LENGTH} characters, appears under your name on your profile.
+                                                <p className="text-kam-gray-dark/62 text-sm">
+                                                    A short introduction, up to {SHORT_BIO_MAX_LENGTH} characters,
+                                                    appears under your name on your profile.
                                                 </p>
-                                                <p className="text-xs text-kam-gray-dark/52">
+                                                <p className="text-kam-gray-dark/52 text-xs">
                                                     {state.about.length}/{SHORT_BIO_MAX_LENGTH}
                                                 </p>
                                                 {errors.about && <p className="text-sm text-red-600">{errors.about}</p>}
@@ -1025,7 +1081,7 @@ export function OnboardingSignupFlow() {
                                                     placeholder="What change do you want to contribute to?"
                                                     className="min-h-[160px] border-[#d9c7a0] bg-white/80"
                                                 />
-                                                <p className="text-sm text-kam-gray-dark/62">
+                                                <p className="text-kam-gray-dark/62 text-sm">
                                                     Optional. You can add this now or come back to it later.
                                                 </p>
                                             </div>
@@ -1096,7 +1152,9 @@ export function OnboardingSignupFlow() {
                                         className="w-full max-w-md rounded-[28px] border border-white/80 bg-[#fff4d5] p-8 text-center shadow-[0_18px_48px_rgba(123,81,24,0.14)]"
                                     >
                                         <OnboardingCompleteAnimation />
-                                        {(donationIntent.amount || donationIntent.customAmount || donationIntent.volunteering) && (
+                                        {(donationIntent.amount ||
+                                            donationIntent.customAmount ||
+                                            donationIntent.volunteering) && (
                                             <p className="mt-3 text-sm text-kam-gray-dark/70">
                                                 Thank you for participating.
                                             </p>

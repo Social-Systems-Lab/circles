@@ -74,11 +74,13 @@ function generateLocalDidAndPublicKey(): { did: string; publicKeyPem: string } {
 
 function makeHandleSeed(profile: VibeIdProfile | undefined, vibeDid: string): string {
     const displayName = profile?.displayName || "vibe";
-    return displayName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 14) || `vibe-${crypto.createHash("sha256").update(vibeDid).digest("hex").slice(0, 8)}`;
+    return (
+        displayName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 14) || `vibe-${crypto.createHash("sha256").update(vibeDid).digest("hex").slice(0, 8)}`
+    );
 }
 
 async function getAvailableHandle(profile: VibeIdProfile | undefined, vibeDid: string): Promise<string> {
@@ -103,10 +105,14 @@ async function createVibeIdUser(params: {
     profile?: VibeIdProfile;
     name: string;
     email: string;
+    handle?: string;
+    skills?: string[];
+    interests?: string[];
+    metadata?: Record<string, unknown>;
 }): Promise<Circle> {
-    const { vibeDid, profile, name, email } = params;
+    const { vibeDid, profile, name, email, skills, interests, metadata } = params;
     const { did, publicKeyPem } = generateLocalDidAndPublicKey();
-    const handle = await getAvailableHandle(profile, vibeDid);
+    const handle = params.handle ?? (await getAvailableHandle(profile, vibeDid));
     const verificationToken = generateSecureToken();
     const user = createNewUser(
         did,
@@ -121,8 +127,20 @@ async function createVibeIdUser(params: {
     );
     user.verificationStatus = "unverified";
     user.accountStatus = "pending_verification";
+    if (skills?.length) {
+        user.skills = skills;
+        user.offers = {
+            ...(user.offers ?? {}),
+            skills,
+            visibility: user.offers?.visibility ?? "public",
+        };
+    }
+    if (interests?.length) {
+        user.interests = interests;
+    }
     user.metadata = {
         ...(user.metadata ?? {}),
+        ...(metadata ?? {}),
         authProviders: {
             vibeId: {
                 did: vibeDid,
@@ -194,7 +212,10 @@ export async function createVibeIdRequest(request: NextRequest): Promise<NextRes
     const linkUserDid = intent === "link" ? await getAuthenticatedUserDid() : undefined;
 
     if (intent === "link" && !linkUserDid) {
-        return NextResponse.json({ success: false, message: "You need to be logged in to connect VibeID." }, { status: 401 });
+        return NextResponse.json(
+            { success: false, message: "You need to be logged in to connect VibeID." },
+            { status: 401 },
+        );
     }
 
     const origin = normalizeSiteOrigin(request);
@@ -294,7 +315,10 @@ export async function handleVibeIdCallback(request: NextRequest): Promise<NextRe
                 { requestId },
                 { $set: { status: "failed", completedAt: new Date(), error: "missing_link_user" } },
             );
-            return NextResponse.json({ success: false, message: "The linking request is missing a user." }, { status: 400 });
+            return NextResponse.json(
+                { success: false, message: "The linking request is missing a user." },
+                { status: 400 },
+            );
         }
 
         if (existingUser && existingUser.did !== storedRequest.linkUserDid) {
@@ -309,7 +333,10 @@ export async function handleVibeIdCallback(request: NextRequest): Promise<NextRe
                     },
                 },
             );
-            return NextResponse.json({ success: false, message: "This VibeID is already connected to another Kamooni account." }, { status: 409 });
+            return NextResponse.json(
+                { success: false, message: "This VibeID is already connected to another Kamooni account." },
+                { status: 409 },
+            );
         }
 
         const userToLink = await getUserPrivate(storedRequest.linkUserDid);
@@ -421,10 +448,7 @@ export async function readVibeIdStatus(_request: NextRequest, requestId: string)
 
     const privateUser = await getUserPrivate(storedRequest.userDid);
     await createUserSession(privateUser, storedRequest.userDid);
-    await collection.updateOne(
-        { requestId },
-        { $set: { completedAt: new Date(Date.now() - COMPLETED_TTL_MS) } },
-    );
+    await collection.updateOne({ requestId }, { $set: { completedAt: new Date(Date.now() - COMPLETED_TTL_MS) } });
 
     return NextResponse.json({
         status: "approved",
@@ -437,6 +461,22 @@ export async function completeVibeIdSignup(request: NextRequest): Promise<NextRe
     const requestId = typeof body?.requestId === "string" ? body.requestId : "";
     const name = normalizeDisplayText(body?.name, "", 80);
     const email = normalizeEmail(body?.email);
+    const handle =
+        typeof body?.handle === "string"
+            ? body.handle.trim().toLowerCase().replace(/\s+/g, "-").replace(/_/g, "-")
+            : "";
+    const skills = Array.isArray(body?.skills)
+        ? body.skills.filter((skill: unknown): skill is string => typeof skill === "string" && skill.trim().length > 0)
+        : undefined;
+    const interests = Array.isArray(body?.interests)
+        ? body.interests.filter(
+              (interest: unknown): interest is string => typeof interest === "string" && interest.trim().length > 0,
+          )
+        : undefined;
+    const metadata =
+        body?.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+            ? (body.metadata as Record<string, unknown>)
+            : undefined;
 
     if (!requestId || !name || !email) {
         return NextResponse.json({ success: false, message: "Name and email are required." }, { status: 400 });
@@ -446,24 +486,63 @@ export async function completeVibeIdSignup(request: NextRequest): Promise<NextRe
         return NextResponse.json({ success: false, message: "Enter a valid email address." }, { status: 400 });
     }
 
+    if (handle) {
+        if (handle.length < 3) {
+            return NextResponse.json(
+                { success: false, message: "Handle must be at least 3 characters." },
+                { status: 400 },
+            );
+        }
+
+        if (handle.length > 20) {
+            return NextResponse.json(
+                { success: false, message: "Handle can't be more than 20 characters." },
+                { status: 400 },
+            );
+        }
+
+        if (!/^[a-z0-9-]+$/.test(handle)) {
+            return NextResponse.json(
+                { success: false, message: "Use lowercase letters, numbers, and hyphens only." },
+                { status: 400 },
+            );
+        }
+    }
+
     const collection = getRequestsCollection();
     const storedRequest = await collection.findOne({ requestId });
 
     if (!storedRequest || storedRequest.status !== "needs_signup" || !storedRequest.vibeDid) {
-        return NextResponse.json({ success: false, message: "This VibeID signup request is not ready." }, { status: 400 });
+        return NextResponse.json(
+            { success: false, message: "This VibeID signup request is not ready." },
+            { status: 400 },
+        );
     }
 
     const existingVibeUser = await findUserForVibeId(storedRequest.vibeDid);
     if (existingVibeUser) {
-        return NextResponse.json({ success: false, message: "This VibeID is already connected to a Kamooni account." }, { status: 409 });
+        return NextResponse.json(
+            { success: false, message: "This VibeID is already connected to a Kamooni account." },
+            { status: 409 },
+        );
     }
 
     const existingEmailUser = await Circles.findOne({ email }, { collation: { locale: "en", strength: 2 } });
     if (existingEmailUser) {
         return NextResponse.json(
-            { success: false, message: "This email is already used. Log in with that account and connect VibeID in settings." },
+            {
+                success: false,
+                message: "This email is already used. Log in with that account and connect VibeID in settings.",
+            },
             { status: 409 },
         );
+    }
+
+    if (handle) {
+        const existingHandleUser = await Circles.findOne({ handle });
+        if (existingHandleUser) {
+            return NextResponse.json({ success: false, message: "That handle is already taken." }, { status: 409 });
+        }
     }
 
     const user = await createVibeIdUser({
@@ -471,6 +550,10 @@ export async function completeVibeIdSignup(request: NextRequest): Promise<NextRe
         profile: storedRequest.profile,
         name,
         email,
+        handle: handle || undefined,
+        skills,
+        interests,
+        metadata,
     });
 
     await collection.updateOne(
