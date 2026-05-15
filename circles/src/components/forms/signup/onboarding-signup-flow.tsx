@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Montserrat, Noto_Serif } from "next/font/google";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, Loader2 } from "lucide-react";
@@ -187,6 +187,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
 
 export function OnboardingSignupFlow() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { toast } = useToast();
     const [, setUser] = useAtom(userAtom);
     const [, setAuthInfo] = useAtom(authInfoAtom);
@@ -242,6 +243,30 @@ export function OnboardingSignupFlow() {
         setErrors({});
         setStepIndex(1);
     };
+
+    useEffect(() => {
+        const requestId = searchParams?.get("vibeIdRequestId");
+        if (!requestId || vibeIdSignupRequestId) {
+            return;
+        }
+
+        const displayName = searchParams?.get("vibeIdName") || "";
+        setVibeIdSignupRequestId(requestId);
+        setState((prev) => ({
+            ...prev,
+            name: prev.name || displayName,
+            password: "",
+            confirmPassword: "",
+        }));
+        setErrors({});
+        setStepIndex(1);
+
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.delete("vibeIdRequestId");
+        nextParams.delete("vibeIdName");
+        const nextQuery = nextParams.toString();
+        router.replace(nextQuery ? `/signup?${nextQuery}` : "/signup");
+    }, [router, searchParams, vibeIdSignupRequestId]);
 
     useEffect(() => {
         return () => {

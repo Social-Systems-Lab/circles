@@ -110,6 +110,22 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
                     closePrompt();
                     return;
                 }
+
+                if (requestData) {
+                    const params = new URLSearchParams();
+                    params.set("vibeIdRequestId", requestData.requestId);
+                    if (result.profile?.displayName) {
+                        params.set("vibeIdName", result.profile.displayName);
+                    }
+                    const redirectTo = searchParams?.get("redirectTo");
+                    if (redirectTo) {
+                        params.set("redirectTo", redirectTo);
+                    }
+                    closePrompt();
+                    router.push(`/signup?${params.toString()}`);
+                    return;
+                }
+
                 setSignupName((current) => current || result.profile?.displayName || "");
                 setNeedsSignupDetails(true);
                 setStatusText("Add your Kamooni account details to finish signup.");
