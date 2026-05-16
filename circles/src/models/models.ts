@@ -1501,6 +1501,7 @@ export interface TaskDisplay extends Task {
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
     participantProfiles?: Circle[];
+    contributionNote?: string;
     rank?: number; // Aggregated task rank
     goal?: GoalDisplay; // Associated goal details
     event?: EventDisplay; // Associated event details

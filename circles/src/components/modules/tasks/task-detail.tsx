@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react";
+import Image from "next/image";
 import {
     Circle,
     TaskDisplay,
@@ -62,6 +63,7 @@ import {
     acceptTaskAction,
     assignTaskAction, // Renamed action
     deleteTaskAction, // Renamed action
+    getShiftViewerContextAction,
     getTaskAction,
     getMembersAction, // Keep this action (assuming it's generic)
     joinShiftTaskAction,
@@ -241,6 +243,8 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const [attendanceParticipant, setAttendanceParticipant] = useState<TaskParticipant | null>(null);
     const [attendanceStatus, setAttendanceStatus] = useState<TaskParticipantAttendanceStatus>("attended");
     const [attendanceNote, setAttendanceNote] = useState("");
+    const [acceptedConnectionDids, setAcceptedConnectionDids] = useState<string[]>([]);
+    const [reviewerProfiles, setReviewerProfiles] = useState<Circle[]>([]);
     const { toast } = useToast();
     const router = useRouter();
 
@@ -254,6 +258,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const shiftConfirmedSummary = getShiftConfirmedSummary(task);
     const shiftPendingSummary = getShiftPendingSummary(task);
     const shiftDisplayStatus = isShiftTask ? getShiftDisplayStatus(task) : null;
+    const isCompletedShift = isShiftTask && shiftDisplayStatus === "completed";
     const isAuthor = currentUserDid === task.createdBy; // Use task prop
     const isAssignee = currentUserDid === task.assignedTo; // Use task prop
     const canSubmitForReview = !isShiftTask && isAssignee;
@@ -277,6 +282,13 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         shiftDisplayStatus !== "completed";
     const canVerifyShiftParticipants = isShiftTask && permissions.canModerate;
     const canReviewShiftAttendance = isShiftTask && permissions.canModerate && shiftDisplayStatus === "completed";
+    const shiftHeroImage = isShiftTask && task.images && task.images.length > 0 ? task.images[0] : null;
+    const attendeeVisibilityDidSet = new Set([currentUserDid, ...acceptedConnectionDids]);
+    const reviewerProfileByDid = new Map(
+        reviewerProfiles
+            .filter((profile): profile is Circle & { did: string } => typeof profile.did === "string" && profile.did.length > 0)
+            .map((profile) => [profile.did, profile]),
+    );
     const shiftIsWaitlistedByPending =
         isShiftTask &&
         !isShiftParticipant &&
@@ -285,6 +297,18 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         verifiedShiftParticipantsCount < shiftSlots &&
         shiftDisplayStatus !== "review" &&
         shiftDisplayStatus !== "completed";
+    const attendedShiftParticipants = confirmedShiftParticipants.filter(
+        ({ participant }) => participant.attendanceStatus === "attended",
+    );
+    const completedShiftSummaryParticipants =
+        attendedShiftParticipants.length > 0 ? attendedShiftParticipants : confirmedShiftParticipants;
+    const currentViewerAttendanceReview =
+        currentShiftParticipant?.attendanceStatus === "attended" ? currentShiftParticipant.attendanceNote?.trim() : "";
+    const currentViewerAttendanceReviewer =
+        currentShiftParticipant?.attendanceVerifiedBy
+            ? reviewerProfileByDid.get(currentShiftParticipant.attendanceVerifiedBy)
+            : undefined;
+    const isNonAdminCompletedShiftPreview = isPreview && isCompletedShift && !permissions.canModerate;
 
     useEffect(() => {
         setSelectedPriority(task.priority ?? "none");
@@ -306,6 +330,34 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         setAttendanceStatus(attendanceParticipant.attendanceStatus ?? "attended");
         setAttendanceNote(attendanceParticipant.attendanceNote ?? "");
     }, [attendanceParticipant]);
+
+    useEffect(() => {
+        if (!isShiftTask || !circle.handle) {
+            setAcceptedConnectionDids([]);
+            setReviewerProfiles([]);
+            return;
+        }
+
+        let cancelled = false;
+        void getShiftViewerContextAction(circle.handle, task._id as string)
+            .then((context) => {
+                if (cancelled) {
+                    return;
+                }
+
+                setAcceptedConnectionDids(context.acceptedConnectionDids);
+                setReviewerProfiles(context.reviewerProfiles);
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    console.error("Failed to load shift viewer context:", error);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [circle.handle, isShiftTask, task._id]);
 
     const refreshOpenTaskPreview = async () => {
         if (!isPreview || !circle.handle) {
@@ -364,6 +416,13 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     const handleEdit = () => {
         router.push(`/circles/${circle.handle}/tasks/${task._id}/edit`); // Updated path
+    };
+
+    const handleOpenTaskPage = () => {
+        if (isPreview) {
+            setContentPreview(undefined);
+        }
+        router.push(`/circles/${circle.handle}/tasks/${task._id}`);
     };
 
     const handleDelete = async () => {
@@ -430,6 +489,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             });
         });
     };
+
+    const canRevealCompletedShiftParticipant = (participant: TaskParticipant) =>
+        permissions.canModerate || attendeeVisibilityDidSet.has(participant.userDid);
 
     const openStageChangeDialog = (stage: TaskStage) => {
         // Updated type
@@ -776,6 +838,20 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     // Define the main content structure
     const mainContent = (
         <>
+            {shiftHeroImage && (
+                <div className={cn("relative overflow-hidden", isPreview ? "mb-4 rounded-2xl" : "rounded-t-xl")}>
+                    <div className="relative aspect-[16/7] w-full bg-slate-100">
+                        <Image
+                            src={shiftHeroImage.fileInfo?.url ?? "/images/default-post-picture.png"}
+                            alt={shiftHeroImage.name || `${task.title} image`}
+                            fill
+                            className="object-cover"
+                            sizes={isPreview ? "100vw" : "(max-width: 1024px) 100vw, 896px"}
+                            priority={isPreview}
+                        />
+                    </div>
+                </div>
+            )}
             <CardHeader className="space-y-0 pb-2">
                 <div className="flex min-w-0 flex-col gap-3">
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
@@ -784,7 +860,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 <StageIcon className="h-3 w-3" />
                                 {stageText}
                             </Badge>
-                            {isShiftTask && <Badge className="border-transparent bg-sky-100 text-sky-800">Shift</Badge>}
+                            {isShiftTask && !isNonAdminCompletedShiftPreview && (
+                                <Badge className="border-transparent bg-sky-100 text-sky-800">Shift</Badge>
+                            )}
                             {workflowStatus && (
                                 <Badge
                                     variant="outline"
@@ -793,7 +871,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     {workflowStatus.label}
                                 </Badge>
                             )}
-                            {canEditTask ? (
+                            {!isNonAdminCompletedShiftPreview && canEditTask ? (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button
@@ -826,48 +904,59 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                         </DropdownMenuRadioGroup>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
-                            ) : (
+                            ) : !isNonAdminCompletedShiftPreview ? (
                                 <Badge variant="outline" className={cn("shrink-0 border", priorityInfo.badgeClassName)}>
                                     {priorityInfo.label}
                                 </Badge>
-                            )}
+                            ) : null}
                         </div>
 
-                        {/* Actions Dropdown */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 shrink-0 p-0">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Options</DropdownMenuLabel>
-                                {/* Edit Action */}
-                                {canEditTask && ( // Renamed variable
-                                    <DropdownMenuItem onClick={handleEdit} disabled={currentStage === "resolved"}>
-                                        <Pencil className="mr-2 h-4 w-4" /> Edit Task {/* Updated text */}
-                                    </DropdownMenuItem>
-                                )}
-                                {/* Delete Action */}
-                                {canDeleteTask && ( // Renamed variable
-                                    <>
-                                        {canEditTask && <DropdownMenuSeparator />} {/* Renamed variable */}
-                                        <DropdownMenuItem
-                                            onClick={() => setDeleteDialogOpen(true)}
-                                            className="text-red-600"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" /> Delete Task {/* Updated text */}
+                        {isNonAdminCompletedShiftPreview ? (
+                            <Button type="button" variant="outline" onClick={handleOpenTaskPage} className="shrink-0">
+                                <Play className="mr-2 h-4 w-4" /> Open
+                            </Button>
+                        ) : (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 shrink-0 p-0">
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Options</DropdownMenuLabel>
+                                    {isPreview && (
+                                        <DropdownMenuItem onClick={handleOpenTaskPage}>
+                                            <Play className="mr-2 h-4 w-4" /> Open Task
                                         </DropdownMenuItem>
-                                    </>
-                                )}
-                                {/* Show message if no actions */}
-                                {!canEditTask &&
-                                    !canDeleteTask && ( // Renamed variables
-                                        <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
                                     )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                    {isPreview && (canEditTask || canDeleteTask) && <DropdownMenuSeparator />}
+                                    {/* Edit Action */}
+                                    {canEditTask && ( // Renamed variable
+                                        <DropdownMenuItem onClick={handleEdit} disabled={currentStage === "resolved"}>
+                                            <Pencil className="mr-2 h-4 w-4" /> Edit Task {/* Updated text */}
+                                        </DropdownMenuItem>
+                                    )}
+                                    {/* Delete Action */}
+                                    {canDeleteTask && ( // Renamed variable
+                                        <>
+                                            {canEditTask && <DropdownMenuSeparator />} {/* Renamed variable */}
+                                            <DropdownMenuItem
+                                                onClick={() => setDeleteDialogOpen(true)}
+                                                className="text-red-600"
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" /> Delete Task {/* Updated text */}
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                    {/* Show message if no actions */}
+                                    {!canEditTask &&
+                                        !canDeleteTask && ( // Renamed variables
+                                            <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
+                                        )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
                     </div>
 
                     {/* Link only if not in preview */}
@@ -961,7 +1050,8 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
                 {/* Images */}
                 {task.images &&
-                    task.images.length > 0 && ( // Use task prop
+                    task.images.length > 0 &&
+                    !shiftHeroImage && ( // Use task prop
                         <div className="mb-6">
                             <h3 className="mb-2 text-lg font-semibold">Images</h3>
                             <ImageThumbnailCarousel images={task.images} className="w-full" /> {/* Use task prop */}
@@ -1012,21 +1102,23 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 </div>
                             </div>
                         )}
-                        <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                            Sign up requests a spot. A participant only appears publicly after admin confirmation.
-                        </div>
-                        {currentShiftParticipant?.verifiedAt && (
+                        {!isCompletedShift && (
+                            <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                                Sign up requests a spot. A participant only appears publicly after admin confirmation.
+                            </div>
+                        )}
+                        {!isCompletedShift && currentShiftParticipant?.verifiedAt && (
                             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                                 You are confirmed for this shift. Contact an admin if you can no longer attend.
                             </div>
                         )}
-                        {currentShiftParticipant && !currentShiftParticipant.verifiedAt && (
+                        {!isCompletedShift && currentShiftParticipant && !currentShiftParticipant.verifiedAt && (
                             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                                 You are signed up and waiting for confirmation. You can still leave until an admin
                                 confirms you.
                             </div>
                         )}
-                        {shiftIsWaitlistedByPending && (
+                        {!isCompletedShift && shiftIsWaitlistedByPending && (
                             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                                 All current slots are pending confirmation. Contact an admin if you need help.
                             </div>
@@ -1037,10 +1129,77 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 contributions.
                             </div>
                         )}
+                        {isCompletedShift && !permissions.canModerate && (
+                            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                                {attendedShiftParticipants.length > 0
+                                    ? `${attendedShiftParticipants.length} ${
+                                          attendedShiftParticipants.length === 1 ? "person contributed" : "people contributed"
+                                      }`
+                                    : `${confirmedShiftParticipants.length} ${
+                                          confirmedShiftParticipants.length === 1 ? "person was confirmed" : "people were confirmed"
+                                      }`}
+                            </div>
+                        )}
+                        {isCompletedShift && currentViewerAttendanceReview && (
+                            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-4">
+                                <div className="flex items-start gap-3">
+                                    <UserPicture
+                                        name={currentViewerAttendanceReviewer?.name || "Admin"}
+                                        picture={currentViewerAttendanceReviewer?.picture?.url}
+                                        size="36px"
+                                    />
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-medium text-emerald-900">
+                                            Attendance verified by {currentViewerAttendanceReviewer?.name || "an admin"}
+                                        </div>
+                                        <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-900">
+                                            {currentViewerAttendanceReview}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="mt-6">
-                            <h4 className="text-base font-semibold text-foreground">Confirmed Participants</h4>
-                            {confirmedShiftParticipants.length > 0 ? (
+                            <h4 className="text-base font-semibold text-foreground">
+                                {isCompletedShift && !permissions.canModerate ? "Contributors" : "Confirmed Participants"}
+                            </h4>
+                            {isCompletedShift && !permissions.canModerate ? (
+                                confirmedShiftParticipants.length > 0 ? (
+                                    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-4">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {completedShiftSummaryParticipants.map(({ participant, profile }) => {
+                                                const canReveal = canRevealCompletedShiftParticipant(participant);
+                                                const participantName = canReveal ? profile?.name : undefined;
+                                                const participantPicture = canReveal ? profile?.picture?.url : undefined;
+                                                const avatarLabel = canReveal
+                                                    ? participantName || profile?.handle || participant.userDid
+                                                    : "Anonymous contributor";
+
+                                                return (
+                                                    <div
+                                                        key={participant.userDid}
+                                                        className="rounded-full border border-slate-200 bg-slate-50 p-1"
+                                                        title={avatarLabel}
+                                                    >
+                                                        <UserPicture
+                                                            name={participantName}
+                                                            picture={participantPicture}
+                                                            size="32px"
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="mt-3 text-sm text-muted-foreground">
+                                            People are only identified here if they are you, you are an admin, or you are
+                                            accepted contacts.
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-3 text-sm text-muted-foreground">No confirmed participants yet.</div>
+                                )
+                            ) : confirmedShiftParticipants.length > 0 ? (
                                 <div className="mt-3 space-y-3">
                                     {confirmedShiftParticipants.map(({ participant, profile }) => {
                                         const participantName = profile?.name || participant.userDid;
@@ -1122,7 +1281,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             )}
                         </div>
 
-                        {permissions.canModerate && (
+                        {permissions.canModerate && !isCompletedShift && (
                             <div className="mt-6">
                                 <h4 className="text-base font-semibold text-foreground">Pending Sign-ups</h4>
                                 {pendingShiftParticipants.length > 0 ? (
@@ -1222,7 +1381,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                         postId={task.commentPostId}
                         circle={circle}
                         user={user ?? null} // Convert undefined from atom to null
-                        // initialCommentCount={task.comments || 0} // Pass if comment count is added to TaskDisplay
+                        hideWhenEmpty={isPreview}
                     />
                 )}
                 {/* Show message if comments are disabled or no post ID */}

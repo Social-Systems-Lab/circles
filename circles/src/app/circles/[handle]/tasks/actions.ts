@@ -44,6 +44,8 @@ import {
 } from "@/lib/data/task";
 import { getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Import cache update function
+import { getCirclesByDids } from "@/lib/data/circle";
+import { listAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
 // Import task notification functions (assuming they will be created)
 import {
     notifyTaskSubmittedForReview,
@@ -211,6 +213,46 @@ export async function getTaskAction(circleHandle: string, taskId: string): Promi
         console.error("Error getting task:", error); // Updated message
         return null; // Return null on error
         // throw error; // Or re-throw
+    }
+}
+
+export async function getShiftViewerContextAction(
+    circleHandle: string,
+    taskId: string,
+): Promise<{ acceptedConnectionDids: string[]; reviewerProfiles: Circle[] }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { acceptedConnectionDids: [], reviewerProfiles: [] };
+        }
+
+        const task = await getTaskAction(circleHandle, taskId);
+        if (!task || (task.taskType ?? "outcome") !== "shift") {
+            return { acceptedConnectionDids: [], reviewerProfiles: [] };
+        }
+
+        const [acceptedConnections, reviewerProfiles] = await Promise.all([
+            listAcceptedConnectionsForUserDid(userDid),
+            getCirclesByDids(
+                Array.from(
+                    new Set(
+                        (task.participants ?? [])
+                            .map((participant) => participant.attendanceVerifiedBy)
+                            .filter((did): did is string => typeof did === "string" && did.length > 0),
+                    ),
+                ),
+            ),
+        ]);
+
+        return {
+            acceptedConnectionDids: acceptedConnections
+                .map((connection) => connection.did)
+                .filter((did): did is string => typeof did === "string" && did.length > 0),
+            reviewerProfiles,
+        };
+    } catch (error) {
+        console.error("Error getting shift viewer context:", error);
+        return { acceptedConnectionDids: [], reviewerProfiles: [] };
     }
 }
 
