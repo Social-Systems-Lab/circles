@@ -546,9 +546,16 @@ interface CommentSectionProps {
     circle: Circle; // Circle context for permissions
     user: UserPrivate | null; // Current user
     initialCommentCount?: number; // Optional initial count to avoid extra fetch if 0
+    hideWhenEmpty?: boolean;
 }
 
-export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, user, initialCommentCount = -1 }) => {
+export const CommentSection: React.FC<CommentSectionProps> = ({
+    postId,
+    circle,
+    user,
+    initialCommentCount = -1,
+    hideWhenEmpty = false,
+}) => {
     const [comments, setComments] = useState<CommentDisplay[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -595,6 +602,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, 
             .filter((c) => !c.parentCommentId) // Filter for top-level comments
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // Sort by creation time
     }, [comments]);
+
+    if (!isLoading && !error && hideWhenEmpty && topLevelComments.length === 0) {
+        return null;
+    }
 
     const handleAddComment = () => {
         if (!newCommentContent.trim() || isSubmittingComment || !user) return;

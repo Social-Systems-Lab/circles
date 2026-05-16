@@ -614,6 +614,7 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                     contributionVerifiedBy: {
                         $ifNull: ["$matchedShiftParticipant.attendanceVerifiedBy", "$verifiedBy"],
                     },
+                    contributionNote: "$matchedShiftParticipant.attendanceNote",
                 },
             },
             {
@@ -701,6 +702,7 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                     circle: "$circleDetails",
                     verifiedAt: "$contributionVerifiedAt",
                     verifiedBy: "$contributionVerifiedBy",
+                    contributionNote: "$contributionNote",
                 },
             },
             { $sort: { verifiedAt: -1 } },

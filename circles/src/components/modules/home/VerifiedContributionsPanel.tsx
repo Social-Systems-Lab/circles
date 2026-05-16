@@ -137,6 +137,11 @@ export default function VerifiedContributionsPanel({
                                                             </>
                                                         )}
                                                     </div>
+                                                    {item.task.contributionNote && (
+                                                        <div className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+                                                            &ldquo;{item.task.contributionNote}&rdquo;
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </button>
                                         ))}
