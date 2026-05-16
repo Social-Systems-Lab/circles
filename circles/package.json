@@ -8,7 +8,8 @@
         "build": "cross-env IS_BUILD=true next build",
         "start": "next start",
         "lint": "next lint",
-        "check:chat-actions": "tsc --pretty false --noEmit -p tsconfig.json"
+        "check:chat-actions": "tsc --pretty false --noEmit -p tsconfig.json",
+        "seed:performance": "bun scripts/seed-performance-fixture.ts"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",

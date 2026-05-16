@@ -34,6 +34,68 @@ export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     return feeds;
 };
 
+export const getFeedsByCircleIds = async (circleIds: string[]): Promise<Feed[]> => {
+    if (circleIds.length === 0) {
+        return [];
+    }
+
+    const feeds = await Feeds.find({
+        circleId: { $in: circleIds },
+    }).toArray();
+    return feeds;
+};
+
+export const getAccessibleFeedIdsForUser = async (userDid: string, circleHandle?: string): Promise<string[]> => {
+    if (circleHandle) {
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle?._id) {
+            return [];
+        }
+
+        const circleId = circle._id.toString();
+        const membership = await Members.findOne({ userDid, circleId }, { projection: { _id: 0, userGroups: 1 } });
+        if (!membership) {
+            return [];
+        }
+
+        const feeds = await getFeedsByCircleId(circleId);
+        return feeds
+            .filter((feed) => feed.userGroups.some((group) => membership.userGroups?.includes(group)))
+            .map((feed) => feed._id?.toString())
+            .filter((feedId): feedId is string => Boolean(feedId));
+    }
+
+    const memberships = await Members.find(
+        { userDid },
+        { projection: { _id: 0, circleId: 1, userGroups: 1 } },
+    ).toArray();
+    if (memberships.length === 0) {
+        return [];
+    }
+
+    const circleIds = [...new Set(memberships.map((membership) => membership.circleId).filter(Boolean))];
+    const objectIds = circleIds
+        .filter((circleId) => ObjectId.isValid(circleId))
+        .map((circleId) => new ObjectId(circleId));
+    const circles = await Circles.find({ _id: { $in: objectIds } }, { projection: { _id: 1, handle: 1 } }).toArray();
+    const accessibleCircleIds = new Set(
+        circles.filter((circle) => circle.handle !== "default").map((circle) => circle._id.toString()),
+    );
+
+    const membershipsByCircleId = new Map<string, string[]>();
+    for (const membership of memberships) {
+        if (accessibleCircleIds.has(membership.circleId)) {
+            membershipsByCircleId.set(membership.circleId, membership.userGroups ?? []);
+        }
+    }
+
+    const feeds = await getFeedsByCircleIds([...membershipsByCircleId.keys()]);
+    return feeds
+        .filter((feed) => membershipsByCircleId.get(feed.circleId)?.some((group) => feed.userGroups.includes(group)))
+        .map((feed) => feed._id?.toString())
+        .filter((feedId): feedId is string => Boolean(feedId));
+};
+
 export async function getPublicFeeds(): Promise<Feed[]> {
     // Keep this export
     const feeds = await Feeds.find({ userGroups: "everyone" }).toArray();
@@ -1470,7 +1532,10 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
     const postsWithInternalLinks = posts.filter((p) => p.internalPreviewType && p.internalPreviewId);
     if (postsWithInternalLinks.length === 0) return;
 
-    const previewDataMap = new Map<string, Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay>();
+    const previewDataMap = new Map<
+        string,
+        Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay
+    >();
 
     // Group IDs by type
     const idsByType = postsWithInternalLinks.reduce(

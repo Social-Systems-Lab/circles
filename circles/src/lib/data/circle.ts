@@ -72,6 +72,31 @@ export const SAFE_CIRCLE_PROJECTION = {
     hiddenCancelledEventIds: 1,
 } as const;
 
+const DISCOVERY_CIRCLE_PROJECTION = {
+    _id: 1,
+    did: 1,
+    name: 1,
+    handle: 1,
+    picture: 1,
+    images: 1,
+    description: 1,
+    mission: 1,
+    isPublic: 1,
+    isVerified: 1,
+    isMember: 1,
+    members: 1,
+    createdAt: 1,
+    circleType: 1,
+    publishStatus: 1,
+    interests: 1,
+    location: 1,
+    causes: 1,
+    skills: 1,
+    websiteUrl: 1,
+    representsOrganization: 1,
+    organizationName: 1,
+} as const;
+
 export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {
     let objectIds = ids.map((id) => new ObjectId(id));
     let circles = await Circles.find({ _id: { $in: objectIds } }, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
@@ -118,7 +143,8 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
 export const getCirclePublishStatus = (circle?: Partial<Circle> | null): CirclePublishStatus =>
     circle?.publishStatus ?? "published";
 
-export const isCirclePublished = (circle?: Partial<Circle> | null): boolean => getCirclePublishStatus(circle) === "published";
+export const isCirclePublished = (circle?: Partial<Circle> | null): boolean =>
+    getCirclePublishStatus(circle) === "published";
 
 export const getPublishedCircleQuery = (): any => ({
     $or: [{ publishStatus: "published" as const }, { publishStatus: { $exists: false } }],
@@ -139,7 +165,7 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
                 },
             ],
         },
-        { projection: SAFE_CIRCLE_PROJECTION },
+        { projection: DISCOVERY_CIRCLE_PROJECTION },
     ).toArray();
 
     circles.forEach((circle: Circle) => {

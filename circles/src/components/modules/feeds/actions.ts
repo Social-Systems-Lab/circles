@@ -21,7 +21,7 @@ import {
     extractMentions,
     getPostsWithMetrics,
     getPostsFromMultipleFeeds,
-    getFeedsByCircleId,
+    getAccessibleFeedIdsForUser,
     getPostsFromMultipleFeedsWithMetrics,
     getPublicFeeds,
     getPublicUserFeed, // Added getPublicUserFeed
@@ -104,37 +104,7 @@ export async function getAggregatePostsAction(
         return getGlobalPostsAction(userDid, limit, skip, sortingOptions, sdgHandles);
     }
 
-    const user = await getUserPrivate(userDid);
-    const accessibleFeeds: string[] = [];
-
-    if (circleHandle) {
-        const circle = await getCircleByHandle(circleHandle);
-        if (circle) {
-            const feeds = await getFeedsByCircleId(circle._id.toString());
-            const membership = user.memberships.find((m) => m.circleId === circle._id.toString());
-            if (membership) {
-                for (const feed of feeds) {
-                    if (feed.userGroups.some((group) => membership.userGroups.includes(group))) {
-                        accessibleFeeds.push(feed._id?.toString());
-                    }
-                }
-            }
-        }
-    } else {
-        for (const membership of user.memberships) {
-            if (membership.circle.handle === "default") {
-                continue;
-            }
-
-            const { circleId, userGroups } = membership;
-            const feeds = await getFeedsByCircleId(circleId);
-            for (const feed of feeds) {
-                if (feed.userGroups.some((group) => userGroups.includes(group))) {
-                    accessibleFeeds.push(feed._id?.toString());
-                }
-            }
-        }
-    }
+    const accessibleFeeds = await getAccessibleFeedIdsForUser(userDid, circleHandle);
 
     if (accessibleFeeds.length === 0) {
         return [];
@@ -167,10 +137,7 @@ type ExpectedPreview = {
 
 const mentionPermissionErrorMessage = "You can only mention people you can message.";
 
-const validateMentionPermissions = async (
-    userDid: string,
-    mentions?: Array<{ id: string }>,
-): Promise<void> => {
+const validateMentionPermissions = async (userDid: string, mentions?: Array<{ id: string }>): Promise<void> => {
     if (!mentions?.length) {
         return;
     }
