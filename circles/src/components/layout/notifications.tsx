@@ -498,6 +498,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "task_accepted":
                 case "task_shift_signup":
                 case "task_shift_confirmed":
+                case "task_shift_attendance_verified":
                 case "task_status_changed":
                     return notification.taskId ? `/circles/${circleHandle}/tasks/${notification.taskId}` : null;
                 case "goal_submitted_for_review":
@@ -536,6 +537,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 return "Open";
             case "task_accepted":
                 return "View";
+            case "task_shift_attendance_verified":
             case "task_changes_requested":
             case "task_verified":
             case "post_comment":
@@ -697,6 +699,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_accepted":
             case "task_shift_signup":
             case "task_shift_confirmed":
+            case "task_shift_attendance_verified":
             case "task_status_changed":
                 // For now, issue notifications aren't grouped, so use original message
                 return groupedNotification.latestNotification.message;
@@ -766,6 +769,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                     "task_accepted",
                                     "task_shift_signup",
                                     "task_shift_confirmed",
+                                    "task_shift_attendance_verified",
                                     "task_status_changed",
                                 ].includes(groupedNotification.latestNotification.notificationType) ? (
                                     <>
