@@ -21,11 +21,9 @@ import {
     feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import ContentPreview from "../layout/content-preview";
 import { Content, ContentPreviewData, Location, PostDisplay, EventDisplay } from "@/models/models";
-import ImageGallery from "../layout/image-gallery";
 import { TbFocus2 } from "react-icons/tb";
 import Onboarding from "../onboarding/onboarding";
 import { Dialog, DialogContent } from "../ui/dialog";
@@ -89,6 +87,42 @@ const getMarkerImageUrl = (content: Content): string | undefined => {
     return item.picture?.url ?? item.images?.[0]?.fileInfo?.url;
 };
 
+const getOptimizedImageUrl = (imageUrl: string | undefined, width: number, quality = 70): string | undefined => {
+    if (
+        !imageUrl ||
+        imageUrl.startsWith("data:") ||
+        imageUrl.startsWith("blob:") ||
+        imageUrl.startsWith("/_next/image")
+    ) {
+        return imageUrl;
+    }
+
+    return `/_next/image?url=${encodeURIComponent(imageUrl)}&w=${width}&q=${quality}`;
+};
+
+const getLngLatVector = ({ lng, lat }: { lng: number; lat: number }) => {
+    const latRad = degreesToRadians(lat);
+    const lngRad = degreesToRadians(lng);
+
+    return {
+        x: Math.cos(latRad) * Math.cos(lngRad),
+        y: Math.cos(latRad) * Math.sin(lngRad),
+        z: Math.sin(latRad),
+    };
+};
+
+const getDotProduct = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number =>
+    a.x * b.x + a.y * b.y + a.z * b.z;
+
+const getStableMarkerTieBreak = (id: string): number => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash * 31 + id.charCodeAt(i)) % 97;
+    }
+
+    return hash;
+};
+
 const getMarkerDescription = (content: Content): string => {
     if (isEventDisplay(content)) {
         return (content as any)?.description ?? "";
@@ -122,10 +156,14 @@ const createMarkerPopupHtml = (content: Content): string => {
     const title = escapeHtml(getMarkerTitle(content));
     const description = escapeHtml(getMarkerDescription(content)).slice(0, 180);
     const imageUrl =
-        getMarkerImageUrl(content) ??
-        ((content as any)?.circleType === "post"
-            ? "/images/default-post-picture.png"
-            : "/images/default-user-cover.png");
+        getOptimizedImageUrl(
+            getMarkerImageUrl(content) ??
+                ((content as any)?.circleType === "post"
+                    ? "/images/default-post-picture.png"
+                    : "/images/default-user-cover.png"),
+            384,
+            72,
+        ) ?? "/images/default-user-cover.png";
     const openHref = getMarkerOpenHref(content);
     const openLink = openHref
         ? `<a href="${escapeHtml(openHref)}" style="display:inline-flex;height:34px;align-items:center;border-radius:9999px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);padding:0 13px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;">Open</a>`
@@ -162,7 +200,7 @@ const getMarkerTheme = (content: Content): { background: string; color: string; 
 
 const setMarkerSelected = (element: HTMLElement, selected: boolean) => {
     element.dataset.selected = selected ? "true" : "false";
-    element.style.zIndex = selected ? "1000" : "";
+    element.style.zIndex = selected ? "90000" : (element.dataset.zIndex ?? "");
     const face = element.querySelector<HTMLElement>("[data-marker-face]");
     if (face) {
         face.style.borderColor = selected ? "#f8dd53" : "#ffffff";
@@ -178,7 +216,7 @@ const createMarkerElement = (
     onLeave: () => void,
 ): HTMLDivElement => {
     const theme = getMarkerTheme(content);
-    const imageUrl = getMarkerImageUrl(content);
+    const imageUrl = getOptimizedImageUrl(getMarkerImageUrl(content), 64, 60);
     const markerElement = document.createElement("div");
     markerElement.title = getMarkerTitle(content);
     markerElement.setAttribute("aria-label", markerElement.title);
@@ -190,6 +228,7 @@ const createMarkerElement = (
     markerElement.style.top = "0";
     markerElement.style.willChange = "transform";
     markerElement.style.pointerEvents = "auto";
+    markerElement.dataset.zIndex = "0";
 
     const face = document.createElement("div");
     face.dataset.markerFace = "true";
@@ -391,6 +430,7 @@ const MapBox = ({
         const { width, height } = mapElement.getBoundingClientRect();
         const mapCenter = map.current.getCenter();
         const centerLngLat = { lng: mapCenter.lng, lat: mapCenter.lat };
+        const centerVector = getLngLatVector(centerLngLat);
         const isGlobe = map.current.getProjection?.()?.name === "globe";
 
         markersRef.current.forEach((marker, id) => {
@@ -411,7 +451,23 @@ const MapBox = ({
             const isHidden = isOutsideViewport || isBehindGlobe;
 
             marker.style.display = isHidden ? "none" : "";
-            marker.style.zIndex = isHidden ? "" : `${Math.round(point.y)}`;
+            if (isHidden) {
+                marker.style.zIndex = "";
+            } else if (marker.dataset.selected === "true") {
+                marker.style.zIndex = "90000";
+            } else {
+                const markerVector = getLngLatVector(lngLat);
+                const depth = isGlobe ? getDotProduct(centerVector, markerVector) : 0.5;
+                const nextZIndex = 1000 + Math.round(depth * 500) * 10 + getStableMarkerTieBreak(id);
+                const currentZIndex = Number(marker.dataset.zIndex);
+
+                if (!Number.isFinite(currentZIndex) || Math.abs(nextZIndex - currentZIndex) > 30) {
+                    marker.dataset.zIndex = `${nextZIndex}`;
+                    marker.style.zIndex = `${nextZIndex}`;
+                } else {
+                    marker.style.zIndex = marker.dataset.zIndex ?? `${nextZIndex}`;
+                }
+            }
             marker.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, -100%)`;
         });
 
