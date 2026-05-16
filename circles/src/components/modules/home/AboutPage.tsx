@@ -32,7 +32,8 @@ import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
 import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
 import { FundingPanel } from "@/components/modules/funding/funding-panel";
-import type { FundingAskDisplay } from "@/models/models";
+import { UpcomingShiftsPanel } from "./upcoming-shifts-panel";
+import type { FundingAskDisplay, TaskDisplay } from "@/models/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserPicture } from "../members/user-picture";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -45,8 +46,11 @@ interface AboutPageProps {
     verifiedContributionPublicCount?: number;
     fundingPreviewAsks?: FundingAskDisplay[];
     fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
+    upcomingShiftTasks?: TaskDisplay[];
+    upcomingShiftsVisibility?: "visible" | "sign_in" | "members_only";
     canCreateFundingAsk?: boolean;
     showFundingPanel?: boolean;
+    showUpcomingShiftsPanel?: boolean;
     adminLeaders?: MemberDisplay[];
     proofOfHumanitySummary?: HumanityVerificationSummary | null;
 }
@@ -57,8 +61,11 @@ export default function AboutPage({
     verifiedContributionPublicCount = 0,
     fundingPreviewAsks = [],
     fundingPanelVisibility = "sign_in",
+    upcomingShiftTasks = [],
+    upcomingShiftsVisibility = "sign_in",
     canCreateFundingAsk = false,
     showFundingPanel = false,
+    showUpcomingShiftsPanel = false,
     adminLeaders = [],
     proofOfHumanitySummary = null,
 }: AboutPageProps) {
@@ -151,13 +158,15 @@ export default function AboutPage({
     const shouldShowVerifiedContributions = isUserProfile;
     const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary;
     const shouldShowFundingPanel = showFundingPanel;
+    const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
     const hasSidebarContent =
         hasOverviewDetails ||
         hasAdminDetails ||
         hasNeedsMatchingDetails ||
         shouldShowProofOfHumanity ||
         shouldShowVerifiedContributions ||
-        shouldShowFundingPanel;
+        shouldShowFundingPanel ||
+        shouldShowUpcomingShiftsPanel;
 
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
@@ -317,9 +326,19 @@ export default function AboutPage({
                                 </div>
                             )}
 
+                            {shouldShowUpcomingShiftsPanel && (
+                                <div className="md:order-2">
+                                    <UpcomingShiftsPanel
+                                        circleHandle={circle.handle || ""}
+                                        shifts={upcomingShiftTasks}
+                                        visibility={upcomingShiftsVisibility}
+                                    />
+                                </div>
+                            )}
+
                             {hasNeedsMatchingDetails && (
                                 <div
-                                    className={`md:order-2 flex flex-col bg-white p-6 ${
+                                    className={`md:order-3 flex flex-col bg-white p-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -403,7 +422,7 @@ export default function AboutPage({
 
                             {hasOverviewDetails && (
                                 <div
-                                    className={`md:order-3 flex flex-col bg-white p-6 ${
+                                    className={`md:order-4 flex flex-col bg-white p-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >

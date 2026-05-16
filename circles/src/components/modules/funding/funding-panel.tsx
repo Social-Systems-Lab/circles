@@ -27,21 +27,21 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
     const activeItemCount = asks.reduce((total, ask) => total + getFundingOpenItemCount(ask), 0);
 
     return (
-        <div className="rounded-[15px] border-0 bg-white p-4 shadow-lg sm:p-5 md:p-6">
-            <div className="mb-3 flex items-start justify-between gap-3">
-                <div>
+        <div className="rounded-[15px] border-0 bg-white px-4 pb-4 pt-3 shadow-lg sm:px-5 sm:pb-5 sm:pt-4 md:px-6 md:pb-6 md:pt-5">
+            <div className="mb-3">
+                <div className="flex items-center justify-between gap-3">
                     <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Funding Needs</div>
                     {visibility === "visible" ? (
-                        <div className="mt-1 text-sm text-slate-600">
-                            {activeItemCount} active item{activeItemCount === 1 ? "" : "s"} across {asks.length} request
-                            {asks.length === 1 ? "" : "s"}
-                        </div>
+                        <Button asChild variant="ghost" size="sm">
+                            <Link href={`/circles/${circleHandle}/funding`}>View all</Link>
+                        </Button>
                     ) : null}
                 </div>
                 {visibility === "visible" ? (
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href={`/circles/${circleHandle}/funding`}>View all</Link>
-                    </Button>
+                    <div className="mt-1 text-sm text-slate-600">
+                        {activeItemCount} active item{activeItemCount === 1 ? "" : "s"} across {asks.length} request
+                        {asks.length === 1 ? "" : "s"}
+                    </div>
                 ) : null}
             </div>
 
