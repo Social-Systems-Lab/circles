@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CalendarView from "./calendar";
-import EventTimeline from "./event-timeline";
-import { EventDisplay, Circle } from "@/models/models";
+import EventTimeline, { type ShiftTimelineItem } from "./event-timeline";
+import { EventDisplay, Circle, TaskDisplay } from "@/models/models";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
@@ -15,6 +15,7 @@ import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+import { getShiftEndAt, getShiftStartAt, isShiftTask } from "../tasks/shift-task-utils";
 
 type Props = {
     circle: Circle;
@@ -46,6 +47,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
     const [includeParticipating, setIncludeParticipating] = useState(true);
     const [filteredEvents, setFilteredEvents] = useState(events);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
+    const [shifts, setShifts] = useState<ShiftTimelineItem[]>([]);
 
     const getCanonicalEventId = useCallback((event: EventDisplay) => {
         const rawId = (event as any).originalEventId ?? (event as any)._id;
@@ -109,7 +111,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                     }));
 
                 const taskMilestones: Milestone[] = (tasksRes?.tasks || [])
-                    .filter((t: any) => t?.targetDate && t?.stage !== "resolved")
+                    .filter((t: any) => t?.targetDate && t?.stage !== "resolved" && !isShiftTask(t))
                     .map((t: any) => ({
                         id: (t as any)._id?.toString?.() || t._id,
                         type: "task",
@@ -117,6 +119,32 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                         date: t.targetDate,
                         circleHandle: t.circle?.handle,
                     }));
+
+                const now = new Date();
+                const shiftItems: ShiftTimelineItem[] = (tasksRes?.tasks || [])
+                    .filter((task: TaskDisplay) => isShiftTask(task))
+                    .map((task: TaskDisplay) => {
+                        const startAt = getShiftStartAt(task);
+                        const endAt = getShiftEndAt(task);
+                        return {
+                            id: (task as any)._id?.toString?.() || String(task._id || ""),
+                            task,
+                            circleHandle: task.circle?.handle,
+                            startAt: startAt?.toISOString() ?? null,
+                            endAt: endAt?.toISOString() ?? null,
+                        };
+                    })
+                    .filter((shift) => {
+                        if (!shift.startAt) {
+                            return false;
+                        }
+
+                        if (shift.endAt) {
+                            return new Date(shift.endAt) >= now;
+                        }
+
+                        return new Date(shift.startAt) >= now;
+                    });
 
                 const issueMilestones: Milestone[] = (issuesRes || [])
                     .filter((i: any) => i?.targetDate && i?.stage !== "resolved")
@@ -128,8 +156,10 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                     }));
 
                 setMilestones([...goalMilestones, ...taskMilestones, ...issueMilestones]);
+                setShifts(shiftItems);
             } catch (e) {
                 setMilestones([]);
+                setShifts([]);
             }
         };
 
@@ -206,6 +236,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                         <EventTimeline
                             circleHandle={circle.handle!}
                             events={filteredEvents}
+                            shifts={shifts}
                             milestones={milestones}
                             onEventHidden={handleEventHidden}
                         />

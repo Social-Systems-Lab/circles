@@ -11,13 +11,19 @@ import { redirect, notFound } from "next/navigation";
 
 type PageProps = {
     params: Promise<{ handle: string; taskId: string }>; // Expect taskId
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function TaskDetailPage(props: PageProps) {
     // Renamed function
     const params = await props.params;
+    const searchParams = await props.searchParams;
     const circleHandle = params.handle;
     const taskId = params.taskId; // Use taskId
+    const sourceParam = Array.isArray(searchParams?.source) ? searchParams.source[0] : searchParams?.source;
+    const isEventsSource = sourceParam === "events";
+    const backHref = `/circles/${circleHandle}/${isEventsSource ? "events" : "tasks"}`;
+    const backLabel = isEventsSource ? "Back to Events" : "Back to Tasks";
 
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();
@@ -45,11 +51,11 @@ export default async function TaskDetailPage(props: PageProps) {
                     {/* Updated text & fixed quotes */}
                 </p>
                 <Button asChild className="mt-4">
-                    <Link href={`/circles/${circleHandle}/tasks`}>
+                    <Link href={backHref}>
                         {" "}
                         {/* Updated path */}
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Tasks {/* Updated text */}
+                        {backLabel}
                     </Link>
                 </Button>
             </div>
@@ -82,11 +88,11 @@ export default async function TaskDetailPage(props: PageProps) {
         <div className="formatted flex w-full flex-col">
             <div className="mb-4 flex items-center p-4">
                 <Button asChild variant="ghost" className="mr-2">
-                    <Link href={`/circles/${circleHandle}/tasks`}>
+                    <Link href={backHref}>
                         {" "}
                         {/* Updated path */}
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Tasks {/* Updated text */}
+                        {backLabel}
                     </Link>
                 </Button>
             </div>

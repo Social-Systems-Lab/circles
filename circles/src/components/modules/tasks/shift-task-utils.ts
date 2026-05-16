@@ -18,7 +18,7 @@ export type ShiftDisplayStatus = "review" | "upcoming" | "inProgress" | "complet
 
 export const isShiftTask = (task: Pick<Task, "taskType">) => (task.taskType ?? "outcome") === "shift";
 
-const getShiftStartAt = (task: Pick<Task, "targetDate" | "shiftStartTime">) => {
+export const getShiftStartAt = (task: Pick<Task, "targetDate" | "shiftStartTime">) => {
     if (!task.targetDate || !task.shiftStartTime) {
         return null;
     }
@@ -37,6 +37,15 @@ const getShiftStartAt = (task: Pick<Task, "targetDate" | "shiftStartTime">) => {
     return shiftDate;
 };
 
+export const getShiftEndAt = (task: Pick<Task, "targetDate" | "shiftStartTime" | "shiftDurationMinutes">) => {
+    const shiftStartAt = getShiftStartAt(task);
+    if (!shiftStartAt || !task.shiftDurationMinutes) {
+        return null;
+    }
+
+    return addMinutes(shiftStartAt, task.shiftDurationMinutes);
+};
+
 export const getShiftDisplayStatus = (task: ShiftTaskLike, now = new Date()): ShiftDisplayStatus => {
     if (task.stage === "review") {
         return "review";
@@ -47,11 +56,10 @@ export const getShiftDisplayStatus = (task: ShiftTaskLike, now = new Date()): Sh
     }
 
     const shiftStartAt = getShiftStartAt(task);
-    if (!shiftStartAt || !task.shiftDurationMinutes) {
+    const shiftEndAt = getShiftEndAt(task);
+    if (!shiftStartAt || !shiftEndAt) {
         return task.stage === "inProgress" ? "inProgress" : "upcoming";
     }
-
-    const shiftEndAt = addMinutes(shiftStartAt, task.shiftDurationMinutes);
     if (now < shiftStartAt) {
         return "upcoming";
     }
