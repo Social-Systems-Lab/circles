@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { EventDisplay, TaskDisplay } from "@/models/models";
 import { Card, CardContent } from "@/components/ui/card";
@@ -455,11 +455,22 @@ export default function EventTimeline({
     onEventHidden,
     onNavigate,
 }: Props) {
+    const searchParams = useSearchParams();
     const { toast } = useToast();
     const [user, setUser] = useAtom(userAtom);
     const [locallyHiddenIds, setLocallyHiddenIds] = useState<string[]>([]);
     const [pendingHideId, setPendingHideId] = useState<string | null>(null);
     const [itemFilter, setItemFilter] = useState<"all" | "events" | "shifts">("all");
+
+    useEffect(() => {
+        const filterParam = (searchParams.get("filter") || "").toLowerCase();
+        if (filterParam === "events" || filterParam === "shifts") {
+            setItemFilter(filterParam);
+            return;
+        }
+
+        setItemFilter("all");
+    }, [searchParams]);
 
     const handleHideCancelled = useCallback(
         async (eventId: string) => {

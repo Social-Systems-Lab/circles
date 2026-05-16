@@ -4,9 +4,10 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import AboutPage from "@/components/modules/home/AboutPage";
 import type { VerifiedContributionItem } from "@/components/modules/home/VerifiedContributionsPanel";
-import { getVerifiedTasksForUser } from "@/lib/data/task";
+import { getTasksByCircleId, getVerifiedTasksForUser } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
-import type { TaskPermissions } from "@/models/models";
+import { getShiftEndAt, getShiftStartAt, isShiftTask } from "@/components/modules/tasks/shift-task-utils";
+import type { TaskDisplay, TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
 import { getMembers } from "@/lib/data/member";
@@ -32,10 +33,13 @@ export default async function CircleHomePage(props: PageProps) {
     let verifiedContributionPublicCount = 0;
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
+    let upcomingShiftTasks: TaskDisplay[] = [];
+    let upcomingShiftsVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, viewerDid) : null;
     const showFundingPanel = isFundingEnabledForCircle(circle);
+    const showUpcomingShiftsPanel = circle.circleType !== "user" && (circle.enabledModules?.includes("tasks") ?? false);
     const showAdminsPublicly = circle.showAdminsPublicly !== false;
     const adminLeaders =
         showAdminsPublicly && circle.circleType !== "user" && circle._id
@@ -89,6 +93,49 @@ export default async function CircleHomePage(props: PageProps) {
         }
     }
 
+    if (showUpcomingShiftsPanel && circle._id && viewerDid) {
+        const canViewTasks = await isAuthorized(viewerDid, circle._id as string, features.tasks.view);
+        upcomingShiftsVisibility = canViewTasks ? "visible" : viewerDid ? "members_only" : "sign_in";
+
+        if (canViewTasks) {
+            const now = new Date();
+            const tasks = await getTasksByCircleId(circle._id as string, viewerDid);
+            upcomingShiftTasks = tasks
+                .filter((task) => {
+                    if (!isShiftTask(task)) {
+                        return false;
+                    }
+
+                    if (task.stage === "review" || task.stage === "resolved") {
+                        return false;
+                    }
+
+                    if (!task.slots || task.slots < 1) {
+                        return false;
+                    }
+
+                    const signedUpCount = task.participants?.length ?? 0;
+                    if (signedUpCount >= task.slots) {
+                        return false;
+                    }
+
+                    const startAt = getShiftStartAt(task);
+                    const endAt = getShiftEndAt(task);
+                    if (!startAt) {
+                        return false;
+                    }
+
+                    return endAt ? endAt >= now : startAt >= now;
+                })
+                .sort((left, right) => {
+                    const leftStart = getShiftStartAt(left)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+                    const rightStart = getShiftStartAt(right)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+                    return leftStart - rightStart;
+                })
+                .slice(0, 3);
+        }
+    }
+
     return (
         <AboutPage
             circle={circle}
@@ -96,8 +143,11 @@ export default async function CircleHomePage(props: PageProps) {
             verifiedContributionPublicCount={verifiedContributionPublicCount}
             fundingPreviewAsks={fundingPreviewAsks}
             fundingPanelVisibility={fundingPanelVisibility}
+            upcomingShiftTasks={JSON.parse(JSON.stringify(upcomingShiftTasks))}
+            upcomingShiftsVisibility={upcomingShiftsVisibility}
             canCreateFundingAsk={canCreateFundingAsk}
             showFundingPanel={showFundingPanel}
+            showUpcomingShiftsPanel={showUpcomingShiftsPanel}
             adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}
             proofOfHumanitySummary={proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null}
         />
