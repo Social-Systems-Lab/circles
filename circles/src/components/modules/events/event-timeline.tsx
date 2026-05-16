@@ -4,26 +4,36 @@ import React, { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { EventDisplay } from "@/models/models";
+import { EventDisplay, TaskDisplay } from "@/models/models";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { CalendarIcon, CheckSquare, Clock, MapPin, Users, Pencil } from "lucide-react";
+import { AlertCircle, CalendarIcon, CheckSquare, Clock, MapPin, Users, Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { hideCancelledEventAction } from "@/app/circles/[handle]/events/actions";
 import { getEventJoinState } from "./event-join-state";
+import { getShiftConfirmedSummary, getShiftDisplayStatus, getShiftPendingSummary } from "../tasks/shift-task-utils";
 
 type Props = {
     circleHandle: string;
     events: EventDisplay[];
+    shifts?: ShiftTimelineItem[];
     milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string }[];
     condensed?: boolean;
     onEventHidden?: (eventId: string) => void;
     onNavigate?: () => void;
+};
+
+export type ShiftTimelineItem = {
+    id: string;
+    task: TaskDisplay;
+    circleHandle?: string;
+    startAt: Date | string | null;
+    endAt?: Date | string | null;
 };
 
 const monthColorClasses = [
@@ -42,8 +52,11 @@ const monthColorClasses = [
 ];
 
 function fmtRange(startAt?: Date | string, endAt?: Date | string, allDay?: boolean): string {
-    if (!startAt || !endAt) return "";
+    if (!startAt) return "";
     const s = new Date(startAt);
+    if (!endAt) {
+        return allDay ? format(s, "EEE, MMM d, yyyy") : format(s, "EEE, MMM d, yyyy • p");
+    }
     const e = new Date(endAt);
     if (allDay) {
         // Same day vs multi-day
@@ -81,6 +94,26 @@ function isOngoing(evt: EventDisplay): boolean {
     if (!start || !end) return false;
     const now = new Date();
     return now >= start && now <= end;
+}
+
+function shiftLocationToString(task: TaskDisplay): string | undefined {
+    const loc = task.location;
+    if (!loc) return undefined;
+    const parts = [loc.street, loc.city, loc.region, loc.country].filter(Boolean) as string[];
+    return parts.length ? parts.join(", ") : undefined;
+}
+
+function getShiftStageLabel(task: TaskDisplay): { label: string; className: string } {
+    switch (getShiftDisplayStatus(task)) {
+        case "review":
+            return { label: "Review", className: "border-yellow-400 bg-yellow-100 text-yellow-800" };
+        case "inProgress":
+            return { label: "In Progress", className: "border-orange-300 bg-orange-100 text-orange-800" };
+        case "completed":
+            return { label: "Completed", className: "border-green-300 bg-green-100 text-green-800" };
+        default:
+            return { label: "Upcoming", className: "border-sky-300 bg-sky-100 text-sky-800" };
+    }
 }
 
 const EventCard: React.FC<{
@@ -254,6 +287,97 @@ const EventCard: React.FC<{
     );
 };
 
+const ShiftCard: React.FC<{
+    shift: ShiftTimelineItem;
+    fallbackCircleHandle: string;
+    condensed?: boolean;
+    onNavigate?: () => void;
+}> = ({ shift, fallbackCircleHandle, condensed, onNavigate }) => {
+    const task = shift.task;
+    const taskCircleHandle = shift.circleHandle || fallbackCircleHandle;
+    const shiftStage = getShiftStageLabel(task);
+    const pendingSummary = getShiftPendingSummary(task);
+    const locationLabel = shiftLocationToString(task);
+
+    return (
+        <Card className="relative h-full max-w-2xl border-sky-200 bg-sky-50/40 transition-shadow duration-200 ease-in-out group-hover:shadow-lg">
+            <Link
+                href={`/circles/${taskCircleHandle}/tasks/${task._id}?source=events#circle-tabs`}
+                className="group block"
+                onClick={() => onNavigate?.()}
+            >
+                <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
+                    {task.images && task.images.length > 0 && (
+                        <div
+                            className={cn(
+                                "relative flex-shrink-0 overflow-hidden rounded border",
+                                condensed ? "h-16 w-16" : "h-24 w-24",
+                            )}
+                        >
+                            <Image
+                                src={task.images[0].fileInfo.url}
+                                alt={task.title}
+                                fill
+                                sizes="96px"
+                                className="object-cover transition-transform duration-200 ease-in-out group-hover:scale-105"
+                            />
+                        </div>
+                    )}
+                    <div className="min-w-0 flex-grow">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                            <div
+                                className={cn(
+                                    "header mb-1 truncate font-semibold group-hover:text-primary",
+                                    condensed ? "text-[16px]" : "text-[20px]",
+                                )}
+                            >
+                                {task.title}
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <Badge className="border-transparent bg-sky-100 text-sky-800">Shift</Badge>
+                                <Badge variant="outline" className={shiftStage.className}>
+                                    <Clock className="mr-1 h-3 w-3" />
+                                    {shiftStage.label}
+                                </Badge>
+                            </div>
+                        </div>
+
+                        {task.description && (
+                            <p
+                                className={cn(
+                                    "mb-2 text-muted-foreground",
+                                    condensed ? "line-clamp-2 text-xs" : "line-clamp-3 text-sm",
+                                )}
+                            >
+                                {task.description}
+                            </p>
+                        )}
+
+                        <div className="mb-1 flex items-center text-xs text-muted-foreground">
+                            <CalendarIcon className="mr-1 h-3 w-3" />
+                            {fmtRange(shift.startAt ?? undefined, shift.endAt ?? undefined, false)}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center">
+                                <Users className="mr-1 h-3 w-3" />
+                                {getShiftConfirmedSummary(task)}
+                            </span>
+                            {pendingSummary && <span className="text-amber-700">{pendingSummary}</span>}
+                            {locationLabel && (
+                                <span className="inline-flex items-center">
+                                    <MapPin className="mr-1 h-3 w-3" />
+                                    {locationLabel}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </CardContent>
+            </Link>
+        </Card>
+    );
+};
+
 // Condensed one-line milestone row
 const MilestoneRow: React.FC<{
     m: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string };
@@ -325,6 +449,7 @@ const MilestoneRow: React.FC<{
 export default function EventTimeline({
     circleHandle,
     events,
+    shifts,
     milestones,
     condensed,
     onEventHidden,
@@ -334,6 +459,7 @@ export default function EventTimeline({
     const [user, setUser] = useAtom(userAtom);
     const [locallyHiddenIds, setLocallyHiddenIds] = useState<string[]>([]);
     const [pendingHideId, setPendingHideId] = useState<string | null>(null);
+    const [itemFilter, setItemFilter] = useState<"all" | "events" | "shifts">("all");
 
     const handleHideCancelled = useCallback(
         async (eventId: string) => {
@@ -400,6 +526,23 @@ export default function EventTimeline({
                 event: e,
             }));
 
+        const upcomingShiftEntries = (shifts || [])
+            .filter((shift) => {
+                if (!shift.startAt) {
+                    return false;
+                }
+
+                const start = new Date(shift.startAt);
+                const end = shift.endAt ? new Date(shift.endAt) : undefined;
+                if (end) return end >= now;
+                return start >= now;
+            })
+            .map((shift) => ({
+                kind: "shift" as const,
+                date: new Date(shift.startAt as Date | string),
+                shift,
+            }));
+
         const pastEventEntries = visibleEvents
             .filter((e) => {
                 const end = e.endAt ? new Date(e.endAt as any) : undefined;
@@ -422,13 +565,18 @@ export default function EventTimeline({
         const overdueItems = allMilestones.filter(m => m.date < startOfToday);
         const upcomingMilestones = allMilestones.filter(m => m.date >= startOfToday);
 
-        const upcomingItems = [...upcomingEventEntries, ...upcomingMilestones];
+        const upcomingItems =
+            itemFilter === "events"
+                ? upcomingEventEntries
+                : itemFilter === "shifts"
+                  ? upcomingShiftEntries
+                  : [...upcomingEventEntries, ...upcomingShiftEntries, ...upcomingMilestones];
         upcomingItems.sort((a, b) => a.date.getTime() - b.date.getTime());
         overdueItems.sort((a, b) => a.date.getTime() - b.date.getTime());
         pastEventEntries.sort((a, b) => b.date.getTime() - a.date.getTime());
 
         return { upcoming: upcomingItems, overdue: overdueItems, pastEvents: pastEventEntries };
-    }, [events, milestones, locallyHiddenIds]);
+    }, [events, itemFilter, milestones, locallyHiddenIds, shifts]);
 
     // Group by Year -> Month
     const grouped: Record<string, Record<number, typeof upcoming>> = useMemo(() => {
@@ -461,14 +609,50 @@ export default function EventTimeline({
 
     const pastYearKeys = useMemo(() => Object.keys(pastGrouped).sort((a, b) => Number(b) - Number(a)), [pastGrouped]);
 
-    if (upcoming.length === 0 && overdue.length === 0 && pastEvents.length === 0) {
-        return <div className="p-8 text-center text-muted-foreground">No upcoming items found.</div>;
+    const showOverdue = itemFilter === "all" && overdue.length > 0;
+    const showPastEvents = itemFilter !== "shifts" && pastEvents.length > 0;
+
+    if (upcoming.length === 0 && !showOverdue && !showPastEvents) {
+        return (
+            <div className="space-y-4 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                    {(["all", "events", "shifts"] as const).map((value) => (
+                        <Button
+                            key={value}
+                            type="button"
+                            variant={itemFilter === value ? "default" : "outline"}
+                            className={cn(itemFilter === value && "bg-slate-900 text-white hover:bg-slate-800")}
+                            onClick={() => setItemFilter(value)}
+                        >
+                            {value === "all" ? "All" : value === "events" ? "Events" : "Shifts"}
+                        </Button>
+                    ))}
+                </div>
+                <div className="text-center text-muted-foreground">
+                    {itemFilter === "shifts" ? "No upcoming shifts found." : "No upcoming items found."}
+                </div>
+            </div>
+        );
     }
 
     return (
         <div className="relative pl-0 pr-2">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+                {(["all", "events", "shifts"] as const).map((value) => (
+                    <Button
+                        key={value}
+                        type="button"
+                        variant={itemFilter === value ? "default" : "outline"}
+                        className={cn(itemFilter === value && "bg-slate-900 text-white hover:bg-slate-800")}
+                        onClick={() => setItemFilter(value)}
+                    >
+                        {value === "all" ? "All" : value === "events" ? "Events" : "Shifts"}
+                    </Button>
+                ))}
+            </div>
+
             {/* Overdue Section */}
-            {overdue.length > 0 && (
+            {showOverdue && (
                 <div className="mb-8">
                     <div className="mb-3 ml-12 text-lg font-semibold text-red-600 flex items-center gap-2">
                         <AlertCircle className="h-5 w-5" />
@@ -531,6 +715,17 @@ export default function EventTimeline({
                                                         />
                                                     );
                                                 }
+                                                if (it.kind === "shift") {
+                                                    return (
+                                                        <ShiftCard
+                                                            key={`shift-${it.shift.id}-${idx}`}
+                                                            shift={it.shift}
+                                                            fallbackCircleHandle={circleHandle}
+                                                            condensed={condensed}
+                                                            onNavigate={onNavigate}
+                                                        />
+                                                    );
+                                                }
                                                 return (
                                                     <MilestoneRow
                                                         key={`${it.milestone.type}:${it.milestone.id}-${idx}`}
@@ -548,7 +743,7 @@ export default function EventTimeline({
                 </div>
             ))}
 
-            {pastEvents.length > 0 && (
+            {showPastEvents && (
                 <div className="mt-10">
                     <div className="mb-4 ml-12 text-lg font-semibold text-muted-foreground">Past Events</div>
                     {pastYearKeys.map((year) => (
@@ -601,6 +796,3 @@ export default function EventTimeline({
         </div>
     );
 }
-
-// Helper for AlertCircle since I forgot to import it in the main block above
-import { AlertCircle } from "lucide-react";
