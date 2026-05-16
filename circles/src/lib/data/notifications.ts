@@ -140,6 +140,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `${actorName} signed up for ${taskTitle}`;
         case "task_shift_confirmed":
             return `${actorName} confirmed you for ${taskTitle}`;
+        case "task_shift_attendance_verified":
+            return `Your attendance for ${taskTitle} was verified`;
         case "task_status_changed":
             return `${actorName} updated ${taskTitle}`;
         case "goal_submitted_for_review":
@@ -1841,6 +1843,34 @@ export async function notifyTaskShiftConfirmed(
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskShiftConfirmed:", error);
+    }
+}
+
+export async function notifyTaskShiftAttendanceVerified(
+    task: TaskDisplay,
+    verifier: Circle,
+    participant: UserPrivate,
+): Promise<void> {
+    try {
+        if ((task.taskType ?? "outcome") !== "shift" || verifier.did === participant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_shift_attendance_verified",
+            [participant],
+            sanitizeObjectForJSON({
+                circle,
+                user: verifier,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskShiftAttendanceVerified:", error);
     }
 }
 

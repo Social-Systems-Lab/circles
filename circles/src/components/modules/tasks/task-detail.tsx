@@ -2,7 +2,16 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react";
-import { Circle, TaskDisplay, TaskStage, MemberDisplay, TaskPermissions, TaskPriority } from "@/models/models"; // Updated types
+import {
+    Circle,
+    TaskDisplay,
+    TaskStage,
+    MemberDisplay,
+    TaskPermissions,
+    TaskPriority,
+    TaskParticipant,
+    TaskParticipantAttendanceStatus,
+} from "@/models/models"; // Updated types
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
@@ -58,6 +67,7 @@ import {
     joinShiftTaskAction,
     leaveShiftTaskAction,
     requestTaskChangesAction,
+    reviewShiftAttendanceAction,
     submitTaskForReviewAction,
     updateTaskPriorityAction,
     verifyShiftParticipantAction,
@@ -227,6 +237,10 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const [selectedAssigneeDid, setSelectedAssigneeDid] = useState<string | undefined>(task.assignedTo); // Use task prop
     const [selectedPriority, setSelectedPriority] = useState<TaskPriority | "none">(task.priority ?? "none");
     const [changesRequestNote, setChangesRequestNote] = useState(task.reviewRequestedChangesNote ?? "");
+    const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
+    const [attendanceParticipant, setAttendanceParticipant] = useState<TaskParticipant | null>(null);
+    const [attendanceStatus, setAttendanceStatus] = useState<TaskParticipantAttendanceStatus>("attended");
+    const [attendanceNote, setAttendanceNote] = useState("");
     const { toast } = useToast();
     const router = useRouter();
 
@@ -262,6 +276,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         shiftDisplayStatus !== "review" &&
         shiftDisplayStatus !== "completed";
     const canVerifyShiftParticipants = isShiftTask && permissions.canModerate;
+    const canReviewShiftAttendance = isShiftTask && permissions.canModerate && shiftDisplayStatus === "completed";
     const shiftIsWaitlistedByPending =
         isShiftTask &&
         !isShiftParticipant &&
@@ -282,6 +297,15 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     useEffect(() => {
         setChangesRequestNote(task.reviewRequestedChangesNote ?? "");
     }, [task._id, task.reviewRequestedChangesNote]);
+
+    useEffect(() => {
+        if (!attendanceParticipant) {
+            return;
+        }
+
+        setAttendanceStatus(attendanceParticipant.attendanceStatus ?? "attended");
+        setAttendanceNote(attendanceParticipant.attendanceNote ?? "");
+    }, [attendanceParticipant]);
 
     const refreshOpenTaskPreview = async () => {
         if (!isPreview || !circle.handle) {
@@ -357,6 +381,53 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 });
             }
             setDeleteDialogOpen(false);
+        });
+    };
+
+    const openAttendanceDialog = (participant: TaskParticipant) => {
+        setAttendanceParticipant(participant);
+        setAttendanceDialogOpen(true);
+    };
+
+    const closeAttendanceDialog = (open: boolean) => {
+        setAttendanceDialogOpen(open);
+        if (!open) {
+            setAttendanceParticipant(null);
+            setAttendanceStatus("attended");
+            setAttendanceNote("");
+        }
+    };
+
+    const submitAttendanceReview = () => {
+        if (!attendanceParticipant) {
+            return;
+        }
+
+        startTransition(async () => {
+            const result = await reviewShiftAttendanceAction(
+                circle.handle!,
+                task._id as string,
+                attendanceParticipant.userDid,
+                attendanceStatus,
+                attendanceNote,
+            );
+
+            if (!result.success) {
+                toast({
+                    title: "Error",
+                    description: result.message || "Failed to review attendance",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            closeAttendanceDialog(false);
+            await refreshOpenTaskPreview();
+            router.refresh();
+            toast({
+                title: "Success",
+                description: result.message || "Attendance reviewed",
+            });
         });
     };
 
@@ -960,6 +1031,12 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 All current slots are pending confirmation. Contact an admin if you need help.
                             </div>
                         )}
+                        {canReviewShiftAttendance && (
+                            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                This shift has completed. Review attendance for confirmed participants to add verified
+                                contributions.
+                            </div>
+                        )}
 
                         <div className="mt-6">
                             <h4 className="text-base font-semibold text-foreground">Confirmed Participants</h4>
@@ -967,6 +1044,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 <div className="mt-3 space-y-3">
                                     {confirmedShiftParticipants.map(({ participant, profile }) => {
                                         const participantName = profile?.name || participant.userDid;
+                                        const attendanceLabel =
+                                            participant.attendanceStatus === "attended"
+                                                ? "Attendance verified"
+                                                : participant.attendanceStatus === "did_not_attend"
+                                                  ? "Marked did not attend"
+                                                  : canReviewShiftAttendance
+                                                    ? "Awaiting attendance review"
+                                                    : "Attendance not yet reviewed";
 
                                         return (
                                             <div
@@ -991,8 +1076,41 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                                                   })
                                                                 : ""}
                                                         </div>
+                                                        <div
+                                                            className={cn(
+                                                                "mt-1 text-sm",
+                                                                participant.attendanceStatus === "attended"
+                                                                    ? "text-emerald-700"
+                                                                    : participant.attendanceStatus === "did_not_attend"
+                                                                      ? "text-rose-700"
+                                                                      : "text-muted-foreground",
+                                                            )}
+                                                        >
+                                                            {attendanceLabel}
+                                                            {participant.attendanceVerifiedAt ? (
+                                                                <>
+                                                                    {" "}
+                                                                    {formatDistanceToNow(
+                                                                        new Date(participant.attendanceVerifiedAt),
+                                                                        {
+                                                                            addSuffix: true,
+                                                                        },
+                                                                    )}
+                                                                </>
+                                                            ) : null}
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                {canReviewShiftAttendance && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() => openAttendanceDialog(participant)}
+                                                        disabled={isPending}
+                                                    >
+                                                        {participant.attendanceStatus ? "Update Review" : "Review Attendance"}
+                                                    </Button>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1288,6 +1406,51 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             disabled={isPending}
                         >
                             {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Request Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={attendanceDialogOpen} onOpenChange={closeAttendanceDialog}>
+                <DialogContent
+                    onInteractOutside={(e) => {
+                        e.preventDefault();
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Review Attendance</DialogTitle>
+                        <DialogDescription>
+                            Mark whether this confirmed participant actually attended the completed shift.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <Select
+                            value={attendanceStatus}
+                            onValueChange={(value) =>
+                                setAttendanceStatus(value as TaskParticipantAttendanceStatus)
+                            }
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select attendance outcome" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="attended">Attended</SelectItem>
+                                <SelectItem value="did_not_attend">Did not attend</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Textarea
+                            value={attendanceNote}
+                            onChange={(event) => setAttendanceNote(event.target.value)}
+                            placeholder="Optional short review or note"
+                            maxLength={500}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button onClick={submitAttendanceReview} disabled={isPending || !attendanceParticipant}>
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Review
                         </Button>
                     </DialogFooter>
                 </DialogContent>

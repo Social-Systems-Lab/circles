@@ -12,6 +12,7 @@ import {
     Media,
     RankedList, // Added
     Task,
+    TaskParticipantAttendanceStatus,
     TaskPriority,
     TaskDisplay,
     TaskStage,
@@ -19,6 +20,7 @@ import {
     locationSchema,
     didSchema,
     rankedListSchema, // Added
+    taskParticipantAttendanceStatusSchema,
     taskPrioritySchema,
     taskTypeSchema,
 } from "@/models/models";
@@ -50,6 +52,7 @@ import {
     notifyTaskAccepted,
     notifyTaskChangesRequested,
     notifyTaskShiftSignup,
+    notifyTaskShiftAttendanceVerified,
     notifyTaskShiftConfirmed,
     notifyTaskStatusChanged,
     notifyTaskVerified,
@@ -64,6 +67,39 @@ type GetTasksActionResult = {
     unrankedCount: number;
     userRankUpdatedAt: Date | null;
     userRankBecameStaleAt: Date | null;
+};
+
+const getShiftEndAt = (task: Pick<Task, "stage" | "targetDate" | "shiftStartTime" | "shiftDurationMinutes">) => {
+    if (task.stage === "resolved") {
+        return new Date(0);
+    }
+
+    if (!task.targetDate || !task.shiftStartTime || !task.shiftDurationMinutes) {
+        return null;
+    }
+
+    const [hours, minutes] = task.shiftStartTime.split(":").map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+        return null;
+    }
+
+    const shiftEndAt = new Date(task.targetDate);
+    if (Number.isNaN(shiftEndAt.getTime())) {
+        return null;
+    }
+
+    shiftEndAt.setHours(hours, minutes, 0, 0);
+    shiftEndAt.setMinutes(shiftEndAt.getMinutes() + task.shiftDurationMinutes);
+    return shiftEndAt;
+};
+
+const hasShiftCompleted = (task: Pick<Task, "stage" | "targetDate" | "shiftStartTime" | "shiftDurationMinutes">) => {
+    const shiftEndAt = getShiftEndAt(task);
+    if (!shiftEndAt) {
+        return task.stage === "resolved";
+    }
+
+    return shiftEndAt.getTime() <= Date.now();
 };
 
 /**
@@ -281,6 +317,15 @@ const createTaskSchema = baseTaskSchema.superRefine((data, context) => {
             });
         }
     }
+});
+
+const reviewShiftAttendanceSchema = z.object({
+    participantDid: didSchema,
+    attendanceStatus: taskParticipantAttendanceStatusSchema,
+    note: z.preprocess(
+        (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
+        z.string().max(500, "Attendance note must be 500 characters or fewer").optional(),
+    ),
 });
 
 const updateTaskSchema = baseTaskSchema.extend({
@@ -1470,6 +1515,131 @@ export async function verifyShiftParticipantAction(
     } catch (error) {
         console.error("Error verifying shift participant:", error);
         return { success: false, message: "Failed to verify shift participant" };
+    }
+}
+
+export async function reviewShiftAttendanceAction(
+    circleHandle: string,
+    taskId: string,
+    participantDid: string,
+    attendanceStatus: TaskParticipantAttendanceStatus,
+    note?: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const validated = reviewShiftAttendanceSchema.safeParse({
+            participantDid,
+            attendanceStatus,
+            note,
+        });
+        if (!validated.success) {
+            return {
+                success: false,
+                message: validated.error.errors.map((error) => error.message).join(", "),
+            };
+        }
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        if (!ObjectId.isValid(taskId)) {
+            return { success: false, message: "Invalid task id" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks.moderate);
+        if (!canModerate) {
+            return { success: false, message: "Not authorized to review shift attendance" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        if ((task.taskType ?? "outcome") !== "shift") {
+            return { success: false, message: "Only shift tasks support attendance review" };
+        }
+
+        if (!hasShiftCompleted(task)) {
+            return { success: false, message: "Attendance can only be reviewed after the shift has completed" };
+        }
+
+        const participant = (task.participants ?? []).find(
+            (entry) => entry.userDid === validated.data.participantDid,
+        );
+        if (!participant) {
+            return { success: false, message: "Participant not found on this shift" };
+        }
+
+        if (!participant.verifiedAt) {
+            return { success: false, message: "Only confirmed participants can be reviewed for attendance" };
+        }
+
+        const shouldNotifyAttendanceVerified =
+            validated.data.attendanceStatus === "attended" && participant.attendanceStatus !== "attended";
+
+        const now = new Date();
+        const result = await Tasks.updateOne(
+            {
+                _id: new ObjectId(taskId),
+                taskType: "shift",
+                participants: {
+                    $elemMatch: {
+                        userDid: validated.data.participantDid,
+                        verifiedAt: { $exists: true, $ne: null },
+                    },
+                },
+            },
+            {
+                $set: {
+                    "participants.$.attendanceStatus": validated.data.attendanceStatus,
+                    "participants.$.attendanceVerifiedAt": now,
+                    "participants.$.attendanceVerifiedBy": userDid,
+                    "participants.$.attendanceNote": validated.data.note ?? "",
+                    updatedAt: now,
+                },
+            },
+        );
+
+        if (!result.modifiedCount) {
+            return { success: false, message: "Unable to review this participant right now" };
+        }
+
+        if (shouldNotifyAttendanceVerified) {
+            const [verifier, reviewedParticipant] = await Promise.all([
+                getUserByDid(userDid),
+                getUserPrivate(validated.data.participantDid),
+            ]);
+
+            if (verifier && reviewedParticipant) {
+                await notifyTaskShiftAttendanceVerified(task, verifier, reviewedParticipant);
+            } else {
+                console.error("🔔 [ACTION] Failed to fetch shift attendance notification context:", {
+                    verifierDid: userDid,
+                    participantDid: validated.data.participantDid,
+                });
+            }
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return {
+            success: true,
+            message:
+                validated.data.attendanceStatus === "attended"
+                    ? "Attendance verified"
+                    : "Participant marked as not attending",
+        };
+    } catch (error) {
+        console.error("Error reviewing shift attendance:", error);
+        return { success: false, message: "Failed to review shift attendance" };
     }
 }
 

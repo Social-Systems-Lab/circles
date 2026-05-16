@@ -1089,6 +1089,7 @@ export type NotificationType =
     | "task_accepted"
     | "task_shift_signup"
     | "task_shift_confirmed"
+    | "task_shift_attendance_verified"
     | "task_status_changed"
     // Goal Notifications
     | "goal_submitted_for_review"
@@ -1158,6 +1159,7 @@ export const notificationTypeValues = [
     "task_accepted",
     "task_shift_signup",
     "task_shift_confirmed",
+    "task_shift_attendance_verified",
     "task_status_changed",
     "goal_submitted_for_review",
     "goal_approved",
@@ -1246,6 +1248,7 @@ export const summaryNotificationTypeDetails: Record<
             "task_accepted",
             "task_shift_signup",
             "task_shift_confirmed",
+            "task_shift_attendance_verified",
             "task_status_changed",
             "ranking_stale_reminder",
             "ranking_grace_period_ended",
@@ -1439,11 +1442,17 @@ export const taskPrioritySchema = z.enum(["low", "medium", "high", "critical"]);
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 export const taskTypeSchema = z.enum(["outcome", "shift"]);
 export type TaskType = z.infer<typeof taskTypeSchema>;
+export const taskParticipantAttendanceStatusSchema = z.enum(["attended", "did_not_attend"]);
+export type TaskParticipantAttendanceStatus = z.infer<typeof taskParticipantAttendanceStatusSchema>;
 export const taskParticipantSchema = z.object({
     userDid: didSchema,
     joinedAt: z.date(),
     verifiedAt: z.date().optional(),
     verifiedBy: didSchema.optional(),
+    attendanceStatus: taskParticipantAttendanceStatusSchema.optional(),
+    attendanceVerifiedAt: z.date().optional(),
+    attendanceVerifiedBy: didSchema.optional(),
+    attendanceNote: z.string().optional(),
 });
 export type TaskParticipant = z.infer<typeof taskParticipantSchema>;
 

@@ -77,6 +77,7 @@ const defaultSettingsConfig: Omit<DefaultNotificationSetting, "_id" | "createdAt
     { entityType: "TASK", notificationType: "task_verified", defaultIsEnabled: true }, // Assignee
     { entityType: "TASK", notificationType: "task_approved", defaultIsEnabled: true }, // Author
     { entityType: "TASK", notificationType: "task_assigned", defaultIsEnabled: true }, // Assignee
+    { entityType: "TASK", notificationType: "task_shift_attendance_verified", defaultIsEnabled: true }, // Participant
     { entityType: "TASK", notificationType: "task_status_changed", defaultIsEnabled: true }, // Author/Assignee
 
     // Goal specific defaults

@@ -579,7 +579,8 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                             participants: {
                                 $elemMatch: {
                                     userDid,
-                                    verifiedAt: { $exists: true, $ne: null },
+                                    attendanceStatus: "attended",
+                                    attendanceVerifiedAt: { $exists: true, $ne: null },
                                 },
                             },
                         },
@@ -596,7 +597,8 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                                 cond: {
                                     $and: [
                                         { $eq: ["$$participant.userDid", userDid] },
-                                        { $ne: ["$$participant.verifiedAt", null] },
+                                        { $eq: ["$$participant.attendanceStatus", "attended"] },
+                                        { $ne: ["$$participant.attendanceVerifiedAt", null] },
                                     ],
                                 },
                             },
@@ -607,10 +609,10 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
             {
                 $addFields: {
                     contributionVerifiedAt: {
-                        $ifNull: ["$matchedShiftParticipant.verifiedAt", "$verifiedAt"],
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedAt", "$verifiedAt"],
                     },
                     contributionVerifiedBy: {
-                        $ifNull: ["$matchedShiftParticipant.verifiedBy", "$verifiedBy"],
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedBy", "$verifiedBy"],
                     },
                 },
             },
