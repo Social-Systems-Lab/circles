@@ -260,7 +260,16 @@ export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     circle?: Circle;
     feed?: Feed;
     // Populated internal preview data
-    internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | FundingAskDisplay | null;
+    internalPreviewData?:
+        | Circle
+        | PostDisplay
+        | TaskDisplay
+        | ProposalDisplay
+        | IssueDisplay
+        | GoalDisplay
+        | EventDisplay
+        | FundingAskDisplay
+        | null;
     sharedPostData?: PostDisplay | null;
     sdgs?: Cause[];
 }
