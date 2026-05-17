@@ -99,6 +99,15 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
         if (post.media && post.media.length > 0) {
             return post.media[0].fileInfo?.url;
         }
+        if (
+            (post.internalPreviewType === "event" || post.internalPreviewType === "task") &&
+            post.internalPreviewData &&
+            "images" in post.internalPreviewData &&
+            Array.isArray(post.internalPreviewData.images) &&
+            post.internalPreviewData.images.length > 0
+        ) {
+            return post.internalPreviewData.images[0]?.fileInfo?.url;
+        }
         if (post.sharedPostData?.media && post.sharedPostData.media.length > 0) {
             return post.sharedPostData.media[0].fileInfo?.url;
         }
@@ -171,6 +180,7 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                                             <InternalLinkPreview
                                                 url={post.internalPreviewUrl!}
                                                 initialData={post.internalPreviewData}
+                                                previewType={post.internalPreviewType}
                                             />
                                         </div>
                                     ) : (

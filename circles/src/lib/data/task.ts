@@ -42,6 +42,7 @@ export const SAFE_TASK_PROJECTION = {
     userGroups: 1,
     location: 1,
     commentPostId: 1,
+    noticeboardPostId: 1,
     images: 1,
     targetDate: 1,
     goal: 1,

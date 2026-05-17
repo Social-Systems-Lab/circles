@@ -1486,6 +1486,7 @@ export const taskSchema = z.object({
     userGroups: z.array(z.string()).default([]), // User groups that can see this task
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
     targetDate: z.date().nullable().optional(), // Target date for task (optional)
     goalId: z.string().optional(), // Optional link to a goal
@@ -1630,6 +1631,7 @@ export const eventSchema = z.object({
     userGroups: z.array(z.string()).default([]), // User groups that can see this event
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
     // Format
     isVirtual: z.boolean().optional(),

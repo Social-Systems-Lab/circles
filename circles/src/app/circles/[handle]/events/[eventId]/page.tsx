@@ -11,10 +11,14 @@ import { ArrowLeft } from "lucide-react";
 
 type PageProps = {
     params: Promise<{ handle: string; eventId: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function EventDetailPage(props: PageProps) {
     const params = await props.params;
+    const searchParams = await props.searchParams;
+    const sourceParam = Array.isArray(searchParams?.source) ? searchParams.source[0] : searchParams?.source;
+    const isNoticeboardSource = sourceParam === "noticeboard";
     const circle = await getCircleByHandle(params.handle);
     if (!circle) {
         notFound();
@@ -49,9 +53,9 @@ export default async function EventDetailPage(props: PageProps) {
         <div className="formatted flex w-full flex-col">
             <div className="mb-4 flex items-center p-4">
                 <Button asChild variant="ghost" className="mr-2">
-                    <Link href={`/circles/${circle.handle}/events`}>
+                    <Link href={`/circles/${circle.handle}/${isNoticeboardSource ? "feed" : "events"}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Events
+                        {isNoticeboardSource ? "Back to Noticeboard" : "Back to Events"}
                     </Link>
                 </Button>
             </div>

@@ -4,26 +4,48 @@ import React from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Circle, FundingAskDisplay, PostDisplay, ProposalDisplay, IssueDisplay, TaskDisplay } from "@/models/models";
+import { Circle, EventDisplay, FundingAskDisplay, PostDisplay, ProposalDisplay, IssueDisplay, TaskDisplay } from "@/models/models";
 import { truncateText } from "@/lib/utils";
 import {
     Users,
     AlertCircle,
     CircleHelp,
+    CalendarDays,
     ListTodo,
 } from "lucide-react";
 import Image from "next/image";
 import { FundingStatusPill, getFundingRequestSummaryLine } from "@/components/modules/funding/funding-shared";
 
 // Define the type for the data prop more explicitly
-type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay;
+type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | EventDisplay | FundingAskDisplay;
 
 type InternalLinkPreviewProps = {
     url: string; // Keep URL for the link itself
     initialData?: PreviewData | null; // Accept pre-fetched data
+    previewType?: "circle" | "post" | "proposal" | "issue" | "task" | "event" | "funding";
 };
 
-const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialData }) => {
+const getPreviewImageUrl = (data: PreviewData | null | undefined): string | undefined => {
+    if (!data || !("images" in data) || !Array.isArray(data.images) || data.images.length === 0) {
+        return undefined;
+    }
+
+    return data.images[0]?.fileInfo?.url;
+};
+
+const addSourceParam = (href: string, source: string) => {
+    try {
+        const parsed = new URL(href, "http://dummybase");
+        if (!parsed.searchParams.get("source")) {
+            parsed.searchParams.set("source", source);
+        }
+        return `${parsed.pathname}${parsed.search}${parsed.hash}` || href;
+    } catch {
+        return href;
+    }
+};
+
+const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialData, previewType }) => {
     const href = React.useMemo(() => {
         try {
             const parsed = new URL(url, "http://dummybase");
@@ -46,10 +68,11 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
 
     // Determine the type based on the structure of initialData
     // This is a basic check; more robust type guards might be needed if structures overlap significantly
-    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | "task" | "funding" | null => {
+    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | "task" | "event" | "funding" | null => {
         if ("shortStory" in data && "trustBadgeType" in data) return "funding";
         if ("circleType" in data && data.circleType === "post") return "post";
         if ("stage" in data && "decisionText" in data) return "proposal";
+        if ("startAt" in data && "endAt" in data) return "event";
         if ("stage" in data && "title" in data && !("decisionText" in data) && !("taskSpecificField" in data))
             return "issue";
         if ("stage" in data && "title" in data && !("decisionText" in data) /* && "taskSpecificField" in data */)
@@ -58,7 +81,8 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
         return null;
     };
 
-    const dataType = getDataType(initialData);
+    const dataType = previewType ?? getDataType(initialData);
+    const noticeboardHref = dataType === "task" || dataType === "event" ? addSourceParam(href, "noticeboard") : href;
 
     const getCircleTypeName = (circleType: string) => {
         switch (circleType) {
@@ -156,20 +180,100 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                 );
             case "task":
                 const task = initialData as TaskDisplay;
+                const taskPreviewImage = getPreviewImageUrl(task);
                 return (
-                    <>
-                        <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 text-green-700">
-                            <ListTodo className="h-5 w-5" /> {/* Task icon */}
-                        </Avatar>
-                        <div>
-                            <div className="text-xs text-gray-500">Task</div>
-                            <div className="font-medium">{task.title}</div>
-                            <p className="text-sm text-gray-600">
-                                Status: <span className="font-semibold">{task.stage}</span>
-                                {task.assignee && ` | Assigned to: ${task.assignee.name}`}
+                    <div className="overflow-hidden rounded-[15px] border border-slate-200 bg-white">
+                        {taskPreviewImage ? (
+                            <div className="relative h-40 w-full bg-slate-100">
+                                <Image
+                                    src={taskPreviewImage}
+                                    alt={task.title}
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 768px) 100vw, 480px"
+                                />
+                            </div>
+                        ) : null}
+                        <div className="space-y-3 p-4">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 text-green-700">
+                                    <ListTodo className="h-5 w-5" />
+                                </Avatar>
+                                <div>
+                                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        {task.taskType === "shift" ? "Volunteer shift" : "Task"}
+                                    </div>
+                                    <div className="text-lg font-semibold text-slate-900">{task.title}</div>
+                                </div>
+                            </div>
+                            <p className="text-sm text-slate-600">
+                                {task.taskType === "shift" ? "Join this shift" : "Status"}
+                                {": "}
+                                <span className="font-semibold">{task.stage}</span>
+                                {task.taskType !== "shift" && task.assignee && ` | Assigned to: ${task.assignee.name}`}
                             </p>
+                            <Button asChild size="sm" className="w-fit">
+                                <Link
+                                    href={noticeboardHref}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                    }}
+                                >
+                                    {task.taskType === "shift" ? "View shift" : "View task"}
+                                </Link>
+                            </Button>
                         </div>
-                    </>
+                    </div>
+                );
+            case "event":
+                const event = initialData as EventDisplay;
+                const eventPreviewImage = getPreviewImageUrl(event);
+                return (
+                    <div className="overflow-hidden rounded-[15px] border border-slate-200 bg-white">
+                        {eventPreviewImage ? (
+                            <div className="relative h-40 w-full bg-slate-100">
+                                <Image
+                                    src={eventPreviewImage}
+                                    alt={event.title}
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 768px) 100vw, 480px"
+                                />
+                            </div>
+                        ) : null}
+                        <div className="space-y-3 p-4">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-sky-100 text-sky-700">
+                                    <CalendarDays className="h-5 w-5" />
+                                </Avatar>
+                                <div>
+                                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Event
+                                    </div>
+                                    <div className="text-lg font-semibold text-slate-900">{event.title}</div>
+                                </div>
+                            </div>
+                            <p className="text-sm text-slate-600">
+                                Attend this event
+                                {event.startAt
+                                    ? ` | ${new Date(event.startAt).toLocaleString([], {
+                                          dateStyle: "medium",
+                                          timeStyle: "short",
+                                      })}`
+                                    : ""}
+                            </p>
+                            <Button asChild size="sm" className="w-fit">
+                                <Link
+                                    href={noticeboardHref}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                    }}
+                                >
+                                    View event
+                                </Link>
+                            </Button>
+                        </div>
+                    </div>
                 );
             case "funding":
                 const ask = initialData as FundingAskDisplay;
@@ -217,7 +321,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
     };
 
     return (
-        dataType === "funding" ? (
+        dataType === "funding" || dataType === "event" || dataType === "task" ? (
             <div className="my-2">{renderPreviewContent()}</div>
         ) : (
             <Link href={href} className="my-2 block rounded-md border transition-colors hover:bg-gray-50">
