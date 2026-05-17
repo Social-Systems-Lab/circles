@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Feeds, Posts, Tasks } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type
-import { createPost } from "@/lib/data/feed"; // Import createPost
+import { createDefaultFeed, createPost, getFeedByHandle, updatePost } from "@/lib/data/feed"; // Import createPost
 import { ObjectId } from "mongodb"; // Import ObjectId
 import {
     Circle,
@@ -23,6 +23,7 @@ import {
     taskParticipantAttendanceStatusSchema,
     taskPrioritySchema,
     taskTypeSchema,
+    postSchema,
 } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -102,6 +103,85 @@ const hasShiftCompleted = (task: Pick<Task, "stage" | "targetDate" | "shiftStart
     }
 
     return shiftEndAt.getTime() <= Date.now();
+};
+
+const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") === "true";
+
+const getTaskInternalPreviewUrl = (circleHandle: string, taskId: string) => {
+    const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
+    return `${baseUrl}/circles/${circleHandle}/tasks/${taskId}?source=noticeboard`;
+};
+
+const buildShiftNoticeboardPostContent = (task: Pick<Task, "description" | "participantNotes">) => {
+    const detail = task.participantNotes?.trim() || task.description.trim();
+    return detail ? `Help with this volunteer shift. ${detail}` : "Help with this volunteer shift.";
+};
+
+const upsertShiftNoticeboardPost = async ({
+    circle,
+    circleHandle,
+    task,
+}: {
+    circle: Circle;
+    circleHandle: string;
+    task: Pick<Task, "_id" | "title" | "description" | "participantNotes" | "createdBy" | "noticeboardPostId">;
+}): Promise<string | null> => {
+    if (!circle._id || !task._id) {
+        return null;
+    }
+
+    let feed = await getFeedByHandle(circle._id.toString(), "default");
+    if (!feed) {
+        feed = await createDefaultFeed(circle._id.toString());
+    }
+    if (!feed?._id) {
+        throw new Error("Noticeboard feed not found.");
+    }
+
+    const taskId = task._id.toString();
+    const postData: Partial<Post> = {
+        title: task.title,
+        content: buildShiftNoticeboardPostContent(task),
+        feedId: feed._id.toString(),
+        createdBy: task.createdBy,
+        createdAt: new Date(),
+        editedAt: new Date(),
+        reactions: {},
+        comments: 0,
+        userGroups: ["admins", "moderators", "members"],
+        postType: "post",
+        internalPreviewType: "task",
+        internalPreviewId: taskId,
+        internalPreviewUrl: getTaskInternalPreviewUrl(circleHandle, taskId),
+    };
+
+    if (task.noticeboardPostId) {
+        try {
+            await updatePost({
+                _id: task.noticeboardPostId,
+                title: postData.title,
+                content: postData.content,
+                editedAt: new Date(),
+                userGroups: postData.userGroups,
+                postType: postData.postType,
+                internalPreviewType: postData.internalPreviewType,
+                internalPreviewId: postData.internalPreviewId,
+                internalPreviewUrl: postData.internalPreviewUrl,
+            });
+            return task.noticeboardPostId;
+        } catch (error) {
+            console.error("Failed to update linked noticeboard post for shift:", error);
+        }
+    }
+
+    const createdPost = await createPost(
+        await postSchema.parseAsync({
+            ...postData,
+            createdAt: new Date(),
+            editedAt: undefined,
+        }),
+    );
+    return createdPost._id?.toString?.() ?? createdPost._id ?? null;
 };
 
 /**
@@ -603,6 +683,30 @@ export async function createTaskAction( // Renamed function
             // Non-critical, so don't fail the task creation
         }
 
+        if (data.taskType === "shift" && shouldPublishToNoticeboard(formData)) {
+            try {
+                const noticeboardPostId = await upsertShiftNoticeboardPost({
+                    circle,
+                    circleHandle,
+                    task: createdTask,
+                });
+                if (noticeboardPostId && noticeboardPostId !== createdTask.noticeboardPostId) {
+                    await Tasks.updateOne(
+                        { _id: new ObjectId(createdTask._id!.toString()) },
+                        { $set: { noticeboardPostId } },
+                    );
+                    revalidatePath(`/circles/${circleHandle}/feed`);
+                }
+            } catch (error) {
+                console.error("Failed to create linked noticeboard post for shift:", error);
+                return {
+                    success: true,
+                    message: "Task submitted, but Noticeboard post could not be created.",
+                    taskId: createdTask._id?.toString(),
+                };
+            }
+        }
+
         return {
             success: true,
             message: "Task submitted successfully", // Updated message
@@ -810,6 +914,29 @@ export async function updateTaskAction(
 
         if (!success) {
             return { success: false, message: "Failed to update task" };
+        }
+
+        if (data.taskType === "shift" && shouldPublishToNoticeboard(formData)) {
+            try {
+                const noticeboardPostId = await upsertShiftNoticeboardPost({
+                    circle,
+                    circleHandle,
+                    task: {
+                        ...task,
+                        ...updateData,
+                        _id: taskId,
+                        createdBy: task.createdBy,
+                        noticeboardPostId: task.noticeboardPostId,
+                    },
+                });
+                if (noticeboardPostId && noticeboardPostId !== task.noticeboardPostId) {
+                    await Tasks.updateOne({ _id: new ObjectId(taskId) }, { $set: { noticeboardPostId } });
+                }
+                revalidatePath(`/circles/${circleHandle}/feed`);
+            } catch (error) {
+                console.error("Failed to create linked noticeboard post for shift:", error);
+                return { success: true, message: "Task updated, but Noticeboard post could not be created." };
+            }
         }
 
         // Revalidate relevant pages

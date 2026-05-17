@@ -25,6 +25,7 @@ export const SAFE_EVENT_PROJECTION = {
     userGroups: 1,
     location: 1,
     commentPostId: 1,
+    noticeboardPostId: 1,
     images: 1,
     isVirtual: 1,
     virtualUrl: 1,

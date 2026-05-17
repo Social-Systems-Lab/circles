@@ -8,6 +8,7 @@ import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
@@ -74,6 +75,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
     const [isPrivate, setIsPrivate] = useState<boolean>(event?.visibility === "private");
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
+    const [publishToNoticeboard, setPublishToNoticeboard] = useState<boolean>(Boolean(event?.noticeboardPostId));
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
@@ -175,6 +177,10 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
         }
     }, [event?.images]);
 
+    useEffect(() => {
+        setPublishToNoticeboard(Boolean(event?.noticeboardPostId));
+    }, [event?.noticeboardPostId]);
+
     const handleImagesChange = (items: ImageItem[]) => setImages(items);
     const handleCircleSelected = useCallback((circle: Circle | null) => {
         setSelectedCircle(circle?.handle);
@@ -255,6 +261,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                 } else {
                     fd.set("recurrence", "");
                 }
+                fd.set("publishToNoticeboard", String(publishToNoticeboard));
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
@@ -616,6 +623,22 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                     <p className="text-xs text-muted-foreground">
                         Private events are visible only to the creator and invited participants.
                     </p>
+
+                    <div className="rounded-lg border p-4">
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="publishToNoticeboard"
+                                checked={publishToNoticeboard}
+                                onCheckedChange={(checked) => setPublishToNoticeboard(Boolean(checked))}
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="publishToNoticeboard">Share this event on the Noticeboard</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Create or update one linked Noticeboard post for this event.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="space-y-4">

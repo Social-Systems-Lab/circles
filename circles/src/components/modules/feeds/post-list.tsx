@@ -1226,7 +1226,11 @@ export const PostItem = ({
                 <div className="pl-4 pr-4">
                     {/* Render Internal Preview if URL exists, passing pre-fetched data */}
                     {post.internalPreviewUrl ? (
-                        <InternalLinkPreview url={post.internalPreviewUrl} initialData={post.internalPreviewData} />
+                        <InternalLinkPreview
+                            url={post.internalPreviewUrl}
+                            initialData={post.internalPreviewData}
+                            previewType={post.internalPreviewType}
+                        />
                     ) : // Otherwise, render External Preview if URL exists
                     post.linkPreviewUrl ? (
                         <LinkPreviewCard

@@ -23,8 +23,15 @@ export default async function TaskDetailPage(props: PageProps) {
     const sourceParam = Array.isArray(searchParams?.source) ? searchParams.source[0] : searchParams?.source;
     const isEventsSource = sourceParam === "events";
     const isAboutSource = sourceParam === "about";
-    const backHref = `/circles/${circleHandle}/${isEventsSource ? "events" : isAboutSource ? "home" : "tasks"}`;
-    const backLabel = isEventsSource ? "Back to Events" : isAboutSource ? "Back to About" : "Back to Tasks";
+    const isNoticeboardSource = sourceParam === "noticeboard";
+    const backHref = `/circles/${circleHandle}/${isEventsSource ? "events" : isAboutSource ? "home" : isNoticeboardSource ? "feed" : "tasks"}`;
+    const backLabel = isEventsSource
+        ? "Back to Events"
+        : isAboutSource
+          ? "Back to About"
+          : isNoticeboardSource
+            ? "Back to Noticeboard"
+            : "Back to Tasks";
 
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();

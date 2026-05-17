@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added Card imports
+import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,6 +89,7 @@ const taskFormSchema = z
             (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
             z.string().max(1000, "Participant notes must be 1000 characters or fewer").optional(),
         ),
+        publishToNoticeboard: z.boolean().default(false),
         priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
     })
     .superRefine((data, context) => {
@@ -208,6 +210,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             shiftStartTime: task?.shiftStartTime,
             shiftDurationMinutes: task?.shiftDurationMinutes,
             participantNotes: task?.participantNotes,
+            publishToNoticeboard: Boolean(task?.noticeboardPostId),
             priority: task?.priority || null,
         },
     });
@@ -303,6 +306,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             form.setValue("shiftStartTime", undefined, { shouldValidate: false });
             form.setValue("shiftDurationMinutes", undefined, { shouldValidate: false });
             form.setValue("participantNotes", undefined, { shouldValidate: false });
+            form.setValue("publishToNoticeboard", false, { shouldValidate: false });
             return;
         }
 
@@ -391,6 +395,10 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             formData.append("participantNotes", "");
         }
+        formData.append(
+            "publishToNoticeboard",
+            values.taskType === "shift" ? String(values.publishToNoticeboard) : "false",
+        );
 
         if (values.priority) {
             formData.append("priority", values.priority);
@@ -696,6 +704,34 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                                     <FormDescription>
                                                         Shared instructions for people taking this shift.
                                                     </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="publishToNoticeboard"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:col-span-2 md:py-4">
+                                                    <div className="flex items-start gap-3 rounded-lg border p-4">
+                                                        <FormControl>
+                                                            <Checkbox
+                                                                checked={field.value}
+                                                                onCheckedChange={(checked) =>
+                                                                    field.onChange(Boolean(checked))
+                                                                }
+                                                                disabled={isSubmitting}
+                                                            />
+                                                        </FormControl>
+                                                        <div className="space-y-1">
+                                                            <FormLabel>Share this shift on the Noticeboard</FormLabel>
+                                                            <FormDescription>
+                                                                Create or update one linked Noticeboard post for this volunteer shift.
+                                                            </FormDescription>
+                                                        </div>
+                                                    </div>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}

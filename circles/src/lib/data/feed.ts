@@ -1,5 +1,5 @@
 // feed.ts - Feed data access functions
-import { Feeds, Posts, Comments, Reactions, Circles, Members, Proposals, Issues, Tasks } from "./db"; // Added Tasks
+import { Feeds, Posts, Comments, Reactions, Circles, Members, Proposals, Issues, Tasks, Events } from "./db"; // Added Tasks
 import { ObjectId } from "mongodb";
 import {
     Feed,
@@ -13,6 +13,7 @@ import {
     ProposalDisplay,
     IssueDisplay,
     FundingAskDisplay,
+    EventDisplay,
     TaskDisplay, // Added TaskDisplay
 } from "@/models/models";
 import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle";
@@ -22,7 +23,6 @@ import { deleteVbdPost, upsertVbdPosts } from "./vdb";
 import { getProposalById } from "./proposal";
 import { getIssueById } from "./issue";
 import { getFundingAskDocumentById } from "./funding";
-import { getTaskById } from "./task"; // Added getTaskById
 import { sdgs } from "./sdgs";
 import { isAuthorized } from "@/lib/auth/auth";
 import { features } from "./constants";
@@ -1534,7 +1534,7 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
 
     const previewDataMap = new Map<
         string,
-        Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay
+        Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | EventDisplay | FundingAskDisplay
     >();
 
     // Group IDs by type
@@ -1641,6 +1641,15 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                         const taskWithStringId = { ...t, _id: t._id.toString() };
                         // TODO: Also convert author/assignee/circle _id if populated here
                         previewDataMap.set(`task-${t._id.toString()}`, taskWithStringId as TaskDisplay);
+                    });
+                    break;
+                case "event":
+                    const events = await Events.find(
+                        { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+                    ).toArray();
+                    events.forEach((event) => {
+                        const eventWithStringId = { ...event, _id: event._id.toString() };
+                        previewDataMap.set(`event-${event._id.toString()}`, eventWithStringId as EventDisplay);
                     });
                     break;
                 case "funding":
