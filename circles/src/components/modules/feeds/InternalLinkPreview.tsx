@@ -4,7 +4,16 @@ import React from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Circle, EventDisplay, FundingAskDisplay, PostDisplay, ProposalDisplay, IssueDisplay, TaskDisplay } from "@/models/models";
+import {
+    Circle,
+    EventDisplay,
+    FundingAskDisplay,
+    GoalDisplay,
+    PostDisplay,
+    ProposalDisplay,
+    IssueDisplay,
+    TaskDisplay,
+} from "@/models/models";
 import { truncateText } from "@/lib/utils";
 import {
     Users,
@@ -17,12 +26,20 @@ import Image from "next/image";
 import { FundingStatusPill, getFundingRequestSummaryLine } from "@/components/modules/funding/funding-shared";
 
 // Define the type for the data prop more explicitly
-type PreviewData = Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | EventDisplay | FundingAskDisplay;
+type PreviewData =
+    | Circle
+    | PostDisplay
+    | ProposalDisplay
+    | IssueDisplay
+    | TaskDisplay
+    | GoalDisplay
+    | EventDisplay
+    | FundingAskDisplay;
 
 type InternalLinkPreviewProps = {
     url: string; // Keep URL for the link itself
     initialData?: PreviewData | null; // Accept pre-fetched data
-    previewType?: "circle" | "post" | "proposal" | "issue" | "task" | "event" | "funding";
+    previewType?: PostDisplay["internalPreviewType"];
 };
 
 const getPreviewImageUrl = (data: PreviewData | null | undefined): string | undefined => {
@@ -68,11 +85,14 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
 
     // Determine the type based on the structure of initialData
     // This is a basic check; more robust type guards might be needed if structures overlap significantly
-    const getDataType = (data: PreviewData): "circle" | "post" | "proposal" | "issue" | "task" | "event" | "funding" | null => {
+    const getDataType = (
+        data: PreviewData,
+    ): "circle" | "post" | "proposal" | "issue" | "task" | "goal" | "event" | "funding" | null => {
         if ("shortStory" in data && "trustBadgeType" in data) return "funding";
         if ("circleType" in data && data.circleType === "post") return "post";
         if ("stage" in data && "decisionText" in data) return "proposal";
         if ("startAt" in data && "endAt" in data) return "event";
+        if ("resultPostId" in data || "resultSummary" in data || "completedAt" in data) return "goal";
         if ("stage" in data && "title" in data && !("decisionText" in data) && !("taskSpecificField" in data))
             return "issue";
         if ("stage" in data && "title" in data && !("decisionText" in data) /* && "taskSpecificField" in data */)
@@ -225,6 +245,41 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                         </div>
                     </div>
                 );
+            case "goal":
+                const goal = initialData as GoalDisplay;
+                const goalPreviewImage = getPreviewImageUrl(goal);
+                return (
+                    <div className="overflow-hidden rounded-[15px] border border-slate-200 bg-white">
+                        {goalPreviewImage ? (
+                            <div className="relative h-40 w-full bg-slate-100">
+                                <Image
+                                    src={goalPreviewImage}
+                                    alt={goal.title}
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 768px) 100vw, 480px"
+                                />
+                            </div>
+                        ) : null}
+                        <div className="space-y-3 p-4">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
+                                    <CircleHelp className="h-5 w-5" />
+                                </Avatar>
+                                <div>
+                                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Goal
+                                    </div>
+                                    <div className="text-lg font-semibold text-slate-900">{goal.title}</div>
+                                </div>
+                            </div>
+                            <p className="text-sm text-slate-600">
+                                Status: <span className="font-semibold">{goal.stage}</span>
+                            </p>
+                            <p className="text-sm text-slate-600">{truncateText(goal.description, 140)}</p>
+                        </div>
+                    </div>
+                );
             case "event":
                 const event = initialData as EventDisplay;
                 const eventPreviewImage = getPreviewImageUrl(event);
@@ -321,7 +376,7 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
     };
 
     return (
-        dataType === "funding" || dataType === "event" || dataType === "task" ? (
+        dataType === "funding" || dataType === "event" || dataType === "task" || dataType === "goal" ? (
             <div className="my-2">{renderPreviewContent()}</div>
         ) : (
             <Link href={href} className="my-2 block rounded-md border transition-colors hover:bg-gray-50">
