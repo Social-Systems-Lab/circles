@@ -358,6 +358,11 @@ founding members assigned, 72 pending. platformSettings initialised
 with window open at cap 1000. App container rebuilt and serving new
 code; /admin verified.
 
+Hotfix 2026-05-12: 
+basic-info-step.tsx was not updated in 006a — canCreateIndependentCircle still checked isMember || manualMember only, excluding founding members. Fixed by adding || isFoundingMember to both checks. Deployed to Cleura.
+
+
+
 ### Known issues / future tasks
 - **Interaction-gate audit needed.** Several features still check
   `isVerified` / `verificationStatus === "verified"` directly rather
@@ -395,3 +400,144 @@ code; /admin verified.
 - Security cleanup session (rotate secrets, .env consolidation)
 - Likely some urgent UX fixes between 006a and 006b as real users
   encounter the new flow
+
+
+## Session 007 — 2026-05-12/13
+
+### What we did
+- Hotfix: founding members blocked from creating independent circles.
+  `basic-info-step.tsx` still checked `isMember || manualMember` only —
+  `isFoundingMember` was missing. Added `|| user?.isFoundingMember` to
+  both `canCreateIndependentCircle` checks. (Interaction-gate audit gap
+  from 006a.)
+- Events panel: added "📍 X pinned · Y online only" notice at top of
+  sidebar when some events lack a map location. Helps users understand
+  why sidebar count can exceed map pin count.
+- Session 007 terminology: renamed paid tier from "Membership" to
+  "Supporting Kamooni" throughout subscription UI. Paying/volunteering
+  users are now called "Supporters" in all visible copy. Internal
+  identifiers (isMember, MembershipPanel, etc.) unchanged.
+- Fix: admin Verification Requests tab crashed with "User not found"
+  when a verification request referenced a deleted user. Added try/catch
+  guards in `listAdminVerificationRequests` (line 644) and
+  `getAdminVerificationRequestDetail` (line 710) in
+  `verification-workflow.ts`. Stale rows now render as "Unknown user"
+  via existing fallback; stale detail pages return null gracefully.
+- Merged `feature/security-next-15-5-18` into main (Next.js/dependency
+  update that was sitting on that branch).
+
+### Files changed
+- circles/src/components/circle-wizard/basic-info-step.tsx
+- circles/src/components/layout/events-panel.tsx
+- circles/src/app/circles/[handle]/settings/subscription/page.tsx
+- circles/src/app/circles/[handle]/settings/subscription/subscription-form-settings.tsx
+- circles/src/app/circles/[handle]/settings/subscription/subscription-form.tsx
+- circles/src/lib/data/verification-workflow.ts
+- circles/package.json + circles/bun.lock (via security branch merge)
+
+### Deployed?
+Yes — multiple deploys to Cleura throughout session.
+Last commit: cfa266aa
+
+### Known issues / future tasks
+- **Dependabot vulnerabilities: 90 (3 critical, 36 high, 46 moderate,
+  5 low)** — up from 76 at start of session due to security branch
+  merge. Dedicated session needed urgently.
+- **Interaction-gate audit still needed.** basic-info-step.tsx was one
+  missed file; others likely remain. Grep for raw `isMember` checks
+  across codebase (Session 010).
+- **Security branch contents need review.** What changed in package.json
+  / bun.lock on `feature/security-next-15-5-18` before merge — verify
+  no unintended changes landed.
+- All previously listed known issues from 006a carry forward.
+
+### What's next
+- Session 006b: invite credits + accountInvites collection + queue-skip flow
+- Security/Dependabot session (now urgent — 90 vulnerabilities)
+- Session 008: Follow vs Join split for circles
+- Session 010: Interaction gate audit (grep raw isMember checks)
+- Rotate MongoDB admin password (shared in session chat)
+
+## Session 007/Security — 2026-05-12 to 2026-05-14
+
+### What we did
+
+**Hotfixes and UX (2026-05-12)**
+- Fixed founding members being blocked from creating independent circles.
+  `basic-info-step.tsx` checked `isMember || manualMember` only —
+  `isFoundingMember` was missing. Added `|| user?.isFoundingMember` to
+  both `canCreateIndependentCircle` checks. Classic interaction-gate gap
+  from 006a.
+- Events panel: added "📍 X pinned · Y online only" notice at top of
+  sidebar when some events lack a map location. Uses `location.lngLat`
+  existence as the map criterion (same as event.ts:846). Hidden when all
+  events have a location.
+- Subscription UI: renamed paid tier from "Membership" to "Supporting
+  Kamooni" throughout. Paying/volunteering users are now "Supporters" in
+  all visible copy. Internal identifiers (isMember, MembershipPanel,
+  etc.) unchanged. Also updated copy in volunteering and benefits modals.
+- Fixed admin Verification Requests tab crashing with "User not found"
+  when a verification request referenced a deleted test account. Added
+  try/catch guards in `listAdminVerificationRequests` (line 644) and
+  `getAdminVerificationRequestDetail` (line 710) in
+  verification-workflow.ts. Stale rows render as "Unknown user" via
+  existing fallback; stale detail pages return null gracefully.
+- Merged `feature/security-next-15-5-18` into main (Next.js 15.5.18 +
+  dependency updates that were sitting on that branch).
+
+**Security / Dependabot (2026-05-14)**
+- `jsrsasign` + `jsrsasign-util` removed — dead dependencies, zero
+  source references. jose already handles all JWT ops. Resolves 2 CVEs
+  (Critical + High).
+- `next` — already on 15.5.18, patched for the full May 2026 advisory
+  batch (13 CVEs including SSRF, middleware bypass, DoS). No action
+  needed.
+- `link-preview-js` updated 3.0.14 → 4.0.3. Fixes SSRF via IPv6/DNS
+  rebinding (CVE-2026-43897, High). No breaking API changes.
+- `protobufjs` (transitive via weaviate-client → grpc) forced to 7.5.8
+  via package.json overrides. Fixes RCE (CVE-2026-41242, Critical).
+- `fast-xml-parser` (transitive via minio) forced to 4.5.6 via
+  package.json overrides. Fixes entity-expansion DoS (CVE-2026-26278,
+  Critical).
+- `flatted` (dev-only, High) — deferred.
+
+### Decisions made
+- Transitive version pinning via `overrides` in package.json (not
+  phantom direct deps) — correct pattern for Bun.
+- `next` pin left as exact (15.5.18, no caret) — intentional, revisit
+  in future maintenance session.
+- `flatted` deferred — dev-only, no production risk.
+
+### Files changed
+- circles/src/components/circle-wizard/basic-info-step.tsx
+- circles/src/components/layout/events-panel.tsx
+- circles/src/app/circles/[handle]/settings/subscription/page.tsx
+- circles/src/app/circles/[handle]/settings/subscription/subscription-form-settings.tsx
+- circles/src/app/circles/[handle]/settings/subscription/subscription-form.tsx
+- circles/src/lib/data/verification-workflow.ts
+- circles/package.json (security overrides + link-preview-js bump)
+- circles/bun.lock
+
+### Deployed?
+Yes — multiple deploys to Cleura throughout session.
+Last commit: 99ad9b27
+
+### Known issues / future tasks
+- **Dependabot: ~95 open alerts** (rescan pending after security commit
+  — expect ~5 to close). `flatted` dev-only High still open.
+- **Interaction-gate audit still needed.** basic-info-step.tsx was one
+  missed file from 006a; others likely remain. Grep for raw `isMember`
+  checks across codebase (Session 010).
+- **MongoDB admin password rotation needed.** Credentials were shared
+  in session chat. Security cleanup session still pending.
+- **`feature/security-next-15-5-18` merge** brought in package.json /
+  bun.lock changes — contents reviewed and clean.
+- All previously listed known issues from 006a carry forward.
+
+### What's next
+- Session 006b: invite credits + accountInvites collection + queue-skip
+  flow (priority verification for invitees)
+- Session 008: Follow vs Join split for circles
+- Session 010: Interaction gate audit (grep raw isMember checks)
+- Security cleanup: rotate MongoDB password, .env consolidation
+- Maintenance: relax next pin to ~15.5.18, address flatted
