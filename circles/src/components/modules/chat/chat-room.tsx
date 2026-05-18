@@ -111,7 +111,7 @@ const renderFormattedChatBody = (
             <MemoizedReactMarkdown
                 className={
                     options?.markdownClassName ||
-                    (shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : undefined)
+                    (shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : "formatted")
                 }
                 components={{
                     a: ({ href, className, ...props }) => (
@@ -132,7 +132,7 @@ const renderFormattedChatBody = (
         );
     }
 
-    return <RichText content={body} />;
+    return <RichText content={body} className="formatted" />;
 };
 
 type ChatAttachmentLike = {
@@ -1554,6 +1554,10 @@ const TopicCard: React.FC<{
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
     const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
+    const [isEditingStarter, setIsEditingStarter] = useState(false);
+    const [editingStarterText, setEditingStarterText] = useState("");
+    const [editedStarterBody, setEditedStarterBody] = useState<string | null>(null);
+    const [isHoveringStarter, setIsHoveringStarter] = useState(false);
     const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1759,6 +1763,22 @@ const TopicCard: React.FC<{
         }
     };
 
+    const handleStarterEditSubmit = async () => {
+        const trimmed = editingStarterText.trim();
+        if (!trimmed) return;
+        try {
+            const { editMessageAction } = await import("./actions");
+            const result = await editMessageAction(conversationId, messageId, trimmed);
+            if (result.success) {
+                setEditedStarterBody(trimmed);
+                setIsEditingStarter(false);
+                setEditingStarterText("");
+            }
+        } catch (e) {
+            console.error("Failed to edit topic starter:", e);
+        }
+    };
+
     const handleReaction = async (replyId: string, emoji: string) => {
         try {
             const { toggleMongoReactionAction } = await import("./actions");
@@ -1826,6 +1846,8 @@ const TopicCard: React.FC<{
     };
 
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
+    const effectiveStarterBody = editedStarterBody ?? topicDescription;
+    const isOwnStarter = !!user?.did && message.createdBy === user.did;
 
     return (
         <div
@@ -1850,8 +1872,8 @@ const TopicCard: React.FC<{
                             ))}
                         </div>
                     )}
-                    {!isOpen && topicDescription && (
-                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">{topicDescription}</p>
+                    {!isOpen && effectiveStarterBody && (
+                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">{effectiveStarterBody}</p>
                     )}
                 </div>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
@@ -1872,17 +1894,53 @@ const TopicCard: React.FC<{
             {/* Expanded body */}
             {isOpen && (
                 <div className="border-t border-[#DDEBB8]">
-                    {topicDescription && (
-                        <div className="px-6 pt-3 pb-2 text-center">
-                            <div className="text-sm leading-relaxed text-gray-600">
-                                {renderFormattedChatBody(topicDescription, {
-                                    format: (message as any)?.format,
-                                    markdownClassName: "formatted mx-auto max-w-none text-sm leading-relaxed text-gray-600",
-                                })}
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
-                                <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
-                            </div>
+                    {effectiveStarterBody && (
+                        <div
+                            className="relative px-6 pt-3 pb-2 text-left"
+                            onMouseEnter={() => !isMobile && setIsHoveringStarter(true)}
+                            onMouseLeave={() => !isMobile && setIsHoveringStarter(false)}
+                        >
+                            {isOwnStarter && isHoveringStarter && !isEditingStarter && (
+                                <div className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => { setIsEditingStarter(true); setEditingStarterText(effectiveStarterBody); }}
+                                    >
+                                        <GrEdit className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
+                            {isEditingStarter ? (
+                                <div className="flex flex-col gap-1">
+                                    <textarea
+                                        value={editingStarterText}
+                                        onChange={(e) => setEditingStarterText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Escape") { setIsEditingStarter(false); setEditingStarterText(""); }
+                                        }}
+                                        rows={5}
+                                        className="min-h-[120px] w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                    />
+                                    <div className="flex gap-1 justify-end">
+                                        <button onClick={() => { setIsEditingStarter(false); setEditingStarterText(""); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                                        <button onClick={() => void handleStarterEditSubmit()} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Save</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="text-sm leading-relaxed text-gray-600">
+                                        {renderFormattedChatBody(effectiveStarterBody, {
+                                            format: (message as any)?.format,
+                                            markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-600",
+                                        })}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
+                                        <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
 
@@ -2027,7 +2085,7 @@ const TopicCard: React.FC<{
                                 <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)} />
                             </PopoverContent>
                         </Popover>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             {replyToMessage && (
                                 <div className="mb-2 rounded-lg border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
                                     <div className="flex items-start justify-between gap-2">
@@ -2059,7 +2117,7 @@ const TopicCard: React.FC<{
                                     }}
                                     placeholder="Write a reply. Use return for a new line."
                                     rows={1}
-                                    className="min-h-[44px] max-h-56 flex-1 overflow-y-auto resize-none rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                    className="min-h-[44px] max-h-56 flex-1 min-w-0 overflow-y-auto resize-none rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
                                 />
                                 <Button
                                     variant="ghost"

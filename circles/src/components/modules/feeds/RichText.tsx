@@ -56,6 +56,7 @@ MentionHoverCard.displayName = "MentionHoverCard";
 type RichTextProps = {
     content: string;
     mentions?: MentionDisplay[];
+    className?: string;
 };
 
 const getTextContent = (children: React.ReactNode): string =>
@@ -64,7 +65,7 @@ const getTextContent = (children: React.ReactNode): string =>
         .join("")
         .trim();
 
-const RichText = memo(({ content, mentions }: RichTextProps) => {
+const RichText = memo(({ content, mentions, className }: RichTextProps) => {
     // remarkGfm handles autolinking, so we don't need needsMarkdown check anymore for basic links
     const hasMentions = mentions && mentions.length > 0;
 
@@ -187,7 +188,7 @@ const RichText = memo(({ content, mentions }: RichTextProps) => {
 
     // Keep min-w-0 on the root, break-words is handled by parent or specific elements
     return (
-        <div className="min-w-0">
+        <div className={`min-w-0${className ? ` ${className}` : ""}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
                 {content}
             </ReactMarkdown>
