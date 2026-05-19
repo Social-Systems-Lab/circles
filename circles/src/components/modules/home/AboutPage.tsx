@@ -320,12 +320,6 @@ export default function AboutPage({
                         {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="flex flex-col gap-6">
-                            {shouldShowMembershipCredential && membershipCredential && (
-                                <div className="md:order-1">
-                                    <MembershipCredentialCard credential={membershipCredential} />
-                                </div>
-                            )}
-
                             {shouldShowFundingPanel && (
                                 <div className="md:order-2">
                                     <FundingPanel
@@ -649,6 +643,12 @@ export default function AboutPage({
                                             })}
                                         </div>
                                     </TooltipProvider>
+                                </div>
+                            )}
+
+                            {shouldShowMembershipCredential && membershipCredential && (
+                                <div className="md:order-7">
+                                    <MembershipCredentialCard credential={membershipCredential} />
                                 </div>
                             )}
                         </div>
