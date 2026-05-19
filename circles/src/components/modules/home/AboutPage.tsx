@@ -39,6 +39,8 @@ import { UserPicture } from "../members/user-picture";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import MembershipCredentialCard from "./MembershipCredentialCard";
+import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 
 interface AboutPageProps {
     circle: Circle;
@@ -53,6 +55,7 @@ interface AboutPageProps {
     showUpcomingShiftsPanel?: boolean;
     adminLeaders?: MemberDisplay[];
     proofOfHumanitySummary?: HumanityVerificationSummary | null;
+    membershipCredential?: CircleMembershipCredentialCardData | null;
 }
 
 export default function AboutPage({
@@ -68,6 +71,7 @@ export default function AboutPage({
     showUpcomingShiftsPanel = false,
     adminLeaders = [],
     proofOfHumanitySummary = null,
+    membershipCredential = null,
 }: AboutPageProps) {
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -157,6 +161,7 @@ export default function AboutPage({
     const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
     const shouldShowVerifiedContributions = isUserProfile;
     const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary;
+    const shouldShowMembershipCredential = !isUserProfile && !!membershipCredential;
     const shouldShowFundingPanel = showFundingPanel;
     const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
     const hasSidebarContent =
@@ -164,6 +169,7 @@ export default function AboutPage({
         hasAdminDetails ||
         hasNeedsMatchingDetails ||
         shouldShowProofOfHumanity ||
+        shouldShowMembershipCredential ||
         shouldShowVerifiedContributions ||
         shouldShowFundingPanel ||
         shouldShowUpcomingShiftsPanel;
@@ -314,9 +320,14 @@ export default function AboutPage({
                         {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="flex flex-col gap-6">
-                            {/* TODO(stage 2): insert an existing circle sign-up/tasks panel here when this page already loads it safely. */}
-                            {shouldShowFundingPanel && (
+                            {shouldShowMembershipCredential && membershipCredential && (
                                 <div className="md:order-1">
+                                    <MembershipCredentialCard credential={membershipCredential} />
+                                </div>
+                            )}
+
+                            {shouldShowFundingPanel && (
+                                <div className="md:order-2">
                                     <FundingPanel
                                         circleHandle={circle.handle || ""}
                                         asks={fundingPreviewAsks}
@@ -327,7 +338,7 @@ export default function AboutPage({
                             )}
 
                             {shouldShowUpcomingShiftsPanel && (
-                                <div className="md:order-2">
+                                <div className="md:order-3">
                                     <UpcomingShiftsPanel
                                         circleHandle={circle.handle || ""}
                                         shifts={upcomingShiftTasks}
@@ -338,7 +349,7 @@ export default function AboutPage({
 
                             {hasNeedsMatchingDetails && (
                                 <div
-                                    className={`md:order-3 flex flex-col bg-white p-6 ${
+                                    className={`md:order-4 flex flex-col bg-white p-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >

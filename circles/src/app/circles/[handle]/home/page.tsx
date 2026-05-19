@@ -10,8 +10,14 @@ import { getShiftEndAt, getShiftStartAt, isShiftTask } from "@/components/module
 import type { TaskDisplay, TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
-import { getMembers } from "@/lib/data/member";
+import { getMember, getMembers } from "@/lib/data/member";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import { getUserPrivate } from "@/lib/data/user";
+import {
+    createCircleMembershipCredentialCard,
+    getLinkedVibeIdDid,
+    type CircleMembershipCredentialCardData,
+} from "@/lib/vibe-id/membership-credentials";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -36,6 +42,7 @@ export default async function CircleHomePage(props: PageProps) {
     let upcomingShiftTasks: TaskDisplay[] = [];
     let upcomingShiftsVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
+    let membershipCredential: CircleMembershipCredentialCardData | null = null;
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, viewerDid) : null;
     const showFundingPanel = isFundingEnabledForCircle(circle);
@@ -136,6 +143,18 @@ export default async function CircleHomePage(props: PageProps) {
         }
     }
 
+    if (circle.circleType !== "user" && circle._id && viewerDid) {
+        const [viewer, member] = await Promise.all([getUserPrivate(viewerDid), getMember(viewerDid, String(circle._id))]);
+        const subjectVibeDid = getLinkedVibeIdDid(viewer);
+        if (member && subjectVibeDid) {
+            membershipCredential = createCircleMembershipCredentialCard({
+                circle,
+                member,
+                subjectVibeDid,
+            });
+        }
+    }
+
     return (
         <AboutPage
             circle={circle}
@@ -150,6 +169,7 @@ export default async function CircleHomePage(props: PageProps) {
             showUpcomingShiftsPanel={showUpcomingShiftsPanel}
             adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}
             proofOfHumanitySummary={proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null}
+            membershipCredential={membershipCredential}
         />
     );
 }
