@@ -1010,23 +1010,16 @@ export const PostItem = ({
                     }}
                 >
                     {isAggregateFeed && post.circle && post.circle?._id !== post.author._id ? (
-                        // New layout for aggregate feed posts in a different circle
+                        // Aggregate feed Circle post: show only the Circle avatar
                         <div className="flex items-center gap-4">
-                            <div className="relative h-10 w-10">
-                                <CirclePicture circle={post.circle!} size="40px" openPreview={true} />
-                                <div
-                                    className="absolute bottom-[-4px] right-[-4px] cursor-pointer rounded-full border-2 border-white"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAuthorClick(post.author);
-                                    }}
-                                >
-                                    <UserPicture
-                                        name={post.author.name}
-                                        picture={post.author.picture?.url}
-                                        size="24px"
-                                    />
-                                </div>
+                            <div
+                                className="h-10 w-10 cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/circles/${post.circle!.handle}`);
+                                }}
+                            >
+                                <CirclePicture circle={post.circle!} size="40px" />
                             </div>
                             <div className="flex flex-col">
                                 <div
@@ -1253,35 +1246,28 @@ export const PostItem = ({
                     }}
                 >
                     {isAggregateFeed && post.circle && post.circle?._id !== post.author._id ? (
-                        // Aggregate feed: Show circle with overlapping author profile pic
+                        // Aggregate feed Circle post: show only the Circle avatar
                         <>
-                            <div className="relative h-10 w-10">
-                                <CirclePicture circle={post.circle!} size="40px" openPreview={true} />
-                                <div
-                                    className="absolute bottom-[-4px] right-[-4px] cursor-pointer rounded-full border-2 border-white"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAuthorClick(post.author);
-                                    }}
-                                >
-                                    <UserPicture
-                                        name={post.author.name}
-                                        picture={post.author.picture?.url}
-                                        size="24px"
-                                    />
-                                </div>
+                            <div
+                                className="h-10 w-10 cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/circles/${post.circle!.handle}`);
+                                }}
+                            >
+                                <CirclePicture circle={post.circle!} size="40px" />
                             </div>
                             <div
-                                className="flex cursor-pointer flex-col text-right"
+                                className="flex flex-col text-right"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                 }}
                             >
                                 <div
-                                    className="text-xs font-semibold text-gray-700"
+                                    className="cursor-pointer text-xs font-semibold text-gray-700"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        handleCircleClick(post.circle!);
+                                        router.push(`/circles/${post.circle!.handle}`);
                                     }}
                                 >
                                     {post.circle!.name}
