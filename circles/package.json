@@ -9,6 +9,7 @@
         "start": "next start",
         "lint": "next lint",
         "check:chat-actions": "tsc --pretty false --noEmit -p tsconfig.json",
+        "generate:vibeid-issuer-key": "node scripts/generate-vibeid-issuer-key.js",
         "seed:performance": "bun scripts/seed-performance-fixture.ts"
     },
     "dependencies": {

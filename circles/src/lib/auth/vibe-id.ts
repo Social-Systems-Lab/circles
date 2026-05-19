@@ -430,6 +430,8 @@ export async function readVibeIdStatus(_request: NextRequest, requestId: string)
     if (storedRequest.status === "linked") {
         return NextResponse.json({
             status: "linked",
+            vibeDid: storedRequest.vibeDid,
+            profile: storedRequest.profile,
             message: "VibeID connected.",
         });
     }

@@ -2,7 +2,7 @@
 
 import QRCode from "react-qr-code";
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, Loader2, Smartphone } from "lucide-react";
+import { Check, Copy, KeyRound, Loader2, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,18 +23,41 @@ type VibeIdRequest = {
 
 type VibeIdStatusResponse = {
     status: "pending" | "approved" | "needs_signup" | "linked" | "rejected" | "failed" | "expired";
+    vibeDid?: string;
+    profile?: VibeIdProfile;
     message?: string;
     error?: string;
 };
 
-function getLinkedVibeDid(user: Circle): string | undefined {
-    const metadata = user.metadata as { authProviders?: { vibeId?: { did?: string } } } | undefined;
-    return metadata?.authProviders?.vibeId?.did;
+type VibeIdProfile = {
+    displayName?: string;
+    initials?: string;
+    avatarUrl?: string;
+};
+
+type LinkedVibeId = {
+    did: string;
+    profile?: VibeIdProfile;
+};
+
+function getLinkedVibeId(user: Circle): LinkedVibeId | undefined {
+    const metadata = user.metadata as { authProviders?: { vibeId?: { did?: string; profile?: VibeIdProfile } } } | undefined;
+    const vibeId = metadata?.authProviders?.vibeId;
+    return vibeId?.did ? { did: vibeId.did, profile: vibeId.profile } : undefined;
+}
+
+function formatDidChip(did: string): string {
+    if (did.length <= 20) {
+        return did;
+    }
+
+    return `${did.slice(0, 14)}...${did.slice(-8)}`;
 }
 
 export function VibeIdSettingsCard({ user }: { user: Circle }) {
     const { toast } = useToast();
-    const [linkedDid, setLinkedDid] = useState(getLinkedVibeDid(user));
+    const [linkedVibeId, setLinkedVibeId] = useState(getLinkedVibeId(user));
+    const [copied, setCopied] = useState(false);
     const [requestData, setRequestData] = useState<VibeIdRequest | null>(null);
     const [isStarting, setIsStarting] = useState(false);
     const [statusText, setStatusText] = useState("Waiting for approval in VibeID.");
@@ -64,7 +87,7 @@ export function VibeIdSettingsCard({ user }: { user: Circle }) {
 
             if (result.status === "linked") {
                 closePrompt();
-                setLinkedDid("connected");
+                setLinkedVibeId(result.vibeDid ? { did: result.vibeDid, profile: result.profile } : getLinkedVibeId(user));
                 toast({ title: "VibeID connected" });
                 return;
             }
@@ -126,6 +149,19 @@ export function VibeIdSettingsCard({ user }: { user: Circle }) {
         }
     };
 
+    const copyDid = async () => {
+        if (!linkedVibeId?.did) {
+            return;
+        }
+
+        await navigator.clipboard.writeText(linkedVibeId.did);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+    };
+
+    const profileLabel = linkedVibeId?.profile?.displayName || user.name || "VibeID";
+    const initials = linkedVibeId?.profile?.initials || profileLabel.slice(0, 2).toUpperCase();
+
     return (
         <>
             <Card>
@@ -135,14 +171,46 @@ export function VibeIdSettingsCard({ user }: { user: Circle }) {
                         Connect VibeID to this Kamooni account so you can sign in without your password.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm text-muted-foreground">
-                        {linkedDid ? "VibeID is connected to this account." : "No VibeID is connected yet."}
-                    </div>
-                    <Button type="button" variant={linkedDid ? "outline" : "default"} disabled={isStarting} onClick={startLink}>
+                <CardContent className="flex flex-col gap-4">
+                    {linkedVibeId ? (
+                        <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex min-w-0 items-center gap-3">
+                                {linkedVibeId.profile?.avatarUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={linkedVibeId.profile.avatarUrl}
+                                        alt=""
+                                        className="h-10 w-10 rounded-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d9e7ff] text-sm font-semibold text-[#0b1020]">
+                                        {initials}
+                                    </div>
+                                )}
+                                <div className="min-w-0">
+                                    <div className="text-sm font-medium text-foreground">{profileLabel}</div>
+                                    <div className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full border bg-white px-2.5 py-1 font-mono text-xs text-muted-foreground">
+                                        <span className="truncate">{formatDidChip(linkedVibeId.did)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={copyDid}>
+                                {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                                {copied ? "Copied" : "Copy DID"}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                            No VibeID is connected yet.
+                        </div>
+                    )}
+
+                    <div className="flex justify-end">
+                    <Button type="button" variant={linkedVibeId ? "outline" : "default"} disabled={isStarting} onClick={startLink}>
                         {isStarting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                        {linkedDid ? "Reconnect VibeID" : "Connect VibeID"}
+                        {linkedVibeId ? "Reconnect VibeID" : "Connect VibeID"}
                     </Button>
+                    </div>
                 </CardContent>
             </Card>
 
