@@ -10,18 +10,10 @@ import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { useRouter } from "next/navigation";
-import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus } from "lucide-react";
-import emptyFeed from "@images/empty-feed.png";
-import Image from "next/image";
-import { updateQueryParam } from "@/lib/utils/helpers-client";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
-import { useEffect, useState, useMemo } from "react";
-import { SdgPanel } from "../search/SdgPanel";
-import { sdgs } from "@/lib/data/sdgs";
-import { ChevronDown } from "lucide-react";
+import { useEffect } from "react";
 
 export type FeedComponentProps = {
     circle: Circle;
@@ -38,21 +30,11 @@ export const DiscussionComponent = ({
     circle,
     posts,
     feed,
-    onFilterChange,
-    onSdgChange,
-    selectedSdgsExternal,
     searchQuery,
     setSearchQuery,
 }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
-    const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
-
-    const handleSdgSelectionChange = (sdgs: SDG[]) => {
-        setSelectedSdgs(sdgs);
-        const sdgHandles = sdgs.map((s) => s.handle);
-        updateQueryParam(router, "sdgs", sdgHandles.join(","));
-    };
 
     // check if authorized to post
     const canPost = isAuthorized(user, circle, features.discussions.create);
@@ -65,10 +47,6 @@ export const DiscussionComponent = ({
         }
     }, []);
 
-    const handleFilterChange = (filter: string) => {
-        updateQueryParam(router, "sort", filter);
-    };
-
     return (
         <div
             className={`flex h-full min-h-screen w-full flex-1 items-start justify-center`}
@@ -77,7 +55,7 @@ export const DiscussionComponent = ({
                 maxWidth: isCompact ? "none" : "700px",
             }}
         >
-            <div className="flex w-full flex-col">
+            <div className="flex w-full flex-col gap-3">
                 <div className="flex w-full flex-row items-center gap-2">
                     <div className="flex flex-1 flex-col">
                         <Input
@@ -92,13 +70,6 @@ export const DiscussionComponent = ({
                         </Button>
                     )}
                 </div>
-                <ListFilter
-                    onFilterChange={onFilterChange ?? handleFilterChange}
-                    onSdgChange={onSdgChange ?? handleSdgSelectionChange}
-                    selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
-                    defaultValue="activity"
-                />
-
                 <DiscussionList posts={posts} feed={feed} circle={circle} />
             </div>
         </div>
