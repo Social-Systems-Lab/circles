@@ -88,42 +88,9 @@ import {
     getShiftPendingParticipants,
     getShiftPendingSummary,
     getShiftSignedUpCount,
-    type ShiftDisplayStatus,
     isShiftTask as isShiftTaskItem,
 } from "./shift-task-utils";
-import { getTaskPriorityInfo } from "./task-ui";
-
-// Helper function for stage badge styling and icons (copied from tasks-list)
-const getStageInfo = (stage: TaskStage) => {
-    // Updated type
-    switch (stage) {
-        case "review":
-            return { color: "bg-yellow-200 text-yellow-800", icon: Clock, text: "Review" };
-        case "open":
-            return { color: "bg-blue-200 text-blue-800", icon: Play, text: "Open" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
-        case "resolved":
-            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
-        default:
-            return { color: "bg-gray-200 text-gray-800", icon: Clock, text: "Unknown" };
-    }
-};
-
-const getShiftStageInfo = (status: ShiftDisplayStatus) => {
-    switch (status) {
-        case "review":
-            return getStageInfo("review");
-        case "upcoming":
-            return { color: "bg-sky-100 text-sky-800", icon: Clock, text: "Upcoming" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
-        case "completed":
-            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Completed" };
-        default:
-            return getStageInfo("open");
-    }
-};
+import { getShiftStageInfo, getTaskPriorityInfo, getTaskStageInfo } from "./task-ui";
 
 const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
     { value: "critical", label: "Critical" },
@@ -534,7 +501,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     const currentStage = selectedStage;
     const displayStageInfo =
-        isShiftTask && shiftDisplayStatus ? getShiftStageInfo(shiftDisplayStatus) : getStageInfo(currentStage);
+        isShiftTask && shiftDisplayStatus ? getShiftStageInfo(shiftDisplayStatus) : getTaskStageInfo(currentStage);
     const { color: stageColor, icon: StageIcon, text: stageText } = displayStageInfo;
     const priorityInfo = getTaskPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
 
@@ -1091,23 +1058,23 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             </div>
                         )}
                         {!isCompletedShift && (
-                            <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                            <div className="mt-4 rounded-lg border border-[hsl(var(--shift-banner-info-border))] bg-[hsl(var(--shift-banner-info-bg))] px-4 py-3 text-sm text-[hsl(var(--shift-banner-info-foreground))]">
                                 Sign up requests a spot. A participant only appears publicly after admin confirmation.
                             </div>
                         )}
                         {!isCompletedShift && currentShiftParticipant?.verifiedAt && (
-                            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                            <div className="mt-4 rounded-lg border border-[hsl(var(--shift-banner-confirmed-border))] bg-[hsl(var(--shift-banner-confirmed-bg))] px-4 py-3 text-sm text-[hsl(var(--shift-banner-confirmed-foreground))]">
                                 You are confirmed for this shift. Contact an admin if you can no longer attend.
                             </div>
                         )}
                         {!isCompletedShift && currentShiftParticipant && !currentShiftParticipant.verifiedAt && (
-                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            <div className="mt-4 rounded-lg border border-[hsl(var(--shift-banner-pending-border))] bg-[hsl(var(--shift-banner-pending-bg))] px-4 py-3 text-sm text-[hsl(var(--shift-banner-pending-foreground))]">
                                 You are signed up and waiting for confirmation. You can still leave until an admin
                                 confirms you.
                             </div>
                         )}
                         {!isCompletedShift && shiftIsWaitlistedByPending && (
-                            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            <div className="mt-4 rounded-lg border border-[hsl(var(--shift-banner-pending-border))] bg-[hsl(var(--shift-banner-pending-bg))] px-4 py-3 text-sm text-[hsl(var(--shift-banner-pending-foreground))]">
                                 All current slots are pending confirmation. Contact an admin if you need help.
                             </div>
                         )}

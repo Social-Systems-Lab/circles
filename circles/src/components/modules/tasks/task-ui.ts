@@ -1,4 +1,6 @@
-import { TaskPriority } from "@/models/models";
+import { TaskPriority, TaskStage } from "@/models/models";
+import { CheckCircle, Clock, Loader2, Play } from "lucide-react";
+import type { ShiftDisplayStatus } from "./shift-task-utils";
 
 export const taskPriorityLabels: Record<TaskPriority, string> = {
     low: "Low",
@@ -27,4 +29,62 @@ export const getTaskPriorityInfo = (priority?: TaskPriority) => {
         label: taskPriorityLabels[priority],
         badgeClassName: taskPriorityBadgeClasses[priority],
     };
+};
+
+export const getTaskStageInfo = (stage: TaskStage) => {
+    switch (stage) {
+        case "review":
+            return {
+                color: "bg-[hsl(var(--task-stage-review-bg))] text-[hsl(var(--task-stage-review-foreground))]",
+                icon: Clock,
+                text: "Review",
+            };
+        case "open":
+            return {
+                color: "bg-[hsl(var(--task-stage-open-bg))] text-[hsl(var(--task-stage-open-foreground))]",
+                icon: Play,
+                text: "Open",
+            };
+        case "inProgress":
+            return {
+                color: "bg-[hsl(var(--task-stage-progress-bg))] text-[hsl(var(--task-stage-progress-foreground))]",
+                icon: Loader2,
+                text: "In Progress",
+            };
+        case "resolved":
+            return {
+                color: "bg-[hsl(var(--task-stage-resolved-bg))] text-[hsl(var(--task-stage-resolved-foreground))]",
+                icon: CheckCircle,
+                text: "Resolved",
+            };
+        default:
+            return { color: "bg-gray-200 text-gray-800", icon: Clock, text: "Unknown" };
+    }
+};
+
+export const getShiftStageInfo = (status: ShiftDisplayStatus) => {
+    switch (status) {
+        case "review":
+            return getTaskStageInfo("review");
+        case "upcoming":
+            return {
+                color: "bg-[hsl(var(--task-stage-upcoming-bg))] text-[hsl(var(--task-stage-upcoming-foreground))]",
+                icon: Clock,
+                text: "Upcoming",
+            };
+        case "inProgress":
+            return {
+                color: "bg-[hsl(var(--task-stage-progress-bg))] text-[hsl(var(--task-stage-progress-foreground))]",
+                icon: Loader2,
+                text: "In Progress",
+            };
+        case "completed":
+            return {
+                color: "bg-[hsl(var(--task-stage-resolved-bg))] text-[hsl(var(--task-stage-resolved-foreground))]",
+                icon: CheckCircle,
+                text: "Completed",
+            };
+        default:
+            return getTaskStageInfo("open");
+    }
 };

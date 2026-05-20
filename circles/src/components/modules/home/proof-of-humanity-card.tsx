@@ -33,8 +33,11 @@ type ProofOfHumanityCardProps = {
 
 const humanBadgeClassName =
     "rounded-full border border-[#1f6b45] bg-[#e8f4ec] px-3 py-1 text-[#174f34] hover:border-[#1a5a3a] hover:bg-[#deeee4] hover:text-[#123d28]";
+const verifiedHumanBadgeClassName =
+    "rounded-full border-transparent bg-[hsl(var(--button-primary))] px-3 py-1 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))] hover:text-[hsl(var(--button-primary-foreground))]";
 
-const formatCountLabel = (count: number, singular: string, plural: string) => `${count} ${count === 1 ? singular : plural}`;
+const formatCountLabel = (count: number, singular: string, plural: string) =>
+    `${count} ${count === 1 ? singular : plural}`;
 
 export function ProofOfHumanityHeaderAction({
     circle,
@@ -49,7 +52,7 @@ export function ProofOfHumanityHeaderAction({
 
     if (summary.totalActiveCount > 0) {
         return (
-            <Button asChild variant="outline" size="sm" className={humanBadgeClassName}>
+            <Button asChild variant="outline" size="sm" className={verifiedHumanBadgeClassName}>
                 <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>✓ Human</Link>
             </Button>
         );
@@ -204,7 +207,9 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                         : "You have publicly confirmed that this is a real person."}
                                 </div>
                                 {viewerVerification.note && (
-                                    <p className="mt-2 text-sm text-foreground">&ldquo;{viewerVerification.note}&rdquo;</p>
+                                    <p className="mt-2 text-sm text-foreground">
+                                        &ldquo;{viewerVerification.note}&rdquo;
+                                    </p>
                                 )}
                             </div>
                         )}
@@ -252,9 +257,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-[520px]">
                     <DialogHeader>
-                        <DialogTitle>
-                            {viewerVerification ? "Update your verification" : "Verify Human"}
-                        </DialogTitle>
+                        <DialogTitle>{viewerVerification ? "Update your verification" : "Verify Human"}</DialogTitle>
                         <DialogDescription>
                             Choose the level of public confirmation you want to give for this profile.
                         </DialogDescription>
@@ -263,7 +266,10 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                     <div className="space-y-5">
                         <div className="space-y-3">
                             <Label>Verification level</Label>
-                            <RadioGroup value={level} onValueChange={(value) => setLevel(value as HumanityVerificationLevel)}>
+                            <RadioGroup
+                                value={level}
+                                onValueChange={(value) => setLevel(value as HumanityVerificationLevel)}
+                            >
                                 <div className="flex items-start gap-3 rounded-lg border p-3">
                                     <RadioGroupItem value="real_person" id="proof-level-real-person" />
                                     <Label htmlFor="proof-level-real-person" className="cursor-pointer leading-5">
@@ -318,8 +324,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
 function VerifierRow({ verification }: { verification: HumanityVerificationDisplay }) {
     const verifierName = verification.verifier?.name || verification.verifier?.handle || verification.verifierDid;
-    const levelLabel =
-        verification.level === "met_in_real_life" ? "Met in real life" : "Confirmed real person";
+    const levelLabel = verification.level === "met_in_real_life" ? "Met in real life" : "Confirmed real person";
 
     return (
         <div className="rounded-xl border border-border/70 bg-background/80 p-3">
@@ -334,9 +339,13 @@ function VerifierRow({ verification }: { verification: HumanityVerificationDispl
                 ) : (
                     <div className="font-medium text-foreground">{verifierName}</div>
                 )}
-                <Badge variant={verification.level === "met_in_real_life" ? "default" : "secondary"}>{levelLabel}</Badge>
+                <Badge variant={verification.level === "met_in_real_life" ? "default" : "secondary"}>
+                    {levelLabel}
+                </Badge>
             </div>
-            {verification.note && <p className="mt-2 text-sm text-muted-foreground">&ldquo;{verification.note}&rdquo;</p>}
+            {verification.note && (
+                <p className="mt-2 text-sm text-muted-foreground">&ldquo;{verification.note}&rdquo;</p>
+            )}
         </div>
     );
 }

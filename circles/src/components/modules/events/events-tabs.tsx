@@ -204,7 +204,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                             {canCreate && (
                                 <Link
                                     href={`/circles/${circle.handle}/events/create`}
-                                    className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                                    className="inline-flex items-center rounded-md bg-[hsl(var(--button-primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]"
                                 >
                                     Create Event
                                 </Link>

@@ -18,18 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions, TaskPriority } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
 import { Button } from "@/components/ui/button";
-import {
-    ArrowDown,
-    ArrowUp,
-    CheckCircle,
-    ChevronDown,
-    Clock,
-    Loader2,
-    MoreHorizontal,
-    Play,
-    Plus,
-    User,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Loader2, MoreHorizontal, Plus, User } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -82,7 +71,13 @@ import {
     type ShiftDisplayStatus,
     isShiftTask as isShiftTaskItem,
 } from "./shift-task-utils";
-import { taskPriorityBadgeClasses, taskPriorityLabels, taskTitleLinkClassName } from "./task-ui";
+import {
+    getShiftStageInfo,
+    getTaskStageInfo,
+    taskPriorityBadgeClasses,
+    taskPriorityLabels,
+    taskTitleLinkClassName,
+} from "./task-ui";
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -128,38 +123,6 @@ const tableRowVariants = {
             duration: 0.3,
         },
     }),
-};
-
-// Helper function for stage badge styling and icons
-const getStageInfo = (stage: TaskStage) => {
-    // Updated type
-    switch (stage) {
-        case "review":
-            return { color: "bg-yellow-200 text-yellow-800", icon: Clock, text: "Review" };
-        case "open":
-            return { color: "bg-blue-200 text-blue-800", icon: Play, text: "Open" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
-        case "resolved":
-            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
-        default:
-            return { color: "bg-gray-200 text-gray-800", icon: Clock, text: "Unknown" };
-    }
-};
-
-const getShiftStageInfo = (status: ShiftDisplayStatus) => {
-    switch (status) {
-        case "review":
-            return getStageInfo("review");
-        case "upcoming":
-            return { color: "bg-sky-100 text-sky-800", icon: Clock, text: "Upcoming" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
-        case "completed":
-            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Completed" };
-        default:
-            return getStageInfo("open");
-    }
 };
 
 const getWorkflowStatusBadge = (task: TaskDisplay) => {
@@ -425,7 +388,7 @@ const TasksList: React.FC<TasksListProps> = ({
             return "All Stages";
         }
         if (selectedStages.length === 1) {
-            return getStageInfo(selectedStages[0]).text;
+            return getTaskStageInfo(selectedStages[0]).text;
         }
         return `${selectedStages.length} Stages`;
     }, [areAllStagesSelected, selectedStages]);
@@ -608,7 +571,7 @@ const TasksList: React.FC<TasksListProps> = ({
                         text,
                     } = isShiftTaskItem(task)
                         ? getShiftStageInfo(getShiftDisplayStatus(task))
-                        : getStageInfo(info.getValue() as TaskStage);
+                        : getTaskStageInfo(info.getValue() as TaskStage);
                     return (
                         <div className="flex flex-col gap-1">
                             <Badge className={`${color} w-fit items-center gap-1`}>
@@ -1181,7 +1144,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                             checked={selectedStages.includes(stage)}
                                             onCheckedChange={() => toggleStageFilter(stage)}
                                         >
-                                            {getStageInfo(stage).text}
+                                            {getTaskStageInfo(stage).text}
                                         </DropdownMenuCheckboxItem>
                                     ))}
                                 </DropdownMenuContent>
@@ -1238,13 +1201,13 @@ const TasksList: React.FC<TasksListProps> = ({
                     )}
 
                     {shouldShowVerificationQueue && (
-                        <div className="mt-4 overflow-hidden rounded-[15px] border border-amber-200 bg-amber-50/70 shadow-sm">
-                            <div className="border-b border-amber-200 px-4 py-3">
+                        <div className="mt-4 overflow-hidden rounded-[15px] border border-[hsl(var(--verification-panel-border))] bg-[hsl(var(--verification-panel-bg))] shadow-sm">
+                            <div className="border-b border-[hsl(var(--verification-panel-border))] px-4 py-3">
                                 <h2 className="text-sm font-semibold text-slate-900">Needs Verification</h2>
                             </div>
 
                             {verificationQueueTasks.length > 0 ? (
-                                <div className="divide-y divide-amber-100">
+                                <div className="divide-y divide-[hsl(var(--verification-panel-divider))]">
                                     {verificationQueueTasks.map((task) => {
                                         const submittedForReviewAt = task.submittedForReviewAt
                                             ? formatDistanceToNow(new Date(task.submittedForReviewAt), {
