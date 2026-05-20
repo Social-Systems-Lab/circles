@@ -107,18 +107,34 @@ export default function AboutPage({
     const matchingOfferNeedHandles = !isUserProfile
         ? Array.from(new Set(circleNeeds.filter((handle) => currentUserOfferSkillSet.has(handle))))
         : [];
+    const matchingOfferNeedSet = new Set(matchingOfferNeedHandles);
+    const nonMatchingNeedHandles = circleNeeds.filter((handle) => !matchingOfferNeedSet.has(handle));
+    const orderedNeeds = [...matchingOfferNeedHandles, ...nonMatchingNeedHandles];
     const hasMatchingOfferNeeds = !isUserProfile && !!user && matchingOfferNeedHandles.length > 0;
     const hasMoreSkills = profileOfferSkills.length > 4;
     const hasMoreInterests = profileInterests.length > 6;
-    const hasMoreNeeds = circleNeeds.length > 4;
+    const hasMoreNeeds = hasMatchingOfferNeeds ? nonMatchingNeedHandles.length > 0 : circleNeeds.length > 4;
     const visibleSkills = isSkillsExpanded ? profileOfferSkills : profileOfferSkills.slice(0, 4);
     const visibleInterests = isInterestsExpanded ? profileInterests : profileInterests.slice(0, 6);
-    const visibleNeeds = isNeedsExpanded ? circleNeeds : circleNeeds.slice(0, 4);
+    const visibleNeeds = isNeedsExpanded
+        ? orderedNeeds
+        : hasMatchingOfferNeeds
+          ? matchingOfferNeedHandles
+          : circleNeeds.slice(0, 4);
     const remainingSkillsCount = Math.max(profileOfferSkills.length - 4, 0);
     const remainingInterestsCount = Math.max(profileInterests.length - 6, 0);
-    const remainingNeedsCount = Math.max(circleNeeds.length - 4, 0);
+    const remainingNeedsCount = hasMatchingOfferNeeds
+        ? nonMatchingNeedHandles.length
+        : Math.max(circleNeeds.length - 4, 0);
+    const matchedNeedBadgeClassName =
+        "border-transparent bg-[hsl(var(--button-primary))] text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]";
 
-    const renderSkillPopoverBadge = (handle: string, key: string, variant: "skill" | "need" = "skill") => {
+    const renderSkillPopoverBadge = (
+        handle: string,
+        key: string,
+        variant: "skill" | "need" = "skill",
+        badgeClassName?: string,
+    ) => {
         const skill = getSkillDefinitionByHandle(handle);
         const skillName = skill?.name || handle;
         const categoryLabel = skill?.category ? skillCategoryLabels[skill.category] : null;
@@ -131,7 +147,10 @@ export default function AboutPage({
                         className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         aria-label={`View details for ${skillName}`}
                     >
-                        <Badge variant={variant} className="cursor-pointer text-sm font-medium">
+                        <Badge
+                            variant={variant}
+                            className={`cursor-pointer text-sm font-medium ${badgeClassName ?? ""}`}
+                        >
                             {skillName}
                         </Badge>
                     </button>
@@ -317,7 +336,7 @@ export default function AboutPage({
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
-                        {hasSidebarContent && (
+                {hasSidebarContent && (
                     <div className="md:col-span-1">
                         <div className="flex flex-col gap-6">
                             {shouldShowFundingPanel && (
@@ -343,7 +362,7 @@ export default function AboutPage({
 
                             {hasNeedsMatchingDetails && (
                                 <div
-                                    className={`md:order-4 flex flex-col bg-white p-6 ${
+                                    className={`flex flex-col bg-white p-6 md:order-4 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -362,6 +381,9 @@ export default function AboutPage({
                                                         handle,
                                                         `${handle}-${index}`,
                                                         "need",
+                                                        matchingOfferNeedSet.has(handle)
+                                                            ? matchedNeedBadgeClassName
+                                                            : undefined,
                                                     );
                                                 })}
                                                 {hasMoreNeeds && (
@@ -392,31 +414,26 @@ export default function AboutPage({
                                     )}
 
                                     {hasMatchingOfferNeeds && (
-                                        <div className="w-full rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-3">
-                                            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8f5a2a]">
-                                                You can help here
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {matchingOfferNeedHandles.map((handle, index) => {
-                                                    return renderSkillPopoverBadge(handle, `match-${handle}-${index}`);
-                                                })}
+                                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+                                            <div className="text-sm text-muted-foreground">
+                                                You have {matchingOfferNeedHandles.length} matching{" "}
+                                                {matchingOfferNeedHandles.length === 1 ? "skill" : "skills"}
                                             </div>
                                             {canContactCircle && (
-                                                <div className="mt-3 flex flex-col items-center">
+                                                <div className="flex flex-wrap items-center gap-3">
                                                     <Button
                                                         type="button"
                                                         size="sm"
-                                                        className="rounded-full border border-[#c8793a] bg-transparent text-[#c8793a] hover:bg-[#f3e4d6] hover:text-[#b86c31]"
                                                         onClick={() => openContactDialog("offer_help")}
                                                     >
                                                         Offer Help
                                                     </Button>
                                                     <button
                                                         type="button"
-                                                        className="mt-2 text-xs text-[#8f5a2a] underline-offset-2 hover:underline"
+                                                        className="text-xs text-muted-foreground underline-offset-2 hover:underline"
                                                         onClick={() => openContactDialog("ask_question")}
                                                     >
-                                                        Not sure yet? Ask a question first.
+                                                        Ask a question first
                                                     </button>
                                                 </div>
                                             )}
@@ -427,7 +444,7 @@ export default function AboutPage({
 
                             {hasOverviewDetails && (
                                 <div
-                                    className={`md:order-4 flex flex-col bg-white p-6 ${
+                                    className={`flex flex-col bg-white p-6 md:order-4 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -576,7 +593,7 @@ export default function AboutPage({
 
                             {shouldShowVerifiedContributions && (
                                 <div
-                                    className={`md:order-4 bg-white p-6 ${
+                                    className={`bg-white p-6 md:order-4 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -595,7 +612,7 @@ export default function AboutPage({
 
                             {hasAdminDetails && (
                                 <div
-                                    className={`md:order-6 flex flex-col bg-white p-6 ${
+                                    className={`flex flex-col bg-white p-6 md:order-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
