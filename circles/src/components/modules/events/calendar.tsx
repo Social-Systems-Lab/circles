@@ -16,7 +16,13 @@ import { EventDisplay } from "@/models/models";
 type CalendarViewProps = {
     circleHandle: string;
     events: EventDisplay[];
-    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string }[];
+    milestones?: {
+        id: string;
+        type: "goal" | "task" | "issue";
+        title: string;
+        date: Date | string;
+        circleHandle?: string;
+    }[];
 };
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
@@ -57,6 +63,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
                     itemId: m.id,
                     circleHandle: m.circleHandle,
                 },
+                backgroundColor: m.type === "task" ? "hsl(var(--calendar-task-bg))" : undefined,
+                borderColor: m.type === "task" ? "hsl(var(--calendar-task-border))" : undefined,
+                textColor: m.type === "task" ? "hsl(var(--calendar-task-foreground))" : undefined,
             })) || [];
 
         return [...eventItems, ...milestoneItems];
@@ -102,7 +111,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
                 type === "goal" ? (
                     <span className="select-none">🎯</span>
                 ) : type === "task" ? (
-                    <CheckSquare className="h-3.5 w-3.5 shrink-0 rounded-sm bg-emerald-50 p-[1px] text-emerald-700 ring-1 ring-emerald-200" />
+                    <CheckSquare className="h-3.5 w-3.5 shrink-0 rounded-sm bg-white/20 p-[1px] text-white ring-1 ring-white/35" />
                 ) : (
                     <span className="select-none">🐞</span>
                 );

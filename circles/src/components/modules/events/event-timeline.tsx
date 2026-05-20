@@ -22,7 +22,13 @@ type Props = {
     circleHandle: string;
     events: EventDisplay[];
     shifts?: ShiftTimelineItem[];
-    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string }[];
+    milestones?: {
+        id: string;
+        type: "goal" | "task" | "issue";
+        title: string;
+        date: Date | string;
+        circleHandle?: string;
+    }[];
     condensed?: boolean;
     onEventHidden?: (eventId: string) => void;
     onNavigate?: () => void;
@@ -219,7 +225,7 @@ const EventCard: React.FC<{
                                 <Button
                                     variant="secondary"
                                     size="sm"
-                                    className="h-6 max-w-full px-2 text-xs relative z-10 hover:bg-gray-300"
+                                    className="relative z-10 h-6 max-w-full px-2 text-xs hover:bg-gray-300"
                                     onClick={(ev) => {
                                         ev.preventDefault();
                                         ev.stopPropagation();
@@ -252,9 +258,9 @@ const EventCard: React.FC<{
                             joinState.isEnabled && "bg-green-600 text-white hover:bg-green-700",
                             !joinState.isEnabled &&
                                 !joinState.isMissingLink &&
-                                "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:opacity-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700",
+                                "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700 disabled:opacity-100",
                             joinState.isMissingLink &&
-                                "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:opacity-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900",
+                                "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900 disabled:opacity-100",
                         )}
                         onClick={(ev) => {
                             ev.preventDefault();
@@ -389,7 +395,7 @@ const MilestoneRow: React.FC<{
         m.type === "goal" ? (
             <span className="select-none">🎯</span>
         ) : m.type === "task" ? (
-            <CheckSquare className="h-4 w-4 shrink-0 rounded-sm bg-emerald-50 p-[1px] text-emerald-700 ring-1 ring-emerald-200" />
+            <CheckSquare className="h-4 w-4 shrink-0 rounded-sm bg-rose-100 p-[1px] text-rose-700 ring-1 ring-rose-200" />
         ) : (
             <span className="select-none">🐞</span>
         );
@@ -410,21 +416,21 @@ const MilestoneRow: React.FC<{
 
     return (
         <div className="group flex items-center gap-2">
-            <Link
-                href={href}
-                className="flex-grow block"
-                onClick={() => onNavigate?.()}
-            >
-                <div className={cn(
-                    "flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40",
-                    isOverdue && "border-red-200 bg-red-50 hover:bg-red-100/50"
-                )}>
+            <Link href={href} className="block flex-grow" onClick={() => onNavigate?.()}>
+                <div
+                    className={cn(
+                        "flex items-center gap-2 truncate rounded border bg-white px-3 py-2 text-xs hover:bg-muted/40",
+                        isOverdue && "border-red-200 bg-red-50 hover:bg-red-100/50",
+                    )}
+                >
                     {icon}
-                    <span className="truncate flex-grow">{m.title}</span>
-                    <span className={cn(
-                        "ml-auto inline-flex items-center",
-                        isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
-                    )}>
+                    <span className="flex-grow truncate">{m.title}</span>
+                    <span
+                        className={cn(
+                            "ml-auto inline-flex items-center",
+                            isOverdue ? "font-medium text-red-600" : "text-muted-foreground",
+                        )}
+                    >
                         <CalendarIcon className="mr-1 h-3 w-3" />
                         {format(new Date(m.date), "MMM d, yyyy")}
                     </span>
@@ -567,14 +573,16 @@ export default function EventTimeline({
                 event: e,
             }));
 
-        const allMilestones = (milestones || []).filter((m) => m.date).map(m => ({
-            kind: "milestone" as const,
-            date: new Date(m.date),
-            milestone: m,
-        }));
+        const allMilestones = (milestones || [])
+            .filter((m) => m.date)
+            .map((m) => ({
+                kind: "milestone" as const,
+                date: new Date(m.date),
+                milestone: m,
+            }));
 
-        const overdueItems = allMilestones.filter(m => m.date < startOfToday);
-        const upcomingMilestones = allMilestones.filter(m => m.date >= startOfToday);
+        const overdueItems = allMilestones.filter((m) => m.date < startOfToday);
+        const upcomingMilestones = allMilestones.filter((m) => m.date >= startOfToday);
 
         const upcomingItems =
             itemFilter === "events"
@@ -665,7 +673,7 @@ export default function EventTimeline({
             {/* Overdue Section */}
             {showOverdue && (
                 <div className="mb-8">
-                    <div className="mb-3 ml-12 text-lg font-semibold text-red-600 flex items-center gap-2">
+                    <div className="mb-3 ml-12 flex items-center gap-2 text-lg font-semibold text-red-600">
                         <AlertCircle className="h-5 w-5" />
                         Overdue
                     </div>
@@ -709,17 +717,18 @@ export default function EventTimeline({
                                         <div className={cn("flex flex-col", condensed ? "gap-2" : "gap-4")}>
                                             {monthItems.map((it, idx) => {
                                                 if (it.kind === "event") {
-                                                    const eventId =
-                                                        ((it.event as any)._id?.toString?.() ||
-                                                            (it.event as any)._id ||
-                                                            "") as string;
+                                                    const eventId = ((it.event as any)._id?.toString?.() ||
+                                                        (it.event as any)._id ||
+                                                        "") as string;
                                                     return (
                                                         <EventCard
                                                             key={`${(it.event as any)._id}-${idx}`}
                                                             e={it.event}
                                                             circleHandle={circleHandle}
                                                             condensed={condensed}
-                                                            canManageJoinLink={Boolean(user?.did && user.did === it.event.createdBy)}
+                                                            canManageJoinLink={Boolean(
+                                                                user?.did && user.did === it.event.createdBy,
+                                                            )}
                                                             onHideCancelled={handleHideCancelled}
                                                             hidePending={pendingHideId === eventId}
                                                             onNavigate={onNavigate}
@@ -778,17 +787,18 @@ export default function EventTimeline({
                                                 </div>
                                                 <div className={cn("flex flex-col", condensed ? "gap-2" : "gap-4")}>
                                                     {monthItems.map((it, idx) => {
-                                                        const eventId =
-                                                            ((it.event as any)._id?.toString?.() ||
-                                                                (it.event as any)._id ||
-                                                                "") as string;
+                                                        const eventId = ((it.event as any)._id?.toString?.() ||
+                                                            (it.event as any)._id ||
+                                                            "") as string;
                                                         return (
                                                             <EventCard
                                                                 key={`past-${(it.event as any)._id}-${idx}`}
                                                                 e={it.event}
                                                                 circleHandle={circleHandle}
                                                                 condensed={condensed}
-                                                                canManageJoinLink={Boolean(user?.did && user.did === it.event.createdBy)}
+                                                                canManageJoinLink={Boolean(
+                                                                    user?.did && user.did === it.event.createdBy,
+                                                                )}
                                                                 onHideCancelled={handleHideCancelled}
                                                                 hidePending={pendingHideId === eventId}
                                                                 onNavigate={onNavigate}

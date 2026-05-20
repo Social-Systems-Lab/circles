@@ -22,7 +22,7 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
                 <Button
-                    variant={isCompact ? "ghost" : "outline"}
+                    variant={isCompact ? "ghost" : "default"}
                     className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
                 >
                     <Plus className="h-4 w-4" />

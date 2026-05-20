@@ -42,10 +42,10 @@ export const ListFilter = ({
                         <RadioGroupItem value="top" id="top" className="peer sr-only" />
                         <Label
                             htmlFor="top"
-                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
+                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-[hsl(var(--task-link))] dark:hover:bg-gray-800 dark:peer-data-[state=checked]:bg-green-900/30"
                         >
-                            <Star className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
+                            <Star className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-400 dark:peer-data-[state=checked]:text-green-300" />
+                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-300 dark:peer-data-[state=checked]:text-green-300">
                                 Top
                             </span>
                         </Label>
@@ -54,10 +54,10 @@ export const ListFilter = ({
                         <RadioGroupItem value="near" id="near" className="peer sr-only" />
                         <Label
                             htmlFor="near"
-                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
+                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-[hsl(var(--task-link))] dark:hover:bg-gray-800 dark:peer-data-[state=checked]:bg-green-900/30"
                         >
-                            <MapPin className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
+                            <MapPin className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-400 dark:peer-data-[state=checked]:text-green-300" />
+                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-300 dark:peer-data-[state=checked]:text-green-300">
                                 Near
                             </span>
                         </Label>
@@ -66,10 +66,10 @@ export const ListFilter = ({
                         <RadioGroupItem value="new" id="new" className="peer sr-only" />
                         <Label
                             htmlFor="new"
-                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
+                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-[hsl(var(--task-link))] dark:hover:bg-gray-800 dark:peer-data-[state=checked]:bg-green-900/30"
                         >
-                            <Clock className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
+                            <Clock className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-400 dark:peer-data-[state=checked]:text-green-300" />
+                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-300 dark:peer-data-[state=checked]:text-green-300">
                                 New
                             </span>
                         </Label>
@@ -78,10 +78,10 @@ export const ListFilter = ({
                         <RadioGroupItem value="activity" id="activity" className="peer sr-only" />
                         <Label
                             htmlFor="activity"
-                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
+                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-[hsl(var(--task-link))] dark:hover:bg-gray-800 dark:peer-data-[state=checked]:bg-green-900/30"
                         >
-                            <BiRefresh className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
+                            <BiRefresh className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-400 dark:peer-data-[state=checked]:text-green-300" />
+                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-300 dark:peer-data-[state=checked]:text-green-300">
                                 Activity
                             </span>
                         </Label>
@@ -90,10 +90,10 @@ export const ListFilter = ({
                         <RadioGroupItem value="similarity" id="similarity" className="peer sr-only" />
                         <Label
                             htmlFor="similarity"
-                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-blue-500 dark:hover:bg-gray-800 dark:peer-data-[state=checked]:border-blue-400 dark:peer-data-[state=checked]:bg-blue-900"
+                            className="flex h-8 cursor-pointer items-center justify-center border-b-2 border-transparent px-2 peer-data-[state=checked]:border-[hsl(var(--task-link))] dark:hover:bg-gray-800 dark:peer-data-[state=checked]:bg-green-900/30"
                         >
-                            <AudioLines className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-blue-500 dark:text-gray-400 dark:peer-data-[state=checked]:text-blue-400" />
-                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-blue-500 dark:text-gray-300 dark:peer-data-[state=checked]:text-blue-400">
+                            <AudioLines className="mr-1 h-[18px] w-[18px] text-gray-500 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-400 dark:peer-data-[state=checked]:text-green-300" />
+                            <span className="text-[13px] font-medium text-gray-700 peer-data-[state=checked]:text-[hsl(var(--task-link))] dark:text-gray-300 dark:peer-data-[state=checked]:text-green-300">
                                 Resonates
                             </span>
                         </Label>

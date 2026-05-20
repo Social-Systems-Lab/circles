@@ -221,8 +221,7 @@ export function PostForm({
     const showRestrictedShareWarning = Boolean(
         isShareMode &&
             sharePreviewPost &&
-            ((sharePreviewPost.userGroups?.length ?? 0) > 0 &&
-                !sharePreviewPost.userGroups?.includes("everyone") ||
+            (((sharePreviewPost.userGroups?.length ?? 0) > 0 && !sharePreviewPost.userGroups?.includes("everyone")) ||
                 ((sharePreviewPost.feed?.userGroups?.length ?? 0) > 0 &&
                     !sharePreviewPost.feed?.userGroups?.includes("everyone"))),
     );
@@ -639,8 +638,8 @@ export function PostForm({
                                         <div className="flex items-center">
                                             <Info className="mr-2 h-5 w-5 flex-shrink-0" />
                                             <p className="mt-0 pt-0" style={{ paddingTop: 0, marginTop: 0 }}>
-                                                Your account is not verified. Noticeboard posts from unverified accounts are
-                                                not shown to other users until the account is verified.
+                                                Your account is not verified. Noticeboard posts from unverified accounts
+                                                are not shown to other users until the account is verified.
                                             </p>
                                         </div>
                                     </div>
@@ -678,7 +677,10 @@ export function PostForm({
                                 {isShareMode && (
                                     <div className="mt-4">
                                         <Label className="mb-2 block text-sm font-medium text-gray-600">Sharing</Label>
-                                        <SharedPostPreview post={sharePreviewPost} fallbackText="Original post unavailable." />
+                                        <SharedPostPreview
+                                            post={sharePreviewPost}
+                                            fallbackText="Original post unavailable."
+                                        />
                                     </div>
                                 )}
                                 {isPreviewLoading && (
@@ -720,7 +722,9 @@ export function PostForm({
                                                     <div className="text-sm font-semibold text-gray-600">
                                                         {new URL(linkPreview.url).hostname}
                                                     </div>
-                                                    <div className="mt-1 line-clamp-2 font-medium">{linkPreview.title}</div>
+                                                    <div className="mt-1 line-clamp-2 font-medium">
+                                                        {linkPreview.title}
+                                                    </div>
                                                     {linkPreview.description && (
                                                         <div className="mt-1 line-clamp-2 text-sm text-gray-500">
                                                             {linkPreview.description}
@@ -766,7 +770,10 @@ export function PostForm({
                                                 <>
                                                     <Avatar className="h-10 w-10 rounded-full">
                                                         <AvatarImage
-                                                            src={(internalPreview.data as PostDisplay).author?.picture?.url}
+                                                            src={
+                                                                (internalPreview.data as PostDisplay).author?.picture
+                                                                    ?.url
+                                                            }
                                                             alt={(internalPreview.data as PostDisplay).author?.name}
                                                         />
                                                         <AvatarFallback>
@@ -918,7 +925,9 @@ export function PostForm({
                                                             {user?.name}
                                                         </div>
                                                         <div className="flex flex-wrap gap-2 pt-1 text-xs text-gray-500">
-                                                            {selectedCircle?.name && <span>in {selectedCircle.name}</span>}
+                                                            {selectedCircle?.name && (
+                                                                <span>in {selectedCircle.name}</span>
+                                                            )}
                                                             <span>
                                                                 {userGroups.includes("everyone")
                                                                     ? "Visible to everyone"
@@ -936,7 +945,7 @@ export function PostForm({
                                                     </h2>
                                                 ) : null}
                                                 {postContent.trim() ? (
-                                                    <div className="formatted min-w-0 break-words whitespace-pre-wrap text-base leading-7 text-gray-800">
+                                                    <div className="formatted min-w-0 whitespace-pre-wrap break-words text-base leading-7 text-gray-800">
                                                         <RichText content={postContent} />
                                                     </div>
                                                 ) : (
@@ -951,7 +960,10 @@ export function PostForm({
                                                     </div>
                                                 ) : null}
                                                 {isShareMode ? (
-                                                    <SharedPostPreview post={sharePreviewPost} fallbackText="Original post unavailable." />
+                                                    <SharedPostPreview
+                                                        post={sharePreviewPost}
+                                                        fallbackText="Original post unavailable."
+                                                    />
                                                 ) : null}
                                             </div>
 
@@ -1063,9 +1075,11 @@ export function PostForm({
                                             Cancel
                                         </Button>
                                         <Button
-                                            className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
+                                            className="rounded-full bg-[hsl(var(--button-primary))] px-6 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]"
                                             onClick={initialPost ? handleSubmit : handlePreview}
-                                            disabled={isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading}
+                                            disabled={
+                                                isActuallySubmitting || isPreviewLoading || isInternalPreviewLoading
+                                            }
                                         >
                                             {initialPost ? "Update" : "Review post"}
                                         </Button>
@@ -1082,7 +1096,7 @@ export function PostForm({
                                         </Button>
                                     </div>
                                     <Button
-                                        className="rounded-full bg-blue-500 px-6 text-white hover:bg-blue-600"
+                                        className="rounded-full bg-[hsl(var(--button-primary))] px-6 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]"
                                         onClick={handleSubmit}
                                         disabled={isActuallySubmitting}
                                     >

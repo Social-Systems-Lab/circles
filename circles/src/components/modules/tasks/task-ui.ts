@@ -31,6 +31,30 @@ export const getTaskPriorityInfo = (priority?: TaskPriority) => {
     };
 };
 
+export const getTaskWorkflowStatusBadge = (task: {
+    verifiedAt?: Date | string | null;
+    submittedForReviewAt?: Date | string | null;
+    reviewRequestedChangesAt?: Date | string | null;
+}) => {
+    if (task.verifiedAt) {
+        return {
+            label: "Verified",
+            className:
+                "border-transparent bg-[hsl(var(--task-verified-bg))] text-[hsl(var(--task-verified-foreground))]",
+        };
+    }
+
+    if (task.submittedForReviewAt) {
+        return { label: "Review Requested", className: "bg-amber-100 text-amber-800" };
+    }
+
+    if (task.reviewRequestedChangesAt) {
+        return { label: "Changes Requested", className: "bg-rose-100 text-rose-800" };
+    }
+
+    return null;
+};
+
 export const getTaskStageInfo = (stage: TaskStage) => {
     switch (stage) {
         case "review":

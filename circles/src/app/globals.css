@@ -301,6 +301,11 @@ h1,
         --task-stage-review-foreground: 30 54% 28%;
         --task-stage-resolved-bg: 132 28% 72%;
         --task-stage-resolved-foreground: 128 36% 24%;
+        --task-verified-bg: 136 27% 86%;
+        --task-verified-foreground: 132 28% 28%;
+        --calendar-task-bg: 136 36% 34%;
+        --calendar-task-border: 136 39% 27%;
+        --calendar-task-foreground: 0 0% 100%;
         --shift-banner-info-bg: 132 12% 95%;
         --shift-banner-info-border: 132 14% 81%;
         --shift-banner-info-foreground: 138 18% 31%;

@@ -90,7 +90,7 @@ import {
     getShiftSignedUpCount,
     isShiftTask as isShiftTaskItem,
 } from "./shift-task-utils";
-import { getShiftStageInfo, getTaskPriorityInfo, getTaskStageInfo } from "./task-ui";
+import { getShiftStageInfo, getTaskPriorityInfo, getTaskStageInfo, getTaskWorkflowStatusBadge } from "./task-ui";
 
 const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
     { value: "critical", label: "Critical" },
@@ -103,8 +103,8 @@ const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
 const getWorkflowStatusInfo = (task: TaskDisplay) => {
     if (task.verifiedAt) {
         return {
-            label: "Verified",
-            badgeClassName: "border-transparent bg-emerald-100 text-emerald-800",
+            ...getTaskWorkflowStatusBadge(task)!,
+            badgeClassName: getTaskWorkflowStatusBadge(task)!.className,
             description: `Verified ${formatDistanceToNow(new Date(task.verifiedAt), { addSuffix: true })}`,
         };
     }

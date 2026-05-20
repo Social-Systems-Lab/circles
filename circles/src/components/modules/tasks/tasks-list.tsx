@@ -77,6 +77,7 @@ import {
     taskPriorityBadgeClasses,
     taskPriorityLabels,
     taskTitleLinkClassName,
+    getTaskWorkflowStatusBadge,
 } from "./task-ui";
 interface TasksListProps {
     tasksData: {
@@ -129,20 +130,7 @@ const getWorkflowStatusBadge = (task: TaskDisplay) => {
     if (isShiftTaskItem(task)) {
         return null;
     }
-
-    if (task.verifiedAt) {
-        return { label: "Verified", className: "bg-emerald-100 text-emerald-800" };
-    }
-
-    if (task.submittedForReviewAt) {
-        return { label: "Review Requested", className: "bg-amber-100 text-amber-800" };
-    }
-
-    if (task.reviewRequestedChangesAt) {
-        return { label: "Changes Requested", className: "bg-rose-100 text-rose-800" };
-    }
-
-    return null;
+    return getTaskWorkflowStatusBadge(task);
 };
 
 const ShiftAllocationPreview = ({ task, showPendingHint }: { task: TaskDisplay; showPendingHint: boolean }) => {
