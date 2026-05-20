@@ -91,6 +91,7 @@ import {
     type ShiftDisplayStatus,
     isShiftTask as isShiftTaskItem,
 } from "./shift-task-utils";
+import { getTaskPriorityInfo } from "./task-ui";
 
 // Helper function for stage badge styling and icons (copied from tasks-list)
 const getStageInfo = (stage: TaskStage) => {
@@ -131,21 +132,6 @@ const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
     { value: "low", label: "Low" },
     { value: "none", label: "No Priority" },
 ];
-
-const getPriorityInfo = (priority?: TaskPriority) => {
-    switch (priority) {
-        case "low":
-            return { label: "Low", badgeClassName: "border-transparent bg-green-100 text-green-800" };
-        case "medium":
-            return { label: "Medium", badgeClassName: "border-transparent bg-blue-100 text-blue-800" };
-        case "high":
-            return { label: "High", badgeClassName: "border-transparent bg-orange-100 text-orange-800" };
-        case "critical":
-            return { label: "Critical", badgeClassName: "border-transparent bg-red-100 text-red-800" };
-        default:
-            return { label: "No Priority", badgeClassName: "border-transparent bg-slate-100 text-slate-700" };
-    }
-};
 
 const getWorkflowStatusInfo = (task: TaskDisplay) => {
     if (task.verifiedAt) {
@@ -286,7 +272,10 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const attendeeVisibilityDidSet = new Set([currentUserDid, ...acceptedConnectionDids]);
     const reviewerProfileByDid = new Map(
         reviewerProfiles
-            .filter((profile): profile is Circle & { did: string } => typeof profile.did === "string" && profile.did.length > 0)
+            .filter(
+                (profile): profile is Circle & { did: string } =>
+                    typeof profile.did === "string" && profile.did.length > 0,
+            )
             .map((profile) => [profile.did, profile]),
     );
     const shiftIsWaitlistedByPending =
@@ -304,10 +293,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         attendedShiftParticipants.length > 0 ? attendedShiftParticipants : confirmedShiftParticipants;
     const currentViewerAttendanceReview =
         currentShiftParticipant?.attendanceStatus === "attended" ? currentShiftParticipant.attendanceNote?.trim() : "";
-    const currentViewerAttendanceReviewer =
-        currentShiftParticipant?.attendanceVerifiedBy
-            ? reviewerProfileByDid.get(currentShiftParticipant.attendanceVerifiedBy)
-            : undefined;
+    const currentViewerAttendanceReviewer = currentShiftParticipant?.attendanceVerifiedBy
+        ? reviewerProfileByDid.get(currentShiftParticipant.attendanceVerifiedBy)
+        : undefined;
     const isNonAdminCompletedShiftPreview = isPreview && isCompletedShift && !permissions.canModerate;
 
     useEffect(() => {
@@ -548,7 +536,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const displayStageInfo =
         isShiftTask && shiftDisplayStatus ? getShiftStageInfo(shiftDisplayStatus) : getStageInfo(currentStage);
     const { color: stageColor, icon: StageIcon, text: stageText } = displayStageInfo;
-    const priorityInfo = getPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
+    const priorityInfo = getTaskPriorityInfo(selectedPriority === "none" ? undefined : selectedPriority);
 
     const canEditTask = (isAuthor && currentStage === "review") || permissions.canModerate;
     const canDeleteTask = isAuthor || permissions.canModerate; // Renamed variable
@@ -1086,13 +1074,13 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             </div>
                         </div>
                         {task.participantNotes && (
-                            <div className="mt-5 rounded-2xl border border-amber-300 bg-gradient-to-br from-amber-50 via-white to-amber-100/80 px-4 py-4 shadow-sm">
+                            <div className="mt-5 rounded-2xl border border-[hsl(var(--shift-callout-border))] bg-[hsl(var(--shift-callout-bg))] px-4 py-4 shadow-sm">
                                 <div className="flex items-start gap-3">
-                                    <div className="rounded-full bg-amber-100 p-2 text-amber-700">
-                                        <Megaphone className="h-4 w-4" />
+                                    <div className="rounded-full bg-white/70 p-2.5 text-[hsl(var(--shift-callout-accent))]">
+                                        <Megaphone className="h-7 w-7" />
                                     </div>
                                     <div className="min-w-0">
-                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[hsl(var(--shift-callout-accent))]">
                                             Important for participants
                                         </div>
                                         <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-900">
@@ -1133,10 +1121,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                                 {attendedShiftParticipants.length > 0
                                     ? `${attendedShiftParticipants.length} ${
-                                          attendedShiftParticipants.length === 1 ? "person contributed" : "people contributed"
+                                          attendedShiftParticipants.length === 1
+                                              ? "person contributed"
+                                              : "people contributed"
                                       }`
                                     : `${confirmedShiftParticipants.length} ${
-                                          confirmedShiftParticipants.length === 1 ? "person was confirmed" : "people were confirmed"
+                                          confirmedShiftParticipants.length === 1
+                                              ? "person was confirmed"
+                                              : "people were confirmed"
                                       }`}
                             </div>
                         )}
@@ -1162,7 +1154,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
                         <div className="mt-6">
                             <h4 className="text-base font-semibold text-foreground">
-                                {isCompletedShift && !permissions.canModerate ? "Contributors" : "Confirmed Participants"}
+                                {isCompletedShift && !permissions.canModerate
+                                    ? "Contributors"
+                                    : "Confirmed Participants"}
                             </h4>
                             {isCompletedShift && !permissions.canModerate ? (
                                 confirmedShiftParticipants.length > 0 ? (
@@ -1171,7 +1165,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                             {completedShiftSummaryParticipants.map(({ participant, profile }) => {
                                                 const canReveal = canRevealCompletedShiftParticipant(participant);
                                                 const participantName = canReveal ? profile?.name : undefined;
-                                                const participantPicture = canReveal ? profile?.picture?.url : undefined;
+                                                const participantPicture = canReveal
+                                                    ? profile?.picture?.url
+                                                    : undefined;
                                                 const avatarLabel = canReveal
                                                     ? participantName || profile?.handle || participant.userDid
                                                     : "Anonymous contributor";
@@ -1192,12 +1188,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                             })}
                                         </div>
                                         <div className="mt-3 text-sm text-muted-foreground">
-                                            People are only identified here if they are you, you are an admin, or you are
-                                            accepted contacts.
+                                            People are only identified here if they are you, you are an admin, or you
+                                            are accepted contacts.
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="mt-3 text-sm text-muted-foreground">No confirmed participants yet.</div>
+                                    <div className="mt-3 text-sm text-muted-foreground">
+                                        No confirmed participants yet.
+                                    </div>
                                 )
                             ) : confirmedShiftParticipants.length > 0 ? (
                                 <div className="mt-3 space-y-3">
@@ -1230,9 +1228,12 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                                         <div className="mt-1 text-sm text-emerald-700">
                                                             Confirmed{" "}
                                                             {participant.verifiedAt
-                                                                ? formatDistanceToNow(new Date(participant.verifiedAt), {
-                                                                      addSuffix: true,
-                                                                  })
+                                                                ? formatDistanceToNow(
+                                                                      new Date(participant.verifiedAt),
+                                                                      {
+                                                                          addSuffix: true,
+                                                                      },
+                                                                  )
                                                                 : ""}
                                                         </div>
                                                         <div
@@ -1267,7 +1268,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                                         onClick={() => openAttendanceDialog(participant)}
                                                         disabled={isPending}
                                                     >
-                                                        {participant.attendanceStatus ? "Update Review" : "Review Attendance"}
+                                                        {participant.attendanceStatus
+                                                            ? "Update Review"
+                                                            : "Review Attendance"}
                                                     </Button>
                                                 )}
                                             </div>
@@ -1275,9 +1278,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     })}
                                 </div>
                             ) : (
-                                <div className="mt-3 text-sm text-muted-foreground">
-                                    No confirmed participants yet.
-                                </div>
+                                <div className="mt-3 text-sm text-muted-foreground">No confirmed participants yet.</div>
                             )}
                         </div>
 
@@ -1307,9 +1308,12 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                                                 </div>
                                                                 <div className="mt-1 text-sm text-muted-foreground">
                                                                     Signed up{" "}
-                                                                    {formatDistanceToNow(new Date(participant.joinedAt), {
-                                                                        addSuffix: true,
-                                                                    })}
+                                                                    {formatDistanceToNow(
+                                                                        new Date(participant.joinedAt),
+                                                                        {
+                                                                            addSuffix: true,
+                                                                        },
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1358,9 +1362,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="mt-3 text-sm text-muted-foreground">
-                                        No pending sign-ups.
-                                    </div>
+                                    <div className="mt-3 text-sm text-muted-foreground">No pending sign-ups.</div>
                                 )}
                             </div>
                         )}
@@ -1585,9 +1587,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                     <div className="space-y-4 py-4">
                         <Select
                             value={attendanceStatus}
-                            onValueChange={(value) =>
-                                setAttendanceStatus(value as TaskParticipantAttendanceStatus)
-                            }
+                            onValueChange={(value) => setAttendanceStatus(value as TaskParticipantAttendanceStatus)}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select attendance outcome" />

@@ -3,7 +3,14 @@
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
-import { mapOpenAtom, replyToMessageAtom, roomMessagesAtom, userAtom, unreadCountsAtom, lastReadTimestampsAtom } from "@/lib/data/atoms";
+import {
+    mapOpenAtom,
+    replyToMessageAtom,
+    roomMessagesAtom,
+    userAtom,
+    unreadCountsAtom,
+    lastReadTimestampsAtom,
+} from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -22,7 +29,17 @@ import {
     toggleMongoReactionAction,
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoArrowDown, IoClose, IoSend, IoAddCircleOutline, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
+import {
+    IoArrowBack,
+    IoArrowDown,
+    IoClose,
+    IoSend,
+    IoAddCircleOutline,
+    IoAttach,
+    IoDocumentText,
+    IoTimeOutline,
+    IoWarningOutline,
+} from "react-icons/io5";
 import { HiLightBulb } from "react-icons/hi";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
@@ -119,8 +136,8 @@ const renderFormattedChatBody = (
                             href={href}
                             className={
                                 isChatMentionLinkHref(href)
-                                    ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
-                                    : `${shouldEmphasizeLinks ? "text-blue-700 underline underline-offset-2 hover:text-blue-800" : ""} ${className ?? ""}`.trim()
+                                    ? `inline-flex items-center rounded-md bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 font-semibold text-[hsl(var(--task-link))] no-underline hover:underline ${className ?? ""}`.trim()
+                                    : `${shouldEmphasizeLinks ? "text-[hsl(var(--task-link))] underline underline-offset-2 hover:text-[hsl(var(--task-link-hover))]" : ""} ${className ?? ""}`.trim()
                             }
                             {...props}
                         />
@@ -145,9 +162,7 @@ const getMessageElementId = (messageId?: string) =>
     messageId ? `${CHAT_MESSAGE_ELEMENT_ID_PREFIX}${messageId}` : undefined;
 
 const getMessageAttachments = (message?: Partial<ChatMessage>) =>
-    ((((message as any)?.attachments as ChatAttachmentLike[] | undefined) || []).filter(
-        (attachment) => attachment?.url,
-    ));
+    (((message as any)?.attachments as ChatAttachmentLike[] | undefined) || []).filter((attachment) => attachment?.url);
 
 const getFirstImageAttachment = (message?: Partial<ChatMessage>) =>
     getMessageAttachments(message).find((attachment) => attachment.mimeType?.startsWith("image/"));
@@ -209,7 +224,7 @@ const ReplyReferencePreview: React.FC<{
     return (
         <Wrapper
             type={isClickable ? "button" : undefined}
-            className={`mb-2 w-full rounded-md border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 p-2 pl-2 text-left ${isClickable ? "cursor-pointer transition-colors hover:bg-slate-50 focus:outline-none" : ""} ${className ?? ""}`.trim()}
+            className={`mb-2 w-full rounded-md border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 p-2 pl-2 text-left ${isClickable ? "cursor-pointer transition-colors hover:bg-slate-50 focus:outline-none" : ""} ${className ?? ""}`.trim()}
             onClick={
                 isClickable
                     ? (event) => {
@@ -219,10 +234,7 @@ const ReplyReferencePreview: React.FC<{
                     : undefined
             }
         >
-            <div
-                className="text-xs font-semibold"
-                style={{ color: authorColor }}
-            >
+            <div className="text-xs font-semibold" style={{ color: authorColor }}>
                 {originalAuthor}
             </div>
             {imageAttachment ? (
@@ -272,7 +284,9 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
                     <ReplyReferencePreview
                         replyTo={hasInlineReply ? undefined : replyTo}
                         inlineAuthor={hasInlineReply ? originalAuthor : undefined}
-                        inlineText={hasInlineReply ? originalMessage.substring(originalMessage.indexOf(">") + 2) : undefined}
+                        inlineText={
+                            hasInlineReply ? originalMessage.substring(originalMessage.indexOf(">") + 2) : undefined
+                        }
                         authorColor={originalAuthorColor}
                     />
                 )}
@@ -327,10 +341,7 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
         return null;
     }
 
-    const runContactAction = async (
-        action: () => Promise<{ success: boolean; message: string }>,
-        title: string,
-    ) => {
+    const runContactAction = async (action: () => Promise<{ success: boolean; message: string }>, title: string) => {
         setIsActing(true);
         try {
             const result = await action();
@@ -401,10 +412,7 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
                         className="rounded-full"
                         disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
                         onClick={() =>
-                            void runContactAction(
-                                () => sendConnectRequestAction(otherParticipant.did!),
-                                "Connect",
-                            )
+                            void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
                         }
                     >
                         {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
@@ -429,7 +437,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
             const attachments = (message as any)?.attachments as
                 | { url: string; name: string; mimeType?: string; size?: number }[]
                 | undefined;
-            
+
             return (
                 <span>
                     {renderChatMessage(message, preview)}
@@ -444,7 +452,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                             <img
                                                 src={attachment.url}
                                                 alt={attachment.name || "Image attachment"}
-                                                className="rounded-lg object-contain max-h-60 w-full cursor-pointer hover:opacity-90"
+                                                className="max-h-60 w-full cursor-pointer rounded-lg object-contain hover:opacity-90"
                                                 onClick={() => window.open(attachment.url, "_blank")}
                                             />
                                         </div>
@@ -456,13 +464,15 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                         href={attachment.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 hover:bg-gray-200 transition-colors"
+                                        className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 transition-colors hover:bg-gray-200"
                                     >
                                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                                             <IoDocumentText className="h-6 w-6" />
                                         </div>
                                         <div className="flex flex-col overflow-hidden">
-                                            <span className="truncate font-medium text-gray-700">{attachment.name}</span>
+                                            <span className="truncate font-medium text-gray-700">
+                                                {attachment.name}
+                                            </span>
                                             {attachment.size && (
                                                 <span className="text-xs text-gray-500">
                                                     {(attachment.size / 1024).toFixed(1)} KB
@@ -474,7 +484,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                             })}
                         </div>
                     )}
-                    {isEdited && <span className="ml-1 text-xs text-gray-500 italic">(edited)</span>}
+                    {isEdited && <span className="ml-1 text-xs italic text-gray-500">(edited)</span>}
                 </span>
             );
 
@@ -498,8 +508,8 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                     href={href}
                                     className={
                                         isChatMentionLinkHref(href)
-                                            ? `inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 no-underline hover:underline ${className ?? ""}`.trim()
-                                            : `${shouldEmphasizeLinks ? "text-blue-700 underline underline-offset-2 hover:text-blue-800" : ""} ${className ?? ""}`.trim()
+                                            ? `inline-flex items-center rounded-md bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 font-semibold text-[hsl(var(--task-link))] no-underline hover:underline ${className ?? ""}`.trim()
+                                            : `${shouldEmphasizeLinks ? "text-[hsl(var(--task-link))] underline underline-offset-2 hover:text-[hsl(var(--task-link-hover))]" : ""} ${className ?? ""}`.trim()
                                     }
                                     {...props}
                                 />
@@ -685,7 +695,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const orderedMessages = [...messages]
         .filter(
             (message) =>
-                (message.type === "m.room.message" || message.type === "m.room.member" || message.type === "m.room.notice") &&
+                (message.type === "m.room.message" ||
+                    message.type === "m.room.member" ||
+                    message.type === "m.room.notice") &&
                 !(message as any).threadId,
         )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -723,8 +735,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     message.status === "pending"
                         ? "opacity-70"
                         : message.status === "failed"
-                        ? "border border-red-200"
-                        : "";
+                          ? "border border-red-200"
+                          : "";
                 const isNonPreviewSender = isNonPreviewSystemSenderMessage(message);
                 const senderLabel = message.author.name;
 
@@ -748,18 +760,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             onTouchStart={() => handleTouchStart(message)}
                             onTouchEnd={handleTouchEnd}
                         >
-                            {!isDirect && !isOwnMessage && (
-                                isLastInChain ? (
+                            {!isDirect &&
+                                !isOwnMessage &&
+                                (isLastInChain ? (
                                     <CirclePicture
                                         circle={message.author!}
                                         size="28px"
-                                        className="self-end mb-1 flex-shrink-0"
+                                        className="mb-1 flex-shrink-0 self-end"
                                         openPreview={!isNonPreviewSender}
                                     />
                                 ) : (
                                     <div className="w-7 flex-shrink-0" />
-                                )
-                            )}
+                                ))}
 
                             {/* Topic card — renders inline for topic-starter messages */}
                             {(message as any).thread ? (
@@ -775,132 +787,136 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                 </div>
                             ) : null}
                             {!(message as any).thread && (
-                            <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
-                                <div
-                                    className={`${CHAT_STANDARD_BUBBLE_CLASS} p-2 pr-4 shadow-md ${bubbleStatusClasses}`}
-                                    style={{ borderRadius: bubbleRadius }}
-                                    onClick={() => toggleMobileMessageActions(message.id)}
-                                >
-                                    {isFirstInChain && !isOwnMessage && !isDirect && (
+                                <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
+                                    <div
+                                        className={`${CHAT_STANDARD_BUBBLE_CLASS} p-2 pr-4 shadow-md ${bubbleStatusClasses}`}
+                                        style={{ borderRadius: bubbleRadius }}
+                                        onClick={() => toggleMobileMessageActions(message.id)}
+                                    >
+                                        {isFirstInChain && !isOwnMessage && !isDirect && (
+                                            <div
+                                                className="text-xs font-semibold"
+                                                style={{ color: generateColorFromString(senderLabel || "") }}
+                                            >
+                                                {senderLabel}
+                                            </div>
+                                        )}
+                                        <MessageRenderer message={message} />
+                                        {isLastInChain && (
+                                            <div className="mt-0 flex items-center justify-end gap-1 text-[9px] text-gray-400">
+                                                <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                {isOwnMessage && message.status === "pending" && (
+                                                    <span className="flex items-center gap-1 text-blue-400">
+                                                        <IoTimeOutline className="h-2.5 w-2.5" />
+                                                    </span>
+                                                )}
+                                                {isOwnMessage && message.status === "failed" && (
+                                                    <span className="flex items-center gap-1 text-red-400">
+                                                        <IoWarningOutline className="h-2.5 w-2.5" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div
-                                            className="text-xs font-semibold"
-                                            style={{ color: generateColorFromString(senderLabel || "") }}
+                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}
                                         >
-                                            {senderLabel}
+                                            {Object.entries(message.reactions).map(([reaction, reactions]) => (
+                                                <div
+                                                    key={reaction}
+                                                    className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
+                                                        reactions.some((r) => r.sender === user?.did)
+                                                            ? "border-gray-200"
+                                                            : "border-gray-200"
+                                                    }`}
+                                                    onClick={() => handleReaction(message, reaction)}
+                                                >
+                                                    <span>{reaction}</span>
+                                                    {reactions.length > 1 && (
+                                                        <span className="ml-1 text-gray-600">{reactions.length}</span>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
-                                    <MessageRenderer message={message} />
-                                    {isLastInChain && (
-                                        <div className="mt-0 flex items-center gap-1 text-[9px] text-gray-400 justify-end">
-                                            <span>{formatChatDate(new Date(message.createdAt))}</span>
-                                            {isOwnMessage && message.status === "pending" && (
-                                                <span className="flex items-center gap-1 text-blue-400">
-                                                    <IoTimeOutline className="h-2.5 w-2.5" />
-                                                </span>
+
+                                    {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
+                                        <div
+                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {isOwnMessage && (
+                                                <>
+                                                    {canEditMessage && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6"
+                                                            onClick={() => handleEdit(message)}
+                                                        >
+                                                            <GrEdit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canDeleteMessage && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6"
+                                                            onClick={() => handleDelete(message)}
+                                                        >
+                                                            <GrTrash className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </>
                                             )}
-                                            {isOwnMessage && message.status === "failed" && (
-                                                <span className="flex items-center gap-1 text-red-400">
-                                                    <IoWarningOutline className="h-2.5 w-2.5" />
-                                                </span>
+                                            {canReply && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => handleReply(message)}
+                                                >
+                                                    <MdReply className="h-4 w-4" />
+                                                </Button>
                                             )}
+                                            <Popover
+                                                open={pickerOpenForMessage === message.id}
+                                                onOpenChange={(isOpen) =>
+                                                    setPickerOpenForMessage(isOpen ? message.id : null)
+                                                }
+                                            >
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                    <LazyEmojiPicker
+                                                        onEmojiClick={(emojiData: EmojiClickData) => {
+                                                            handleReaction(message, emojiData.emoji);
+                                                            setPickerOpenForMessage(null);
+                                                        }}
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
                                         </div>
                                     )}
                                 </div>
-                                {message.reactions && Object.keys(message.reactions).length > 0 && (
-                                    <div className={`relative -mt-3 z-10 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}>
-                                        {Object.entries(message.reactions).map(([reaction, reactions]) => (
-                                            <div
-                                                key={reaction}
-                                                className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
-                                                    reactions.some((r) => r.sender === user?.did)
-                                                        ? "border-gray-200"
-                                                        : "border-gray-200"
-                                                }`}
-                                                onClick={() => handleReaction(message, reaction)}
-                                            >
-                                                <span>{reaction}</span>
-                                                {reactions.length > 1 && <span className="ml-1 text-gray-600">{reactions.length}</span>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                    <div
-                                        className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        {isOwnMessage && (
-                                            <>
-                                                {canEditMessage && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => handleEdit(message)}
-                                                    >
-                                                        <GrEdit className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                                {canDeleteMessage && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => handleDelete(message)}
-                                                    >
-                                                        <GrTrash className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
-                                        {canReply && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6"
-                                                onClick={() => handleReply(message)}
-                                            >
-                                                <MdReply className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                        <Popover
-                                            open={pickerOpenForMessage === message.id}
-                                            onOpenChange={(isOpen) =>
-                                                setPickerOpenForMessage(isOpen ? message.id : null)
-                                            }
-                                        >
-                                            <PopoverTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                    <BsEmojiSmile className="h-4 w-4" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                <LazyEmojiPicker
-                                                    onEmojiClick={(emojiData: EmojiClickData) => {
-                                                        handleReaction(message, emojiData.emoji);
-                                                        setPickerOpenForMessage(null);
-                                                    }}
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                )}
-                            </div>
                             )}
 
-                            {!isDirect && isOwnMessage && (
-                                isLastInChain ? (
+                            {!isDirect &&
+                                isOwnMessage &&
+                                (isLastInChain ? (
                                     <CirclePicture
                                         circle={message.author!}
                                         size="28px"
-                                        className="self-end mb-1 flex-shrink-0"
+                                        className="mb-1 flex-shrink-0 self-end"
                                         openPreview={false}
                                     />
                                 ) : (
                                     <div className="w-7 flex-shrink-0" />
-                                )
-                            )}
+                                ))}
                         </div>,
                     );
                 }
@@ -1069,20 +1085,20 @@ const ChatInput = ({
             provider: "mongo",
             messageLength: trimmedMessage.length,
             isEditing: !!editingMessage,
-            editingMessageId: editingMessage?.id
+            editingMessageId: editingMessage?.id,
         });
-        
+
         if (!user) return;
 
         if (!roomId) {
             console.error("Chat room does not have a room ID");
             return;
         }
-        
+
         if (!trimmedMessage) {
             return;
         }
-        
+
         // If editing, handle edit instead of send
         if (editingMessage) {
             console.log("📤 [Send] Routing to handleEditSubmit...");
@@ -1159,16 +1175,16 @@ const ChatInput = ({
                 status: "failed",
                 errorMessage: reason || "Failed to send",
             }));
-	    setNewMessage(trimmedMessage);
+            setNewMessage(trimmedMessage);
             if (replyTarget) {
                 setReplyToMessage(replyTarget);
             }
         };
-        
+
         console.log("📤 [Send] Sending new message...");
         try {
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
-            
+
             if (result.success) {
                 const eventId = (result as any).eventId || (result as any).messageId;
 
@@ -1199,31 +1215,31 @@ const ChatInput = ({
     };
 
     const handleEditSubmit = async () => {
-        console.log("✏️ [Edit] Starting edit submission", { 
-            hasEditingMessage: !!editingMessage, 
+        console.log("✏️ [Edit] Starting edit submission", {
+            hasEditingMessage: !!editingMessage,
             messageId: editingMessage?.id,
             newContent: newMessage.trim(),
-            roomId
+            roomId,
         });
-        
+
         if (!editingMessage || !newMessage.trim()) {
             console.log("✏️ [Edit] Aborted - missing message or content");
             return;
         }
         const trimmedContent = newMessage.trim();
-        
+
         try {
             console.log("✏️ [Edit] Importing editMessageAction...");
             console.log("✏️ [Edit] Calling editMessageAction with:", {
                 roomId,
                 eventId: editingMessage.id,
-                content: trimmedContent
+                content: trimmedContent,
             });
 
             const result = await editMessageAction(roomId!, editingMessage.id, trimmedContent);
-            
+
             console.log("✏️ [Edit] Server response:", result);
-            
+
             if (result.success) {
                 const roomKey = editingMessage.roomId || roomId;
                 const editedAt = new Date();
@@ -1284,7 +1300,7 @@ const ChatInput = ({
             const formData = new FormData();
             if (!roomId) {
                 console.error("Chat room does not have a room ID");
-                return; 
+                return;
             }
             formData.append("roomId", roomId);
             formData.append("file", file);
@@ -1320,15 +1336,10 @@ const ChatInput = ({
     return (
         <div className="flex w-full flex-col">
             <div className={`flex w-full items-end gap-2 ${isMobile ? "gap-1.5" : ""}`}>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFileSelect}
-                />
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                <Button
+                    variant="ghost"
+                    size="icon"
                     className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
@@ -1351,7 +1362,9 @@ const ChatInput = ({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto border-none bg-transparent p-0">
-                        <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => setNewMessage((prev) => prev + data.emoji)} />
+                        <LazyEmojiPicker
+                            onEmojiClick={(data: EmojiClickData) => setNewMessage((prev) => prev + data.emoji)}
+                        />
                     </PopoverContent>
                 </Popover>
 
@@ -1361,7 +1374,9 @@ const ChatInput = ({
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-grow overflow-hidden">
                                     <div className="font-semibold text-blue-700">Editing message</div>
-                                    <p className="line-clamp-2 text-sm text-blue-600">{editingMessage.content.body as string}</p>
+                                    <p className="line-clamp-2 text-sm text-blue-600">
+                                        {editingMessage.content.body as string}
+                                    </p>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1">
                                     <Button
@@ -1369,7 +1384,10 @@ const ChatInput = ({
                                         variant="ghost"
                                         size="sm"
                                         className="h-8 rounded-full px-3 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
-                                        onClick={() => { setEditingMessage(null); setNewMessage(""); }}
+                                        onClick={() => {
+                                            setEditingMessage(null);
+                                            setNewMessage("");
+                                        }}
                                     >
                                         Cancel
                                     </Button>
@@ -1389,8 +1407,12 @@ const ChatInput = ({
                     {replyToMessage && !editingMessage && (
                         <div className="mb-2 flex max-w-full items-center justify-between overflow-hidden rounded-lg bg-gray-200 p-2">
                             <div className="flex-grow overflow-hidden">
-                                <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
-                                <p className="line-clamp-3 text-sm text-gray-600">{replyToMessage.content.body as string}</p>
+                                <div className="font-semibold text-gray-700">
+                                    Replying to {replyToMessage.author.name}
+                                </div>
+                                <p className="line-clamp-3 text-sm text-gray-600">
+                                    {replyToMessage.content.body as string}
+                                </p>
                             </div>
                             <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
                                 <IoClose className="h-5 w-5" />
@@ -1457,11 +1479,11 @@ const ChatInput = ({
                         </PopoverContent>
                     </Popover>
                 )}
-                
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="hidden h-10 w-10 shrink-0 rounded-full text-blue-600 hover:bg-blue-50 md:inline-flex"
+
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden h-10 w-10 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] md:inline-flex"
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
                     title={editingMessage ? "Save edit" : "Send message"}
@@ -1486,7 +1508,8 @@ const ChatInput = ({
 // ─── Topic inline card (self-contained, expands in place) ──────────────────
 
 const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
-const getTopicLastSeenKey = (conversationId: string, topicId: string) => `kamooni_topic_lastseen_${conversationId}_${topicId}`;
+const getTopicLastSeenKey = (conversationId: string, topicId: string) =>
+    `kamooni_topic_lastseen_${conversationId}_${topicId}`;
 const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 type TopicNavigationRequest = {
@@ -1580,7 +1603,7 @@ const TopicCard: React.FC<{
         } else {
             void computeUnreadCount();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Re-check unread count whenever replyCount changes (picks up new replies without refresh)
@@ -1588,7 +1611,7 @@ const TopicCard: React.FC<{
         if (!isOpen) {
             void computeUnreadCount();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [thread?.replyCount]);
 
     useEffect(() => {
@@ -1699,7 +1722,7 @@ const TopicCard: React.FC<{
         requestAnimationFrame(() => {
             cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigationRequest?.nonce]);
 
     if (!thread) return null;
@@ -1729,12 +1752,7 @@ const TopicCard: React.FC<{
         setIsSending(true);
         try {
             const { sendThreadReplyAction } = await import("./mongo-actions");
-            const result = await sendThreadReplyAction(
-                messageId,
-                conversationId,
-                trimmed,
-                replyToMessage?.id,
-            );
+            const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
             if (result.success) {
                 setReplyText("");
                 setReplyToMessage(null);
@@ -1857,30 +1875,27 @@ const TopicCard: React.FC<{
             className={`my-2 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
         >
             {/* Header row — always visible, click to toggle */}
-            <div
-                className="flex cursor-pointer flex-col items-center gap-2 p-3 text-center"
-                onClick={handleToggle}
-            >
+            <div className="flex cursor-pointer flex-col items-center gap-2 p-3 text-center" onClick={handleToggle}>
                 <div className="min-w-0">
                     <p className="font-semibold text-gray-900">{thread.title}</p>
                     {thread.hashtags && thread.hashtags.length > 0 && (
                         <div className="mt-1 flex flex-wrap justify-center gap-1">
                             {thread.hashtags.map((tag: string) => (
-                                <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                <span key={tag} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
                                     #{tag}
                                 </span>
                             ))}
                         </div>
                     )}
                     {!isOpen && effectiveStarterBody && (
-                        <p className="mt-1 text-sm text-gray-600 line-clamp-2">{effectiveStarterBody}</p>
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
                     )}
                 </div>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
                     <div className="relative">
                         <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-amber-500" : "text-gray-400"}`} />
                         {!isOpen && unreadCount > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
+                            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
                                 {unreadCount}
                             </span>
                         )}
@@ -1896,17 +1911,20 @@ const TopicCard: React.FC<{
                 <div className="border-t border-[#DDEBB8]">
                     {effectiveStarterBody && (
                         <div
-                            className="relative px-6 pt-3 pb-2 text-left"
+                            className="relative px-6 pb-2 pt-3 text-left"
                             onMouseEnter={() => !isMobile && setIsHoveringStarter(true)}
                             onMouseLeave={() => !isMobile && setIsHoveringStarter(false)}
                         >
                             {isOwnStarter && isHoveringStarter && !isEditingStarter && (
-                                <div className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                <div className="absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
                                     <Button
                                         variant="ghost"
                                         size="icon"
                                         className="h-6 w-6"
-                                        onClick={() => { setIsEditingStarter(true); setEditingStarterText(effectiveStarterBody); }}
+                                        onClick={() => {
+                                            setIsEditingStarter(true);
+                                            setEditingStarterText(effectiveStarterBody);
+                                        }}
                                     >
                                         <GrEdit className="h-4 w-4" />
                                     </Button>
@@ -1918,14 +1936,30 @@ const TopicCard: React.FC<{
                                         value={editingStarterText}
                                         onChange={(e) => setEditingStarterText(e.target.value)}
                                         onKeyDown={(e) => {
-                                            if (e.key === "Escape") { setIsEditingStarter(false); setEditingStarterText(""); }
+                                            if (e.key === "Escape") {
+                                                setIsEditingStarter(false);
+                                                setEditingStarterText("");
+                                            }
                                         }}
                                         rows={5}
                                         className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
                                     />
-                                    <div className="flex gap-1 justify-end">
-                                        <button onClick={() => { setIsEditingStarter(false); setEditingStarterText(""); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-                                        <button onClick={() => void handleStarterEditSubmit()} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Save</button>
+                                    <div className="flex justify-end gap-1">
+                                        <button
+                                            onClick={() => {
+                                                setIsEditingStarter(false);
+                                                setEditingStarterText("");
+                                            }}
+                                            className="text-xs text-gray-500 hover:text-gray-700"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => void handleStarterEditSubmit()}
+                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                        >
+                                            Save
+                                        </button>
                                     </div>
                                 </div>
                             ) : (
@@ -1933,11 +1967,18 @@ const TopicCard: React.FC<{
                                     <div className="text-sm leading-relaxed text-gray-600">
                                         {renderFormattedChatBody(effectiveStarterBody, {
                                             format: (message as any)?.format,
-                                            markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-600",
+                                            markdownClassName:
+                                                "formatted max-w-none text-sm leading-relaxed text-gray-600",
                                         })}
                                     </div>
                                     <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
-                                        <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</span>
+                                        <span>
+                                            {new Date(message.createdAt).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                hour12: false,
+                                            })}
+                                        </span>
                                     </div>
                                 </>
                             )}
@@ -1945,12 +1986,10 @@ const TopicCard: React.FC<{
                     )}
 
                     {/* Replies */}
-                    <div className="px-3 py-2 space-y-2">
-                        {isLoading && (
-                            <p className="text-center text-xs text-gray-400 py-2">Loading replies...</p>
-                        )}
+                    <div className="space-y-2 px-3 py-2">
+                        {isLoading && <p className="py-2 text-center text-xs text-gray-400">Loading replies...</p>}
                         {!isLoading && replies.length === 0 && (
-                            <p className="text-center text-xs text-gray-400 py-2">No replies yet. Be the first.</p>
+                            <p className="py-2 text-center text-xs text-gray-400">No replies yet. Be the first.</p>
                         )}
                         {replies.map((reply, replyIndex) => {
                             const isOwn = reply.createdBy === user?.did;
@@ -1959,11 +1998,14 @@ const TopicCard: React.FC<{
                             const isLastInChain =
                                 !nextReply ||
                                 nextReply.createdBy !== reply.createdBy ||
-                                new Date(nextReply.createdAt).getTime() - new Date(reply.createdAt).getTime() > 5 * 60 * 1000;
+                                new Date(nextReply.createdAt).getTime() - new Date(reply.createdAt).getTime() >
+                                    5 * 60 * 1000;
                             const isFirstInChain =
                                 replyIndex === 0 ||
                                 replies[replyIndex - 1].createdBy !== reply.createdBy ||
-                                new Date(reply.createdAt).getTime() - new Date(replies[replyIndex - 1].createdAt).getTime() > 5 * 60 * 1000;
+                                new Date(reply.createdAt).getTime() -
+                                    new Date(replies[replyIndex - 1].createdAt).getTime() >
+                                    5 * 60 * 1000;
                             return (
                                 <div
                                     key={reply.id}
@@ -1971,46 +2013,77 @@ const TopicCard: React.FC<{
                                     data-message-id={reply.id}
                                     className={`relative flex gap-2 ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
                                     onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
-                                    onMouseLeave={() => { if (!isMobile) { setHoveredReplyId(null); } }}
+                                    onMouseLeave={() => {
+                                        if (!isMobile) {
+                                            setHoveredReplyId(null);
+                                        }
+                                    }}
                                 >
                                     {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) && !isEditing && (
-                                        <div className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}>
+                                        <div
+                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}
+                                        >
                                             {isOwn && (
                                                 <>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingReplyId(reply.id); setEditingReplyText((reply.content?.body as string) || ""); }}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => {
+                                                            setEditingReplyId(reply.id);
+                                                            setEditingReplyText((reply.content?.body as string) || "");
+                                                        }}
+                                                    >
                                                         <GrEdit className="h-4 w-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => void handleDeleteReply(reply.id)}>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => void handleDeleteReply(reply.id)}
+                                                    >
                                                         <GrTrash className="h-4 w-4" />
                                                     </Button>
                                                 </>
                                             )}
-                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyToMessage(reply)}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => setReplyToMessage(reply)}
+                                            >
                                                 <MdReply className="h-4 w-4" />
                                             </Button>
-                                            <Popover open={pickerOpenForReply === reply.id} onOpenChange={(open) => setPickerOpenForReply(open ? reply.id : null)}>
+                                            <Popover
+                                                open={pickerOpenForReply === reply.id}
+                                                onOpenChange={(open) => setPickerOpenForReply(open ? reply.id : null)}
+                                            >
                                                 <PopoverTrigger asChild>
                                                     <Button variant="ghost" size="icon" className="h-6 w-6">
                                                         <BsEmojiSmile className="h-4 w-4" />
                                                     </Button>
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                    <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => { void handleReaction(reply.id, data.emoji); setPickerOpenForReply(null); }} />
+                                                    <LazyEmojiPicker
+                                                        onEmojiClick={(data: EmojiClickData) => {
+                                                            void handleReaction(reply.id, data.emoji);
+                                                            setPickerOpenForReply(null);
+                                                        }}
+                                                    />
                                                 </PopoverContent>
                                             </Popover>
                                         </div>
                                     )}
-                                    {!isOwn && (
-                                        isLastInChain ? (
+                                    {!isOwn &&
+                                        (isLastInChain ? (
                                             <CirclePicture
                                                 circle={reply.author}
                                                 size="28px"
-                                                className="self-end mb-1 flex-shrink-0"
+                                                className="mb-1 flex-shrink-0 self-end"
                                             />
                                         ) : (
                                             <div className="w-7 flex-shrink-0" />
-                                        )
-                                    )}
+                                        ))}
                                     <div
                                         className={`relative flex ${isEditing ? "max-w-[95%] flex-1" : "max-w-[75%]"} flex-col overflow-hidden shadow-md ${CHAT_STANDARD_BUBBLE_CLASS}`}
                                         style={{ borderRadius: "12px" }}
@@ -2022,14 +2095,30 @@ const TopicCard: React.FC<{
                                                         value={editingReplyText}
                                                         onChange={(e) => setEditingReplyText(e.target.value)}
                                                         onKeyDown={(e) => {
-                                                            if (e.key === "Escape") { setEditingReplyId(null); setEditingReplyText(""); }
+                                                            if (e.key === "Escape") {
+                                                                setEditingReplyId(null);
+                                                                setEditingReplyText("");
+                                                            }
                                                         }}
                                                         rows={5}
                                                         className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
                                                     />
-                                                    <div className="flex gap-1 justify-end">
-                                                        <button onClick={() => { setEditingReplyId(null); setEditingReplyText(""); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-                                                        <button onClick={() => void handleEditSubmit(reply.id)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Save</button>
+                                                    <div className="flex justify-end gap-1">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingReplyId(null);
+                                                                setEditingReplyText("");
+                                                            }}
+                                                            className="text-xs text-gray-500 hover:text-gray-700"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={() => void handleEditSubmit(reply.id)}
+                                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                        >
+                                                            Save
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -2037,24 +2126,37 @@ const TopicCard: React.FC<{
                                             )}
                                             {isLastInChain && (
                                                 <div className="mt-0.5 text-right text-[8px] leading-none text-gray-300">
-                                                    {new Date(reply.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                                                    {new Date(reply.createdAt).toLocaleTimeString([], {
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        hour12: false,
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
                                         {reply.reactions && Object.keys(reply.reactions).length > 0 && (
-                                            <div className={`-mb-1 flex flex-wrap gap-1 px-2 pb-1 ${isOwn ? "justify-end" : "justify-start"}`}>
-                                                {Object.entries(reply.reactions as Record<string, any>).map(([emoji, reactors]) => {
-                                                    const reactorList = Array.isArray(reactors) ? reactors : [];
-                                                    return (
-                                                        <button
-                                                            key={emoji}
-                                                            onClick={() => void handleReaction(reply.id, emoji)}
-                                                            className="flex items-center rounded-full border border-gray-200 bg-white px-1 py-0 text-sm leading-none"
-                                                        >
-                                                            {emoji} {reactorList.length > 1 && <span className="ml-0.5 text-gray-500">{reactorList.length}</span>}
-                                                        </button>
-                                                    );
-                                                })}
+                                            <div
+                                                className={`-mb-1 flex flex-wrap gap-1 px-2 pb-1 ${isOwn ? "justify-end" : "justify-start"}`}
+                                            >
+                                                {Object.entries(reply.reactions as Record<string, any>).map(
+                                                    ([emoji, reactors]) => {
+                                                        const reactorList = Array.isArray(reactors) ? reactors : [];
+                                                        return (
+                                                            <button
+                                                                key={emoji}
+                                                                onClick={() => void handleReaction(reply.id, emoji)}
+                                                                className="flex items-center rounded-full border border-gray-200 bg-white px-1 py-0 text-sm leading-none"
+                                                            >
+                                                                {emoji}{" "}
+                                                                {reactorList.length > 1 && (
+                                                                    <span className="ml-0.5 text-gray-500">
+                                                                        {reactorList.length}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    },
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -2064,37 +2166,49 @@ const TopicCard: React.FC<{
                     </div>
 
                     {/* Reply input */}
-                    <div className="flex gap-1 items-end px-3 pb-3">
+                    <div className="flex items-end gap-1 px-3 pb-3">
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                            className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
                         >
-                            {isUploading ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" /> : <IoAttach className="h-4 w-4" />}
+                            {isUploading ? (
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                            ) : (
+                                <IoAttach className="h-4 w-4" />
+                            )}
                         </Button>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                >
                                     <BsEmojiSmile className="h-4 w-4" />
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                <LazyEmojiPicker onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)} />
+                                <LazyEmojiPicker
+                                    onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)}
+                                />
                             </PopoverContent>
                         </Popover>
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                             {replyToMessage && (
-                                <div className="mb-2 rounded-lg border border-slate-200 border-l-4 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
+                                <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
                                             <div className="font-semibold text-gray-700">
                                                 Replying to {replyToMessage.author?.name || "message"}
                                             </div>
                                             <div className="truncate">
-                                                {renderMentionsAsDisplayText((replyToMessage.content?.body as string) || "")}
+                                                {renderMentionsAsDisplayText(
+                                                    (replyToMessage.content?.body as string) || "",
+                                                )}
                                             </div>
                                         </div>
                                         <button
@@ -2117,12 +2231,12 @@ const TopicCard: React.FC<{
                                     }}
                                     placeholder="Write a reply. Use return for a new line."
                                     rows={1}
-                                    className="min-h-[44px] max-h-56 flex-1 min-w-0 overflow-y-auto resize-none rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                    className="max-h-56 min-h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
                                 />
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-9 w-9 shrink-0 rounded-full text-blue-600 hover:bg-blue-100"
+                                    className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))]"
                                     onClick={() => void handleSendReply()}
                                     disabled={!replyText.trim() || isSending}
                                 >
@@ -2164,7 +2278,10 @@ const NewThreadModal: React.FC<{
     };
 
     const handleCreate = async () => {
-        if (!title.trim()) { setError("Title is required"); return; }
+        if (!title.trim()) {
+            setError("Title is required");
+            return;
+        }
         setIsSaving(true);
         setError("");
         try {
@@ -2185,7 +2302,7 @@ const NewThreadModal: React.FC<{
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col gap-4 p-6">
+            <div className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-6 shadow-xl">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">New Topic</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
@@ -2216,12 +2333,17 @@ const NewThreadModal: React.FC<{
                             placeholder="Add hashtag (optional)"
                             value={hashtagInput}
                             onChange={(e) => setHashtagInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addHashtag(); } }}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addHashtag();
+                                }
+                            }}
                             className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <button
                             onClick={addHashtag}
-                            className="px-3 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
                         >
                             Add
                         </button>
@@ -2229,7 +2351,10 @@ const NewThreadModal: React.FC<{
                     {hashtags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                             {hashtags.map((tag) => (
-                                <span key={tag} className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                                <span
+                                    key={tag}
+                                    className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-600"
+                                >
                                     #{tag}
                                     <button onClick={() => removeHashtag(tag)} className="hover:text-red-500">
                                         <IoClose className="h-3 w-3" />
@@ -2242,17 +2367,17 @@ const NewThreadModal: React.FC<{
                     {error && <p className="text-sm text-red-500">{error}</p>}
                 </div>
 
-                <div className="flex gap-2 justify-end">
+                <div className="flex justify-end gap-2">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => void handleCreate()}
                         disabled={isSaving}
-                        className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
                     >
                         {isSaving ? "Creating..." : "Create Topic"}
                     </button>
@@ -2449,7 +2574,6 @@ export const ChatRoomComponent: React.FC<{
                         return { ...prev, [roomId]: merged };
                     });
                 }
-
             } catch (error) {
                 console.error("Failed to load topic starters:", error);
             }
@@ -2471,7 +2595,7 @@ export const ChatRoomComponent: React.FC<{
             const result = await fetchMongoMessagesAction(roomId, undefined, 50);
             if (result.success && result.messages) {
                 const olderMessages = result.messages.filter(
-                    (msg) => msg.id < oldestId && !currentMessages.some((m) => m.id === msg.id)
+                    (msg) => msg.id < oldestId && !currentMessages.some((m) => m.id === msg.id),
                 );
                 if (olderMessages.length === 0) {
                     setHasOlderMessages(false);
@@ -2515,7 +2639,7 @@ export const ChatRoomComponent: React.FC<{
 
             try {
                 const result = await deleteMongoMessageAction(message.id);
-                
+
                 if (!result.success) {
                     console.error("Failed to delete message:", result.message);
                     // Roll back the optimistic delete so local state matches persisted state.
@@ -2537,7 +2661,8 @@ export const ChatRoomComponent: React.FC<{
                     const current = prev[message.roomId] || [];
                     if (current.some((m) => m.id === message.id)) return prev;
                     const next = [...current];
-                    const insertionIndex = originalIndex >= 0 && originalIndex <= next.length ? originalIndex : next.length;
+                    const insertionIndex =
+                        originalIndex >= 0 && originalIndex <= next.length ? originalIndex : next.length;
                     next.splice(insertionIndex, 0, message);
                     return { ...prev, [message.roomId]: next };
                 });
@@ -2664,10 +2789,10 @@ export const ChatRoomComponent: React.FC<{
     }, [roomId]);
 
     useEffect(() => {
-    if (!roomId) return;
+        if (!roomId) return;
 
-    const roomMessagesForChat = roomMessages[roomId] || [];
-    setMessages(roomMessagesForChat);   
+        const roomMessagesForChat = roomMessages[roomId] || [];
+        setMessages(roomMessagesForChat);
     }, [roomId, roomMessages]);
 
     useEffect(() => {
@@ -2697,7 +2822,6 @@ export const ChatRoomComponent: React.FC<{
     useEffect(() => {
         markLatestMessageAsRead(); // Mark the latest message as read when messages update
     }, [messages, markLatestMessageAsRead]);
-
 
     useEffect(() => {
         const updateInputWidth = () => {
@@ -2740,7 +2864,6 @@ export const ChatRoomComponent: React.FC<{
         observer.observe(el);
         return () => observer.disconnect();
     }, [replyToMessage]);
-
 
     return (
         <>
@@ -2785,24 +2908,26 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
-                        {!isLoadingMessages && (
-                            <ChatMessages
-                                messages={messages}
-                                messagesEndRef={messagesEndRef}
-                                onMessagesRendered={handleMessagesRendered}
-                                handleDelete={handleDelete}
-                                handleEdit={handleEdit}
-                                canReply={!isAnnouncementConversation}
-                                chatProvider={provider}
-                                isDirect={!!(chatRoom as any)?.isDirect}
-                                conversationId={roomId || ""}
-                                currentUser={user}
-                                onTopicOpen={() => {}}
-                                onTopicLoaded={() => {}}
-                                topicNavigationRequest={topicNavigationRequest}
-                            />
-                        )}
+                            {(isLoadingMessages || isLoadingMongo) && (
+                                <div className="text-center text-gray-500">Loading messages...</div>
+                            )}
+                            {!isLoadingMessages && (
+                                <ChatMessages
+                                    messages={messages}
+                                    messagesEndRef={messagesEndRef}
+                                    onMessagesRendered={handleMessagesRendered}
+                                    handleDelete={handleDelete}
+                                    handleEdit={handleEdit}
+                                    canReply={!isAnnouncementConversation}
+                                    chatProvider={provider}
+                                    isDirect={!!(chatRoom as any)?.isDirect}
+                                    conversationId={roomId || ""}
+                                    currentUser={user}
+                                    onTopicOpen={() => {}}
+                                    onTopicLoaded={() => {}}
+                                    topicNavigationRequest={topicNavigationRequest}
+                                />
+                            )}
                         </div>
                     ) : (
                         <div
@@ -2823,7 +2948,9 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo) && <div className="text-center text-gray-500">Loading messages...</div>}
+                            {(isLoadingMessages || isLoadingMongo) && (
+                                <div className="text-center text-gray-500">Loading messages...</div>
+                            )}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
@@ -2853,7 +2980,7 @@ export const ChatRoomComponent: React.FC<{
                                 setShowJumpToLatest(false);
                                 scrollToBottom("smooth");
                             }}
-                            className="fixed z-20 h-10 w-10 rounded-full border border-blue-200 bg-blue-50 text-blue-700 shadow-lg hover:bg-blue-100"
+                            className="fixed z-20 h-10 w-10 rounded-full border border-[hsl(var(--task-priority-low-bg))] bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--task-link))] shadow-lg hover:bg-[hsl(var(--task-priority-low-bg))]"
                             style={{
                                 right: `${jumpButtonRight}px`,
                                 bottom: `${inputBarHeight + (isMobile ? 84 : 20)}px`,
@@ -2926,13 +3053,13 @@ export const ChatRoomComponent: React.FC<{
                     <IoArrowBack className="h-5 w-5" />
                 </Button>
             )}
-        {showNewThreadModal && roomId && (
-            <NewThreadModal
-                conversationId={roomId}
-                onClose={() => setShowNewThreadModal(false)}
-                onCreated={() => {}}
-            />
-        )}
+            {showNewThreadModal && roomId && (
+                <NewThreadModal
+                    conversationId={roomId}
+                    onClose={() => setShowNewThreadModal(false)}
+                    onCreated={() => {}}
+                />
+            )}
         </>
     );
 };

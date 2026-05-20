@@ -233,7 +233,7 @@ export default function HomeContent({
                         <div className="flex items-center gap-2 pt-1">
                             {circle.isMember ? (
                                 <Link href={`/circles/${circle.handle}/settings/subscription`}>
-                                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                    <span className="inline-flex items-center rounded-full bg-[hsl(var(--founding-member-bg))] px-2 py-1 text-xs font-medium text-[hsl(var(--founding-member-foreground))]">
                                         <img
                                             src="/images/member-badge.png"
                                             alt="Member Badge"

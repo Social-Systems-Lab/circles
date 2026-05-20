@@ -6,8 +6,8 @@
     --foreground-rgb: 0, 0, 0;
     --background-start-rgb: 214, 219, 220;
     --background-end-rgb: 255, 255, 255;
-    --link-rgb: 33, 100, 205;
-    --link-hover-rgb: 21, 67, 139;
+    --link-rgb: 43, 100, 59;
+    --link-hover-rgb: 32, 80, 46;
 
     --text-size-80: 0.694rem;
     --text-size-90: 0.833rem;
@@ -273,6 +273,27 @@ h1,
         --primary-foreground: 210 40% 98%;
 
         --primary-light: 215.3 100% 70%;
+        --button-primary: 145 36% 32%;
+        --button-primary-hover: 145 39% 27%;
+        --button-primary-foreground: 0 0% 100%;
+        --bookmark-active: 48 95% 64%;
+        --bookmark-active-hover: 45 90% 58%;
+        --bookmark-active-foreground: 35 30% 18%;
+        --founding-member-bg: 105 28% 88%;
+        --founding-member-foreground: 118 28% 29%;
+        --task-priority-critical-bg: 12 88% 90%;
+        --task-priority-critical-foreground: 12 48% 31%;
+        --task-priority-high-bg: 46 92% 83%;
+        --task-priority-high-foreground: 30 54% 28%;
+        --task-priority-medium-bg: 68 38% 79%;
+        --task-priority-medium-foreground: 85 41% 26%;
+        --task-priority-low-bg: 106 31% 86%;
+        --task-priority-low-foreground: 118 31% 29%;
+        --task-link: 136 40% 28%;
+        --task-link-hover: 136 43% 22%;
+        --shift-callout-bg: 42 67% 96%;
+        --shift-callout-border: 14 67% 63%;
+        --shift-callout-accent: 15 52% 38%;
 
         --secondary: 210 40% 96.1%;
         --secondary-foreground: 222.2 47.4% 11.2%;
@@ -305,10 +326,12 @@ h1,
 
 a.textLink {
     color: rgb(var(--link-rgb));
+    text-decoration-color: rgb(var(--link-rgb));
 }
 
 a.textLink:hover {
     color: rgb(var(--link-hover-rgb));
+    text-decoration-color: rgb(var(--link-hover-rgb));
 }
 
 /* Mapbox */

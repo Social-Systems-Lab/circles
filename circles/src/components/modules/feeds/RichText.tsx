@@ -46,7 +46,7 @@ const MentionHoverCard = memo(({ mention, children }: MentionHoverCardProps) => 
     }, [mention.circle, setContentPreview, sidePanelContentVisible, isMobile, router]);
 
     return (
-        <span className="cursor-pointer font-semibold text-blue-600 hover:underline" onClick={openMention}>
+        <span className={`cursor-pointer font-semibold ${contentLinkClassName}`} onClick={openMention}>
             {children}
         </span>
     );
@@ -64,6 +64,9 @@ const getTextContent = (children: React.ReactNode): string =>
         .map((child) => (typeof child === "string" ? child : ""))
         .join("")
         .trim();
+
+const contentLinkClassName =
+    "text-[hsl(var(--task-link))] underline-offset-2 hover:text-[hsl(var(--task-link-hover))] hover:underline";
 
 const RichText = memo(({ content, mentions, className }: RichTextProps) => {
     // remarkGfm handles autolinking, so we don't need needsMarkdown check anymore for basic links
@@ -120,7 +123,7 @@ const RichText = memo(({ content, mentions, className }: RichTextProps) => {
 
                 if (circlePathRegex.test(href) && linkText && linkText !== href) {
                     return (
-                        <Link href={href} className="font-semibold text-blue-600 hover:underline">
+                        <Link href={href} className={`font-semibold ${contentLinkClassName}`}>
                             {children}
                         </Link>
                     );
@@ -146,7 +149,7 @@ const RichText = memo(({ content, mentions, className }: RichTextProps) => {
                             href={href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
+                            className={contentLinkClassName}
                             {...props}
                         >
                             {children}
@@ -157,7 +160,7 @@ const RichText = memo(({ content, mentions, className }: RichTextProps) => {
                 // Handle other internal links (if any) using Next Link
                 // Avoid passing potentially invalid props like 'node' to Next Link
                 const { node: _, ...linkProps } = props;
-                
+
                 // Check if it's an event link and append hash if missing
                 let finalHref = href;
                 if (href.match(/^\/circles\/[^\/]+\/events\/[^\/]+$/)) {
@@ -165,7 +168,7 @@ const RichText = memo(({ content, mentions, className }: RichTextProps) => {
                 }
 
                 return (
-                    <Link href={finalHref} {...linkProps} className="text-blue-600 hover:underline">
+                    <Link href={finalHref} {...linkProps} className={contentLinkClassName}>
                         {children}
                     </Link>
                 );
@@ -173,7 +176,9 @@ const RichText = memo(({ content, mentions, className }: RichTextProps) => {
             // Ensure paragraphs and other block elements allow word breaks
             // Destructure node separately
             // Use break-words (overflow-wrap)
-            p: ({ node, ...props }: { node?: any; [key: string]: any }) => <p className="break-words mb-3 last:mb-0" {...props} />,
+            p: ({ node, ...props }: { node?: any; [key: string]: any }) => (
+                <p className="mb-3 break-words last:mb-0" {...props} />
+            ),
             li: ({ node, ...props }: { node?: any; [key: string]: any }) => <li className="break-words" {...props} />,
             // Add other block elements as needed (e.g., blockquote, pre)
             blockquote: ({ node, ...props }: { node?: any; [key: string]: any }) => (

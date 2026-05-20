@@ -73,6 +73,7 @@ import { Label } from "@/components/ui/label";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import {
     getShiftConfirmedParticipants,
     getShiftConfirmedSummary,
@@ -81,6 +82,7 @@ import {
     type ShiftDisplayStatus,
     isShiftTask as isShiftTaskItem,
 } from "./shift-task-utils";
+import { taskPriorityBadgeClasses, taskPriorityLabels, taskTitleLinkClassName } from "./task-ui";
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -106,18 +108,6 @@ const allTaskStages: TaskStage[] = ["open", "inProgress", "review", "resolved"];
 const allTaskPriorities: TaskPriority[] = ["low", "medium", "high", "critical"];
 const defaultTasksListSorting: SortingState = [{ id: "createdAt", desc: true }];
 const tasksListViewStateVersion = 1;
-const taskPriorityBadgeClasses: Record<TaskPriority, string> = {
-    low: "bg-green-100 text-green-800",
-    medium: "bg-blue-100 text-blue-800",
-    high: "bg-orange-100 text-orange-800",
-    critical: "bg-red-100 text-red-800",
-};
-const taskPriorityLabels: Record<TaskPriority, string> = {
-    low: "Low",
-    medium: "Medium",
-    high: "High",
-    critical: "Critical",
-};
 const taskPrioritySortOrder: Record<TaskPriority, number> = {
     critical: 4,
     high: 3,
@@ -126,15 +116,7 @@ const taskPrioritySortOrder: Record<TaskPriority, number> = {
 };
 const getSortableCircleLabel = (circle?: Circle) =>
     circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
-const sortableTaskColumnIds = new Set([
-    "title",
-    "priority",
-    "stage",
-    "assignee",
-    "circle",
-    "targetDate",
-    "createdAt",
-]);
+const sortableTaskColumnIds = new Set(["title", "priority", "stage", "assignee", "circle", "targetDate", "createdAt"]);
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -200,13 +182,7 @@ const getWorkflowStatusBadge = (task: TaskDisplay) => {
     return null;
 };
 
-const ShiftAllocationPreview = ({
-    task,
-    showPendingHint,
-}: {
-    task: TaskDisplay;
-    showPendingHint: boolean;
-}) => {
+const ShiftAllocationPreview = ({ task, showPendingHint }: { task: TaskDisplay; showPendingHint: boolean }) => {
     const confirmedParticipants = getShiftConfirmedParticipants(task);
     const pendingSummary = showPendingHint ? getShiftPendingSummary(task) : null;
     const confirmedSummary = getShiftConfirmedSummary(task);
@@ -541,7 +517,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                             onTaskNavigate?.();
                                         }
                                     }}
-                                    className="truncate font-medium text-blue-600 hover:underline"
+                                    className={cn("truncate", taskTitleLinkClassName)}
                                 >
                                     {info.getValue() as string}
                                 </Link>
@@ -1291,7 +1267,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                                 <div className="min-w-0">
                                                     <Link
                                                         href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`}
-                                                        className="block truncate font-medium text-blue-600 hover:underline"
+                                                        className={cn("block truncate", taskTitleLinkClassName)}
                                                         onClick={(event) => event.stopPropagation()}
                                                     >
                                                         {task.title}
