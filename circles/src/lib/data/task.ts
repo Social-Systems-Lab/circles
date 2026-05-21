@@ -975,7 +975,7 @@ export const submitTaskClaim = async (
                 _id: new ObjectId(taskId),
                 stage: "open",
                 $and: [
-                    { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                    { assignedTo: { $exists: false } },
                     { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
                 ],
                 claims: {
@@ -1033,7 +1033,7 @@ export const reviewTaskClaim = async (
                     _id: new ObjectId(taskId),
                     stage: "open",
                     $and: [
-                        { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                        { assignedTo: { $exists: false } },
                         { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
                     ],
                     claims: {
@@ -1056,7 +1056,7 @@ export const reviewTaskClaim = async (
                     _id: new ObjectId(taskId),
                     stage: "open",
                     $and: [
-                        { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                        { assignedTo: { $exists: false } },
                         { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
                     ],
                     claims: {
@@ -1108,7 +1108,7 @@ export const reviewTaskClaim = async (
                 _id: new ObjectId(taskId),
                 stage: "open",
                 $and: [
-                    { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                    { assignedTo: { $exists: false } },
                     { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
                 ],
                 claims: {
