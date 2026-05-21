@@ -136,6 +136,22 @@ export default function HomeContent({
                                 {!isUser && <InviteButton circle={circle} />}
                                 {user && <FollowButton circle={circle} />}
                                 {user && <BookmarkButton circle={circle} iconOnly />}
+                                {!isUser && authorizedToEdit && circle.handle && (
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-9 w-9 shrink-0 rounded-full border-stone-300/90 bg-stone-100/90 text-stone-700 shadow-sm transition-colors hover:bg-stone-200 hover:text-stone-900"
+                                    >
+                                        <Link
+                                            href={`/circles/${circle.handle}/settings/about`}
+                                            aria-label={`Open ${circle.name ?? "circle"} settings`}
+                                            title="Circle settings"
+                                        >
+                                            <Settings className="h-5 w-5" />
+                                        </Link>
+                                    </Button>
+                                )}
                                 {/* Consistent Bell Icon for Mobile View */}
                                 {circle._id && user && (
                                     <NotificationSettingsDialog // Changed Popover to Dialog
@@ -157,7 +173,7 @@ export default function HomeContent({
                         <div
                             className={`flex w-full ${isCompact ? "justify-center" : "items-start justify-between gap-4"}`}
                         >
-                            <div className="flex flex-row items-center gap-4">
+                            <div className="flex min-w-0 flex-wrap items-center gap-4">
                                 <h4 className="m-0 p-0 text-4xl font-bold text-gray-800">
                                     {authorizedToEdit ? (
                                         <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
@@ -167,17 +183,6 @@ export default function HomeContent({
                                 </h4>
                                 {proofOfHumanitySummary && (
                                     <ProofOfHumanityHeaderAction circle={circle} summary={proofOfHumanitySummary} />
-                                )}
-                                {!isUser && authorizedToEdit && circle.handle && (
-                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7 text-gray-500">
-                                        <Link
-                                            href={`/circles/${circle.handle}/settings/about`}
-                                            aria-label={`Open ${circle.name ?? "circle"} settings`}
-                                            title="Settings"
-                                        >
-                                            <Settings className="h-4 w-4" />
-                                        </Link>
-                                    </Button>
                                 )}
                                 {/* {!isCompact && <SocialLinks circle={circle} />} */}
                             </div>
@@ -194,6 +199,22 @@ export default function HomeContent({
                                     {!isUser && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
+                                    {!isUser && authorizedToEdit && circle.handle && (
+                                        <Button
+                                            asChild
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-9 w-9 shrink-0 rounded-full border-stone-300/90 bg-stone-100/90 text-stone-700 shadow-sm transition-colors hover:bg-stone-200 hover:text-stone-900"
+                                        >
+                                            <Link
+                                                href={`/circles/${circle.handle}/settings/about`}
+                                                aria-label={`Open ${circle.name ?? "circle"} settings`}
+                                                title="Circle settings"
+                                            >
+                                                <Settings className="h-5 w-5" />
+                                            </Link>
+                                        </Button>
+                                    )}
                                     {circle._id && user && (
                                         <NotificationSettingsDialog
                                             entityType="CIRCLE"

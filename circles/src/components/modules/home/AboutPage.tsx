@@ -689,6 +689,7 @@ export default function AboutPage({
                     </DialogHeader>
                     <div className="space-y-2">
                         <Textarea
+                            className="focus-visible:border-[hsl(var(--button-primary))] focus-visible:ring-[hsl(var(--button-primary))]"
                             value={contactMessage}
                             onChange={(event) => {
                                 setContactMessage(event.target.value);
