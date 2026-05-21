@@ -1,7 +1,7 @@
 // task.ts - Task data access functions
 import { Tasks, Circles, Members, Reactions, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post, TaskPriority } from "@/models/models"; // Added Post type
+import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post, TaskPriority, TaskClaim } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
@@ -31,6 +31,9 @@ export const SAFE_TASK_PROJECTION = {
     reviewRequestedChangesAt: 1,
     reviewRequestedChangesBy: 1,
     reviewRequestedChangesNote: 1,
+    claims: 1,
+    claimApprovedAt: 1,
+    claimApprovedBy: 1,
     verifiedAt: 1,
     verifiedBy: 1,
     taskType: 1,
@@ -949,6 +952,189 @@ export const changeTaskStage = async (taskId: string, newStage: TaskStage): Prom
     }
 };
 
+export const submitTaskClaim = async (
+    taskId: string,
+    claimantDid: string,
+    note?: string,
+): Promise<{ success: boolean; claim?: TaskClaim; reason?: "duplicate" | "not_claimable" }> => {
+    try {
+        if (!ObjectId.isValid(taskId)) {
+            return { success: false, reason: "not_claimable" };
+        }
+
+        const claim: TaskClaim = {
+            claimId: new ObjectId().toString(),
+            claimantDid,
+            status: "pending",
+            createdAt: new Date(),
+            ...(note ? { note } : {}),
+        };
+
+        const result = await Tasks.updateOne(
+            {
+                _id: new ObjectId(taskId),
+                stage: "open",
+                $and: [
+                    { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                    { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                ],
+                claims: {
+                    $not: {
+                        $elemMatch: {
+                            claimantDid,
+                            status: "pending",
+                        },
+                    },
+                },
+            },
+            {
+                $push: { claims: claim },
+                $set: { updatedAt: new Date() },
+            },
+        );
+
+        if (result.modifiedCount > 0) {
+            return { success: true, claim };
+        }
+
+        const existingTask = await Tasks.findOne(
+            { _id: new ObjectId(taskId) },
+            { projection: { assignedTo: 1, stage: 1, taskType: 1, claims: 1 } },
+        );
+        const hasDuplicatePendingClaim = (existingTask?.claims || []).some(
+            (existingClaim: TaskClaim) => existingClaim.claimantDid === claimantDid && existingClaim.status === "pending",
+        );
+
+        return {
+            success: false,
+            reason: hasDuplicatePendingClaim ? "duplicate" : "not_claimable",
+        };
+    } catch (error) {
+        console.error(`Error submitting task claim (${taskId}):`, error);
+        return { success: false, reason: "not_claimable" };
+    }
+};
+
+export const reviewTaskClaim = async (
+    taskId: string,
+    claimId: string,
+    reviewerDid: string,
+    decision: "approved" | "declined",
+): Promise<boolean> => {
+    try {
+        if (!ObjectId.isValid(taskId)) {
+            return false;
+        }
+
+        const now = new Date();
+        if (decision === "approved") {
+            const task = await Tasks.findOne(
+                {
+                    _id: new ObjectId(taskId),
+                    stage: "open",
+                    $and: [
+                        { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                        { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                    ],
+                    claims: {
+                        $elemMatch: {
+                            claimId,
+                            status: "pending",
+                        },
+                    },
+                },
+                { projection: { claims: 1 } },
+            );
+
+            const approvedClaim = (task?.claims || []).find((claim: TaskClaim) => claim.claimId === claimId && claim.status === "pending");
+            if (!approvedClaim) {
+                return false;
+            }
+
+            const result = await Tasks.updateOne(
+                {
+                    _id: new ObjectId(taskId),
+                    stage: "open",
+                    $and: [
+                        { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                        { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                    ],
+                    claims: {
+                        $elemMatch: {
+                            claimId,
+                            claimantDid: approvedClaim.claimantDid,
+                            status: "pending",
+                        },
+                    },
+                },
+                {
+                    $set: {
+                        assignedTo: approvedClaim.claimantDid,
+                        claimApprovedAt: now,
+                        claimApprovedBy: reviewerDid,
+                        updatedAt: now,
+                        "claims.$[approved].status": "approved",
+                        "claims.$[approved].reviewedAt": now,
+                        "claims.$[approved].reviewedBy": reviewerDid,
+                        "claims.$[others].status": "closed",
+                        "claims.$[others].reviewedAt": now,
+                        "claims.$[others].reviewedBy": reviewerDid,
+                    },
+                    $unset: {
+                        acceptedAt: "",
+                        acceptedBy: "",
+                        submittedForReviewAt: "",
+                        submittedForReviewBy: "",
+                        reviewRequestedChangesAt: "",
+                        reviewRequestedChangesBy: "",
+                        reviewRequestedChangesNote: "",
+                        verifiedAt: "",
+                        verifiedBy: "",
+                    },
+                },
+                {
+                    arrayFilters: [
+                        { "approved.claimId": claimId, "approved.status": "pending" },
+                        { "others.claimId": { $ne: claimId }, "others.status": "pending" },
+                    ],
+                },
+            );
+
+            return result.modifiedCount > 0;
+        }
+
+        const result = await Tasks.updateOne(
+            {
+                _id: new ObjectId(taskId),
+                stage: "open",
+                $and: [
+                    { $or: [{ assignedTo: { $exists: false } }, { assignedTo: null }] },
+                    { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                ],
+                claims: {
+                    $elemMatch: {
+                        claimId,
+                        status: "pending",
+                    },
+                },
+            },
+            {
+                $set: {
+                    updatedAt: now,
+                    "claims.$.status": "declined",
+                    "claims.$.reviewedAt": now,
+                    "claims.$.reviewedBy": reviewerDid,
+                },
+            },
+        );
+
+        return result.modifiedCount > 0;
+    } catch (error) {
+        console.error(`Error reviewing task claim (${taskId}, ${claimId}):`, error);
+        return false;
+    }
+};
+
 /**
  * Assign a task to a user or unassign it. Updates `updatedAt`.
  * @param taskId The ID of the task
@@ -974,6 +1160,8 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
                 reviewRequestedChangesAt: "",
                 reviewRequestedChangesBy: "",
                 reviewRequestedChangesNote: "",
+                claimApprovedAt: "",
+                claimApprovedBy: "",
                 verifiedAt: "",
                 verifiedBy: "",
             },
@@ -981,12 +1169,22 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
         if (assigneeDid && assigneeDid !== "unassigned") {
             // Check for explicit "unassigned" value from select
             updateOp.$set.assignedTo = assigneeDid;
+            updateOp.$set["claims.$[pending].status"] = "closed";
+            updateOp.$set["claims.$[pending].reviewedAt"] = new Date();
         } else {
             // Unset the assignedTo field if assigneeDid is null, undefined, or "unassigned"
             updateOp.$unset.assignedTo = "";
         }
 
-        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp); // Changed Issues to Tasks, param issueId to taskId
+        const result = await Tasks.updateOne(
+            { _id: new ObjectId(taskId) },
+            updateOp,
+            assigneeDid && assigneeDid !== "unassigned"
+                ? {
+                      arrayFilters: [{ "pending.status": "pending" }],
+                  }
+                : undefined,
+        ); // Changed Issues to Tasks, param issueId to taskId
         return result.matchedCount > 0;
     } catch (error) {
         console.error(`Error assigning task (${taskId}):`, error); // Updated error message and param

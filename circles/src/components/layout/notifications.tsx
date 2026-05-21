@@ -500,6 +500,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "task_shift_confirmed":
                 case "task_shift_attendance_verified":
                 case "task_status_changed":
+                case "task_claim_submitted":
+                case "task_claim_approved":
+                case "task_claim_declined":
                     return notification.taskId ? `/circles/${circleHandle}/tasks/${notification.taskId}` : null;
                 case "goal_submitted_for_review":
                 case "goal_approved":
@@ -540,6 +543,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_shift_attendance_verified":
             case "task_changes_requested":
             case "task_verified":
+            case "task_claim_approved":
+            case "task_claim_declined":
             case "post_comment":
             case "comment_reply":
             case "post_mention":
@@ -547,6 +552,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_status_changed":
             case "task_approved":
             case "task_submitted_for_review":
+            case "task_claim_submitted":
             case "task_changes_requested":
             case "task_verified":
             case "issue_assigned":
@@ -701,6 +707,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "task_shift_confirmed":
             case "task_shift_attendance_verified":
             case "task_status_changed":
+            case "task_claim_submitted":
+            case "task_claim_approved":
+            case "task_claim_declined":
                 // For now, issue notifications aren't grouped, so use original message
                 return groupedNotification.latestNotification.message;
 
@@ -771,6 +780,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                     "task_shift_confirmed",
                                     "task_shift_attendance_verified",
                                     "task_status_changed",
+                                    "task_claim_submitted",
+                                    "task_claim_approved",
+                                    "task_claim_declined",
                                 ].includes(groupedNotification.latestNotification.notificationType) ? (
                                     <>
                                         {/* Show triggering user picture in the center */}

@@ -42,8 +42,10 @@ import {
     changeTaskStage,
     assignTask,
     getActiveTasksByCircleId,
+    submitTaskClaim,
+    reviewTaskClaim,
 } from "@/lib/data/task";
-import { getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
+import { getMember, getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Import cache update function
 import { getCirclesByDids } from "@/lib/data/circle";
 import { listAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
@@ -59,6 +61,9 @@ import {
     notifyTaskShiftConfirmed,
     notifyTaskStatusChanged,
     notifyTaskVerified,
+    notifyTaskClaimSubmitted,
+    notifyTaskClaimApproved,
+    notifyTaskClaimDeclined,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
@@ -504,6 +509,11 @@ const assignTaskSchema = z.object({
 
 const requestTaskChangesSchema = z.object({
     note: z.string().max(500, "Changes request note must be 500 characters or fewer").optional(),
+});
+
+const reviewTaskClaimSchema = z.object({
+    claimId: z.string().min(1, "Claim is required"),
+    decision: z.enum(["approved", "declined"]),
 });
 
 const shiftParticipantSchema = z.object({
@@ -1335,6 +1345,163 @@ export async function requestTaskChangesAction(
     }
 }
 
+export async function submitTaskClaimAction(
+    circleHandle: string,
+    taskId: string,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const claimant = await getUserByDid(userDid);
+        if (!claimant) {
+            return { success: false, message: "User data not found" };
+        }
+        if (!canPerformRestrictedAction(claimant)) {
+            return { success: false, message: getRestrictedActionMessage("claim tasks") };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const membership = await getMember(userDid, circle._id as string);
+        if (!membership) {
+            return { success: false, message: "Only circle members can claim tasks" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        if ((task.taskType ?? "outcome") === "shift") {
+            return { success: false, message: "Shift tasks cannot be claimed" };
+        }
+        if (task.stage !== "open") {
+            return { success: false, message: "Only open tasks can be claimed" };
+        }
+        if (task.assignedTo) {
+            return { success: false, message: "Assigned tasks cannot be claimed" };
+        }
+
+        const result = await submitTaskClaim(taskId, userDid);
+        if (!result.success) {
+            return {
+                success: false,
+                message:
+                    result.reason === "duplicate"
+                        ? "You already have a pending claim on this task"
+                        : "This task cannot be claimed right now",
+            };
+        }
+
+        const updatedTask = await getTaskById(taskId, userDid);
+        if (updatedTask) {
+            await notifyTaskClaimSubmitted(updatedTask, claimant);
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return { success: true, message: "Task claim submitted" };
+    } catch (error) {
+        console.error("Error submitting task claim:", error);
+        return { success: false, message: "Failed to submit task claim" };
+    }
+}
+
+export async function reviewTaskClaimAction(
+    circleHandle: string,
+    taskId: string,
+    claimId: string,
+    decision: "approved" | "declined",
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const validated = reviewTaskClaimSchema.safeParse({ claimId, decision });
+        if (!validated.success) {
+            return {
+                success: false,
+                message: validated.error.errors.map((error) => error.message).join(", "),
+            };
+        }
+
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "User not authenticated" };
+        }
+
+        const reviewer = await getUserByDid(userDid);
+        if (!reviewer) {
+            return { success: false, message: "User data not found" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) {
+            return { success: false, message: "Circle not found" };
+        }
+
+        const canAssign = await isAuthorized(userDid, circle._id as string, features.tasks.assign);
+        if (!canAssign) {
+            return { success: false, message: "Not authorized to review task claims" };
+        }
+
+        const task = await getTaskById(taskId, userDid);
+        if (!task) {
+            return { success: false, message: "Task not found" };
+        }
+
+        const claim = (task.claims ?? []).find(
+            (existingClaim) => existingClaim.claimId === validated.data.claimId && existingClaim.status === "pending",
+        );
+        if (!claim) {
+            return { success: false, message: "Pending claim not found" };
+        }
+
+        if (validated.data.decision === "approved") {
+            const claimantMembership = await getMember(claim.claimantDid, circle._id as string);
+            if (!claimantMembership) {
+                return { success: false, message: "Claimant is no longer a member of this circle" };
+            }
+        }
+
+        const success = await reviewTaskClaim(taskId, validated.data.claimId, userDid, validated.data.decision);
+        if (!success) {
+            return {
+                success: false,
+                message:
+                    validated.data.decision === "approved"
+                        ? "Failed to approve task claim"
+                        : "Failed to decline task claim",
+            };
+        }
+
+        const updatedTask = await getTaskById(taskId, userDid);
+        const claimant = await getUserPrivate(claim.claimantDid);
+        if (updatedTask && claimant) {
+            if (validated.data.decision === "approved") {
+                await notifyTaskClaimApproved(updatedTask, reviewer, claimant);
+            } else {
+                await notifyTaskClaimDeclined(updatedTask, reviewer, claimant);
+            }
+        }
+
+        revalidatePath(`/circles/${circleHandle}/tasks`);
+        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+
+        return {
+            success: true,
+            message: validated.data.decision === "approved" ? "Task claim approved" : "Task claim declined",
+        };
+    } catch (error) {
+        console.error("Error reviewing task claim:", error);
+        return { success: false, message: "Failed to review task claim" };
+    }
+}
+
 export async function verifyTaskCompletionAction(
     circleHandle: string,
     taskId: string,
@@ -1376,6 +1543,10 @@ export async function verifyTaskCompletionAction(
 
         if (task.stage !== "inProgress" || !task.submittedForReviewAt) {
             return { success: false, message: "Task must be submitted for review before it can be verified" };
+        }
+
+        if (task.assignedTo === userDid) {
+            return { success: false, message: "Assignees cannot verify their own task contributions" };
         }
 
         if (task.verifiedAt) {

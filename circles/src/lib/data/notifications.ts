@@ -144,6 +144,12 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `Your attendance for ${taskTitle} was verified`;
         case "task_status_changed":
             return `${actorName} updated ${taskTitle}`;
+        case "task_claim_submitted":
+            return `${actorName} claimed ${taskTitle}`;
+        case "task_claim_approved":
+            return `${taskTitle} claim approved`;
+        case "task_claim_declined":
+            return `${taskTitle} claim declined`;
         case "goal_submitted_for_review":
             return `${actorName} submitted ${goalTitle} for review`;
         case "goal_approved":
@@ -1741,6 +1747,90 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
 
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
+    }
+}
+
+export async function notifyTaskClaimSubmitted(task: TaskDisplay, claimant: Circle): Promise<void> {
+    try {
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        const reviewerDids = (await getAuthorizedMembers(circle, features.tasks?.assign))
+            .map((user) => user.did)
+            .filter((did): did is string => Boolean(did) && did !== claimant.did);
+
+        if (reviewerDids.length === 0) {
+            return;
+        }
+
+        const recipients = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+            (user): user is UserPrivate => user !== null,
+        );
+
+        if (recipients.length === 0) {
+            return;
+        }
+
+        await sendNotifications(
+            "task_claim_submitted",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: claimant,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskClaimSubmitted:", error);
+    }
+}
+
+export async function notifyTaskClaimApproved(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+    try {
+        if (reviewer.did === claimant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_claim_approved",
+            [claimant],
+            sanitizeObjectForJSON({
+                circle,
+                user: reviewer,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskClaimApproved:", error);
+    }
+}
+
+export async function notifyTaskClaimDeclined(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+    try {
+        if (reviewer.did === claimant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_claim_declined",
+            [claimant],
+            sanitizeObjectForJSON({
+                circle,
+                user: reviewer,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskClaimDeclined:", error);
     }
 }
 

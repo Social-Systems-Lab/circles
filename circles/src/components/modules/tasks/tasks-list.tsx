@@ -44,6 +44,7 @@ import {
     getTaskAction,
     getTasksAction,
     requestTaskChangesAction,
+    submitTaskClaimAction,
     verifyTaskCompletionAction,
 } from "@/app/circles/[handle]/tasks/actions";
 import { UserPicture } from "../members/user-picture";
@@ -166,6 +167,15 @@ const ShiftAllocationPreview = ({ task, showPendingHint }: { task: TaskDisplay; 
     );
 };
 
+const getPendingClaims = (task: TaskDisplay) => (task.claims ?? []).filter((claim) => claim.status === "pending");
+
+const canViewerClaimTask = (task: TaskDisplay, currentUserDid?: string, isCircleMember?: boolean) =>
+    !isShiftTaskItem(task) &&
+    task.stage === "open" &&
+    !task.assignedTo &&
+    Boolean(isCircleMember) &&
+    !getPendingClaims(task).some((claim) => claim.claimantDid === currentUserDid);
+
 type PersistedTasksListViewState = {
     version: number;
     searchText: string;
@@ -278,6 +288,9 @@ const TasksList: React.FC<TasksListProps> = ({
     const router = useRouter();
     const { toast } = useToast();
     const [searchText, setSearchText] = useState("");
+    const isCircleMember =
+        circle.did === user?.did ||
+        Boolean(user?.memberships?.some((membership) => String(membership.circle?._id) === String(circle._id)));
     const [selectedStages, setSelectedStages] = useState<TaskStage[]>(allTaskStages);
     const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>(allTaskPriorities);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
@@ -411,6 +424,31 @@ const TasksList: React.FC<TasksListProps> = ({
             return [...currentPriorities, priority];
         });
     }, []);
+
+    const refreshOpenTaskPreview = useCallback(
+        async (taskId: string) => {
+            if (!circle.handle) {
+                return;
+            }
+
+            const updatedTask = await getTaskAction(circle.handle, taskId);
+            if (!updatedTask) {
+                return;
+            }
+
+            setContentPreview((currentPreview) => {
+                if (currentPreview?.type !== "task" || currentPreview.content._id !== updatedTask._id) {
+                    return currentPreview;
+                }
+
+                return {
+                    ...currentPreview,
+                    content: updatedTask,
+                };
+            });
+        },
+        [circle.handle, setContentPreview],
+    );
 
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
@@ -589,10 +627,11 @@ const TasksList: React.FC<TasksListProps> = ({
                     </Button>
                 ),
                 cell: (info) => {
-                    if (isShiftTaskItem(info.row.original)) {
+                    const task = info.row.original;
+                    if (isShiftTaskItem(task)) {
                         return (
                             <ShiftAllocationPreview
-                                task={info.row.original}
+                                task={task}
                                 showPendingHint={permissions.canModerate}
                             />
                         );
@@ -600,7 +639,74 @@ const TasksList: React.FC<TasksListProps> = ({
 
                     const assignee = info.getValue() as Circle | undefined;
                     if (!assignee) {
-                        return <span className="text-gray-500">Unassigned</span>;
+                        const pendingClaims = getPendingClaims(task);
+                        const currentUserPendingClaim = pendingClaims.some((claim) => claim.claimantDid === user?.did);
+                        const pendingClaimCount = pendingClaims.length;
+                        const canClaim = canViewerClaimTask(task, user?.did, isCircleMember);
+                        const isClaimableListState = task.stage === "open";
+
+                        return (
+                            <div className="flex min-w-0 flex-col gap-1">
+                                {isClaimableListState ? (
+                                    <Badge
+                                        variant="outline"
+                                        className="w-fit border-amber-300 bg-amber-50 text-amber-800"
+                                    >
+                                        Unclaimed
+                                    </Badge>
+                                ) : (
+                                    <span className="text-gray-500">Unassigned</span>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    {isClaimableListState && pendingClaimCount > 0 && permissions.canAssign && (
+                                        <span className="text-amber-700">
+                                            {pendingClaimCount} pending claim{pendingClaimCount === 1 ? "" : "s"}
+                                        </span>
+                                    )}
+                                    {isClaimableListState && currentUserPendingClaim ? (
+                                        <Badge
+                                            variant="outline"
+                                            className="w-fit border-amber-200 bg-amber-50 text-amber-700"
+                                        >
+                                            Claim pending
+                                        </Badge>
+                                    ) : isClaimableListState && canClaim ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 border-[hsl(var(--task-link))]/25 px-2 text-xs font-medium text-[hsl(var(--task-link))] hover:bg-[hsl(var(--task-link))]/5 hover:text-[hsl(var(--task-link-hover))]"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                startTransition(async () => {
+                                                    const result = await submitTaskClaimAction(circle.handle!, task._id as string);
+
+                                                    if (!result.success) {
+                                                        toast({
+                                                            title: "Error",
+                                                            description: result.message || "Failed to submit claim",
+                                                            variant: "destructive",
+                                                        });
+                                                        return;
+                                                    }
+
+                                                    await refreshOpenTaskPreview(task._id as string);
+                                                    router.refresh();
+                                                    toast({
+                                                        title: "Success",
+                                                        description: result.message || "Task claim submitted",
+                                                    });
+                                                });
+                                            }}
+                                            disabled={isPending}
+                                        >
+                                            {isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                                            Claim task
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            </div>
+                        );
                     }
                     return (
                         <TooltipProvider>
@@ -720,12 +826,19 @@ const TasksList: React.FC<TasksListProps> = ({
         [
             isCompact,
             circle.handle,
+            isCircleMember,
+            isPending,
             openAssignee,
             openAuthor,
             inToolbox,
             onTaskNavigate,
+            permissions.canAssign,
             permissions.canModerate,
+            refreshOpenTaskPreview,
+            router,
             showProfileCircleAvatarColumn,
+            toast,
+            user?.did,
         ],
     );
 
@@ -851,31 +964,6 @@ const TasksList: React.FC<TasksListProps> = ({
             return isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate;
         },
         [permissions.canAssign, permissions.canModerate, permissions.canResolve, user?.did],
-    );
-
-    const refreshOpenTaskPreview = useCallback(
-        async (taskId: string) => {
-            if (!circle.handle) {
-                return;
-            }
-
-            const updatedTask = await getTaskAction(circle.handle, taskId);
-            if (!updatedTask) {
-                return;
-            }
-
-            setContentPreview((currentPreview) => {
-                if (currentPreview?.type !== "task" || currentPreview.content._id !== updatedTask._id) {
-                    return currentPreview;
-                }
-
-                return {
-                    ...currentPreview,
-                    content: updatedTask,
-                };
-            });
-        },
-        [circle.handle, setContentPreview],
     );
 
     const runVerificationQueueAction = useCallback(

@@ -1100,6 +1100,9 @@ export type NotificationType =
     | "task_shift_confirmed"
     | "task_shift_attendance_verified"
     | "task_status_changed"
+    | "task_claim_submitted"
+    | "task_claim_approved"
+    | "task_claim_declined"
     // Goal Notifications
     | "goal_submitted_for_review"
     | "goal_approved"
@@ -1170,6 +1173,9 @@ export const notificationTypeValues = [
     "task_shift_confirmed",
     "task_shift_attendance_verified",
     "task_status_changed",
+    "task_claim_submitted",
+    "task_claim_approved",
+    "task_claim_declined",
     "goal_submitted_for_review",
     "goal_approved",
     "goal_status_changed",
@@ -1259,6 +1265,9 @@ export const summaryNotificationTypeDetails: Record<
             "task_shift_confirmed",
             "task_shift_attendance_verified",
             "task_status_changed",
+            "task_claim_submitted",
+            "task_claim_approved",
+            "task_claim_declined",
             "ranking_stale_reminder",
             "ranking_grace_period_ended",
         ],
@@ -1453,6 +1462,18 @@ export const taskTypeSchema = z.enum(["outcome", "shift"]);
 export type TaskType = z.infer<typeof taskTypeSchema>;
 export const taskParticipantAttendanceStatusSchema = z.enum(["attended", "did_not_attend"]);
 export type TaskParticipantAttendanceStatus = z.infer<typeof taskParticipantAttendanceStatusSchema>;
+export const taskClaimStatusSchema = z.enum(["pending", "approved", "declined", "withdrawn", "closed"]);
+export type TaskClaimStatus = z.infer<typeof taskClaimStatusSchema>;
+export const taskClaimSchema = z.object({
+    claimId: z.string(),
+    claimantDid: didSchema,
+    status: taskClaimStatusSchema,
+    createdAt: z.date(),
+    reviewedAt: z.date().optional(),
+    reviewedBy: didSchema.optional(),
+    note: z.string().optional(),
+});
+export type TaskClaim = z.infer<typeof taskClaimSchema>;
 export const taskParticipantSchema = z.object({
     userDid: didSchema,
     joinedAt: z.date(),
@@ -1484,6 +1505,9 @@ export const taskSchema = z.object({
     reviewRequestedChangesAt: z.date().optional(),
     reviewRequestedChangesBy: didSchema.optional(),
     reviewRequestedChangesNote: z.string().optional(),
+    claims: z.array(taskClaimSchema).optional(),
+    claimApprovedAt: z.date().optional(),
+    claimApprovedBy: didSchema.optional(),
     verifiedAt: z.date().optional(),
     verifiedBy: didSchema.optional(),
     taskType: taskTypeSchema.optional(),

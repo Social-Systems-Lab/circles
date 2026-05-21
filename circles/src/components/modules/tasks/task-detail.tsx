@@ -12,6 +12,7 @@ import {
     TaskPriority,
     TaskParticipant,
     TaskParticipantAttendanceStatus,
+    TaskClaim,
 } from "@/models/models"; // Updated types
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -71,9 +72,11 @@ import {
     requestTaskChangesAction,
     reviewShiftAttendanceAction,
     submitTaskForReviewAction,
+    submitTaskClaimAction,
     updateTaskPriorityAction,
     verifyShiftParticipantAction,
     verifyTaskCompletionAction,
+    reviewTaskClaimAction,
 } from "@/app/circles/[handle]/tasks/actions"; // Updated path
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -203,6 +206,8 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     const isShiftTask = isShiftTaskItem(task);
     const shiftParticipants = task.participants ?? [];
+    const taskClaims = task.claims ?? [];
+    const pendingClaims = !isShiftTask ? taskClaims.filter((claim) => claim.status === "pending") : [];
     const shiftSlots = task.slots ?? 0;
     const signedUpShiftParticipantsCount = getShiftSignedUpCount(task);
     const verifiedShiftParticipantsCount = getShiftConfirmedCount(task);
@@ -214,9 +219,21 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const isCompletedShift = isShiftTask && shiftDisplayStatus === "completed";
     const isAuthor = currentUserDid === task.createdBy; // Use task prop
     const isAssignee = currentUserDid === task.assignedTo; // Use task prop
+    const currentUserPendingClaim = pendingClaims.find((claim) => claim.claimantDid === currentUserDid);
+    const isCircleMember =
+        circle.did === currentUserDid ||
+        Boolean(user?.memberships?.some((membership) => String(membership.circle?._id) === String(circle._id)));
+    const canClaimTask =
+        !isShiftTask &&
+        !permissions.canAssign &&
+        task.stage === "open" &&
+        !task.assignedTo &&
+        isCircleMember &&
+        !currentUserPendingClaim;
     const canSubmitForReview = !isShiftTask && isAssignee;
     const canManageVerification =
         !isShiftTask && (isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate);
+    const isClaimApprovedAssignment = Boolean(task.claimApprovedAt) && task.assignedTo === currentUserDid;
     const workflowStatus = isShiftTask ? null : getWorkflowStatusInfo(task);
     const currentShiftParticipant = shiftParticipants.find((participant) => participant.userDid === currentUserDid);
     const isShiftParticipant = Boolean(currentShiftParticipant);
@@ -264,6 +281,16 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         ? reviewerProfileByDid.get(currentShiftParticipant.attendanceVerifiedBy)
         : undefined;
     const isNonAdminCompletedShiftPreview = isPreview && isCompletedShift && !permissions.canModerate;
+    const memberNameByDid = new Map(
+        members
+            .filter((member): member is MemberDisplay & { userDid: string } => typeof member.userDid === "string" && member.userDid.length > 0)
+            .map((member) => [member.userDid, member.name || member.userDid]),
+    );
+    const memberByDid = new Map(
+        members
+            .filter((member): member is MemberDisplay & { userDid: string } => typeof member.userDid === "string" && member.userDid.length > 0)
+            .map((member) => [member.userDid, member]),
+    );
 
     useEffect(() => {
         setSelectedPriority(task.priority ?? "none");
@@ -338,7 +365,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     // Fetch members when assign dialog opens
     useEffect(() => {
-        if (assignDialogOpen) {
+        if (assignDialogOpen || pendingClaims.length > 0) {
             const fetchMembers = async () => {
                 try {
                     const result = await getMembersAction(circle._id as string);
@@ -367,7 +394,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             };
             fetchMembers();
         }
-    }, [assignDialogOpen, circle._id, toast]);
+    }, [assignDialogOpen, pendingClaims.length, circle._id, toast]);
 
     const handleEdit = () => {
         router.push(`/circles/${circle.handle}/tasks/${task._id}/edit`); // Updated path
@@ -447,6 +474,56 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     const canRevealCompletedShiftParticipant = (participant: TaskParticipant) =>
         permissions.canModerate || attendeeVisibilityDidSet.has(participant.userDid);
+
+    const getClaimantLabel = (claim: TaskClaim) => memberNameByDid.get(claim.claimantDid) || claim.claimantDid;
+    const getClaimantMember = (claim: TaskClaim) => memberByDid.get(claim.claimantDid);
+
+    const openClaimantPreview = (claim: TaskClaim) => {
+        const claimant = getClaimantMember(claim);
+        if (!claimant) {
+            return;
+        }
+
+        if (typeof claimant.handle === "string" && claimant.handle.length > 0 && window.innerWidth < 768) {
+            router.push(`/circles/${claimant.handle}`);
+            return;
+        }
+
+        setContentPreview((currentPreview) => {
+            const isCurrentUserPreview =
+                currentPreview?.type === "user" &&
+                currentPreview.content._id === claimant._id;
+
+            return isCurrentUserPreview
+                ? undefined
+                : {
+                      type: "user",
+                      content: claimant as Circle,
+                  };
+        });
+    };
+
+    const handleReviewClaim = (claimId: string, decision: "approved" | "declined") => {
+        startTransition(async () => {
+            const result = await reviewTaskClaimAction(circle.handle!, task._id as string, claimId, decision);
+
+            if (!result.success) {
+                toast({
+                    title: "Error",
+                    description: result.message || `Failed to ${decision === "approved" ? "approve" : "decline"} claim`,
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            await refreshOpenTaskPreview();
+            router.refresh();
+            toast({
+                title: "Success",
+                description: result.message || `Claim ${decision}`,
+            });
+        });
+    };
 
     const openStageChangeDialog = (stage: TaskStage) => {
         // Updated type
@@ -611,6 +688,44 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                 </Button>,
             );
         }
+        if (!isShiftTask && currentStage === "open" && currentUserPendingClaim) {
+            actions.push(
+                <Button key="claim-pending" variant="outline" disabled>
+                    Claim Pending
+                </Button>,
+            );
+        }
+        if (canClaimTask) {
+            actions.push(
+                <Button
+                    key="claim-task"
+                    onClick={() =>
+                        startTransition(async () => {
+                            const result = await submitTaskClaimAction(circle.handle!, task._id as string);
+
+                            if (!result.success) {
+                                toast({
+                                    title: "Error",
+                                    description: result.message || "Failed to submit claim",
+                                    variant: "destructive",
+                                });
+                                return;
+                            }
+
+                            await refreshOpenTaskPreview();
+                            router.refresh();
+                            toast({
+                                title: "Success",
+                                description: result.message || "Task claim submitted",
+                            });
+                        })
+                    }
+                    disabled={isPending}
+                >
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Claim Task
+                </Button>,
+            );
+        }
         if (!isShiftTask && currentStage === "open" && isAssignee) {
             if (!task.acceptedAt) {
                 actions.push(
@@ -639,7 +754,8 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                         }
                         disabled={isPending}
                     >
-                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Accept Task
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{" "}
+                        {isClaimApprovedAssignment ? "Confirm I'll do this" : "Accept Task"}
                     </Button>,
                 );
             } else if (task.acceptedBy === currentUserDid) {
@@ -1333,6 +1449,86 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 )}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {!isShiftTask && permissions.canAssign && pendingClaims.length > 0 && (
+                    <div className="mb-6">
+                        <h3 className="mb-2 text-lg font-semibold">Pending Claims</h3>
+                        <div className="space-y-3">
+                            {pendingClaims.map((claim) => {
+                                const claimant = getClaimantMember(claim);
+                                const claimantHandle =
+                                    claimant?.handle && claimant.handle !== getClaimantLabel(claim)
+                                        ? `@${claimant.handle}`
+                                        : null;
+
+                                return (
+                                    <div
+                                        key={claim.claimId}
+                                        className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <div
+                                                className={claimant ? "cursor-pointer" : ""}
+                                                onClick={claimant ? () => openClaimantPreview(claim) : undefined}
+                                            >
+                                                <UserPicture
+                                                    name={claimant?.name || getClaimantLabel(claim)}
+                                                    picture={claimant?.picture?.url}
+                                                    size="36px"
+                                                />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        "truncate text-left text-base font-medium text-foreground",
+                                                        claimant ? "hover:underline" : "cursor-default",
+                                                    )}
+                                                    onClick={claimant ? () => openClaimantPreview(claim) : undefined}
+                                                    disabled={!claimant}
+                                                >
+                                                    {getClaimantLabel(claim)}
+                                                </button>
+                                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                                                    {claimantHandle && <span>{claimantHandle}</span>}
+                                                    {claimantHandle && <span aria-hidden="true">•</span>}
+                                                    <span>
+                                                        Claimed{" "}
+                                                        {formatDistanceToNow(new Date(claim.createdAt), {
+                                                            addSuffix: true,
+                                                        })}
+                                                    </span>
+                                                </div>
+                                                {claim.note && (
+                                                    <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
+                                                        {claim.note}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Button
+                                                type="button"
+                                                onClick={() => handleReviewClaim(claim.claimId, "approved")}
+                                                disabled={isPending}
+                                            >
+                                                Approve
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => handleReviewClaim(claim.claimId, "declined")}
+                                                disabled={isPending}
+                                            >
+                                                Decline
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
