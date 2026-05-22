@@ -656,6 +656,24 @@ export const verificationMessageSchema = z.object({
 export type VerificationMessage = z.infer<typeof verificationMessageSchema>;
 export type VerificationMessageSenderRole = z.infer<typeof verificationMessageSenderRoleSchema>;
 
+export const detachCircleRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
+
+export const detachCircleRequestSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    parentCircleId: z.string(),
+    requestedByDid: didSchema,
+    requiredAdminDids: z.array(didSchema),
+    approvedByDids: z.array(didSchema).default([]),
+    status: detachCircleRequestStatusSchema.default("pending"),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    decidedAt: z.date().optional(),
+});
+
+export type DetachCircleRequest = z.infer<typeof detachCircleRequestSchema>;
+export type DetachCircleRequestStatus = z.infer<typeof detachCircleRequestStatusSchema>;
+
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),
     name: z.string().optional(),
@@ -1535,6 +1553,7 @@ export interface TaskDisplay extends Task {
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
     participantProfiles?: Circle[];
+    verifier?: Circle;
     contributionNote?: string;
     rank?: number; // Aggregated task rank
     goal?: GoalDisplay; // Associated goal details
