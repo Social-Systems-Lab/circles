@@ -234,7 +234,7 @@ export default function HomeContent({
                             <div className="mt-3">
                                 {resolvedCircleLevel === "profile_child" ? (
                                     <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
-                                        <span className="font-medium">Created by</span>
+                                        <span className="font-medium">Child of</span>
                                         <Link
                                             href={`/circles/${parentCircle.handle}`}
                                             className="font-semibold text-gray-900 hover:underline"

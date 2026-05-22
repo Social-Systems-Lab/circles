@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle, getCircleById, getCirclePublishStatus } from "@/lib/data/circle";
+import { getPendingAttachCircleRequest, getPendingIncomingAttachCircleRequests } from "@/lib/data/circle-attach";
 import { getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getMember, getMembers } from "@/lib/data/member";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
@@ -32,7 +33,23 @@ export default async function AboutSettingsPage(props: PageProps) {
         circle._id && circle.circleType !== "user"
             ? (await getMembers(String(circle._id))).filter((member) => member.userGroups?.includes("admins"))
             : [];
+    const pendingAttachRequest = circle._id ? await getPendingAttachCircleRequest(String(circle._id)) : null;
     const pendingDetachRequest = circle._id ? await getPendingDetachCircleRequest(String(circle._id)) : null;
+    const incomingAttachRequests =
+        circle._id && member?.userGroups?.includes("admins")
+            ? await getPendingIncomingAttachCircleRequests(String(circle._id))
+            : [];
+    const incomingAttachRequestCircleIds = Array.from(
+        new Set(
+            incomingAttachRequests.flatMap((request) => [request.circleId, request.fromParentCircleId || ""]).filter(Boolean),
+        ),
+    );
+    const incomingAttachRequestCircles = await Promise.all(
+        incomingAttachRequestCircleIds.map((circleId) => getCircleById(circleId)),
+    );
+    const pendingAttachTargetParent = pendingAttachRequest
+        ? await getCircleById(pendingAttachRequest.toParentCircleId)
+        : null;
 
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";
@@ -111,7 +128,17 @@ export default async function AboutSettingsPage(props: PageProps) {
                     adminCount={adminMembers.length}
                     isAdmin={member?.userGroups?.includes("admins") === true}
                     isIndependent={resolvedCircleLevel !== "profile_child"}
+                    circleHandle={circle.handle || ""}
                     parentCircleName={parentCircle?.name || "this parent circle"}
+                    pendingAttachRequest={
+                        pendingAttachRequest
+                            ? {
+                                  requestId: pendingAttachRequest._id?.toString?.() ?? "",
+                                  status: pendingAttachRequest.status,
+                                  targetParentName: pendingAttachTargetParent?.name || "the requested parent",
+                              }
+                            : null
+                    }
                     pendingRequest={
                         pendingDetachRequest
                             ? {
@@ -127,6 +154,21 @@ export default async function AboutSettingsPage(props: PageProps) {
                               }
                             : null
                     }
+                    incomingAttachRequests={incomingAttachRequests.map((request) => {
+                        const movingCircle = incomingAttachRequestCircles.find(
+                            (requestCircle) => requestCircle?._id?.toString?.() === request.circleId,
+                        );
+                        const fromParentCircle = incomingAttachRequestCircles.find(
+                            (requestCircle) => requestCircle?._id?.toString?.() === request.fromParentCircleId,
+                        );
+
+                        return {
+                            requestId: request._id?.toString?.() ?? "",
+                            movingCircleName: movingCircle?.name || "This circle",
+                            movingCircleHandle: movingCircle?.handle || "",
+                            fromParentCircleName: fromParentCircle?.name || null,
+                        };
+                    })}
                     viewerDid={userDid || null}
                 />
             ) : null}

@@ -674,6 +674,24 @@ export const detachCircleRequestSchema = z.object({
 export type DetachCircleRequest = z.infer<typeof detachCircleRequestSchema>;
 export type DetachCircleRequestStatus = z.infer<typeof detachCircleRequestStatusSchema>;
 
+export const attachCircleRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
+
+export const attachCircleRequestSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    fromParentCircleId: z.string().nullable().optional(),
+    toParentCircleId: z.string(),
+    requestedByDid: didSchema,
+    approvedByDid: didSchema.optional(),
+    status: attachCircleRequestStatusSchema.default("pending"),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    decidedAt: z.date().optional(),
+});
+
+export type AttachCircleRequest = z.infer<typeof attachCircleRequestSchema>;
+export type AttachCircleRequestStatus = z.infer<typeof attachCircleRequestStatusSchema>;
+
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),
     name: z.string().optional(),

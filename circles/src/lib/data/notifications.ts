@@ -360,6 +360,36 @@ export async function sendDetachCircleRequestNotification(
     }
 }
 
+export async function sendAttachCircleRequestNotification(
+    requester: UserPrivate,
+    circle: Circle,
+    targetParentCircle: Circle,
+    admins: UserPrivate[],
+    options?: { messageBody?: string; url?: string },
+): Promise<void> {
+    try {
+        if (!admins.length) {
+            return;
+        }
+
+        await sendNotifications(
+            "user_verification_request",
+            admins,
+            sanitizeObjectForJSON({
+                user: requester,
+                circle,
+                targetParentCircle,
+                messageBody:
+                    options?.messageBody ||
+                    `${requester.name || "An admin"} requested to move ${circle.name || "this circle"} under ${targetParentCircle.name || "this parent circle"}.`,
+                url: options?.url,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendAttachCircleRequestNotification:", error);
+    }
+}
+
 // fix
 export async function sendUserVerifiedNotification(user: UserPrivate): Promise<void> {
     try {

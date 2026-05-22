@@ -2,6 +2,11 @@
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import {
+    approveAttachCircleRequest,
+    createAttachCircleRequest,
+    declineAttachCircleRequest,
+} from "@/lib/data/circle-attach";
 import { approveDetachCircleRequest, createDetachCircleRequest, declineDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getUserPrivate } from "@/lib/data/user";
 import {
@@ -12,7 +17,12 @@ import {
     getVerificationAdmins,
     notifyAdminsOfApplicantVerificationReply,
 } from "@/lib/data/verification-workflow";
-import { sendDetachCircleRequestNotification, sendVerificationRequestNotification } from "@/lib/data/notifications";
+import {
+    sendAttachCircleRequestNotification,
+    sendDetachCircleRequestNotification,
+    sendVerificationRequestNotification,
+} from "@/lib/data/notifications";
+import { getMembers } from "@/lib/data/member";
 import { Circle, FileInfo, FormSubmitResponse, Media, UserPrivate } from "@/models/models"; // Added Media, FileInfo
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
@@ -35,6 +45,10 @@ const normalizeOfficialEmail = (email?: string) => {
 };
 
 async function revalidateCircleDetachPaths(circleId: string, parentCircleId?: string | null) {
+    await revalidateCircleStructurePaths(circleId, parentCircleId ? [parentCircleId] : []);
+}
+
+async function revalidateCircleStructurePaths(circleId: string, relatedCircleIds: Array<string | null | undefined>) {
     const circle = await getCircleById(circleId);
     if (!circle) {
         revalidatePath("/circles");
@@ -45,13 +59,16 @@ async function revalidateCircleDetachPaths(circleId: string, parentCircleId?: st
     revalidatePath(circlePath);
     revalidatePath(`${circlePath}settings/about`);
 
-    if (parentCircleId) {
-        const parentCircle = await getCircleById(parentCircleId);
-        if (parentCircle) {
-            const parentCirclePath = await getCirclePath(parentCircle);
-            revalidatePath(parentCirclePath);
-            revalidatePath(`${parentCirclePath}communities`);
+    for (const relatedCircleId of Array.from(new Set(relatedCircleIds.filter(Boolean)))) {
+        const relatedCircle = await getCircleById(relatedCircleId || null);
+        if (!relatedCircle) {
+            continue;
         }
+
+        const relatedCirclePath = await getCirclePath(relatedCircle);
+        revalidatePath(relatedCirclePath);
+        revalidatePath(`${relatedCirclePath}communities`);
+        revalidatePath(`${relatedCirclePath}settings/about`);
     }
 
     revalidatePath("/circles");
@@ -256,6 +273,109 @@ export async function approveDetachCircleRequestAction(requestId: string): Promi
         return {
             success: false,
             message: error instanceof Error ? error.message : "Could not approve the detach request.",
+        };
+    }
+}
+
+export async function createAttachCircleRequestAction(
+    circleId: string,
+    targetParentCircleHandle: string,
+): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to move this circle" };
+    }
+
+    try {
+        const result = await createAttachCircleRequest({
+            circleId,
+            targetParentCircleHandle,
+            requestedByDid: userDid,
+        });
+        await revalidateCircleStructurePaths(result.circle._id?.toString() ?? circleId, [
+            result.fromParentCircle?._id?.toString?.(),
+            result.toParentCircle._id?.toString?.(),
+        ]);
+
+        const requester = await getUserPrivate(userDid);
+        const targetAdminDids = await getMembers(result.toParentCircle._id?.toString?.() ?? "")
+            .then((members) => members.filter((member) => member.userGroups?.includes("admins")))
+            .then((members) => members.map((member) => member.userDid));
+        const targetAdmins = (
+            await Promise.all(targetAdminDids.map((did) => getUserPrivate(did)))
+        ).filter((admin): admin is UserPrivate => Boolean(admin?.did));
+
+        if (requester && targetAdmins.length > 0) {
+            const targetCirclePath = await getCirclePath(result.toParentCircle);
+            await sendAttachCircleRequestNotification(requester, result.circle, result.toParentCircle, targetAdmins, {
+                messageBody: `${requester.name || "An admin"} requested to move ${result.circle.name || "this circle"} under ${result.toParentCircle.name || "this parent circle"}.`,
+                url: `${targetCirclePath}settings/about`,
+            });
+        }
+
+        return {
+            success: true,
+            message: "Move request created and sent to the target parent circle admins.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not start the move request.",
+        };
+    }
+}
+
+export async function approveAttachCircleRequestAction(requestId: string): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to review this move request" };
+    }
+
+    try {
+        const result = await approveAttachCircleRequest({ requestId, adminDid: userDid });
+        await revalidateCircleStructurePaths(result.circle._id?.toString() ?? result.request.circleId, [
+            result.fromParentCircle?._id?.toString?.(),
+            result.toParentCircle._id?.toString?.(),
+        ]);
+
+        return {
+            success: true,
+            message: "Move request approved. The circle has been attached to the new parent.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not approve the move request.",
+        };
+    }
+}
+
+export async function declineAttachCircleRequestAction(requestId: string): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to review this move request" };
+    }
+
+    try {
+        const result = await declineAttachCircleRequest({ requestId, adminDid: userDid });
+        await revalidateCircleStructurePaths(result.circle._id?.toString() ?? result.request.circleId, [
+            result.fromParentCircle?._id?.toString?.(),
+            result.toParentCircle._id?.toString?.(),
+        ]);
+
+        return {
+            success: true,
+            message: "Move request declined.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not decline the move request.",
         };
     }
 }
