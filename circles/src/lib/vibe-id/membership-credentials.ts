@@ -304,6 +304,11 @@ function buildMembershipPresentation(circle: Circle, keyMaterial: IssuerKeyMater
         groupLogoUrl,
         coverImageUrl,
         badgeImageUrl: groupLogoUrl,
+        backgroundStartColor: "#475A70",
+        backgroundEndColor: "#8393A7",
+        accentColor: "#D6E0EE",
+        badgeBackgroundStartColor: "#EEF3FA",
+        badgeBackgroundEndColor: "#D7E2EF",
     };
 }
 
