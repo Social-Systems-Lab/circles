@@ -301,7 +301,7 @@ function buildMembershipPresentation(circle: Circle, keyMaterial: IssuerKeyMater
         issuerName: keyMaterial.issuerName,
         issuerTagline: keyMaterial.issuerTagline || null,
         issuerLogoUrl: absoluteUrl(keyMaterial.issuerLogoUrl),
-        issuerLogoBackgroundColor: "#DCE7F3",
+        issuerLogoBackgroundColor: "#fccb60",
         issuerLogoShape: "circle",
         groupLogoUrl,
         coverImageUrl,
