@@ -243,7 +243,7 @@ export default function HomeContent({
                                         Child circle of{" "}
                                         <Link
                                             href={`/circles/${parentCircle.handle}`}
-                                            className="text-blue-500 hover:underline"
+                                            className="textLink hover:underline"
                                         >
                                             {parentCircle.name}
                                         </Link>
