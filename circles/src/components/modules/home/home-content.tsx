@@ -55,6 +55,10 @@ export default function HomeContent({
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
     const isOwnUserProfile = isUser && (user?.did === circle.did || viewerDid === circle.did);
+    const showSettingsButton = authorizedToEdit && circle.handle && (!isUser || isOwnUserProfile);
+    const settingsButtonTitle = isUser ? "Profile settings" : "Circle settings";
+    const settingsButtonClassName =
+        "h-9 w-9 shrink-0 rounded-full border border-emerald-950 bg-emerald-950 text-white shadow-sm transition-colors hover:bg-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-950 focus-visible:ring-offset-2";
 
     const isMember = useMemo(() => {
         if (!user) return false;
@@ -136,17 +140,17 @@ export default function HomeContent({
                                 {!isUser && <InviteButton circle={circle} />}
                                 {user && <FollowButton circle={circle} />}
                                 {user && <BookmarkButton circle={circle} iconOnly />}
-                                {!isUser && authorizedToEdit && circle.handle && (
+                                {showSettingsButton && (
                                     <Button
                                         asChild
                                         variant="outline"
                                         size="icon"
-                                        className="h-9 w-9 shrink-0 rounded-full border-stone-300/90 bg-stone-100/90 text-stone-700 shadow-sm transition-colors hover:bg-stone-200 hover:text-stone-900"
+                                        className={settingsButtonClassName}
                                     >
                                         <Link
                                             href={`/circles/${circle.handle}/settings/about`}
                                             aria-label={`Open ${circle.name ?? "circle"} settings`}
-                                            title="Circle settings"
+                                            title={settingsButtonTitle}
                                         >
                                             <Settings className="h-5 w-5" />
                                         </Link>
@@ -199,17 +203,17 @@ export default function HomeContent({
                                     {!isUser && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
-                                    {!isUser && authorizedToEdit && circle.handle && (
+                                    {showSettingsButton && (
                                         <Button
                                             asChild
                                             variant="outline"
                                             size="icon"
-                                            className="h-9 w-9 shrink-0 rounded-full border-stone-300/90 bg-stone-100/90 text-stone-700 shadow-sm transition-colors hover:bg-stone-200 hover:text-stone-900"
+                                            className={settingsButtonClassName}
                                         >
                                             <Link
                                                 href={`/circles/${circle.handle}/settings/about`}
                                                 aria-label={`Open ${circle.name ?? "circle"} settings`}
-                                                title="Circle settings"
+                                                title={settingsButtonTitle}
                                             >
                                                 <Settings className="h-5 w-5" />
                                             </Link>
