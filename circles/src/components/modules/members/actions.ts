@@ -2,10 +2,17 @@
 "use server";
 
 import { getAuthenticatedUserDid, getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/auth";
+import {
+    approveAdminRoleRemovalRequest,
+    createAdminRoleRemovalRequest,
+    declineAdminRoleRemovalRequest,
+} from "@/lib/data/admin-role-removal";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
 import { DETACH_ADMIN_CHANGE_BLOCK_MESSAGE, getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { countAdmins, getMember, removeMember, updateMemberUserGroups } from "@/lib/data/member";
+import { sendNotifications } from "@/lib/data/notifications";
+import { getUserPrivate } from "@/lib/data/user";
 import { safeModifyMemberUserGroups } from "@/lib/utils";
 import { Circle, MemberDisplay } from "@/models/models";
 import { revalidatePath } from "next/cache";
@@ -13,7 +20,32 @@ import { revalidatePath } from "next/cache";
 type RemoveMemberResponse = {
     success: boolean;
     message?: string;
+    adminRoleRemovalRequestState?: "created" | "pending";
 };
+
+const ADMIN_ROLE_REMOVAL_REQUEST_CREATED_MESSAGE =
+    "Admin removal request created. The admin must approve before their admin role is removed.";
+const ADMIN_ROLE_REMOVAL_REQUEST_ALREADY_PENDING_MESSAGE =
+    "An admin removal request is already pending for this admin.";
+
+async function notifyTargetAdminOfRemovalRequest(circle: Circle, targetUserDid: string, requestedByDid: string): Promise<void> {
+    try {
+        const [requester, targetAdmin] = await Promise.all([
+            getUserPrivate(requestedByDid),
+            getUserPrivate(targetUserDid),
+        ]);
+        const circlePath = await getCirclePath(circle);
+
+        await sendNotifications("user_verification_request", [targetAdmin], {
+            user: requester,
+            circle,
+            messageBody: `${requester.name || "An admin"} requested to remove your admin role in ${circle.name || "this circle"}.`,
+            url: `${circlePath}followers`,
+        });
+    } catch (error) {
+        console.error("Failed to send admin-role removal notification:", error);
+    }
+}
 
 export const removeMemberAction = async (member: MemberDisplay, circle: Circle): Promise<RemoveMemberResponse> => {
     const userDid = await getAuthenticatedUserDid();
@@ -27,7 +59,7 @@ export const removeMemberAction = async (member: MemberDisplay, circle: Circle):
         let canRemoveSameLevel = await isAuthorized(
             userDid,
             circle._id ?? "",
-            features.general.edit_same_level_user_groups,
+            features.general.remove_same_level_members,
         );
 
         if (!authorized && !canRemoveSameLevel) {
@@ -49,6 +81,32 @@ export const removeMemberAction = async (member: MemberDisplay, circle: Circle):
             if (adminCount <= 1) {
                 return { success: false, message: "Cannot remove the last admin." };
             }
+
+            if (member.userDid !== userDid) {
+                const { created } = await createAdminRoleRemovalRequest({
+                    circleId: circle._id ?? "",
+                    targetUserDid: member.userDid,
+                    requestedByDid: userDid,
+                });
+
+                let circlePath = await getCirclePath(circle);
+                revalidatePath(`${circlePath}followers`);
+
+                if (created) {
+                    await notifyTargetAdminOfRemovalRequest(circle, member.userDid, userDid);
+                    return {
+                        success: true,
+                        message: ADMIN_ROLE_REMOVAL_REQUEST_CREATED_MESSAGE,
+                        adminRoleRemovalRequestState: "created",
+                    };
+                }
+
+                return {
+                    success: true,
+                    message: ADMIN_ROLE_REMOVAL_REQUEST_ALREADY_PENDING_MESSAGE,
+                    adminRoleRemovalRequestState: "pending",
+                };
+            }
         }
 
         // remove member from circle
@@ -67,6 +125,7 @@ export const removeMemberAction = async (member: MemberDisplay, circle: Circle):
 type UpdateUserGroupsResponse = {
     success: boolean;
     message?: string;
+    adminRoleRemovalRequestState?: "created" | "pending";
 };
 
 export const updateUserGroupsAction = async (
@@ -120,6 +179,32 @@ export const updateUserGroupsAction = async (
                 if (adminCount <= 1) {
                     return { success: false, message: "Cannot remove the last admin." };
                 }
+
+                if (member.userDid !== userDid) {
+                    const { created } = await createAdminRoleRemovalRequest({
+                        circleId: circle._id ?? "",
+                        targetUserDid: member.userDid,
+                        requestedByDid: userDid,
+                    });
+
+                    let circlePath = await getCirclePath(circle);
+                    revalidatePath(`${circlePath}followers`);
+
+                    if (created) {
+                        await notifyTargetAdminOfRemovalRequest(circle, member.userDid, userDid);
+                        return {
+                            success: true,
+                            message: ADMIN_ROLE_REMOVAL_REQUEST_CREATED_MESSAGE,
+                            adminRoleRemovalRequestState: "created",
+                        };
+                    }
+
+                    return {
+                        success: true,
+                        message: ADMIN_ROLE_REMOVAL_REQUEST_ALREADY_PENDING_MESSAGE,
+                        adminRoleRemovalRequestState: "pending",
+                    };
+                }
             }
         }
 
@@ -145,5 +230,58 @@ export const updateUserGroupsAction = async (
         return { success: true };
     } catch (error) {
         return { success: false, message: "Failed to update user groups. " + error?.toString() };
+    }
+};
+
+type AdminRoleRemovalRequestResponse = {
+    success: boolean;
+    message?: string;
+};
+
+export const approveAdminRoleRemovalRequestAction = async (
+    requestId: string,
+    circle: Circle,
+): Promise<AdminRoleRemovalRequestResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to approve this request" };
+    }
+
+    try {
+        await approveAdminRoleRemovalRequest({ requestId, targetUserDid: userDid });
+
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(`${circlePath}followers`);
+
+        return { success: true, message: "Your admin role was removed for this circle." };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not approve the admin removal request.",
+        };
+    }
+};
+
+export const declineAdminRoleRemovalRequestAction = async (
+    requestId: string,
+    circle: Circle,
+): Promise<AdminRoleRemovalRequestResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to decline this request" };
+    }
+
+    try {
+        await declineAdminRoleRemovalRequest({ requestId, targetUserDid: userDid });
+
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(`${circlePath}followers`);
+
+        return { success: true, message: "Admin removal request declined." };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not decline the admin removal request.",
+        };
     }
 };

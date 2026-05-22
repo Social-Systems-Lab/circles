@@ -674,6 +674,22 @@ export const detachCircleRequestSchema = z.object({
 export type DetachCircleRequest = z.infer<typeof detachCircleRequestSchema>;
 export type DetachCircleRequestStatus = z.infer<typeof detachCircleRequestStatusSchema>;
 
+export const adminRoleRemovalRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
+
+export const adminRoleRemovalRequestSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    targetUserDid: didSchema,
+    requestedByDid: didSchema,
+    status: adminRoleRemovalRequestStatusSchema.default("pending"),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    decidedAt: z.date().optional(),
+});
+
+export type AdminRoleRemovalRequest = z.infer<typeof adminRoleRemovalRequestSchema>;
+export type AdminRoleRemovalRequestStatus = z.infer<typeof adminRoleRemovalRequestStatusSchema>;
+
 export const attachCircleRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
 
 export const attachCircleRequestSchema = z.object({

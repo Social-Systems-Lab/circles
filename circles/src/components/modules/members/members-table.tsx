@@ -58,6 +58,11 @@ interface MemberTableProps {
     circle: Circle;
 }
 
+type AdminRoleRemovalAcknowledgement = {
+    title: string;
+    body: string;
+};
+
 export const multiSelectFilter: FilterFn<MemberDisplay> = (
     row: Row<MemberDisplay>,
     columnId: string,
@@ -101,6 +106,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
     const [user, setUser] = useAtom(userAtom);
     const [removeMemberDialogOpen, setRemoveMemberDialogOpen] = useState<boolean>(false);
     const [editUserGroupsDialogOpen, setEditUserGroupsDialogOpen] = useState<boolean>(false);
+    const [adminRoleRemovalDialog, setAdminRoleRemovalDialog] = useState<AdminRoleRemovalAcknowledgement | null>(null);
     const [selectedMember, setSelectedMember] = useState<MemberDisplay | null>(null);
     const [isPending, startTransition] = useTransition();
     const [selectedUserGroups, setSelectedUserGroups] = useState<string[]>([]);
@@ -217,11 +223,23 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
             // call server action to remove user from circle
             let result = await removeMemberAction(selectedMember, circle);
             if (result.success) {
-                toast({
-                    icon: "success",
-                    title: "Member Removed",
-                    description: `${selectedMember.name} has been removed from the circle`,
-                });
+                if (result.adminRoleRemovalRequestState === "created") {
+                    setAdminRoleRemovalDialog({
+                        title: "Admin removal request created",
+                        body: `${selectedMember.name} will keep their admin access until they approve this request.\nThey have been notified and will see the request on this circle’s members page.`,
+                    });
+                } else if (result.adminRoleRemovalRequestState === "pending") {
+                    setAdminRoleRemovalDialog({
+                        title: "Admin removal request already pending",
+                        body: `${selectedMember.name} already has a pending request to approve before their admin role can be removed.`,
+                    });
+                } else {
+                    toast({
+                        icon: "success",
+                        title: result.message ? "Updated" : "Member Removed",
+                        description: result.message || `${selectedMember.name} has been removed from the circle`,
+                    });
+                }
             } else {
                 toast({
                     icon: "error",
@@ -247,11 +265,23 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                 data.memberUserGroups[selectedMember.userDid],
             );
             if (result.success) {
-                toast({
-                    icon: "success",
-                    title: "User Groups Updated",
-                    description: `${selectedMember.name}'s user groups have been updated`,
-                });
+                if (result.adminRoleRemovalRequestState === "created") {
+                    setAdminRoleRemovalDialog({
+                        title: "Admin removal request created",
+                        body: `${selectedMember.name} will keep their admin access until they approve this request.\nThey have been notified and will see the request on this circle’s members page.`,
+                    });
+                } else if (result.adminRoleRemovalRequestState === "pending") {
+                    setAdminRoleRemovalDialog({
+                        title: "Admin removal request already pending",
+                        body: `${selectedMember.name} already has a pending request to approve before their admin role can be removed.`,
+                    });
+                } else {
+                    toast({
+                        icon: "success",
+                        title: result.message ? "Updated" : "User Groups Updated",
+                        description: result.message || `${selectedMember.name}'s user groups have been updated`,
+                    });
+                }
             } else {
                 toast({
                     icon: "error",
@@ -490,6 +520,19 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                                 </DialogFooter>
                             </form>
                         </FormProvider>
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={adminRoleRemovalDialog !== null} onOpenChange={(open) => !open && setAdminRoleRemovalDialog(null)}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{adminRoleRemovalDialog?.title}</DialogTitle>
+                            <DialogDescription className="whitespace-pre-line">
+                                {adminRoleRemovalDialog?.body}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button onClick={() => setAdminRoleRemovalDialog(null)}>OK</Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </div>
