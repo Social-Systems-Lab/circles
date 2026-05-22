@@ -99,7 +99,7 @@ function getIssuerKeyMaterial(): IssuerKeyMaterial | null {
         issuer: derivedIssuer,
         issuerName: process.env.VIBE_ID_CREDENTIAL_ISSUER_NAME || "Kamooni",
         issuerTagline: process.env.VIBE_ID_CREDENTIAL_ISSUER_TAGLINE || "Building a thriving future together",
-        issuerLogoUrl: process.env.VIBE_ID_CREDENTIAL_ISSUER_LOGO_URL || "/images/kamooni_logo.png",
+        issuerLogoUrl: process.env.VIBE_ID_CREDENTIAL_ISSUER_LOGO_URL || "/images/logo-white.png",
         privateKey,
     };
     return issuerKeyMaterial;
@@ -301,6 +301,7 @@ function buildMembershipPresentation(circle: Circle, keyMaterial: IssuerKeyMater
         issuerName: keyMaterial.issuerName,
         issuerTagline: keyMaterial.issuerTagline || null,
         issuerLogoUrl: absoluteUrl(keyMaterial.issuerLogoUrl),
+        issuerLogoBackgroundColor: "#173924",
         groupLogoUrl,
         coverImageUrl,
         badgeImageUrl: groupLogoUrl,
