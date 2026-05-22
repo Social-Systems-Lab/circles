@@ -5,8 +5,6 @@ import type { Circle, Member } from "@/models/models";
 const CREDENTIAL_KIND = "credential.v1";
 const CREDENTIAL_ALGORITHM = "P-256";
 const CREDENTIAL_TYPE = "CircleMembershipCredential";
-const DEFAULT_ISSUER_DID = "did:web:kamooni.org";
-const DEFAULT_ISSUER_KEY_ID = "kamooni-platform-v1";
 const DEFAULT_EXPIRY_DAYS = 365;
 
 type JsonRecord = Record<string, unknown>;
@@ -15,7 +13,7 @@ export type VibeUnsignedCredential = {
     id: string;
     type: string;
     issuer: string;
-    issuerKeyId: string;
+    issuerKeyId?: string | null;
     subjectDid: string;
     claims: JsonRecord;
     issuedAt: string;
@@ -62,7 +60,9 @@ export type CircleMembershipCredentialVerificationResult =
 
 type IssuerKeyMaterial = {
     issuer: string;
-    issuerKeyId: string;
+    issuerName: string;
+    issuerTagline?: string;
+    issuerLogoUrl?: string;
     privateKey: KeyObject;
 };
 
@@ -88,10 +88,19 @@ function getIssuerKeyMaterial(): IssuerKeyMaterial | null {
     }
 
     const privateJwk = parseJsonWebKey(rawPrivateJwk);
+    const privateKey = crypto.createPrivateKey({ key: privateJwk, format: "jwk" });
+    const derivedIssuer = deriveVibeP256Did(privateKey);
+    const configuredIssuer = process.env.VIBE_ID_CREDENTIAL_ISSUER_DID?.trim();
+    if (configuredIssuer && configuredIssuer !== derivedIssuer) {
+        throw new Error("VIBE_ID_CREDENTIAL_ISSUER_DID does not match VIBE_ID_CREDENTIAL_ISSUER_PRIVATE_JWK.");
+    }
+
     issuerKeyMaterial = {
-        issuer: process.env.VIBE_ID_CREDENTIAL_ISSUER_DID || DEFAULT_ISSUER_DID,
-        issuerKeyId: process.env.VIBE_ID_CREDENTIAL_ISSUER_KID || DEFAULT_ISSUER_KEY_ID,
-        privateKey: crypto.createPrivateKey({ key: privateJwk, format: "jwk" }),
+        issuer: derivedIssuer,
+        issuerName: process.env.VIBE_ID_CREDENTIAL_ISSUER_NAME || "Kamooni",
+        issuerTagline: process.env.VIBE_ID_CREDENTIAL_ISSUER_TAGLINE || "Building a thriving future together",
+        issuerLogoUrl: process.env.VIBE_ID_CREDENTIAL_ISSUER_LOGO_URL || "/images/kamooni_logo.png",
+        privateKey,
     };
     return issuerKeyMaterial;
 }
@@ -109,7 +118,6 @@ export function getMembershipCredentialIssuerMetadata() {
     const publicJwk = crypto.createPublicKey(keyMaterial.privateKey).export({ format: "jwk" });
     return {
         issuer: keyMaterial.issuer,
-        issuerKeyId: keyMaterial.issuerKeyId,
         alg: CREDENTIAL_ALGORITHM,
         publicJwk,
     };
@@ -224,7 +232,9 @@ export function verifyCircleMembershipCredentialEnvelope(input: unknown): Circle
         };
     }
 
-    if (credential.issuer !== keyMaterial.issuer || credential.issuerKeyId !== keyMaterial.issuerKeyId) {
+    if (
+        credential.issuer !== keyMaterial.issuer
+    ) {
         return {
             ok: false,
             error: "issuer_mismatch",
@@ -279,6 +289,36 @@ function createMembershipCredentialId(circleId: string, subjectDid: string): str
     return `urn:vibeid:credential:circle-membership:${digest}`;
 }
 
+function buildMembershipPresentation(circle: Circle, keyMaterial: IssuerKeyMaterial): JsonRecord {
+    const groupName = circle.name || "Circle";
+    const groupLogoUrl = absoluteUrl(circle.picture?.url);
+    const coverImageUrl = absoluteUrl(circle.images?.find((image) => image.fileInfo?.url)?.fileInfo?.url);
+
+    return {
+        title: "Member",
+        groupName,
+        groupHandle: circle.handle || null,
+        issuerName: keyMaterial.issuerName,
+        issuerTagline: keyMaterial.issuerTagline || null,
+        issuerLogoUrl: absoluteUrl(keyMaterial.issuerLogoUrl),
+        groupLogoUrl,
+        coverImageUrl,
+        badgeImageUrl: groupLogoUrl,
+    };
+}
+
+function absoluteUrl(value?: string | null): string | null {
+    if (!value) {
+        return null;
+    }
+
+    try {
+        return new URL(value, getSiteOrigin()).toString();
+    } catch {
+        return null;
+    }
+}
+
 function createSignedCircleMembershipCredentialEnvelope(input: {
     circle: Circle;
     member: Member;
@@ -300,7 +340,6 @@ function createSignedCircleMembershipCredentialEnvelope(input: {
         id: createMembershipCredentialId(circleId, input.subjectVibeDid),
         type: CREDENTIAL_TYPE,
         issuer: keyMaterial.issuer,
-        issuerKeyId: keyMaterial.issuerKeyId,
         subjectDid: input.subjectVibeDid,
         claims: {
             circleId,
@@ -309,6 +348,7 @@ function createSignedCircleMembershipCredentialEnvelope(input: {
             roles: input.member.userGroups ?? ["members"],
             joinedAt: input.member.joinedAt ? input.member.joinedAt.toISOString() : null,
             membership: "member",
+            presentation: buildMembershipPresentation(input.circle, keyMaterial),
         },
         issuedAt: now.toISOString(),
         expiresAt: expiresAt.toISOString(),
@@ -373,7 +413,6 @@ function parseCredentialEnvelope(value: unknown): VibeCredentialEnvelope | null 
         typeof credential.id !== "string" ||
         typeof credential.type !== "string" ||
         typeof credential.issuer !== "string" ||
-        typeof credential.issuerKeyId !== "string" ||
         typeof credential.subjectDid !== "string" ||
         typeof credential.issuedAt !== "string" ||
         typeof credential.alg !== "string" ||
@@ -392,7 +431,7 @@ function parseCredentialEnvelope(value: unknown): VibeCredentialEnvelope | null 
             id: credential.id,
             type: credential.type,
             issuer: credential.issuer,
-            issuerKeyId: credential.issuerKeyId,
+            issuerKeyId: typeof credential.issuerKeyId === "string" ? credential.issuerKeyId : undefined,
             subjectDid: credential.subjectDid,
             claims: credential.claims as JsonRecord,
             issuedAt: credential.issuedAt,
@@ -424,6 +463,22 @@ function parseJsonWebKey(value: string): JsonWebKey {
     }
 
     return JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8")) as JsonWebKey;
+}
+
+function deriveVibeP256Did(privateKey: KeyObject): string {
+    const publicJwk = crypto.createPublicKey(privateKey).export({ format: "jwk" });
+    if (publicJwk.crv !== "P-256" || typeof publicJwk.x !== "string" || typeof publicJwk.y !== "string") {
+        throw new Error("VibeID credential issuer key must be a P-256 JWK.");
+    }
+
+    const x = Buffer.from(publicJwk.x, "base64url");
+    const y = Buffer.from(publicJwk.y, "base64url");
+    if (x.length !== 32 || y.length !== 32) {
+        throw new Error("VibeID credential issuer key has invalid P-256 coordinates.");
+    }
+
+    const prefix = (y[y.length - 1] & 1) === 0 ? 0x02 : 0x03;
+    return `did:vibe:p256:${Buffer.concat([Buffer.from([prefix]), x]).toString("base64url")}`;
 }
 
 function canonicalJson(value: unknown): string {
