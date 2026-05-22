@@ -332,6 +332,34 @@ export async function sendVerificationRequestNotification(
     }
 }
 
+export async function sendDetachCircleRequestNotification(
+    requester: UserPrivate,
+    circle: Circle,
+    admins: UserPrivate[],
+    options?: { messageBody?: string; url?: string },
+): Promise<void> {
+    try {
+        if (!admins.length) {
+            return;
+        }
+
+        await sendNotifications(
+            "user_verification_request",
+            admins,
+            sanitizeObjectForJSON({
+                user: requester,
+                circle,
+                messageBody:
+                    options?.messageBody ||
+                    `${requester.name || "An admin"} requested to make ${circle.name || "this circle"} an independent circle.`,
+                url: options?.url,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendDetachCircleRequestNotification:", error);
+    }
+}
+
 // fix
 export async function sendUserVerifiedNotification(user: UserPrivate): Promise<void> {
     try {

@@ -4,6 +4,7 @@
 import { getAuthenticatedUserDid, getMemberAccessLevel, hasHigherAccess, isAuthorized } from "@/lib/auth/auth";
 import { getCircleById, getCirclePath } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
+import { DETACH_ADMIN_CHANGE_BLOCK_MESSAGE, getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { countAdmins, getMember, removeMember, updateMemberUserGroups } from "@/lib/data/member";
 import { safeModifyMemberUserGroups } from "@/lib/utils";
 import { Circle, MemberDisplay } from "@/models/models";
@@ -40,6 +41,10 @@ export const removeMemberAction = async (member: MemberDisplay, circle: Circle):
         // make sure last admin isn't removed
         const isAdmin = member.userGroups?.includes("admins");
         if (isAdmin) {
+            const pendingDetachRequest = await getPendingDetachCircleRequest(circle._id ?? "");
+            if (pendingDetachRequest) {
+                return { success: false, message: DETACH_ADMIN_CHANGE_BLOCK_MESSAGE };
+            }
             const adminCount = await countAdmins(circle._id ?? "");
             if (adminCount <= 1) {
                 return { success: false, message: "Cannot remove the last admin." };
@@ -103,10 +108,18 @@ export const updateUserGroupsAction = async (
 
         // make sure last admin isn't removed
         const isAdmin = existingMember.userGroups?.includes("admins");
-        if (isAdmin && !newGroups.includes("admins")) {
-            const adminCount = await countAdmins(circle._id ?? "");
-            if (adminCount <= 1) {
-                return { success: false, message: "Cannot remove the last admin." };
+        const isAddingAdmin = !isAdmin && newGroups.includes("admins");
+        const isRemovingAdmin = isAdmin && !newGroups.includes("admins");
+        if (isAddingAdmin || isRemovingAdmin) {
+            const pendingDetachRequest = await getPendingDetachCircleRequest(circle._id ?? "");
+            if (pendingDetachRequest) {
+                return { success: false, message: DETACH_ADMIN_CHANGE_BLOCK_MESSAGE };
+            }
+            if (isRemovingAdmin) {
+                const adminCount = await countAdmins(circle._id ?? "");
+                if (adminCount <= 1) {
+                    return { success: false, message: "Cannot remove the last admin." };
+                }
             }
         }
 

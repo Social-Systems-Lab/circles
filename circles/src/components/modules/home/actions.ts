@@ -7,6 +7,7 @@ import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import { getCircleById, getCirclePath, updateCircle, getCircleByDid, getCirclesByIds } from "@/lib/data/circle";
+import { DETACH_ADMIN_CHANGE_BLOCK_MESSAGE, getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
@@ -129,6 +130,10 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
         }
         const isAdmin = member.userGroups?.includes("admins");
         if (isAdmin) {
+            const pendingDetachRequest = await getPendingDetachCircleRequest(circle._id ?? "");
+            if (pendingDetachRequest) {
+                return { success: false, message: DETACH_ADMIN_CHANGE_BLOCK_MESSAGE };
+            }
             const adminCount = await countAdmins(circle._id ?? "");
             if (adminCount <= 1) {
                 return { success: false, message: "Cannot leave as last admin." };

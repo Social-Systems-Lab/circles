@@ -1,10 +1,8 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { hasContributorPerks } from "@/lib/auth/perks";
 import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
-import { Circles } from "@/lib/data/db";
-import { countAdmins, getMember } from "@/lib/data/member";
+import { approveDetachCircleRequest, createDetachCircleRequest, declineDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getUserPrivate } from "@/lib/data/user";
 import {
     addApplicantVerificationMessage,
@@ -14,13 +12,12 @@ import {
     getVerificationAdmins,
     notifyAdminsOfApplicantVerificationReply,
 } from "@/lib/data/verification-workflow";
-import { sendVerificationRequestNotification } from "@/lib/data/notifications";
-import { Circle, FileInfo, FormSubmitResponse, Media } from "@/models/models"; // Added Media, FileInfo
+import { sendDetachCircleRequestNotification, sendVerificationRequestNotification } from "@/lib/data/notifications";
+import { Circle, FileInfo, FormSubmitResponse, Media, UserPrivate } from "@/models/models"; // Added Media, FileInfo
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
-import { ObjectId } from "mongodb";
 import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 
@@ -36,6 +33,29 @@ const normalizeOfficialEmail = (email?: string) => {
     const normalized = email?.trim().toLowerCase();
     return normalized ? normalized : undefined;
 };
+
+async function revalidateCircleDetachPaths(circleId: string, parentCircleId?: string | null) {
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        revalidatePath("/circles");
+        return;
+    }
+
+    const circlePath = await getCirclePath(circle);
+    revalidatePath(circlePath);
+    revalidatePath(`${circlePath}settings/about`);
+
+    if (parentCircleId) {
+        const parentCircle = await getCircleById(parentCircleId);
+        if (parentCircle) {
+            const parentCirclePath = await getCirclePath(parentCircle);
+            revalidatePath(parentCirclePath);
+            revalidatePath(`${parentCirclePath}communities`);
+        }
+    }
+
+    revalidatePath("/circles");
+}
 
 async function updateCirclePublishStatus(circleId: string, publishStatus: "published" | "pending_verification") {
     const userDid = await getAuthenticatedUserDid();
@@ -164,86 +184,105 @@ export async function submitCircleForVerificationAction(formData: FormData) {
     return updateCirclePublishStatus(circleId, "pending_verification");
 }
 
-export async function convertProfileChildCircleToIndependentAction(circleId: string): Promise<FormSubmitResponse> {
+export async function createDetachCircleRequestAction(circleId: string): Promise<FormSubmitResponse> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit circle settings" };
     }
 
-    const user = await getUserPrivate(userDid);
-    if (!hasContributorPerks(user)) {
-        return { success: false, message: "Only verified members can convert a circle into an independent circle" };
-    }
-
-    const circle = await getCircleById(circleId);
-    if (!circle) {
-        return { success: false, message: "Circle not found" };
-    }
-
-    if (circle.circleType === "user") {
-        return { success: false, message: "User profiles cannot be converted into independent circles" };
-    }
-
-    if (circle.circleType !== "circle") {
-        return { success: false, message: "Only standard circles can be converted in this stage" };
-    }
-
-    if (!circle.parentCircleId) {
-        return {
-            success: false,
-            message: "Only circles that currently sit under a personal/profile circle can be converted in this stage",
-        };
-    }
-
-    const parentCircle = await getCircleById(circle.parentCircleId);
-    if (!parentCircle) {
-        return { success: false, message: "Parent profile circle not found" };
-    }
-
-    if (parentCircle.circleType !== "user") {
-        return {
-            success: false,
-            message: "Only circles under a personal/profile circle can be converted in this stage",
-        };
-    }
-
     const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
     if (!authorized) {
-        return { success: false, message: "You are not authorized to convert this circle" };
+        return { success: false, message: "You are not authorized to detach this circle" };
     }
 
-    const member = await getMember(userDid, circleId);
-    if (!member?.userGroups?.includes("admins")) {
-        return { success: false, message: "Only circle admins can convert this circle" };
+    try {
+        const result = await createDetachCircleRequest({ circleId, requestedByDid: userDid });
+        await revalidateCircleDetachPaths(result.circle._id?.toString() ?? circleId, result.parentCircle?._id?.toString?.());
+
+        if (result.status === "pending" && result.request) {
+            const requester = await getUserPrivate(userDid);
+            const remainingAdminDids = result.request.requiredAdminDids.filter(
+                (did) => !result.request!.approvedByDids.includes(did),
+            );
+            const remainingAdmins = (await Promise.all(remainingAdminDids.map((did) => getUserPrivate(did)))).filter(
+                (admin): admin is UserPrivate => Boolean(admin?.did),
+            );
+
+            if (requester && remainingAdmins.length > 0) {
+                const circlePath = await getCirclePath(result.circle);
+                await sendDetachCircleRequestNotification(requester, result.circle, remainingAdmins, {
+                    messageBody: `${requester.name || "An admin"} requested to make ${result.circle.name || "this circle"} an independent circle.`,
+                    url: `${circlePath}settings/about`,
+                });
+            }
+        }
+
+        return {
+            success: true,
+            message:
+                result.status === "detached"
+                    ? "Circle detached and is now independent"
+                    : "Detach request created. The remaining circle admins must approve it.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not start the detach request.",
+        };
+    }
+}
+
+export async function approveDetachCircleRequestAction(requestId: string): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to review this detach request" };
     }
 
-    const adminCount = await countAdmins(circleId);
-    if (adminCount < 1) {
-        return { success: false, message: "This circle must have at least one admin before conversion" };
+    try {
+        const result = await approveDetachCircleRequest({ requestId, adminDid: userDid });
+        await revalidateCircleDetachPaths(
+            result.circle._id?.toString() ?? result.request.circleId,
+            result.parentCircle?._id?.toString?.() ?? result.request.parentCircleId,
+        );
+
+        return {
+            success: true,
+            message:
+                result.status === "approved"
+                    ? "Detach approved. The circle is now independent."
+                    : "Your approval was recorded.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not approve the detach request.",
+        };
+    }
+}
+
+export async function declineDetachCircleRequestAction(requestId: string): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to review this detach request" };
     }
 
-    await Circles.updateOne(
-        { _id: new ObjectId(circleId) },
-        {
-            $set: { circleLevel: "top_level" },
-            $unset: { parentCircleId: "" },
-        },
-    );
+    try {
+        const result = await declineDetachCircleRequest({ requestId, adminDid: userDid });
+        await revalidateCircleDetachPaths(
+            result.circle._id?.toString() ?? result.request.circleId,
+            result.parentCircle?._id?.toString?.() ?? result.request.parentCircleId,
+        );
 
-    const circlePath = await getCirclePath(circle);
-    const parentCirclePath = await getCirclePath(parentCircle);
-
-    revalidatePath(circlePath);
-    revalidatePath(`${circlePath}settings/about`);
-    revalidatePath(parentCirclePath);
-    revalidatePath(`${parentCirclePath}communities`);
-    revalidatePath("/circles");
-
-    return {
-        success: true,
-        message: "Circle converted to an independent circle",
-        data: { redirectTo: `${circlePath}settings/about` },
-    };
+        return {
+            success: true,
+            message: "Detach request declined.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not decline the detach request.",
+        };
+    }
 }
 
 export async function getIndependentCircleVerificationThreadAction(circleId: string) {

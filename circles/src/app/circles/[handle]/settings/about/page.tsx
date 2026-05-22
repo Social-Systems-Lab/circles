@@ -3,11 +3,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle, getCircleById, getCirclePublishStatus } from "@/lib/data/circle";
-import { getUserPrivate } from "@/lib/data/user";
-import { hasContributorPerks } from "@/lib/auth/perks";
+import { getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
+import { getMember, getMembers } from "@/lib/data/member";
 import { publishCircleAction, submitCircleForVerificationAction } from "./actions";
 import { CircleVerificationThreadCard } from "./circle-verification-thread-card";
-import { ConvertProfileChildCircleCard } from "./convert-profile-child-circle-card";
+import { CircleStructureCard } from "./circle-structure-card";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
 
@@ -26,18 +26,19 @@ export default async function AboutSettingsPage(props: PageProps) {
     }
 
     const userDid = await getAuthenticatedUserDid();
-    const user = userDid ? await getUserPrivate(userDid) : undefined;
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
+    const member = userDid && circle._id ? await getMember(userDid, String(circle._id)) : null;
+    const adminMembers =
+        circle._id && circle.circleType !== "user"
+            ? (await getMembers(String(circle._id))).filter((member) => member.userGroups?.includes("admins"))
+            : [];
+    const pendingDetachRequest = circle._id ? await getPendingDetachCircleRequest(String(circle._id)) : null;
 
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";
     const isDraft = publishStatus === "draft";
-    const isProfileCircle = circle.circleLevel === "profile_child";
-    const canConvertToIndependent =
-        hasContributorPerks(user) &&
-        circle.circleType === "circle" &&
-        Boolean(circle.parentCircleId) &&
-        parentCircle?.circleType === "user";
+    const resolvedCircleLevel = circle.circleLevel ?? (circle.parentCircleId ? "profile_child" : "top_level");
+    const isProfileCircle = resolvedCircleLevel === "profile_child";
     const verificationReadiness = getVerificationReadiness(circle);
     const statusCopy =
         publishStatus === "draft"
@@ -104,8 +105,30 @@ export default async function AboutSettingsPage(props: PageProps) {
             {showWorkflowCard && !isProfileCircle && publishStatus === "pending_verification" ? (
                 <CircleVerificationThreadCard circleId={String(circle._id)} />
             ) : null}
-            {canConvertToIndependent && circle._id ? (
-                <ConvertProfileChildCircleCard circleId={String(circle._id)} parentCircleName={parentCircle.name || "this profile"} />
+            {showWorkflowCard && circle._id ? (
+                <CircleStructureCard
+                    circleId={String(circle._id)}
+                    adminCount={adminMembers.length}
+                    isAdmin={member?.userGroups?.includes("admins") === true}
+                    isIndependent={resolvedCircleLevel !== "profile_child"}
+                    parentCircleName={parentCircle?.name || "this parent circle"}
+                    pendingRequest={
+                        pendingDetachRequest
+                            ? {
+                                  requestId: pendingDetachRequest._id?.toString?.() ?? "",
+                                  approvedByDids: pendingDetachRequest.approvedByDids,
+                                  requiredAdmins: pendingDetachRequest.requiredAdminDids.map((did) => {
+                                      const admin = adminMembers.find((member) => member.userDid === did);
+                                      return {
+                                          did,
+                                          name: admin?.name || admin?.handle || did.slice(0, 12),
+                                      };
+                                  }),
+                              }
+                            : null
+                    }
+                    viewerDid={userDid || null}
+                />
             ) : null}
             <AboutSettingsForm circle={circle} />
         </div>
