@@ -423,6 +423,38 @@ export const getTaskById = async (
         const tasks = (await Tasks.aggregate([
             // 1) Match the specific Task by _id
             { $match: { _id: new ObjectId(taskId) } },
+            {
+                $addFields: {
+                    matchedShiftParticipant: {
+                        $first: {
+                            $filter: {
+                                input: { $ifNull: ["$participants", []] },
+                                as: "participant",
+                                cond: {
+                                    $and: [
+                                        { $eq: ["$$participant.userDid", userDid ?? null] },
+                                        { $eq: ["$$participant.attendanceStatus", "attended"] },
+                                        { $ne: ["$$participant.attendanceVerifiedAt", null] },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    contributionVerifiedAt: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedAt", "$verifiedAt"],
+                    },
+                    contributionVerifiedBy: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedBy", "$verifiedBy"],
+                    },
+                    contributionNote: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceNote", "$contributionNote"],
+                    },
+                },
+            },
 
             // 2) Lookup author details
             {
@@ -504,6 +536,33 @@ export const getTaskById = async (
                 },
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { verifierDid: "$contributionVerifiedBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$verifierDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$verifierDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "verifierDetails",
+                },
+            },
+            { $unwind: { path: "$verifierDetails", preserveNullAndEmptyArrays: true } },
 
             // --- 5) Lookup Goal Details ---
             {
@@ -545,6 +604,10 @@ export const getTaskById = async (
                     assignee: "$assigneeDetails",
                     participantProfiles: "$participantProfiles",
                     circle: "$circleDetails",
+                    verifier: "$verifierDetails",
+                    verifiedAt: "$contributionVerifiedAt",
+                    verifiedBy: "$contributionVerifiedBy",
+                    contributionNote: "$contributionNote",
                     goal: "$goalDetails", // Add the looked-up goal data
                 },
             },
@@ -697,6 +760,33 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
             {
+                $lookup: {
+                    from: "circles",
+                    let: { verifierDid: "$contributionVerifiedBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$verifierDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$verifierDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "verifierDetails",
+                },
+            },
+            { $unwind: { path: "$verifierDetails", preserveNullAndEmptyArrays: true } },
+            {
                 $project: {
                     ...SAFE_TASK_PROJECTION,
                     _id: { $toString: "$_id" },
@@ -704,6 +794,7 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                     assignee: "$assigneeDetails",
                     participantProfiles: "$participantProfiles",
                     circle: "$circleDetails",
+                    verifier: "$verifierDetails",
                     verifiedAt: "$contributionVerifiedAt",
                     verifiedBy: "$contributionVerifiedBy",
                     contributionNote: "$contributionNote",

@@ -237,6 +237,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const workflowStatus = isShiftTask ? null : getWorkflowStatusInfo(task);
     const currentShiftParticipant = shiftParticipants.find((participant) => participant.userDid === currentUserDid);
     const isShiftParticipant = Boolean(currentShiftParticipant);
+    const verifierLabel = task.verifier?.name || task.verifier?.handle;
     const canJoinShift =
         isShiftTask &&
         !isShiftParticipant &&
@@ -280,6 +281,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const currentViewerAttendanceReviewer = currentShiftParticipant?.attendanceVerifiedBy
         ? reviewerProfileByDid.get(currentShiftParticipant.attendanceVerifiedBy)
         : undefined;
+    const contributionVerifierProfile = task.verifier || currentViewerAttendanceReviewer;
+    const contributionVerifierName = verifierLabel || currentViewerAttendanceReviewer?.name;
+    const contributionVerifierPicture = task.verifier?.picture?.url || currentViewerAttendanceReviewer?.picture?.url;
     const isNonAdminCompletedShiftPreview = isPreview && isCompletedShift && !permissions.canModerate;
     const memberNameByDid = new Map(
         members
@@ -478,29 +482,37 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const getClaimantLabel = (claim: TaskClaim) => memberNameByDid.get(claim.claimantDid) || claim.claimantDid;
     const getClaimantMember = (claim: TaskClaim) => memberByDid.get(claim.claimantDid);
 
-    const openClaimantPreview = (claim: TaskClaim) => {
-        const claimant = getClaimantMember(claim);
-        if (!claimant) {
+    const openUserPreview = (profile?: Circle) => {
+        if (!profile) {
             return;
         }
 
-        if (typeof claimant.handle === "string" && claimant.handle.length > 0 && window.innerWidth < 768) {
-            router.push(`/circles/${claimant.handle}`);
+        if (typeof profile.handle === "string" && profile.handle.length > 0 && window.innerWidth < 768) {
+            router.push(`/circles/${profile.handle}`);
             return;
         }
 
         setContentPreview((currentPreview) => {
             const isCurrentUserPreview =
                 currentPreview?.type === "user" &&
-                currentPreview.content._id === claimant._id;
+                currentPreview.content._id === profile._id;
 
             return isCurrentUserPreview
                 ? undefined
                 : {
                       type: "user",
-                      content: claimant as Circle,
+                      content: profile,
                   };
         });
+    };
+
+    const openClaimantPreview = (claim: TaskClaim) => {
+        const claimant = getClaimantMember(claim);
+        if (!claimant) {
+            return;
+        }
+
+        openUserPreview(claimant as Circle);
     };
 
     const handleReviewClaim = (claimId: string, decision: "approved" | "declined") => {
@@ -1099,12 +1111,33 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             </div>
                         )}
                     </div>
+                    {task.verifiedAt && contributionVerifierName && (
+                        <button
+                            type="button"
+                            onClick={() => openUserPreview(contributionVerifierProfile)}
+                            className="flex w-fit max-w-full items-center gap-2 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                            <UserPicture
+                                name={contributionVerifierName}
+                                picture={contributionVerifierPicture}
+                                size="18px"
+                            />
+                            <span className="truncate">Verified by {contributionVerifierName}</span>
+                        </button>
+                    )}
                     {workflowStatus && (
                         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                             <div>{workflowStatus.description}</div>
                             {task.reviewRequestedChangesNote && (
                                 <div className="mt-1 text-slate-600">Note: {task.reviewRequestedChangesNote}</div>
                             )}
+                        </div>
+                    )}
+                    {isShiftTask && task.verifiedAt && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                            <div>
+                                Verified {formatDistanceToNow(new Date(task.verifiedAt), { addSuffix: true })}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -1219,13 +1252,13 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                             <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-4">
                                 <div className="flex items-start gap-3">
                                     <UserPicture
-                                        name={currentViewerAttendanceReviewer?.name || "Admin"}
-                                        picture={currentViewerAttendanceReviewer?.picture?.url}
+                                        name={contributionVerifierName || "Admin"}
+                                        picture={contributionVerifierPicture}
                                         size="36px"
                                     />
                                     <div className="min-w-0">
                                         <div className="text-sm font-medium text-emerald-900">
-                                            Attendance verified by {currentViewerAttendanceReviewer?.name || "an admin"}
+                                            Attendance verified by {contributionVerifierName || "an admin"}
                                         </div>
                                         <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-900">
                                             {currentViewerAttendanceReview}
