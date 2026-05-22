@@ -1241,8 +1241,9 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
             return false;
         }
 
+        const now = new Date();
         const updateOp: any = {
-            $set: { updatedAt: new Date() },
+            $set: { updatedAt: now },
             $unset: {
                 acceptedAt: "",
                 acceptedBy: "",
@@ -1260,22 +1261,31 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
         if (assigneeDid && assigneeDid !== "unassigned") {
             // Check for explicit "unassigned" value from select
             updateOp.$set.assignedTo = assigneeDid;
-            updateOp.$set["claims.$[pending].status"] = "closed";
-            updateOp.$set["claims.$[pending].reviewedAt"] = new Date();
         } else {
             // Unset the assignedTo field if assigneeDid is null, undefined, or "unassigned"
             updateOp.$unset.assignedTo = "";
         }
 
-        const result = await Tasks.updateOne(
-            { _id: new ObjectId(taskId) },
-            updateOp,
-            assigneeDid && assigneeDid !== "unassigned"
-                ? {
-                      arrayFilters: [{ "pending.status": "pending" }],
-                  }
-                : undefined,
-        ); // Changed Issues to Tasks, param issueId to taskId
+        let updateOptions:
+            | {
+                  arrayFilters: [{ "pending.status": string }];
+              }
+            | undefined;
+
+        if (assigneeDid && assigneeDid !== "unassigned") {
+            const task = await Tasks.findOne({ _id: new ObjectId(taskId) }, { projection: { claims: 1 } });
+            const hasPendingClaims = (task?.claims || []).some((claim: TaskClaim) => claim.status === "pending");
+
+            if (hasPendingClaims) {
+                updateOp.$set["claims.$[pending].status"] = "closed";
+                updateOp.$set["claims.$[pending].reviewedAt"] = now;
+                updateOptions = {
+                    arrayFilters: [{ "pending.status": "pending" }],
+                };
+            }
+        }
+
+        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp, updateOptions); // Changed Issues to Tasks, param issueId to taskId
         return result.matchedCount > 0;
     } catch (error) {
         console.error(`Error assigning task (${taskId}):`, error); // Updated error message and param
