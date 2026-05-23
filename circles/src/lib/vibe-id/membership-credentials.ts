@@ -4,10 +4,20 @@ import type { Circle, Member } from "@/models/models";
 
 const CREDENTIAL_KIND = "credential.v1";
 const CREDENTIAL_ALGORITHM = "P-256";
-const CREDENTIAL_TYPE = "CircleMembershipCredential";
+const CIRCLE_MEMBERSHIP_CREDENTIAL_TYPE = "CircleMembershipCredential";
+const PLATFORM_MEMBERSHIP_CREDENTIAL_TYPE = "membership";
 const DEFAULT_EXPIRY_DAYS = 365;
+const PLATFORM_MEMBERSHIP_TEMPLATE_ID = "kamooni.membership.default";
+const PLATFORM_MEMBERSHIP_TEMPLATE_VERSION = "1.0.0";
 
 type JsonRecord = Record<string, unknown>;
+
+export type CredentialPresentationRef = {
+    id: string;
+    version: string;
+    uri: string;
+    hash?: string | null;
+};
 
 export type VibeUnsignedCredential = {
     id: string;
@@ -19,6 +29,7 @@ export type VibeUnsignedCredential = {
     issuedAt: string;
     expiresAt?: string | null;
     statusUrl?: string | null;
+    presentationRef?: CredentialPresentationRef | null;
 };
 
 export type VibeSignedCredential = VibeUnsignedCredential & {
@@ -34,6 +45,17 @@ export type VibeCredentialEnvelope = {
 export type CircleMembershipCredentialCardData = {
     circleName: string;
     circleHandle?: string;
+    credentialId: string;
+    issuedAt: string;
+    expiresAt?: string | null;
+    subjectDid: string;
+    issuer: string;
+    deepLinkUrl: string;
+    credentialUrl: string;
+    statusUrl: string;
+};
+
+export type PlatformMembershipCredentialCardData = {
     credentialId: string;
     issuedAt: string;
     expiresAt?: string | null;
@@ -126,6 +148,108 @@ export function getMembershipCredentialIssuerMetadata() {
 export function getLinkedVibeIdDid(user: Circle | null | undefined): string | null {
     const did = user?.metadata?.authProviders?.vibeId?.did;
     return typeof did === "string" && did.trim() ? did.trim() : null;
+}
+
+export function isPlatformMember(user: Pick<Circle, "isMember" | "manualMember"> | null | undefined): boolean {
+    return user?.isMember === true || user?.manualMember === true;
+}
+
+export function getKamooniMembershipTemplate(): JsonRecord {
+    return {
+        kind: "credential-card-template.v1",
+        id: PLATFORM_MEMBERSHIP_TEMPLATE_ID,
+        version: PLATFORM_MEMBERSHIP_TEMPLATE_VERSION,
+        supportedTypes: [PLATFORM_MEMBERSHIP_CREDENTIAL_TYPE],
+        layout: "membership.heroIssuerOverlay",
+        size: {
+            aspectRatio: "1.586",
+            target: "credit-card",
+        },
+        labels: {
+            title: "Member",
+            subtitle: "Kamooni",
+            issuer: process.env.VIBE_ID_CREDENTIAL_ISSUER_NAME || "Kamooni",
+        },
+        assets: {
+            issuerLogo: {
+                uri: absoluteUrl(process.env.VIBE_ID_CREDENTIAL_ISSUER_LOGO_URL || "/images/logo-white.png"),
+            },
+            coverImage: {
+                uri: absoluteUrl("/images/member-badge.png"),
+            },
+        },
+        style: {
+            accentColor: "#fccb60",
+            coverTreatment: "leftRadialScrim",
+            issuerPlacement: "bottomOverlay",
+            badgeMask: {
+                type: "builtin",
+                name: "circle",
+            },
+        },
+    };
+}
+
+export function getKamooniMembershipTemplateHash(): string {
+    return `sha256-${crypto.createHash("sha256").update(canonicalJson(getKamooniMembershipTemplate())).digest("base64url")}`;
+}
+
+function buildPlatformMembershipPresentationRef(): CredentialPresentationRef {
+    return {
+        id: PLATFORM_MEMBERSHIP_TEMPLATE_ID,
+        version: PLATFORM_MEMBERSHIP_TEMPLATE_VERSION,
+        uri: new URL("/.well-known/vibeid/templates/membership-v1.json", getSiteOrigin()).toString(),
+        hash: getKamooniMembershipTemplateHash(),
+    };
+}
+
+export function createPlatformMembershipCredentialCard(input: {
+    user: Circle;
+    subjectVibeDid: string;
+}): PlatformMembershipCredentialCardData | null {
+    const keyMaterial = getIssuerKeyMaterial();
+    if (!keyMaterial || !isPlatformMember(input.user)) {
+        return null;
+    }
+
+    const statusUrl = new URL("/api/vibe-id/credentials/platform-membership/status", getSiteOrigin());
+    statusUrl.searchParams.set("subjectDid", input.subjectVibeDid);
+    const credentialUrl = new URL("/api/vibe-id/credentials/platform-membership/claim", getSiteOrigin());
+    credentialUrl.searchParams.set("subjectDid", input.subjectVibeDid);
+    const envelope = createSignedPlatformMembershipCredentialEnvelope(input);
+    if (!envelope) {
+        return null;
+    }
+
+    const signedCredential = envelope.credential;
+    return {
+        credentialId: signedCredential.id,
+        issuedAt: signedCredential.issuedAt,
+        expiresAt: signedCredential.expiresAt,
+        subjectDid: signedCredential.subjectDid,
+        issuer: signedCredential.issuer,
+        deepLinkUrl: createCredentialClaimDeepLink(credentialUrl.toString()),
+        credentialUrl: credentialUrl.toString(),
+        statusUrl: statusUrl.toString(),
+    };
+}
+
+export async function createPlatformMembershipCredentialEnvelope(input: {
+    subjectVibeDid: string;
+}): Promise<VibeCredentialEnvelope | null> {
+    const { Circles } = await import("@/lib/data/db");
+    const user = await Circles.findOne({
+        circleType: "user",
+        "metadata.authProviders.vibeId.did": input.subjectVibeDid,
+    });
+    if (!user || !isPlatformMember(user as Circle)) {
+        return null;
+    }
+
+    return createSignedPlatformMembershipCredentialEnvelope({
+        user: { ...user, _id: user._id.toString() } as Circle,
+        subjectVibeDid: input.subjectVibeDid,
+    });
 }
 
 export function createCircleMembershipCredentialCard(input: {
@@ -224,7 +348,7 @@ export function verifyCircleMembershipCredentialEnvelope(input: unknown): Circle
     }
 
     const { credential } = envelope;
-    if (credential.type !== CREDENTIAL_TYPE) {
+    if (credential.type !== CIRCLE_MEMBERSHIP_CREDENTIAL_TYPE) {
         return {
             ok: false,
             error: "unsupported_credential_type",
@@ -289,6 +413,15 @@ function createMembershipCredentialId(circleId: string, subjectDid: string): str
     return `urn:vibeid:credential:circle-membership:${digest}`;
 }
 
+function createPlatformMembershipCredentialId(subjectDid: string): string {
+    const digest = crypto
+        .createHash("sha256")
+        .update(`KamooniPlatformMembershipCredential\n${subjectDid}`)
+        .digest("base64url")
+        .slice(0, 32);
+    return `urn:vibeid:credential:membership:kamooni-platform:${digest}`;
+}
+
 function buildMembershipPresentation(circle: Circle, keyMaterial: IssuerKeyMaterial): JsonRecord {
     const groupName = circle.name || "Circle";
     const groupLogoUrl = absoluteUrl(circle.picture?.url);
@@ -327,6 +460,38 @@ function absoluteUrl(value?: string | null): string | null {
     }
 }
 
+function createSignedPlatformMembershipCredentialEnvelope(input: {
+    user: Circle;
+    subjectVibeDid: string;
+}): VibeCredentialEnvelope | null {
+    const keyMaterial = getIssuerKeyMaterial();
+    if (!keyMaterial || !isPlatformMember(input.user)) {
+        return null;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + DEFAULT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+    const statusUrl = new URL("/api/vibe-id/credentials/platform-membership/status", getSiteOrigin());
+    statusUrl.searchParams.set("subjectDid", input.subjectVibeDid);
+
+    const credential: VibeUnsignedCredential = {
+        id: createPlatformMembershipCredentialId(input.subjectVibeDid),
+        type: PLATFORM_MEMBERSHIP_CREDENTIAL_TYPE,
+        issuer: keyMaterial.issuer,
+        subjectDid: input.subjectVibeDid,
+        claims: {},
+        issuedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        statusUrl: statusUrl.toString(),
+        presentationRef: buildPlatformMembershipPresentationRef(),
+    };
+
+    return {
+        kind: CREDENTIAL_KIND,
+        credential: signCredential(credential, keyMaterial.privateKey),
+    };
+}
+
 function createSignedCircleMembershipCredentialEnvelope(input: {
     circle: Circle;
     member: Member;
@@ -346,7 +511,7 @@ function createSignedCircleMembershipCredentialEnvelope(input: {
 
     const credential: VibeUnsignedCredential = {
         id: createMembershipCredentialId(circleId, input.subjectVibeDid),
-        type: CREDENTIAL_TYPE,
+        type: CIRCLE_MEMBERSHIP_CREDENTIAL_TYPE,
         issuer: keyMaterial.issuer,
         subjectDid: input.subjectVibeDid,
         claims: {
@@ -445,9 +610,32 @@ function parseCredentialEnvelope(value: unknown): VibeCredentialEnvelope | null 
             issuedAt: credential.issuedAt,
             expiresAt: typeof credential.expiresAt === "string" || credential.expiresAt === null ? credential.expiresAt : undefined,
             statusUrl: typeof credential.statusUrl === "string" || credential.statusUrl === null ? credential.statusUrl : undefined,
+            presentationRef: parsePresentationRef(credential.presentationRef),
             alg: CREDENTIAL_ALGORITHM,
             signature: credential.signature,
         },
+    };
+}
+
+function parsePresentationRef(value: unknown): CredentialPresentationRef | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+
+    const ref = value as Partial<CredentialPresentationRef>;
+    if (
+        typeof ref.id !== "string" ||
+        typeof ref.version !== "string" ||
+        typeof ref.uri !== "string"
+    ) {
+        return undefined;
+    }
+
+    return {
+        id: ref.id,
+        version: ref.version,
+        uri: ref.uri,
+        hash: typeof ref.hash === "string" || ref.hash === null ? ref.hash : undefined,
     };
 }
 

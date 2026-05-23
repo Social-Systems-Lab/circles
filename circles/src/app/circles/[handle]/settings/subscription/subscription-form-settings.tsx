@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Circle } from "@/models/models";
+import type { PlatformMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
 import { VibeIdSettingsCard } from "./vibe-id-settings-card";
@@ -43,7 +44,13 @@ const getInitialEmailPreferences = (user: Circle): Record<EmailPreferenceKey, bo
     emailVerificationUpdates: user.emailVerificationUpdates === true,
 });
 
-export default function SubscriptionFormSettings({ user }: { user: Circle }) {
+export default function SubscriptionFormSettings({
+    user,
+    membershipCredential,
+}: {
+    user: Circle;
+    membershipCredential?: PlatformMembershipCredentialCardData | null;
+}) {
     const [subscriptionAttempted, setSubscriptionAttempted] = useState(false);
     const initialEmailPreferences = getInitialEmailPreferences(user);
 
@@ -54,7 +61,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
     if (subscriptionAttempted) {
         return (
             <div className="space-y-8">
-                <VibeIdSettingsCard user={user} />
+                <VibeIdSettingsCard user={user} membershipCredential={membershipCredential} />
                 <VerificationSettingsCard user={user} />
                 <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
                 <section className="space-y-4">
@@ -77,7 +84,7 @@ export default function SubscriptionFormSettings({ user }: { user: Circle }) {
 
     return (
         <div className="space-y-8">
-            <VibeIdSettingsCard user={user} />
+            <VibeIdSettingsCard user={user} membershipCredential={membershipCredential} />
             <VerificationSettingsCard user={user} />
             <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
             <section className="space-y-4">

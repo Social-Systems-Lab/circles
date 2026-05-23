@@ -2,8 +2,9 @@
 
 import QRCode from "react-qr-code";
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, KeyRound, Loader2, Smartphone } from "lucide-react";
+import { BadgeCheck, Check, Copy, ExternalLink, KeyRound, Loader2, QrCode, Smartphone, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Dialog,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import type { Circle } from "@/models/models";
+import type { PlatformMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 
 type VibeIdRequest = {
     requestId: string;
@@ -54,10 +56,18 @@ function formatDidChip(did: string): string {
     return `${did.slice(0, 14)}...${did.slice(-8)}`;
 }
 
-export function VibeIdSettingsCard({ user }: { user: Circle }) {
+export function VibeIdSettingsCard({
+    user,
+    membershipCredential,
+}: {
+    user: Circle;
+    membershipCredential?: PlatformMembershipCredentialCardData | null;
+}) {
     const { toast } = useToast();
     const [linkedVibeId, setLinkedVibeId] = useState(getLinkedVibeId(user));
     const [copied, setCopied] = useState(false);
+    const [credentialCopied, setCredentialCopied] = useState(false);
+    const [isMembershipQrVisible, setIsMembershipQrVisible] = useState(false);
     const [requestData, setRequestData] = useState<VibeIdRequest | null>(null);
     const [isStarting, setIsStarting] = useState(false);
     const [statusText, setStatusText] = useState("Waiting for approval in VibeID.");
@@ -159,6 +169,16 @@ export function VibeIdSettingsCard({ user }: { user: Circle }) {
         window.setTimeout(() => setCopied(false), 1500);
     };
 
+    const copyCredential = async () => {
+        if (!membershipCredential) {
+            return;
+        }
+
+        await navigator.clipboard.writeText(membershipCredential.deepLinkUrl);
+        setCredentialCopied(true);
+        window.setTimeout(() => setCredentialCopied(false), 1500);
+    };
+
     const profileLabel = linkedVibeId?.profile?.displayName || user.name || "VibeID";
     const initials = linkedVibeId?.profile?.initials || profileLabel.slice(0, 2).toUpperCase();
 
@@ -173,32 +193,88 @@ export function VibeIdSettingsCard({ user }: { user: Circle }) {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                     {linkedVibeId ? (
-                        <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex min-w-0 items-center gap-3">
-                                {linkedVibeId.profile?.avatarUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={linkedVibeId.profile.avatarUrl}
-                                        alt=""
-                                        className="h-10 w-10 rounded-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d9e7ff] text-sm font-semibold text-[#0b1020]">
-                                        {initials}
-                                    </div>
-                                )}
-                                <div className="min-w-0">
-                                    <div className="text-sm font-medium text-foreground">{profileLabel}</div>
-                                    <div className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full border bg-white px-2.5 py-1 font-mono text-xs text-muted-foreground">
-                                        <span className="truncate">{formatDidChip(linkedVibeId.did)}</span>
+                        <>
+                            <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    {linkedVibeId.profile?.avatarUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={linkedVibeId.profile.avatarUrl}
+                                            alt=""
+                                            className="h-10 w-10 rounded-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d9e7ff] text-sm font-semibold text-[#0b1020]">
+                                            {initials}
+                                        </div>
+                                    )}
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-medium text-foreground">{profileLabel}</div>
+                                        <div className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full border bg-white px-2.5 py-1 font-mono text-xs text-muted-foreground">
+                                            <span className="truncate">{formatDidChip(linkedVibeId.did)}</span>
+                                        </div>
                                     </div>
                                 </div>
+                                <Button type="button" variant="outline" size="sm" onClick={copyDid}>
+                                    {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                                    {copied ? "Copied" : "Copy DID"}
+                                </Button>
                             </div>
-                            <Button type="button" variant="outline" size="sm" onClick={copyDid}>
-                                {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                                {copied ? "Copied" : "Copy DID"}
-                            </Button>
-                        </div>
+
+                            <div className="rounded-xl border bg-white p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                            <WalletCards className="h-4 w-4" />
+                                            Credential
+                                        </div>
+                                        <div className="text-base font-semibold text-foreground">Kamooni membership</div>
+                                        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                                            Claim this credential in VibeID to keep a signed proof of your active Kamooni membership.
+                                        </p>
+                                    </div>
+                                    <Badge variant={membershipCredential ? "outline" : "secondary"} className="w-fit gap-1">
+                                        <BadgeCheck className="h-3.5 w-3.5" />
+                                        {membershipCredential ? "Available" : "Membership inactive"}
+                                    </Badge>
+                                </div>
+
+                                {membershipCredential ? (
+                                    <div className="mt-4 space-y-3">
+                                        {isMembershipQrVisible ? (
+                                            <div className="mx-auto flex h-56 w-56 items-center justify-center rounded-lg border bg-white p-3 sm:mx-0">
+                                                <QRCode value={membershipCredential.deepLinkUrl} size={196} />
+                                            </div>
+                                        ) : null}
+
+                                        <div className="grid gap-2 sm:grid-cols-3">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setIsMembershipQrVisible((visible) => !visible)}
+                                            >
+                                                <QrCode className="mr-2 h-4 w-4" />
+                                                {isMembershipQrVisible ? "Hide QR" : "Show QR"}
+                                            </Button>
+                                            <Button type="button" variant="outline" asChild>
+                                                <a href={membershipCredential.deepLinkUrl}>
+                                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                                    Open VibeID
+                                                </a>
+                                            </Button>
+                                            <Button type="button" variant="outline" onClick={copyCredential}>
+                                                {credentialCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                                                {credentialCopied ? "Copied" : "Copy"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="mt-4 text-sm text-muted-foreground">
+                                        A membership credential becomes available here when your Kamooni membership is active.
+                                    </p>
+                                )}
+                            </div>
+                        </>
                     ) : (
                         <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
                             No VibeID is connected yet.
