@@ -913,6 +913,7 @@ export const createMongoGroupChatAction = async (
 
     const name = formData.get("name") as string;
     const participantDidsJson = formData.get("participants") as string;
+    const avatarFile = formData.get("avatar");
 
     if (!name || !participantDidsJson) {
         return { success: false, message: "Missing group name or participants" };
@@ -933,6 +934,26 @@ export const createMongoGroupChatAction = async (
         .replace(/(^-|-$)/g, "");
 
     try {
+        let picture: { url: string } | undefined;
+
+        if (avatarFile instanceof File && avatarFile.size > 0) {
+            const MAX_SIZE = 5 * 1024 * 1024;
+            if (avatarFile.size > MAX_SIZE) {
+                return { success: false, message: "File size exceeds 5MB limit" };
+            }
+
+            const { saveFile } = await import("@/lib/data/storage");
+            const { getCircleByDid } = await import("@/lib/data/circle");
+            const ownerCircle = await getCircleByDid(userDid);
+
+            if (!ownerCircle?._id) {
+                return { success: false, message: "Could not resolve storage owner" };
+            }
+
+            const fileInfo = await saveFile(avatarFile, "chat-group-avatar", ownerCircle._id as string, true);
+            picture = { url: fileInfo.url };
+        }
+
         const conversation = await createConversation({
             type: "group",
             name,
@@ -940,6 +961,7 @@ export const createMongoGroupChatAction = async (
             participants,
             createdAt: new Date(),
             updatedAt: new Date(),
+            picture,
         });
 
         const conversationId = conversation._id as string;
