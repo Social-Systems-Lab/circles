@@ -144,8 +144,9 @@ export const createUserAccount = async (
     if (process.env.NODE_ENV !== "production") {
         console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
         console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
-        user.devVerificationToken = unhashedVerificationToken;
-        user.devVerificationUrl = verificationLink;
+        const devUser = user as Circle & { devVerificationToken?: string; devVerificationUrl?: string };
+        devUser.devVerificationToken = unhashedVerificationToken;
+        devUser.devVerificationUrl = verificationLink;
     }
     try {
         await sendEmail({
