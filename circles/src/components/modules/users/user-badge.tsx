@@ -1,25 +1,17 @@
 "use client";
 
-import Image from "next/image";
 import { Circle } from "@/models/models";
+import { UserStatusBadge } from "./user-status-badge";
 
 type UserBadgeProps = {
     user: Circle;
 };
 
 export default function UserBadge({ user }: UserBadgeProps) {
-    const isMember = user.isMember;
-    const isVerified = user.isVerified;
-
     return (
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
             <span>{user.name}</span>
-            {isMember && (
-                <Image src="/images/member-badge.png" alt="Member Badge" width={16} height={16} className="ml-1" />
-            )}
-            {!isMember && isVerified && (
-                <Image src="/images/verified-badge.png" alt="Verified Badge" width={16} height={16} className="ml-1" />
-            )}
+            <UserStatusBadge user={user} />
         </div>
     );
 }

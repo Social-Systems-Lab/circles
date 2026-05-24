@@ -26,7 +26,7 @@ const hasCustomCoverImage = (circle?: Partial<Circle> | null): boolean =>
 
 const hasAboutText = (circle?: Partial<Circle> | null): boolean => {
     if (circle?.circleType === "user") {
-        return Boolean(circle.content?.trim());
+        return Boolean(circle.content?.trim() || circle.description?.trim());
     }
 
     return Boolean(circle?.content?.trim() || circle?.description?.trim());
@@ -35,23 +35,36 @@ const hasAboutText = (circle?: Partial<Circle> | null): boolean => {
 export const getVerificationReadiness = (circle?: Partial<Circle> | null): VerificationReadiness => {
     const isUserProfile = circle?.circleType === "user";
 
-    const items: VerificationReadinessItem[] = [
-        {
-            key: "picture",
-            label: isUserProfile ? "Add a profile picture" : "Add a circle picture",
-            complete: hasCustomPicture(circle),
-        },
-        {
-            key: "coverImage",
-            label: "Add a cover image - the wide banner image at the top of the page",
-            complete: hasCustomCoverImage(circle),
-        },
-        {
-            key: "aboutText",
-            label: "Add About text",
-            complete: hasAboutText(circle),
-        },
-    ];
+    const items: VerificationReadinessItem[] = isUserProfile
+        ? [
+              {
+                  key: "picture",
+                  label: "Add a profile picture",
+                  complete: hasCustomPicture(circle),
+              },
+              {
+                  key: "aboutText",
+                  label: "Add About text",
+                  complete: hasAboutText(circle),
+              },
+          ]
+        : [
+              {
+                  key: "picture",
+                  label: "Add a circle picture",
+                  complete: hasCustomPicture(circle),
+              },
+              {
+                  key: "coverImage",
+                  label: "Add a cover image - the wide banner image at the top of the page",
+                  complete: hasCustomCoverImage(circle),
+              },
+              {
+                  key: "aboutText",
+                  label: "Add About text",
+                  complete: hasAboutText(circle),
+              },
+          ];
 
     return {
         isReady: items.every((item) => item.complete),

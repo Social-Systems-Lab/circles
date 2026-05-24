@@ -56,6 +56,8 @@ export default function Onboarding() {
     const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
+    const shouldSkipAutoOnboarding =
+        user?.metadata?.onboardingFlow === "v2-signup" || user?.metadata?.onboardingFlow === "pilot-quick-signup";
 
     // Filter steps based on what's already completed
     const steps = useMemo(() => {
@@ -128,13 +130,13 @@ export default function Onboarding() {
     useEffect(() => {
         if (!user) return;
         if (authInfo.authStatus !== "authenticated") return;
-        if (user.metadata?.onboardingFlow === "v2-signup") return;
+        if (shouldSkipAutoOnboarding) return;
 
         // Check if there are any steps to show
         if (steps.length > 0 && !hasClosedOnboarding) {
             setIsOpen(true);
         }
-    }, [user, authInfo, hasClosedOnboarding, steps]);
+    }, [user, authInfo, hasClosedOnboarding, shouldSkipAutoOnboarding, steps]);
 
     // Effect to initialize and keep user data in sync
     useEffect(() => {

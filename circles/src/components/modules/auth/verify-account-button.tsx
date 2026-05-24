@@ -154,7 +154,7 @@ export function VerifyAccountButton({
                 className="bg-black text-white hover:bg-black/90"
                 onClick={openVerificationDialog}
             >
-                {verificationStatus === "pending" ? "Open Verification" : "Verify Account"}
+                {verificationStatus === "pending" ? "Open Verification" : "Request Verification"}
             </Button>
 
             <Dialog open={open} onOpenChange={handleDialogChange}>
@@ -174,7 +174,7 @@ export function VerifyAccountButton({
                     ) : activeDialogMode === "readiness" ? (
                         <>
                             <DialogHeader>
-                                <DialogTitle>Complete your profile before requesting verification.</DialogTitle>
+                                <DialogTitle>Complete your profile before requesting member verification.</DialogTitle>
                                 <DialogDescription>
                                     Add the missing items below, then try again when your public profile is ready.
                                 </DialogDescription>
@@ -184,15 +184,14 @@ export function VerifyAccountButton({
                     ) : (
                         <>
                             <DialogHeader>
-                                <DialogTitle>Request Account Verification</DialogTitle>
+                                <DialogTitle>Request member verification</DialogTitle>
                                 <DialogDescription>
-                                    {`By clicking 'Confirm,' you will send a request to the administrators to verify your account.
-                        Please ensure your profile is complete to increase your chances of approval.`}
+                                    {`Send a request for Kamooni admins to review your profile. Email verification is separate and only confirms your email address.`}
                                 </DialogDescription>
                                 <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
                                     <p>
-                                        You can also support the platform and get a founding member badge by becoming a
-                                        member. Members are automatically verified.
+                                        During the test pilot, verified non-founding users receive a Test pilot
+                                        badge. Founding Member status is granted separately.
                                     </p>
                                     <Button variant="link" className="p-0 text-yellow-800" onClick={handleLearnMore}>
                                         Learn more about membership

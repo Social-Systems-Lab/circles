@@ -51,7 +51,7 @@ export const createUserAccount = async (
     type: AccountType,
     email: string,
     password: string,
-): Promise<Circle> => {
+): Promise<Circle & { devVerificationToken?: string; devVerificationUrl?: string }> => {
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
     }
@@ -141,6 +141,12 @@ export const createUserAccount = async (
 
     // Send verification email
     const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
+    if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
+        console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
+        user.devVerificationToken = unhashedVerificationToken;
+        user.devVerificationUrl = verificationLink;
+    }
     try {
         await sendEmail({
             to: email,

@@ -114,7 +114,7 @@ const ProfileMenuBar = () => {
     };
 
     // hide when in the welcome screen
-    if (pathname === "/signup" || pathname === "/login") {
+    if (pathname?.startsWith("/signup") || pathname === "/login") {
         return null;
     }
 
@@ -184,21 +184,12 @@ const ProfileMenuBar = () => {
                                 variant="ghost"
                                 onClick={() => router.push(`/circles/${user?.handle}`)}
                             >
-                                <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
-                                {user.isMember && (
-                                    <img
-                                        src="/images/member-badge.png"
-                                        alt="Member Badge"
-                                        className="absolute bottom-0 right-0 h-4 w-4"
-                                    />
-                                )}
-                                {!user.isMember && user.isVerified && (
-                                    <img
-                                        src="/images/verified-badge.png"
-                                        alt="Verified Badge"
-                                        className="absolute bottom-0 right-0 h-4 w-4"
-                                    />
-                                )}
+                                <UserPicture
+                                    name={user?.name}
+                                    picture={user?.picture?.url}
+                                    size="40px"
+                                    circleType="user"
+                                />
                             </Button>
                         </>
                     )}

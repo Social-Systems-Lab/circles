@@ -3,11 +3,11 @@
 import { Circles } from "@/lib/data/db";
 import { hashToken } from "@/lib/data/email";
 import { revalidatePath } from "next/cache";
-import { buildVerifiedUserSet, isVerifiedUser } from "@/lib/auth/verification";
 
 interface VerifyEmailResponse {
     success: boolean;
     message: string;
+    handle?: string;
 }
 
 export async function verifyEmailAction(token: string): Promise<VerifyEmailResponse> {
@@ -26,7 +26,7 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
             return { success: false, message: "Invalid or expired verification token." };
         }
 
-        if (user.isEmailVerified || isVerifiedUser(user)) {
+        if (user.isEmailVerified) {
             await Circles.updateOne(
                 { _id: user._id },
                 {
@@ -36,7 +36,11 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
                     },
                 },
             );
-            return { success: false, message: "This verification link has already been used. You can log in." };
+            return {
+                success: false,
+                message: "This email verification link has already been used. You can log in.",
+                handle: user.handle || undefined,
+            };
         }
 
         if (user.emailVerificationTokenExpiry && new Date() > user.emailVerificationTokenExpiry) {
@@ -52,7 +56,7 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
                     },
                 },
             );
-            return { success: false, message: "Verification token has expired. Please request a new one." };
+            return { success: false, message: "This email verification link has expired. Please request a new one." };
         }
         if (!user.did) {
             return { success: false, message: "Could not verify this account. Please contact support." };
@@ -66,7 +70,6 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
                     isEmailVerified: true,
                     emailVerificationToken: null,
                     emailVerificationTokenExpiry: null,
-                    ...buildVerifiedUserSet(user.did),
                 },
             },
         );
@@ -88,7 +91,11 @@ export async function verifyEmailAction(token: string): Promise<VerifyEmailRespo
             }
         }
 
-        return { success: true, message: "Email verified successfully! You can now log in." };
+        return {
+            success: true,
+            message: "Email verified",
+            handle: user.handle || undefined,
+        };
     } catch (error) {
         console.error("Error during email verification:", error);
         return { success: false, message: "An unexpected error occurred during email verification." };

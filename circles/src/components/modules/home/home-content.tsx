@@ -30,6 +30,7 @@ import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import { UserStatusBadge } from "@/components/modules/users/user-status-badge";
 
 type HomeContentProps = {
     circle: Circle;
@@ -256,20 +257,8 @@ export default function HomeContent({
                             </div>
                         )}
                         <div className="flex items-center gap-2 pt-1">
-                            {circle.isMember ? (
-                                <Link href={`/circles/${circle.handle}/settings/subscription`}>
-                                    <span className="inline-flex items-center rounded-full bg-[hsl(var(--founding-member-bg))] px-2 py-1 text-xs font-medium text-[hsl(var(--founding-member-foreground))]">
-                                        <img
-                                            src="/images/member-badge.png"
-                                            alt="Member Badge"
-                                            className="mr-1 h-4 w-4"
-                                        />
-                                        Founding Member
-                                    </span>
-                                </Link>
-                            ) : isOwnUserProfile ? (
-                                <VerifyAccountButton />
-                            ) : null}
+                            {isUser ? <UserStatusBadge user={circle} /> : null}
+                            {isOwnUserProfile ? <VerifyAccountButton /> : null}
                         </div>
                         {(circle.description || circle.mission) && (
                             <div className="line-clamp-1 pb-1 text-gray-600">

@@ -102,7 +102,15 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
         // }
 
         let privateUser = await getUserPrivate(user.did!);
-        return { success: true, message: "User signed up successfully", data: { user: privateUser } };
+        return {
+            success: true,
+            message: "User signed up successfully",
+            data: {
+                user: privateUser,
+                devVerificationToken: process.env.NODE_ENV !== "production" ? user.devVerificationToken ?? null : null,
+                devVerificationUrl: process.env.NODE_ENV !== "production" ? user.devVerificationUrl ?? null : null,
+            },
+        };
     } catch (error) {
         if (error instanceof AuthenticationError) {
             return { success: false, message: error.message };
