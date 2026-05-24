@@ -110,7 +110,7 @@ const ProfileMenuBar = () => {
 
     const onSignUpClick = () => {
         let redirectTo = searchParams.get("redirectTo") ?? "/";
-        router.push("/signup?redirectTo=" + redirectTo);
+        router.push("/signup/pilot?redirectTo=" + redirectTo);
     };
 
     // hide when in the welcome screen

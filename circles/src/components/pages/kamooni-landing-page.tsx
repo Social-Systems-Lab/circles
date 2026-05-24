@@ -289,7 +289,7 @@ export default function KamooniLandingPage({
                         </p>
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                            <Link href="/signup">
+                            <Link href="/signup/pilot">
                                 <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                                     Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                                 </Button>
@@ -362,7 +362,7 @@ export default function KamooniLandingPage({
                         </p>
                         {!isHoldingPage && (
                             <div className="mt-8 text-center">
-                                <Link href="/signup">
+                                <Link href="/signup/pilot">
                                     <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                                         Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                                     </Button>

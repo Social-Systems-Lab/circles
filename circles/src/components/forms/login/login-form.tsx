@@ -143,7 +143,7 @@ export function LoginForm(): React.ReactElement {
 
                 <div className="text-center text-sm text-muted-foreground">
                     Don&#39;t have an account?{" "}
-                    <Link href="/signup" className="underline hover:text-primary">
+                    <Link href="/signup/pilot" className="underline hover:text-primary">
                         Sign up here
                     </Link>
                 </div>
