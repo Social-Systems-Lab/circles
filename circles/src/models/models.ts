@@ -1055,6 +1055,7 @@ export type UserToolboxTab =
     | "notifications"
     | "profile"
     | "circles"
+    | "bookmarks"
     | "connections"
     | "tasks"
     | "events"

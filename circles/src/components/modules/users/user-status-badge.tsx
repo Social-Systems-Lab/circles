@@ -39,7 +39,12 @@ export function UserStatusBadge({ user, className }: UserStatusBadgeProps) {
 
     if (isPlatformVerified) {
         return (
-            <Badge className={cn("border-transparent bg-[#f7c968] text-[#5f4214] hover:bg-[#f7c968] hover:text-[#5f4214]", className)}>
+            <Badge
+                className={cn(
+                    "border-transparent bg-[hsl(var(--platform-yellow))] text-[hsl(var(--platform-yellow-foreground))] hover:bg-[hsl(var(--platform-yellow-hover))] hover:text-[hsl(var(--platform-yellow-foreground))]",
+                    className,
+                )}
+            >
                 Test pilot
             </Badge>
         );

@@ -12,9 +12,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, ChevronDown, Circle as CircleIcon, Loader2, Users } from "lucide-react";
-import { MdOutlineLogout } from "react-icons/md";
-import { LuClipboardCheck, LuMail, LuSettings } from "react-icons/lu";
+import { Bell, Bookmark, ChevronDown, Circle as CircleIcon, Loader2, Pin, PinOff, Users } from "lucide-react";
+import { LuClipboardCheck, LuMail } from "react-icons/lu";
 import {
     authInfoAtom,
     userAtom,
@@ -40,7 +39,10 @@ import { listChatRoomsAction } from "@/components/modules/chat/actions";
 import {
     acceptConnectRequestAction,
     declineConnectRequestAction,
+    getBookmarkedCirclesAction,
     listToolboxConnectionsAction,
+    pinCircleAction,
+    unpinCircleAction,
 } from "@/components/modules/home/actions";
 const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
@@ -54,6 +56,18 @@ type ToolboxConnectionItem = {
     connectStatus: "accepted" | "pending_sent" | "pending_received";
     updatedAt: Date | string;
 };
+type BookmarkedItem = {
+    id: string;
+    circleId: string;
+    name: string;
+    type: string;
+    href: string;
+    pinned: boolean;
+    description?: string;
+};
+
+const toolboxActiveTabClassName =
+    "m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 text-[#696969] transition-colors hover:text-[#2d6a45] data-[state=active]:bg-[#e4f1e8] data-[state=active]:text-[#2d6a45] data-[state=active]:shadow-sm";
 
 export const UserToolbox = () => {
     const [user, setUser] = useAtom(userAtom);
@@ -105,6 +119,9 @@ export const UserToolbox = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+    const [bookmarkedItems, setBookmarkedItems] = useState<BookmarkedItem[]>([]);
+    const [isLoadingBookmarks, setIsLoadingBookmarks] = useState(true);
+    const [bookmarkActionCircleId, setBookmarkActionCircleId] = useState<string | null>(null);
     const [connections, setConnections] = useState<{
         accepted: ToolboxConnectionItem[];
         pendingIncoming: ToolboxConnectionItem[];
@@ -237,6 +254,69 @@ export const UserToolbox = () => {
     useEffect(() => {
         let isMounted = true;
 
+        const loadBookmarks = async () => {
+            if (!user?.did) {
+                if (isMounted) {
+                    setBookmarkedItems([]);
+                    setIsLoadingBookmarks(false);
+                }
+                return;
+            }
+
+            try {
+                const circles = await getBookmarkedCirclesAction();
+                if (!isMounted) return;
+
+                const pinnedIds = user.pinnedCircles ?? [];
+                const orderedCircles = [...circles].sort((a, b) => {
+                    const aId = a._id?.toString() ?? "";
+                    const bId = b._id?.toString() ?? "";
+                    const aPinnedIndex = pinnedIds.indexOf(aId);
+                    const bPinnedIndex = pinnedIds.indexOf(bId);
+
+                    if (aPinnedIndex !== -1 || bPinnedIndex !== -1) {
+                        if (aPinnedIndex === -1) return 1;
+                        if (bPinnedIndex === -1) return -1;
+                        return aPinnedIndex - bPinnedIndex;
+                    }
+
+                    return (a.name ?? "").localeCompare(b.name ?? "");
+                });
+
+                setBookmarkedItems(
+                    orderedCircles.map((circle) => ({
+                        id: circle._id?.toString() ?? circle.handle ?? circle.did ?? getCircleDefaultPath(circle),
+                        circleId: circle._id?.toString() ?? "",
+                        name: circle.name || circle.handle || "Untitled bookmark",
+                        type: circle.circleType === "user" ? "Profile" : circle.circleType === "project" ? "Project" : "Circle",
+                        href: getCircleDefaultPath(circle),
+                        pinned: pinnedIds.includes(circle._id?.toString() ?? ""),
+                        description: circle.description ?? circle.mission,
+                    })),
+                );
+            } catch (error) {
+                console.error("Failed to load bookmarked items:", error);
+                if (isMounted) {
+                    setBookmarkedItems([]);
+                }
+            } finally {
+                if (isMounted) {
+                    setIsLoadingBookmarks(false);
+                }
+            }
+        };
+
+        setIsLoadingBookmarks(true);
+        void loadBookmarks();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user?.did, user?.bookmarkedCircles, user?.pinnedCircles]);
+
+    useEffect(() => {
+        let isMounted = true;
+
         const loadConnections = async () => {
             if (!user?.did) {
                 if (isMounted) {
@@ -310,15 +390,6 @@ export const UserToolbox = () => {
 
         router.push("/welcome");
     };
-
-    const userHandle = user?.handle;
-
-    const handleOpenSettings = useCallback(() => {
-        if (!userHandle) return;
-
-        closeToolbox();
-        router.push(`/circles/${userHandle}/settings/about`);
-    }, [closeToolbox, router, userHandle]);
 
     const openConnection = useCallback(
         (connection: ToolboxConnectionItem) => {
@@ -394,6 +465,54 @@ export const UserToolbox = () => {
         [respondingConnectionDid, toast],
     );
 
+    const handleBookmarkPinToggle = useCallback(
+        async (item: BookmarkedItem) => {
+            if (!item.circleId || bookmarkActionCircleId === item.circleId || !user) {
+                return;
+            }
+
+            const previousUser = user;
+            const nextPinned = item.pinned
+                ? (previousUser.pinnedCircles ?? []).filter((id) => id !== item.circleId)
+                : [item.circleId, ...(previousUser.pinnedCircles ?? []).filter((id) => id !== item.circleId)].slice(0, 5);
+
+            setBookmarkActionCircleId(item.circleId);
+            setUser({
+                ...previousUser,
+                pinnedCircles: nextPinned,
+            });
+
+            try {
+                const updatedUser = item.pinned
+                    ? await unpinCircleAction(item.circleId)
+                    : await pinCircleAction(item.circleId);
+
+                if (!updatedUser) {
+                    setUser(previousUser);
+                    toast({
+                        title: "Unable to update pin",
+                        description: item.pinned ? "Failed to remove bookmark pin." : "Failed to pin bookmark.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
+                setUser(updatedUser);
+            } catch (error) {
+                console.error("Failed to toggle bookmark pin", error);
+                setUser(previousUser);
+                toast({
+                    title: "Unable to update pin",
+                    description: item.pinned ? "Failed to remove bookmark pin." : "Failed to pin bookmark.",
+                    variant: "destructive",
+                });
+            } finally {
+                setBookmarkActionCircleId(null);
+            }
+        },
+        [bookmarkActionCircleId, setUser, toast, user],
+    );
+
     const renderConnectionRow = useCallback(
         (connection: ToolboxConnectionItem, label?: string) => {
             const showRespondControl = connection.connectStatus === "pending_received";
@@ -453,54 +572,130 @@ export const UserToolbox = () => {
         [handleConnectionResponse, openConnection, respondingConnectionDid],
     );
 
+    const renderBookmarkRow = useCallback(
+        (item: BookmarkedItem) => {
+            const isUpdatingPin = bookmarkActionCircleId === item.circleId;
+            const rowClassName = item.pinned
+                ? "m-1 flex items-start gap-3 rounded-xl border border-[#c9d1a7] bg-[#f4f6e8] p-2.5 shadow-[0_1px_2px_rgba(92,107,48,0.08)] hover:bg-[#eef2dd]"
+                : "m-1 flex items-start gap-3 rounded-lg p-2 hover:bg-gray-100";
+            const iconWrapClassName = item.pinned
+                ? "mt-0.5 rounded-full bg-[#dfe6bd] p-2 text-[#5d6b33]"
+                : "mt-0.5 rounded-full bg-slate-100 p-2 text-slate-500";
+            const pinButtonClassName = item.pinned
+                ? "h-8 w-8 shrink-0 rounded-full border border-[#c9d1a7] bg-[#dfe6bd] text-[#5d6b33] hover:bg-[#d3dcae] hover:text-[#4f5d2b]"
+                : "h-8 w-8 shrink-0 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700";
+
+            return (
+                <Link
+                    key={item.id}
+                    href={item.href}
+                    className={rowClassName}
+                    onClick={closeToolbox}
+                >
+                    <div className={iconWrapClassName}>
+                        <Bookmark className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{item.name}</p>
+                            <span
+                                className={
+                                    item.pinned
+                                        ? "rounded-full bg-[#dfe6bd] px-2 py-0.5 text-[11px] font-medium text-[#5d6b33]"
+                                        : "rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                                }
+                            >
+                                {item.type}
+                            </span>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">{item.description ?? item.href}</p>
+                    </div>
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className={pinButtonClassName}
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleBookmarkPinToggle(item);
+                        }}
+                        title={item.pinned ? "Unpin bookmark" : "Pin bookmark"}
+                        aria-label={item.pinned ? "Unpin bookmark" : "Pin bookmark"}
+                        disabled={isUpdatingPin}
+                    >
+                        {isUpdatingPin ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : item.pinned ? (
+                            <PinOff className="h-4 w-4 fill-current" />
+                        ) : (
+                            <Pin className="h-4 w-4" />
+                        )}
+                    </Button>
+                </Link>
+            );
+        },
+        [bookmarkActionCircleId, closeToolbox, handleBookmarkPinToggle],
+    );
+
     const handleTabChange = useCallback(
         (nextTab: string) => {
-            if (nextTab === "settings") {
-                handleOpenSettings();
-                return;
-            }
             setTab(nextTab as ToolboxTab);
         },
-        [handleOpenSettings, setTab],
+        [setTab],
     );
+
+    const pinnedBookmarks = bookmarkedItems.filter((item) => item.pinned);
+    const otherBookmarks = bookmarkedItems.filter((item) => !item.pinned);
 
     if (userToolboxState === undefined) return null;
 
     return (
         <Card className="h-full overflow-auto border-0">
             <CardHeader className="p-4">
-                <div className="flex items-center space-x-4">
-                    <Link href={`/circles/${user?.handle}`}>
-                        <Avatar className="h-12 w-12">
-                            <AvatarImage
-                                src={user?.picture?.url || "/placeholder.svg?height=48&width=48"}
-                                alt={user?.name}
-                            />
-                            <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                    </Link>
-                    <div>
+                <div className="flex items-start justify-between gap-3 pr-12">
+                    <div className="flex min-w-0 flex-1 items-center space-x-4">
                         <Link href={`/circles/${user?.handle}`}>
-                            <div className="font-semibold">{user?.name}</div>
-                            <p className="text-sm text-muted-foreground">@{user?.handle}</p>
+                            <Avatar className="h-12 w-12">
+                                <AvatarImage
+                                    src={user?.picture?.url || "/placeholder.svg?height=48&width=48"}
+                                    alt={user?.name}
+                                />
+                                <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
+                            </Avatar>
                         </Link>
-                        <div className="mt-2">
-                            {user?.isMember ? (
-                                <Link href={`/circles/${user?.handle}/settings/subscription`}>
-                                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                        <img
-                                            src="/images/member-badge.png"
-                                            alt="Member Badge"
-                                            className="mr-1 h-4 w-4"
-                                        />
-                                        Founding Member
-                                    </span>
-                                </Link>
-                            ) : (
-                                <VerifyAccountButton />
-                            )}
+                        <div className="min-w-0">
+                            <Link href={`/circles/${user?.handle}`}>
+                                <div className="truncate font-semibold">{user?.name}</div>
+                                <p className="truncate text-sm text-muted-foreground">@{user?.handle}</p>
+                            </Link>
+                            <div className="mt-2">
+                                {user?.isMember ? (
+                                    <Link href={`/circles/${user?.handle}/settings/subscription`}>
+                                        <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                                            <img
+                                                src="/images/member-badge.png"
+                                                alt="Member Badge"
+                                                className="mr-1 h-4 w-4"
+                                            />
+                                            Founding Member
+                                        </span>
+                                    </Link>
+                                ) : (
+                                    <VerifyAccountButton />
+                                )}
+                            </div>
                         </div>
                     </div>
+                    <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="shrink-0 bg-black text-white hover:bg-[#1f1f1f]"
+                        onClick={() => void signOut()}
+                    >
+                        Sign out
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -509,49 +704,43 @@ export const UserToolbox = () => {
                     onValueChange={handleTabChange}
                     className="flex h-full flex-col"
                 >
-                    <TabsList className="grid h-auto w-full grid-cols-7 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
+                    <TabsList className="grid h-auto w-full grid-cols-6 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
                         {/* Existing TabsTriggers */}
                         <TabsTrigger
                             value="chat"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={toolboxActiveTabClassName}
                         >
                             <LuMail className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="events"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={toolboxActiveTabClassName}
                         >
                             <LuClipboardCheck className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="notifications"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={toolboxActiveTabClassName}
                         >
                             <Bell className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="circles"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={toolboxActiveTabClassName}
                         >
                             <CircleIcon className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
                             value="connections"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            className={toolboxActiveTabClassName}
                         >
                             <Users className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger
-                            value="settings"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
+                            value="bookmarks"
+                            className={toolboxActiveTabClassName}
                         >
-                            <LuSettings className="h-5 w-5" />
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="account"
-                            className={`m-0 ml-4 mr-4 h-8 w-8 rounded-full p-0 data-[state=active]:bg-primaryLight data-[state=active]:text-white data-[state=active]:shadow-md`}
-                        >
-                            <MdOutlineLogout className="h-5 w-5" />
+                            <Bookmark className="h-5 w-5" />
                         </TabsTrigger>
                         {/* ... other tabs */}
                     </TabsList>
@@ -584,6 +773,62 @@ export const UserToolbox = () => {
                         ) : (
                             <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
                                 No communities followed
+                            </div>
+                        )}
+                    </TabsContent>
+                    <TabsContent value="bookmarks" className="m-0 flex-grow overflow-auto pt-1">
+                        {isLoadingBookmarks ? (
+                            <div className="flex flex-1 items-center justify-center">
+                                <LoadingSpinner />
+                            </div>
+                        ) : bookmarkedItems.length > 0 ? (
+                            <div className="pb-2">
+                                <div className="flex items-center justify-between px-3 pb-2 pt-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Bookmarks
+                                    </p>
+                                    <Link
+                                        href="/bookmarks"
+                                        className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                                        onClick={closeToolbox}
+                                    >
+                                        View all
+                                    </Link>
+                                </div>
+                                {pinnedBookmarks.length > 0 ? (
+                                    <>
+                                        <div className="px-3 pb-1 pt-1">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Pinned
+                                            </p>
+                                        </div>
+                                        {pinnedBookmarks.map(renderBookmarkRow)}
+                                    </>
+                                ) : null}
+                                {otherBookmarks.length > 0 ? (
+                                    <>
+                                        <div className="px-3 pb-1 pt-3">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                {pinnedBookmarks.length > 0 ? "Other bookmarks" : "All bookmarks"}
+                                            </p>
+                                        </div>
+                                        {otherBookmarks.map(renderBookmarkRow)}
+                                    </>
+                                ) : null}
+                            </div>
+                        ) : (
+                            <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                                <p>No bookmarks yet</p>
+                                <p className="mt-2 max-w-[220px] text-sm text-muted-foreground">
+                                    Saved profiles, circles and projects will appear here.
+                                </p>
+                                <Link
+                                    href="/bookmarks"
+                                    className="mt-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                                    onClick={closeToolbox}
+                                >
+                                    View all bookmarks
+                                </Link>
                             </div>
                         )}
                     </TabsContent>
