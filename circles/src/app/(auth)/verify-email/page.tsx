@@ -31,7 +31,7 @@ function VerifyEmailContent() {
                         setTitle("Email verified");
                         setMessage(response.message || "Email verified");
                         setDetail(
-                            "Your email address has been verified. Your Kamooni profile is still unverified until you continue to your profile, complete it, and request member verification.",
+                            "Your email address has been verified. Continue to your profile next to complete your setup. Kamooni member verification happens later from your profile.",
                         );
                         setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(false);
@@ -41,7 +41,9 @@ function VerifyEmailContent() {
                         setMessage(
                             response.message || "Failed to verify your email. The email verification link may be invalid or expired.",
                         );
-                        setDetail(null);
+                        setDetail(
+                            "If you cannot use the original link right now, you can still continue to your profile, but some account steps may require email verification later.",
+                        );
                         setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(true);
                         setIsResolved(true);
@@ -50,14 +52,18 @@ function VerifyEmailContent() {
                 .catch(() => {
                     setTitle("Email verification");
                     setMessage("An unexpected error occurred. Please try again later.");
-                    setDetail(null);
+                    setDetail(
+                        "You can continue to your profile for now, but you may need to verify your email before completing some account steps.",
+                    );
                     setError(true);
                     setIsResolved(true);
                 });
         } else {
             setTitle("Email verification");
             setMessage("No email verification token was found. Please check the link or request a new one.");
-            setDetail(null);
+            setDetail(
+                "If you cannot use the verification link right now, you can continue to your profile for now and come back to email verification later.",
+            );
             setError(true);
             setIsResolved(true);
         }
@@ -76,7 +82,9 @@ function VerifyEmailContent() {
                 {isResolved && (
                     <div className="mt-6 text-center">
                         <Button asChild>
-                            <Link href={continueHref}>Continue to my profile</Link>
+                            <Link href={continueHref}>
+                                {error ? "Continue for now" : "Continue to profile setup"}
+                            </Link>
                         </Button>
                     </div>
                 )}

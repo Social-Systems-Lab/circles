@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { submitSignupFormAction } from "@/components/forms/signup/actions";
@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 
 type PilotSignupState = {
+    firstName: string;
+    lastName: string;
     email: string;
     password: string;
     confirmPassword: string;
@@ -22,6 +24,8 @@ type PilotSignupState = {
 type PilotSignupErrors = Partial<Record<keyof PilotSignupState, string>>;
 
 const initialState: PilotSignupState = {
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -29,11 +33,29 @@ const initialState: PilotSignupState = {
 };
 
 function sanitizeHandle(value: string) {
-    return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/_/g, "-");
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\s_-]+/g, "")
+        .replace(/[\s_]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+function getDefaultHandle(firstName: string, lastName: string) {
+    return sanitizeHandle(`${firstName} ${lastName}`);
 }
 
 function getErrors(state: PilotSignupState): PilotSignupErrors {
     const errors: PilotSignupErrors = {};
+
+    if (!state.firstName.trim()) {
+        errors.firstName = "First name is required.";
+    }
+
+    if (!state.lastName.trim()) {
+        errors.lastName = "Last name is required.";
+    }
 
     if (!state.email.trim()) {
         errors.email = "Email is required.";
@@ -76,11 +98,21 @@ export function PilotSignupForm() {
     const [state, setState] = useState<PilotSignupState>(initialState);
     const [errors, setErrors] = useState<PilotSignupErrors>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasEditedHandle, setHasEditedHandle] = useState(false);
 
     const updateField = (field: keyof PilotSignupState, value: string) => {
         setState((prev) => ({ ...prev, [field]: value }));
         setErrors((prev) => ({ ...prev, [field]: undefined }));
     };
+
+    useEffect(() => {
+        if (hasEditedHandle) {
+            return;
+        }
+
+        const nextHandle = getDefaultHandle(state.firstName, state.lastName);
+        setState((prev) => (prev.handle === nextHandle ? prev : { ...prev, handle: nextHandle }));
+    }, [hasEditedHandle, state.firstName, state.lastName]);
 
     const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -94,7 +126,9 @@ export function PilotSignupForm() {
         setIsSubmitting(true);
 
         try {
+            const fullName = `${state.firstName.trim()} ${state.lastName.trim()}`.trim();
             const result = await submitSignupFormAction({
+                name: fullName,
                 handle: sanitizeHandle(state.handle),
                 _email: state.email.trim(),
                 _password: state.password,
@@ -161,6 +195,32 @@ export function PilotSignupForm() {
                 </CardHeader>
                 <CardContent>
                     <form className="space-y-5" onSubmit={onSubmit}>
+                        <div className="grid gap-5 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="pilot-signup-first-name">First name</Label>
+                                <Input
+                                    id="pilot-signup-first-name"
+                                    value={state.firstName}
+                                    onChange={(event) => updateField("firstName", event.target.value)}
+                                    autoComplete="given-name"
+                                    placeholder="Jane"
+                                />
+                                {errors.firstName ? <p className="text-sm text-red-600">{errors.firstName}</p> : null}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="pilot-signup-last-name">Last name</Label>
+                                <Input
+                                    id="pilot-signup-last-name"
+                                    value={state.lastName}
+                                    onChange={(event) => updateField("lastName", event.target.value)}
+                                    autoComplete="family-name"
+                                    placeholder="Smith"
+                                />
+                                {errors.lastName ? <p className="text-sm text-red-600">{errors.lastName}</p> : null}
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="pilot-signup-email">Email</Label>
                             <Input
@@ -207,12 +267,16 @@ export function PilotSignupForm() {
                             <Input
                                 id="pilot-signup-handle"
                                 value={state.handle}
-                                onChange={(event) => updateField("handle", sanitizeHandle(event.target.value))}
+                                onChange={(event) => {
+                                    setHasEditedHandle(true);
+                                    updateField("handle", sanitizeHandle(event.target.value));
+                                }}
                                 autoComplete="nickname"
                                 placeholder="your-handle"
                             />
                             <p className="text-sm text-muted-foreground">
-                                This is the handle others will use to find you on Kamooni.
+                                This defaults from your first and last name. You can still edit it before creating
+                                your account.
                             </p>
                             {errors.handle ? <p className="text-sm text-red-600">{errors.handle}</p> : null}
                         </div>

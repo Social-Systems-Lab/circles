@@ -25,20 +25,25 @@ export default async function PilotCheckEmailPage(props: PageProps) {
         <div className="flex min-h-screen items-center justify-center bg-[#f7fbff] px-4 py-10">
             <Card className="w-full max-w-xl border-[#d8e7f3] shadow-sm">
                 <CardHeader className="space-y-2">
-                    <CardTitle className="text-3xl">Verify your email</CardTitle>
+                    <CardTitle className="text-3xl">Check your email</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                        We&apos;ve sent an email verification link to your address. Please verify your email so we know
-                        we can reach you.
+                        We&apos;ve sent a verification link to your email address. Verify your email before continuing
+                        with profile setup so we know we can reach you.
                     </p>
                     <p className="text-sm text-muted-foreground">
-                        This only confirms your email address. After that, continue to your profile, complete it, and
-                        request member verification later when you are ready.
+                        This step only confirms your email address. After that, you can continue to your profile,
+                        complete it, and request Kamooni member verification later.
                     </p>
                     {searchParams.email ? (
                         <p className="text-sm font-medium text-slate-700">{searchParams.email}</p>
                     ) : null}
                 </CardHeader>
                 <CardContent className="space-y-5">
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                        <div className="font-medium">Next step</div>
+                        <p className="mt-1">Open the verification link we sent to your email.</p>
+                    </div>
+
                     {devVerificationHref ? (
                         <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
                             <div className="font-medium">Development helper</div>
@@ -54,13 +59,18 @@ export default async function PilotCheckEmailPage(props: PageProps) {
                     ) : null}
 
                     <div className="flex flex-wrap gap-3">
-                        <Button asChild>
-                            <Link href={continueUrl}>Continue to my profile</Link>
-                        </Button>
                         <Button asChild variant="outline">
                             <Link href="/login">Go to login</Link>
                         </Button>
                     </div>
+
+                    <p className="text-sm text-muted-foreground">
+                        Having trouble? You can{" "}
+                        <Link href={continueUrl} className="underline hover:text-foreground">
+                            continue for now
+                        </Link>
+                        , but some account steps may require email verification.
+                    </p>
                 </CardContent>
             </Card>
         </div>

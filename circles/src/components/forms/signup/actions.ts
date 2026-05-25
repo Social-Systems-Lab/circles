@@ -12,8 +12,10 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
         const normalizedHandle = String(values.handle || "")
             .trim()
             .toLowerCase()
-            .replace(/\s+/g, "-")
-            .replace(/_/g, "-");
+            .replace(/[^a-z0-9\s_-]+/g, "")
+            .replace(/[\s_]+/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-+|-+$/g, "");
         const normalizedEmail = String(values._email || "").trim().toLowerCase();
         const derivedName =
             String(values.name || "").trim() ||

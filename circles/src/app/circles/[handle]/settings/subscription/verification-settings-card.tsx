@@ -118,6 +118,12 @@ export function VerificationSettingsCard({
     const status = request?.status ?? (thread?.isVerified ? "approved" : null);
     const canReply = Boolean(thread?.canReply && request?.id);
     const readiness = getVerificationReadiness(user);
+    const hasMessages = (thread?.messages?.length ?? 0) > 0;
+    const isApproved = status === "approved" || thread?.isVerified === true;
+    const isRejected = status === "rejected";
+    const shouldShowThread = hasMessages && Boolean(request);
+    const shouldShowReplyComposer = canReply;
+    const shouldShowLockedNotice = !canReply && !isApproved;
 
     return (
         <Card>
@@ -169,21 +175,43 @@ export function VerificationSettingsCard({
                             </div>
                         ) : null}
 
-                        <div className="space-y-4">
-                            <div className="space-y-1">
-                                <h2 className="text-lg font-semibold">Thread</h2>
-                                <p className="text-sm text-muted-foreground">
-                                    Messages from admins and your replies will appear here in order.
+                        {isApproved ? (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900">
+                                <div className="font-medium">Approved</div>
+                                <p className="mt-1">
+                                    Your verification has been approved. You can continue from your{" "}
+                                    <Link href="/" className="underline">
+                                        account home
+                                    </Link>
+                                    .
                                 </p>
                             </div>
-                            <VerificationThreadMessageList
-                                messages={thread?.messages ?? []}
-                                viewerRole="applicant"
-                                emptyMessage="No clarification messages yet. Admin updates will appear here."
-                            />
-                        </div>
+                        ) : null}
 
-                        {canReply ? (
+                        {isRejected ? (
+                            <div className="space-y-3 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+                                <div>This verification request is closed. You can submit a new request when you are ready.</div>
+                                <VerifyAccountButton onStatusChange={loadThread} />
+                            </div>
+                        ) : null}
+
+                        {shouldShowThread ? (
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <h2 className="text-lg font-semibold">Thread</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        Messages from admins and your replies will appear here in order.
+                                    </p>
+                                </div>
+                                <VerificationThreadMessageList
+                                    messages={thread?.messages ?? []}
+                                    viewerRole="applicant"
+                                    emptyMessage="No clarification messages yet. Admin updates will appear here."
+                                />
+                            </div>
+                        ) : null}
+
+                        {shouldShowReplyComposer ? (
                             <div className="space-y-4 rounded-lg border bg-muted/20 p-5">
                                 <div className="space-y-1">
                                     <div className="font-medium">Reply</div>
@@ -217,26 +245,13 @@ export function VerificationSettingsCard({
                                     </Button>
                                 </div>
                             </div>
-                        ) : (
+                        ) : shouldShowLockedNotice ? (
                             <div className="space-y-3 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
                                 <div>
-                                    {status === "approved" || thread?.isVerified ? (
-                                        <>
-                                            Your verification has been approved. You can continue from your{" "}
-                                            <Link href="/" className="underline">
-                                                account home
-                                            </Link>
-                                            .
-                                        </>
-                                    ) : status === "rejected" ? (
-                                        "This verification request is closed. You can submit a new request when you are ready."
-                                    ) : (
-                                        "Replies are currently locked until an admin asks for more information."
-                                    )}
+                                    Replies are currently locked until an admin asks for more information.
                                 </div>
-                                {status === "rejected" ? <VerifyAccountButton onStatusChange={loadThread} /> : null}
                             </div>
-                        )}
+                        ) : null}
                     </>
                 )}
             </CardContent>
