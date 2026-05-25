@@ -282,8 +282,8 @@ h1,
         --bookmark-active: var(--platform-yellow);
         --bookmark-active-hover: var(--platform-yellow-hover);
         --bookmark-active-foreground: var(--platform-yellow-foreground);
-        --founding-member-bg: 105 28% 88%;
-        --founding-member-foreground: 118 28% 29%;
+        --founding-member-bg: 75 39% 82%;
+        --founding-member-foreground: 74 35% 31%;
         --task-priority-critical-bg: 12 88% 90%;
         --task-priority-critical-foreground: 12 48% 31%;
         --task-priority-high-bg: 46 92% 83%;
