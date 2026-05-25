@@ -254,14 +254,16 @@ export const AggregateFeedComponent = ({
                     </div>
                 )}
                 <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <ListFilter
-                            defaultValue={defaultSort}
-                            onFilterChange={handleFilterChange}
-                            onSdgChange={handleSdgSelectionChange}
-                            selectedSdgs={selectedSdgs}
-                            showSdgFilter={false}
-                        />
+                    <div className="flex w-full justify-center">
+                        <div className="w-full md:w-auto">
+                            <ListFilter
+                                defaultValue={defaultSort}
+                                onFilterChange={handleFilterChange}
+                                onSdgChange={handleSdgSelectionChange}
+                                selectedSdgs={selectedSdgs}
+                                showSdgFilter={false}
+                            />
+                        </div>
                     </div>
                 </div>
 
