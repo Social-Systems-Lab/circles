@@ -50,6 +50,12 @@ const REQUEST_TYPE_LABELS: Record<string, string> = {
     independent_circle: "Independent circle",
 };
 
+const profileLinkClass = "text-[#2f6f46] hover:text-[#245638] hover:underline";
+
+const getApplicantProfileHref = (item: VerificationQueueItem) => {
+    return item.applicant.handle ? `/circles/${item.applicant.handle}` : null;
+};
+
 export default function VerificationRequestsTab({ initialCircleId }: { initialCircleId?: string }) {
     const [requests, setRequests] = useState<VerificationQueueItem[]>([]);
     const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
@@ -218,13 +224,46 @@ export default function VerificationRequestsTab({ initialCircleId }: { initialCi
                                         <TableCell>
                                             {item.targetCircle ? (
                                                 <div>
-                                                    <div className="font-medium">{item.targetCircle.name}</div>
+                                                    <div className="font-medium">
+                                                        {item.targetCircle.handle ? (
+                                                            <Link
+                                                                href={`/circles/${item.targetCircle.handle}`}
+                                                                className={profileLinkClass}
+                                                                target="_blank"
+                                                            >
+                                                                {item.targetCircle.name}
+                                                            </Link>
+                                                        ) : (
+                                                            item.targetCircle.name
+                                                        )}
+                                                    </div>
                                                     <div className="text-xs text-muted-foreground">
-                                                        {item.targetCircle.handle ? `@${item.targetCircle.handle}` : item.targetCircle.id}
+                                                        {item.targetCircle.handle ? (
+                                                            <Link
+                                                                href={`/circles/${item.targetCircle.handle}`}
+                                                                className={`font-medium ${profileLinkClass}`}
+                                                                target="_blank"
+                                                            >
+                                                                @{item.targetCircle.handle}
+                                                            </Link>
+                                                        ) : (
+                                                            item.targetCircle.id
+                                                        )}
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="text-sm text-muted-foreground">Profile account</div>
+                                                <div>
+                                                    <div className="text-sm font-medium text-foreground">Profile account</div>
+                                                    {getApplicantProfileHref(item) ? (
+                                                        <Link
+                                                            href={getApplicantProfileHref(item)!}
+                                                            className={`text-xs font-medium ${profileLinkClass}`}
+                                                            target="_blank"
+                                                        >
+                                                            Open submitted profile
+                                                        </Link>
+                                                    ) : null}
+                                                </div>
                                             )}
                                         </TableCell>
                                         <TableCell>
@@ -233,10 +272,37 @@ export default function VerificationRequestsTab({ initialCircleId }: { initialCi
                                                     name={item.applicant.name}
                                                     picture={item.applicant.picture?.url}
                                                 />
-                                                <div>
-                                                    <div className="font-medium">{item.applicant.name}</div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {item.applicant.email || item.applicant.handle}
+                                                <div className="min-w-0">
+                                                    <div className="truncate font-medium">
+                                                        {getApplicantProfileHref(item) ? (
+                                                            <Link
+                                                                href={getApplicantProfileHref(item)!}
+                                                                className={profileLinkClass}
+                                                                target="_blank"
+                                                            >
+                                                                {item.applicant.name}
+                                                            </Link>
+                                                        ) : (
+                                                            item.applicant.name
+                                                        )}
+                                                    </div>
+                                                    <div className="truncate text-xs text-muted-foreground">
+                                                        {item.applicant.handle ? (
+                                                            <Link
+                                                                href={getApplicantProfileHref(item)!}
+                                                                className={`font-medium ${profileLinkClass}`}
+                                                                target="_blank"
+                                                            >
+                                                                @{item.applicant.handle}
+                                                            </Link>
+                                                        ) : (
+                                                            item.applicant.email
+                                                        )}
+                                                        {item.applicant.email && item.applicant.handle ? (
+                                                            <span className="ml-2 text-muted-foreground">
+                                                                {item.applicant.email}
+                                                            </span>
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             </div>

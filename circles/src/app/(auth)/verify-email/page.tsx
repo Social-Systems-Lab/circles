@@ -31,7 +31,7 @@ function VerifyEmailContent() {
                         setTitle("Email verified");
                         setMessage(response.message || "Email verified");
                         setDetail(
-                            "Your email address has been verified. Your Kamooni profile is still unverified until you complete your profile and request member verification.",
+                            "Your email address has been verified. Your Kamooni profile is still unverified until you continue to your profile, complete it, and request member verification.",
                         );
                         setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(false);

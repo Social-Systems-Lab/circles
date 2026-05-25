@@ -8,6 +8,7 @@ import { getUserPrivate } from "@/lib/data/user";
 import {
     COMMUNITY_GUIDELINE_RULE_IDS,
     CommunityGuidelineRuleId,
+    createEmptyCommunityGuidelineAgreementState,
     hasAcceptedAllCommunityGuidelines,
     isAcceptedCommunityGuidelineRule,
     normalizeCommunityGuidelineAgreementState,
@@ -114,6 +115,53 @@ export async function acceptCommunityGuidelineAction(
         };
     } catch (error) {
         console.error("Error in acceptCommunityGuidelineAction:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not save your agreement.",
+        };
+    }
+}
+
+export async function acceptCodeOfConductAction(): Promise<AcceptCommunityGuidelineResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to continue." };
+    }
+
+    try {
+        const user = await getUserPrivate(userDid);
+        if (!user?._id) {
+            return { success: false, message: "User not found." };
+        }
+
+        const now = new Date();
+        const nextAcceptanceState = createEmptyCommunityGuidelineAgreementState();
+
+        for (const ruleId of COMMUNITY_GUIDELINE_RULE_IDS) {
+            nextAcceptanceState[ruleId] = {
+                accepted: true,
+                acceptedAt: now,
+            };
+        }
+
+        await updateCircle(
+            {
+                _id: user._id,
+                communityGuidelinesAcceptance: nextAcceptanceState,
+                communityGuidelinesAcceptedAt: now,
+            },
+            userDid,
+        );
+
+        const updatedUser = await getUserPrivate(userDid);
+
+        return {
+            success: true,
+            message: "Code of Conduct accepted.",
+            user: updatedUser,
+        };
+    } catch (error) {
+        console.error("Error in acceptCodeOfConductAction:", error);
         return {
             success: false,
             message: error instanceof Error ? error.message : "Could not save your agreement.",

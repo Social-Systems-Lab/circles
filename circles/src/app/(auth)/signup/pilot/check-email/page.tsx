@@ -31,8 +31,8 @@ export default async function PilotCheckEmailPage(props: PageProps) {
                         we can reach you.
                     </p>
                     <p className="text-sm text-muted-foreground">
-                        This does not verify your Kamooni profile yet. You can complete your profile and request member
-                        verification later.
+                        This only confirms your email address. After that, continue to your profile, complete it, and
+                        request member verification later when you are ready.
                     </p>
                     {searchParams.email ? (
                         <p className="text-sm font-medium text-slate-700">{searchParams.email}</p>

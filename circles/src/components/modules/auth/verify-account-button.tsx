@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
-import { CommunityGuidelinesAgreementFlow } from "@/components/auth/community-guidelines-gate";
+import { CodeOfConductAgreement } from "@/components/auth/code-of-conduct-agreement";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -126,17 +126,8 @@ export function VerifyAccountButton({
         }
     };
 
-    const handleLearnMore = () => {
-        if (!user) {
-            return;
-        }
-
-        router.push(`/circles/${user.handle}/settings/subscription`);
-        setOpen(false);
-    };
-
-    const handleGuidelinesComplete = async () => {
-        console.log("[VerifyAccountButton] guidelines completed", {
+    const handleCodeOfConductComplete = async () => {
+        console.log("[VerifyAccountButton] code of conduct completed", {
             communityGuidelinesCompleted: isCommunityGuidelinesCompleted(user?.communityGuidelinesAcceptance),
             communityGuidelinesAcceptance: user?.communityGuidelinesAcceptance,
             communityGuidelinesAcceptedAt: user?.communityGuidelinesAcceptedAt,
@@ -166,10 +157,10 @@ export function VerifyAccountButton({
                     }
                 >
                     {activeDialogMode === "guidelines" ? (
-                        <CommunityGuidelinesAgreementFlow
+                        <CodeOfConductAgreement
                             user={user}
                             onUserChange={(nextUser) => setUser(nextUser)}
-                            onComplete={handleGuidelinesComplete}
+                            onComplete={handleCodeOfConductComplete}
                         />
                     ) : activeDialogMode === "readiness" ? (
                         <>
@@ -184,19 +175,12 @@ export function VerifyAccountButton({
                     ) : (
                         <>
                             <DialogHeader>
-                                <DialogTitle>Request member verification</DialogTitle>
+                                <DialogTitle>Submit profile for review</DialogTitle>
                                 <DialogDescription>
-                                    {`Send a request for Kamooni admins to review your profile. Email verification is separate and only confirms your email address.`}
+                                    Your profile will be submitted to Kamooni admins for review. You&apos;ll be
+                                    notified when your verification request has been reviewed. Email verification is
+                                    separate and only confirms your email address.
                                 </DialogDescription>
-                                <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-                                    <p>
-                                        During the test pilot, verified non-founding users receive a Test pilot
-                                        badge. Founding Member status is granted separately.
-                                    </p>
-                                    <Button variant="link" className="p-0 text-yellow-800" onClick={handleLearnMore}>
-                                        Learn more about membership
-                                    </Button>
-                                </div>
                             </DialogHeader>
 
                             <form action={formAction}>
@@ -205,7 +189,7 @@ export function VerifyAccountButton({
                                         type="submit"
                                         disabled={isSubmitting || !communityGuidelinesCompleted || !readiness.isReady}
                                     >
-                                        {isSubmitting ? "Submitting..." : "Confirm"}
+                                        {isSubmitting ? "Submitting..." : "Submit for review"}
                                     </Button>
                                 </DialogFooter>
                             </form>
