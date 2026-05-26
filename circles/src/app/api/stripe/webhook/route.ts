@@ -74,6 +74,10 @@ async function resolveUserFromEvent(event: Stripe.Event) {
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId: string) {
+    if (session.mode !== "subscription") {
+        return;
+    }
+
     const user = await resolveUserFromEvent({
         id: eventId,
         type: "checkout.session.completed",
