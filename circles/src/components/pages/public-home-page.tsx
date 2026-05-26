@@ -257,7 +257,9 @@ export default function PublicHomePage() {
                     <div className="stats-row">
                         {statTargets.map((stat, index) => (
                             <div key={stat.label} className="stat">
-                                <span className="num">{stat.target.toLocaleString()}</span>
+                                <span className="num" data-target={stat.target}>
+                                    0
+                                </span>
                                 <span className="label">{stat.label}</span>
                             </div>
                         ))}

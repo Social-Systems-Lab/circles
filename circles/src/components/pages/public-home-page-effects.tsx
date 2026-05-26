@@ -9,6 +9,8 @@ export default function PublicHomePageEffects() {
             return;
         }
 
+        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
         const revealElements = Array.from(root.querySelectorAll<HTMLElement>(".reveal"));
         const revealObserver = new IntersectionObserver(
             (entries) => {
@@ -27,8 +29,79 @@ export default function PublicHomePageEffects() {
             revealObserver.observe(element);
         });
 
+        const statsElements = Array.from(root.querySelectorAll<HTMLElement>(".stats"));
+        const animationFrames = new Set<number>();
+        const timeouts = new Set<ReturnType<typeof window.setTimeout>>();
+
+        const setFinalStatValues = (statsElement: HTMLElement) => {
+            statsElement.querySelectorAll<HTMLElement>("[data-target]").forEach((numElement) => {
+                const target = Number.parseInt(numElement.dataset.target || "0", 10);
+                numElement.textContent = target.toLocaleString();
+            });
+        };
+
+        const animateNumber = (element: HTMLElement, target: number, duration: number) => {
+            const start = performance.now();
+            const startValue = 0;
+
+            const step = (now: number) => {
+                const elapsed = now - start;
+                const t = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - t, 5);
+                const value = Math.round(startValue + (target - startValue) * eased);
+
+                element.textContent = value.toLocaleString();
+
+                if (t < 1) {
+                    const frame = window.requestAnimationFrame(step);
+                    animationFrames.add(frame);
+                }
+            };
+
+            const frame = window.requestAnimationFrame(step);
+            animationFrames.add(frame);
+        };
+
+        const statsObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    const statsElement = entry.target as HTMLElement;
+
+                    if (!entry.isIntersecting || statsElement.dataset.animated) {
+                        return;
+                    }
+
+                    statsElement.dataset.animated = "true";
+
+                    if (prefersReducedMotion) {
+                        setFinalStatValues(statsElement);
+                    } else {
+                        statsElement.querySelectorAll<HTMLElement>("[data-target]").forEach((numElement, index) => {
+                            const target = Number.parseInt(numElement.dataset.target || "0", 10);
+                            const timeout = window.setTimeout(() => animateNumber(numElement, target, 2100), index * 150);
+                            timeouts.add(timeout);
+                        });
+                    }
+
+                    statsObserver.unobserve(statsElement);
+                });
+            },
+            { threshold: 0.4 },
+        );
+
+        statsElements.forEach((element) => {
+            if (prefersReducedMotion) {
+                setFinalStatValues(element);
+            } else {
+                statsObserver.observe(element);
+            }
+        });
+
         return () => {
             revealObserver.disconnect();
+            statsObserver.disconnect();
+            animationFrames.forEach((frame) => window.cancelAnimationFrame(frame));
+            timeouts.forEach((timeout) => window.clearTimeout(timeout));
         };
     }, []);
 
