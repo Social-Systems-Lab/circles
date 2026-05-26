@@ -31,7 +31,7 @@ export default function PublicHomePageEffects() {
 
         const statsElements = Array.from(root.querySelectorAll<HTMLElement>(".stats"));
         const animationFrames = new Set<number>();
-        const timeouts = new Set<ReturnType<typeof window.setTimeout>>();
+        const timeouts = new Set<number>();
 
         const setFinalStatValues = (statsElement: HTMLElement) => {
             statsElement.querySelectorAll<HTMLElement>("[data-target]").forEach((numElement) => {
