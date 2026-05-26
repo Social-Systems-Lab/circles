@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -73,10 +74,23 @@ function DonateContent() {
     }
 
     return (
-        <div className="relative overflow-hidden bg-kam-hero-yellow/10">
-            <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-kam-hero-yellow via-kam-hero-yellow/80 to-transparent" />
-            <div className="container relative z-10 py-16">
-                <div className="mx-auto max-w-3xl rounded-[32px] border border-black/5 bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.08)] sm:p-10">
+        <div className="relative overflow-hidden bg-kam-hero-yellow">
+            <div
+                className="pointer-events-none absolute -left-[80px] -top-[60px] h-[300px] w-[300px] rotate-12 transform opacity-45
+                  sm:-left-[90px] sm:-top-[70px] sm:h-[350px] sm:w-[350px]
+                  md:-left-[100px] md:-top-[80px] md:h-[400px] md:w-[400px]"
+            >
+                <Image src="/images/flower-bg.png" alt="" fill className="object-contain" aria-hidden="true" />
+            </div>
+            <div
+                className="pointer-events-none absolute -bottom-[60px] -right-[80px] h-[300px] w-[300px] -rotate-12 transform opacity-45
+                  sm:-bottom-[70px] sm:-right-[90px] sm:h-[350px] sm:w-[350px]
+                  md:-bottom-[80px] md:-right-[100px] md:h-[400px] md:w-[400px]"
+            >
+                <Image src="/images/flower-bg.png" alt="" fill className="object-contain" aria-hidden="true" />
+            </div>
+            <div className="container relative z-10 py-16 sm:py-20">
+                <div className="mx-auto max-w-3xl rounded-[32px] border border-white/40 bg-white p-8 shadow-[0_30px_90px_rgba(123,74,0,0.18)] sm:p-10">
                     <div className="max-w-2xl">
                         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-kam-orange">Support Kamooni</p>
                         <h1 className="mt-4 text-4xl font-bold tracking-tight text-kam-gray-dark sm:text-5xl">
@@ -88,7 +102,7 @@ function DonateContent() {
                         </p>
                     </div>
 
-                    <div className="mt-10 rounded-3xl border border-kam-hero-yellow/60 bg-kam-hero-yellow/20 p-6">
+                    <div className="mt-10 rounded-3xl border border-black/10 bg-white p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
                         <h2 className="text-xl font-semibold text-kam-gray-dark">Choose an amount</h2>
                         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                             {DONATION_AMOUNTS.map((amount) => {
@@ -100,8 +114,8 @@ function DonateContent() {
                                         type="button"
                                         className={`rounded-2xl border px-4 py-5 text-lg font-semibold transition-colors ${
                                             isSelected
-                                                ? "border-kam-orange bg-kam-orange text-white"
-                                                : "border-black/10 bg-white text-kam-gray-dark hover:border-kam-orange/50 hover:bg-kam-hero-yellow/30"
+                                                ? "border-[hsl(var(--button-primary-hover))] bg-[hsl(var(--button-primary))] text-white shadow-[0_10px_24px_rgba(27,94,62,0.22)]"
+                                                : "border-black/10 bg-white text-kam-gray-dark hover:border-kam-orange/50 hover:bg-kam-hero-yellow/15"
                                         }`}
                                         onClick={() => {
                                             setSelectedAmount(amount);
@@ -187,10 +201,23 @@ export default function DonatePage() {
     return (
         <Suspense
             fallback={
-                <div className="relative overflow-hidden bg-kam-hero-yellow/10">
-                    <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-kam-hero-yellow via-kam-hero-yellow/80 to-transparent" />
-                    <div className="container relative z-10 py-16">
-                        <div className="mx-auto max-w-3xl rounded-[32px] border border-black/5 bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.08)] sm:p-10">
+                <div className="relative overflow-hidden bg-kam-hero-yellow">
+                    <div
+                        className="pointer-events-none absolute -left-[80px] -top-[60px] h-[300px] w-[300px] rotate-12 transform opacity-45
+                          sm:-left-[90px] sm:-top-[70px] sm:h-[350px] sm:w-[350px]
+                          md:-left-[100px] md:-top-[80px] md:h-[400px] md:w-[400px]"
+                    >
+                        <Image src="/images/flower-bg.png" alt="" fill className="object-contain" aria-hidden="true" />
+                    </div>
+                    <div
+                        className="pointer-events-none absolute -bottom-[60px] -right-[80px] h-[300px] w-[300px] -rotate-12 transform opacity-45
+                          sm:-bottom-[70px] sm:-right-[90px] sm:h-[350px] sm:w-[350px]
+                          md:-bottom-[80px] md:-right-[100px] md:h-[400px] md:w-[400px]"
+                    >
+                        <Image src="/images/flower-bg.png" alt="" fill className="object-contain" aria-hidden="true" />
+                    </div>
+                    <div className="container relative z-10 py-16 sm:py-20">
+                        <div className="mx-auto max-w-3xl rounded-[32px] border border-white/40 bg-white p-8 shadow-[0_30px_90px_rgba(123,74,0,0.18)] sm:p-10">
                             <div className="max-w-2xl">
                                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-kam-orange">Support Kamooni</p>
                                 <h1 className="mt-4 text-4xl font-bold tracking-tight text-kam-gray-dark sm:text-5xl">
