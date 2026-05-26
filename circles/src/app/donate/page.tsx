@@ -184,9 +184,9 @@ function DonateContent() {
                             open-source platform without ads or corporate surveillance.
                         </p>
                         <p>
-                            Looking for supporting membership instead? Visit{" "}
-                            <Link href="/welcome" className="font-semibold text-kam-orange underline-offset-4 hover:underline">
-                                the Kamooni welcome page
+                            Looking for the support overview instead? Visit{" "}
+                            <Link href="/donations" className="font-semibold text-kam-orange underline-offset-4 hover:underline">
+                                the Kamooni donations page
                             </Link>
                             .
                         </p>
