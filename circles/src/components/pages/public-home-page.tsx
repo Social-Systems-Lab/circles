@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Montserrat, Noto_Serif, Outfit } from "next/font/google";
 import PublicHomePageEffects from "./public-home-page-effects";
+import { getPublicPlatformStats } from "@/lib/data/platform-stats";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -157,7 +158,19 @@ const statTargets = [
     { label: "Circles", target: 97 },
 ];
 
-export default function PublicHomePage() {
+export default async function PublicHomePage() {
+    let stats = statTargets;
+
+    try {
+        const platformStats = await getPublicPlatformStats();
+        stats = [
+            { label: "People", target: platformStats.people },
+            { label: "Circles", target: platformStats.circles },
+        ];
+    } catch (error) {
+        console.error("Failed to load public platform stats:", error);
+    }
+
     return (
         <div className={`${montserrat.variable} ${notoSerif.variable} ${outfit.variable} kam-home`}>
             <PublicHomePageEffects />
@@ -255,7 +268,7 @@ export default function PublicHomePage() {
                 <div className="container">
                     <p className="stats-title">Our current cohort</p>
                     <div className="stats-row">
-                        {statTargets.map((stat, index) => (
+                        {stats.map((stat, index) => (
                             <div key={stat.label} className="stat">
                                 <span className="num" data-target={stat.target}>
                                     0

@@ -7,7 +7,7 @@ export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefin
 
     let userGroups: string[] | undefined;
     if ("memberships" in user) {
-        userGroups = user.memberships.find((c) => c.circleId === circle._id)?.userGroups;
+        userGroups = user.memberships?.find((c) => c.circleId === circle._id)?.userGroups;
     } else {
         userGroups = user.userGroups;
     }

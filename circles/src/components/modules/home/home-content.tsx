@@ -31,6 +31,8 @@ import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { UserStatusBadge } from "@/components/modules/users/user-status-badge";
+import { isVerifiedUser } from "@/lib/auth/verification";
+import { hasContributorPerks } from "@/lib/auth/perks";
 import {
     Dialog,
     DialogContent,
@@ -84,6 +86,20 @@ export default function HomeContent({
 
     useEffect(() => {
         if (!isOwnUserProfile || !circle.handle) {
+            setShowWelcomeDialog(false);
+            return;
+        }
+
+        const completedOnboardingSteps = circle.completedOnboardingSteps ?? [];
+        const hasSeenWelcomeOnboarding =
+            completedOnboardingSteps.includes("welcome") ||
+            completedOnboardingSteps.includes("member") ||
+            completedOnboardingSteps.includes("final");
+        const shouldSuppressWelcomeDialog =
+            isVerifiedUser(circle) || hasContributorPerks(circle) || hasSeenWelcomeOnboarding;
+
+        if (shouldSuppressWelcomeDialog) {
+            setShowWelcomeDialog(false);
             return;
         }
 
@@ -93,7 +109,7 @@ export default function HomeContent({
         if (!alreadySeen) {
             setShowWelcomeDialog(true);
         }
-    }, [circle.handle, isOwnUserProfile]);
+    }, [circle, isOwnUserProfile]);
 
     const handleWelcomeDialogChange = (nextOpen: boolean) => {
         setShowWelcomeDialog(nextOpen);

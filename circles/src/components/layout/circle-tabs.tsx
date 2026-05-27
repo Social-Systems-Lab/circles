@@ -35,7 +35,7 @@ export function CircleTabs({ circle }: CircleTabsProps) {
 
     // Determine user's access groups for the current circle
     const userGroups = useMemo(() => {
-        const membership = user?.memberships.find((m) => m.circleId === circle?._id);
+        const membership = user?.memberships?.find((m) => m.circleId === circle?._id);
         return membership ? membership.userGroups : [];
     }, [user, circle?._id]);
 

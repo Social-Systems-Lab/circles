@@ -18,6 +18,7 @@ import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
 import { listChatRoomsAction } from "../modules/chat/actions";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -182,7 +183,7 @@ const ProfileMenuBar = () => {
                             <Button
                                 className="relative h-auto w-auto rounded-full p-0"
                                 variant="ghost"
-                                onClick={() => router.push(`/circles/${user?.handle}`)}
+                                onClick={() => router.push(getCircleDefaultPath(user))}
                             >
                                 <UserPicture
                                     name={user?.name}
