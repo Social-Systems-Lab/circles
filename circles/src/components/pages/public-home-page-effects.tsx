@@ -10,11 +10,13 @@ export default function PublicHomePageEffects() {
         }
 
         const heroBackground = root.querySelector<HTMLElement>(".hero-bg");
+        const hero = root.querySelector<HTMLElement>(".hero");
         const heroImage = new window.Image();
         const heroImageUrl = "/images/landing/hero-illustration.png";
 
         const handleHeroImageLoaded = () => {
             heroBackground?.classList.add("is-loaded");
+            hero?.classList.add("is-ready");
         };
 
         heroImage.addEventListener("load", handleHeroImageLoaded);

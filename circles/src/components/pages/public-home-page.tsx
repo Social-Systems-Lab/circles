@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Montserrat, Noto_Serif, Outfit } from "next/font/google";
+import { preload } from "react-dom";
 import PublicHomePageEffects from "./public-home-page-effects";
 import { getPublicPlatformStats } from "@/lib/data/platform-stats";
 
@@ -157,6 +158,8 @@ const statTargets = [
 ];
 
 export default async function PublicHomePage() {
+    preload("/images/landing/hero-illustration.png", { as: "image" });
+
     let stats = statTargets;
 
     try {
