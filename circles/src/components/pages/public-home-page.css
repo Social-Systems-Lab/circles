@@ -426,7 +426,7 @@
   /* ─────────── Q&A — three blocks ─────────── */
   .qa-stack {
     background: var(--bg);
-    padding: 30px 0 110px;
+    padding: 30px 0 72px;
   }
   .qa {
     max-width: 760px;
@@ -436,14 +436,16 @@
   }
   .qa + .qa { margin-top: 110px; }
   /* When a pin divider sits between two .qa blocks, it takes over the spacing */
-  .qa + .pin-divider { margin-top: 80px; }
-  .pin-divider + .qa { margin-top: 80px; }
+  .qa + .pin-divider { margin-top: 92px; }
+  .pin-divider + .qa { margin-top: 72px; }
   .pin-divider {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 22px;
     max-width: 380px;
+    padding-top: 18px;
+    padding-bottom: 4px;
     margin-left: auto;
     margin-right: auto;
     color: var(--yellow);
@@ -466,7 +468,7 @@
   /* ─────────── STATS — Our current cohort ─────────── */
   .stats {
     background: var(--bg);
-    padding: 30px 32px 60px;
+    padding: 20px 32px 60px;
   }
   .stats .container {
     max-width: 720px;
@@ -514,13 +516,21 @@
     color: var(--ink-soft);
     margin-top: 8px;
   }
+  .stats .stats-copy {
+    max-width: 680px;
+    margin: 0 auto 32px;
+    font-family: var(--sans);
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--ink-soft);
+  }
   .stats .stats-cta {
     display: flex;
     justify-content: center;
   }
   @media (max-width: 540px) {
     .stats .stats-row { gap: 40px; }
-    .stats { padding: 20px 32px 70px; }
+    .stats { padding: 16px 32px 70px; }
   }
 
   /* ─────────── Section markers (icons between sections) ─────────── */
@@ -622,7 +632,7 @@
     color: var(--ink);
     max-width: 620px;
     margin-top: 32px;
-    margin-bottom: 0;
+    margin-bottom: 18px;
   }
   .qa p.emphasis em {
     font-style: italic;
@@ -647,8 +657,11 @@
     text-decoration-color: var(--red);
   }
   @media (max-width: 900px) {
-    .qa-stack { padding: 90px 0 80px; }
+    .qa-stack { padding: 90px 0 56px; }
     .qa + .qa { margin-top: 80px; }
+    .qa + .pin-divider { margin-top: 80px; }
+    .pin-divider + .qa { margin-top: 64px; }
+    .pin-divider { padding-top: 14px; }
   }
 
   /* ─────────── FINAL CTA (dark) ─────────── */

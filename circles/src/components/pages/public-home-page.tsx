@@ -142,11 +142,9 @@ const qaItems = [
             <>
                 <p>Glad you asked. Kamooni is very much in an early stage. We are still ironing out the kinks and testing new ideas. It&apos;s a very exciting time. The second half of this year will be dedicated to refining and improving the platform so we can launch with confidence and panache.</p>
                 <p>
-                    A great next step is to join our growing team of intrepid test pilots. If you are someone with solid ideas for a better social environment, this is your chance to make your mark! Want to meet the rest of the team first? Join us for one of our regular{" "}
-                    <strong>
-                        <Link href="/circles/changemaker-tuesdays/home">open sessions on Tuesdays</Link>
-                    </strong>
-                    .
+                    A great next step is to join our growing team of intrepid test pilots. If you have clear ideas for
+                    a better social environment, or want to join a community of people focused on action and creating
+                    the tools that will take us to the next level, this is the time to join.
                 </p>
             </>
         ),
@@ -277,6 +275,11 @@ export default async function PublicHomePage() {
                             </div>
                         ))}
                     </div>
+                    <p className="stats-copy">
+                        Whether you are a developer, a designer, a marketer, an activist, a volunteer or a fellow
+                        human being who senses there is a better way to do things, we&apos;d love to have you. Let&apos;s
+                        be the system change we want to see. Together.
+                    </p>
                     <div className="stats-cta">
                         <Link className="btn btn-primary" href="/signup/pilot">
                             Sign up
