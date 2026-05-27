@@ -83,6 +83,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 28%, rgba(113, 73, 32, 0.34) 0%, rgba(113, 73, 32, 0) 38%),
+      linear-gradient(180deg, #2f2018 0%, #4b3120 38%, #7a5228 72%, #d9b36c 100%);
   }
   .hero-bg {
     position: absolute;
@@ -91,7 +94,10 @@
     background-size: cover;
     background-position: top center;
     z-index: 0;
+    opacity: 0;
+    transition: opacity 0.55s ease;
   }
+  .hero-bg.is-loaded { opacity: 1; }
   .hero-bg::after {
     /* Darker warm wash so the white logo reads against the illustration */
     content: "";
@@ -112,6 +118,11 @@
           rgba(34, 23, 16, 0.55) 30%,
           rgba(34, 23, 16, 0.40) 70%,
           rgba(244, 234, 208, 0.95) 100%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-bg {
+      transition: none;
     }
   }
 

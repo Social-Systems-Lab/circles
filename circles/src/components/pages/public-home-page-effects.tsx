@@ -9,6 +9,20 @@ export default function PublicHomePageEffects() {
             return;
         }
 
+        const heroBackground = root.querySelector<HTMLElement>(".hero-bg");
+        const heroImage = new window.Image();
+        const heroImageUrl = "/images/landing/hero-illustration.png";
+
+        const handleHeroImageLoaded = () => {
+            heroBackground?.classList.add("is-loaded");
+        };
+
+        heroImage.addEventListener("load", handleHeroImageLoaded);
+        heroImage.src = heroImageUrl;
+        if (heroImage.complete) {
+            handleHeroImageLoaded();
+        }
+
         const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         const revealElements = Array.from(root.querySelectorAll<HTMLElement>(".reveal"));
@@ -98,6 +112,7 @@ export default function PublicHomePageEffects() {
         });
 
         return () => {
+            heroImage.removeEventListener("load", handleHeroImageLoaded);
             revealObserver.disconnect();
             statsObserver.disconnect();
             animationFrames.forEach((frame) => window.cancelAnimationFrame(frame));
