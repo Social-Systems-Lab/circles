@@ -13,7 +13,7 @@ import BookmarkButton from "./bookmark-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { MessageButton } from "./message-button";
+import { MessageButton, ProfileRelationshipHeaderAction } from "./message-button";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog"; // Changed Popover to Dialog
@@ -259,6 +259,7 @@ export default function HomeContent({
                                     {proofOfHumanitySummary && (
                                         <ProofOfHumanityHeaderAction circle={circle} summary={proofOfHumanitySummary} />
                                     )}
+                                    {isUser ? <ProfileRelationshipHeaderAction circle={circle} /> : null}
                                 </div>
 
                                 {!isCompact && (

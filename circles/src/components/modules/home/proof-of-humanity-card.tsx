@@ -32,9 +32,9 @@ type ProofOfHumanityCardProps = {
 };
 
 const humanBadgeClassName =
-    "rounded-full border border-[#1f6b45] bg-[#e8f4ec] px-3 py-1 text-[#174f34] hover:border-[#1a5a3a] hover:bg-[#deeee4] hover:text-[#123d28]";
+    "inline-flex h-8 items-center rounded-full border border-[#1f6b45] bg-[#e8f4ec] px-3 py-1 text-[#174f34] hover:border-[#1a5a3a] hover:bg-[#deeee4] hover:text-[#123d28]";
 const verifiedHumanBadgeClassName =
-    "rounded-full border-transparent bg-[hsl(var(--button-primary))] px-3 py-1 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))] hover:text-[hsl(var(--button-primary-foreground))]";
+    "inline-flex h-8 items-center rounded-full border-transparent bg-[hsl(var(--button-primary))] px-3 py-1 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))] hover:text-[hsl(var(--button-primary-foreground))]";
 
 const formatCountLabel = (count: number, singular: string, plural: string) =>
     `${count} ${count === 1 ? singular : plural}`;

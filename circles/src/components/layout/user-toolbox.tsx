@@ -517,21 +517,27 @@ export const UserToolbox = () => {
         (connection: ToolboxConnectionItem, label?: string) => {
             const showRespondControl = connection.connectStatus === "pending_received";
             const isResponding = respondingConnectionDid === connection.circle.did;
+            const rowClassName = "m-1 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-100";
+            const labelClassName = showRespondControl
+                ? "rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                : connection.connectStatus === "accepted"
+                  ? "rounded-full border border-[#c7d8cb] bg-[#f3f7f4] px-2 py-0.5 text-[11px] font-medium text-[#45604d]"
+                  : "rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600";
+            const respondButtonClassName =
+                "h-8 shrink-0 rounded-full bg-amber-500 px-2 text-xs font-medium text-white shadow-sm hover:bg-amber-600 focus-visible:ring-amber-400";
 
             return (
                 <div
                     key={`${connection.connectStatus}-${connection.circle.did}`}
-                    className="m-1 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-100"
+                    className={rowClassName}
                     onClick={() => openConnection(connection)}
                 >
                     <CirclePicture circle={connection.circle} size="40px" />
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                             <p className="truncate text-sm font-medium">{connection.circle.name}</p>
-                            {label ? (
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                    {label}
-                                </span>
+                            {label && !showRespondControl ? (
+                                <span className={labelClassName}>{label}</span>
                             ) : null}
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
@@ -542,9 +548,9 @@ export const UserToolbox = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="outline"
+                                    variant="default"
                                     size="sm"
-                                    className="h-8 shrink-0 px-2 text-xs"
+                                    className={respondButtonClassName}
                                     disabled={isResponding}
                                     onClick={(event) => event.stopPropagation()}
                                 >
@@ -555,13 +561,13 @@ export const UserToolbox = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
                                 <DropdownMenuItem onSelect={() => void handleConnectionResponse(connection, "accept")}>
-                                    Accept
+                                    Accept connection
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    className="text-red-600 focus:text-red-600"
+                                    className="text-amber-900 focus:bg-amber-50 focus:text-amber-950"
                                     onSelect={() => void handleConnectionResponse(connection, "decline")}
                                 >
-                                    Decline
+                                    Decline request
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -843,13 +849,13 @@ export const UserToolbox = () => {
                             <div className="pb-2">
                                 {connections.pendingIncoming.length > 0 && (
                                     <div className="px-3 pb-1 pt-2">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
                                             Requests for you
                                         </p>
                                     </div>
                                 )}
                                 {connections.pendingIncoming.map((connection) =>
-                                    renderConnectionRow(connection, "Requested You"),
+                                    renderConnectionRow(connection),
                                 )}
                                 {connections.pendingOutgoing.length > 0 && (
                                     <div className="px-3 pb-1 pt-3">
@@ -863,12 +869,12 @@ export const UserToolbox = () => {
                                 )}
                                 {connections.accepted.length > 0 && (
                                     <div className="px-3 pb-1 pt-3">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
                                             Connections
                                         </p>
                                     </div>
                                 )}
-                                {connections.accepted.map((connection) => renderConnectionRow(connection))}
+                                {connections.accepted.map((connection) => renderConnectionRow(connection, "Connected"))}
                             </div>
                         ) : (
                             <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">

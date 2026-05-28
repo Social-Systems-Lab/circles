@@ -27,6 +27,7 @@ import { MdOutlineArticle } from "react-icons/md";
 import { Hammer, AlertCircle } from "lucide-react"; // Gavel icon for proposals, AlertCircle for issues
 import { AiFillHeart } from "react-icons/ai";
 import { Button } from "../ui/button";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 type Notification = {
     id: string;
@@ -469,7 +470,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "pm_received":
                     return notification.roomId ? `/chat/${notification.roomId}` : null;
                 case "contact_request_received":
-                    return notification.user?.handle ? `/circles/${notification.user.handle}` : null;
+                    return notification.user?.handle ? getCircleDefaultPath(notification.user) : null;
                 case "post_comment":
                 case "comment_reply":
                 case "post_like":
@@ -526,6 +527,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         }
 
         switch (notification.notificationType) {
+            case "contact_request_received":
+                return "Respond";
             case "pm_received":
                 return "Reply";
             case "task_assigned":
@@ -571,6 +574,14 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 return null;
         }
     }, [getNotificationHref]);
+
+    const getNotificationActionClassName = useCallback((groupedNotification: GroupedNotification) => {
+        if (groupedNotification.latestNotification.notificationType === "contact_request_received") {
+            return "ml-2 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-sm hover:bg-amber-600";
+        }
+
+        return "ml-2 rounded-md border px-2 py-1 text-xs text-gray-600 hover:bg-gray-100";
+    }, []);
 
     const handleNotificationClick = useCallback(async (groupedNotification: GroupedNotification) => {
         await markNotificationGroupAsRead(groupedNotification);
@@ -872,7 +883,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                                         e.stopPropagation();
                                         void handleNotificationClick(groupedNotification);
                                     }}
-                                    className="ml-2 rounded-md border px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                                    className={getNotificationActionClassName(groupedNotification)}
                                 >
                                     {getNotificationActionLabel(groupedNotification)}
                                 </button>
