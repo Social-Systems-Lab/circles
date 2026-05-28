@@ -12,7 +12,6 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
-import emptyFeed from "@images/empty-feed.png";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 
 interface ChatListProps {
@@ -154,7 +153,12 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                         </p>
                     ) : isMobile ? (
                         <div className="flex flex-col items-center justify-center gap-4 p-4">
-                            <Image src={emptyFeed} alt="No messages yet" width={230} />
+                            <Image
+                                src="/images/illustrations/mailbox.png"
+                                alt="No messages yet"
+                                width={230}
+                                height={230}
+                            />
                             <h4 className="text-lg font-semibold">No Messages Yet</h4>
                             <p className="max-w-md text-center text-sm text-gray-500">
                                 You haven&apos;t joined any message groups yet. Try discover new circles to message in.

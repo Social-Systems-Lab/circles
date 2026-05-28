@@ -6,7 +6,6 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import Image from "next/image";
-import emptyFeed from "@images/empty-feed.png";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -56,7 +55,7 @@ export default function ChatPage() {
     if (chatRooms.length <= 0) {
         return (
             <div className="flex h-screen flex-col items-center justify-center gap-4 p-4">
-                <Image src={emptyFeed} alt="No messages yet" width={300} />
+                <Image src="/images/illustrations/mailbox.png" alt="No messages yet" width={300} height={300} />
                 <h4 className="text-lg font-semibold">No Messages Yet</h4>
                 <p className="max-w-md text-center text-sm text-gray-500">
                     You haven&apos;t joined any message groups yet. Try discover new circles to message in.
