@@ -679,6 +679,9 @@ export const modules: ModuleInfo[] = [
     },
 ];
 
+// TODO: Re-enable the projects module in public UI once the page is ready.
+export const hiddenPublicModuleHandles: readonly string[] = ["projects"];
+
 export const defaultUserModules = ["home", "feed", "followers", "communities", "settings"];
 export const defaultCircleModules = ["home", "feed", "followers", "discussions", "settings"];
 export const defaultProjectModules = ["home", "feed", "goals", "tasks", "followers", "discussions", "settings"];

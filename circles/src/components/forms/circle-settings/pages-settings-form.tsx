@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { savePages } from "@/app/circles/[handle]/settings/pages/actions";
-import { modules } from "@/lib/data/constants";
+import { hiddenPublicModuleHandles, modules } from "@/lib/data/constants";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { getUserPrivateAction } from "@/components/modules/home/actions";
@@ -27,7 +27,9 @@ export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.Rea
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Get all available modules from features
-    const availableModules: ModuleInfo[] = modules;
+    const availableModules: ModuleInfo[] = modules.filter(
+        (module) => !hiddenPublicModuleHandles.includes(module.handle),
+    );
 
     const form = useForm({
         defaultValues: { _id: circle._id, enabledModules: circle.enabledModules || ["general", "settings"] },

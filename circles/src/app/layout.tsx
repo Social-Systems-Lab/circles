@@ -1,6 +1,6 @@
 // layout.tsx - global app layout with the main navigation bar
 import { ReactScan } from "../components/utils/react-scan";
-import { Wix_Madefor_Display, Libre_Franklin, Inter, Bebas_Neue } from "next/font/google";
+import { Wix_Madefor_Display, Libre_Franklin, Bebas_Neue } from "next/font/google";
 import "@app/globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Provider } from "jotai";
@@ -26,7 +26,6 @@ export const fetchCache = "force-no-store";
 export const revalidate = 0;
 const enableReactScan = false;
 
-const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
 const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-franklin" });
 
@@ -50,7 +49,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                 <head>
                     <meta name="app-version" content={process.env.version} />
                 </head>
-                <body className={inter.className} suppressHydrationWarning>
+                <body suppressHydrationWarning>
                     <main className="relative flex flex-col md:flex-row">
                         <GlobalNav />
                         <div className="relative flex w-full flex-row overflow-hidden">

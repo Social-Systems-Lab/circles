@@ -9,7 +9,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useMemo, useCallback, useEffect, useState, useRef } from "react";
 import type { Circle, Module } from "@/models/models";
-import { features, getFeature, LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
+import { features, getFeature, hiddenPublicModuleHandles, LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -72,7 +72,7 @@ export function CircleTabs({ circle }: CircleTabsProps) {
         return enabledModules
             .filter((moduleHandle) => {
                 let m = modules.find((x) => x.handle === moduleHandle);
-                return m && hasAccess(moduleHandle);
+                return m && !hiddenPublicModuleHandles.includes(moduleHandle) && hasAccess(moduleHandle);
             })
             .map((moduleHandle) => modules.find((x) => x.handle === moduleHandle)!);
     }, [enabledModules, hasAccess]);
