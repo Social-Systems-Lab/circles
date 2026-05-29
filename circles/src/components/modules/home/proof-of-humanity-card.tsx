@@ -15,7 +15,6 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Circle, HumanityVerificationDisplay, HumanityVerificationLevel } from "@/models/models";
@@ -31,13 +30,37 @@ type ProofOfHumanityCardProps = {
     summary: HumanityVerificationSummary;
 };
 
-const humanBadgeClassName =
-    "inline-flex h-8 items-center rounded-full border border-[#1f6b45] bg-[#e8f4ec] px-3 py-1 text-[#174f34] hover:border-[#1a5a3a] hover:bg-[#deeee4] hover:text-[#123d28]";
-const verifiedHumanBadgeClassName =
-    "inline-flex h-8 items-center rounded-full border-transparent bg-[hsl(var(--button-primary))] px-3 py-1 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))] hover:text-[hsl(var(--button-primary-foreground))]";
+const headerHumanButtonClassName =
+    "h-8 rounded-full border-transparent bg-[#1f6b45] px-3 text-white hover:bg-[#19573a] hover:text-white";
+const headerVerifyHumanButtonClassName =
+    "h-8 rounded-full border-[#1f6b45] bg-transparent px-3 text-[#1f6b45] hover:border-[#19573a] hover:bg-[#e8f4ec] hover:text-[#19573a]";
+const primaryActionButtonClassName =
+    "rounded-full border-transparent bg-[#1f6b45] text-white hover:bg-[#19573a] hover:text-white";
+const verificationBadgeClassName =
+    "border-[#93ab83] bg-[#edf4e7] text-[#42553b] hover:border-[#809771] hover:bg-[#e5efdc] hover:text-[#384831]";
 
-const formatCountLabel = (count: number, singular: string, plural: string) =>
-    `${count} ${count === 1 ? singular : plural}`;
+const getVerificationSelections = (level?: HumanityVerificationLevel | null) => ({
+    confirmsRealPerson: Boolean(level),
+    confirmsMetInPerson: level === "met_in_real_life",
+});
+
+const getVerificationLevel = ({
+    confirmsRealPerson,
+    confirmsMetInPerson,
+}: {
+    confirmsRealPerson: boolean;
+    confirmsMetInPerson: boolean;
+}): HumanityVerificationLevel | null => {
+    if (confirmsMetInPerson) {
+        return "met_in_real_life";
+    }
+
+    if (confirmsRealPerson) {
+        return "real_person";
+    }
+
+    return null;
+};
 
 export function ProofOfHumanityHeaderAction({
     circle,
@@ -52,7 +75,7 @@ export function ProofOfHumanityHeaderAction({
 
     if (summary.totalActiveCount > 0) {
         return (
-            <Button asChild variant="outline" size="sm" className={verifiedHumanBadgeClassName}>
+            <Button asChild variant="outline" size="sm" className={headerHumanButtonClassName}>
                 <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>✓ Human</Link>
             </Button>
         );
@@ -63,7 +86,7 @@ export function ProofOfHumanityHeaderAction({
     }
 
     return (
-        <Button asChild variant="outline" size="sm" className={humanBadgeClassName}>
+        <Button asChild variant="outline" size="sm" className={headerVerifyHumanButtonClassName}>
             <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>Verify Human</Link>
         </Button>
     );
@@ -75,16 +98,18 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const [isPending, startTransition] = useTransition();
-    const [level, setLevel] = useState<HumanityVerificationLevel>(summary.viewerVerification?.level ?? "real_person");
+    const [confirmsRealPerson, setConfirmsRealPerson] = useState(
+        getVerificationSelections(summary.viewerVerification?.level).confirmsRealPerson,
+    );
+    const [confirmsMetInPerson, setConfirmsMetInPerson] = useState(
+        getVerificationSelections(summary.viewerVerification?.level).confirmsMetInPerson,
+    );
     const [note, setNote] = useState(summary.viewerVerification?.note ?? "");
     const [acknowledgedPublic, setAcknowledgedPublic] = useState(false);
 
     const viewerVerification = summary.viewerVerification;
-    const summaryLine = `${formatCountLabel(summary.realPersonCount, "real person", "real people")} · ${formatCountLabel(
-        summary.metInRealLifeCount,
-        "met in real life",
-        "met in real life",
-    )}`;
+    const selectedLevel = getVerificationLevel({ confirmsRealPerson, confirmsMetInPerson });
+    const summaryLine = `Confirmed by ${summary.totalActiveCount} ${summary.totalActiveCount === 1 ? "person" : "people"}`;
 
     useEffect(() => {
         const syncExpandedWithHash = () => {
@@ -100,9 +125,19 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
     const handleSave = () => {
         startTransition(async () => {
+            if (!selectedLevel) {
+                toast({
+                    title: "Choose at least one confirmation",
+                    description: "Select a confirmation before saving your verification.",
+                    variant: "destructive",
+                    icon: "error",
+                });
+                return;
+            }
+
             const result = await saveProofOfHumanityVerificationAction({
                 subjectDid: circle.did!,
-                level,
+                level: selectedLevel,
                 note,
                 acknowledgedPublic,
             });
@@ -175,17 +210,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
                 {isExpanded && (
                     <div id="proof-of-humanity-details" className="mt-5">
-                        <div className="space-y-2 rounded-xl border border-border/60 bg-background px-3 py-3">
-                            <div className="text-sm font-medium text-foreground">Counts</div>
-                            <div className="text-sm text-muted-foreground">
-                                {formatCountLabel(summary.realPersonCount, "real person", "real people")}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                {formatCountLabel(summary.metInRealLifeCount, "met in real life", "met in real life")}
-                            </div>
-                        </div>
-
-                        <div className="mt-5">
+                        <div>
                             <div className="mb-2 text-sm font-medium text-foreground">Public verifiers</div>
                             {summary.verifications.length > 0 ? (
                                 <div className="space-y-3">
@@ -203,7 +228,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                 <div className="text-sm font-medium text-foreground">Your verification</div>
                                 <div className="mt-1 text-sm text-muted-foreground">
                                     {viewerVerification.level === "met_in_real_life"
-                                        ? "You have publicly confirmed that you have met this person in real life."
+                                        ? "You have publicly confirmed that you have met this person physically, in person."
                                         : "You have publicly confirmed that this is a real person."}
                                 </div>
                                 {viewerVerification.note && (
@@ -217,9 +242,10 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                         <div className="mt-5 flex flex-wrap gap-2">
                             {summary.canCurrentViewerVerify && !viewerVerification && (
                                 <Button
-                                    variant="outline"
+                                    className={primaryActionButtonClassName}
                                     onClick={() => {
-                                        setLevel("real_person");
+                                        setConfirmsRealPerson(true);
+                                        setConfirmsMetInPerson(false);
                                         setNote("");
                                         setAcknowledgedPublic(false);
                                         setIsDialogOpen(true);
@@ -233,7 +259,9 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                     <Button
                                         variant="outline"
                                         onClick={() => {
-                                            setLevel(viewerVerification.level);
+                                            const selections = getVerificationSelections(viewerVerification.level);
+                                            setConfirmsRealPerson(selections.confirmsRealPerson);
+                                            setConfirmsMetInPerson(selections.confirmsMetInPerson);
                                             setNote(viewerVerification.note ?? "");
                                             setAcknowledgedPublic(false);
                                             setIsDialogOpen(true);
@@ -265,24 +293,41 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
                     <div className="space-y-5">
                         <div className="space-y-3">
-                            <Label>Verification level</Label>
-                            <RadioGroup
-                                value={level}
-                                onValueChange={(value) => setLevel(value as HumanityVerificationLevel)}
-                            >
+                            <Label>Public confirmations</Label>
+                            <div className="space-y-3">
                                 <div className="flex items-start gap-3 rounded-lg border p-3">
-                                    <RadioGroupItem value="real_person" id="proof-level-real-person" />
+                                    <Checkbox
+                                        id="proof-level-real-person"
+                                        checked={confirmsRealPerson}
+                                        onCheckedChange={(checked) => {
+                                            const isChecked = Boolean(checked);
+                                            setConfirmsRealPerson(isChecked);
+                                            if (!isChecked) {
+                                                setConfirmsMetInPerson(false);
+                                            }
+                                        }}
+                                    />
                                     <Label htmlFor="proof-level-real-person" className="cursor-pointer leading-5">
                                         I confirm this is a real person
                                     </Label>
                                 </div>
                                 <div className="flex items-start gap-3 rounded-lg border p-3">
-                                    <RadioGroupItem value="met_in_real_life" id="proof-level-met-in-real-life" />
+                                    <Checkbox
+                                        id="proof-level-met-in-real-life"
+                                        checked={confirmsMetInPerson}
+                                        onCheckedChange={(checked) => {
+                                            const isChecked = Boolean(checked);
+                                            setConfirmsMetInPerson(isChecked);
+                                            if (isChecked) {
+                                                setConfirmsRealPerson(true);
+                                            }
+                                        }}
+                                    />
                                     <Label htmlFor="proof-level-met-in-real-life" className="cursor-pointer leading-5">
-                                        I have met this person in real life
+                                        We have met physically, in person
                                     </Label>
                                 </div>
-                            </RadioGroup>
+                            </div>
                         </div>
 
                         <div className="space-y-2">
@@ -312,7 +357,11 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                         <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isPending}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSave} disabled={isPending || !acknowledgedPublic}>
+                        <Button
+                            className={primaryActionButtonClassName}
+                            onClick={handleSave}
+                            disabled={isPending || !acknowledgedPublic || !selectedLevel}
+                        >
                             {isPending ? "Saving..." : viewerVerification ? "Save changes" : "Submit verification"}
                         </Button>
                     </DialogFooter>
@@ -324,7 +373,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
 function VerifierRow({ verification }: { verification: HumanityVerificationDisplay }) {
     const verifierName = verification.verifier?.name || verification.verifier?.handle || verification.verifierDid;
-    const levelLabel = verification.level === "met_in_real_life" ? "Met in real life" : "Confirmed real person";
+    const levelLabel = verification.level === "met_in_real_life" ? "Met in real life" : "Real person";
 
     return (
         <div className="rounded-xl border border-border/70 bg-background/80 p-3">
@@ -339,7 +388,7 @@ function VerifierRow({ verification }: { verification: HumanityVerificationDispl
                 ) : (
                     <div className="font-medium text-foreground">{verifierName}</div>
                 )}
-                <Badge variant={verification.level === "met_in_real_life" ? "default" : "secondary"}>
+                <Badge variant="outline" className={verificationBadgeClassName}>
                     {levelLabel}
                 </Badge>
             </div>
