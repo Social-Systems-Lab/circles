@@ -41,6 +41,8 @@ import { ProofOfHumanityCard } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import MembershipCredentialCard from "./MembershipCredentialCard";
 import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
+import { isVerifiedUser } from "@/lib/auth/verification";
+import { useProfileRelationshipState } from "./message-button";
 
 interface AboutPageProps {
     circle: Circle;
@@ -91,6 +93,7 @@ export default function AboutPage({
     const isOwner = user?.did === circle.did;
     const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
     const isUserProfile = circle.circleType === "user";
+    const [relationshipState] = useProfileRelationshipState(circle, user?.did);
     const profileOfferSkills = circle.offers?.skills?.length ? circle.offers.skills : circle.skills || [];
     const currentUserOfferSkills = !isUserProfile
         ? user?.offers?.skills?.length
@@ -183,7 +186,80 @@ export default function AboutPage({
     const shouldShowMembershipCredential = !isUserProfile && !!membershipCredential;
     const shouldShowFundingPanel = showFundingPanel;
     const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
+    const followerCount = circle.members ? Math.max(circle.members - 1, 0) : 0;
+    const followMembership = user?.memberships?.find((membership) => membership.circleId === circle._id);
+    const relationshipStatusLabel = (() => {
+        if (!isUserProfile) {
+            return null;
+        }
+
+        if (user?.did && circle.did === user.did) {
+            return "Your profile";
+        }
+
+        if (relationshipState?.connectStatus === "accepted") {
+            return "Connected";
+        }
+
+        if (relationshipState?.connectStatus === "pending_sent") {
+            return "Requested";
+        }
+
+        if (followMembership) {
+            return "Following";
+        }
+
+        return null;
+    })();
+    const memberStatusLabel = (() => {
+        if (!isUserProfile) {
+            return null;
+        }
+
+        if (circle.isFoundingMember) {
+            return "Founding Member";
+        }
+
+        if (isVerifiedUser(circle)) {
+            return "Test Pilot";
+        }
+
+        return "Member";
+    })();
+    const profileStatusChips = [
+        relationshipStatusLabel
+            ? {
+                  key: "relationship",
+                  label: relationshipStatusLabel,
+                  className:
+                      relationshipStatusLabel === "Requested"
+                          ? "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600"
+                          : relationshipStatusLabel === "Connected"
+                            ? "bg-[#f3f7f4] text-[#45604d] hover:bg-[#f3f7f4] hover:text-[#45604d]"
+                            : "bg-[#edf4e7] text-[#42553b] hover:bg-[#edf4e7] hover:text-[#42553b]",
+              }
+            : null,
+        memberStatusLabel
+            ? {
+                  key: "member-status",
+                  label: memberStatusLabel,
+                  className:
+                      memberStatusLabel === "Founding Member"
+                          ? "bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--founding-member-foreground))] hover:bg-[hsl(var(--founding-member-bg))] hover:text-[hsl(var(--founding-member-foreground))]"
+                          : memberStatusLabel === "Test Pilot"
+                            ? "bg-[hsl(var(--platform-yellow))] text-[hsl(var(--platform-yellow-foreground))] hover:bg-[hsl(var(--platform-yellow))] hover:text-[hsl(var(--platform-yellow-foreground))]"
+                            : "bg-slate-50 text-slate-700 hover:bg-slate-50 hover:text-slate-700",
+              }
+            : null,
+        {
+            key: "followers",
+            label: `${followerCount} ${followerCount === 1 ? "follower" : "followers"}`,
+            className: "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600",
+        },
+    ].filter((chip): chip is { key: string; label: string; className: string } => Boolean(chip));
+    const shouldShowProfileStatus = isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
     const hasSidebarContent =
+        shouldShowProfileStatus ||
         hasOverviewDetails ||
         hasAdminDetails ||
         hasNeedsMatchingDetails ||
@@ -442,9 +518,33 @@ export default function AboutPage({
                                 </div>
                             )}
 
+                            {shouldShowProfileStatus && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 md:order-5 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Relationship
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        {profileStatusChips.map((chip) => (
+                                            <Badge
+                                                key={chip.key}
+                                                variant="outline"
+                                                className={`border-0 rounded-full px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
+                                            >
+                                                {chip.label}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {hasOverviewDetails && (
                                 <div
-                                    className={`flex flex-col bg-white p-6 md:order-4 ${
+                                    className={`flex flex-col bg-white p-6 md:order-6 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -593,7 +693,7 @@ export default function AboutPage({
 
                             {shouldShowVerifiedContributions && (
                                 <div
-                                    className={`bg-white p-6 md:order-4 ${
+                                    className={`bg-white p-6 md:order-7 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -605,14 +705,14 @@ export default function AboutPage({
                             )}
 
                             {shouldShowProofOfHumanity && proofOfHumanitySummary && (
-                                <div className="md:order-5">
+                                <div className="md:order-8">
                                     <ProofOfHumanityCard circle={circle} summary={proofOfHumanitySummary} />
                                 </div>
                             )}
 
                             {hasAdminDetails && (
                                 <div
-                                    className={`flex flex-col bg-white p-6 md:order-6 ${
+                                    className={`flex flex-col bg-white p-6 md:order-9 ${
                                         isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
                                     }`}
                                 >
@@ -664,7 +764,7 @@ export default function AboutPage({
                             )}
 
                             {shouldShowMembershipCredential && membershipCredential && (
-                                <div className="md:order-7">
+                                <div className="md:order-10">
                                     <MembershipCredentialCard credential={membershipCredential} />
                                 </div>
                             )}

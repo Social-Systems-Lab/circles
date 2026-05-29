@@ -13,7 +13,7 @@ import BookmarkButton from "./bookmark-button";
 import GalleryTrigger from "./gallery-trigger";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { MessageButton, ProfileRelationshipHeaderAction } from "./message-button";
+import { MessageButton } from "./message-button";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog"; // Changed Popover to Dialog
@@ -30,7 +30,6 @@ import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
-import { UserStatusBadge } from "@/components/modules/users/user-status-badge";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { hasContributorPerks } from "@/lib/auth/perks";
 import {
@@ -259,7 +258,6 @@ export default function HomeContent({
                                     {proofOfHumanitySummary && (
                                         <ProofOfHumanityHeaderAction circle={circle} summary={proofOfHumanitySummary} />
                                     )}
-                                    {isUser ? <ProfileRelationshipHeaderAction circle={circle} /> : null}
                                 </div>
 
                                 {!isCompact && (
@@ -326,10 +324,11 @@ export default function HomeContent({
                                     )}
                                 </div>
                             )}
-                            <div className="flex items-center gap-2 pt-1">
-                                {isUser ? <UserStatusBadge user={circle} /> : null}
-                                {isOwnUserProfile ? <VerifyAccountButton /> : null}
-                            </div>
+                            {isOwnUserProfile ? (
+                                <div className="flex items-center gap-2 pt-1">
+                                    <VerifyAccountButton />
+                                </div>
+                            ) : null}
                             {(circle.description || circle.mission) && (
                                 <div className="line-clamp-1 pb-1 text-gray-600">
                                     {authorizedToEdit ? (
@@ -344,7 +343,7 @@ export default function HomeContent({
                                     )}
                                 </div>
                             )}
-                            {memberCount > 0 && (
+                            {!isUser && memberCount > 0 && (
                                 <div className="flex flex-row items-center justify-center text-gray-600">
                                     <FaUsers />
                                     <p className="m-0 ml-2">

@@ -31,7 +31,7 @@ type MessageButtonProps = {
     renderCompact?: boolean;
 };
 
-type RelationshipState = {
+export type RelationshipState = {
     connectStatus: "none" | "pending_sent" | "pending_received" | "accepted";
     dmAllowed: boolean;
     showConnect: boolean;
@@ -299,7 +299,7 @@ export const ProfileRelationshipHeaderAction = ({ circle }: { circle: Circle }) 
     return null;
 };
 
-const useProfileRelationshipState = (circle: Circle, viewerDid?: string) => {
+export const useProfileRelationshipState = (circle: Circle, viewerDid?: string) => {
     const [relationshipState, setRelationshipState] = useState<RelationshipState | null>(null);
     const relationshipRequestRef = useRef(0);
 
