@@ -198,15 +198,13 @@ export default function HomeContent({
                             </div>
                         </div>
 
-                        {isCompact && (
+                        {isCompact && isUser && (
                             <>
-                                {isUser && (
-                                    <div className={`absolute left-0 top-0 flex flex-row gap-1 pt-2`}>
-                                        <MessageButton circle={circle} renderCompact={false} />
-                                    </div>
-                                )}
+                                <div className="absolute left-0 top-0 flex flex-row gap-1 pt-2">
+                                    <MessageButton circle={circle} renderCompact={false} />
+                                </div>
 
-                                <div className={`absolute right-0 top-0 flex flex-row items-center gap-1 pt-2`}>
+                                <div className="absolute right-0 top-0 flex flex-row items-center gap-1 pt-2">
                                     {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
                                     {!isUser && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
@@ -298,6 +296,38 @@ export default function HomeContent({
                                     </div>
                                 )}
                             </div>
+
+                            {isCompact && !isUser && (
+                                <div className="flex w-full flex-wrap items-center justify-center gap-2 pb-2 pt-3">
+                                    {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
+                                    <InviteButton circle={circle} />
+                                    {user && <FollowButton circle={circle} />}
+                                    {user && <BookmarkButton circle={circle} iconOnly />}
+                                    {showSettingsButton && (
+                                        <Button
+                                            asChild
+                                            variant="outline"
+                                            size="icon"
+                                            className={settingsButtonClassName}
+                                        >
+                                            <Link
+                                                href={`/circles/${circle.handle}/settings/about`}
+                                                aria-label={`Open ${circle.name ?? "circle"} settings`}
+                                                title={settingsButtonTitle}
+                                            >
+                                                <Settings className="h-5 w-5" />
+                                            </Link>
+                                        </Button>
+                                    )}
+                                    {circle._id && user && (
+                                        <NotificationSettingsDialog
+                                            entityType="CIRCLE"
+                                            entityId={circle._id.toString()}
+                                            className="h-8 w-8 p-0"
+                                        />
+                                    )}
+                                </div>
+                            )}
 
                             {!isKamooniRootCircle && parentCircle && (
                                 <div className="mt-3">
