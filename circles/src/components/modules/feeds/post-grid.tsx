@@ -89,8 +89,11 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
 
     // Extract preview text from post content
     const getPreviewText = (content: string, maxLength: number = 120) => {
-        // Remove HTML tags and markdown formatting
-        const plainText = content.replace(/<[^>]*>/g, "").replace(/[#*_~`]/g, "");
+        // Collapse markdown links down to their label text for compact card excerpts.
+        const plainText = content
+            .replace(/\[([^\]]+)\]\((?:https?:\/\/[^)\s]+|\/circles\/[^)\s]+)\)/g, "$1")
+            .replace(/<[^>]*>/g, "")
+            .replace(/[#*_~`]/g, "");
         return plainText.length > maxLength ? plainText.substring(0, maxLength) + "..." : plainText;
     };
 
@@ -98,6 +101,9 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
     const getPostImage = (post: PostDisplay) => {
         if (post.media && post.media.length > 0) {
             return post.media[0].fileInfo?.url;
+        }
+        if (post.linkPreviewImage?.url) {
+            return post.linkPreviewImage.url;
         }
         if (
             (post.internalPreviewType === "event" || post.internalPreviewType === "task") &&

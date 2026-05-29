@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
     ImageIcon,
+    Link2,
     MapPinIcon,
     BarChartIcon,
     Trash2,
@@ -211,6 +212,10 @@ export function PostForm({
     const isActuallySubmitting = externalIsSubmitting ?? isPending;
     const [location, setLocation] = useState<Location | undefined>(initialPost?.location);
     const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+    const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
+    const [linkText, setLinkText] = useState("");
+    const [linkUrl, setLinkUrl] = useState("");
+    const [linkSelection, setLinkSelection] = useState<{ start: number; end: number } | null>(null);
     const [userGroups, setUserGroups] = useState<string[]>(initialPost?.userGroups || ["everyone"]);
     const [isUserGroupsDialogOpen, setIsUserGroupsDialogOpen] = useState(false);
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>(initialPost?.sdgs || []);
@@ -316,26 +321,45 @@ export function PostForm({
     const [previewRemovedManually, setPreviewRemovedManually] = useState(false);
     const cancelExternalFetchRef = useRef<() => void>(() => {});
     const cancelInternalFetchRef = useRef<() => void>(() => {});
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
     const extractFirstUrl = (text: string): { url: string; isInternal: boolean } | null => {
         const textWithoutMentions = text.replace(/\[[^\]]+\]\(\/circles\/[^)]+\)/g, "");
-        const externalUrlRegex = /(https?:\/\/[^\s]+)/g;
-        const internalUrlRegex = /(\/circles\/[a-zA-Z0-9\-\/]+)/g;
-        const internalMatches = textWithoutMentions.match(internalUrlRegex);
-        if (internalMatches) {
-            const url = internalMatches[0];
-            const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
-            const proposalRegex = /^\/circles\/[a-zA-Z0-9\-]+\/proposals\/[a-zA-Z0-9]+$/;
-            const issueRegex = /^\/circles\/[a-zA-Z0-9\-]+\/issues\/[a-zA-Z0-9]+$/;
-            const circleRegex = /^\/circles\/[a-zA-Z0-9\-]+(?:\/(?!post|proposals|issues).*)?$/;
-            if (postRegex.test(url) || proposalRegex.test(url) || issueRegex.test(url) || circleRegex.test(url)) {
-                return { url: url, isInternal: true };
+        const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
+        const proposalRegex = /^\/circles\/[a-zA-Z0-9\-]+\/proposals\/[a-zA-Z0-9]+$/;
+        const issueRegex = /^\/circles\/[a-zA-Z0-9\-]+\/issues\/[a-zA-Z0-9]+$/;
+        const circleRegex = /^\/circles\/[a-zA-Z0-9\-]+(?:\/(?!post|proposals|issues).*)?$/;
+        const isSupportedInternalUrl = (url: string) =>
+            postRegex.test(url) || proposalRegex.test(url) || issueRegex.test(url) || circleRegex.test(url);
+
+        const markdownLinkRegex = /\[[^\]]+\]\((https?:\/\/[^)\s]+|\/circles\/[^)\s]+)\)/g;
+        const markdownLinkMatch = markdownLinkRegex.exec(textWithoutMentions);
+        if (markdownLinkMatch) {
+            const url = markdownLinkMatch[1];
+            if (url.startsWith("/circles/") && isSupportedInternalUrl(url)) {
+                return { url, isInternal: true };
+            }
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                return { url, isInternal: false };
             }
         }
-        const externalMatches = textWithoutMentions.match(externalUrlRegex);
+
+        const textWithoutMarkdownLinks = textWithoutMentions.replace(markdownLinkRegex, "");
+        const internalUrlRegex = /(\/circles\/[a-zA-Z0-9\-\/]+)/g;
+        const internalMatches = textWithoutMarkdownLinks.match(internalUrlRegex);
+        if (internalMatches) {
+            const url = internalMatches[0];
+            if (isSupportedInternalUrl(url)) {
+                return { url, isInternal: true };
+            }
+        }
+
+        const externalUrlRegex = /(https?:\/\/[^\s]+)/g;
+        const externalMatches = textWithoutMarkdownLinks.match(externalUrlRegex);
         if (externalMatches) {
             return { url: externalMatches[0], isInternal: false };
         }
+
         return null;
     };
 
@@ -454,6 +478,49 @@ export function PostForm({
         cancelExternalFetchRef.current();
         cancelInternalFetchRef.current();
         setPreviewRemovedManually(true);
+    };
+
+    const openLinkDialog = () => {
+        const textarea = textareaRef.current;
+        const selectionStart = textarea?.selectionStart ?? postContent.length;
+        const selectionEnd = textarea?.selectionEnd ?? postContent.length;
+        const selectedText = postContent.slice(selectionStart, selectionEnd);
+        setLinkSelection({ start: selectionStart, end: selectionEnd });
+        setLinkText(selectedText.trim());
+        setLinkUrl("");
+        setIsLinkDialogOpen(true);
+    };
+
+    const closeLinkDialog = () => {
+        setIsLinkDialogOpen(false);
+        setLinkText("");
+        setLinkUrl("");
+        setLinkSelection(null);
+    };
+
+    const handleInsertLink = () => {
+        if (!linkUrl.trim()) {
+            return;
+        }
+
+        const selectionStart = linkSelection?.start ?? postContent.length;
+        const selectionEnd = linkSelection?.end ?? postContent.length;
+        const normalizedUrl =
+            linkUrl.startsWith("http://") || linkUrl.startsWith("https://") ? linkUrl : `https://${linkUrl}`;
+        const fallbackLabel = normalizedUrl;
+        const markdownLink = `[${linkText.trim() || fallbackLabel}](${normalizedUrl})`;
+        const nextContent = `${postContent.slice(0, selectionStart)}${markdownLink}${postContent.slice(selectionEnd)}`;
+
+        setPostContent(nextContent);
+        closeLinkDialog();
+
+        requestAnimationFrame(() => {
+            const updatedTextarea = textareaRef.current;
+            if (!updatedTextarea) return;
+            updatedTextarea.focus();
+            const cursorPosition = selectionStart + markdownLink.length;
+            updatedTextarea.setSelectionRange(cursorPosition, cursorPosition);
+        });
     };
 
     const getUserGroupName = (userGroup: string) => {
@@ -584,6 +651,8 @@ export function PostForm({
         setIsPreviewStep(true);
     };
 
+    const previewHeaderImage = images[0]?.preview || linkPreview?.image;
+
     return (
         <div {...getRootProps()} className="flex h-full flex-col">
             <div className="flex flex-grow flex-col overflow-hidden p-4">
@@ -662,6 +731,7 @@ export function PostForm({
                                 </Label>
                                 {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
                                 <Textarea
+                                    ref={textareaRef}
                                     value={postContent}
                                     onChange={(e) => setPostContent(e.target.value)}
                                     placeholder={isShareMode ? "Add a comment to your share..." : "Write your post..."}
@@ -899,10 +969,10 @@ export function PostForm({
                                     </div>
 
                                     <div className="overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-sm">
-                                        {images[0] && (
+                                        {previewHeaderImage && (
                                             <div className="relative h-56 w-full overflow-hidden bg-gray-100">
                                                 <Image
-                                                    src={images[0].preview}
+                                                    src={previewHeaderImage}
                                                     alt={title.trim() || "Post preview image"}
                                                     fill
                                                     className="object-cover"
@@ -1030,7 +1100,17 @@ export function PostForm({
                                             variant="ghost"
                                             size="icon"
                                             className="rounded-full"
+                                            onClick={openLinkDialog}
+                                            type="button"
+                                        >
+                                            <Link2 className="h-5 w-5 text-gray-500" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="rounded-full"
                                             onClick={() => setIsLocationDialogOpen(true)}
+                                            type="button"
                                         >
                                             <MapPinIcon className="h-5 w-5 text-gray-500" />
                                         </Button>
@@ -1140,6 +1220,54 @@ export function PostForm({
                                         Set Location
                                     </Button>
                                 </div>
+                            </DialogContent>
+                        </Dialog>
+                        <Dialog
+                            open={isLinkDialogOpen}
+                            onOpenChange={(open) => {
+                                if (open) {
+                                    setIsLinkDialogOpen(true);
+                                    return;
+                                }
+                                closeLinkDialog();
+                            }}
+                        >
+                            <DialogContent className="z-[11000] max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Insert Link</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="post-link-text">Link text</Label>
+                                        <Input
+                                            id="post-link-text"
+                                            value={linkText}
+                                            onChange={(e) => setLinkText(e.target.value)}
+                                            placeholder="Link text"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="post-link-url">URL</Label>
+                                        <Input
+                                            id="post-link-url"
+                                            value={linkUrl}
+                                            onChange={(e) => setLinkUrl(e.target.value)}
+                                            placeholder="https://example.com"
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="ghost" className="text-gray-500" onClick={closeLinkDialog}>
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        className="rounded-full bg-[hsl(var(--button-primary))] px-6 text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]"
+                                        onClick={handleInsertLink}
+                                    >
+                                        Insert link
+                                    </Button>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
                     </>
