@@ -3,7 +3,7 @@
 "use client"; // This component now uses client-side state for filters
 
 import { FeedComponent } from "./feed";
-import { getPostsAction, getAggregatePostsAction, getFeedByHandleAction } from "./actions";
+import { getPostsAction, getFeedByHandleAction } from "./actions";
 import { Circle, SortingOptions, Cause as SDG, PostDisplay } from "@/models/models";
 import { useState, useEffect, useTransition, useCallback } from "react";
 import { useAtom } from "jotai";
@@ -31,13 +31,13 @@ export default function FeedsModule(props: PageProps) {
         startTransition(async () => {
             try {
                 const sdgHandles = selectedSdgs.map((s) => s.handle);
-                const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles, circle.handle);
+                const newPosts = await getPostsAction(feed._id, circle._id, 20, 0, sorting, sdgHandles);
                 setPosts(newPosts);
             } finally {
                 setIsLoading(false);
             }
         });
-    }, [feed, sorting, selectedSdgs, user, circle.handle]);
+    }, [feed, sorting, selectedSdgs, circle._id]);
 
     useEffect(() => {
         async function fetchInitialData() {
