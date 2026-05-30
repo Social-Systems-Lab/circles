@@ -388,7 +388,7 @@ export const UserToolbox = () => {
         // close the toolbox
         closeToolbox();
 
-        router.push("/welcome");
+        router.push("/");
     };
 
     const openConnection = useCallback(
