@@ -13,7 +13,6 @@ import { isAuthorized } from "@/lib/auth/client-auth";
 import { useRouter } from "next/navigation";
 import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
-import emptyFeed from "@images/empty-feed.png";
 import Image from "next/image";
 import kamooniLogo from "@images/kamooni_logo.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
@@ -218,7 +217,12 @@ export const AggregateFeedComponent = ({
                         <CreateNewPost circle={user as Circle} feed={userFeed} />
                     </div>
                 )}
-                <Image src={emptyFeed} alt="No noticeboard posts yet" width={isMobile ? 230 : 300} />
+                <Image
+                    src="/images/illustrations/noticeboard-empty-state.png"
+                    alt="No noticeboard posts yet"
+                    width={isMobile ? 230 : 300}
+                    height={isMobile ? 230 : 300}
+                />
                 <h4>No noticeboard posts</h4>
                 <div className="max-w-[700px] pl-4 pr-4">
                     We couldn&apos;t find any noticeboard posts. Try the discover tab to find new content and start

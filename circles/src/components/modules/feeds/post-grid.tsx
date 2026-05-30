@@ -13,7 +13,6 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { getPublishTime } from "@/lib/utils";
 import { Heart, MapPin, MessageCircle, X } from "lucide-react";
 import { UserPicture } from "../members/user-picture";
-import emptyFeed from "@images/empty-feed.png";
 import { PostItem } from "./post-list";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -138,7 +137,12 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
     if (posts.length === 0) {
         return (
             <div className="flex h-full flex-col items-center justify-center py-12">
-                <Image src={emptyFeed} alt="No posts yet" width={isMobile ? 230 : 300} />
+                <Image
+                    src="/images/illustrations/noticeboard-empty-state.png"
+                    alt="No posts yet"
+                    width={isMobile ? 230 : 300}
+                    height={isMobile ? 230 : 300}
+                />
                 <h4>No posts yet</h4>
                 <div className="max-w-[700px] pl-4 pr-4 text-center">
                     There are no posts on this noticeboard yet. Be the first to share something!
