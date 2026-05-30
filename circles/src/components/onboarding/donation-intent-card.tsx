@@ -4,12 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-const DONATION_OPTIONS = ["5", "10", "25", "50", "100+"] as const;
+const SUPPORTER_OPTIONS = [
+  { amount: "1", label: "Seed Supporter" },
+  { amount: "2", label: "Community Supporter" },
+  { amount: "5", label: "Sustaining Supporter" },
+  { amount: "10", label: "Founding Supporter" },
+] as const;
 
 type DonationIntentValue = {
   amount: string | null;
   customAmount: string;
-  volunteering: boolean;
   later: boolean;
 };
 
@@ -37,19 +41,10 @@ export default function DonationIntentCard({
     });
   };
 
-  const toggleVolunteering = () => {
-    onChange({
-      ...value,
-      volunteering: !value.volunteering,
-      later: false,
-    });
-  };
-
   const chooseLater = () => {
     onChange({
       amount: null,
       customAmount: "",
-      volunteering: false,
       later: true,
     });
   };
@@ -64,63 +59,55 @@ export default function DonationIntentCard({
   };
 
   const canContinue =
-    value.later ||
-    value.volunteering ||
-    value.amount !== null ||
-    value.customAmount.trim().length > 0;
+    value.later || value.amount !== null || value.customAmount.trim().length > 0;
 
   return (
     <div className="space-y-8">
       <div className="rounded-[24px] border border-white/70 bg-white/70 p-6 shadow-[0_10px_35px_rgba(123,81,24,0.08)]">
         <h2 className="font-[family-name:var(--font-noto-serif)] text-2xl text-kam-gray-dark sm:text-3xl">
-          One quick question before you enter Kamooni
+          You&apos;re ready to start using Kamooni.
         </h2>
 
         <p className="mt-4 text-sm leading-6 text-kam-gray-dark/75 sm:text-base">
-          We plan to introduce a feature that allows members to donate directly
-          to projects on Kamooni with zero platform fees.
-        </p>
-
-        <p className="mt-3 text-sm leading-6 text-kam-gray-dark/75 sm:text-base">
-          There is <span className="font-semibold">no commitment</span>. We&rsquo;re
-          simply curious what you might consider contributing each month once
-          this becomes available.
+          Kamooni is community-supported. Would you consider becoming a Founding
+          Supporter from <span className="font-semibold">€1/month</span>?
         </p>
       </div>
 
       <div className="space-y-6">
         <div>
           <h3 className="text-base font-semibold text-kam-gray-dark sm:text-lg">
-            How much might you consider donating monthly to projects through Kamooni?
+            Choose the level that feels right for you
           </h3>
 
           <p className="mt-2 text-sm text-kam-gray-dark/62">
-            You can also choose volunteering, or decide later.
+            This is optional. You can support now or continue and decide later.
           </p>
         </div>
 
         <div className="space-y-3">
           <p className="text-sm font-medium uppercase tracking-[0.14em] text-[#9d5a21]/80">
-            Monthly donation
+            Monthly support
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {DONATION_OPTIONS.map((option) => {
-              const selected = value.amount === option;
+            {SUPPORTER_OPTIONS.map((option) => {
+              const selected = value.amount === option.amount;
 
               return (
                 <button
-                  key={option}
+                  key={option.amount}
                   type="button"
-                  onClick={() => selectAmount(option)}
+                  onClick={() => selectAmount(option.amount)}
                   className={cn(
-                    "min-h-[64px] rounded-[20px] border px-4 py-3 text-left text-base font-medium transition-colors",
+                    "min-h-[72px] rounded-[20px] border px-4 py-3 text-left transition-colors",
                     selected
                       ? "border-[#c77733] bg-[#c77733] text-white"
                       : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#c77733]/60"
                   )}
                 >
-                  €{option}
+                  <div className="text-base font-medium">€{option.amount}/month</div>
+                  <div className="mt-1 text-sm opacity-90">{option.label}</div>
                 </button>
               );
             })}
@@ -135,7 +122,8 @@ export default function DonationIntentCard({
                   : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#c77733]/60"
               )}
             >
-              Other amount
+              <div className="text-base font-medium">Own amount</div>
+              <div className="mt-1 text-sm opacity-90">Custom Supporter</div>
             </button>
           </div>
 
@@ -152,39 +140,18 @@ export default function DonationIntentCard({
           )}
         </div>
 
-        <div className="space-y-3">
-          <p className="text-sm font-medium uppercase tracking-[0.14em] text-[#6f7a34]/90">
-            Other ways to contribute
-          </p>
-
-          <div className="grid gap-3">
-            <button
-              type="button"
-              onClick={toggleVolunteering}
-              className={cn(
-                "min-h-[64px] rounded-[20px] border px-4 py-3 text-left text-sm font-medium transition-colors sm:text-base",
-                value.volunteering
-                  ? "border-[#6f7a34] bg-[#6f7a34] text-white"
-                  : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#6f7a34]/60"
-              )}
-            >
-              I will contribute through volunteering
-            </button>
-
-            <button
-              type="button"
-              onClick={chooseLater}
-              className={cn(
-                "min-h-[64px] rounded-[20px] border px-4 py-3 text-left text-sm font-medium transition-colors sm:text-base",
-                value.later
-                  ? "border-[#8b6f47] bg-[#8b6f47] text-white"
-                  : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#8b6f47]/60"
-              )}
-            >
-              I&apos;ll decide later
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={chooseLater}
+          className={cn(
+            "min-h-[64px] w-full rounded-[20px] border px-4 py-3 text-left text-sm font-medium transition-colors sm:text-base",
+            value.later
+              ? "border-[#8b6f47] bg-[#8b6f47] text-white"
+              : "border-[#d8c7a0] bg-white/72 text-kam-gray-dark hover:border-[#8b6f47]/60"
+          )}
+        >
+          Maybe later
+        </button>
 
         <div className="flex flex-col gap-3 pt-2 sm:flex-row">
           {onBack && (
@@ -204,7 +171,7 @@ export default function DonationIntentCard({
             disabled={!canContinue || isSubmitting}
             className="h-12 flex-1 bg-[#b65d2c] text-white hover:bg-[#9f5227]"
           >
-            Continue
+            {value.later ? "Continue" : "Become a Founding Supporter"}
           </Button>
         </div>
       </div>

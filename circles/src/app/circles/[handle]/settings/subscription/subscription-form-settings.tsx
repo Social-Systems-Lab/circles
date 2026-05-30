@@ -68,7 +68,7 @@ export default function SubscriptionFormSettings({
                     <div className="space-y-1 px-1">
                         <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>
                         <p className="text-sm text-muted-foreground">
-                            Founding membership supports Kamooni and unlocks supporter benefits.
+                            Founding Supporters help sustain Kamooni and unlock supporter benefits.
                         </p>
                     </div>
                     <div className="rounded-lg border bg-muted/20 px-6 py-8 text-center">
@@ -91,7 +91,7 @@ export default function SubscriptionFormSettings({
                 <div className="space-y-1 px-1">
                     <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>
                     <p className="text-sm text-muted-foreground">
-                        Founding membership supports Kamooni and unlocks supporter benefits.
+                        Founding Supporters help sustain Kamooni and unlock supporter benefits.
                     </p>
                 </div>
                 <SubscriptionForm circle={user} onDialogClose={handleDialogClose} />

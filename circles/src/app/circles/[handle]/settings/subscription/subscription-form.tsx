@@ -19,7 +19,6 @@ export default function SubscriptionForm({
 }) {
     const { toast } = useToast();
     const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
-    const [isLoadingYearly, setIsLoadingYearly] = useState(false);
     const [isLoadingPortal, setIsLoadingPortal] = useState(false);
     const [openPanel, setOpenPanel] = useState<MembershipPanel>(null);
 
@@ -29,9 +28,8 @@ export default function SubscriptionForm({
         user.subscription?.provider === "stripe" &&
         (membershipState === "active" || membershipState === "grace_period");
 
-    async function startCheckout(interval: "month" | "year") {
-        const setLoading = interval === "year" ? setIsLoadingYearly : setIsLoadingMonthly;
-        setLoading(true);
+    async function startCheckout() {
+        setIsLoadingMonthly(true);
 
         try {
             const response = await fetch("/api/stripe/create-checkout-session", {
@@ -39,7 +37,7 @@ export default function SubscriptionForm({
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ interval }),
+                body: JSON.stringify({ interval: "month" }),
             });
 
             const data = await response.json();
@@ -54,7 +52,7 @@ export default function SubscriptionForm({
                 title: error instanceof Error ? error.message : "Failed to start checkout",
                 variant: "destructive",
             });
-            setLoading(false);
+            setIsLoadingMonthly(false);
         }
     }
 
@@ -88,17 +86,16 @@ export default function SubscriptionForm({
                 <div className="formatted mt-2 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-2">
                     <Card className="flex flex-col rounded-3xl p-4">
                         <CardHeader>
-                            <CardTitle className="text-2xl font-bold">Free</CardTitle>
+                            <CardTitle className="text-2xl font-bold">Test Pilots</CardTitle>
                             <CardDescription>€0 / forever</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
                                 <p>Everything you need to contribute, connect, and be an active part of the Kamooni community.</p>
                                 <p>
-                                    If demand is high, there may be a waiting list. Supporters help keep Kamooni open to
-                                    new members.
+                                    Kamooni stays open because it is community-supported. Becoming a supporter is optional.
                                 </p>
-                                <p>You can also become a supporting member after three months of contributing as a volunteer.</p>
+                                <p>Early users are joining as Test Pilots and helping us improve the platform together.</p>
                             </div>
 
                             <div className="mt-auto pt-2">
@@ -117,16 +114,16 @@ export default function SubscriptionForm({
 
                     <Card className="relative flex flex-col rounded-3xl p-4">
                         <CardHeader>
-                            <CardTitle className="text-2xl font-bold">Supporting Kamooni</CardTitle>
+                            <CardTitle className="text-2xl font-bold">Founding Supporters</CardTitle>
                             <div className="absolute right-4 top-4">
                                 <Image src="/images/member-badge.png" alt="Supporter Badge" width={32} height={32} />
                             </div>
-                            <CardDescription>€5/month or €50/year</CardDescription>
+                            <CardDescription>From €1/month</CardDescription>
                         </CardHeader>
 
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
-                                <p>Supporters help sustain Kamooni and keep it open to others.</p>
+                                <p>Founding Supporters help sustain Kamooni and keep it open to others.</p>
                                 <p>
                                     As a thank you, supporters receive a few extra benefits, can invite five friends if
                                     there is a queue, and are invited to join the Kamoonity circle and help shape Kamooni.
@@ -135,7 +132,7 @@ export default function SubscriptionForm({
 
                             {isMember && (
                                 <div className="rounded-xl border bg-white p-3 text-sm text-muted-foreground">
-                                    <div className="font-medium text-foreground">Supporting membership active</div>
+                                    <div className="font-medium text-foreground">Founding Supporter active</div>
                                     {membershipState && <div className="mt-1">State: {membershipState.replace("_", " ")}</div>}
                                 </div>
                             )}
@@ -154,11 +151,11 @@ export default function SubscriptionForm({
                         <div className="space-y-3 p-6 pt-0">
                             {canManageStripeMembership ? (
                                 <Button variant="outline" className="w-full" onClick={openPortal} disabled={isLoadingPortal}>
-                                    {isLoadingPortal ? "Opening Stripe..." : "Manage or cancel supporting membership"}
+                                    {isLoadingPortal ? "Opening Stripe..." : "Manage or cancel Founding Supporter plan"}
                                 </Button>
                             ) : isMember ? (
                                 <Button variant="outline" className="w-full" disabled>
-                                    Supporting Membership Active
+                                    Founding Supporter Active
                                 </Button>
                             ) : null}
                         </div>
@@ -193,10 +190,8 @@ export default function SubscriptionForm({
                                     canManageStripeMembership={canManageStripeMembership}
                                     isLoadingPortal={isLoadingPortal}
                                     isLoadingMonthly={isLoadingMonthly}
-                                    isLoadingYearly={isLoadingYearly}
                                     onManageMembership={openPortal}
-                                    onJoinMonthly={() => startCheckout("month")}
-                                    onJoinYearly={() => startCheckout("year")}
+                                    onJoinMonthly={startCheckout}
                                 />
                             )}
                         </div>
@@ -210,11 +205,11 @@ export default function SubscriptionForm({
 function FreeMembershipPanel() {
     return (
         <div className="space-y-5 pr-8">
-            <h3 className="text-2xl font-bold text-foreground">How volunteering to become a supporter works</h3>
+            <h3 className="text-2xl font-bold text-foreground">How Test Pilots can become supporters</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>
-                    While Kamooni needs funding to stay open and accessible to as many people as possible, we also
-                    want to recognise the important work volunteers do and the value this brings to everyone.
+                    Kamooni needs funding to stay open and accessible to as many people as possible, and we also want
+                    to recognise the value volunteers bring to the wider community.
                 </p>
                 <p>
                     <strong className="font-semibold text-foreground">
@@ -240,26 +235,22 @@ function MemberBenefitsPanel({
     canManageStripeMembership,
     isLoadingPortal,
     isLoadingMonthly,
-    isLoadingYearly,
     onManageMembership,
     onJoinMonthly,
-    onJoinYearly,
 }: {
     canManageStripeMembership: boolean;
     isLoadingPortal: boolean;
     isLoadingMonthly: boolean;
-    isLoadingYearly: boolean;
     onManageMembership: () => void;
     onJoinMonthly: () => void;
-    onJoinYearly: () => void;
 }) {
     return (
         <div className="space-y-5 pr-8">
-            <h3 className="text-2xl font-bold text-foreground">Why become a supporter</h3>
+            <h3 className="text-2xl font-bold text-foreground">Why become a Founding Supporter</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>Supporting Kamooni helps keep the platform open, healthy, and available to others.</p>
                 <div>
-                    <p className="mb-3">As a thank you, supporters receive a few extra benefits. Supporters can:</p>
+                    <p className="mb-3">As a thank you, supporters receive a few extra benefits. Founding Supporters can:</p>
                     <ul className="list-disc space-y-2 pl-5">
                         <li>invite <strong className="font-semibold text-foreground">five friends</strong> who can join right away, even if there is a waiting list</li>
                         <li><strong className="font-semibold text-foreground">test new features</strong> before everyone else and help shape how they develop</li>
@@ -270,28 +261,38 @@ function MemberBenefitsPanel({
                     </ul>
                 </div>
                 <div className="rounded-xl border bg-gray-50 p-4">
-                    <p className="font-semibold text-foreground">Choose the option that suits you best:</p>
+                    <p className="font-semibold text-foreground">Contribution options</p>
                     <div className="mt-4 space-y-3">
                         <Button
                             variant="outline"
                             className="w-full justify-between"
                             onClick={onJoinMonthly}
-                            disabled={isLoadingMonthly || isLoadingYearly}
+                            disabled={isLoadingMonthly}
                         >
-                            <span>Join Monthly</span>
+                            <span>€5 Sustaining Supporter</span>
                             <span>€5/month</span>
                         </Button>
-                        <Button
-                            variant="outline"
-                            className="w-full justify-between"
-                            onClick={onJoinYearly}
-                            disabled={isLoadingMonthly || isLoadingYearly}
-                        >
-                            <span>Join Yearly</span>
-                            <span>€50/year</span>
+                        <Button variant="outline" className="w-full justify-between" disabled>
+                            <span>€1 Seed Supporter</span>
+                            <span>Not yet wired</span>
                         </Button>
-
+                        <Button variant="outline" className="w-full justify-between" disabled>
+                            <span>€2 Community Supporter</span>
+                            <span>Not yet wired</span>
+                        </Button>
+                        <Button variant="outline" className="w-full justify-between" disabled>
+                            <span>€10 Founding Supporter</span>
+                            <span>Not yet wired</span>
+                        </Button>
+                        <Button variant="outline" className="w-full justify-between" disabled>
+                            <span>Own amount Custom Supporter</span>
+                            <span>Needs follow-up</span>
+                        </Button>
                     </div>
+                    <p className="mt-4 text-xs text-muted-foreground">
+                        The current live Stripe setup supports the existing €5/month recurring checkout. Additional
+                        supporter amounts will need follow-up Stripe price and checkout wiring.
+                    </p>
                 </div>
                 <p>
                     Over time, we hope to make these functions available to everyone. But until Kamooni can fully
@@ -307,7 +308,7 @@ function MemberBenefitsPanel({
                 <div className="rounded-xl border bg-gray-50 p-4">
                     <div className="space-y-4">
                         <div>
-                            <div className="font-semibold text-foreground">Supporting membership active</div>
+                            <div className="font-semibold text-foreground">Founding Supporter active</div>
                             <div className="text-sm text-muted-foreground">
                                 Update your plan, payment details, or cancel at any time in Stripe.
                             </div>

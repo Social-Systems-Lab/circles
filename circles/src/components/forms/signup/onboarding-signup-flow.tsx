@@ -70,7 +70,6 @@ type SignupErrors = Partial<Record<keyof SignupState, string>>;
 type DonationIntentValue = {
     amount: string | null;
     customAmount: string;
-    volunteering: boolean;
     later: boolean;
 };
 
@@ -89,7 +88,6 @@ const initialState: SignupState = {
 const initialDonationIntent: DonationIntentValue = {
     amount: null,
     customAmount: "",
-    volunteering: false,
     later: false,
 };
 
@@ -597,7 +595,7 @@ export function OnboardingSignupFlow() {
             const donationIntentResult = await saveDonationIntentAction({
                 amount: donationIntent.amount,
                 customAmount: donationIntent.customAmount,
-                volunteering: donationIntent.volunteering,
+                volunteering: false,
                 skipped: donationIntent.later,
             });
 
@@ -686,7 +684,7 @@ export function OnboardingSignupFlow() {
                                         {stepIndex === 2 && "How you can contribute"}
                                         {stepIndex === 3 && "What you care about"}
                                         {stepIndex === 4 && "Set up your profile"}
-                                        {stepIndex === 5 && "Support projects through Kamooni"}
+                                        {stepIndex === 5 && "Become a Founding Supporter"}
                                     </h1>
                                     <p className="text-kam-gray-dark/72 mt-3 max-w-2xl text-sm leading-6 sm:text-base">
                                         {stepIndex === 0 &&
@@ -698,7 +696,7 @@ export function OnboardingSignupFlow() {
                                         {stepIndex === 4 &&
                                             "Add a face, a cover image, a short introduction, and optionally a mission so your profile feels alive when you arrive."}
                                         {stepIndex === 5 &&
-                                            "Let us know what you might consider contributing to projects through Kamooni in the future. This is optional and there is no commitment."}
+                                            "Choose an optional supporter level before you continue. You can always decide later."}
                                     </p>
                                 </div>
                             </div>
@@ -1177,9 +1175,7 @@ export function OnboardingSignupFlow() {
                                         className="w-full max-w-md rounded-[28px] border border-white/80 bg-[#fff4d5] p-8 text-center shadow-[0_18px_48px_rgba(123,81,24,0.14)]"
                                     >
                                         <OnboardingCompleteAnimation />
-                                        {(donationIntent.amount ||
-                                            donationIntent.customAmount ||
-                                            donationIntent.volunteering) && (
+                                        {(donationIntent.amount || donationIntent.customAmount) && (
                                             <p className="mt-3 text-sm text-kam-gray-dark/70">
                                                 Thank you for participating.
                                             </p>
