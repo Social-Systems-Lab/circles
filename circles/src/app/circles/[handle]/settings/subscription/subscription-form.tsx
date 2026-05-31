@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,13 +11,9 @@ import Image from "next/image";
 import { useToast } from "@/components/ui/use-toast";
 
 type MembershipPanel = "free" | "member" | null;
+type SupporterTier = 1 | 2 | 5 | 10;
 
-export default function SubscriptionForm({
-    circle: user,
-}: {
-    circle: Circle;
-    onDialogClose?: () => void;
-}) {
+export default function SubscriptionForm({ circle: user }: { circle: Circle; onDialogClose?: () => void }) {
     const { toast } = useToast();
     const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
     const [isLoadingPortal, setIsLoadingPortal] = useState(false);
@@ -28,7 +25,7 @@ export default function SubscriptionForm({
         user.subscription?.provider === "stripe" &&
         (membershipState === "active" || membershipState === "grace_period");
 
-    async function startCheckout() {
+    async function startCheckout(amount: SupporterTier) {
         setIsLoadingMonthly(true);
 
         try {
@@ -37,7 +34,7 @@ export default function SubscriptionForm({
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ interval: "month" }),
+                body: JSON.stringify({ interval: "month", amount }),
             });
 
             const data = await response.json();
@@ -91,25 +88,25 @@ export default function SubscriptionForm({
                         </CardHeader>
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
-                                <p>Everything you need to contribute, connect, and be an active part of the Kamooni community.</p>
                                 <p>
-                                    Kamooni stays open because it is community-supported. Becoming a supporter is optional.
+                                    Everything you need to contribute, connect, and be an active part of the Kamooni
+                                    community.
                                 </p>
-                                <p>Early users are joining as Test Pilots and helping us improve the platform together.</p>
+                                <p>
+                                    Kamooni stays open because it is community-supported. Becoming a supporter is
+                                    optional.
+                                </p>
+                                <p>
+                                    Early users are joining as Test Pilots and helping us improve the platform together.
+                                </p>
                             </div>
 
                             <div className="mt-auto pt-2">
-                                <Button
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => setOpenPanel("free")}
-                                >
+                                <Button variant="outline" className="w-full" onClick={() => setOpenPanel("free")}>
                                     Find out more
                                 </Button>
                             </div>
                         </CardContent>
-
-                        
                     </Card>
 
                     <Card className="relative flex flex-col rounded-3xl p-4">
@@ -126,23 +123,22 @@ export default function SubscriptionForm({
                                 <p>Founding Supporters help sustain Kamooni and keep it open to others.</p>
                                 <p>
                                     As a thank you, supporters receive a few extra benefits, can invite five friends if
-                                    there is a queue, and are invited to join the Kamoonity circle and help shape Kamooni.
+                                    there is a queue, and are invited to join the Kamoonity circle and help shape
+                                    Kamooni.
                                 </p>
                             </div>
 
                             {isMember && (
                                 <div className="rounded-xl border bg-white p-3 text-sm text-muted-foreground">
                                     <div className="font-medium text-foreground">Founding Supporter active</div>
-                                    {membershipState && <div className="mt-1">State: {membershipState.replace("_", " ")}</div>}
+                                    {membershipState && (
+                                        <div className="mt-1">State: {membershipState.replace("_", " ")}</div>
+                                    )}
                                 </div>
                             )}
 
                             <div className="mt-auto pt-2">
-                                <Button
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => setOpenPanel("member")}
-                                >
+                                <Button variant="outline" className="w-full" onClick={() => setOpenPanel("member")}>
                                     Find out more
                                 </Button>
                             </div>
@@ -150,7 +146,12 @@ export default function SubscriptionForm({
 
                         <div className="space-y-3 p-6 pt-0">
                             {canManageStripeMembership ? (
-                                <Button variant="outline" className="w-full" onClick={openPortal} disabled={isLoadingPortal}>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={openPortal}
+                                    disabled={isLoadingPortal}
+                                >
                                     {isLoadingPortal ? "Opening Stripe..." : "Manage or cancel Founding Supporter plan"}
                                 </Button>
                             ) : isMember ? (
@@ -208,20 +209,21 @@ function FreeMembershipPanel() {
             <h3 className="text-2xl font-bold text-foreground">How Test Pilots can become supporters</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>
-                    Kamooni needs funding to stay open and accessible to as many people as possible, and we also want
-                    to recognise the value volunteers bring to the wider community.
+                    Kamooni needs funding to stay open and accessible to as many people as possible, and we also want to
+                    recognise the value volunteers bring to the wider community.
                 </p>
                 <p>
                     <strong className="font-semibold text-foreground">
                         Volunteer for at least five hours per month for three consecutive months,
                     </strong>{" "}
-                    and you will be invited to join Kamooni as a supporter, with all the benefits that supporting includes.
+                    and you will be invited to join Kamooni as a supporter, with all the benefits that supporting
+                    includes.
                 </p>
                 <p>
                     <strong className="font-semibold text-foreground">Supporter status is renewed monthly.</strong>{" "}
                     Hours from one month cannot be carried over to the next. However, if you fall short one month, we
-                    offer a grace period so you can make up the missing hours the following month and keep your supporting
-                    status.
+                    offer a grace period so you can make up the missing hours the following month and keep your
+                    supporting status.
                 </p>
                 <p>
                     Kamooni wants to recognise the contributions our volunteers make, and thank them in some small way.
@@ -242,7 +244,7 @@ function MemberBenefitsPanel({
     isLoadingPortal: boolean;
     isLoadingMonthly: boolean;
     onManageMembership: () => void;
-    onJoinMonthly: () => void;
+    onJoinMonthly: (amount: SupporterTier) => void;
 }) {
     return (
         <div className="space-y-5 pr-8">
@@ -250,14 +252,35 @@ function MemberBenefitsPanel({
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>Supporting Kamooni helps keep the platform open, healthy, and available to others.</p>
                 <div>
-                    <p className="mb-3">As a thank you, supporters receive a few extra benefits. Founding Supporters can:</p>
+                    <p className="mb-3">
+                        As a thank you, supporters receive a few extra benefits. Founding Supporters can:
+                    </p>
                     <ul className="list-disc space-y-2 pl-5">
-                        <li>invite <strong className="font-semibold text-foreground">five friends</strong> who can join right away, even if there is a waiting list</li>
-                        <li><strong className="font-semibold text-foreground">test new features</strong> before everyone else and help shape how they develop</li>
-                        <li><strong className="font-semibold text-foreground">vote on the Kamooni roadmap</strong> and suggest what to build or improve next</li>
-                        <li>create <strong className="font-semibold text-foreground">independent community circles</strong> with more options</li>
-                        <li><strong className="font-semibold text-foreground">activate funding options</strong> through their circles</li>
-                        <li><strong className="font-semibold text-foreground">receive altruistic dividends</strong> from any surplus Kamooni generates</li>
+                        <li>
+                            invite <strong className="font-semibold text-foreground">five friends</strong> who can join
+                            right away, even if there is a waiting list
+                        </li>
+                        <li>
+                            <strong className="font-semibold text-foreground">test new features</strong> before everyone
+                            else and help shape how they develop
+                        </li>
+                        <li>
+                            <strong className="font-semibold text-foreground">vote on the Kamooni roadmap</strong> and
+                            suggest what to build or improve next
+                        </li>
+                        <li>
+                            create{" "}
+                            <strong className="font-semibold text-foreground">independent community circles</strong>{" "}
+                            with more options
+                        </li>
+                        <li>
+                            <strong className="font-semibold text-foreground">activate funding options</strong> through
+                            their circles
+                        </li>
+                        <li>
+                            <strong className="font-semibold text-foreground">receive altruistic dividends</strong> from
+                            any surplus Kamooni generates
+                        </li>
                     </ul>
                 </div>
                 <div className="rounded-xl border bg-gray-50 p-4">
@@ -266,32 +289,49 @@ function MemberBenefitsPanel({
                         <Button
                             variant="outline"
                             className="w-full justify-between"
-                            onClick={onJoinMonthly}
+                            onClick={() => onJoinMonthly(1)}
+                            disabled={isLoadingMonthly}
+                        >
+                            <span>€1 Seed Supporter</span>
+                            <span>€1/month</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="w-full justify-between"
+                            onClick={() => onJoinMonthly(2)}
+                            disabled={isLoadingMonthly}
+                        >
+                            <span>€2 Community Supporter</span>
+                            <span>€2/month</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="w-full justify-between"
+                            onClick={() => onJoinMonthly(5)}
                             disabled={isLoadingMonthly}
                         >
                             <span>€5 Sustaining Supporter</span>
                             <span>€5/month</span>
                         </Button>
-                        <Button variant="outline" className="w-full justify-between" disabled>
-                            <span>€1 Seed Supporter</span>
-                            <span>Not yet wired</span>
-                        </Button>
-                        <Button variant="outline" className="w-full justify-between" disabled>
-                            <span>€2 Community Supporter</span>
-                            <span>Not yet wired</span>
-                        </Button>
-                        <Button variant="outline" className="w-full justify-between" disabled>
+                        <Button
+                            variant="outline"
+                            className="w-full justify-between"
+                            onClick={() => onJoinMonthly(10)}
+                            disabled={isLoadingMonthly}
+                        >
                             <span>€10 Founding Supporter</span>
-                            <span>Not yet wired</span>
+                            <span>€10/month</span>
                         </Button>
-                        <Button variant="outline" className="w-full justify-between" disabled>
-                            <span>Own amount Custom Supporter</span>
-                            <span>Needs follow-up</span>
+                        <Button variant="outline" className="w-full justify-between" asChild>
+                            <Link href="/donate">
+                                <span>Own amount Custom Supporter</span>
+                                <span>One-off donation</span>
+                            </Link>
                         </Button>
                     </div>
                     <p className="mt-4 text-xs text-muted-foreground">
-                        The current live Stripe setup supports the existing €5/month recurring checkout. Additional
-                        supporter amounts will need follow-up Stripe price and checkout wiring.
+                        Own amount currently opens the existing one-off donation flow. Recurring supporter membership is
+                        available for the fixed monthly tiers above.
                     </p>
                 </div>
                 <p>
