@@ -1,13 +1,11 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-    --foreground-rgb: 0, 0, 0;
-    --background-start-rgb: 214, 219, 220;
-    --background-end-rgb: 255, 255, 255;
-    --link-rgb: 33, 100, 205;
-    --link-hover-rgb: 21, 67, 139;
+@theme {
+    --color-foreground-rgb: 0, 0, 0;
+    --color-background-start-rgb: 214, 219, 220;
+    --color-background-end-rgb: 255, 255, 255;
+    --color-link-rgb: 33, 100, 205;
+    --color-link-hover-rgb: 21, 67, 139;
 
     --text-size-80: 0.694rem;
     --text-size-90: 0.833rem;
@@ -21,7 +19,7 @@
 }
 
 body {
-    color: rgb(var(--foreground-rgb));
+    color: rgb(var(--color-foreground-rgb));
     scrollbar-gutter: stable both-edges;
 }
 
