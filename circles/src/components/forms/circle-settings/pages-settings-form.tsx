@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { savePages } from "@/app/circles/[handle]/settings/pages/actions";
-import { features, modules } from "@/lib/data/constants";
+import { hiddenPublicModuleHandles, modules } from "@/lib/data/constants";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { getUserPrivateAction } from "@/components/modules/home/actions";
@@ -23,11 +23,13 @@ interface PagesSettingsFormProps {
 export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
     const router = useRouter();
-    const [, setUser] = useAtom(userAtom);
+    const [user, setUser] = useAtom(userAtom);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Get all available modules from features
-    const availableModules: ModuleInfo[] = modules;
+    const availableModules: ModuleInfo[] = modules.filter(
+        (module) => !hiddenPublicModuleHandles.includes(module.handle),
+    );
 
     const form = useForm({
         defaultValues: { _id: circle._id, enabledModules: circle.enabledModules || ["general", "settings"] },
@@ -90,11 +92,24 @@ export function PagesSettingsForm({ circle }: PagesSettingsFormProps): React.Rea
                                     <Switch
                                         checked={enabledModules.includes(module.handle)}
                                         onCheckedChange={(checked) => handleToggle(module.handle, checked)}
-                                        disabled={module.readOnly}
-                                        aria-readonly={module.readOnly}
+                                        disabled={
+                                            module.readOnly ||
+                                            (module.handle === "funding" && (!user?.isAdmin || circle.circleType !== "circle"))
+                                        }
+                                        aria-readonly={
+                                            module.readOnly ||
+                                            (module.handle === "funding" && (!user?.isAdmin || circle.circleType !== "circle"))
+                                        }
                                     />
                                 </div>
-                                <CardDescription>{module.description}</CardDescription>
+                                <CardDescription>
+                                    {module.description}
+                                    {module.handle === "funding" ? (
+                                        <span className="mt-1.5 block">
+                                            MVP: circles only. Super Admins only.
+                                        </span>
+                                    ) : null}
+                                </CardDescription>
                             </CardHeader>
                         </Card>
                     ))}

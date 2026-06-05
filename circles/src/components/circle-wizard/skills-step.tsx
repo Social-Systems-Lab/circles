@@ -11,7 +11,7 @@ import { Skill } from "@/models/models";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ItemGrid, ItemList } from "./item-card";
 import SelectedItemBadge from "./selected-item-badge";
-import { skills } from "@/lib/data/skills";
+import { getSkillsByHandles, skills } from "@/lib/data/skills";
 
 export default function SkillsStep({
     circleData,
@@ -82,11 +82,7 @@ export default function SkillsStep({
                         const circle = result.data.circle as any;
                         if (circle.skills) {
                             // Convert skills array back to Skill objects
-                            const updatedSkills = circle.skills.map((handle: string) => {
-                                return (
-                                    skills.find((s) => s.handle === handle) || { handle, name: handle, description: "" }
-                                );
-                            });
+                            const updatedSkills = getSkillsByHandles(circle.skills);
 
                             setCircleData((prev) => ({
                                 ...prev,

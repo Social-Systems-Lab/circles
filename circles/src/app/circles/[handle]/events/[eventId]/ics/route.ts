@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { Events } from "@/lib/data/db";
-import { getCircleByHandle } from "@/lib/data/circle";
+import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import type { Event as EventModel, Location } from "@/models/models";
 
 // Helpers for ICS formatting
@@ -84,7 +84,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ handle: string;
         }
 
         const circle = await getCircleByHandle(handle);
-        if (!circle || !circle._id) {
+        if (!circle || !circle._id || !isCirclePublished(circle)) {
             return new Response("Circle not found", { status: 404 });
         }
 

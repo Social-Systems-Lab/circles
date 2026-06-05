@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createEventAction, updateEventAction } from "@/app/circles/[handle]/events/actions";
-import { EventDisplay, Location, Media } from "@/models/models";
+import { Circle, EventDisplay, Location, Media } from "@/models/models";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
@@ -27,6 +28,7 @@ type Props = {
     circleHandle?: string; // optional, can come from context or picker
     event?: EventDisplay | null;
     showCirclePicker?: boolean;
+    initialSelectedCircleId?: string;
 };
 
 function toISOStringLocal(date: Date) {
@@ -48,16 +50,20 @@ function formatTime(date: Date) {
     return format(date, "HH:mm");
 }
 
-import CircleSelector from "@/components/global-create/circle-selector";
-import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
+function toUtcEndOfDayIso(dateOnly: string) {
+    return `${dateOnly}T23:59:59.999Z`;
+}
 
-export default function EventForm({ circleHandle, event, showCirclePicker }: Props) {
+import CircleSelector from "@/components/global-create/circle-selector";
+import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
+
+export default function EventForm({ circleHandle, event, showCirclePicker, initialSelectedCircleId }: Props) {
     console.log("EventForm mounted/updated. Event recurrence:", event?.recurrence);
     const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
+    const itemDetail = creatableItemsList.find((item: CreatableItemDetail) => item.key === "event");
 
     const [title, setTitle] = useState(event?.title || "");
     const [description, setDescription] = useState(event?.description || "");
@@ -69,6 +75,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
     const [isPrivate, setIsPrivate] = useState<boolean>(event?.visibility === "private");
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
+    const [publishToNoticeboard, setPublishToNoticeboard] = useState<boolean>(Boolean(event?.noticeboardPostId));
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
@@ -170,7 +177,14 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
         }
     }, [event?.images]);
 
+    useEffect(() => {
+        setPublishToNoticeboard(Boolean(event?.noticeboardPostId));
+    }, [event?.noticeboardPostId]);
+
     const handleImagesChange = (items: ImageItem[]) => setImages(items);
+    const handleCircleSelected = useCallback((circle: Circle | null) => {
+        setSelectedCircle(circle?.handle);
+    }, []);
 
     const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -190,7 +204,11 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
         }
 
         if (!selectedCircle) {
-            toast({ title: "Validation", description: "Please select a circle.", variant: "destructive" });
+            toast({
+                title: "Validation",
+                description: "Please select a profile or circle.",
+                variant: "destructive",
+            });
             return;
         }
 
@@ -236,13 +254,14 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                     const recurrenceData = {
                         frequency: recurrenceFreq,
                         interval: parseInt(recurrenceInterval) || 1,
-                        endDate: recurrenceEndMode === "date" ? new Date(recurrenceEndDate).toISOString() : undefined,
+                        endDate: recurrenceEndMode === "date" ? toUtcEndOfDayIso(recurrenceEndDate) : undefined,
                         count: recurrenceEndMode === "count" ? parseInt(recurrenceCount) : undefined,
                     };
                     fd.set("recurrence", JSON.stringify(recurrenceData));
                 } else {
                     fd.set("recurrence", "");
                 }
+                fd.set("publishToNoticeboard", String(publishToNoticeboard));
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
@@ -278,18 +297,13 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
 
     return (
         <form className="space-y-6" onSubmit={onSubmit}>
-            {showCirclePicker && (
+            {showCirclePicker && itemDetail && (
                 <div>
-                    <Label>Select Circle</Label>
                     <CircleSelector
-                        itemType={
-                            {
-                                key: "event",
-                                moduleHandle: "events",
-                                createFeatureHandle: "createEvent",
-                            } as CreatableItemDetail
-                        }
-                        onCircleSelected={(circle) => setSelectedCircle(circle?.handle)}
+                        itemType={itemDetail}
+                        onCircleSelected={handleCircleSelected}
+                        initialSelectedCircleId={initialSelectedCircleId}
+                        showModuleEnableMessage={false}
                     />
                 </div>
             )}
@@ -609,6 +623,22 @@ export default function EventForm({ circleHandle, event, showCirclePicker }: Pro
                     <p className="text-xs text-muted-foreground">
                         Private events are visible only to the creator and invited participants.
                     </p>
+
+                    <div className="rounded-lg border p-4">
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="publishToNoticeboard"
+                                checked={publishToNoticeboard}
+                                onCheckedChange={(checked) => setPublishToNoticeboard(Boolean(checked))}
+                            />
+                            <div className="space-y-1">
+                                <Label htmlFor="publishToNoticeboard">Share this event on the Noticeboard</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Create or update one linked Noticeboard post for this event.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="space-y-4">

@@ -78,10 +78,12 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                 });
                 setUser((prevUser) => ({
                     ...prevUser!,
-                    memberships: [
-                        ...(prevUser!.memberships || []),
-                        { circleId: circle._id, circle: circle, userGroups: ["members"], joinedAt: new Date() },
-                    ],
+                    memberships: prevUser!.memberships?.some((m) => m.circleId === circle._id)
+                        ? prevUser!.memberships
+                        : [
+                              ...(prevUser!.memberships || []),
+                              { circleId: circle._id, circle: circle, userGroups: ["members"], joinedAt: new Date() },
+                          ],
                 }));
             } else {
                 toast({
@@ -94,10 +96,12 @@ export const FollowButton = ({ circle, renderCompact }: CircleMembershipButtonPr
                 // Update user state to include the new pending request
                 setUser((prevUser) => ({
                     ...prevUser!,
-                    pendingRequests: [
-                        ...(prevUser!.pendingRequests || []),
-                        { circleId: circle._id, status: "pending", userDid: user!.did!, requestedAt: new Date() },
-                    ],
+                    pendingRequests: prevUser!.pendingRequests?.some((r) => r.circleId === circle._id)
+                        ? prevUser!.pendingRequests
+                        : [
+                              ...(prevUser!.pendingRequests || []),
+                              { circleId: circle._id, status: "pending", userDid: user!.did!, requestedAt: new Date() },
+                          ],
                 }));
             }
         } else {

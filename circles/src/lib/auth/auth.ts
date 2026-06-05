@@ -9,11 +9,12 @@ import { ObjectId } from "mongodb";
 import { features, maxAccessLevel } from "../data/constants";
 import { cookies } from "next/headers";
 import { createSession, generateUserToken, verifyUserToken } from "./jwt";
+import { readAuthToken } from "./cookie";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
-import { registerOrLoginMatrixUser } from "../data/matrix";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
+import { isVerifiedUser } from "./verification";
 
 export const SALT_FILENAME = "salt.bin";
 export const IV_FILENAME = "iv.bin";
@@ -23,7 +24,19 @@ export const ENCRYPTED_PRIVATE_KEY_FILENAME = "privateKey.pem.enc";
 export const ENCRYPTION_ALGORITHM = "aes-256-cbc";
 export const APP_DIR =
     process.env.APP_DIR ||
-    (process.env.NODE_ENV === "production" ? "/circles" : path.join(process.cwd(), "circles_data"));
+    (() => {
+        const circlesUrl = process.env.CIRCLES_URL || "";
+        const isLocalLikeRuntime =
+            process.env.CIRCLES_LOCAL_AUTH_DIR === "true" ||
+            process.env.CIRCLES_HOST === "db" ||
+            circlesUrl.includes("://db") ||
+            circlesUrl.includes("://localhost") ||
+            circlesUrl.includes("://127.0.0.1");
+        if (isLocalLikeRuntime) {
+            return path.join(process.cwd(), "circles_data");
+        }
+        return process.env.NODE_ENV === "production" ? "/circles" : path.join(process.cwd(), "circles_data");
+    })();
 
 console.log("DEBUG AUTH: NODE_ENV", process.env.NODE_ENV);
 console.log("DEBUG AUTH: APP_DIR", APP_DIR);
@@ -38,7 +51,7 @@ export const createUserAccount = async (
     type: AccountType,
     email: string,
     password: string,
-): Promise<Circle> => {
+): Promise<Circle & { devVerificationToken?: string; devVerificationUrl?: string }> => {
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
     }
@@ -112,11 +125,29 @@ export const createUserAccount = async (
         hashedVerificationToken, // emailVerificationToken
         verificationTokenExpiry, // emailVerificationTokenExpiry
     );
+    user.verificationStatus = "unverified";
+    user.accountStatus = "pending_verification";
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
+    try {
+        const { getNextSignupOrder } = await import("@/lib/data/platform-settings");
+        const order = await getNextSignupOrder();
+        await Circles.updateOne({ _id: res.insertedId }, { $set: { signupOrder: order } });
+        user.signupOrder = order;
+    } catch (error) {
+        console.error("Failed to set signupOrder:", error);
+    }
+
     // Send verification email
     const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
+    if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
+        console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
+        const devUser = user as Circle & { devVerificationToken?: string; devVerificationUrl?: string };
+        devUser.devVerificationToken = unhashedVerificationToken;
+        devUser.devVerificationUrl = verificationLink;
+    }
     try {
         await sendEmail({
             to: email,
@@ -221,7 +252,8 @@ export class AuthenticationError extends Error {
 export const getUserPrivateKey = (did: string, password: string): string => {
     const accountPath = path.join(USERS_DIR, did);
     if (!fs.existsSync(accountPath)) {
-        throw new AuthenticationError("Account does not exist");
+        console.error("Login failed: auth credential directory missing", { did, accountPath });
+        throw new AuthenticationError("Your account credentials need to be rebuilt. Please use Forgot Password to reset your password and restore access.");
     }
 
     const salt: Buffer = fs.readFileSync(path.join(accountPath, SALT_FILENAME));
@@ -242,6 +274,11 @@ export const getUserPrivateKey = (did: string, password: string): string => {
         decryptedPrivateKey = decipher.update(encryptedPrivateKeyStr, "hex", "utf8"); // Use the string variable
         decryptedPrivateKey += decipher.final("utf8");
     } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+            console.log(
+                `[LOGIN_DIAG] did=${did} credentialSource=file path=${accountPath} exists=true verificationBranch=password_mismatch`,
+            );
+        }
         throw new AuthenticationError("Incorrect password");
     }
 
@@ -291,7 +328,7 @@ export const hasHigherAccess = async (
 
 // gets authenticated user DID or throws an error if user is not authenticated
 export const getAuthenticatedUserDid = async (): Promise<string | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
     if (!token) {
         return undefined;
     }
@@ -318,7 +355,7 @@ export const isAuthorized = async (
         const user = await Circles.findOne({ did: userDid });
         if (
             featureInput.needsToBeVerified &&
-            !user?.isVerified &&
+            !isVerifiedUser(user) &&
             user?._id.toString() !== circleId &&
             user?.did !== circle.createdBy
         ) {
@@ -384,23 +421,9 @@ export const getAuthorizedMembers = async (circle: string | Circle, feature: Fea
     return await getCirclesByDids(memberDids);
 };
 
-export async function createUserSession(user: UserPrivate, userDid: string): Promise<string> {
+export async function createUserSession(_user: UserPrivate, userDid: string): Promise<string> {
     let token = await generateUserToken(userDid);
     await createSession(token);
-
-    try {
-        // check if user has a matrix account
-        console.log("Attempting to register/login Matrix user for:", user.name, user.did);
-        await registerOrLoginMatrixUser(user, userDid);
-        console.log("Successfully registered/logged in Matrix user");
-    } catch (error) {
-        console.error("Error creating matrix session for user:", user.name);
-        console.error("Error details:", error);
-        if (error instanceof Error) {
-            console.error("Error message:", error.message);
-            console.error("Error stack:", error.stack);
-        }
-    }
 
     return token;
 }

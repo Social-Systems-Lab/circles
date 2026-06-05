@@ -90,7 +90,7 @@ export default function LandingPage() {
                 {/* CTA */}
                 <div className="text-center">
                     <Link
-                        href="/signup"
+                        href="/signup/pilot"
                         className="inline-flex items-center rounded-full bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
                     >
                         Sign Up

@@ -10,6 +10,7 @@ import { getQdrantClient, getVbdCircleById } from "@/lib/data/vdb";
 import {
     Cause as SDG,
     Circle,
+    DonationIntent,
     FileInfo,
     Media,
     Metrics,
@@ -21,10 +22,52 @@ import {
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added isFile, saveFile, deleteFile
+import { updateDonationIntent } from "@/lib/data/user";
 
 type SaveMissionActionResponse = {
     success: boolean;
     message: string;
+};
+
+type SaveDonationIntentActionInput = {
+    amount?: string | number | null;
+    customAmount?: string | null;
+    volunteering?: boolean;
+    skipped?: boolean;
+};
+
+type SaveDonationIntentActionResponse = SaveMissionActionResponse & {
+    donationIntent?: DonationIntent;
+};
+
+const normalizeDonationAmount = (value: string | number | null | undefined): number | null => {
+    if (typeof value === "number") {
+        return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+        return null;
+    }
+
+    const parsedValue = Number.parseFloat(trimmedValue.replace(",", "."));
+    return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+};
+
+const normalizeDonationIntent = (input: SaveDonationIntentActionInput): DonationIntent => {
+    const skipped = Boolean(input.skipped);
+    const amountValue = input.amount === "other" ? input.customAmount : input.amount;
+
+    return {
+        amount: skipped ? null : normalizeDonationAmount(amountValue),
+        volunteering: Boolean(input.volunteering),
+        skipped,
+        updatedAt: new Date(),
+    };
 };
 
 export const saveMissionAction = async (mission: string, circleId: string): Promise<SaveMissionActionResponse> => {
@@ -66,6 +109,33 @@ export const saveMissionAction = async (mission: string, circleId: string): Prom
         } else {
             return { success: false, message: "Failed to save circle settings. " + error };
         }
+    }
+};
+
+export const saveDonationIntentAction = async (
+    input: SaveDonationIntentActionInput,
+): Promise<SaveDonationIntentActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to save donation intent" };
+    }
+
+    try {
+        const donationIntent = normalizeDonationIntent(input);
+        await updateDonationIntent(userDid, donationIntent);
+
+        const user = await getUserByDid(userDid);
+        const circlePath = await getCirclePath(user);
+        revalidatePath(circlePath);
+
+        return { success: true, message: "Donation intent saved successfully", donationIntent };
+    } catch (error) {
+        console.log("error", error);
+        if (error instanceof Error) {
+            return { success: false, message: error.message };
+        }
+
+        return { success: false, message: "Failed to save donation intent. " + error };
     }
 };
 
@@ -154,6 +224,48 @@ export const saveSkillsAction = async (
         // clear page cache so pages update
         let circlePath = await getCirclePath(circle);
         revalidatePath(circlePath); // revalidate home page
+
+        return { success: true, message: "Circle settings saved successfully" };
+    } catch (error) {
+        console.log("error", error);
+        if (error instanceof Error) {
+            return { success: false, message: error.message };
+        } else {
+            return { success: false, message: "Failed to save circle settings. " + error };
+        }
+    }
+};
+
+export const saveInterestsAction = async (
+    interests: string[] | undefined,
+    circleId: string,
+): Promise<SaveSdgsActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    try {
+        let circle: Partial<Circle> = {
+            _id: circleId,
+            interests,
+        };
+
+        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_causes_and_skills);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to edit circle settings" };
+        }
+
+        let user = await getUserByDid(userDid);
+        circle.completedOnboardingSteps = user.completedOnboardingSteps ?? [];
+        if (!circle.completedOnboardingSteps.includes("interests")) {
+            circle.completedOnboardingSteps.push("interests");
+        }
+
+        await updateCircle(circle, userDid);
+
+        let circlePath = await getCirclePath(circle);
+        revalidatePath(circlePath);
 
         return { success: true, message: "Circle settings saved successfully" };
     } catch (error) {

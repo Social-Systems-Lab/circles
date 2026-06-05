@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobalServerSettingsForm } from "./global-server-settings-form"; // Import the new form
 import { Circle, ServerSettings } from "@/models/models";
@@ -16,15 +17,44 @@ import CirclesTab from "./tabs/circles-tab";
 import UsersTab from "./tabs/users-tab";
 import SuperAdminsTab from "./tabs/super-admins-tab";
 import VerificationRequestsTab from "./tabs/verification-requests-tab";
+import SystemMessagesTab from "./tabs/system-messages-tab";
+import type { OnboardingMcpAmountBucket, OnboardingMcpStats } from "@/lib/data/user";
 import { toast } from "sonner"; // Import toast for feedback
+
+const monthlyAmountFormatter = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 2,
+});
+
+const amountBucketOrder: OnboardingMcpAmountBucket[] = ["5", "10", "25", "50", "100+", "custom"];
 
 interface AdminDashboardProps {
     serverSettings: ServerSettings;
     circles: Circle[];
+    onboardingMcpStats: OnboardingMcpStats;
+    initialTab?: string;
+    initialVerificationCircleId?: string;
 }
 
-export default function AdminDashboard({ serverSettings, circles }: AdminDashboardProps) {
-    const [activeTab, setActiveTab] = useState("server-settings");
+const ADMIN_TABS = new Set([
+    "server-settings",
+    "operations",
+    "circles",
+    "users",
+    "verification-requests",
+    "super-admins",
+    "system-messages",
+]);
+
+const normalizeAdminTab = (tab?: string) => (tab && ADMIN_TABS.has(tab) ? tab : "server-settings");
+
+export default function AdminDashboard({
+    serverSettings,
+    circles,
+    onboardingMcpStats,
+    initialTab,
+    initialVerificationCircleId,
+}: AdminDashboardProps) {
+    const [activeTab, setActiveTab] = useState(() => normalizeAdminTab(initialTab));
     const [isReindexing, setIsReindexing] = useState(false);
     const [reindexStatusMessage, setReindexStatusMessage] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -127,8 +157,10 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
         }
     };
 
+    const formatMonthlyAmount = (amount: number) => `${monthlyAmountFormatter.format(amount)} / month`;
+
     return (
-        <Tabs defaultValue="server-settings" className="w-full" onValueChange={setActiveTab}>
+        <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
             <TabsList className="mb-6">
                 <TabsTrigger value="server-settings">Server Settings</TabsTrigger>
                 <TabsTrigger value="operations">Server Operations</TabsTrigger> {/* New Tab Trigger */}
@@ -136,6 +168,7 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                 <TabsTrigger value="users">Users</TabsTrigger>
                 <TabsTrigger value="verification-requests">Verification Requests</TabsTrigger>
                 <TabsTrigger value="super-admins">Super Admins</TabsTrigger>
+                <TabsTrigger value="system-messages">System Messages</TabsTrigger>
             </TabsList>
 
             <TabsContent value="server-settings" className="space-y-4">
@@ -144,6 +177,66 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                     <div className="pt-4">
                         <GlobalServerSettingsForm serverSettings={serverSettings} maxWidth="600px" />
                     </div>
+                </div>
+
+                <div className="mb-8">
+                    <h2 className="mb-2 text-xl font-semibold">Onboarding MCP Summary</h2>
+                    <Card className="max-w-3xl">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-lg">Monthly contribution potential</CardTitle>
+                            <CardDescription>
+                                Snapshot from saved onboarding donation intent responses.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Users with donation intent</p>
+                                    <p className="text-2xl font-semibold">
+                                        {onboardingMcpStats.totalUsersWithDonationIntent}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Users with amount</p>
+                                    <p className="text-2xl font-semibold">{onboardingMcpStats.usersWithAmount}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Volunteering</p>
+                                    <p className="text-2xl font-semibold">{onboardingMcpStats.volunteeringCount}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Skipped</p>
+                                    <p className="text-2xl font-semibold">{onboardingMcpStats.skippedCount}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total monthly potential</p>
+                                    <p className="text-2xl font-semibold">
+                                        {formatMonthlyAmount(onboardingMcpStats.totalMonthlyContributionPotential)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Average monthly potential</p>
+                                    <p className="text-2xl font-semibold">
+                                        {formatMonthlyAmount(onboardingMcpStats.averageMonthlyContributionPotential)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <h3 className="mb-2 text-sm font-medium">Amount buckets</h3>
+                                <ul className="space-y-1 text-sm">
+                                    {amountBucketOrder.map((bucket) => (
+                                        <li key={bucket} className="flex items-center justify-between gap-4">
+                                            <span className="text-muted-foreground">
+                                                {bucket === "custom" ? "Custom" : `${bucket} / month`}
+                                            </span>
+                                            <span className="font-medium">{onboardingMcpStats.amountBuckets[bucket]}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </TabsContent>
 
@@ -164,7 +257,7 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
             <TabsContent value="verification-requests" className="space-y-4">
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Verification Requests</h2>
-                    <VerificationRequestsTab />
+                    <VerificationRequestsTab initialCircleId={initialVerificationCircleId} />
                 </div>
             </TabsContent>
 
@@ -172,6 +265,13 @@ export default function AdminDashboard({ serverSettings, circles }: AdminDashboa
                 <div className="mb-8">
                     <h2 className="mb-2 text-xl font-semibold">Manage Super Admins</h2>
                     <SuperAdminsTab />
+                </div>
+            </TabsContent>
+
+            <TabsContent value="system-messages" className="space-y-4">
+                <div className="mb-8">
+                    <h2 className="mb-2 text-xl font-semibold">System Messages</h2>
+                    <SystemMessagesTab />
                 </div>
             </TabsContent>
 

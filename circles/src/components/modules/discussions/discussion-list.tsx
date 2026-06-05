@@ -58,7 +58,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-const TextareaAutosize = require("react-textarea-autosize");
+import TextareaAutosize from "react-textarea-autosize";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     createCommentAction,
@@ -80,7 +80,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { DiscussionForm } from "./discussion-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
+import { SuggestionDataItem } from "react-mentions";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -110,15 +110,19 @@ export const defaultMentionsInputStyle = {
         padding: "0.5rem 1rem", // Same as input
     },
     suggestions: {
+        zIndex: 12000,
         control: {
             backgroundColor: "transparent",
         },
         list: {
-            backgroundColor: "transparent",
-            border: "0px solid rgba(0,0,0,0.15)",
+            backgroundColor: "white",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: "15px",
             fontSize: 14,
-            overflow: "hidden",
+            boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
+            maxHeight: "240px",
+            overflowY: "auto" as const,
+            zIndex: 80,
         },
         item: {
             backgroundColor: "white",
@@ -160,11 +164,21 @@ export const handleMentionQuery = async (query: string, callback: (data: Suggest
     }
     let suggestions =
         response.circles?.map((circle) => ({
-            id: circle._id,
-            display: circle.name,
-            picture: circle.picture?.url,
+            id: String(circle._id ?? ""),
+            display: String(circle.name ?? ""),
+            picture: circle.picture?.url ? String(circle.picture.url) : undefined,
         })) ?? [];
     callback(suggestions);
+};
+
+export const getMentionsPortalHost = () => {
+    if (typeof document === "undefined") {
+        return undefined;
+    }
+
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    const dialogHost = activeElement?.closest('[role="dialog"]');
+    return dialogHost instanceof HTMLElement ? document.body : undefined;
 };
 
 type LikeButtonProps = {
@@ -892,7 +906,7 @@ export const DiscussionItem = ({
                                                 </DropdownMenuItem>
                                             </DialogTrigger>
                                             <DialogContent
-                                                className="overflow-hidden rounded-[15px] p-0 sm:max-w-[425px] sm:rounded-[15px]"
+                                                className="h-[90vh] w-[95vw] max-w-3xl overflow-hidden rounded-[15px] p-0"
                                                 onInteractOutside={(e) => {
                                                     e.preventDefault();
                                                 }}
@@ -969,7 +983,11 @@ export const DiscussionItem = ({
                 <div className="pl-4 pr-4">
                     {/* Render Internal Preview if URL exists, passing pre-fetched data */}
                     {post.internalPreviewUrl ? (
-                        <InternalLinkPreview url={post.internalPreviewUrl} initialData={post.internalPreviewData} />
+                        <InternalLinkPreview
+                            url={post.internalPreviewUrl}
+                            initialData={post.internalPreviewData}
+                            previewType={post.internalPreviewType}
+                        />
                     ) : // Otherwise, render External Preview if URL exists
                     post.linkPreviewUrl ? (
                         <LinkPreviewCard
@@ -1212,24 +1230,16 @@ export const DiscussionItem = ({
                 {/* Comment input box */}
                 {user && canComment && !disableComments && (
                     <div className="mt-2 flex items-start gap-2">
-                        <MentionsInput
+                        {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
+                        <TextareaAutosize
                             value={newCommentContent}
-                            onChange={(e) => setNewCommentContent(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewCommentContent(e.target.value)}
                             onKeyDown={handleCommentKeyDown}
                             placeholder="Write a comment..."
-                            className="flex-grow rounded-[20px] bg-gray-100"
-                            style={defaultMentionsInputStyle}
-                        >
-                            <Mention
-                                trigger="@"
-                                data={handleMentionQuery}
-                                style={defaultMentionStyle}
-                                displayTransform={(id, display) => `${display}`}
-                                renderSuggestion={renderCircleSuggestion}
-                                markup="[__display__](/circles/__id__)"
-                                // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
-                            />
-                        </MentionsInput>
+                            className="w-full resize-none rounded-[20px] bg-gray-100 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            minRows={1}
+                            maxRows={6}
+                        />
 
                         {isMobile && (
                             <button onClick={handleAddComment} className="mt-1 text-blue-500">
@@ -1516,24 +1526,17 @@ const CommentItem = ({
                                 </div>
                                 {isEditing ? (
                                     <>
-                                        <MentionsInput
+                                        <TextareaAutosize
                                             value={editContent}
-                                            onChange={(e) => setEditContent(e.target.value)}
+                                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                                                setEditContent(e.target.value)
+                                            }
                                             onKeyDown={handleEditKeyDown}
                                             placeholder="Write a comment..."
-                                            className="flex-grow rounded-[20px] bg-gray-200"
-                                            style={defaultMentionsInputStyle}
-                                        >
-                                            <Mention
-                                                trigger="@"
-                                                data={handleMentionQuery}
-                                                style={defaultMentionStyle}
-                                                displayTransform={(id, display) => `${display}`}
-                                                renderSuggestion={renderCircleSuggestion}
-                                                markup="[__display__](/circles/__id__)"
-                                                // regex={/\[([^\]]+)\]\(\/circles\/([^)]+)\)/} // TODO probably not necessary let's see
-                                            />
-                                        </MentionsInput>
+                                            className="w-full resize-none rounded-[20px] bg-gray-200 p-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            minRows={1}
+                                            maxRows={6}
+                                        />
                                     </>
                                 ) : (
                                     <MemoizedCommentContent

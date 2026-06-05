@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added C
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Issue, Location, UserPrivate } from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Issue, IssueUrgency, Location, UserPrivate } from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -25,6 +25,18 @@ import { getFullLocationName } from "@/lib/utils";
 import { createIssueAction, updateIssueAction } from "@/app/circles/[handle]/issues/actions";
 import CircleSelector from "@/components/global-create/circle-selector"; // Added CircleSelector
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { isAuthorized } from "@/lib/auth/client-auth";
+import { features } from "@/lib/data/constants";
+
+const issueUrgencyOptions: { value: IssueUrgency; label: string; description: string }[] = [
+    { value: "low", label: "Low", description: "Low urgency" },
+    { value: "medium", label: "Medium", description: "Needs attention soon" },
+    { value: "high", label: "High", description: "Needs prompt attention" },
+    { value: "critical", label: "Critical", description: "Needs immediate attention" },
+];
+
+const nonCriticalIssueUrgencyOptions = issueUrgencyOptions.filter((option) => option.value !== "critical");
 
 // Form schema for creating/editing an issue
 const issueFormSchema = z.object({
@@ -33,12 +45,14 @@ const issueFormSchema = z.object({
     images: z.array(z.any()).optional(), // react-hook-form handles FileList/Media[]
     location: z.any().optional(), // Location object or undefined
     targetDate: z.date().optional(),
+    urgency: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
 });
 
 type IssueFormValues = Omit<z.infer<typeof issueFormSchema>, "images" | "location" | "targetDate"> & {
     images?: (File | Media)[]; // Allow both File (new uploads) and Media (existing)
     location?: Location;
     targetDate?: Date;
+    urgency?: IssueUrgency | null;
 };
 
 interface IssueFormProps {
@@ -71,6 +85,13 @@ export const IssueForm: React.FC<IssueFormProps> = ({
     const router = useRouter();
     const searchParams = useSearchParams();
     const isEditing = !!issue;
+    const isFixedCircleContext = Boolean(!isEditing && initialSelectedCircleId);
+    const targetDateCircle = selectedCircle ?? circleProp ?? null;
+    const canManageTargetDate = targetDateCircle
+        ? isAuthorized(user, targetDateCircle, features.issues.review) ||
+          isAuthorized(user, targetDateCircle, features.issues.moderate)
+        : false;
+    const allowedUrgencyOptions = canManageTargetDate ? issueUrgencyOptions : nonCriticalIssueUrgencyOptions;
 
     const targetDateFromQuery = searchParams.get("targetDate");
     let prefilledDate: Date | undefined = undefined;
@@ -89,12 +110,13 @@ export const IssueForm: React.FC<IssueFormProps> = ({
             images: issue?.images || [],
             location: issue?.location,
             targetDate: prefilledDate ?? (issue?.targetDate ? new Date(issue.targetDate) : undefined),
+            urgency: issue?.urgency || null,
         },
     });
 
     // Effect to set selectedCircle if editing an existing issue
     useEffect(() => {
-        if (isEditing && circleProp) {
+        if (circleProp && (!selectedCircle || selectedCircle._id !== circleProp._id)) {
             setSelectedCircle(circleProp);
         } else if (isEditing && issue && issue.circleId && user?.memberships) {
             // Fallback if circleProp not directly passed but user context is available
@@ -103,7 +125,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                 setSelectedCircle(owningCircle);
             }
         }
-    }, [isEditing, issue, user, circleProp, setSelectedCircle]);
+    }, [isEditing, issue, user, circleProp, selectedCircle, setSelectedCircle]);
 
     useEffect(() => {
         if (!isEditing && initialSelectedCircleId && user?.memberships) {
@@ -166,8 +188,16 @@ export const IssueForm: React.FC<IssueFormProps> = ({
             formData.append("location", JSON.stringify(location));
         }
 
-        if (values.targetDate) {
+        if (values.urgency) {
+            formData.append("urgency", values.urgency);
+        } else if (isEditing) {
+            formData.append("urgency", "");
+        }
+
+        if (values.targetDate && canManageTargetDate) {
             formData.append("targetDate", values.targetDate.toISOString());
+        } else if (isEditing && canManageTargetDate) {
+            formData.append("targetDate", "");
         }
 
         if (values.images) {
@@ -236,6 +266,7 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                         {isEditing ? "Edit Issue" : "Submit New Issue"}
                     </h3>
                     {!isEditing &&
+                        !isFixedCircleContext &&
                         itemDetail && ( // Show CircleSelector only when creating new
                             <div className="pb-4 pt-2">
                                 <CircleSelector
@@ -257,49 +288,88 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                     {/* Grid container */}
                                     <FormField
                                         control={form.control}
-                                        name="targetDate"
+                                        name="urgency"
                                         render={({ field }) => (
                                             <FormItem className="py-3 md:py-4">
-                                                <FormLabel>Target Date (Optional)</FormLabel>
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                        <FormControl>
-                                                            <Button
-                                                                variant={"outline"}
-                                                                className={cn(
-                                                                    "w-full pl-3 text-left font-normal md:w-[240px]",
-                                                                    !field.value && "text-muted-foreground",
-                                                                )}
-                                                                disabled={isSubmitting}
-                                                            >
-                                                                {field.value ? (
-                                                                    format(field.value, "PPP")
-                                                                ) : (
-                                                                    <span>Pick a date</span>
-                                                                )}
-                                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                                            </Button>
-                                                        </FormControl>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-0" align="start">
-                                                        <Calendar
-                                                            mode="single"
-                                                            selected={field.value}
-                                                            onSelect={field.onChange}
-                                                            disabled={(date: Date) =>
-                                                                date < new Date("1900-01-01") || isSubmitting
-                                                            }
-                                                            initialFocus
-                                                        />
-                                                    </PopoverContent>
-                                                </Popover>
+                                                <FormLabel>Urgency</FormLabel>
+                                                <Select
+                                                    onValueChange={(value) =>
+                                                        field.onChange(value === "not_set" ? null : value)
+                                                    }
+                                                    value={field.value ?? "not_set"}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Not set" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="not_set">Not set</SelectItem>
+                                                        {allowedUrgencyOptions.map((option) => (
+                                                            <SelectItem key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                                 <FormDescription>
-                                                    Set an optional target completion date for this issue.
+                                                    {issueUrgencyOptions.find((option) => option.value === field.value)
+                                                        ?.description || "Optional urgency for this issue."}
                                                 </FormDescription>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
                                     />
+                                    {canManageTargetDate ? (
+                                        <FormField
+                                            control={form.control}
+                                            name="targetDate"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Target Date (Optional)</FormLabel>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <FormControl>
+                                                                <Button
+                                                                    variant={"outline"}
+                                                                    className={cn(
+                                                                        "w-full pl-3 text-left font-normal md:w-[240px]",
+                                                                        !field.value && "text-muted-foreground",
+                                                                    )}
+                                                                    disabled={isSubmitting}
+                                                                >
+                                                                    {field.value ? (
+                                                                        format(field.value, "PPP")
+                                                                    ) : (
+                                                                        <span>Pick a date</span>
+                                                                    )}
+                                                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                                </Button>
+                                                            </FormControl>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={field.value}
+                                                                onSelect={field.onChange}
+                                                                disabled={(date: Date) =>
+                                                                    date < new Date("1900-01-01") || isSubmitting
+                                                                }
+                                                                initialFocus
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <FormDescription>
+                                                        Set an optional target completion date for this issue.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    ) : (
+                                        <div className="hidden md:block" />
+                                    )}
                                     <FormField
                                         control={form.control}
                                         name="title"
@@ -320,8 +390,6 @@ export const IssueForm: React.FC<IssueFormProps> = ({
                                             </FormItem>
                                         )}
                                     />
-                                    {/* Empty div for spacing or other elements if needed in the second column */}
-                                    <div className="hidden md:col-span-1 md:block"></div>
                                 </div>
                                 <FormField
                                     control={form.control}

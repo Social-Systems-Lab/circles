@@ -6,6 +6,7 @@ import { Circle } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import RichText from "../feeds/RichText";
 import { useRouter } from "next/navigation";
+import { getSkillLabelByHandle } from "@/lib/data/skills";
 
 interface OffersCardProps {
     circle: Circle;
@@ -36,13 +37,6 @@ export default function OffersCard({ circle, isOwner }: OffersCardProps) {
             {circle.offers?.text ? (
                 <div>
                     <RichText content={circle.offers.text} />
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        {circle.offers.skills?.map((skill) => (
-                            <Badge key={skill} onClick={() => handleSkillClick(skill)} className="cursor-pointer">
-                                {skill}
-                            </Badge>
-                        ))}
-                    </div>
                 </div>
             ) : (
                 <div className="text-center text-muted-foreground">

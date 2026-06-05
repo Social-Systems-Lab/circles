@@ -18,14 +18,14 @@ import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
 import Indicators from "@/components/utils/indicators";
 import ImageCarousel from "@/components/ui/image-carousel";
 import { sdgs } from "@/lib/data/sdgs";
-import { skills } from "@/lib/data/skills";
+import { getSkillByHandle } from "@/lib/data/skills";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge"; // Import Badge for pills
 import SdgList from "../sdgs/SdgList";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 // Helper mappings for quick lookup
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
-const skillMap = new Map(skills.map((s) => [s.handle, s]));
 
 interface CircleSwipeCardProps {
     circle: WithMetric<Circle>;
@@ -297,7 +297,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                                 </h3>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {circle.skills!.slice(0, 8).map((handle) => {
-                                        const skill = skillMap.get(handle);
+                                        const skill = getSkillByHandle(handle);
                                         if (!skill) return null;
                                         return (
                                             <Badge
@@ -365,7 +365,7 @@ export const CircleSwipeCard: React.FC<CircleSwipeCardProps> = ({ circle, onSwip
                 {circle.handle && (
                     <div className="pointer-events-auto absolute bottom-0 right-4">
                         <Button
-                            onClick={() => router.push(`/circles/${circle.handle}`)}
+                            onClick={() => router.push(getCircleDefaultPath(circle))}
                             variant="outline"
                             size="icon"
                             className="h-10 w-10 rounded-full border-blue-300 bg-white hover:bg-blue-50 hover:text-blue-600" // Smaller size

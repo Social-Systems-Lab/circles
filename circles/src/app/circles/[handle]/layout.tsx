@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { getCircleByHandle, getDefaultCircle, getCircleById } from "@/lib/data/circle";
+import { getCircleByHandle, getDefaultCircle, getCircleById, isCirclePublished } from "@/lib/data/circle";
 import { redirect } from "next/navigation";
 import HomeCover from "@/components/modules/home/home-cover";
 import HomeContent from "@/components/modules/home/home-content";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
+import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -27,15 +28,32 @@ export default async function RootLayout(props: Props) {
     let authorizedToEdit = false;
     let userDid = await getAuthenticatedUserDid();
     authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
+    const canViewCircle = isCirclePublished(circle) || authorizedToEdit || circle.createdBy === userDid;
+    if (!canViewCircle) {
+        redirect("/not-found");
+    }
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
+    const proofOfHumanitySummary =
+        circle.circleType === "user" && circle.did
+            ? await getHumanityVerificationSummary(circle.did, userDid)
+            : null;
+    const plainCircle = JSON.parse(JSON.stringify(circle));
+    const plainParentCircle = parentCircle ? JSON.parse(JSON.stringify(parentCircle)) : undefined;
+    const plainProofOfHumanitySummary = proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null;
 
     return (
         <>
             <>
-                <HomeCover circle={circle} />
-                <HomeContent circle={circle} authorizedToEdit={authorizedToEdit} parentCircle={parentCircle} />
+                <HomeCover circle={plainCircle} />
+                <HomeContent
+                    circle={plainCircle}
+                    authorizedToEdit={authorizedToEdit}
+                    viewerDid={userDid}
+                    parentCircle={plainParentCircle}
+                    proofOfHumanitySummary={plainProofOfHumanitySummary}
+                />
             </>
-            <CircleTabs circle={circle} />
+            <CircleTabs circle={plainCircle} />
 
             {children}
         </>

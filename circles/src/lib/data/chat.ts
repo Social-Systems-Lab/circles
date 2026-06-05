@@ -1,11 +1,10 @@
 // chat.ts - chat logic
 
-import { ChatRooms, Circles, ChatRoomMembers } from "./db";
+import { ChatConversations, ChatRooms, ChatRoomMembers, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { ChatRoom, ChatRoomMember, ChatRoomDisplay, Circle } from "@/models/models";
 import { getCircleById, updateCircle } from "./circle";
-import { addUserToRoom, createMatrixRoom } from "./matrix";
-import { getPrivateUserByDid } from "./user";
+import { listConversationsForUser } from "./mongo-chat";
 
 // Chat Room Functions
 
@@ -40,6 +39,151 @@ export const getChatRooms = async (circleId: string): Promise<ChatRoom[]> => {
         }
     });
     return chatRooms;
+};
+
+export const listChatRoomsForUser = async (userDid: string): Promise<ChatRoomDisplay[]> => {
+    const memberships = await Members.find({ userDid }).toArray();
+    const circleIds = memberships.map((m) => m.circleId).filter(Boolean) as string[];
+
+    // Only include:
+    // - non-user circles (communities/projects/etc)
+    // - OR your own user-circle (circle.did === userDid)
+    const circleObjectIds = circleIds
+        .map((id) => {
+            try {
+                return new ObjectId(id);
+            } catch {
+                return null;
+            }
+        })
+        .filter(Boolean) as ObjectId[];
+
+    const circles = await Circles.find(
+        { _id: { $in: circleObjectIds } },
+        { projection: { _id: 1, did: 1, circleType: 1 } },
+    ).toArray();
+
+    const allowedCircleIds = circles
+        .filter((c: any) => c.circleType !== "user" || c.did === userDid)
+        .map((c: any) => c._id.toString());
+
+    return await listConversationsForUser(userDid, allowedCircleIds);
+};
+
+export const getChatContactsForUserDid = async (userDid: string): Promise<Circle[]> => {
+    const contactDids = new Set<string>();
+    const currentUser = await Circles.findOne(
+        { did: userDid },
+        { projection: { _id: 1 } },
+    );
+    const currentUserCircleId = currentUser?._id ? String(currentUser._id) : undefined;
+
+    const outgoingMemberships = await Members.find({ userDid }, { projection: { circleId: 1 } }).toArray();
+    const followedUserCircleIds = Array.from(
+        new Set(
+            outgoingMemberships
+                .map((membership: any) => (typeof membership?.circleId === "string" ? membership.circleId : undefined))
+                .filter((circleId): circleId is string => !!circleId && ObjectId.isValid(circleId)),
+        ),
+    );
+
+    if (followedUserCircleIds.length > 0) {
+        const followedObjectIds = followedUserCircleIds.map((circleId) => new ObjectId(circleId));
+        const followedUsers = await Circles.find(
+            {
+                _id: { $in: followedObjectIds },
+                circleType: "user",
+                did: { $ne: userDid },
+            },
+            { projection: { did: 1 } },
+        ).toArray();
+
+        for (const followedUser of followedUsers) {
+            if (followedUser?.did) {
+                contactDids.add(String(followedUser.did));
+            }
+        }
+    }
+
+    if (currentUserCircleId) {
+        const incomingMemberships = await Members.find(
+            { circleId: currentUserCircleId, userDid: { $ne: userDid } },
+            { projection: { userDid: 1 } },
+        ).toArray();
+
+        for (const follower of incomingMemberships) {
+            if (follower?.userDid) {
+                contactDids.add(String(follower.userDid));
+            }
+        }
+    }
+
+    const dmConversations = await ChatConversations.find(
+        {
+            type: "dm",
+            participants: userDid,
+            archived: { $ne: true },
+        },
+        { projection: { participants: 1 } },
+    ).toArray();
+
+    for (const conversation of dmConversations) {
+        for (const participantDid of (conversation as any)?.participants || []) {
+            if (participantDid && participantDid !== userDid) {
+                contactDids.add(String(participantDid));
+            }
+        }
+    }
+
+    if (contactDids.size === 0) {
+        return [];
+    }
+
+    return await Circles.find(
+        {
+            did: { $in: Array.from(contactDids) },
+            circleType: "user",
+        },
+        {
+            projection: {
+                _id: 1,
+                did: 1,
+                handle: 1,
+                name: 1,
+                picture: 1,
+                circleType: 1,
+            },
+        },
+    )
+        .sort({ name: 1 })
+        .toArray();
+};
+
+export const searchMentionableUsersForUserDid = async (
+    userDid: string,
+    query: string,
+    limit: number = 10,
+): Promise<Circle[]> => {
+    const contacts = await getChatContactsForUserDid(userDid);
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const filtered = contacts.filter((contact) => {
+        if (!normalizedQuery) return true;
+        const nameMatch = contact.name?.toLowerCase().includes(normalizedQuery);
+        const handleMatch = contact.handle?.toLowerCase().includes(normalizedQuery);
+        return !!(nameMatch || handleMatch);
+    });
+
+    return filtered.slice(0, limit);
+};
+
+export const getMentionableUserIdsForUserDid = async (userDid: string): Promise<Set<string>> => {
+    const contacts = await getChatContactsForUserDid(userDid);
+    return new Set(
+        contacts
+            .map((contact) => (contact?._id ? String(contact._id) : undefined))
+            .filter((contactId): contactId is string => !!contactId),
+    );
 };
 
 export const getDefaultChatRoomByCircleHandle = async (circleHandle: string): Promise<ChatRoomDisplay | null> => {
@@ -97,15 +241,6 @@ export const createDefaultChatRooms = async (circleId: string, userDid: string):
         membersChat = await createChatRoom(membersChat);
     }
 
-    if (!membersChat.matrixRoomId) {
-        // create matrix room
-        let matrixRoom = await createMatrixRoom(membersChat._id, membersChat.name, membersChat.name);
-        if (matrixRoom) {
-            membersChat.matrixRoomId = matrixRoom.roomId;
-            await updateChatRoom(membersChat);
-        }
-    }
-
     chatRooms.push(membersChat);
 
     let existingChatRooms = await getChatRooms(circleId);
@@ -125,6 +260,31 @@ export const addChatRoomMember = async (
 ): Promise<ChatRoomMember> => {
     const existingMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
     if (existingMember) {
+        const memberStatus = typeof (existingMember as any).status === "string"
+            ? (existingMember as any).status.toLowerCase()
+            : undefined;
+        const isInactiveMembership =
+            memberStatus === "left" ||
+            memberStatus === "inactive" ||
+            (existingMember as any).active === false ||
+    	    (existingMember as any).isActive === false;        
+
+        if (isInactiveMembership) {
+            await ChatRoomMembers.updateOne(
+                { userDid: userDid, chatRoomId: chatRoomId },
+                {
+                    $set: {
+                        status: "active",
+                        active: true,
+                        isActive: true,
+                    } as any,
+                },
+            );
+            const reactivatedMember = await ChatRoomMembers.findOne({ userDid: userDid, chatRoomId: chatRoomId });
+            if (reactivatedMember) {
+                return reactivatedMember;
+            }
+        }
         return existingMember;
     }
 
@@ -145,7 +305,16 @@ export const addChatRoomMember = async (
 };
 
 export const removeChatRoomMember = async (userDid: string, chatRoomId: string): Promise<void> => {
-    await ChatRoomMembers.deleteOne({ userDid: userDid, chatRoomId: chatRoomId });
+    await ChatRoomMembers.updateOne(
+        { userDid: userDid, chatRoomId: chatRoomId },
+        {
+            $set: {
+                status: "left",
+                active: false,
+                isActive: false,
+            } as any,
+        },
+    );
 };
 
 export const getChatRoomMembers = async (chatRoomId: string): Promise<ChatRoomMember[]> => {
@@ -172,47 +341,26 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     console.log("Searching for DM room between", dmParticipants);
 
     // Check if a DM already exists between these users
-    const existingRoom = (await ChatRooms.findOne({
-        isDirect: true,
-        dmParticipants: { $all: dmParticipants },
-    })) as ChatRoom;
+  const existingRoom = (await ChatRooms.findOne({
+    isDirect: true,
+    dmParticipants: { $all: dmParticipants },
+    archived: { $ne: true },
+})) as ChatRoom;
+
+
 
     console.log("Found existing room?", JSON.stringify(existingRoom));
 
     if (existingRoom) {
         existingRoom._id = existingRoom._id.toString();
-
-        // If the room doesn't have a Matrix room, create one
-        if (!existingRoom.matrixRoomId) {
-            console.log("Creating Matrix room for existing DM");
-            const matrixRoom = await createMatrixRoom(existingRoom._id, existingRoom.name, "Private Conversation");
-            if (matrixRoom.roomId) {
-                existingRoom.matrixRoomId = matrixRoom.roomId;
-                await ChatRooms.updateOne(
-                    { _id: new ObjectId(existingRoom._id) },
-                    { $set: { matrixRoomId: matrixRoom.roomId } }
-                );
-            }
-        }
-
-        // add user to matrix chat room again to make sure in case process failed before
-        if (existingRoom.matrixRoomId) {
-            // add users to matrix room
-            try {
-                // get private user
-                let privateA = await getPrivateUserByDid(userA.did!);
-                let privateB = await getPrivateUserByDid(userB.did!);
-
-                // add users as members to chat room
-                await addChatRoomMember(userA.did!, existingRoom._id);
-                await addChatRoomMember(userB.did!, existingRoom._id);
-
-                await addUserToRoom(privateA.matrixAccessToken!, existingRoom.matrixRoomId);
-                await addUserToRoom(privateB.matrixAccessToken!, existingRoom.matrixRoomId);
-            } catch (error) {
-                console.error("Error adding users to matrix room", error);
-            }
-        }
+ console.log("[DM RESOLVE]", {
+    userA: userA?.did,
+    userB: userB?.did,
+    roomId: existingRoom?._id,
+    archived: existingRoom?.archived
+  });
+        await addChatRoomMember(userA.did!, existingRoom._id);
+        await addChatRoomMember(userB.did!, existingRoom._id);
 
         return existingRoom;
     }
@@ -236,25 +384,6 @@ export const findOrCreateDMRoom = async (userA: Circle, userB: Circle): Promise<
     await addChatRoomMember(userA.did!, newRoom._id);
     await addChatRoomMember(userB.did!, newRoom._id);
 
-    // Create a corresponding Matrix room
-    const matrixRoom = await createMatrixRoom(newRoom._id, newRoom.name, "Private Conversation");
-    if (matrixRoom.roomId) {
-        newRoom.matrixRoomId = matrixRoom.roomId;
-        await ChatRooms.updateOne({ _id: result.insertedId }, { $set: { matrixRoomId: matrixRoom.roomId } });
-
-        // add users to matrix room
-        try {
-            // get private user
-            let privateA = await getPrivateUserByDid(userA.did!);
-            let privateB = await getPrivateUserByDid(userB.did!);
-
-            await addUserToRoom(privateA.matrixAccessToken!, newRoom.matrixRoomId);
-            await addUserToRoom(privateB.matrixAccessToken!, newRoom.matrixRoomId);
-        } catch (error) {
-            console.error("Error adding users to matrix room", error);
-        }
-    }
-
     return newRoom;
 };
 
@@ -262,20 +391,8 @@ export const createGroupChatRoom = async (
     name: string,
     creatorDid: string,
     participantDids: string[],
-    matrixRoomId: string,
     avatarUrl?: string
 ): Promise<ChatRoom> => {
-    // Convert Matrix mxc:// URL to HTTP URL if needed
-    let httpAvatarUrl: string | undefined;
-    if (avatarUrl) {
-        if (avatarUrl.startsWith("mxc://")) {
-            // Use localhost (nginx) to benefit from direct file serving
-            const matrixUrl = "http://localhost";
-            httpAvatarUrl = `${matrixUrl}/_matrix/media/v3/download/${avatarUrl.replace("mxc://", "")}`;
-        } else {
-            httpAvatarUrl = avatarUrl;
-        }
-    }
 
     const newRoom: ChatRoom = {
         name: name,
@@ -283,8 +400,7 @@ export const createGroupChatRoom = async (
         createdAt: new Date(),
         userGroups: [],
         isDirect: false,
-        matrixRoomId: matrixRoomId,
-        picture: httpAvatarUrl ? { url: httpAvatarUrl } : undefined,
+        picture: avatarUrl ? { url: avatarUrl } : undefined,
     };
 
     // Insert into DB

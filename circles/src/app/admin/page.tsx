@@ -1,12 +1,16 @@
 import { Suspense } from "react";
 import { getServerSettings } from "@/lib/data/server-settings";
 import AdminDashboard from "@/components/modules/admin/admin-dashboard";
-import { getUserPrivate } from "@/lib/data/user";
+import { getOnboardingMcpStats, getUserPrivate } from "@/lib/data/user";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { getCircles } from "@/lib/data/circle";
 
-export default async function AdminPage() {
+type AdminPageProps = {
+    searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+};
+
+export default async function AdminPage({ searchParams }: AdminPageProps) {
     let serverSettings = await getServerSettings();
 
     // check if user is admin
@@ -15,18 +19,30 @@ export default async function AdminPage() {
         redirect("/unauthenticated");
     }
     let user = await getUserPrivate(userDid);
+    console.log("[ADMIN DEBUG]", { userDid, email: user.email, isAdmin: user.isAdmin, id: user._id });
     if (!user.isAdmin) {
         redirect("/unauthorized");
     }
 
-    const circles = await getCircles();
+    const [circles, onboardingMcpStats] = await Promise.all([getCircles(), getOnboardingMcpStats()]);
+    const resolvedSearchParams = searchParams ? await searchParams : {};
+    const initialTab =
+        typeof resolvedSearchParams.tab === "string" ? resolvedSearchParams.tab : undefined;
+    const initialVerificationCircleId =
+        typeof resolvedSearchParams.circleId === "string" ? resolvedSearchParams.circleId : undefined;
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="mb-4 text-2xl font-bold">Admin Dashboard</h1>
 
             <Suspense fallback={<div>Loading admin dashboard...</div>}>
-                <AdminDashboard serverSettings={serverSettings} circles={circles} />
+                <AdminDashboard
+                    serverSettings={serverSettings}
+                    circles={circles}
+                    onboardingMcpStats={onboardingMcpStats}
+                    initialTab={initialTab}
+                    initialVerificationCircleId={initialVerificationCircleId}
+                />
             </Suspense>
         </div>
     );

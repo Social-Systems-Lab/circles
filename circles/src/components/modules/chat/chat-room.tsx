@@ -2,8 +2,15 @@
 "use client";
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
-import { Circle, ChatMessage, MatrixUserCache, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
-import { mapOpenAtom, matrixUserCacheAtom, replyToMessageAtom, roomMessagesAtom, userAtom, unreadCountsAtom, lastReadTimestampsAtom } from "@/lib/data/atoms";
+import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
+import {
+    mapOpenAtom,
+    replyToMessageAtom,
+    roomMessagesAtom,
+    userAtom,
+    unreadCountsAtom,
+    lastReadTimestampsAtom,
+} from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -11,22 +18,47 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
-import { defaultMentionsInputStyle, defaultMentionStyle, handleMentionQuery } from "../feeds/post-list";
-import { sendRoomMessage, sendReaction, redactRoomMessage } from "@/lib/data/client-matrix";
+import { defaultMentionsInputStyle, defaultMentionStyle } from "../feeds/post-list";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { fetchMatrixUsers } from "./actions";
+import {
+    deleteMongoMessageAction,
+    editMessageAction,
+    getChatRoomMembersAction,
+    sendAttachmentAction,
+    sendMessageAction,
+    toggleMongoReactionAction,
+} from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { IoArrowBack, IoClose, IoSend, IoAddCircleOutline, IoArrowDown, IoAttach, IoDocumentText, IoTimeOutline, IoWarningOutline } from "react-icons/io5";
+import {
+    IoArrowBack,
+    IoArrowDown,
+    IoClose,
+    IoSend,
+    IoAddCircleOutline,
+    IoAttach,
+    IoDocumentText,
+    IoTimeOutline,
+    IoWarningOutline,
+} from "react-icons/io5";
+import { HiLightBulb } from "react-icons/hi";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { GrEdit, GrTrash } from "react-icons/gr";
-import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { generateColorFromString } from "@/lib/utils/color";
 import { EmojiClickData } from "emoji-picker-react";
 import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
+import { useMongoChat } from "./useMongoChat";
+import {
+    acceptConnectRequestAction,
+    declineConnectRequestAction,
+    getProfileRelationshipStateAction,
+    sendConnectRequestAction,
+} from "@/components/modules/home/actions";
+import { useToast } from "@/components/ui/use-toast";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -46,122 +78,413 @@ export const renderCircleSuggestion = (
     </div>
 );
 
+const CHAT_MENTION_MARKUP_REGEX = /\[([^\]]+)\]\(\/circles\/([^)]+)\)/g;
+const CHAT_MENTION_MARKUP_TEST_REGEX = /\[[^\]]+\]\(\/circles\/[^)]+\)/;
+const CHAT_MENTION_LINK_HREF_REGEX = /^\/circles\/[^/\s?#]+(?:[?#].*)?$/i;
+const CHAT_BOTTOM_THRESHOLD_PX = 150;
+const CHAT_TOPIC_BACKGROUND_CLASS = "border border-[#DDEBB8] bg-[#F1F6DF]";
+const CHAT_STANDARD_BUBBLE_CLASS = "border border-gray-200 bg-white";
+const CHAT_MESSAGE_ELEMENT_ID_PREFIX = "chat-message-";
+const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-2", "ring-offset-white"];
+
+const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
+const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
+
+type MentionSuggestion = {
+    id: string;
+    display: string;
+    picture?: string;
+    handle?: string;
+};
+
+type DmConnectBannerState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
+
+const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
+    message.system?.messageType === "system" &&
+    message.system?.systemType === "announcement" &&
+    (message.system?.source === "platform_admin" ||
+        (typeof (message as any)?.broadcastId === "string" && ((message as any).broadcastId as string).length > 0));
+
+const isNonPreviewSystemSenderMessage = (message: ChatMessage): boolean => {
+    if (message.system?.messageType !== "system") return false;
+    if (message.system?.systemType === "welcome") return true;
+    return isPlatformAnnouncementMessage(message);
+};
+
+const renderFormattedChatBody = (
+    body: string,
+    options?: {
+        format?: string;
+        shouldEmphasizeLinks?: boolean;
+        markdownClassName?: string;
+    },
+) => {
+    const isMarkdown = options?.format === "markdown";
+    const hasMentionMarkup = CHAT_MENTION_MARKUP_TEST_REGEX.test(body);
+    const shouldEmphasizeLinks = options?.shouldEmphasizeLinks === true;
+
+    if (isMarkdown || hasMentionMarkup) {
+        return (
+            <MemoizedReactMarkdown
+                className={
+                    options?.markdownClassName ||
+                    (shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : "formatted")
+                }
+                components={{
+                    a: ({ href, className, ...props }) => (
+                        <a
+                            href={href}
+                            className={
+                                isChatMentionLinkHref(href)
+                                    ? `inline-flex items-center rounded-md bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 font-semibold text-[hsl(var(--task-link))] no-underline hover:underline ${className ?? ""}`.trim()
+                                    : `${shouldEmphasizeLinks ? "text-[hsl(var(--task-link))] underline underline-offset-2 hover:text-[hsl(var(--task-link-hover))]" : ""} ${className ?? ""}`.trim()
+                            }
+                            {...props}
+                        />
+                    ),
+                }}
+            >
+                {body}
+            </MemoizedReactMarkdown>
+        );
+    }
+
+    return <RichText content={body} className="formatted" />;
+};
+
+type ChatAttachmentLike = {
+    url: string;
+    name?: string;
+    mimeType?: string;
+};
+
+const getMessageElementId = (messageId?: string) =>
+    messageId ? `${CHAT_MESSAGE_ELEMENT_ID_PREFIX}${messageId}` : undefined;
+
+const getMessageAttachments = (message?: Partial<ChatMessage>) =>
+    (((message as any)?.attachments as ChatAttachmentLike[] | undefined) || []).filter((attachment) => attachment?.url);
+
+const getFirstImageAttachment = (message?: Partial<ChatMessage>) =>
+    getMessageAttachments(message).find((attachment) => attachment.mimeType?.startsWith("image/"));
+
+const getReplyPreviewLabel = (replyTo?: Partial<ChatMessage>) => {
+    const body = renderMentionsAsDisplayText((replyTo?.content?.body as string) || "").trim();
+    if (body) return body;
+
+    const firstAttachment = getMessageAttachments(replyTo)[0];
+    if (!firstAttachment) return "";
+    if (firstAttachment.mimeType?.startsWith("image/")) return "Photo";
+    return firstAttachment.name || "Attachment";
+};
+
+const getImageReplyPreviewText = (replyTo?: Partial<ChatMessage>) => {
+    const body = renderMentionsAsDisplayText((replyTo?.content?.body as string) || "").trim();
+    const imageAttachment = getFirstImageAttachment(replyTo);
+    if (!body || !imageAttachment?.name) return body;
+
+    return body === imageAttachment.name ? "" : body;
+};
+
+const getImageMessageBodyText = (message: ChatMessage) => {
+    const body = renderMentionsAsDisplayText((message?.content?.body as string) || "").trim();
+    const imageAttachment = getFirstImageAttachment(message);
+    if (!body || !imageAttachment?.name) return body;
+
+    return body === imageAttachment.name ? "" : body;
+};
+
+const scrollToMessageElement = (messageId?: string) => {
+    const elementId = getMessageElementId(messageId);
+    if (!elementId) return;
+
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.classList.add(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+    window.setTimeout(() => {
+        element.classList.remove(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+    }, 1800);
+};
+
+const ReplyReferencePreview: React.FC<{
+    replyTo?: Partial<ChatMessage>;
+    inlineAuthor?: string;
+    inlineText?: string;
+    authorColor: string;
+    className?: string;
+}> = ({ replyTo, inlineAuthor, inlineText, authorColor, className }) => {
+    const originalAuthor = inlineAuthor || replyTo?.author?.name || replyTo?.author?._id || "";
+    const imageAttachment = getFirstImageAttachment(replyTo);
+    const previewLabel = inlineText || getReplyPreviewLabel(replyTo);
+    const imagePreviewText = inlineText || getImageReplyPreviewText(replyTo);
+    const isClickable = !!replyTo?.id;
+    const Wrapper = isClickable ? "button" : "div";
+
+    return (
+        <Wrapper
+            type={isClickable ? "button" : undefined}
+            className={`mb-2 w-full rounded-md border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 p-2 pl-2 text-left ${isClickable ? "cursor-pointer transition-colors hover:bg-slate-50 focus:outline-none" : ""} ${className ?? ""}`.trim()}
+            onClick={
+                isClickable
+                    ? (event) => {
+                          event.stopPropagation();
+                          scrollToMessageElement(replyTo?.id);
+                      }
+                    : undefined
+            }
+        >
+            <div className="text-xs font-semibold" style={{ color: authorColor }}>
+                {originalAuthor}
+            </div>
+            {imageAttachment ? (
+                <div className="mt-1 flex items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={imageAttachment.url}
+                        alt={imageAttachment.name || "Reply image preview"}
+                        className="h-10 w-10 shrink-0 rounded-md object-cover"
+                    />
+                    {imagePreviewText ? <p className="truncate text-sm text-gray-600">{imagePreviewText}</p> : null}
+                </div>
+            ) : (
+                <p className="truncate text-sm text-gray-600">{previewLabel}</p>
+            )}
+        </Wrapper>
+    );
+};
+
 const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     if (preview) {
         return (
             <span>
                 <b>{message.author.name}: </b>
-                {message?.content?.body as string}
+                {renderMentionsAsDisplayText((message?.content?.body as string) || "")}
             </span>
         );
     } else {
-        const body = (message?.content?.body as string) || "";
-        const isReply = body.includes("\n\n") && body.startsWith("> ");
-        const replyText = isReply ? body.substring(body.indexOf("\n\n") + 2) : body;
-        const originalMessage = isReply ? body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")) : "";
-        const originalAuthor = isReply ? originalMessage.substring(1, originalMessage.indexOf(">")) : "";
+        const imageMessageBody = getImageMessageBodyText(message);
+        const body = typeof imageMessageBody === "string" ? imageMessageBody : (message?.content?.body as string) || "";
+        const replyTo = message.replyTo;
+        const hasInlineReply = body.includes("\n\n") && body.startsWith("> ");
+        const isReply = !!replyTo || hasInlineReply;
+        const replyText = hasInlineReply ? body.substring(body.indexOf("\n\n") + 2) : body;
+        const originalMessage = hasInlineReply
+            ? renderMentionsAsDisplayText(body.substring(body.indexOf("> ") + 2, body.indexOf("\n\n")))
+            : getReplyPreviewLabel(replyTo);
+        const originalAuthor = hasInlineReply
+            ? originalMessage.substring(1, originalMessage.indexOf(">"))
+            : replyTo?.author?.name || replyTo?.author?._id || "";
         const originalAuthorColor = generateColorFromString(originalAuthor);
+        const shouldEmphasizeLinks = isNonPreviewSystemSenderMessage(message);
 
         return (
             <div className="max-w-full overflow-hidden">
                 {isReply && (
-                    <div className="mb-2 rounded-md border-l-4 border-gray-400 bg-[#f3f3f3] p-2 pl-2">
-                        <div
-                            className="text-xs font-semibold"
-                            style={{ color: originalAuthorColor }}
-                        >
-                            {originalAuthor}
-                        </div>
-                        <p className="truncate text-sm text-gray-600">
-                            {originalMessage.substring(originalMessage.indexOf(">") + 2)}
-                        </p>
-                    </div>
+                    <ReplyReferencePreview
+                        replyTo={hasInlineReply ? undefined : replyTo}
+                        inlineAuthor={hasInlineReply ? originalAuthor : undefined}
+                        inlineText={
+                            hasInlineReply ? originalMessage.substring(originalMessage.indexOf(">") + 2) : undefined
+                        }
+                        authorColor={originalAuthorColor}
+                    />
                 )}
-                <RichText content={replyText} />
+                {renderFormattedChatBody(replyText, {
+                    format: (message as any)?.format,
+                    shouldEmphasizeLinks,
+                })}
             </div>
         );
     }
 };
 
+const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | null }> = ({ chatRoom, user }) => {
+    const { toast } = useToast();
+    const [state, setState] = useState<DmConnectBannerState>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isActing, setIsActing] = useState(false);
+
+    const otherParticipant = useMemo(() => {
+        if (!(chatRoom as any)?.isDirect || !user?.did) {
+            return null;
+        }
+
+        const participants = Array.isArray((chatRoom as any)?.participantCircles)
+            ? ((chatRoom as any).participantCircles as Circle[])
+            : [];
+        return participants.find((participant) => participant?.did && participant.did !== user.did) || null;
+    }, [chatRoom, user?.did]);
+
+    const loadState = useCallback(async () => {
+        if (!otherParticipant?.did) {
+            setState(null);
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            setState(await getProfileRelationshipStateAction(otherParticipant.did));
+        } catch (error) {
+            console.error("Failed to load DM contact state:", error);
+            setState(null);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [otherParticipant?.did]);
+
+    useEffect(() => {
+        void loadState();
+    }, [loadState]);
+
+    if (!otherParticipant?.did || !state || state.connectStatus === "accepted") {
+        return null;
+    }
+
+    const runContactAction = async (action: () => Promise<{ success: boolean; message: string }>, title: string) => {
+        setIsActing(true);
+        try {
+            const result = await action();
+            if (!result.success) {
+                toast({ title, description: result.message, variant: "destructive" });
+                return;
+            }
+            await loadState();
+            toast({ title, description: result.message });
+        } catch (error) {
+            console.error("Failed to update DM contact state:", error);
+            toast({
+                title,
+                description: error instanceof Error ? error.message : "Failed to update contact request",
+                variant: "destructive",
+            });
+        } finally {
+            setIsActing(false);
+        }
+    };
+
+    const contactName = otherParticipant.name || "this person";
+
+    return (
+        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                    {state.connectStatus === "pending_sent"
+                        ? `Contact request sent to ${contactName}.`
+                        : state.connectStatus === "pending_received"
+                          ? `${contactName} sent you a contact request.`
+                          : `You can message ${contactName}. Connect to add them as a contact.`}
+                </span>
+                {state.connectStatus === "pending_received" ? (
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            className="rounded-full"
+                            disabled={isActing || isLoading}
+                            onClick={() =>
+                                void runContactAction(
+                                    () => acceptConnectRequestAction(otherParticipant.did!),
+                                    "Accept contact request",
+                                )
+                            }
+                        >
+                            Accept
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-full"
+                            disabled={isActing || isLoading}
+                            onClick={() =>
+                                void runContactAction(
+                                    () => declineConnectRequestAction(otherParticipant.did!),
+                                    "Decline contact request",
+                                )
+                            }
+                        >
+                            Decline
+                        </Button>
+                    </div>
+                ) : (
+                    <Button
+                        size="sm"
+                        variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
+                        className="rounded-full"
+                        disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
+                        onClick={() =>
+                            void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
+                        }
+                    >
+                        {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // Renderer for different message types
 export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean }> = ({ message, preview }) => {
-    const [user] = useAtom(userAtom);
     const displayName = message.author?.name || message.createdBy;
     switch (message.type) {
         case "m.room.message":
             if (!Object.keys(message.content).length) {
                 return <span className="italic text-gray-500">Message deleted</span>;
             }
-            const msgtype = (message.content as any).msgtype;
-            if (msgtype === "m.image") {
-                const mxcUrl = (message.content as any).url;
-                if (mxcUrl && typeof mxcUrl === "string") {
-                     // Convert MXC URI to HTTP URL using authenticated endpoint
-                     // Format: mxc://<server-name>/<media-id> -> http://localhost/_matrix/client/v1/media/download/<server-name>/<media-id>?access_token=...
-                     const mediaId = mxcUrl.replace("mxc://", "");
-                     // Construct URL - use port 80 for localhost to go through nginx
-                     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-                     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-                     const port = hostname === 'localhost' ? ':80' : '';
-                     const accessToken = user?.matrixAccessToken || '';
-                     const imageUrl = `${protocol}://${hostname}${port}/_matrix/client/v1/media/download/${mediaId}?access_token=${encodeURIComponent(accessToken)}`;
-                     
-                     console.log(`🖼️ [Chat] Image URL: ${imageUrl.replace(accessToken, 'REDACTED')} (MediaID: ${mediaId})`);
-                     
-                     return (
-                         <div className="max-w-xs sm:max-w-sm">
-                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                             <img 
-                                 src={imageUrl} 
-                                 alt={(message.content as any).body || "Image attachment"} 
-                                 className="rounded-lg object-contain max-h-60 w-full cursor-pointer hover:opacity-90"
-                                 onClick={() => window.open(imageUrl, "_blank")}
-                             />
-                         </div>
-                     );
-                }
-            } else if (msgtype === "m.file") {
-                const mxcUrl = (message.content as any).url;
-                if (mxcUrl && typeof mxcUrl === "string") {
-                     const mediaId = mxcUrl.replace("mxc://", "");
-                     const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-                     const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-                     const port = hostname === 'localhost' ? ':80' : '';
-                     const accessToken = user?.matrixAccessToken || '';
-                     const fileUrl = `${protocol}://${hostname}${port}/_matrix/client/v1/media/download/${mediaId}?access_token=${encodeURIComponent(accessToken)}`;
-                     const fileName = (message.content as any).body || "File attachment";
-                     const fileSize = (message.content as any).info?.size;
-                     
-                     return (
-                         <a 
-                             href={fileUrl} 
-                             target="_blank" 
-                             rel="noopener noreferrer"
-                             className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 hover:bg-gray-200 transition-colors"
-                         >
-                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                                 <IoDocumentText className="h-6 w-6" />
-                             </div>
-                             <div className="flex flex-col overflow-hidden">
-                                 <span className="truncate font-medium text-gray-700">{fileName}</span>
-                                 {fileSize && (
-                                     <span className="text-xs text-gray-500">
-                                         {(fileSize / 1024).toFixed(1)} KB
-                                     </span>
-                                 )}
-                             </div>
-                         </a>
-                     );
-                }
-            }
-            
+
             // Check if message has been edited
-            const isEdited = (message.content as any)["m.new_content"] !== undefined;
-            
+            const isEdited = (message.content as any)["m.new_content"] !== undefined || !!(message as any)?.editedAt;
+            const attachments = (message as any)?.attachments as
+                | { url: string; name: string; mimeType?: string; size?: number }[]
+                | undefined;
+
             return (
                 <span>
                     {renderChatMessage(message, preview)}
-                    {isEdited && <span className="ml-1 text-xs text-gray-500 italic">(edited)</span>}
+                    {Array.isArray(attachments) && attachments.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                            {attachments.map((attachment, index) => {
+                                const isImage = attachment.mimeType?.startsWith("image/");
+                                if (isImage) {
+                                    return (
+                                        <div key={`${attachment.url}-${index}`} className="max-w-xs sm:max-w-sm">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={attachment.url}
+                                                alt={attachment.name || "Image attachment"}
+                                                className="max-h-60 w-full cursor-pointer rounded-lg object-contain hover:opacity-90"
+                                                onClick={() => window.open(attachment.url, "_blank")}
+                                            />
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <a
+                                        key={`${attachment.url}-${index}`}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 transition-colors hover:bg-gray-200"
+                                    >
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                            <IoDocumentText className="h-6 w-6" />
+                                        </div>
+                                        <div className="flex flex-col overflow-hidden">
+                                            <span className="truncate font-medium text-gray-700">
+                                                {attachment.name}
+                                            </span>
+                                            {attachment.size && (
+                                                <span className="text-xs text-gray-500">
+                                                    {(attachment.size / 1024).toFixed(1)} KB
+                                                </span>
+                                            )}
+                                        </div>
+                                    </a>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {isEdited && <span className="ml-1 text-xs italic text-gray-500">(edited)</span>}
                 </span>
             );
 
@@ -169,6 +492,35 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
             const membership = (message.content as { membership: string }).membership;
             const action = membership === "join" ? "has joined" : membership === "leave" ? "has left" : membership;
             return renderSystemMessage(`${displayName} ${action} the room.`);
+        }
+
+        case "m.room.notice": {
+            const body = (message?.content?.body as string) || "";
+            const isMarkdown = (message as any)?.format === "markdown";
+            const shouldEmphasizeLinks = isNonPreviewSystemSenderMessage(message);
+            if (isMarkdown) {
+                return (
+                    <MemoizedReactMarkdown
+                        className={shouldEmphasizeLinks ? "formatted max-w-none text-sm leading-relaxed" : undefined}
+                        components={{
+                            a: ({ href, className, ...props }) => (
+                                <a
+                                    href={href}
+                                    className={
+                                        isChatMentionLinkHref(href)
+                                            ? `inline-flex items-center rounded-md bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 font-semibold text-[hsl(var(--task-link))] no-underline hover:underline ${className ?? ""}`.trim()
+                                            : `${shouldEmphasizeLinks ? "text-[hsl(var(--task-link))] underline underline-offset-2 hover:text-[hsl(var(--task-link-hover))]" : ""} ${className ?? ""}`.trim()
+                                    }
+                                    {...props}
+                                />
+                            ),
+                        }}
+                    >
+                        {body}
+                    </MemoizedReactMarkdown>
+                );
+            }
+            return renderSystemMessage(renderMentionsAsDisplayText(body));
         }
 
         case "m.room.name":
@@ -193,34 +545,57 @@ type ChatMessagesProps = {
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
+    canReply?: boolean;
+    chatProvider?: "matrix" | "mongo";
+    isDirect?: boolean;
+    conversationId?: string;
+    currentUser?: any;
+    onTopicOpen?: () => void;
+    onTopicLoaded?: () => void;
+    topicNavigationRequest?: TopicNavigationRequest | null;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
-    if (!message1?.author || !message2?.author) return false;
+    if (!message1?.createdBy || !message2?.createdBy) return false;
     if (message1.type !== "m.room.message" || message2.type !== "m.room.message") return false;
-    return message1.author._id === message2.author._id;
+    return message1.createdBy === message2.createdBy;
 };
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, onMessagesRendered, handleDelete, handleEdit }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({
+    messages,
+    messagesEndRef,
+    onMessagesRendered,
+    handleDelete,
+    handleEdit,
+    canReply = true,
+    isDirect = false,
+    conversationId,
+    currentUser,
+    onTopicOpen,
+    onTopicLoaded,
+    topicNavigationRequest,
+}) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
-
     const handleReply = (message: ChatMessage) => {
+        if (!canReply) return;
         setReplyToMessage(message);
     };
 
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
     const handleReaction = async (message: ChatMessage, emoji: string) => {
-        if (!user?.matrixAccessToken || !user?.matrixUrl || !user.fullMatrixName) return;
+        if (!user) return;
+        if (!user.did) return;
 
+        const reactionSender = user.did;
         const anyExistingReaction = Object.entries(message.reactions || {})
             .map(([key, reactions]) => {
-                const userReaction = reactions.find((r) => r.sender === user.fullMatrixName);
+                const userReaction = reactions.find((r) => r.sender === reactionSender);
                 return userReaction ? { ...userReaction, key } : null;
             })
             .find((r) => r !== null);
@@ -238,7 +613,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             // Remove any existing reaction from the user
             if (anyExistingReaction) {
                 reactions[anyExistingReaction.key] = reactions[anyExistingReaction.key].filter(
-                    (r) => r.sender !== user.fullMatrixName,
+                    (r) => r.sender !== reactionSender,
                 );
                 if (reactions[anyExistingReaction.key].length === 0) {
                     delete reactions[anyExistingReaction.key];
@@ -248,7 +623,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             // Add the new reaction, unless it was the same as the one removed
             if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
                 const newReaction: ReactionAggregation = {
-                    sender: user.fullMatrixName!,
+                    sender: reactionSender,
                     eventId: `temp-id-${Date.now()}`,
                 };
                 reactions[emoji] = [...(reactions[emoji] || []), newReaction];
@@ -261,18 +636,17 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
         });
 
         try {
-            // If there was an old reaction, redact it first
-            if (anyExistingReaction) {
-                await redactRoomMessage(
-                    user.matrixAccessToken,
-                    user.matrixUrl,
-                    message.roomId,
-                    anyExistingReaction.eventId,
-                );
-            }
-            // If the new reaction is different from the old one, send it
-            if (!anyExistingReaction || anyExistingReaction.key !== emoji) {
-                await sendReaction(user.matrixAccessToken, user.matrixUrl, message.roomId, message.id, emoji);
+            const result = await toggleMongoReactionAction(message.id, emoji);
+            if (result.success && result.reactions) {
+                setRoomMessages((prev) => {
+                    const newRooms = { ...prev };
+                    const roomMessages = [...(newRooms[message.roomId] || [])];
+                    const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+                    if (messageIndex === -1) return prev;
+                    roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
+                    newRooms[message.roomId] = roomMessages;
+                    return newRooms;
+                });
             }
         } catch (error) {
             console.error("Failed to update reaction:", error);
@@ -293,6 +667,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
             clearTimeout(longPressTimer.current);
         }
     };
+
+    const toggleMobileMessageActions = (messageId: string) => {
+        if (!isMobile) return;
+        setHoveredMessageId((prev) => (prev === messageId ? null : messageId));
+        setPickerOpenForMessage((prev) => (prev === messageId ? prev : null));
+    };
     const isSameDay = (date1: Date, date2: Date) => {
         return (
             date1.getFullYear() === date2.getFullYear() &&
@@ -309,21 +689,17 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
     }, [messages, onMessagesRendered]);
 
     const formatChatDate = (chatDate: Date) => {
-        const now = new Date();
-
-        if (isSameDay(chatDate, now)) {
-            return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        } else {
-            return (
-                chatDate.toLocaleDateString() +
-                " " +
-                chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            );
-        }
+        return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
     };
 
     const orderedMessages = [...messages]
-        .filter((message) => message.type === "m.room.message" || message.type === "m.room.member")
+        .filter(
+            (message) =>
+                (message.type === "m.room.message" ||
+                    message.type === "m.room.member" ||
+                    message.type === "m.room.notice") &&
+                !(message as any).threadId,
+        )
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     return (
@@ -349,18 +725,20 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                         </div>,
                     );
                 }
-                const borderRadiusClass = `${isFirstInChain ? "rounded-t-lg" : ""} ${
-                    isLastInChain ? "rounded-b-lg" : ""
-                } ${!isFirstInChain && !isLastInChain ? "rounded-none" : ""}`;
-                const isOwnMessage = message.createdBy === user?.fullMatrixName;
+                const selfIdentifier = user?.did;
+                const isOwnMessage = message.createdBy === selfIdentifier;
+                const borderRadiusClass = "";
+                const bubbleRadius = "12px";
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
                 const bubbleStatusClasses =
                     message.status === "pending"
                         ? "opacity-70"
                         : message.status === "failed"
-                        ? "border border-red-200"
-                        : "";
+                          ? "border border-red-200"
+                          : "";
+                const isNonPreviewSender = isNonPreviewSystemSenderMessage(message);
+                const senderLabel = message.author.name;
 
                 if (isSystemMessage) {
                     acc.push(
@@ -374,135 +752,178 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, messagesEndRef, o
                     acc.push(
                         <div
                             key={message.id}
-                            className={`group relative mb-1 flex gap-4 ${isFirstInChain ? "mt-4" : "mt-1"} ${hoveredMessageId === message.id ? "z-10" : ""}`}
+                            id={getMessageElementId(message.id)}
+                            data-message-id={message.id}
+                            className={`group relative mb-1 flex gap-2 ${isFirstInChain ? "mt-4" : "mt-1"} ${hoveredMessageId === message.id ? "z-10" : ""} ${isOwnMessage ? "justify-end" : "justify-start"}`}
                             onMouseEnter={() => !isMobile && setHoveredMessageId(message.id)}
                             onMouseLeave={() => !isMobile && setHoveredMessageId(null)}
                             onTouchStart={() => handleTouchStart(message)}
                             onTouchEnd={handleTouchEnd}
                         >
-                            {isFirstInChain ? (
-                                <CirclePicture
-                                    circle={message.author!}
-                                    size="40px"
-                                    className="pt-2"
-                                    openPreview={true}
-                                />
-                            ) : (
-                                <div className="h-10 w-10 flex-shrink-0"></div>
-                            )}
+                            {!isDirect &&
+                                !isOwnMessage &&
+                                (isLastInChain ? (
+                                    <CirclePicture
+                                        circle={message.author!}
+                                        size="28px"
+                                        className="mb-1 flex-shrink-0 self-end"
+                                        openPreview={!isNonPreviewSender}
+                                    />
+                                ) : (
+                                    <div className="w-7 flex-shrink-0" />
+                                ))}
 
-                            <div className="relative flex min-w-[100px] max-w-full flex-col overflow-hidden">
-                                <div className={`bg-white p-2 pr-4 shadow-md ${borderRadiusClass} ${bubbleStatusClasses}`}>
-                                    {isFirstInChain && (
-                                        <div
-                                            className="text-xs font-semibold"
-                                            style={{ color: generateColorFromString(message.author.name || "") }}
-                                        >
-                                            {message.author.name}
-                                        </div>
+                            {/* Topic card — renders inline for topic-starter messages */}
+                            {(message as any).thread ? (
+                                <div className="w-full">
+                                    <TopicCard
+                                        message={message}
+                                        conversationId={conversationId || ""}
+                                        user={currentUser}
+                                        onTopicOpen={onTopicOpen}
+                                        onTopicLoaded={onTopicLoaded}
+                                        navigationRequest={topicNavigationRequest}
+                                    />
+                                </div>
+                            ) : null}
+                            {!(message as any).thread && (
+                                <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
+                                    <div
+                                        className={`${CHAT_STANDARD_BUBBLE_CLASS} p-2 pr-4 shadow-md ${bubbleStatusClasses}`}
+                                        style={{ borderRadius: bubbleRadius }}
+                                        onClick={() => toggleMobileMessageActions(message.id)}
+                                    >
+                                        {isFirstInChain && !isOwnMessage && !isDirect && (
+                                            <div
+                                                className="text-xs font-semibold"
+                                                style={{ color: generateColorFromString(senderLabel || "") }}
+                                            >
+                                                {senderLabel}
+                                            </div>
                                         )}
-                                    <MessageRenderer message={message} />
+                                        <MessageRenderer message={message} />
+                                        {isLastInChain && (
+                                            <div className="mt-0 flex items-center justify-end gap-1 text-[9px] text-gray-400">
+                                                <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                {isOwnMessage && message.status === "pending" && (
+                                                    <span className="flex items-center gap-1 text-blue-400">
+                                                        <IoTimeOutline className="h-2.5 w-2.5" />
+                                                    </span>
+                                                )}
+                                                {isOwnMessage && message.status === "failed" && (
+                                                    <span className="flex items-center gap-1 text-red-400">
+                                                        <IoWarningOutline className="h-2.5 w-2.5" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
-                                        <div className="mt-1 flex flex-wrap gap-1">
+                                        <div
+                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                                        >
                                             {Object.entries(message.reactions).map(([reaction, reactions]) => (
                                                 <div
                                                     key={reaction}
                                                     className={`flex items-center rounded-full border bg-gray-100 px-2 py-0.5 text-xs ${
-                                                        reactions.some((r) => r.sender === user?.fullMatrixName)
-                                                            ? "border-blue-500"
-                                                            : "border-gray-300"
+                                                        reactions.some((r) => r.sender === user?.did)
+                                                            ? "border-gray-200"
+                                                            : "border-gray-200"
                                                     }`}
                                                     onClick={() => handleReaction(message, reaction)}
                                                 >
                                                     <span>{reaction}</span>
-                                                    <span className="ml-1 text-gray-600">{reactions.length}</span>
+                                                    {reactions.length > 1 && (
+                                                        <span className="ml-1 text-gray-600">{reactions.length}</span>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
                                     )}
-                                </div>
-                                {isLastInChain && (
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                                        <span>{formatChatDate(new Date(message.createdAt))}</span>
-                                        {isOwnMessage && message.status === "pending" && (
-                                            <span className="flex items-center gap-1 text-blue-500">
-                                                <IoTimeOutline className="h-3 w-3" />
-                                                Sending…
-                                            </span>
-                                        )}
-                                        {isOwnMessage && message.status === "failed" && (
-                                            <span className="flex items-center gap-1 text-red-500">
-                                                <IoWarningOutline className="h-3 w-3" />
-                                                Failed to send
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
 
-                                {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                    <div className="absolute bottom-1 right-0 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                        {isOwnMessage && (
-                                            <>
-                                                {canEditMessage && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => handleEdit(message)}
-                                                    >
-                                                        <GrEdit className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                                {canDeleteMessage && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => handleDelete(message)}
-                                                    >
-                                                        <GrTrash className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6"
-                                            onClick={() => handleReply(message)}
+                                    {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
+                                        <div
+                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
+                                            onClick={(e) => e.stopPropagation()}
                                         >
-                                            <MdReply className="h-4 w-4" />
-                                        </Button>
-                                        <Popover
-                                            open={pickerOpenForMessage === message.id}
-                                            onOpenChange={(isOpen) =>
-                                                setPickerOpenForMessage(isOpen ? message.id : null)
-                                            }
-                                        >
-                                            <PopoverTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                    <BsEmojiSmile className="h-4 w-4" />
+                                            {isOwnMessage && (
+                                                <>
+                                                    {canEditMessage && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6"
+                                                            onClick={() => handleEdit(message)}
+                                                        >
+                                                            <GrEdit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canDeleteMessage && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6"
+                                                            onClick={() => handleDelete(message)}
+                                                        >
+                                                            <GrTrash className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
+                                            {canReply && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => handleReply(message)}
+                                                >
+                                                    <MdReply className="h-4 w-4" />
                                                 </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                <LazyEmojiPicker
-                                                    onEmojiClick={(emojiData: EmojiClickData) => {
-                                                        handleReaction(message, emojiData.emoji);
-                                                        setPickerOpenForMessage(null);
-                                                    }}
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                )}
-                            </div>
+                                            )}
+                                            <Popover
+                                                open={pickerOpenForMessage === message.id}
+                                                onOpenChange={(isOpen) =>
+                                                    setPickerOpenForMessage(isOpen ? message.id : null)
+                                                }
+                                            >
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                    <LazyEmojiPicker
+                                                        onEmojiClick={(emojiData: EmojiClickData) => {
+                                                            handleReaction(message, emojiData.emoji);
+                                                            setPickerOpenForMessage(null);
+                                                        }}
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {!isDirect &&
+                                isOwnMessage &&
+                                (isLastInChain ? (
+                                    <CirclePicture
+                                        circle={message.author!}
+                                        size="28px"
+                                        className="mb-1 flex-shrink-0 self-end"
+                                        openPreview={false}
+                                    />
+                                ) : (
+                                    <div className="w-7 flex-shrink-0" />
+                                ))}
                         </div>,
                     );
                 }
 
                 return acc;
             }, [])}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
 };
@@ -513,7 +934,6 @@ interface LatestMessageProps {
 }
 
 export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMessages }) => {
-    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
     const latestMessage = useMemo(() => {
         const matchingEntry = Object.entries(latestMessages).find(([key]) => key.startsWith(roomId));
         if (!matchingEntry) {
@@ -523,54 +943,127 @@ export const LatestMessage: React.FC<LatestMessageProps> = ({ roomId, latestMess
         return matchingEntry[1];
     }, [latestMessages, roomId]);
 
-    const latestSender = useMemo(async () => {
-        let sender = latestMessage?.sender;
-        if (!sender) return null;
-
-        if (!matrixUserCache[sender]) {
-            console.log("Fetching matrix users");
-            // console.log(JSON.stringify(matrixUserCache, null, 2));
-            //await fetchAndCacheMatrixUsers([sender], matrixUserCache, setMatrixUserCache);
-        }
-
-        return (
-            matrixUserCache[sender] || {
-                _id: sender,
-                name: sender,
-                picture: { url: "/placeholder.svg" },
-            }
-        );
-    }, [latestMessage?.sender, matrixUserCache]);
-
-    const formattedMessage = useMemo(() => {
-        return {
-            ...latestMessage,
-            author: latestSender,
-        } as ChatMessage;
-    }, [latestMessage, latestSender]);
-
-    if (!formattedMessage) {
+    if (!latestMessage) {
         return <span>No messages yet</span>;
     }
 
-    return <span>{formattedMessage?.content?.body as string}</span>;
+    return <span>{latestMessage?.content?.body as string}</span>;
 
     // <MessageRenderer message={formattedMessage} preview={true} />;
 };
 
 type ChatInputProps = {
-    chatRoom: ChatRoomDisplay;
+    roomId: string | null;
     editingMessage: ChatMessage | null;
     setEditingMessage: (message: ChatMessage | null) => void;
+    mentionCandidates: Circle[];
+    chatProvider?: "matrix" | "mongo";
+    onMessageSent?: () => void;
+    onMobileComposerExpandedChange?: (expanded: boolean) => void;
 };
 
-const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputProps) => {
+const ChatInput = ({
+    roomId,
+    editingMessage,
+    setEditingMessage,
+    mentionCandidates,
+    onMessageSent,
+    onMobileComposerExpandedChange,
+}: ChatInputProps) => {
     const [user] = useAtom(userAtom);
     const [newMessage, setNewMessage] = useState("");
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
-    
+    const [isComposerFocused, setIsComposerFocused] = useState(false);
+    const [isMobileActionMenuOpen, setIsMobileActionMenuOpen] = useState(false);
+    const isExpandedMobileComposer = !!isMobile && (isComposerFocused || isMobileActionMenuOpen);
+
+    const chatMentionsInputStyle = useMemo(() => {
+        if (!isMobile) {
+            return defaultMentionsInputStyle;
+        }
+
+        const mobilePadding = "0.75rem 0.875rem";
+        const mobileHeight = {
+            minHeight: "44px",
+            maxHeight: isExpandedMobileComposer ? "160px" : "120px",
+        };
+
+        return {
+            ...defaultMentionsInputStyle,
+            control: {
+                ...defaultMentionsInputStyle.control,
+                ...mobileHeight,
+            },
+            input: {
+                ...defaultMentionsInputStyle.input,
+                ...mobileHeight,
+                padding: mobilePadding,
+                lineHeight: 1.45,
+                overflowY: "auto" as const,
+            },
+            highlighter: {
+                ...defaultMentionsInputStyle.highlighter,
+                ...mobileHeight,
+                padding: mobilePadding,
+                lineHeight: 1.45,
+            },
+        };
+    }, [isExpandedMobileComposer, isMobile]);
+
+    const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
+        const seen = new Set<string>();
+        const suggestions: MentionSuggestion[] = [];
+
+        for (const candidate of mentionCandidates || []) {
+            const idValue = candidate?.handle || candidate?.did || candidate?._id;
+            const display = candidate?.name;
+            if (!idValue || !display) {
+                continue;
+            }
+
+            const dedupeKey = String(candidate?.did || candidate?._id || candidate?.handle || idValue);
+            if (seen.has(dedupeKey)) {
+                continue;
+            }
+            seen.add(dedupeKey);
+
+            suggestions.push({
+                id: String(idValue),
+                display: String(display),
+                ...(candidate?.picture?.url ? { picture: candidate.picture.url } : {}),
+                ...(candidate?.handle ? { handle: candidate.handle } : {}),
+            });
+        }
+
+        return suggestions;
+    }, [mentionCandidates]);
+
+    const handleChatMentionQuery = useCallback(
+        (query: string, callback: (data: MentionSuggestion[]) => void) => {
+            if (!mentionSuggestions.length) {
+                callback([]);
+                return;
+            }
+
+            const term = query.trim().toLowerCase();
+            if (!term) {
+                callback(mentionSuggestions);
+                return;
+            }
+
+            callback(
+                mentionSuggestions.filter((suggestion) => {
+                    const displayMatch = suggestion.display.toLowerCase().includes(term);
+                    const handleMatch = suggestion.handle?.toLowerCase().includes(term);
+                    const idMatch = suggestion.id.toLowerCase().includes(term);
+                    return displayMatch || !!handleMatch || idMatch;
+                }),
+            );
+        },
+        [mentionSuggestions],
+    );
     // Populate input when editing
     useEffect(() => {
         if (editingMessage) {
@@ -578,33 +1071,34 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
         }
     }, [editingMessage]);
 
+    useEffect(() => {
+        onMobileComposerExpandedChange?.(isExpandedMobileComposer);
+    }, [isExpandedMobileComposer, onMobileComposerExpandedChange]);
+
     const handleSendMessage = async () => {
         const trimmedMessage = newMessage.trim();
         console.log("📤 [Send] handleSendMessage called", {
             hasUser: !!user,
-            hasAccessToken: !!user?.matrixAccessToken,
-            hasRoomId: !!chatRoom.matrixRoomId,
+            hasDid: !!user?.did,
+            hasRoomId: !!roomId,
+            roomId,
+            provider: "mongo",
             messageLength: trimmedMessage.length,
             isEditing: !!editingMessage,
-            editingMessageId: editingMessage?.id
+            editingMessageId: editingMessage?.id,
         });
-        
+
         if (!user) return;
-        
-        if (!user.matrixAccessToken) {
-            console.error("Missing Matrix credentials. User needs to log out and log back in to trigger Matrix registration.");
+
+        if (!roomId) {
+            console.error("Chat room does not have a room ID");
             return;
         }
-        
-        if (!chatRoom.matrixRoomId) {
-            console.error("Chat room does not have a Matrix room ID");
-            return;
-        }
-        
+
         if (!trimmedMessage) {
             return;
         }
-        
+
         // If editing, handle edit instead of send
         if (editingMessage) {
             console.log("📤 [Send] Routing to handleEditSubmit...");
@@ -612,7 +1106,6 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
             return;
         }
 
-        const roomId = chatRoom.matrixRoomId;
         const replyTarget = replyToMessage;
         const tempId =
             typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -626,11 +1119,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
                 msgtype: "m.text",
                 body: trimmedMessage,
             },
-            createdBy:
-                user.fullMatrixName ||
-                (user.matrixUsername ? `@${user.matrixUsername}:${process.env.NEXT_PUBLIC_MATRIX_DOMAIN}` : user.name) ||
-                user.handle ||
-                "You",
+            createdBy: user.did || user.handle || user.name || "You",
             createdAt: new Date(),
             author: user,
             reactions: {},
@@ -677,23 +1166,27 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
 
         setNewMessage("");
         setReplyToMessage(null);
+        onMessageSent?.();
 
         const rollbackOptimisticMessage = (reason?: string) => {
             console.error("Failed to send message:", reason);
-            applyToTempMessage((msg) => ({ ...msg, status: "failed" }));
+            applyToTempMessage((msg) => ({
+                ...msg,
+                status: "failed",
+                errorMessage: reason || "Failed to send",
+            }));
             setNewMessage(trimmedMessage);
             if (replyTarget) {
                 setReplyToMessage(replyTarget);
             }
         };
-        
+
         console.log("📤 [Send] Sending new message...");
         try {
-            const { sendMessageAction } = await import("./actions");
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
-            
+
             if (result.success) {
-                const eventId = result.eventId;
+                const eventId = (result as any).eventId || (result as any).messageId;
 
                 if (!eventId) {
                     applyToTempMessage((msg) => ({ ...msg, status: undefined }));
@@ -722,36 +1215,55 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
     };
 
     const handleEditSubmit = async () => {
-        console.log("✏️ [Edit] Starting edit submission", { 
-            hasEditingMessage: !!editingMessage, 
+        console.log("✏️ [Edit] Starting edit submission", {
+            hasEditingMessage: !!editingMessage,
             messageId: editingMessage?.id,
             newContent: newMessage.trim(),
-            roomId: chatRoom.matrixRoomId
+            roomId,
         });
-        
+
         if (!editingMessage || !newMessage.trim()) {
             console.log("✏️ [Edit] Aborted - missing message or content");
             return;
         }
-        
+        const trimmedContent = newMessage.trim();
+
         try {
             console.log("✏️ [Edit] Importing editMessageAction...");
-            const { editMessageAction } = await import("./actions");
             console.log("✏️ [Edit] Calling editMessageAction with:", {
-                roomId: chatRoom.matrixRoomId,
+                roomId,
                 eventId: editingMessage.id,
-                content: newMessage.trim()
+                content: trimmedContent,
             });
-            
-            const result = await editMessageAction(
-                chatRoom.matrixRoomId!,
-                editingMessage.id,
-                newMessage.trim()
-            );
-            
+
+            const result = await editMessageAction(roomId!, editingMessage.id, trimmedContent);
+
             console.log("✏️ [Edit] Server response:", result);
-            
+
             if (result.success) {
+                const roomKey = editingMessage.roomId || roomId;
+                const editedAt = new Date();
+                if (roomKey) {
+                    setRoomMessages((prev) => {
+                        const current = prev[roomKey] || [];
+                        const next = current.map((msg) => {
+                            if (msg.id !== editingMessage.id) return msg;
+                            const updated = {
+                                ...msg,
+                                content: {
+                                    ...(msg.content as Record<string, unknown>),
+                                    body: trimmedContent,
+                                } as ChatMessage["content"],
+                            } as ChatMessage;
+                            (updated as any).editedAt = editedAt;
+                            return updated;
+                        });
+                        return {
+                            ...prev,
+                            [roomKey]: next,
+                        };
+                    });
+                }
                 console.log("✏️ [Edit] Success! Clearing state...");
                 setNewMessage("");
                 setEditingMessage(null);
@@ -776,11 +1288,6 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
         e.target.value = "";
 
         if (!user) return;
-        
-        if (!chatRoom.matrixRoomId) {
-            console.error("Chat room does not have a Matrix room ID");
-            return;
-        }
 
         // Check size (5MB)
         if (file.size > 5 * 1024 * 1024) {
@@ -791,17 +1298,22 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
         setIsUploading(true);
         try {
             const formData = new FormData();
-            formData.append("roomId", chatRoom.matrixRoomId);
+            if (!roomId) {
+                console.error("Chat room does not have a room ID");
+                return;
+            }
+            formData.append("roomId", roomId);
             formData.append("file", file);
+
             if (replyToMessage) {
                 formData.append("replyToEventId", replyToMessage.id);
             }
 
-            const { sendAttachmentAction } = await import("./actions");
             const result = await sendAttachmentAction(formData);
 
             if (result.success) {
                 setReplyToMessage(null);
+                onMessageSent?.();
             } else {
                 console.error("Failed to send attachment:", result.message);
                 alert(`Failed to send attachment: ${result.message}`);
@@ -815,14 +1327,7 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
     };
 
     const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (editingMessage) {
-                handleEditSubmit();
-            } else {
-                handleSendMessage();
-            }
-        } else if (e.key === "Escape" && editingMessage) {
+        if (e.key === "Escape" && editingMessage) {
             setEditingMessage(null);
             setNewMessage("");
         }
@@ -830,39 +1335,12 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
 
     return (
         <div className="flex w-full flex-col">
-            {editingMessage && (
-                <div className="mb-2 flex items-center justify-between rounded-lg bg-blue-100 p-2">
-                    <div className="flex-grow overflow-hidden">
-                        <div className="font-semibold text-blue-700">Editing message</div>
-                        <p className="truncate text-sm text-blue-600">{editingMessage.content.body as string}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => { setEditingMessage(null); setNewMessage(""); }}>
-                        <IoClose className="h-5 w-5" />
-                    </Button>
-                </div>
-            )}
-            {replyToMessage && !editingMessage && (
-                <div className="mb-2 flex items-center justify-between rounded-lg bg-gray-200 p-2">
-                    <div className="flex-grow overflow-hidden">
-                        <div className="font-semibold text-gray-700">Replying to {replyToMessage.author.name}</div>
-                        <p className="truncate text-sm text-gray-600">{replyToMessage.content.body as string}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
-                        <IoClose className="h-5 w-5" />
-                    </Button>
-                </div>
-            )}
-            <div className="flex w-full items-end gap-2">
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFileSelect}
-                />
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+            <div className={`flex w-full items-end gap-2 ${isMobile ? "gap-1.5" : ""}`}>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
                 >
@@ -872,44 +1350,154 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
                         <IoAttach className="h-6 w-6" />
                     )}
                 </Button>
-                
-                <MentionsInput
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={handleCommentKeyDown}
-                    placeholder="Type message and click icon or return to send..."
-                    className="flex-grow rounded-[20px] bg-gray-100"
-                    style={{
-                        ...defaultMentionsInputStyle,
-                        suggestions: {
-                            position: "absolute",
-                            bottom: "100%",
-                            marginBottom: "10px",
-                        },
-                    }}
-                >
-                    <Mention
-                        trigger="@"
-                        data={handleMentionQuery}
-                        style={defaultMentionStyle}
-                        displayTransform={(id, display) => `${display}`}
-                        renderSuggestion={renderCircleSuggestion}
-                        markup="[__display__](/circles/__id__)"
-                    />
-                </MentionsInput>
-                
-                <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-10 w-10 shrink-0 rounded-full text-blue-600 hover:bg-blue-50"
+
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
+                        >
+                            <BsEmojiSmile className="h-5 w-5" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto border-none bg-transparent p-0">
+                        <LazyEmojiPicker
+                            onEmojiClick={(data: EmojiClickData) => setNewMessage((prev) => prev + data.emoji)}
+                        />
+                    </PopoverContent>
+                </Popover>
+
+                <div className="min-w-0 flex-1">
+                    {editingMessage && (
+                        <div className="mb-2 rounded-lg bg-blue-100 p-2">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-grow overflow-hidden">
+                                    <div className="font-semibold text-blue-700">Editing message</div>
+                                    <p className="line-clamp-2 text-sm text-blue-600">
+                                        {editingMessage.content.body as string}
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 rounded-full px-3 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
+                                        onClick={() => {
+                                            setEditingMessage(null);
+                                            setNewMessage("");
+                                        }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-8 rounded-full px-3"
+                                        onClick={handleSendMessage}
+                                        disabled={!newMessage.trim()}
+                                    >
+                                        Save
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {replyToMessage && !editingMessage && (
+                        <div className="mb-2 flex max-w-full items-center justify-between overflow-hidden rounded-lg bg-gray-200 p-2">
+                            <div className="flex-grow overflow-hidden">
+                                <div className="font-semibold text-gray-700">
+                                    Replying to {replyToMessage.author.name}
+                                </div>
+                                <p className="line-clamp-3 text-sm text-gray-600">
+                                    {replyToMessage.content.body as string}
+                                </p>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
+                                <IoClose className="h-5 w-5" />
+                            </Button>
+                        </div>
+                    )}
+                    <MentionsInput
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={handleCommentKeyDown}
+                        onFocus={() => setIsComposerFocused(true)}
+                        onBlur={() => setIsComposerFocused(false)}
+                        placeholder="Type a message. Use return for a new line."
+                        className="min-w-0 rounded-[20px] bg-gray-100 text-base"
+                        style={chatMentionsInputStyle}
+                        allowSuggestionsAboveCursor={true}
+                        forceSuggestionsAboveCursor={true}
+                    >
+                        <Mention
+                            trigger="@"
+                            data={handleChatMentionQuery}
+                            style={defaultMentionStyle}
+                            displayTransform={(id, display) => `${display}`}
+                            renderSuggestion={renderCircleSuggestion}
+                            markup="[__display__](/circles/__id__)"
+                        />
+                    </MentionsInput>
+                </div>
+
+                {isMobile && isExpandedMobileComposer && (
+                    <Popover open={isMobileActionMenuOpen} onOpenChange={setIsMobileActionMenuOpen}>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
+                                title="More actions"
+                                aria-label="More actions"
+                            >
+                                <IoAddCircleOutline className="h-6 w-6" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" side="top" className="w-[280px] rounded-2xl p-3">
+                            <div className="mb-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full justify-start rounded-full"
+                                    onClick={() => {
+                                        setIsMobileActionMenuOpen(false);
+                                        fileInputRef.current?.click();
+                                    }}
+                                    disabled={isUploading}
+                                >
+                                    <IoAttach className="mr-2 h-4 w-4" />
+                                    Attach file
+                                </Button>
+                            </div>
+                            <LazyEmojiPicker
+                                onEmojiClick={(data: EmojiClickData) => {
+                                    setNewMessage((prev) => prev + data.emoji);
+                                }}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                )}
+
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden h-10 w-10 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] md:inline-flex"
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
+                    title={editingMessage ? "Save edit" : "Send message"}
+                    aria-label={editingMessage ? "Save edit" : "Send message"}
                 >
                     <IoSend className="h-5 w-5" />
                 </Button>
                 {isMobile && (
-                    <Button onClick={handleSendMessage} className="ml-2 rounded-full text-white">
-                        <IoSend />
+                    <Button
+                        onClick={handleSendMessage}
+                        className="ml-1 shrink-0 rounded-full text-white"
+                        aria-label={editingMessage ? "Save edit" : "Send message"}
+                    >
+                        {editingMessage ? "Save" : <IoSend />}
                     </Button>
                 )}
             </div>
@@ -917,40 +1505,886 @@ const ChatInput = ({ chatRoom, editingMessage, setEditingMessage }: ChatInputPro
     );
 };
 
-export const fetchAndCacheMatrixUsers = async (
-    matrixUsernames: string[],
-    matrixUserCache: MatrixUserCache,
-    setMatrixUserCache: Dispatch<SetStateAction<MatrixUserCache>>,
-): Promise<MatrixUserCache> => {
-    // Deduplicate usernames
-    const uniqueUsernames = Array.from(new Set(matrixUsernames));
-    const uncachedUsernames = uniqueUsernames.filter((username) => !matrixUserCache[username]);
+// ─── Topic inline card (self-contained, expands in place) ──────────────────
 
-    if (uncachedUsernames.length === 0) {
-        return matrixUserCache; // Nothing to fetch
-    }
+const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
+const getTopicLastSeenKey = (conversationId: string, topicId: string) =>
+    `kamooni_topic_lastseen_${conversationId}_${topicId}`;
+const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
+type TopicNavigationRequest = {
+    topicId: string;
+    nonce: number;
+};
+
+const getOpenTopicIds = (conversationId: string): Set<string> => {
     try {
-        const userData: (Circle | null)[] = await fetchMatrixUsers(uncachedUsernames);
-
-        // Update cache with fetched users
-        const updatedCache = {
-            ...matrixUserCache,
-            ...userData.reduce((acc, user, index) => {
-                const matrixUsername = uncachedUsernames[index];
-                if (user) {
-                    acc[matrixUsername] = user;
-                }
-                return acc;
-            }, {} as MatrixUserCache),
-        };
-
-        setMatrixUserCache(updatedCache);
-        return updatedCache;
-    } catch (error) {
-        console.error("Failed to fetch Matrix users:", error);
-        return matrixUserCache; // Return the current cache even on failure
+        const raw = localStorage.getItem(getTopicStorageKey(conversationId));
+        return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+        return new Set();
     }
+};
+
+const setOpenTopicIds = (conversationId: string, ids: Set<string>) => {
+    try {
+        localStorage.setItem(getTopicStorageKey(conversationId), JSON.stringify(Array.from(ids)));
+    } catch {
+        // localStorage unavailable — fail silently
+    }
+};
+
+const getTopicLastSeen = (conversationId: string, topicId: string): number => {
+    try {
+        const raw = localStorage.getItem(getTopicLastSeenKey(conversationId, topicId));
+        return raw ? parseInt(raw, 10) : 0;
+    } catch {
+        return 0;
+    }
+};
+
+const setTopicLastSeen = (conversationId: string, topicId: string, timestamp: number) => {
+    try {
+        localStorage.setItem(getTopicLastSeenKey(conversationId, topicId), String(timestamp));
+    } catch {
+        // localStorage unavailable — fail silently
+    }
+};
+
+const TopicCard: React.FC<{
+    message: any;
+    conversationId: string;
+    user: any;
+    onTopicOpen?: () => void;
+    onTopicLoaded?: () => void;
+    navigationRequest?: TopicNavigationRequest | null;
+}> = ({ message, conversationId, user, onTopicOpen, onTopicLoaded, navigationRequest }) => {
+    const thread = message.thread;
+    const messageId = message.id || message._id;
+    const cardRef = useRef<HTMLDivElement>(null);
+
+    const [isOpen, setIsOpen] = useState<boolean>(() => {
+        const openIds = getOpenTopicIds(conversationId);
+        return openIds.has(messageId);
+    });
+
+    const [replies, setReplies] = useState<ChatMessage[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [replyText, setReplyText] = useState("");
+    const [isSending, setIsSending] = useState(false);
+    const [unreadCount, setUnreadCount] = useState<number>(0);
+    const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
+    const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+    const [editingReplyText, setEditingReplyText] = useState("");
+    const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
+    const [isEditingStarter, setIsEditingStarter] = useState(false);
+    const [editingStarterText, setEditingStarterText] = useState("");
+    const [editedStarterBody, setEditedStarterBody] = useState<string | null>(null);
+    const [isHoveringStarter, setIsHoveringStarter] = useState(false);
+    const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const pendingScrollIntoViewRef = useRef(false);
+    const isMobile = useIsMobile();
+
+    const autoGrowReplyTextarea = () => {
+        const textarea = replyTextareaRef.current;
+        if (!textarea) return;
+        textarea.style.height = "0px";
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 224)}px`;
+    };
+
+    // Load replies on mount if topic starts open
+    useEffect(() => {
+        if (isOpen) {
+            void loadReplies();
+            onTopicOpen?.();
+        } else {
+            void computeUnreadCount();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Re-check unread count whenever replyCount changes (picks up new replies without refresh)
+    useEffect(() => {
+        if (!isOpen) {
+            void computeUnreadCount();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [thread?.replyCount]);
+
+    useEffect(() => {
+        autoGrowReplyTextarea();
+    }, [replyText]);
+
+    const computeUnreadCount = async () => {
+        try {
+            const { fetchThreadRepliesAction } = await import("./mongo-actions");
+            const result = await fetchThreadRepliesAction(messageId, conversationId);
+            if (result.success && result.replies) {
+                const lastSeen = getTopicLastSeen(conversationId, messageId);
+                const unseen = result.replies.filter((r: any) => {
+                    const ts = new Date(r.createdAt).getTime();
+                    return ts > lastSeen;
+                }).length;
+                setUnreadCount(unseen);
+            }
+        } catch {
+            // fail silently
+        }
+    };
+
+    const loadReplies = async () => {
+        setIsLoading(true);
+        try {
+            const { fetchThreadRepliesAction } = await import("./mongo-actions");
+            const result = await fetchThreadRepliesAction(messageId, conversationId);
+            if (result.success && result.replies) {
+                const mapped = result.replies.map((r: any) => {
+                    // Convert raw reactions array [{emoji, userDid}] to keyed map {emoji: [{sender, eventId}]}
+                    const rawReactions = Array.isArray(r.reactions) ? r.reactions : [];
+                    const reactionMap = rawReactions.reduce((acc: Record<string, any[]>, reaction: any) => {
+                        const key = reaction.emoji;
+                        if (!key) return acc;
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push({
+                            sender: reaction.userDid,
+                            eventId: `${r._id}:${reaction.userDid}:${key}`,
+                        });
+                        return acc;
+                    }, {});
+
+                    return {
+                        id: r._id?.toString(),
+                        roomId: conversationId,
+                        type: "m.room.message",
+                        content: { msgtype: "m.text", body: r.body },
+                        attachments: r.attachments,
+                        reactions: reactionMap,
+                        createdAt: r.createdAt,
+                        createdBy: r.senderDid,
+                        author: {
+                            _id: r.senderDid,
+                            name:
+                                r.authorName && !r.authorName.includes(":") && r.authorName.length < 40
+                                    ? r.authorName
+                                    : r.senderDid,
+                            picture: r.authorPicture ? { url: r.authorPicture } : { url: "/placeholder.svg" },
+                        } as Circle,
+                        replyTo: r.replyTo,
+                    };
+                });
+                setReplies(mapped);
+                // Mark all as seen
+                const now = Date.now();
+                setTopicLastSeen(conversationId, messageId, now);
+                setUnreadCount(0);
+            }
+        } catch (e) {
+            console.error("Failed to load topic replies:", e);
+        } finally {
+            setIsLoading(false);
+            if (pendingScrollIntoViewRef.current) {
+                pendingScrollIntoViewRef.current = false;
+                requestAnimationFrame(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                });
+            }
+            onTopicLoaded?.();
+        }
+    };
+
+    useEffect(() => {
+        if (navigationRequest?.topicId !== messageId) {
+            return;
+        }
+
+        pendingScrollIntoViewRef.current = true;
+
+        if (!isOpen) {
+            setIsOpen(true);
+            const openIds = getOpenTopicIds(conversationId);
+            openIds.add(messageId);
+            setOpenTopicIds(conversationId, openIds);
+            setTopicLastSeen(conversationId, messageId, Date.now());
+            setUnreadCount(0);
+            void loadReplies();
+            onTopicOpen?.();
+            return;
+        }
+
+        if (replies.length === 0 && !isLoading) {
+            void loadReplies();
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navigationRequest?.nonce]);
+
+    if (!thread) return null;
+
+    const handleToggle = () => {
+        const next = !isOpen;
+        if (next) {
+            void loadReplies();
+            onTopicOpen?.();
+        }
+        setIsOpen(next);
+        const openIds = getOpenTopicIds(conversationId);
+        if (next) {
+            openIds.add(messageId);
+            // Mark as seen when opening
+            setTopicLastSeen(conversationId, messageId, Date.now());
+            setUnreadCount(0);
+        } else {
+            openIds.delete(messageId);
+        }
+        setOpenTopicIds(conversationId, openIds);
+    };
+
+    const handleSendReply = async () => {
+        const trimmed = replyText.trim();
+        if (!trimmed || isSending) return;
+        setIsSending(true);
+        try {
+            const { sendThreadReplyAction } = await import("./mongo-actions");
+            const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
+            if (result.success) {
+                setReplyText("");
+                setReplyToMessage(null);
+                await loadReplies();
+            }
+        } catch (e) {
+            console.error("Failed to send topic reply:", e);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleEditSubmit = async (replyId: string) => {
+        const trimmed = editingReplyText.trim();
+        if (!trimmed) return;
+        try {
+            const { editMessageAction } = await import("./actions");
+            const result = await editMessageAction(conversationId, replyId, trimmed);
+            if (result.success) {
+                setEditingReplyId(null);
+                setEditingReplyText("");
+                await loadReplies();
+            }
+        } catch (e) {
+            console.error("Failed to edit topic reply:", e);
+        }
+    };
+
+    const handleStarterEditSubmit = async () => {
+        const trimmed = editingStarterText.trim();
+        if (!trimmed) return;
+        try {
+            const { editMessageAction } = await import("./actions");
+            const result = await editMessageAction(conversationId, messageId, trimmed);
+            if (result.success) {
+                setEditedStarterBody(trimmed);
+                setIsEditingStarter(false);
+                setEditingStarterText("");
+            }
+        } catch (e) {
+            console.error("Failed to edit topic starter:", e);
+        }
+    };
+
+    const handleReaction = async (replyId: string, emoji: string) => {
+        try {
+            const { toggleMongoReactionAction } = await import("./actions");
+            await toggleMongoReactionAction(replyId, emoji);
+            await loadReplies();
+        } catch (e) {
+            console.error("Failed to toggle reaction:", e);
+        }
+    };
+
+    const handleDeleteReply = async (replyId: string) => {
+        if (!window.confirm("Are you sure you want to delete this reply?")) {
+            return;
+        }
+
+        try {
+            const result = await deleteMongoMessageAction(replyId);
+            if (result.success) {
+                if (replyToMessage?.id === replyId) {
+                    setReplyToMessage(null);
+                }
+                await loadReplies();
+                return;
+            }
+
+            alert(`Failed to delete reply: ${result.message}`);
+        } catch (e) {
+            console.error("Failed to delete topic reply:", e);
+            alert("Failed to delete reply. Please try again.");
+        }
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = "";
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File size exceeds 5MB limit.");
+            return;
+        }
+        setIsUploading(true);
+        try {
+            const { sendAttachmentAction } = await import("./actions");
+            const formData = new FormData();
+            formData.append("roomId", conversationId);
+            formData.append("file", file);
+            // Pass threadId so the attachment reply is linked to this topic
+            formData.append("threadId", messageId);
+            if (replyToMessage?.id) {
+                formData.append("replyToMessageId", replyToMessage.id);
+            }
+            const result = await sendAttachmentAction(formData);
+            if (result.success) {
+                setReplyToMessage(null);
+                await loadReplies();
+            } else {
+                alert(`Failed to send attachment: ${result.message}`);
+            }
+        } catch (e) {
+            console.error("Failed to send attachment:", e);
+            alert("An error occurred while uploading the file.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
+    const effectiveStarterBody = editedStarterBody ?? topicDescription;
+    const isOwnStarter = !!user?.did && message.createdBy === user.did;
+
+    return (
+        <div
+            ref={cardRef}
+            id={getMessageElementId(messageId)}
+            data-message-id={messageId}
+            className={`my-2 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
+        >
+            {/* Header row — always visible, click to toggle */}
+            <div className="flex cursor-pointer flex-col items-center gap-2 p-3 text-center" onClick={handleToggle}>
+                <div className="min-w-0">
+                    <p className="font-semibold text-gray-900">{thread.title}</p>
+                    {thread.hashtags && thread.hashtags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap justify-center gap-1">
+                            {thread.hashtags.map((tag: string) => (
+                                <span key={tag} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
+                                    #{tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {!isOpen && effectiveStarterBody && (
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
+                    )}
+                </div>
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                    <div className="relative">
+                        <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-amber-500" : "text-gray-400"}`} />
+                        {!isOpen && unreadCount > 0 && (
+                            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
+                                {unreadCount}
+                            </span>
+                        )}
+                    </div>
+                    <span>
+                        {isOpen ? "Collapse" : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
+                    </span>
+                </div>
+            </div>
+
+            {/* Expanded body */}
+            {isOpen && (
+                <div className="border-t border-[#DDEBB8]">
+                    {effectiveStarterBody && (
+                        <div
+                            className="relative px-6 pb-2 pt-3 text-left"
+                            onMouseEnter={() => !isMobile && setIsHoveringStarter(true)}
+                            onMouseLeave={() => !isMobile && setIsHoveringStarter(false)}
+                        >
+                            {isOwnStarter && isHoveringStarter && !isEditingStarter && (
+                                <div className="absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => {
+                                            setIsEditingStarter(true);
+                                            setEditingStarterText(effectiveStarterBody);
+                                        }}
+                                    >
+                                        <GrEdit className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
+                            {isEditingStarter ? (
+                                <div className="flex flex-col gap-1">
+                                    <textarea
+                                        value={editingStarterText}
+                                        onChange={(e) => setEditingStarterText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Escape") {
+                                                setIsEditingStarter(false);
+                                                setEditingStarterText("");
+                                            }
+                                        }}
+                                        rows={5}
+                                        className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                    />
+                                    <div className="flex justify-end gap-1">
+                                        <button
+                                            onClick={() => {
+                                                setIsEditingStarter(false);
+                                                setEditingStarterText("");
+                                            }}
+                                            className="text-xs text-gray-500 hover:text-gray-700"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => void handleStarterEditSubmit()}
+                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                        >
+                                            Save
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="text-sm leading-relaxed text-gray-600">
+                                        {renderFormattedChatBody(effectiveStarterBody, {
+                                            format: (message as any)?.format,
+                                            markdownClassName:
+                                                "formatted max-w-none text-sm leading-relaxed text-gray-600",
+                                        })}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
+                                        <span>
+                                            {new Date(message.createdAt).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                hour12: false,
+                                            })}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Replies */}
+                    <div className="space-y-2 px-3 py-2">
+                        {isLoading && <p className="py-2 text-center text-xs text-gray-400">Loading replies...</p>}
+                        {!isLoading && replies.length === 0 && (
+                            <p className="py-2 text-center text-xs text-gray-400">No replies yet. Be the first.</p>
+                        )}
+                        {replies.map((reply, replyIndex) => {
+                            const isOwn = reply.createdBy === user?.did;
+                            const isEditing = editingReplyId === reply.id;
+                            const nextReply = replies[replyIndex + 1];
+                            const isLastInChain =
+                                !nextReply ||
+                                nextReply.createdBy !== reply.createdBy ||
+                                new Date(nextReply.createdAt).getTime() - new Date(reply.createdAt).getTime() >
+                                    5 * 60 * 1000;
+                            const isFirstInChain =
+                                replyIndex === 0 ||
+                                replies[replyIndex - 1].createdBy !== reply.createdBy ||
+                                new Date(reply.createdAt).getTime() -
+                                    new Date(replies[replyIndex - 1].createdAt).getTime() >
+                                    5 * 60 * 1000;
+                            return (
+                                <div
+                                    key={reply.id}
+                                    id={getMessageElementId(reply.id)}
+                                    data-message-id={reply.id}
+                                    className={`relative flex gap-2 ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
+                                    onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
+                                    onMouseLeave={() => {
+                                        if (!isMobile) {
+                                            setHoveredReplyId(null);
+                                        }
+                                    }}
+                                >
+                                    {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) && !isEditing && (
+                                        <div
+                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}
+                                        >
+                                            {isOwn && (
+                                                <>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => {
+                                                            setEditingReplyId(reply.id);
+                                                            setEditingReplyText((reply.content?.body as string) || "");
+                                                        }}
+                                                    >
+                                                        <GrEdit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => void handleDeleteReply(reply.id)}
+                                                    >
+                                                        <GrTrash className="h-4 w-4" />
+                                                    </Button>
+                                                </>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6"
+                                                onClick={() => setReplyToMessage(reply)}
+                                            >
+                                                <MdReply className="h-4 w-4" />
+                                            </Button>
+                                            <Popover
+                                                open={pickerOpenForReply === reply.id}
+                                                onOpenChange={(open) => setPickerOpenForReply(open ? reply.id : null)}
+                                            >
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                    <LazyEmojiPicker
+                                                        onEmojiClick={(data: EmojiClickData) => {
+                                                            void handleReaction(reply.id, data.emoji);
+                                                            setPickerOpenForReply(null);
+                                                        }}
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    )}
+                                    {!isOwn &&
+                                        (isLastInChain ? (
+                                            <CirclePicture
+                                                circle={reply.author}
+                                                size="28px"
+                                                className="mb-1 flex-shrink-0 self-end"
+                                            />
+                                        ) : (
+                                            <div className="w-7 flex-shrink-0" />
+                                        ))}
+                                    <div
+                                        className={`relative flex ${isEditing ? "max-w-[95%] flex-1" : "max-w-[75%]"} flex-col overflow-hidden shadow-md ${CHAT_STANDARD_BUBBLE_CLASS}`}
+                                        style={{ borderRadius: "12px" }}
+                                    >
+                                        <div className="px-3 py-1.5">
+                                            {isEditing ? (
+                                                <div className="flex flex-col gap-1">
+                                                    <textarea
+                                                        value={editingReplyText}
+                                                        onChange={(e) => setEditingReplyText(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Escape") {
+                                                                setEditingReplyId(null);
+                                                                setEditingReplyText("");
+                                                            }
+                                                        }}
+                                                        rows={5}
+                                                        className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                                    />
+                                                    <div className="flex justify-end gap-1">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingReplyId(null);
+                                                                setEditingReplyText("");
+                                                            }}
+                                                            className="text-xs text-gray-500 hover:text-gray-700"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={() => void handleEditSubmit(reply.id)}
+                                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                        >
+                                                            Save
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <MessageRenderer message={reply} />
+                                            )}
+                                            {isLastInChain && (
+                                                <div className="mt-0.5 text-right text-[8px] leading-none text-gray-300">
+                                                    {new Date(reply.createdAt).toLocaleTimeString([], {
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        hour12: false,
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {reply.reactions && Object.keys(reply.reactions).length > 0 && (
+                                            <div
+                                                className={`-mb-1 flex flex-wrap gap-1 px-2 pb-1 ${isOwn ? "justify-end" : "justify-start"}`}
+                                            >
+                                                {Object.entries(reply.reactions as Record<string, any>).map(
+                                                    ([emoji, reactors]) => {
+                                                        const reactorList = Array.isArray(reactors) ? reactors : [];
+                                                        return (
+                                                            <button
+                                                                key={emoji}
+                                                                onClick={() => void handleReaction(reply.id, emoji)}
+                                                                className="flex items-center rounded-full border border-gray-200 bg-white px-1 py-0 text-sm leading-none"
+                                                            >
+                                                                {emoji}{" "}
+                                                                {reactorList.length > 1 && (
+                                                                    <span className="ml-0.5 text-gray-500">
+                                                                        {reactorList.length}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    },
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Reply input */}
+                    <div className="flex items-end gap-1 px-3 pb-3">
+                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                        >
+                            {isUploading ? (
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                            ) : (
+                                <IoAttach className="h-4 w-4" />
+                            )}
+                        </Button>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                >
+                                    <BsEmojiSmile className="h-4 w-4" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                <LazyEmojiPicker
+                                    onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)}
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <div className="min-w-0 flex-1">
+                            {replyToMessage && (
+                                <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-gray-700">
+                                                Replying to {replyToMessage.author?.name || "message"}
+                                            </div>
+                                            <div className="truncate">
+                                                {renderMentionsAsDisplayText(
+                                                    (replyToMessage.content?.body as string) || "",
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="text-gray-400 hover:text-gray-600"
+                                            onClick={() => setReplyToMessage(null)}
+                                        >
+                                            <IoClose className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex items-end gap-1">
+                                <textarea
+                                    ref={replyTextareaRef}
+                                    value={replyText}
+                                    onChange={(e) => {
+                                        setReplyText(e.target.value);
+                                        autoGrowReplyTextarea();
+                                    }}
+                                    placeholder="Write a reply. Use return for a new line."
+                                    rows={1}
+                                    className="max-h-56 min-h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))]"
+                                    onClick={() => void handleSendReply()}
+                                    disabled={!replyText.trim() || isSending}
+                                >
+                                    <IoSend className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─── New Thread Modal ───────────────────────────────────────────────────────
+
+const NewThreadModal: React.FC<{
+    conversationId: string;
+    onClose: () => void;
+    onCreated: () => void;
+}> = ({ conversationId, onClose, onCreated }) => {
+    const [title, setTitle] = useState("");
+    const [body, setBody] = useState("");
+    const [hashtagInput, setHashtagInput] = useState("");
+    const [hashtags, setHashtags] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const addHashtag = () => {
+        const tag = hashtagInput.trim().replace(/^#/, "").toLowerCase();
+        if (tag && !hashtags.includes(tag)) {
+            setHashtags([...hashtags, tag]);
+        }
+        setHashtagInput("");
+    };
+
+    const removeHashtag = (tag: string) => {
+        setHashtags(hashtags.filter((t) => t !== tag));
+    };
+
+    const handleCreate = async () => {
+        if (!title.trim()) {
+            setError("Title is required");
+            return;
+        }
+        setIsSaving(true);
+        setError("");
+        try {
+            const { createThreadAction } = await import("./mongo-actions");
+            const result = await createThreadAction(conversationId, title.trim(), body.trim(), hashtags);
+            if (result.success) {
+                onCreated();
+                onClose();
+            } else {
+                setError(result.message || "Failed to create thread");
+            }
+        } catch (e) {
+            setError("Failed to create thread");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-6 shadow-xl">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">New Topic</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+                        <IoClose className="h-5 w-5" />
+                    </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                    <input
+                        type="text"
+                        placeholder="Topic title (required)"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <textarea
+                        placeholder="Topic description (optional)"
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        rows={3}
+                        className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+
+                    {/* Hashtags */}
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Add hashtag (optional)"
+                            value={hashtagInput}
+                            onChange={(e) => setHashtagInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addHashtag();
+                                }
+                            }}
+                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                            onClick={addHashtag}
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                            Add
+                        </button>
+                    </div>
+                    {hashtags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                            {hashtags.map((tag) => (
+                                <span
+                                    key={tag}
+                                    className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-600"
+                                >
+                                    #{tag}
+                                    <button onClick={() => removeHashtag(tag)} className="hover:text-red-500">
+                                        <IoClose className="h-3 w-3" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {error && <p className="text-sm text-red-500">{error}</p>}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                    <button
+                        onClick={onClose}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => void handleCreate()}
+                        disabled={isSaving}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {isSaving ? "Creating..." : "Create Topic"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export const ChatRoomComponent: React.FC<{
@@ -958,30 +2392,239 @@ export const ChatRoomComponent: React.FC<{
     setSelectedChat?: Dispatch<SetStateAction<ChatRoomDisplay | undefined>>;
     circle?: Circle;
     inToolbox?: boolean;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox }) => {
+    chatProvider?: "matrix" | "mongo";
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
+    const hasInitiallyScrolledRef = useRef(false);
+    const userHasScrolledUpRef = useRef(false);
+    const lastRenderedMessageRef = useRef<{ count: number; latestCreatedAt: number | null }>({
+        count: 0,
+        latestCreatedAt: null,
+    });
+    const inputBarRef = useRef<HTMLDivElement>(null);
+    const [inputBarHeight, setInputBarHeight] = useState(56);
     const isCompact = useIsCompact();
     const [hideInput, setHideInput] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
     const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
+    const [jumpButtonRight, setJumpButtonRight] = useState(16);
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false);
     const isMobile = useIsMobile();
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [mapOpen] = useAtom(mapOpenAtom);
-    const [user, setUser] = useAtom(userAtom);
-    const [matrixUserCache, setMatrixUserCache] = useAtom(matrixUserCacheAtom);
+    const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-    const [, setReplyToMessage] = useAtom(replyToMessageAtom);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+    const [hasOlderMessages, setHasOlderMessages] = useState(true);
+    const [showNewThreadModal, setShowNewThreadModal] = useState(false);
+    const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
+    const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
+    const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
     const router = useRouter();
+    const params = useParams<{ handle?: string | string[] }>();
+    const routeHandleParam = params?.handle;
+    const routeHandle = Array.isArray(routeHandleParam) ? routeHandleParam[0] : routeHandleParam;
+    const provider: "mongo" = "mongo";
+
+    const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
+    const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
+    const repliesDisabled =
+        (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
+    const isAnnouncementConversation = conversationType === "announcement" || repliesDisabled;
+
+    useEffect(() => {
+        if (!replyToMessage) return;
+        if (isAnnouncementConversation) {
+            setReplyToMessage(null);
+            return;
+        }
+        if (roomId && replyToMessage.roomId !== roomId) {
+            setReplyToMessage(null);
+        }
+    }, [isAnnouncementConversation, replyToMessage, roomId, setReplyToMessage]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fromPayload = Array.isArray((chatRoom as any)?.participantCircles)
+            ? ((chatRoom as any).participantCircles as Circle[])
+            : [];
+        const fallbackCandidates = user ? [user] : [];
+
+        const dedupeParticipants = (participants: Circle[]): Circle[] => {
+            const seen = new Set<string>();
+            const deduped: Circle[] = [];
+            for (const participant of participants) {
+                const key = participant?.did || participant?._id || participant?.handle;
+                if (!key || seen.has(String(key))) {
+                    continue;
+                }
+                seen.add(String(key));
+                deduped.push(participant);
+            }
+            return deduped;
+        };
+
+        const payloadCandidates = dedupeParticipants(fromPayload);
+        if (payloadCandidates.length > 0) {
+            setMentionCandidates(payloadCandidates);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        if ((chatRoom as any)?.isDirect || isAnnouncementConversation || !roomId) {
+            setMentionCandidates(fallbackCandidates);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        const loadGroupParticipants = async () => {
+            try {
+                const result = await getChatRoomMembersAction(roomId);
+                if (cancelled) {
+                    return;
+                }
+
+                if (result.success && Array.isArray(result.members)) {
+                    const memberUsers = result.members
+                        .map((member: any) => member?.user)
+                        .filter((memberUser: Circle | null): memberUser is Circle => !!memberUser);
+                    const scopedParticipants = dedupeParticipants(memberUsers);
+                    setMentionCandidates(scopedParticipants.length > 0 ? scopedParticipants : fallbackCandidates);
+                    return;
+                }
+            } catch (error) {
+                console.error("Failed to load chat participants for mentions:", error);
+            }
+
+            if (!cancelled) {
+                setMentionCandidates(fallbackCandidates);
+            }
+        };
+
+        void loadGroupParticipants();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatRoom, roomId, user, isAnnouncementConversation]);
+
+    useEffect(() => {
+        if (process.env.NODE_ENV === "production") return;
+        console.log("CHAT DEBUG provider:", provider);
+        console.log("CHAT DEBUG routeParam:", routeHandle ?? null);
+        console.log("CHAT DEBUG roomId:", roomId);
+        console.log("CHAT DEBUG roomMessages keys:", Object.keys(roomMessages));
+    }, [provider, routeHandle, roomId, roomMessages]);
+
+    const { isLoading: isLoadingMongo } = useMongoChat({
+        roomId,
+        enabled: provider === "mongo" && !!roomId,
+        setRoomMessages,
+    });
+
+    const hasLoadedTopicsRef = useRef(false);
+    const [topicNavigationRequest, setTopicNavigationRequest] = useState<TopicNavigationRequest | null>(null);
+
+    useEffect(() => {
+        const handleOpenTopic = (event: Event) => {
+            const customEvent = event as CustomEvent<{ conversationId?: string; topicId?: string }>;
+            const targetConversationId = customEvent.detail?.conversationId;
+            const topicId = customEvent.detail?.topicId;
+            if (!roomId || !targetConversationId || !topicId || targetConversationId !== roomId) {
+                return;
+            }
+
+            setTopicNavigationRequest({
+                topicId,
+                nonce: Date.now(),
+            });
+        };
+
+        window.addEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
+        return () => {
+            window.removeEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
+        };
+    }, [roomId]);
+
+    useEffect(() => {
+        if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
+        hasLoadedTopicsRef.current = true;
+        const loadTopics = async () => {
+            try {
+                const { fetchTopicStartersAction } = await import("./mongo-actions");
+                const result = await fetchTopicStartersAction(roomId);
+                if (result.success && result.messages && result.messages.length > 0) {
+                    setRoomMessages((prev) => {
+                        const existing = prev[roomId] || [];
+                        const existingIds = new Set(existing.map((m) => m.id));
+                        const newTopics = result.messages!.filter((m) => !existingIds.has(m.id));
+                        if (newTopics.length === 0) return prev;
+                        const merged = [...existing, ...newTopics].sort(
+                            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+                        );
+                        return { ...prev, [roomId]: merged };
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to load topic starters:", error);
+            }
+        };
+        void loadTopics();
+    }, [isLoadingMongo, roomId, setRoomMessages]);
+
+    const loadOlderMessages = async () => {
+        if (!roomId || isLoadingOlder || !hasOlderMessages) return;
+        const currentMessages = roomMessages[roomId] || [];
+        if (currentMessages.length === 0) return;
+        const oldestId = currentMessages[0]?.id;
+        if (!oldestId) return;
+        setIsLoadingOlder(true);
+        try {
+            const { fetchMongoMessagesAction } = await import("./actions");
+            // Fetch messages before the oldest currently loaded one
+            // We use a custom approach: fetch 50 messages with _id < oldestId
+            const result = await fetchMongoMessagesAction(roomId, undefined, 50);
+            if (result.success && result.messages) {
+                const olderMessages = result.messages.filter(
+                    (msg) => msg.id < oldestId && !currentMessages.some((m) => m.id === msg.id),
+                );
+                if (olderMessages.length === 0) {
+                    setHasOlderMessages(false);
+                } else {
+                    setRoomMessages((prev) => {
+                        const current = prev[roomId] || [];
+                        const existingIds = new Set(current.map((m) => m.id));
+                        const newOld = olderMessages.filter((m) => !existingIds.has(m.id));
+                        return {
+                            ...prev,
+                            [roomId]: [...newOld, ...current],
+                        };
+                    });
+                    if (olderMessages.length < 50) {
+                        setHasOlderMessages(false);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load older messages:", e);
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    };
 
     const handleDelete = async (message: ChatMessage) => {
         if (window.confirm("Are you sure you want to delete this message?")) {
+            const originalRoomMessages = roomMessages[message.roomId] || [];
+            const originalIndex = originalRoomMessages.findIndex((m) => m.id === message.id);
             // Optimistic UI update
             setRoomMessages((prev) => {
                 const newRoomMessages = { ...prev };
@@ -995,15 +2638,34 @@ export const ChatRoomComponent: React.FC<{
             }
 
             try {
-                const { deleteMessageAction } = await import("./actions");
-                const result = await deleteMessageAction(message.roomId, message.id);
-                
+                const result = await deleteMongoMessageAction(message.id);
+
                 if (!result.success) {
                     console.error("Failed to delete message:", result.message);
+                    // Roll back the optimistic delete so local state matches persisted state.
+                    setRoomMessages((prev) => {
+                        const current = prev[message.roomId] || [];
+                        if (current.some((m) => m.id === message.id)) return prev;
+                        const next = [...current];
+                        const insertionIndex =
+                            originalIndex >= 0 && originalIndex <= next.length ? originalIndex : next.length;
+                        next.splice(insertionIndex, 0, message);
+                        return { ...prev, [message.roomId]: next };
+                    });
                     alert(`Failed to delete message: ${result.message}`);
                 }
             } catch (error) {
                 console.error("Exception deleting message:", error);
+                // Roll back optimistic delete on unexpected failure.
+                setRoomMessages((prev) => {
+                    const current = prev[message.roomId] || [];
+                    if (current.some((m) => m.id === message.id)) return prev;
+                    const next = [...current];
+                    const insertionIndex =
+                        originalIndex >= 0 && originalIndex <= next.length ? originalIndex : next.length;
+                    next.splice(insertionIndex, 0, message);
+                    return { ...prev, [message.roomId]: next };
+                });
                 alert("Failed to delete message. Please try again.");
             }
         }
@@ -1014,94 +2676,49 @@ export const ChatRoomComponent: React.FC<{
         setReplyToMessage(null); // Clear reply when editing
     };
 
-    useEffect(() => {
-        if (logLevel >= LOG_LEVEL_TRACE) {
-            console.log("useEffect.ChatRoomComponent.1");
-        }
-
-        const markPmsAsRead = async () => {
-            try {
-                await fetch("/api/notifications/mark-pms-as-read", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ roomId: chatRoom.matrixRoomId }),
-                });
-            } catch (error) {
-                console.error("Error marking PMs as read:", error);
-            }
-        };
-
-        if (chatRoom.matrixRoomId) {
-            markPmsAsRead();
-        }
-    }, [chatRoom.matrixRoomId]);
-
     const lastReadMessageIdRef = useRef<string | null>(null);
 
     const markLatestMessageAsRead = useCallback(async () => {
-        if (messages.length > 0 && user?.matrixAccessToken) {
-            const latestMessage = messages[messages.length - 1];
-
-            // Prevent infinite loop - only mark as read if it's a new message
-            if (lastReadMessageIdRef.current === latestMessage.id) {
-                return;
-            }
-
-            console.log(`💬 [Chat] Marking latest message as read in room ${chatRoom.name}:`);
-            console.log(`💬 [Chat] - Room ID: ${latestMessage.roomId}`);
-            console.log(`💬 [Chat] - Message ID: ${latestMessage.id}`);
-            console.log(`💬 [Chat] - Time: ${new Date(latestMessage.createdAt).toISOString()}`);
-            console.log(`💬 [Chat] - From: ${latestMessage.createdBy}`);
-
-            if (latestMessage.type === "m.room.message") {
-                const contentPreview =
-                    typeof latestMessage.content?.body === "string"
-                        ? JSON.stringify(latestMessage.content?.body).substring(0, 50)
-                        : "N/A";
-                console.log(`💬 [Chat] - Content: ${contentPreview}...`);
-            }
-
-            try {
-                const { sendReadReceiptAction } = await import("./actions");
-                await sendReadReceiptAction(latestMessage.roomId, latestMessage.id);
-                lastReadMessageIdRef.current = latestMessage.id;
-                
-                // Update last read timestamp for this room
-                const messageTimestamp = latestMessage.createdAt instanceof Date 
-                    ? latestMessage.createdAt.getTime() 
-                    : new Date(latestMessage.createdAt).getTime();
-                    
-                if (chatRoom.matrixRoomId) {
-                    setLastReadTimestamps((prev) => ({
-                        ...prev,
-                        [chatRoom.matrixRoomId!]: messageTimestamp
-                    }));
-                    
-                    console.log(`💬 [Chat] Updated last read timestamp for room ${chatRoom.matrixRoomId} to ${new Date(messageTimestamp).toISOString()}`);
-                }
-                
-                // Clear unread count for this room
-                if (chatRoom.matrixRoomId) {
-                    setUnreadCounts((prev) => {
-                        const newCounts = { ...prev };
-                        // Clear all entries for this room (handles both with and without user ID suffix)
-                        Object.keys(newCounts).forEach(key => {
-                            if (key.startsWith(chatRoom.matrixRoomId!)) {
-                                delete newCounts[key];
-                            }
-                        });
-                        return newCounts;
-                    });
-                }
-                
-                console.log(`💬 [Chat] Read receipt sent successfully`);
-            } catch (error) {
-                console.error("Failed to send read receipt:", error);
-            }
-        } else {
-            console.log(`💬 [Chat] No messages to mark as read for room ${chatRoom.name || chatRoom.matrixRoomId}`);
+        if (!roomId || messages.length === 0) {
+            return;
         }
-    }, [chatRoom?.matrixRoomId, chatRoom?.name, messages, user?.matrixAccessToken, setUnreadCounts, setLastReadTimestamps]);
+
+        const latestMessage = messages[messages.length - 1];
+        if (lastReadMessageIdRef.current === latestMessage.id) {
+            return;
+        }
+
+        lastReadMessageIdRef.current = latestMessage.id;
+        const messageTimestamp =
+            latestMessage.createdAt instanceof Date
+                ? latestMessage.createdAt.getTime()
+                : new Date(latestMessage.createdAt).getTime();
+
+        setLastReadTimestamps((prev) => ({
+            ...prev,
+            [roomId]: messageTimestamp,
+        }));
+
+        setUnreadCounts((prev) => {
+            const newCounts = { ...prev };
+            Object.keys(newCounts).forEach((key) => {
+                if (key.startsWith(roomId)) {
+                    delete newCounts[key];
+                }
+            });
+            return newCounts;
+        });
+
+        try {
+            await fetch("/api/notifications/mark-pms-as-read", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ roomId }),
+            });
+        } catch (error) {
+            console.error("Failed to mark PM notifications as read:", error);
+        }
+    }, [messages, roomId, setUnreadCounts, setLastReadTimestamps]);
 
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
@@ -1109,30 +2726,93 @@ export const ChatRoomComponent: React.FC<{
         }
     };
 
-    const handleScroll = () => {
+    const getBottomDistance = useCallback(() => {
         const container = scrollContainerRef.current;
         if (container) {
-            const { scrollTop, scrollHeight, clientHeight } = container;
-            // A threshold to decide if the user has scrolled up significantly
-            if (scrollHeight - scrollTop - clientHeight > 150) {
-                setUserHasScrolledUp(true);
-            } else {
-                setUserHasScrolledUp(false);
+            const containerDistance = container.scrollHeight - container.scrollTop - container.clientHeight;
+            if (containerDistance > 0) {
+                return containerDistance;
             }
         }
+
+        const doc = document.documentElement;
+        return doc.scrollHeight - (window.scrollY + window.innerHeight);
+    }, []);
+
+    const updateScrollPositionState = useCallback(() => {
+        const isAwayFromBottom = getBottomDistance() > CHAT_BOTTOM_THRESHOLD_PX;
+        userHasScrolledUpRef.current = isAwayFromBottom;
+        setShowJumpToLatest(isAwayFromBottom);
+    }, [getBottomDistance]);
+
+    const handleScroll = () => {
+        updateScrollPositionState();
     };
 
     useEffect(() => {
-        if (!userHasScrolledUp) {
+        if (messages.length === 0) return;
+
+        const latestMessage = messages[messages.length - 1];
+        const latestCreatedAt =
+            latestMessage.createdAt instanceof Date
+                ? latestMessage.createdAt.getTime()
+                : new Date(latestMessage.createdAt).getTime();
+        const previousSnapshot = lastRenderedMessageRef.current;
+        const hasNewLatestMessage =
+            previousSnapshot.count > 0 &&
+            (messages.length > previousSnapshot.count ||
+                (previousSnapshot.latestCreatedAt !== null && latestCreatedAt > previousSnapshot.latestCreatedAt));
+
+        if (!hasInitiallyScrolledRef.current) {
+            hasInitiallyScrolledRef.current = true;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    scrollToBottom("auto");
+                });
+            });
+        } else if (hasNewLatestMessage && !userHasScrolledUpRef.current) {
             scrollToBottom("smooth");
         }
-    }, [messages, userHasScrolledUp]);
+
+        lastRenderedMessageRef.current = {
+            count: messages.length,
+            latestCreatedAt,
+        };
+    }, [messages]);
 
     useEffect(() => {
-        const roomId = chatRoom.matrixRoomId!;
+        hasInitiallyScrolledRef.current = false;
+        lastRenderedMessageRef.current = {
+            count: 0,
+            latestCreatedAt: null,
+        };
+    }, [roomId]);
+
+    useEffect(() => {
+        if (!roomId) return;
+
         const roomMessagesForChat = roomMessages[roomId] || [];
         setMessages(roomMessagesForChat);
-    }, [chatRoom.matrixRoomId, roomMessages, matrixUserCache]);
+    }, [roomId, roomMessages]);
+
+    useEffect(() => {
+        requestAnimationFrame(() => {
+            updateScrollPositionState();
+        });
+    }, [messages, updateScrollPositionState]);
+
+    useEffect(() => {
+        const handleWindowScroll = () => {
+            updateScrollPositionState();
+        };
+
+        window.addEventListener("scroll", handleWindowScroll, { passive: true });
+        window.addEventListener("resize", handleWindowScroll);
+        return () => {
+            window.removeEventListener("scroll", handleWindowScroll);
+            window.removeEventListener("resize", handleWindowScroll);
+        };
+    }, [updateScrollPositionState]);
 
     const messagesRef = useRef<ChatMessage[]>([]);
     useEffect(() => {
@@ -1142,116 +2822,6 @@ export const ChatRoomComponent: React.FC<{
     useEffect(() => {
         markLatestMessageAsRead(); // Mark the latest message as read when messages update
     }, [messages, markLatestMessageAsRead]);
-
-    // Initial check/fetch to ensure we are in the room (triggers auto-join if needed)
-    useEffect(() => {
-        if (!chatRoom.matrixRoomId) return;
-
-        // If we don't have messages yet, try to fetch to ensure we are joined
-        // This is crucial for fixing "broken" memberships where the user is in local DB but not Matrix
-        const checkConnection = async () => {
-            if ((!roomMessages[chatRoom.matrixRoomId!] || roomMessages[chatRoom.matrixRoomId!].length === 0)) {
-                try {
-                    console.log("🔄 [Chat] Checking room connection/fetching initial messages...", chatRoom.matrixRoomId);
-                    const { fetchRoomMessagesAction } = await import("./actions");
-                    const result = await fetchRoomMessagesAction(chatRoom.matrixRoomId!, 20);
-                    
-                    if (result.success && result.messages) {
-                        console.log("✅ [Chat] Initial fetch successful, user is in room.");
-                        // We could update state here, but the background poller will likely catch up.
-                        // However, to be instant, let's update local cache if it's empty
-                        if (result.messages.length > 0) {
-                             // Force an update to roomMessages if it was empty
-                             // (This duplicates logic from the disabled poller but is safe for a one-off)
-                             // Actually, let's just let the poller/sync loop handle the main state, 
-                             // OR manually inject if we trust the format.
-                             // For simplicity/safety, we just want the SIDE EFFECT of joining.
-                             // But showing messages immediately is better.
-                        }
-                    }
-                } catch (error) {
-                    console.error("❌ [Chat] Failed to check connection:", error);
-                }
-            }
-        };
-        
-        checkConnection();
-    }, [chatRoom.matrixRoomId, roomMessages]);
-
-    // Server-side message polling - DISABLED: Now handled by BackgroundMessagePoller globally
-    /*
-    useEffect(() => {
-        if (!chatRoom.matrixRoomId) return;
-
-        let intervalId: NodeJS.Timeout;
-        let lastMessageCount = 0;
-        
-        const pollMessages = async () => {
-            try {
-                const { fetchRoomMessagesAction } = await import("./actions");
-                const result = await fetchRoomMessagesAction(chatRoom.matrixRoomId!, 50);
-                
-                if (result.success && result.messages) {
-                    // Only process if message count changed
-                    if (result.messages.length === lastMessageCount) {
-                        return;
-                    }
-                    
-                    lastMessageCount = result.messages.length;
-                    
-                    // Convert Matrix messages to ChatMessage format and update roomMessages
-                    const formattedMessages: ChatMessage[] = await Promise.all(
-                        result.messages
-                            .filter((msg: any) => msg.type === "m.room.message")
-                            .map(async (msg: any) => {
-                                // Get or cache user info
-                                let author = matrixUserCache[msg.sender];
-                                if (!author) {
-                                    const users = await fetchMatrixUsers([msg.sender]);
-                                    author = users[0];
-                                    if (author) {
-                                        setMatrixUserCache((prev) => ({ ...prev, [msg.sender]: author }));
-                                    }
-                                }
-
-                                return {
-                                    id: msg.event_id,
-                                    roomId: chatRoom.matrixRoomId!,
-                                    type: msg.type,
-                                    content: msg.content,
-                                    createdBy: msg.sender,
-                                    createdAt: new Date(msg.origin_server_ts),
-                                    author: author || undefined,
-                                    reactions: {},
-                                } as ChatMessage;
-                            })
-                    );
-
-                    // Update room messages if we have new messages
-                    if (formattedMessages.length > 0) {
-                        setRoomMessages((prev) => ({
-                            ...prev,
-                            [chatRoom.matrixRoomId!]: formattedMessages.reverse(),
-                        }));
-                    }
-                }
-            } catch (error) {
-                console.error("Failed to poll messages:", error);
-            }
-        };
-
-        // Initial fetch
-        pollMessages();
-
-        // Poll every 3 seconds
-        intervalId = setInterval(pollMessages, 3000);
-
-        return () => {
-            if (intervalId) clearInterval(intervalId);
-        };
-    }, [chatRoom.matrixRoomId, matrixUserCache, setMatrixUserCache, setRoomMessages]);
-    */
-
 
     useEffect(() => {
         const updateInputWidth = () => {
@@ -1274,6 +2844,7 @@ export const ChatRoomComponent: React.FC<{
                     left: `${rect.left + rect.width / 2}px`,
                     transform: "translateX(-50%)",
                 });
+                setJumpButtonRight(Math.max(16, window.innerWidth - rect.right + 16));
             }
         };
 
@@ -1282,11 +2853,17 @@ export const ChatRoomComponent: React.FC<{
         return () => window.removeEventListener("resize", calculatePillPosition);
     }, [messages]);
 
-    const handleMessagesRendered = () => {
-        if (!userHasScrolledUp) {
-            scrollToBottom();
-        }
-    };
+    const handleMessagesRendered = () => {};
+
+    useEffect(() => {
+        const el = inputBarRef.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => {
+            setInputBarHeight(el.offsetHeight);
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [replyToMessage]);
 
     return (
         <>
@@ -1314,10 +2891,26 @@ export const ChatRoomComponent: React.FC<{
                             onScroll={handleScroll}
                             className="overflow-y-auto p-4"
                             style={{
+                                overflowAnchor: "auto",
                                 height: "calc(100vh - 300px)",
+                                paddingBottom: inputBarHeight + (isMobile ? 72 : 16),
                             }}
                         >
-                            {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                            <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!isLoadingMongo && hasOlderMessages && (
+                                <div className="flex justify-center py-2">
+                                    <button
+                                        onClick={() => void loadOlderMessages()}
+                                        disabled={isLoadingOlder}
+                                        className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs text-gray-500 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                                    >
+                                        {isLoadingOlder ? "Loading..." : "Load older messages"}
+                                    </button>
+                                </div>
+                            )}
+                            {(isLoadingMessages || isLoadingMongo) && (
+                                <div className="text-center text-gray-500">Loading messages...</div>
+                            )}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
@@ -1325,6 +2918,14 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    canReply={!isAnnouncementConversation}
+                                    chatProvider={provider}
+                                    isDirect={!!(chatRoom as any)?.isDirect}
+                                    conversationId={roomId || ""}
+                                    currentUser={user}
+                                    onTopicOpen={() => {}}
+                                    onTopicLoaded={() => {}}
+                                    topicNavigationRequest={topicNavigationRequest}
                                 />
                             )}
                         </div>
@@ -1332,9 +2933,24 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto p-4 pb-[144px]"
+                            className="flex-grow overflow-y-auto p-4"
+                            style={{ overflowAnchor: "auto", paddingBottom: inputBarHeight + 16 }}
                         >
-                            {isLoadingMessages && <div className="text-center text-gray-500">Loading messages...</div>}
+                            <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!isLoadingMongo && hasOlderMessages && (
+                                <div className="flex justify-center py-2">
+                                    <button
+                                        onClick={() => void loadOlderMessages()}
+                                        disabled={isLoadingOlder}
+                                        className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs text-gray-500 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                                    >
+                                        {isLoadingOlder ? "Loading..." : "Load older messages"}
+                                    </button>
+                                </div>
+                            )}
+                            {(isLoadingMessages || isLoadingMongo) && (
+                                <div className="text-center text-gray-500">Loading messages...</div>
+                            )}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
@@ -1342,36 +2958,87 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
+                                    canReply={!isAnnouncementConversation}
+                                    chatProvider={provider}
+                                    isDirect={!!(chatRoom as any)?.isDirect}
+                                    conversationId={roomId || ""}
+                                    currentUser={user}
+                                    onTopicOpen={() => {}}
+                                    onTopicLoaded={() => {}}
+                                    topicNavigationRequest={topicNavigationRequest}
                                 />
                             )}
                         </div>
                     )}
 
-                    {userHasScrolledUp && (
+                    {showJumpToLatest && (
                         <Button
-                            variant="secondary"
+                            type="button"
                             size="icon"
-                            className="absolute bottom-20 right-4 h-10 w-10 rounded-full shadow-lg"
-                            onClick={() => scrollToBottom("smooth")}
+                            onClick={() => {
+                                userHasScrolledUpRef.current = false;
+                                setShowJumpToLatest(false);
+                                scrollToBottom("smooth");
+                            }}
+                            className="fixed z-20 h-10 w-10 rounded-full border border-[hsl(var(--task-priority-low-bg))] bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--task-link))] shadow-lg hover:bg-[hsl(var(--task-priority-low-bg))]"
+                            style={{
+                                right: `${jumpButtonRight}px`,
+                                bottom: `${inputBarHeight + (isMobile ? 84 : 20)}px`,
+                            }}
+                            title="Jump to latest"
+                            aria-label="Jump to latest"
                         >
-                            <IoArrowDown className="h-6 w-6" />
+                            <IoArrowDown className="h-5 w-5" />
                         </Button>
                     )}
 
                     <div
-                        className="fixed h-[50px]"
+                        ref={inputBarRef}
+                        className="fixed z-10"
                         style={{
                             width: `${inputWidth}px`,
                             bottom: isMobile ? "72px" : "0px",
                             opacity: hideInput ? 0 : 1,
                         }}
                     >
-                        <div className="flex h-[50px] items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
-                            <ChatInput 
-                                chatRoom={chatRoom} 
-                                editingMessage={editingMessage}
-                                setEditingMessage={setEditingMessage}
-                            />
+                        <div className="flex items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                            {isAnnouncementConversation ? (
+                                <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                    Replies are disabled for this system conversation.
+                                </div>
+                            ) : (
+                                <div className="flex w-full items-end gap-1">
+                                    {!isAnnouncementConversation && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={`h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${
+                                                isMobile && isMobileComposerExpanded ? "hidden" : "inline-flex"
+                                            }`}
+                                            onClick={() => setShowNewThreadModal(true)}
+                                            disabled={false}
+                                            title="New topic"
+                                        >
+                                            <HiLightBulb className="h-5 w-5" />
+                                        </Button>
+                                    )}
+                                    <div className="flex-1">
+                                        <ChatInput
+                                            roomId={roomId}
+                                            editingMessage={editingMessage}
+                                            setEditingMessage={setEditingMessage}
+                                            mentionCandidates={mentionCandidates}
+                                            chatProvider={provider}
+                                            onMobileComposerExpandedChange={setIsMobileComposerExpanded}
+                                            onMessageSent={() => {
+                                                userHasScrolledUpRef.current = false;
+                                                setShowJumpToLatest(false);
+                                                scrollToBottom("smooth");
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1385,6 +3052,13 @@ export const ChatRoomComponent: React.FC<{
                 >
                     <IoArrowBack className="h-5 w-5" />
                 </Button>
+            )}
+            {showNewThreadModal && roomId && (
+                <NewThreadModal
+                    conversationId={roomId}
+                    onClose={() => setShowNewThreadModal(false)}
+                    onCreated={() => {}}
+                />
             )}
         </>
     );

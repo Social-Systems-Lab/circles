@@ -22,6 +22,8 @@ import { RiMegaphoneLine } from "react-icons/ri";
 import { PiScroll } from "react-icons/pi";
 
 export default function GlobalNavItems() {
+    const activeNavClassName = "text-[#2d6a45]";
+    const inactiveNavClassName = "text-[#696969]";
     const pathname = usePathname();
     const router = useRouter();
     const [user, setUser] = useAtom(userAtom);
@@ -80,8 +82,8 @@ export default function GlobalNavItems() {
                             panelMode !== "events" &&
                             drawerContent !== "noticeboard" &&
                             drawerContent !== "events"
-                                ? "text-[#495cff]"
-                                : "text-[#696969]"
+                                ? activeNavClassName
+                                : inactiveNavClassName
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -117,8 +119,8 @@ export default function GlobalNavItems() {
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             (pathname === "/explore" && panelMode === "activity") ||
                             (isMobile && drawerContent === "noticeboard" && pathname === "/explore")
-                                ? "text-[#495cff]"
-                                : "text-[#696969]"
+                                ? activeNavClassName
+                                : inactiveNavClassName
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -157,8 +159,8 @@ export default function GlobalNavItems() {
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
                             (pathname === "/explore" && panelMode === "events") ||
                             (isMobile && drawerContent === "events" && pathname === "/explore")
-                                ? "text-[#495cff]"
-                                : "text-[#696969]"
+                                ? activeNavClassName
+                                : inactiveNavClassName
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}
@@ -183,7 +185,7 @@ export default function GlobalNavItems() {
                     <motion.div
                         onClick={() => setSidePanelMode("none")}
                         className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#f8f8f8] ${
-                            pathname === "/bookmarks" ? "text-[#495cff]" : "text-[#696969]"
+                            pathname === "/bookmarks" ? activeNavClassName : inactiveNavClassName
                         }`}
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}

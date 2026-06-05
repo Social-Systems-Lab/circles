@@ -1,11 +1,20 @@
 "use server";
 
-import { getUserPrivate } from "@/lib/data/user";
+import { revalidatePath } from "next/cache";
+import { getPrivateUserByDid, getUserPrivate, updateUser } from "@/lib/data/user";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 
 const DONORBOX_API_KEY = process.env.DONORBOX_API_KEY;
 const DONORBOX_API_URL = "https://donorbox.org/api/v1";
+const emailPreferenceLabels = {
+    emailMissedMessages: "Missed-message digest emails",
+    emailTaskAssigned: "Task assignment digest emails",
+    emailTaskUpdates: "Task update digest emails",
+    emailVerificationUpdates: "Verification update digest emails",
+} as const;
+
+type EmailPreferenceKey = keyof typeof emailPreferenceLabels;
 
 export async function createSubscription(circleId: string, planId: string) {
     const userDid = await getAuthenticatedUserDid();
@@ -52,4 +61,56 @@ export async function getPlans() {
     }
 
     return response.json();
+}
+
+export async function updateEmailPreferenceSetting(preference: EmailPreferenceKey, enabled: boolean) {
+    if (!(preference in emailPreferenceLabels) || typeof enabled !== "boolean") {
+        return {
+            success: false,
+            message: "Invalid email preference setting.",
+        };
+    }
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return {
+                success: false,
+                message: "You need to be logged in to update this setting.",
+            };
+        }
+
+        const user = await getPrivateUserByDid(userDid);
+        if (!user?._id) {
+            return {
+                success: false,
+                message: "User not found.",
+            };
+        }
+
+        await updateUser(
+            {
+                _id: user._id,
+                [preference]: enabled,
+            },
+            userDid,
+        );
+
+        if (user.handle) {
+            revalidatePath(`/circles/${user.handle}/settings/subscription`);
+        }
+
+        return {
+            success: true,
+            message: `${emailPreferenceLabels[preference]} ${enabled ? "enabled" : "disabled"}.`,
+            preference,
+            enabled,
+        };
+    } catch (error) {
+        console.error("Error updating email preference setting:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to update email preference setting.",
+        };
+    }
 }

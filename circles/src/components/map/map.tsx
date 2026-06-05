@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback } from "react";
-import { createRoot } from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
@@ -21,14 +20,10 @@ import {
     sidePanelModeAtom,
     feedPanelDockedAtom,
 } from "@/lib/data/atoms";
-import MapMarker from "./markers";
-import { isEqual } from "lodash"; // You might need to install lodash
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import ContentPreview from "../layout/content-preview";
 import { Content, ContentPreviewData, Location, PostDisplay, EventDisplay } from "@/models/models";
-import ImageGallery from "../layout/image-gallery";
 import { TbFocus2 } from "react-icons/tb";
 import Onboarding from "../onboarding/onboarding";
 import { Dialog, DialogContent } from "../ui/dialog";
@@ -38,6 +33,264 @@ import { useIsMobile } from "../utils/use-is-mobile";
 
 const isPostDisplay = (c: any): c is PostDisplay => {
     return c && (c as any).circleType === "post";
+};
+
+const isEventDisplay = (content: any): content is EventDisplay => !!(content && content.startAt && content.title);
+
+const getLngLatParts = (lngLat: any): { lng: number; lat: number } | undefined => {
+    const lng = Array.isArray(lngLat) ? lngLat[0] : lngLat?.lng;
+    const lat = Array.isArray(lngLat) ? lngLat[1] : lngLat?.lat;
+    return typeof lng === "number" && typeof lat === "number" ? { lng, lat } : undefined;
+};
+
+const degreesToRadians = (degrees: number): number => (degrees * Math.PI) / 180;
+
+const getAngularDistance = (a: { lng: number; lat: number }, b: { lng: number; lat: number }): number => {
+    const lat1 = degreesToRadians(a.lat);
+    const lat2 = degreesToRadians(b.lat);
+    const deltaLat = degreesToRadians(b.lat - a.lat);
+    const deltaLng = degreesToRadians(b.lng - a.lng);
+    const haversine = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+    return 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
+const getMarkerTitle = (content: Content): string => {
+    if (isEventDisplay(content)) {
+        return content.title ?? "Event";
+    }
+    if ((content as any)?.circleType === "post") {
+        return (content as any)?.content?.slice(0, 80) ?? "Noticeboard post";
+    }
+    return (content as any)?.name ?? "Map item";
+};
+
+const getMarkerInitials = (content: Content): string => {
+    const title = getMarkerTitle(content).trim();
+    if (!title) {
+        return "";
+    }
+    const words = title.split(/\s+/).filter(Boolean);
+    if (words.length === 1) {
+        return words[0].slice(0, 2).toUpperCase();
+    }
+    return `${words[0][0] ?? ""}${words[words.length - 1][0] ?? ""}`.toUpperCase();
+};
+
+const getMarkerImageUrl = (content: Content): string | undefined => {
+    const item = content as any;
+    if (isEventDisplay(content)) {
+        return item.images?.[0]?.fileInfo?.url ?? item.cover?.url ?? item.picture?.url;
+    }
+    if (item.circleType === "post") {
+        return item.media?.[0]?.fileInfo?.url ?? "/images/default-post-picture.png";
+    }
+    return item.picture?.url ?? item.images?.[0]?.fileInfo?.url;
+};
+
+const getOptimizedImageUrl = (imageUrl: string | undefined, width: number, quality = 70): string | undefined => {
+    if (
+        !imageUrl ||
+        imageUrl.startsWith("data:") ||
+        imageUrl.startsWith("blob:") ||
+        imageUrl.startsWith("/_next/image")
+    ) {
+        return imageUrl;
+    }
+
+    return `/_next/image?url=${encodeURIComponent(imageUrl)}&w=${width}&q=${quality}`;
+};
+
+const getStableMarkerTieBreak = (id: string): number => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash * 31 + id.charCodeAt(i)) % 97;
+    }
+
+    return hash;
+};
+
+const getStableMarkerZIndex = (lngLat: { lng: number; lat: number }, id: string): number => {
+    // Southward pins are visually lower on the north-up map, so they should sit above northern pins.
+    return 1000 + Math.round((90 - lngLat.lat) * 100) + getStableMarkerTieBreak(id);
+};
+
+const getMarkerDescription = (content: Content): string => {
+    if (isEventDisplay(content)) {
+        return (content as any)?.description ?? "";
+    }
+    if ((content as any)?.circleType === "post") {
+        return (content as any)?.content ?? "";
+    }
+    return (content as any)?.mission ?? (content as any)?.description ?? "";
+};
+
+const getMarkerOpenHref = (content: Content): string | undefined => {
+    if (isEventDisplay(content)) {
+        const circleHandle = (content as any)?.circle?.handle;
+        return circleHandle && content._id ? `/circles/${circleHandle}/events/${content._id}` : undefined;
+    }
+    if ((content as any)?.handle && (content as any)?.circleType !== "post") {
+        return `/circles/${(content as any).handle}`;
+    }
+    return undefined;
+};
+
+const escapeHtml = (value: string): string =>
+    value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+const createMarkerPopupHtml = (content: Content): string => {
+    const title = escapeHtml(getMarkerTitle(content));
+    const description = escapeHtml(getMarkerDescription(content)).slice(0, 180);
+    const imageUrl =
+        getOptimizedImageUrl(
+            getMarkerImageUrl(content) ??
+                ((content as any)?.circleType === "post"
+                    ? "/images/default-post-picture.png"
+                    : "/images/default-user-cover.png"),
+            384,
+            72,
+        ) ?? "/images/default-user-cover.png";
+    const openHref = getMarkerOpenHref(content);
+    const openIcon = `<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>`;
+    const zoomIcon = `<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`;
+    const buttonStyle =
+        "display:inline-flex;height:40px;min-width:0;flex:1;align-items:center;justify-content:center;gap:7px;border-radius:9999px;border:1px solid rgba(255,255,255,.34);background:rgba(255,255,255,.13);padding:0 14px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;text-shadow:0 1px 2px rgba(0,0,0,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.18);backdrop-filter:blur(6px);";
+    const openAction = openHref
+        ? `<a href="${escapeHtml(openHref)}" style="${buttonStyle}">${openIcon}<span>Open</span></a>`
+        : `<button type="button" data-marker-popup-action="open" style="${buttonStyle}">${openIcon}<span>Open</span></button>`;
+
+    return `
+        <div style="position:relative;width:min(380px,calc(100vw - 32px));height:234px;overflow:hidden;border-radius:15px;background:#111827;box-shadow:0 12px 34px rgba(15,23,42,.28);">
+            <div style="position:absolute;inset:0;background-image:url('${escapeHtml(imageUrl)}');background-size:cover;background-position:center;"></div>
+            <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.66),rgba(0,0,0,.32) 44%,rgba(0,0,0,.02));"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;padding:14px;">
+                <div style="font-size:18px;font-weight:800;line-height:1.2;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45);">${title}</div>
+                ${description ? `<div style="margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:15px;font-weight:600;line-height:1.35;color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.45);">${description}</div>` : ""}
+                <div style="margin-top:13px;display:flex;gap:10px;">
+                    ${openAction}
+                    <button type="button" data-marker-popup-action="zoom" style="${buttonStyle}">${zoomIcon}<span>Zoom in</span></button>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+const getMarkerTheme = (content: Content): { background: string; color: string; size: number } => {
+    if (isEventDisplay(content)) {
+        return { background: "#f8dd53", color: "#332700", size: 34 };
+    }
+    if ((content as any)?.circleType === "post") {
+        return { background: "#36516f", color: "#ffffff", size: 36 };
+    }
+    if ((content as any)?.circleType === "user") {
+        return { background: "#f4f1e8", color: "#253247", size: 40 };
+    }
+    if ((content as any)?.circleType === "project") {
+        return { background: "#dbeafe", color: "#1e3a8a", size: 40 };
+    }
+    return { background: "#ffffff", color: "#253247", size: 40 };
+};
+
+const setMarkerSelected = (element: HTMLElement, selected: boolean) => {
+    element.dataset.selected = selected ? "true" : "false";
+    element.style.zIndex = selected ? "90000" : (element.dataset.zIndex ?? "");
+    const face = element.querySelector<HTMLElement>("[data-marker-face]");
+    if (face) {
+        face.style.borderColor = selected ? "#f8dd53" : "#ffffff";
+        face.style.boxShadow = selected ? "0 0 0 3px rgba(248, 221, 83, 0.35)" : "0 1px 4px rgba(15, 23, 42, 0.2)";
+        face.style.transform = selected ? "scale(1.08)" : "";
+    }
+};
+
+const createMarkerElement = (
+    content: Content,
+    onClick: (content: Content) => void,
+    onHover: (content: Content, element: HTMLElement) => void,
+    onLeave: () => void,
+): HTMLDivElement => {
+    const theme = getMarkerTheme(content);
+    const imageUrl = getOptimizedImageUrl(getMarkerImageUrl(content), 64, 60);
+    const markerElement = document.createElement("div");
+    markerElement.title = getMarkerTitle(content);
+    markerElement.setAttribute("aria-label", markerElement.title);
+    markerElement.style.width = `${theme.size}px`;
+    markerElement.style.height = `${theme.size + 8}px`;
+    markerElement.style.cursor = "pointer";
+    markerElement.style.position = "absolute";
+    markerElement.style.left = "0";
+    markerElement.style.top = "0";
+    markerElement.style.willChange = "transform";
+    markerElement.style.pointerEvents = "auto";
+
+    const face = document.createElement("div");
+    face.dataset.markerFace = "true";
+    if (!imageUrl || isEventDisplay(content)) {
+        face.textContent = isEventDisplay(content)
+            ? new Date(content.startAt).getDate().toString()
+            : getMarkerInitials(content);
+    }
+    face.style.position = "absolute";
+    face.style.left = "0";
+    face.style.top = "0";
+    face.style.display = "flex";
+    face.style.alignItems = "center";
+    face.style.justifyContent = "center";
+    face.style.width = `${theme.size}px`;
+    face.style.height = `${theme.size}px`;
+    face.style.borderRadius = "9999px";
+    face.style.border = "2px solid #ffffff";
+    face.style.backgroundColor = theme.background;
+    if (imageUrl && !isEventDisplay(content)) {
+        face.style.backgroundImage = `url("${imageUrl}")`;
+        face.style.backgroundPosition = "center";
+        face.style.backgroundSize = "cover";
+    }
+    face.style.color = theme.color;
+    face.style.fontSize = isEventDisplay(content) ? "12px" : "11px";
+    face.style.fontWeight = "700";
+    face.style.letterSpacing = "0";
+    face.style.lineHeight = "1";
+    face.style.boxShadow = "0 1px 4px rgba(15, 23, 42, 0.2)";
+    face.style.transition = "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease";
+    face.style.pointerEvents = "none";
+
+    const pointer = document.createElement("div");
+    pointer.style.position = "absolute";
+    pointer.style.left = "50%";
+    pointer.style.bottom = "0";
+    pointer.style.width = "8px";
+    pointer.style.height = "8px";
+    pointer.style.borderRadius = "9999px";
+    pointer.style.background = "#ffffff";
+    pointer.style.boxShadow = "0 1px 2px rgba(15, 23, 42, 0.16)";
+    pointer.style.transform = "translateX(-50%)";
+    pointer.style.pointerEvents = "none";
+
+    markerElement.addEventListener("mouseenter", () => {
+        face.style.transform = "scale(1.12)";
+        face.style.boxShadow = "0 3px 8px rgba(15, 23, 42, 0.26)";
+        onHover(content, markerElement);
+    });
+    markerElement.addEventListener("mouseleave", () => {
+        if (markerElement.dataset.selected !== "true") {
+            face.style.transform = "";
+            face.style.boxShadow = "0 1px 4px rgba(15, 23, 42, 0.2)";
+        }
+        onLeave();
+    });
+    markerElement.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onClick(content);
+    });
+
+    markerElement.appendChild(face);
+    markerElement.appendChild(pointer);
+    return markerElement;
 };
 
 const MapBox = ({
@@ -54,6 +307,7 @@ const MapBox = ({
     feedPanelDocked?: boolean;
 }) => {
     const mapContainer = useRef(null);
+    const markerOverlay = useRef<HTMLDivElement | null>(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const [displayedContent] = useAtom(displayedContentAtom);
     const [zoomContent, setZoomContent] = useAtom(zoomContentAtom);
@@ -67,9 +321,13 @@ const MapBox = ({
     const isMobile = useIsMobile();
     const pathname = usePathname();
 
-    const markersRef = useRef<Map<string, mapboxgl.Marker>>(new globalThis.Map());
+    const markersRef = useRef<Map<string, HTMLElement>>(new globalThis.Map());
     const focusedMarkerIdsRef = useRef<Set<string>>(new Set());
     const lastFocusedMarkerIdRef = useRef<string | null>(null);
+    const markerContentRef = useRef<Map<string, Content>>(new globalThis.Map());
+    const popupRef = useRef<HTMLDivElement | null>(null);
+    const popupContentRef = useRef<Content | null>(null);
+    const popupCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -106,15 +364,144 @@ const MapBox = ({
                 content === x?.content && sidePanelContentVisible === "content" ? undefined : nextPreview,
             );
         },
-        [setContentPreview, sidePanelContentVisible],
+        [setContentPreview, setFocusPost, sidePanelContentVisible],
     );
 
-    const onMapPinClick = useCallback(
+    const closeMarkerPopup = useCallback(() => {
+        if (popupCloseTimeoutRef.current) {
+            clearTimeout(popupCloseTimeoutRef.current);
+        }
+        popupCloseTimeoutRef.current = setTimeout(() => {
+            if (popupRef.current) {
+                popupRef.current.style.display = "none";
+            }
+            popupContentRef.current = null;
+        }, 120);
+    }, []);
+
+    const zoomToMarkerContent = useCallback(
         (content: Content) => {
+            if (!content.location?.lngLat) {
+                return;
+            }
+
             setZoomContent(content);
         },
         [setZoomContent],
     );
+
+    const openMarkerPopup = useCallback(
+        (content: Content, element: HTMLElement) => {
+            if (!map.current || !markerOverlay.current || !content.location?.lngLat) {
+                return;
+            }
+
+            if (popupCloseTimeoutRef.current) {
+                clearTimeout(popupCloseTimeoutRef.current);
+                popupCloseTimeoutRef.current = null;
+            }
+
+            if (!popupRef.current) {
+                popupRef.current = document.createElement("div");
+                popupRef.current.className = "map-marker-preview-popup";
+                popupRef.current.style.position = "absolute";
+                popupRef.current.style.left = "0";
+                popupRef.current.style.top = "0";
+                popupRef.current.style.zIndex = "100000";
+                popupRef.current.style.pointerEvents = "auto";
+                popupRef.current.style.willChange = "transform";
+                popupRef.current.addEventListener("mouseenter", () => {
+                    if (popupCloseTimeoutRef.current) {
+                        clearTimeout(popupCloseTimeoutRef.current);
+                        popupCloseTimeoutRef.current = null;
+                    }
+                });
+                popupRef.current.addEventListener("mouseleave", closeMarkerPopup);
+                markerOverlay.current.appendChild(popupRef.current);
+            }
+
+            popupContentRef.current = content;
+            markerOverlay.current.appendChild(popupRef.current);
+            popupRef.current.innerHTML = createMarkerPopupHtml(content);
+            popupRef.current
+                .querySelector<HTMLElement>('[data-marker-popup-action="open"]')
+                ?.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onMarkerClick(content);
+                });
+            popupRef.current
+                .querySelector<HTMLElement>('[data-marker-popup-action="zoom"]')
+                ?.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    zoomToMarkerContent(content);
+                });
+            popupRef.current.style.display = "";
+            const point = map.current.project(content.location.lngLat as any);
+            popupRef.current.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, 14px)`;
+        },
+        [closeMarkerPopup, onMarkerClick, zoomToMarkerContent],
+    );
+
+    const syncMarkerPositions = useCallback(() => {
+        if (!map.current || !mapContainer.current || !markerOverlay.current) {
+            return;
+        }
+
+        const mapElement = mapContainer.current as HTMLElement;
+        const { width, height } = mapElement.getBoundingClientRect();
+        const mapCenter = map.current.getCenter();
+        const centerLngLat = { lng: mapCenter.lng, lat: mapCenter.lat };
+        const isGlobe = map.current.getProjection?.()?.name === "globe";
+
+        markersRef.current.forEach((marker, id) => {
+            const content = markerContentRef.current.get(id);
+            if (!content?.location?.lngLat) {
+                return;
+            }
+
+            const lngLat = getLngLatParts(content.location.lngLat);
+            if (!lngLat) {
+                marker.style.display = "none";
+                return;
+            }
+
+            const point = map.current!.project(content.location.lngLat as any);
+            const isOutsideViewport = point.x < -80 || point.x > width + 80 || point.y < -80 || point.y > height + 80;
+            const isBehindGlobe = isGlobe && getAngularDistance(centerLngLat, lngLat) > Math.PI / 2;
+            const isHidden = isOutsideViewport || isBehindGlobe;
+
+            marker.style.display = isHidden ? "none" : "";
+            if (isHidden) {
+                marker.style.zIndex = "";
+            } else if (marker.dataset.selected === "true") {
+                marker.style.zIndex = "90000";
+            } else {
+                const zIndex = marker.dataset.zIndex ?? `${getStableMarkerZIndex(lngLat, id)}`;
+                marker.dataset.zIndex = zIndex;
+                marker.style.zIndex = zIndex;
+            }
+            marker.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, -100%)`;
+        });
+
+        if (popupRef.current && popupContentRef.current?.location?.lngLat) {
+            const content = popupContentRef.current;
+            const contentLngLat = content.location?.lngLat;
+            const lngLat = getLngLatParts(contentLngLat);
+            if (!lngLat) {
+                popupRef.current.style.display = "none";
+                return;
+            }
+
+            const point = map.current.project(contentLngLat as any);
+            const isOutsideViewport =
+                point.x < -160 || point.x > width + 160 || point.y < -160 || point.y > height + 160;
+            const isBehindGlobe = isGlobe && getAngularDistance(centerLngLat, lngLat) > Math.PI / 2;
+            popupRef.current.style.display = isOutsideViewport || isBehindGlobe ? "none" : "";
+            popupRef.current.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, 14px)`;
+        }
+    }, []);
 
     useEffect(() => {
         if (!mapContainer.current) {
@@ -130,7 +517,9 @@ const MapBox = ({
             zoom: zoom,
             //maxZoom: 12, // Limit maximum zoom to city level
         });
-    }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent]);
+
+        map.current.on("render", syncMarkerPositions);
+    }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent, syncMarkerPositions]);
 
     // Ensure Mapbox resizes when container size changes (handles animations and window resize)
     useEffect(() => {
@@ -148,8 +537,9 @@ const MapBox = ({
     }, []);
 
     useEffect(() => {
-        if (!map.current || !displayedContent) return;
+        if (!map.current || !markerOverlay.current || !displayedContent) return;
 
+        const overlay = markerOverlay.current;
         const currentMarkerIds = new Set(markersRef.current.keys());
 
         displayedContent.forEach((item) => {
@@ -158,26 +548,27 @@ const MapBox = ({
                 const existingMarker = markersRef.current.get(markerId);
 
                 if (existingMarker) {
-                    // Update existing marker if location changed
-                    if (!isEqual(existingMarker.getLngLat(), item.location.lngLat)) {
-                        existingMarker.setLngLat(item.location.lngLat);
-                    }
                     currentMarkerIds.delete(markerId);
                     focusedMarkerIdsRef.current.delete(markerId);
+                    markerContentRef.current.set(markerId, item);
+                    const lngLat = getLngLatParts(item.location.lngLat);
+                    if (lngLat) {
+                        existingMarker.dataset.zIndex = `${getStableMarkerZIndex(lngLat, markerId)}`;
+                    }
                 } else {
                     // Create new marker
-                    const markerElement = document?.createElement("div");
-                    const root = createRoot(markerElement);
-                    root.render(<MapMarker content={item} onClick={onMarkerClick} onMapPinClick={onMapPinClick} />);
-
-                    const newMarker = new mapboxgl.Marker(markerElement)
-                        .setLngLat(item.location.lngLat)
-                        .addTo(map.current!);
-
-                    markersRef.current.set(markerId, newMarker);
+                    const markerElement = createMarkerElement(item, onMarkerClick, openMarkerPopup, closeMarkerPopup);
+                    const lngLat = getLngLatParts(item.location.lngLat);
+                    if (lngLat) {
+                        markerElement.dataset.zIndex = `${getStableMarkerZIndex(lngLat, markerId)}`;
+                    }
+                    overlay.appendChild(markerElement);
+                    markersRef.current.set(markerId, markerElement);
+                    markerContentRef.current.set(markerId, item);
                 }
             }
         });
+        syncMarkerPositions();
 
         // Remove markers that are no longer in displayedContent
         currentMarkerIds.forEach((id) => {
@@ -188,9 +579,10 @@ const MapBox = ({
             if (markerToRemove) {
                 markerToRemove.remove();
                 markersRef.current.delete(id);
+                markerContentRef.current.delete(id);
             }
         });
-    }, [displayedContent, onMarkerClick, onMapPinClick]);
+    }, [displayedContent, onMarkerClick, openMarkerPopup, closeMarkerPopup, syncMarkerPositions]);
 
     useEffect(() => {
         // console.log("Zooming to content", zoomContent);
@@ -219,19 +611,22 @@ const MapBox = ({
 
                 lastFocusedMarkerIdRef.current = markerId;
 
-                if (!markersRef.current.has(markerId) && map.current) {
-                    const markerElement = document?.createElement("div");
-                    const root = createRoot(markerElement);
-                    root.render(
-                        <MapMarker
-                            content={zoomContent}
-                            onClick={onMarkerClick}
-                            onMapPinClick={onMapPinClick}
-                        />,
+                if (!markersRef.current.has(markerId) && map.current && markerOverlay.current) {
+                    const markerElement = createMarkerElement(
+                        zoomContent,
+                        onMarkerClick,
+                        openMarkerPopup,
+                        closeMarkerPopup,
                     );
 
-                    const focusMarker = new mapboxgl.Marker(markerElement).setLngLat(location.lngLat).addTo(map.current);
-                    markersRef.current.set(markerId, focusMarker);
+                    markerOverlay.current.appendChild(markerElement);
+                    const lngLat = getLngLatParts(location.lngLat);
+                    if (lngLat) {
+                        markerElement.dataset.zIndex = `${getStableMarkerZIndex(lngLat, markerId)}`;
+                    }
+                    setMarkerSelected(markerElement, true);
+                    markersRef.current.set(markerId, markerElement);
+                    markerContentRef.current.set(markerId, zoomContent);
                     focusedMarkerIdsRef.current.add(markerId);
                 }
             }
@@ -253,7 +648,7 @@ const MapBox = ({
             // User requested to center the pin on the screen, even if it's obscured by the panel.
             // So we remove the offset calculation.
             if (zoomContent) {
-                 previewOffsetX = 0;
+                previewOffsetX = 0;
             }
 
             const targetLng = (location.lngLat as any)?.lng;
@@ -290,7 +685,7 @@ const MapBox = ({
             });
         }
         setZoomContent(undefined);
-    }, [zoomContent, onMarkerClick, onMapPinClick, contentPreview, isMobile]);
+    }, [zoomContent, onMarkerClick, openMarkerPopup, closeMarkerPopup, contentPreview, isMobile, setZoomContent]);
 
     // Bring selected marker to front
     const elevatedMarkerIdRef = useRef<string | null>(null);
@@ -299,7 +694,7 @@ const MapBox = ({
         if (elevatedMarkerIdRef.current) {
             const prevMarker = markersRef.current.get(elevatedMarkerIdRef.current);
             if (prevMarker) {
-                prevMarker.getElement().style.zIndex = "";
+                setMarkerSelected(prevMarker, false);
             }
             elevatedMarkerIdRef.current = null;
         }
@@ -319,7 +714,7 @@ const MapBox = ({
         if (targetId) {
             const marker = markersRef.current.get(targetId);
             if (marker) {
-                marker.getElement().style.zIndex = "1000";
+                setMarkerSelected(marker, true);
                 elevatedMarkerIdRef.current = targetId;
             }
         }
@@ -344,6 +739,11 @@ const MapBox = ({
     return (
         <div className="relative h-full w-full">
             <div ref={mapContainer} className="map-container z-10" style={{ width: "100%", height: "100%" }} />
+            <div
+                ref={markerOverlay}
+                className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+                aria-hidden="true"
+            />
             {/* Add the button for zooming into the user's location */}
             <div
                 className="fixed bottom-[90px] right-6 z-[50] cursor-pointer rounded-full bg-[#242424] p-[2px] hover:bg-[#304678e6] md:bottom-[40px]"

@@ -13,6 +13,9 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getUserByDid } from "@/lib/data/user";
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { extractMentions } from "@/lib/data/feed";
+import { getMentionableUserIdsForUserDid } from "@/lib/data/chat";
 
 /**
  * Create a new discussion in a circle
@@ -23,6 +26,9 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
 
     const user = await getUserByDid(userDid);
     if (!user) throw new Error("User not found");
+    if (!canPerformRestrictedAction(user)) {
+        throw new Error(getRestrictedActionMessage("create discussions"));
+    }
 
     const circle = await getCircleByHandle(handle);
     if (!circle) throw new Error("Circle not found");
@@ -69,7 +75,14 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
     }
 
     // Extract mentions from content
-    const mentions = payload.content ? (await import("@/lib/data/feed")).extractMentions(payload.content) : [];
+    const mentions = payload.content ? extractMentions(payload.content) : [];
+    if (mentions.length > 0) {
+        const mentionableUserIds = await getMentionableUserIdsForUserDid(userDid);
+        const hasBlockedMention = mentions.some((mention) => !mentionableUserIds.has(mention.id));
+        if (hasBlockedMention) {
+            throw new Error("You can only mention people you can message.");
+        }
+    }
 
     return createDiscussion({
         ...payload,

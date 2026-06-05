@@ -12,7 +12,7 @@ export default async function BookmarksPage() {
     return (
       <div className="mx-auto max-w-5xl p-6">
         <h1 className="mb-2 text-2xl font-bold">Bookmarks</h1>
-        <p className="text-gray-600">You need to be logged in to view your bookmarked communities.</p>
+        <p className="text-gray-600">You need to be logged in to view your bookmarked circles.</p>
         <div className="mt-4">
           <Link href="/welcome" className="text-blue-600 hover:underline">
             Go to Welcome
@@ -47,14 +47,14 @@ export default async function BookmarksPage() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <h1 className="mb-1 text-2xl font-bold">Bookmarks</h1>
-      <p className="mb-4 text-sm text-gray-600">Pinned communities appear first and also count as bookmarks.</p>
+      <p className="mb-4 text-sm text-gray-600">Pinned circles appear first and also count as bookmarks.</p>
 
       {!hasAny ? (
         <div className="rounded-md border bg-white p-6 text-center text-gray-600">
-          No bookmarks yet. Visit a community and click the Bookmark button to add it here.
+          No bookmarks yet. Visit a circle and click the Bookmark button to add it here.
           <div className="mt-3">
             <Link href="/explore" className="text-blue-600 hover:underline">
-              Explore communities
+              Explore circles
             </Link>
           </div>
         </div>

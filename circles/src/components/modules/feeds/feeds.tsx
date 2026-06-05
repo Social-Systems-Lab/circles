@@ -3,7 +3,7 @@
 "use client"; // This component now uses client-side state for filters
 
 import { FeedComponent } from "./feed";
-import { getPostsAction, getAggregatePostsAction, getFeedByHandleAction } from "./actions";
+import { getPostsAction, getFeedByHandleAction } from "./actions";
 import { Circle, SortingOptions, Cause as SDG, PostDisplay } from "@/models/models";
 import { useState, useEffect, useTransition, useCallback } from "react";
 import { useAtom } from "jotai";
@@ -18,7 +18,7 @@ export default function FeedsModule(props: PageProps) {
     const { circle, searchParams: searchParamsProp } = props;
     const [feed, setFeed] = useState<any>(null);
     const [posts, setPosts] = useState<PostDisplay[]>([]);
-    const [sorting, setSorting] = useState<SortingOptions>("top");
+    const [sorting, setSorting] = useState<SortingOptions>("new");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [isPending, startTransition] = useTransition();
     const [isLoading, setIsLoading] = useState(true);
@@ -31,13 +31,13 @@ export default function FeedsModule(props: PageProps) {
         startTransition(async () => {
             try {
                 const sdgHandles = selectedSdgs.map((s) => s.handle);
-                const newPosts = await getAggregatePostsAction(user?.did, 20, 0, sorting, sdgHandles, circle.handle);
+                const newPosts = await getPostsAction(feed._id, circle._id, 20, 0, sorting, sdgHandles);
                 setPosts(newPosts);
             } finally {
                 setIsLoading(false);
             }
         });
-    }, [feed, sorting, selectedSdgs, user, circle.handle]);
+    }, [feed, sorting, selectedSdgs, circle._id]);
 
     useEffect(() => {
         async function fetchInitialData() {
@@ -45,7 +45,7 @@ export default function FeedsModule(props: PageProps) {
             if (defaultFeed) {
                 setFeed(defaultFeed);
                 const searchParams = await searchParamsProp;
-                const initialSort = (searchParams?.sort as SortingOptions) || "top";
+                const initialSort = (searchParams?.sort as SortingOptions) || "new";
                 setSorting(initialSort);
                 setIsLoading(true);
             }
@@ -75,15 +75,17 @@ export default function FeedsModule(props: PageProps) {
 
     return (
         <div className="flex flex-1 justify-center overflow-hidden">
-            <div className="mb-4 mt-2 flex w-full max-w-[1100px] flex-col items-center md:ml-4 md:mr-4">
+            <div className="mb-4 mt-2 flex w-full max-w-[1280px] flex-col items-center md:ml-4 md:mr-4">
                 <FeedComponent
                     posts={posts}
                     feed={feed}
                     circle={circle}
+                    defaultSort={sorting}
                     onFilterChange={handleFilterChange}
                     onSdgChange={handleSdgChange}
                     selectedSdgsExternal={selectedSdgs}
                     isLoading={isLoading}
+                    viewMode="grid"
                 />
             </div>
         </div>

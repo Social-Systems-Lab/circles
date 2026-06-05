@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCirclesBySearchQuery } from "@/lib/data/circle";
-import { Circle, CircleType } from "@/models/models";
+import { searchDiscoverableCircles } from "@/lib/data/search";
+import { CircleType } from "@/models/models";
 
 export async function GET(req: NextRequest) {
     try {
@@ -13,7 +13,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ circles: [] });
         }
 
-        const circles = await getCirclesBySearchQuery(q.trim(), Math.min(Math.max(limit, 1), 25), type ?? undefined);
+        const circles = await searchDiscoverableCircles({
+            query: q.trim(),
+            limit: Math.min(Math.max(limit, 1), 25),
+            circleTypes: type ? [type] : undefined,
+        });
 
         return NextResponse.json({ circles });
     } catch (error) {

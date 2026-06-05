@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { findOrCreateDMRoom } from "./actions";
 import { DmChatModal } from "../chat/dm-chat-modal";
 import { trackEvent } from "@/app/api/analytics/actions";
+import { getInterestLabel } from "@/lib/data/interests";
 
 interface EngagementCardProps {
     circle: Circle;
@@ -20,6 +21,7 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
     const router = useRouter();
     const [showDM, setShowDM] = useState(false);
     const [initialMessage, setInitialMessage] = useState("");
+    const engagementInterests = circle.interests?.length ? circle.interests : circle.engagements?.interests || [];
 
     const handleInterestClick = (interest: string) => {
         router.push(`/explore?interests=${interest}`);
@@ -51,17 +53,6 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
             {circle.engagements?.text ? (
                 <div>
                     <RichText content={circle.engagements.text} />
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        {circle.engagements.interests?.map((interest) => (
-                            <Badge
-                                key={interest}
-                                onClick={() => handleInterestClick(interest)}
-                                className="cursor-pointer"
-                            >
-                                {interest}
-                            </Badge>
-                        ))}
-                    </div>
                     {!isOwner && circle.engagements.inviteEnabled && (
                         <div className="mt-4">
                             <Button onClick={onInvite}>Invite to project</Button>

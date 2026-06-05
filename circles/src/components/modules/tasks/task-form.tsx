@@ -6,15 +6,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added Card imports
+import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, UserPrivate } from "@/models/models"; // Added UserPrivate
+import {
+    Circle,
+    Media,
+    Task,
+    Location,
+    GoalDisplay,
+    EventDisplay,
+    UserPrivate,
+    TaskPriority,
+    type TaskType,
+} from "@/models/models"; // Added UserPrivate
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter, useSearchParams } from "next/navigation";
 import LocationPicker from "@/components/forms/location-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,17 +38,100 @@ import CircleSelector from "@/components/global-create/circle-selector"; // Adde
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added CreatableItemDetail
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions"; // Corrected import for fetching goals
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
+import { SHIFT_DURATION_OPTIONS } from "./shift-task-utils";
+
+const taskPriorityOptions: { value: TaskPriority; label: string; description: string }[] = [
+    { value: "low", label: "Low", description: "Nice to have" },
+    { value: "medium", label: "Medium", description: "Useful to have" },
+    { value: "high", label: "High", description: "Need to have" },
+    { value: "critical", label: "Critical", description: "Critical to have" },
+];
 
 // Form schema for creating/editing a task
-const taskFormSchema = z.object({
-    title: z.string().min(1, { message: "Task title is required" }),
-    description: z.string().min(1, { message: "Description is required" }),
-    images: z.array(z.any()).optional(),
-    location: z.any().optional(),
-    targetDate: z.date().optional(),
-    goalId: z.string().optional().nullable(), // Allow null or undefined
-    eventId: z.string().optional().nullable(), // Allow null or undefined
-});
+const taskFormSchema = z
+    .object({
+        title: z.string().min(1, { message: "Task title is required" }),
+        description: z.string().optional(),
+        images: z.array(z.any()).optional(),
+        location: z.any().optional(),
+        targetDate: z.date().optional(),
+        goalId: z.string().optional().nullable(), // Allow null or undefined
+        eventId: z.string().optional().nullable(), // Allow null or undefined
+        taskType: z.enum(["outcome", "shift"]).default("outcome"),
+        slots: z.preprocess((value) => {
+            if (value === "" || value == null) {
+                return undefined;
+            }
+            if (typeof value === "string") {
+                const parsedValue = Number(value);
+                return Number.isFinite(parsedValue) ? parsedValue : value;
+            }
+            return value;
+        }, z.number().int().positive("Slots must be at least 1").optional()),
+        shiftStartTime: z.preprocess(
+            (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+            z
+                .string()
+                .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format")
+                .optional(),
+        ),
+        shiftDurationMinutes: z.preprocess((value) => {
+            if (value === "" || value == null) {
+                return undefined;
+            }
+            if (typeof value === "string") {
+                const parsedValue = Number(value);
+                return Number.isFinite(parsedValue) ? parsedValue : value;
+            }
+            return value;
+        }, z.number().int().positive("Duration must be at least 1 minute").optional()),
+        participantNotes: z.preprocess(
+            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
+            z.string().max(1000, "Participant notes must be 1000 characters or fewer").optional(),
+        ),
+        publishToNoticeboard: z.boolean().default(false),
+        priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
+    })
+    .superRefine((data, context) => {
+        if (data.priority === "critical" && !data.targetDate) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["targetDate"],
+                message: "Due date is required for Critical tasks",
+            });
+        }
+
+        if (data.taskType === "shift") {
+            if (!data.targetDate) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["targetDate"],
+                    message: "Date is required for shift tasks",
+                });
+            }
+            if (!data.shiftStartTime) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["shiftStartTime"],
+                    message: "Start time is required for shift tasks",
+                });
+            }
+            if (!data.shiftDurationMinutes) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["shiftDurationMinutes"],
+                    message: "Duration is required for shift tasks",
+                });
+            }
+            if (!data.slots) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["slots"],
+                    message: "Slots are required for shift tasks",
+                });
+            }
+        }
+    });
 
 type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location" | "targetDate"> & {
     images?: (File | Media)[];
@@ -46,6 +139,12 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
     targetDate?: Date;
     goalId?: string | null; // Allow null
     eventId?: string | null;
+    taskType: TaskType;
+    slots?: number;
+    shiftStartTime?: string;
+    shiftDurationMinutes?: number;
+    participantNotes?: string;
+    priority?: TaskPriority | null;
 };
 
 interface TaskFormProps {
@@ -106,23 +205,34 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
             eventId: (task as any)?.eventId || preselectedEventId || null,
+            taskType: task?.taskType ?? "outcome",
+            slots: task?.slots,
+            shiftStartTime: task?.shiftStartTime,
+            shiftDurationMinutes: task?.shiftDurationMinutes,
+            participantNotes: task?.participantNotes,
+            publishToNoticeboard: Boolean(task?.noticeboardPostId),
+            priority: task?.priority || null,
         },
     });
+
+    const taskType = form.watch("taskType");
 
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
+            const isDifferentCircle = Boolean(selectedCircle?._id && circle?._id && selectedCircle._id !== circle._id);
             setSelectedCircle(circle);
-            // Reset goals when circle changes
             setGoals([]);
-            form.reset({
-                // Reset form fields that might depend on the circle, like goalId
-                ...form.getValues(), // keep existing values
-                goalId: null, // reset goalId
-                eventId: null, // reset eventId
-            });
+            setEvents([]);
+            if (isDifferentCircle) {
+                form.reset({
+                    ...form.getValues(),
+                    goalId: null,
+                    eventId: null,
+                });
+            }
         },
-        [form, setSelectedCircle, setGoals],
+        [form, selectedCircle?._id],
     );
 
     useEffect(() => {
@@ -190,6 +300,24 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         }
     }, [selectedCircle]);
 
+    useEffect(() => {
+        if (taskType !== "shift") {
+            form.setValue("slots", undefined, { shouldValidate: false });
+            form.setValue("shiftStartTime", undefined, { shouldValidate: false });
+            form.setValue("shiftDurationMinutes", undefined, { shouldValidate: false });
+            form.setValue("participantNotes", undefined, { shouldValidate: false });
+            form.setValue("publishToNoticeboard", false, { shouldValidate: false });
+            return;
+        }
+
+        if (!form.getValues("slots")) {
+            form.setValue("slots", task?.slots ?? 1, { shouldValidate: false });
+        }
+        if (!form.getValues("shiftDurationMinutes")) {
+            form.setValue("shiftDurationMinutes", task?.shiftDurationMinutes ?? 60, { shouldValidate: false });
+        }
+    }, [form, task?.shiftDurationMinutes, task?.slots, taskType]);
+
     const handleImageChange = (items: ImageItem[]) => {
         const formImages: (File | Media)[] = items
             .map((item) => {
@@ -220,7 +348,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
         const formData = new FormData();
         formData.append("title", values.title);
-        formData.append("description", values.description);
+        formData.append("description", values.description ?? "");
 
         if (location) {
             formData.append("location", JSON.stringify(location));
@@ -244,6 +372,38 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             // Explicitly handle unsetting the event
             formData.append("eventId", ""); // Send empty string to indicate removal
+        }
+
+        formData.append("taskType", values.taskType ?? "outcome");
+        if (values.taskType === "shift" && values.slots) {
+            formData.append("slots", String(values.slots));
+        } else {
+            formData.append("slots", "");
+        }
+        if (values.taskType === "shift" && values.shiftStartTime) {
+            formData.append("shiftStartTime", values.shiftStartTime);
+        } else {
+            formData.append("shiftStartTime", "");
+        }
+        if (values.taskType === "shift" && values.shiftDurationMinutes) {
+            formData.append("shiftDurationMinutes", String(values.shiftDurationMinutes));
+        } else {
+            formData.append("shiftDurationMinutes", "");
+        }
+        if (values.taskType === "shift" && values.participantNotes) {
+            formData.append("participantNotes", values.participantNotes);
+        } else {
+            formData.append("participantNotes", "");
+        }
+        formData.append(
+            "publishToNoticeboard",
+            values.taskType === "shift" ? String(values.publishToNoticeboard) : "false",
+        );
+
+        if (values.priority) {
+            formData.append("priority", values.priority);
+        } else {
+            formData.append("priority", "");
         }
 
         if (values.images) {
@@ -312,9 +472,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
                         {isEditing ? "Edit Task" : "Create New Task"}
                     </h3>
-                    {/* CircleSelector moved into this section */}
-                    {!isEditing && ( // Only show selector if creating new
+                    {!isEditing && (
                         <div className="pb-4 pt-2">
+                            <p className="mb-2 text-sm font-medium text-foreground">Create in</p>
                             <CircleSelector
                                 itemType={itemDetail}
                                 onCircleSelected={handleCircleSelected}
@@ -327,15 +487,13 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     <CardContent className="p-6 pt-0">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-0 md:space-y-0">
-                                {/* Adjusted y-spacing for grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6">
-                                    {/* Grid container */}
                                     <FormField
                                         control={form.control}
                                         name="title"
                                         render={({ field }) => (
                                             <FormItem className="py-3 md:py-4">
-                                                <FormLabel>Task Title</FormLabel>
+                                                <FormLabel>Title</FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         placeholder="e.g., Organize team meeting"
@@ -348,14 +506,361 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             </FormItem>
                                         )}
                                     />
-                                    {/* Goal Selection Dropdown - Conditionally Rendered */}
+                                    <FormField
+                                        control={form.control}
+                                        name="taskType"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Task Format</FormLabel>
+                                                <Select
+                                                    onValueChange={(value) => field.onChange(value as TaskType)}
+                                                    value={field.value}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a task type" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="outcome">Outcome task</SelectItem>
+                                                        <SelectItem value="shift">Shift sign-up</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormDescription>
+                                                    Use a shift for a scheduled sign-up opportunity with limited slots.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-x-6">
+                                    <FormField
+                                        control={form.control}
+                                        name="targetDate"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>
+                                                    {taskType === "shift" ? "Date" : "Target Date (Optional)"}
+                                                </FormLabel>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button
+                                                                variant={"outline"}
+                                                                className={cn(
+                                                                    "w-full pl-3 text-left font-normal md:w-[240px]",
+                                                                    !field.value && "text-muted-foreground",
+                                                                )}
+                                                                disabled={isSubmitting}
+                                                            >
+                                                                {field.value ? (
+                                                                    format(field.value, "PPP")
+                                                                ) : (
+                                                                    <span>Pick a date</span>
+                                                                )}
+                                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={field.value}
+                                                            onSelect={field.onChange}
+                                                            disabled={(date: Date) =>
+                                                                date < new Date("1900-01-01") || isSubmitting
+                                                            }
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <FormDescription>
+                                                    {taskType === "shift"
+                                                        ? "Choose the calendar date for this shift."
+                                                        : "Set an optional target completion date for this task."}
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="shiftStartTime"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Start Time</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="time"
+                                                            value={field.value ?? ""}
+                                                            onChange={(event) => field.onChange(event.target.value)}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Set when sign-up participants should arrive.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="shiftDurationMinutes"
+                                            render={({ field }) => {
+                                                const durationOptions =
+                                                    field.value &&
+                                                    !SHIFT_DURATION_OPTIONS.some(
+                                                        (option) => option.value === field.value,
+                                                    )
+                                                        ? [
+                                                              ...SHIFT_DURATION_OPTIONS,
+                                                              {
+                                                                  value: field.value,
+                                                                  label: `${field.value} minutes`,
+                                                              },
+                                                          ].sort((left, right) => left.value - right.value)
+                                                        : SHIFT_DURATION_OPTIONS;
+
+                                                return (
+                                                    <FormItem className="py-3 md:py-4">
+                                                        <FormLabel>Duration</FormLabel>
+                                                        <Select
+                                                            onValueChange={(value) => field.onChange(Number(value))}
+                                                            value={field.value ? String(field.value) : undefined}
+                                                            disabled={isSubmitting}
+                                                        >
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Choose a duration" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {durationOptions.map((option) => (
+                                                                    <SelectItem
+                                                                        key={option.value}
+                                                                        value={String(option.value)}
+                                                                    >
+                                                                        {option.label}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormDescription>
+                                                            Choose how long the shift runs.
+                                                        </FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                );
+                                            }}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="slots"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Slots</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="number"
+                                                            min={1}
+                                                            step={1}
+                                                            value={field.value ?? ""}
+                                                            onChange={(event) => field.onChange(event.target.value)}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Set how many people can sign up for this shift.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="participantNotes"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:col-span-2 md:py-4">
+                                                    <FormLabel>Participant Notes (Optional)</FormLabel>
+                                                    <FormControl>
+                                                        <Textarea
+                                                            placeholder="What to bring, where to meet, clothing or tools needed"
+                                                            className="min-h-[100px]"
+                                                            {...field}
+                                                            value={field.value ?? ""}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Shared instructions for people taking this shift.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    {taskType === "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="publishToNoticeboard"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:col-span-2 md:py-4">
+                                                    <div className="flex items-start gap-3 rounded-lg border p-4">
+                                                        <FormControl>
+                                                            <Checkbox
+                                                                checked={field.value}
+                                                                onCheckedChange={(checked) =>
+                                                                    field.onChange(Boolean(checked))
+                                                                }
+                                                                disabled={isSubmitting}
+                                                            />
+                                                        </FormControl>
+                                                        <div className="space-y-1">
+                                                            <FormLabel>Share this shift on the Noticeboard</FormLabel>
+                                                            <FormDescription>
+                                                                Create or update one linked Noticeboard post for this volunteer shift.
+                                                            </FormDescription>
+                                                        </div>
+                                                    </div>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    <FormField
+                                        control={form.control}
+                                        name="priority"
+                                        render={({ field }) => (
+                                            <FormItem className="py-3 md:py-4">
+                                                <FormLabel>Priority (Optional)</FormLabel>
+                                                <Select
+                                                    onValueChange={(value) =>
+                                                        field.onChange(value === "none" ? null : value)
+                                                    }
+                                                    value={field.value ?? "none"}
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a priority" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">None</SelectItem>
+                                                        {taskPriorityOptions.map((option) => (
+                                                            <SelectItem key={option.value} value={option.value}>
+                                                                {option.label} - {option.description}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormDescription>
+                                                    Leave unset unless this task needs a visible priority badge.
+                                                </FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                <FormField
+                                    control={form.control}
+                                    name="description"
+                                    render={({ field }) => (
+                                        <FormItem className="py-3 md:col-span-2 md:py-4">
+                                            <FormLabel>Description</FormLabel>
+                                            <FormControl>
+                                                <Textarea
+                                                    placeholder="Add details if helpful"
+                                                    className="min-h-[150px] md:min-h-[200px]"
+                                                    {...field}
+                                                    disabled={isSubmitting}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <div className="py-2 md:col-span-2">
+                                    <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Optional Details
+                                    </h4>
+                                </div>
+                                <FormField
+                                    control={form.control}
+                                    name="images"
+                                    render={({ field }) => (
+                                        <FormItem className="py-3 md:col-span-2 md:py-4">
+                                            <FormLabel>Attach Images (Optional)</FormLabel>
+                                            <FormControl>
+                                                <MultiImageUploader
+                                                    initialImages={task?.images || []}
+                                                    onChange={handleImageChange}
+                                                    maxImages={5}
+                                                    previewMode="compact"
+                                                />
+                                            </FormControl>
+                                            <FormDescription>
+                                                Upload images related to the task (max 5 files, 5MB each).
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <div className="py-3 md:col-span-2 md:py-4">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <p className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                                Location (Optional)
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Add a place if this task needs one.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full justify-start md:w-auto"
+                                            onClick={() => setIsLocationDialogOpen(true)}
+                                            disabled={isSubmitting}
+                                        >
+                                            <MapPinIcon className="mr-2 h-4 w-4" />
+                                            {location ? "Change Location" : "Add Location"}
+                                        </Button>
+                                        {location && (
+                                            <div className="flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
+                                                <MapPin className="mr-2 h-4 w-4 text-primary" />
+                                                <span className="text-sm text-muted-foreground">
+                                                    {getFullLocationName(location)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                {(goalsModuleEnabled || eventsModuleEnabled) && (
+                                    <div className="py-2 md:col-span-2">
+                                        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Optional Linking
+                                        </h4>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-1 gap-0 md:col-span-2 md:grid-cols-2 md:gap-x-6">
                                     {goalsModuleEnabled && (
                                         <FormField
                                             control={form.control}
                                             name="goalId"
                                             render={({ field }) => (
                                                 <FormItem className="py-3 md:py-4">
-                                                    <FormLabel>Assign to Goal (Optional)</FormLabel>
+                                                    <FormLabel>Goal (Optional)</FormLabel>
                                                     <Select
                                                         onValueChange={field.onChange}
                                                         value={field.value ?? "none"}
@@ -391,170 +896,56 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             )}
                                         />
                                     )}
-                                </div>{" "}
-                                {/* End grid container for first row */}
-                                {/* Event Selection Dropdown - Conditionally Rendered */}
-                                {eventsModuleEnabled && (
-                                    <FormField
-                                        control={form.control}
-                                        name="eventId"
-                                        render={({ field }) => (
-                                            <FormItem className="py-3 md:py-4">
-                                                <FormLabel>Assign to Event (Optional)</FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value ?? "none"}
-                                                    disabled={isSubmitting || isLoadingEvents || events.length === 0}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue
-                                                                placeholder={
-                                                                    isLoadingEvents
-                                                                        ? "Loading events..."
-                                                                        : events.length === 0
-                                                                          ? "No events available"
-                                                                          : "Select an event"
-                                                                }
-                                                            />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">-- None --</SelectItem>
-                                                        {events.map((event) => (
-                                                            <SelectItem
-                                                                key={(event as any)._id}
-                                                                value={(event as any)._id}
-                                                            >
-                                                                {event.title}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormDescription>
-                                                    Link this task to an existing event in this circle.
-                                                </FormDescription>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-                                )}
-                                <FormField
-                                    control={form.control}
-                                    name="targetDate"
-                                    render={({ field }) => (
-                                        <FormItem className="py-3 md:py-4">
-                                            <FormLabel>Target Date (Optional)</FormLabel>
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <FormControl>
-                                                        <Button
-                                                            variant={"outline"}
-                                                            className={cn(
-                                                                "w-full pl-3 text-left font-normal md:w-[240px]",
-                                                                !field.value && "text-muted-foreground",
-                                                            )}
-                                                            disabled={isSubmitting}
-                                                        >
-                                                            {field.value ? (
-                                                                format(field.value, "PPP")
-                                                            ) : (
-                                                                <span>Pick a date</span>
-                                                            )}
-                                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                                        </Button>
-                                                    </FormControl>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0" align="start">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={field.value}
-                                                        onSelect={field.onChange}
-                                                        disabled={(date: Date) =>
-                                                            date < new Date("1900-01-01") || isSubmitting
+                                    {eventsModuleEnabled && (
+                                        <FormField
+                                            control={form.control}
+                                            name="eventId"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Event (Optional)</FormLabel>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value ?? "none"}
+                                                        disabled={
+                                                            isSubmitting || isLoadingEvents || events.length === 0
                                                         }
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                            <FormDescription>
-                                                Set an optional target completion date for this task.
-                                            </FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="description"
-                                    render={({ field }) => (
-                                        <FormItem className="py-3 md:col-span-2 md:py-4">
-                                            <FormLabel>Description</FormLabel>
-                                            <FormControl>
-                                                <Textarea
-                                                    placeholder="Provide details about the task, goals, and any relevant context..."
-                                                    className="min-h-[150px] md:min-h-[200px]" // Adjusted height
-                                                    {...field}
-                                                    disabled={isSubmitting}
-                                                />
-                                            </FormControl>
-                                            <FormDescription>Explain the task in detail.</FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="images"
-                                    render={({ field }) => (
-                                        <FormItem className="py-3 md:col-span-2 md:py-4">
-                                            <FormLabel>Attach Images (Optional)</FormLabel>
-                                            <FormControl>
-                                                <MultiImageUploader
-                                                    initialImages={task?.images || []}
-                                                    onChange={handleImageChange}
-                                                    maxImages={5}
-                                                    previewMode="compact"
-                                                />
-                                            </FormControl>
-                                            <FormDescription>
-                                                Upload images related to the task (max 5 files, 5MB each).
-                                            </FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                {location && (
-                                    <div className="mt-4 flex flex-row items-center justify-start rounded-lg border bg-muted/40 p-3">
-                                        <MapPin className={`mr-2 h-4 w-4 text-primary`} />
-                                        <span className="text-sm text-muted-foreground">
-                                            {getFullLocationName(location)}
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="flex items-center justify-between pt-4">
-                                    <div className="flex space-x-1">
-                                        <TooltipProvider delayDuration={100}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="rounded-full"
-                                                        onClick={() => setIsLocationDialogOpen(true)}
-                                                        disabled={isSubmitting}
                                                     >
-                                                        <MapPinIcon className="h-5 w-5 text-gray-500" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>Add Location</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </div>
-
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue
+                                                                    placeholder={
+                                                                        isLoadingEvents
+                                                                            ? "Loading events..."
+                                                                            : events.length === 0
+                                                                              ? "No events available"
+                                                                              : "Select an event"
+                                                                    }
+                                                                />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">-- None --</SelectItem>
+                                                            {events.map((event) => (
+                                                                <SelectItem
+                                                                    key={(event as any)._id}
+                                                                    value={(event as any)._id}
+                                                                >
+                                                                    {event.title}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormDescription>
+                                                        Link this task to an existing event in this circle.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between pt-4">
+                                    <div />
                                     <div className="flex space-x-4">
                                         {onCancel && ( // Always show onCancel if provided (dialog context)
                                             <Button

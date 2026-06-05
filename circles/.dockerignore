@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Node / Bun
+node_modules
+bun.lockb
+
+# Next build output
+.next
+
+# Local environment
+.env
+.env.local
+.env.development
+.env.production
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker artifacts
+docker-compose.override.yml
+
+# Codex worktrees
+.codex

@@ -1,4 +1,5 @@
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import "@/components/pages/public-home-page.css";
+import PublicHomePage from "@/components/pages/public-home-page";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
@@ -6,11 +7,5 @@ export default async function Home() {
         redirect("/holding");
     }
 
-    const userDid = await getAuthenticatedUserDid();
-
-    if (!userDid) {
-        redirect("/welcome");
-    }
-
-    redirect("/explore");
+    return <PublicHomePage />;
 }

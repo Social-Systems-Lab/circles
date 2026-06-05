@@ -1,33 +1,112 @@
 // chat/actions.ts - server actions for joining chat rooms
 "use server";
 
+import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { Circle, ChatRoomMember, ChatRoom, ChatRoomDisplay, UserPrivate } from "@/models/models";
-import {
-    getAllUsers,
-    getPrivateUserByDid,
-    getUserByDid,
-    getUserPrivate,
-    getUsersByMatrixUsernames,
-} from "@/lib/data/user";
+import { getAllUsers, getUserByDid } from "@/lib/data/user";
 import {
     addChatRoomMember,
-    findOrCreateDMRoom,
     getChatRoom,
     getChatRoomMember,
+    getChatContactsForUserDid,
     removeChatRoomMember,
 } from "@/lib/data/chat";
-import { addUserToRoom } from "@/lib/data/matrix";
+import { ChatConversations, ChatRoomMembers, Circles, Members } from "@/lib/data/db";
 import { features } from "@/lib/data/constants";
+import { getCirclesByDids } from "@/lib/data/circle";
+import { ensureConversationForCircle, listConversationMedia } from "@/lib/data/mongo-chat";
+import { emitGroupChatMembershipSystemEvent, sendSystemMessage } from "@/lib/data/system-message-events";
+import { listDmEligibleContactsForUserDid } from "@/lib/data/relationships";
+import {
+    listChatRoomsAction as listMongoChatRoomsAction,
+    fetchMongoMessagesAction as fetchMongoMessagesActionInternal,
+    fetchRecentMessagesAction as fetchRecentMessagesActionInternal,
+    sendMongoMessageAction as sendMongoMessageActionInternal,
+    sendMongoAttachmentAction as sendMongoAttachmentActionInternal,
+    editMongoMessageAction as editMongoMessageActionInternal,
+    deleteMongoMessageAction as deleteMongoMessageActionInternal,
+    toggleMongoReactionAction as toggleMongoReactionActionInternal,
+    findOrCreateDMConversationAction as findOrCreateDMConversationActionInternal,
+    createMongoGroupChatAction as createMongoGroupChatActionInternal,
+    getUnreadCountsAction as getUnreadCountsActionInternal,
+    markConversationReadAction as markConversationReadActionInternal,
+    resolveMongoConversationAccess as resolveMongoConversationAccessInternal,
+} from "./mongo-actions";
 
-const parseEnvFlag = (value?: string | null) => {
-    if (value === undefined || value === null) return true;
-    const normalized = value.trim().toLowerCase();
-    return normalized !== "false" && normalized !== "0" && normalized !== "off";
+const isActiveChatRoomMembership = (membership: any): boolean => {
+    if (!membership) return false;
+
+    const membershipStatus = typeof membership.status === "string" ? membership.status.toLowerCase() : undefined;
+    if (membershipStatus === "removed" || membershipStatus === "left" || membershipStatus === "inactive") {
+        return false;
+    }
+    if (membershipStatus && membershipStatus !== "active") {
+        return false;
+    }
+    if (membership.active === false || membership.isActive === false) {
+        return false;
+    }
+
+    return true;
 };
 
-const isMatrixEnabled = () => parseEnvFlag(process.env.MATRIX_ENABLED);
-const matrixDisabledMessage = "Matrix chat is disabled in this environment.";
+const getMembershipJoinedAt = (membership: any): number => {
+    if (!membership?.joinedAt) return Number.MAX_SAFE_INTEGER;
+    const timestamp = new Date(membership.joinedAt).getTime();
+    return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
+};
+
+const isRequesterAdmin = (userDid: string, members: any[]): boolean => {
+    const requester = members.find((member) => member.userDid === userDid);
+    if (!requester) return false;
+
+    if (requester.role === "admin") {
+        return true;
+    }
+
+    const hasExplicitAdmin = members.some((member) => member.role === "admin");
+    if (hasExplicitAdmin) {
+        return false;
+    }
+
+    // Backward-compat fallback for legacy rooms without role data:
+    // treat the earliest joined member as the effective admin.
+    const earliestMember = members.reduce(
+        (earliest, current) =>
+            getMembershipJoinedAt(current) < getMembershipJoinedAt(earliest) ? current : earliest,
+        members[0],
+    );
+
+    return earliestMember?.userDid === userDid;
+};
+
+const buildMongoMembershipQuery = (chatRoomId: string): Record<string, unknown> => {
+    if (!ObjectId.isValid(chatRoomId)) {
+        return { chatRoomId };
+    }
+    return {
+        $or: [{ chatRoomId }, { chatRoomId: new ObjectId(chatRoomId) }],
+    };
+};
+
+const getMongoConversation = async (chatRoomId: string) => {
+    if (!ObjectId.isValid(chatRoomId)) return null;
+    return await ChatConversations.findOne({
+        _id: new ObjectId(chatRoomId),
+        archived: { $ne: true },
+    });
+};
+
+const listMongoChatRoomMembers = async (chatRoomId: string): Promise<any[]> => {
+    return await ChatRoomMembers.find(buildMongoMembershipQuery(chatRoomId)).toArray();
+};
+
+const canUserEditGroupInfo = async (chatRoomId: string, userDid: string): Promise<boolean> => {
+    const members = await listMongoChatRoomMembers(chatRoomId);
+    const activeMembers = members.filter(isActiveChatRoomMembership);
+    return isRequesterAdmin(userDid, activeMembers);
+};
 
 export async function joinChatRoomAction(
     chatRoomId: string,
@@ -35,9 +114,6 @@ export async function joinChatRoomAction(
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to join a chat room" };
-    }
-    if (!isMatrixEnabled()) {
-        return { success: false, message: matrixDisabledMessage };
     }
 
     try {
@@ -56,14 +132,20 @@ export async function joinChatRoomAction(
             return { success: false, message: "You are not authorized to join this chat room" };
         }
 
-        // add user to matrix chat room
-        let user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have a valid Matrix access token" };
-        }
-
-        await addUserToRoom(user.matrixAccessToken, chatRoom.matrixRoomId!);
+        const existingMembership = await getChatRoomMember(userDid, chatRoomId);
+        const wasAlreadyActive = isActiveChatRoomMembership(existingMembership);
         const chatRoomMember = await addChatRoomMember(userDid, chatRoomId);
+        if (!wasAlreadyActive) {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (conversation?.type === "group") {
+                await emitGroupChatMembershipSystemEvent({
+                    conversationId: chatRoomId,
+                    eventType: "group_chat_joined",
+                    actorDid: userDid,
+                    targetDid: userDid,
+                });
+            }
+        }
 
         return { success: true, message: "Joined chat room successfully", chatRoomMember };
     } catch (error) {
@@ -89,9 +171,21 @@ export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success
         if (!chatRoomMember) {
             return { success: false, message: "You are not a member of this chat room" };
         }
+        const wasActiveMember = isActiveChatRoomMembership(chatRoomMember);
 
         // Remove the user from the chat room
         await removeChatRoomMember(userDid, chatRoomId);
+        if (wasActiveMember) {
+            const conversation = await getMongoConversation(chatRoomId);
+            if (conversation?.type === "group") {
+                await emitGroupChatMembershipSystemEvent({
+                    conversationId: chatRoomId,
+                    eventType: "group_chat_left",
+                    actorDid: userDid,
+                    targetDid: userDid,
+                });
+            }
+        }
 
         return { success: true, message: "Left chat room successfully" };
     } catch (error) {
@@ -100,55 +194,134 @@ export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success
     }
 }
 
-export const fetchMatrixUsers = async (usernames: string[]): Promise<(Circle | null)[]> => {
-    if (usernames.length === 0) {
-        return [];
-    }
 
-    // Extract local parts of the usernames
-    const extractedUsernames = usernames
-        .filter((username) => username)
-        .map((username) => username.split(":")[0].replace("@", ""));
-
-    // Fetch users from the database
-    const users = await getUsersByMatrixUsernames(extractedUsernames);
-
-    // Create a map of fetched users for quick lookup using extracted usernames
-    const userMap = new Map(users.map((user) => [user.matrixUsername, user]));
-
-    // Return users in the same order as requested, inserting null for missing users
-    return extractedUsernames.map((extractedUsername) => {
-        const user = userMap.get(extractedUsername);
-        return user ?? null;
-    });
-};
 
 export const findOrCreateDMRoomAction = async (
     inRecipient: Circle,
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoom; user?: UserPrivate }> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to send PM" };
-    }
-
-    let recipient = inRecipient?.did ? await getUserByDid(inRecipient?.did) : undefined;
-    if (!recipient) {
-        return { success: false, message: "Could not find recipient" };
-    }
-
-    const user = await getUserByDid(userDid);
-    if (user._id === recipient._id) {
-        return { success: false, message: "You cannot send a message to yourself" };
-    }
-
-    let room = await findOrCreateDMRoom(user, recipient);
-    let userPrivate = await getUserPrivate(userDid);
-
-    return { success: true, message: "DM room created", chatRoom: room, user: userPrivate };
+    const result = await findOrCreateDMConversationActionInternal(inRecipient);
+    return { success: result.success, message: result.message, chatRoom: result.chatRoom as ChatRoom };
 };
 
 export const getAllUsersAction = async (): Promise<Circle[]> => {
     return await getAllUsers();
+};
+
+export const getChatContactsAction = async (): Promise<Circle[]> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return [];
+    }
+
+    try {
+        return await listDmEligibleContactsForUserDid(userDid);
+    } catch (error) {
+        console.error("❌ Error fetching chat contacts:", error);
+        return [];
+    }
+};
+
+export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?: ChatRoomDisplay[]; message?: string }> => {
+    return await listMongoChatRoomsAction();
+};
+
+export const fetchMongoMessagesAction = async (
+    conversationId: string,
+    sinceId?: string,
+    limit: number = 50,
+) => {
+    return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
+};
+
+export const fetchRecentMessagesAction = async (
+    conversationId: string,
+    limit?: number,
+) => {
+    return await fetchRecentMessagesActionInternal(conversationId, limit);
+};
+
+export const sendMongoMessageAction = async (
+    conversationId: string,
+    content: string,
+    replyToMessageId?: string,
+    format?: "markdown",
+) => {
+    return await sendMongoMessageActionInternal(conversationId, content, replyToMessageId, format);
+};
+
+export const sendMongoAttachmentAction = async (formData: FormData) => {
+    return await sendMongoAttachmentActionInternal(formData);
+};
+
+export const editMongoMessageAction = async (messageId: string, content: string) => {
+    return await editMongoMessageActionInternal(messageId, content);
+};
+
+export const deleteMongoMessageAction = async (messageId: string) => {
+    return await deleteMongoMessageActionInternal(messageId);
+};
+
+export const toggleMongoReactionAction = async (messageId: string, emoji: string) => {
+    return await toggleMongoReactionActionInternal(messageId, emoji);
+};
+
+export const findOrCreateDMConversationAction = async (
+    inRecipient: Circle,
+    options?: { source?: "composer" | "profile" },
+) => {
+    return await findOrCreateDMConversationActionInternal(inRecipient, options);
+};
+
+export const createMongoGroupChatAction = async (formData: FormData) => {
+    return await createMongoGroupChatActionInternal(formData);
+};
+
+export const ensureCircleConversationAction = async (
+    circleId: string,
+): Promise<{ success: boolean; roomId?: string; message?: string }> => {
+    try {
+        const conversation = await ensureConversationForCircle(circleId);
+        return { success: true, roomId: conversation._id as string };
+    } catch (error) {
+        console.error("❌ Error ensuring circle conversation:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to ensure circle chat" };
+    }
+};
+
+export const getUnreadCountsAction = async (conversationIds: string[]) => {
+    return await getUnreadCountsActionInternal(conversationIds);
+};
+
+export const markConversationReadAction = async (conversationId: string, lastSeenMessageId: string | null) => {
+    return await markConversationReadActionInternal(conversationId, lastSeenMessageId);
+};
+
+export const listConversationMediaAction = async (
+    conversationId: string,
+    kind?: "image" | "video" | "file",
+    limit: number = 50,
+): Promise<{
+    success: boolean;
+    media?: Awaited<ReturnType<typeof listConversationMedia>>;
+    message?: string;
+}> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to view media" };
+    }
+
+    const access = await resolveMongoConversationAccessInternal(conversationId, userDid);
+    if (!access.ok) {
+        return { success: false, message: access.message };
+    }
+
+    try {
+        const media = await listConversationMedia(conversationId, kind, limit);
+        return { success: true, media };
+    } catch (error) {
+        console.error("❌ Error listing conversation media:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to load media" };
+    }
 };
 
 export const sendMessageAction = async (
@@ -156,60 +329,8 @@ export const sendMessageAction = async (
     content: string,
     replyToEventId?: string
 ): Promise<{ success: boolean; message?: string; eventId?: string }> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to send messages" };
-    }
-    if (!isMatrixEnabled()) {
-        return { success: false, message: matrixDisabledMessage };
-    }
-
-    try {
-        console.log("📤 Sending message to room:", roomId);
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            console.error("❌ User does not have a valid Matrix access token");
-            return { success: false, message: "User does not have a valid Matrix access token" };
-        }
-
-        // Import server-side Matrix function
-        const { sendMatrixMessage, forceUserJoinRoom } = await import("@/lib/data/matrix");
-        
-        try {
-            const result = await sendMatrixMessage(
-                user.matrixAccessToken,
-                roomId,
-                content,
-                replyToEventId
-            );
-            console.log("✅ Message sent successfully! Event ID:", result.event_id);
-            return { success: true, eventId: result.event_id };
-        } catch (innerError) {
-            // Check for "not in room" error and try to join
-            if (innerError instanceof Error && 
-                (innerError.message.includes("not in room") || innerError.message.includes("M_FORBIDDEN") || innerError.message.includes("403"))) {
-                
-                console.log("⚠️ User not in room, attempting to force join...", roomId);
-                if (user.fullMatrixName) {
-                    await forceUserJoinRoom(user.fullMatrixName, roomId);
-                    
-                    // Retry sending
-                    const result = await sendMatrixMessage(
-                        user.matrixAccessToken,
-                        roomId,
-                        content,
-                        replyToEventId
-                    );
-                    console.log("✅ Message sent successfully after force join! Event ID:", result.event_id);
-                    return { success: true, eventId: result.event_id };
-                }
-            }
-            throw innerError;
-        }
-    } catch (error) {
-        console.error("❌ Error sending message:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to send message" };
-    }
+    const result = await sendMongoMessageActionInternal(roomId, content, replyToEventId);
+    return { success: result.success, message: result.message, eventId: result.messageId };
 };
 
 export const fetchRoomMessagesAction = async (
@@ -220,51 +341,8 @@ export const fetchRoomMessagesAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to fetch messages" };
     }
-    if (!isMatrixEnabled()) {
-        return { success: false, message: matrixDisabledMessage };
-    }
-
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have a valid Matrix access token" };
-        }
-
-        // Import server-side Matrix function
-        const { fetchRoomMessages, forceUserJoinRoom } = await import("@/lib/data/matrix");
-        
-        try {
-            const messages = await fetchRoomMessages(
-                user.matrixAccessToken,
-                roomId,
-                limit
-            );
-            return { success: true, messages };
-        } catch (innerError) {
-             // Check for "not in room" error/M_FORBIDDEN and try to join
-            if (innerError instanceof Error && 
-                (innerError.message.includes("M_FORBIDDEN") || innerError.message.includes("not in room") || innerError.message.includes("403"))) {
-                
-                console.log("⚠️ User not in room (fetch failed), attempting to force join...", roomId);
-                if (user.fullMatrixName) {
-                    await forceUserJoinRoom(user.fullMatrixName, roomId);
-                    
-                    // Retry fetching
-                    const messages = await fetchRoomMessages(
-                        user.matrixAccessToken,
-                        roomId,
-                        limit
-                    );
-                    console.log("✅ Messages fetched successfully after force join!");
-                    return { success: true, messages };
-                }
-            }
-            throw innerError;
-        }
-    } catch (error) {
-        console.error("❌ Error fetching messages:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to fetch messages" };
-    }
+    const result = await fetchMongoMessagesActionInternal(roomId, undefined, limit);
+    return { success: result.success, messages: result.messages, message: result.message };
 };
 
 
@@ -272,91 +350,8 @@ export const fetchRoomMessagesAction = async (
 export const sendAttachmentAction = async (
     formData: FormData
 ): Promise<{ success: boolean; message?: string; eventId?: string }> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to send attachments" };
-    }
-    if (!isMatrixEnabled()) {
-        return { success: false, message: matrixDisabledMessage };
-    }
-
-    const roomId = formData.get("roomId") as string;
-    const file = formData.get("file") as File;
-    const replyToEventId = formData.get("replyToEventId") as string | undefined;
-
-    if (!roomId || !file) {
-        return { success: false, message: "Missing room ID or file" };
-    }
-
-    // Enforce 5MB limit
-    const MAX_SIZE = 5 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-        return { success: false, message: "File size exceeds 5MB limit" };
-    }
-
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have a valid Matrix access token" };
-        }
-
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const { uploadMatrixMedia, sendMatrixAttachment, addUserToRoom } = await import("@/lib/data/matrix");
-
-        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-
-        // Upload media
-        const mxcUrl = await uploadMatrixMedia(
-            user.matrixAccessToken,
-            matrixUrl,
-            buffer,
-            file.type,
-            file.name
-        );
-
-        // Determine msgtype
-        const msgtype = file.type.startsWith("image/") ? "m.image" : "m.file";
-
-        try {
-            // Send attachment message
-            const result = await sendMatrixAttachment(
-                user.matrixAccessToken,
-                roomId,
-                mxcUrl,
-                { name: file.name, size: file.size, mimetype: file.type },
-                msgtype,
-                replyToEventId
-            );
-
-            console.log("✅ Attachment sent successfully! Event ID:", result.event_id);
-            return { success: true, eventId: result.event_id };
-        } catch (innerError) {
-             // Check for "not in room" error and try to join
-             if (innerError instanceof Error && 
-                (innerError.message.includes("not in room") || innerError.message.includes("M_FORBIDDEN")) && 
-                innerError.message.includes("403")) {
-                
-                console.log("⚠️ User not in room, attempting to join...");
-                await addUserToRoom(user.matrixAccessToken, roomId);
-                
-                // Retry sending
-                const result = await sendMatrixAttachment(
-                    user.matrixAccessToken,
-                    roomId,
-                    mxcUrl,
-                    { name: file.name, size: file.size, mimetype: file.type },
-                    msgtype,
-                    replyToEventId
-                );
-                console.log("✅ Attachment sent successfully after join! Event ID:", result.event_id);
-                return { success: true, eventId: result.event_id };
-            }
-            throw innerError;
-        }
-    } catch (error) {
-        console.error("❌ Error sending attachment:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to send attachment" };
-    }
+    const result = await sendMongoAttachmentActionInternal(formData);
+    return { success: result.success, message: result.message, eventId: result.messageId };
 };
 
 export const editMessageAction = async (
@@ -364,154 +359,20 @@ export const editMessageAction = async (
     eventId: string,
     newContent: string
 ): Promise<{ success: boolean; message?: string }> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to edit messages" };
-    }
-
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have valid Matrix credentials" };
-        }
-
-        const { editRoomMessage } = await import("@/lib/data/matrix");
-        const matrixUrl = `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-        await editRoomMessage(
-            user.matrixAccessToken,
-            matrixUrl,
-            roomId,
-            eventId,
-            newContent
-        );
-
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Error editing message:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to edit message" };
-    }
+    return await editMongoMessageActionInternal(eventId, newContent);
 };
 
 export const deleteMessageAction = async (
     roomId: string,
     eventId: string
 ): Promise<{ success: boolean; message?: string }> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to delete messages" };
-    }
-
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have valid Matrix credentials" };
-        }
-
-        const { redactRoomMessage } = await import("@/lib/data/matrix");
-        const matrixUrl = `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-        await redactRoomMessage(
-            user.matrixAccessToken,
-            matrixUrl,
-            roomId,
-            eventId
-        );
-
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Error deleting message:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to delete message" };
-    }
+    return await deleteMongoMessageActionInternal(eventId);
 };
 
 export const createGroupChatAction = async (
     formData: FormData
 ): Promise<{ success: boolean; roomId?: string; message?: string }> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to create a group chat" };
-    }
-
-    const name = formData.get("name") as string;
-    const participantDidsJson = formData.get("participants") as string;
-    const avatarFile = formData.get("avatar") as File | null;
-
-    if (!name || !participantDidsJson) {
-        return { success: false, message: "Missing group name or participants" };
-    }
-
-    let participantDids: string[] = [];
-    try {
-        participantDids = JSON.parse(participantDidsJson);
-    } catch (e) {
-        return { success: false, message: "Invalid participants data" };
-    }
-
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have valid Matrix credentials" };
-        }
-
-        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-
-        const { createRoom, uploadMatrixMedia } = await import("@/lib/data/matrix");
-        const { getPrivateUserByDid: getUser } = await import("@/lib/data/user");
-
-        // Resolve participant DIDs to Matrix IDs
-        const inviteList: string[] = [];
-        for (const did of participantDids) {
-            const participant = await getUser(did);
-            if (participant?.fullMatrixName) {
-                inviteList.push(participant.fullMatrixName);
-            }
-        }
-        
-        // Always invite the Admin user to ensure "God Mode" repairs work
-        // (Administrator needs to be in private rooms to use Admin API)
-        const { MATRIX_DOMAIN } = await import("@/lib/data/matrix");
-        const adminMxId = `@admin:${MATRIX_DOMAIN}`;
-        if (!inviteList.includes(adminMxId)) {
-            inviteList.push(adminMxId);
-        }
-
-        let avatarUrl: string | undefined;
-        if (avatarFile && avatarFile.size > 0) {
-            const buffer = Buffer.from(await avatarFile.arrayBuffer());
-            const uploadResult = await uploadMatrixMedia(
-                user.matrixAccessToken,
-                matrixUrl,
-                buffer,
-                avatarFile.type,
-                avatarFile.name
-            );
-            avatarUrl = uploadResult;
-        }
-
-        const roomResult = await createRoom(user.matrixAccessToken, matrixUrl, {
-            name,
-            invite: inviteList,
-            preset: "private_chat",
-            creation_content: { "m.federate": true },
-            initial_state: avatarUrl
-                ? [
-                      {
-                          type: "m.room.avatar",
-                          state_key: "",
-                          content: { url: avatarUrl },
-                      },
-                  ]
-                : undefined,
-        });
-
-        // Create the chat room in our local database
-        const { createGroupChatRoom } = await import("@/lib/data/chat");
-        await createGroupChatRoom(name, userDid, participantDids, roomResult.room_id, avatarUrl);
-
-        return { success: true, roomId: roomResult.room_id };
-    } catch (error) {
-        console.error("❌ Error creating group chat:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to create group chat" };
-    }
+    return await createMongoGroupChatActionInternal(formData);
 };
 
 export const sendReadReceiptAction = async (
@@ -523,20 +384,8 @@ export const sendReadReceiptAction = async (
         return { success: false, message: "You need to be logged in to send read receipts" };
     }
 
-    try {
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have valid Matrix credentials" };
-        }
-
-        const { sendReadReceipt } = await import("@/lib/data/matrix");
-        await sendReadReceipt(user.matrixAccessToken, roomId, eventId);
-
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Error sending read receipt:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to send read receipt" };
-    }
+    // Read receipts are handled by the Mongo chat pipeline.
+    return { success: true };
 };
 
 export const deleteGroupChatAction = async (
@@ -546,36 +395,28 @@ export const deleteGroupChatAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete a group" };
     }
-
     try {
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (!chatRoom) {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
             return { success: false, message: "Chat room not found" };
         }
-
-        if (chatRoom.isDirect) {
+        if (conversation.type === "dm") {
             return { success: false, message: "Cannot delete a direct message" };
         }
 
-        // TODO: Check if user is admin
-        // For now, we'll allow any member to delete (should be restricted to admins)
-
-        // Delete from Matrix (admin action)
-        // Note: This requires admin privileges, so we'll need to use admin token
-        // For now, we'll just remove all members and mark as deleted in our DB
-        
-        // Remove all members from the chat room
-        const members = await import("@/lib/data/chat").then(m => m.getChatRoomMembers(chatRoomId));
-        for (const member of members) {
-            await removeChatRoomMember(member.userDid, chatRoomId);
+        const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+        if (!isRequesterAdmin(userDid, members)) {
+            return { success: false, message: "Only admins can delete groups" };
         }
 
-        // Mark chat room as deleted (soft delete)
-        await import("@/lib/data/chat").then(m => m.updateChatRoom({
-            _id: chatRoomId,
-            name: "[Deleted Group]",
-            // Add a deleted flag if we have one in the schema
-        }));
+        await ChatRoomMembers.updateMany(
+            buildMongoMembershipQuery(chatRoomId),
+            { $set: { status: "removed", active: false, isActive: false } as any },
+        );
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $set: { archived: true, updatedAt: new Date() } },
+        );
 
         return { success: true };
     } catch (error) {
@@ -593,42 +434,33 @@ export const leaveGroupChatAction = async (
     }
 
     try {
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (!chatRoom) {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
             return { success: false, message: "Chat room not found" };
         }
-
-        if (chatRoom.isDirect) {
+        if (conversation.type === "dm") {
             return { success: false, message: "Cannot leave a direct message" };
         }
 
-        // Remove user from chat room in our database
-        await removeChatRoomMember(userDid, chatRoomId);
+        const membershipBeforeLeave = await ChatRoomMembers.findOne({ userDid, ...buildMongoMembershipQuery(chatRoomId) });
+        const wasActiveMember = isActiveChatRoomMembership(membershipBeforeLeave);
 
-        // Leave the Matrix room using user's own access token
-        const user = await getPrivateUserByDid(userDid);
-        if (user?.matrixAccessToken && chatRoom.matrixRoomId) {
-            // Use Matrix API to leave room
-            const matrixUrl = process.env.MATRIX_URL || `http://${process.env.MATRIX_HOST}:${process.env.MATRIX_PORT}`;
-            const response = await fetch(
-                `${matrixUrl}/_matrix/client/r0/rooms/${encodeURIComponent(chatRoom.matrixRoomId)}/leave`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${user.matrixAccessToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({}),
-                }
-            );
-
-            if (!response.ok) {
-                const error = await response.json();
-                console.error("Failed to leave Matrix room:", error);
-                // Don't fail the whole operation if Matrix leave fails
-            }
+        await ChatRoomMembers.updateMany(
+            { userDid, ...buildMongoMembershipQuery(chatRoomId) },
+            { $set: { status: "left", active: false, isActive: false } as any },
+        );
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $set: { updatedAt: new Date() } },
+        );
+        if (wasActiveMember) {
+            await emitGroupChatMembershipSystemEvent({
+                conversationId: chatRoomId,
+                eventType: "group_chat_left",
+                actorDid: userDid,
+                targetDid: userDid,
+            });
         }
-
         return { success: true };
     } catch (error) {
         console.error("❌ Error leaving group chat:", error);
@@ -646,40 +478,106 @@ export const updateGroupInfoAction = async (
     }
 
     try {
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (!chatRoom) {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
             return { success: false, message: "Chat room not found" };
         }
-
-        if (chatRoom.isDirect) {
+        if (conversation.type === "dm") {
             return { success: false, message: "Cannot update a direct message" };
         }
 
-        // TODO: Check if user is admin
-        // For now, we'll allow any member to update (should be restricted to admins)
-
-        // Update in our database
-        await import("@/lib/data/chat").then(m => m.updateChatRoom({
-            _id: chatRoomId,
-            ...updates,
-        }));
-
-        // Update in Matrix if name changed (non-blocking)
-        if (updates.name && chatRoom.matrixRoomId) {
-            try {
-                const { updateMatrixRoomNameAndAvatar } = await import("@/lib/data/matrix");
-                await updateMatrixRoomNameAndAvatar(chatRoom.matrixRoomId, updates.name);
-            } catch (matrixError) {
-                console.error("Failed to update Matrix room name:", matrixError);
-                // Don't fail the whole operation if Matrix update fails
-                // The database update succeeded, which is what matters
-            }
+        const canEdit = await canUserEditGroupInfo(chatRoomId, userDid);
+        if (!canEdit) {
+            return { success: false, message: "You are not authorized to update group info" };
         }
+
+        const conversationUpdates: Record<string, any> = { updatedAt: new Date() };
+        if (typeof updates.name === "string") {
+            conversationUpdates.name = updates.name;
+        }
+        if (typeof updates.description === "string") {
+            conversationUpdates.description = updates.description;
+        }
+
+        await ChatConversations.updateOne({ _id: new ObjectId(chatRoomId) }, { $set: conversationUpdates });
 
         return { success: true };
     } catch (error) {
         console.error("❌ Error updating group info:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to update group info" };
+    }
+};
+
+export const sendGroupAnnouncementAction = async (
+    chatRoomId: string,
+    body: string,
+): Promise<{ success: boolean; message?: string; messageId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to send announcements" };
+    }
+
+    const trimmedBody = body.trim();
+    if (!trimmedBody) {
+        return { success: false, message: "Announcement message cannot be empty" };
+    }
+
+    try {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type !== "group") {
+            return { success: false, message: "Announcements are only supported for group chats" };
+        }
+
+        const canSendAnnouncement = await canUserEditGroupInfo(chatRoomId, userDid);
+        if (!canSendAnnouncement) {
+            return { success: false, message: "Only group admins can send announcements" };
+        }
+
+        const result = await sendSystemMessage({
+            conversationId: chatRoomId,
+            body: trimmedBody,
+            systemType: "announcement",
+            source: "admin",
+            actorDid: userDid,
+            chatRoomId,
+            repliesDisabled: true,
+            templateKey: "announcement",
+            version: "v1",
+            format: "markdown",
+        });
+
+        return { success: true, messageId: result.messageId };
+    } catch (error) {
+        console.error("❌ Error sending announcement:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send announcement" };
+    }
+};
+
+export const canEditGroupInfoAction = async (
+    chatRoomId: string,
+): Promise<{ success: boolean; isAdmin?: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type === "dm") {
+            return { success: true, isAdmin: false };
+        }
+
+        const canEdit = await canUserEditGroupInfo(chatRoomId, userDid);
+        return { success: true, isAdmin: canEdit };
+    } catch (error) {
+        console.error("❌ Error checking group edit permissions:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to check permissions" };
     }
 };
 
@@ -705,62 +603,63 @@ export const updateGroupAvatarAction = async (
     }
 
     try {
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (!chatRoom) {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
             return { success: false, message: "Chat room not found" };
         }
-
-        if (chatRoom.isDirect) {
+        if (conversation.type === "dm") {
             return { success: false, message: "Cannot update avatar for direct messages" };
         }
 
-        const user = await getPrivateUserByDid(userDid);
-        if (!user?.matrixAccessToken) {
-            return { success: false, message: "User does not have a valid Matrix access token" };
+        const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+        if (!isRequesterAdmin(userDid, members)) {
+            return { success: false, message: "You are not authorized to update the group avatar" };
         }
 
-        const { uploadMatrixMedia, updateMatrixRoomNameAndAvatar } = await import("@/lib/data/matrix");
-        const matrixUrl = user.matrixUrl || `http://${process.env.MATRIX_HOST || "127.0.0.1"}:${process.env.MATRIX_PORT || "8008"}`;
-        
-        const buffer = Buffer.from(await file.arrayBuffer());
-        
-        // Upload media to Matrix
-        const mxcUrl = await uploadMatrixMedia(
-            user.matrixAccessToken,
-            matrixUrl,
-            buffer,
-            file.type,
-            file.name
+        const { saveFile } = await import("@/lib/data/storage");
+        const { getCircleByDid, getCircleById } = await import("@/lib/data/circle");
+        const ownerCircle = conversation.circleId ? await getCircleById(conversation.circleId) : await getCircleByDid(userDid);
+        if (!ownerCircle?._id) {
+            return { success: false, message: "Could not resolve storage owner" };
+        }
+
+        const fileInfo = await saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $set: { picture: { url: fileInfo.url }, updatedAt: new Date() } as any },
         );
 
-        // Convert MXC URL to HTTP URL for local DB
-        let httpAvatarUrl = mxcUrl;
-        if (mxcUrl.startsWith("mxc://")) {
-            // Use localhost (nginx) to benefit from direct file serving
-            // In production this would be the public media repo URL
-            httpAvatarUrl = `${matrixUrl}/_matrix/media/v3/download/${mxcUrl.replace("mxc://", "")}`;
-        }
-
-        // Update Matrix room avatar
-        if (chatRoom.matrixRoomId) {
-            try {
-                await updateMatrixRoomNameAndAvatar(chatRoom.matrixRoomId, chatRoom.name, mxcUrl);
-            } catch (matrixError) {
-                console.error("Failed to update Matrix room avatar:", matrixError);
-                // Continue to update local DB
-            }
-        }
-
-        // Update in our database
-        await import("@/lib/data/chat").then(m => m.updateChatRoom({
-            _id: chatRoomId,
-            picture: { url: httpAvatarUrl }
-        }));
-
-        return { success: true, pictureUrl: httpAvatarUrl };
+        return { success: true, pictureUrl: fileInfo.url };
     } catch (error) {
         console.error("❌ Error updating group avatar:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to update group avatar" };
+    }
+};
+
+export const getActiveChatRoomMemberCountAction = async (
+    chatRoomId: string,
+): Promise<{ success: boolean; memberCount?: number; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type === "dm") {
+            return { success: true, memberCount: 0 };
+        }
+
+        const members = await listMongoChatRoomMembers(chatRoomId);
+        const activeMemberCount = members.filter(isActiveChatRoomMembership).length;
+
+        return { success: true, memberCount: activeMemberCount };
+    } catch (error) {
+        console.error("❌ Error fetching active member count:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to fetch member count" };
     }
 };
 
@@ -773,47 +672,51 @@ export const getChatRoomMembersAction = async (
     }
 
     try {
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (!chatRoom) {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
             return { success: false, message: "Chat room not found" };
         }
+        if (conversation.type === "dm") {
+            return { success: true, members: [] };
+        }
 
-        // Get all members
-        const { getChatRoomMembers, updateChatRoomMemberRole } = await import("@/lib/data/chat");
-        let members = await getChatRoomMembers(chatRoomId);
+        const access = await resolveMongoConversationAccessInternal(chatRoomId, userDid);
+        if (!access.ok) {
+            return { success: false, message: access.message };
+        }
 
-        // Auto-migration: If no admins exist, make the earliest member an admin
-        const hasAdmin = members.some(m => m.role === "admin");
+        let members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+        const hasAdmin = members.some((member) => member.role === "admin");
         if (!hasAdmin && members.length > 0) {
-            // Find member with earliest joinedAt
-            const earliestMember = members.reduce((prev, current) => 
-                (new Date(prev.joinedAt) < new Date(current.joinedAt)) ? prev : current
+            const earliestMember = members.reduce((prev, current) =>
+                new Date(prev.joinedAt).getTime() <= new Date(current.joinedAt).getTime() ? prev : current,
             );
-            
-            // Update role in DB
-            await updateChatRoomMemberRole(earliestMember.userDid, chatRoomId, "admin");
-            
-            // Update local members array to reflect change
-            members = members.map(m => 
-                m.userDid === earliestMember.userDid ? { ...m, role: "admin" } : m
+            await ChatRoomMembers.updateOne(
+                { userDid: earliestMember.userDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { role: "admin", status: "active", active: true, isActive: true } as any },
+            );
+            members = members.map((member) =>
+                member.userDid === earliestMember.userDid ? { ...member, role: "admin" } : member,
             );
         }
 
-        // Get user details for each member
         const membersWithDetails = await Promise.all(
             members.map(async (member) => {
                 const user = await getUserByDid(member.userDid);
                 return {
                     ...member,
-                    _id: member._id?.toString(),
-                    user: user ? {
-                        did: user.did,
-                        name: user.name,
-                        handle: user.handle,
-                        picture: user.picture,
-                    } : null,
+                    _id: member._id?.toString?.() || member._id,
+                    role: member.role || "member",
+                    user: user
+                        ? {
+                              did: user.did,
+                              name: user.name,
+                              handle: user.handle,
+                              picture: user.picture,
+                          }
+                        : null,
                 };
-            })
+            }),
         );
 
         return { success: true, members: membersWithDetails };
@@ -836,59 +739,52 @@ export const addMembersAction = async (
     }
 
     try {
-        const { getChatRoomMembers, addChatRoomMember } = await import("@/lib/data/chat");
-        
-        // Check if requester is admin (or just a member if we allow members to add others)
-        // Usually only admins add to private groups, but standard chat often allows any member.
-        // Let's restrict to admins for consistency with other actions for now, unless we want open groups.
-        const members = await getChatRoomMembers(chatRoomId);
-        const requester = members.find(m => m.userDid === userDid);
-        
-        const isAdmin = requester?.role === "admin" || (requester && !requester.role); // Fallback for old groups
-        
-        if (!isAdmin) {
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type === "dm") {
+            return { success: false, message: "Cannot add members to a direct message" };
+        }
+
+        const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+        if (!isRequesterAdmin(userDid, members)) {
             return { success: false, message: "Only admins can add members" };
         }
 
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (!chatRoom) {
-            return { success: false, message: "Chat room not found" };
+        const uniqueMemberDids = Array.from(new Set(memberDids.filter(Boolean)));
+        const existingActiveMemberDids = new Set(
+            members.map((member) => (typeof member?.userDid === "string" ? member.userDid : "")),
+        );
+        const memberDidsNewlyActivated = uniqueMemberDids.filter((did) => !existingActiveMemberDids.has(did));
+        const now = new Date();
+        for (const newMemberDid of uniqueMemberDids) {
+            await ChatRoomMembers.updateOne(
+                { userDid: newMemberDid, ...buildMongoMembershipQuery(chatRoomId) },
+                {
+                    $setOnInsert: {
+                        userDid: newMemberDid,
+                        chatRoomId,
+                        joinedAt: now,
+                        role: "member",
+                    },
+                    $set: { status: "active", active: true, isActive: true } as any,
+                },
+                { upsert: true },
+            );
         }
 
-        const { getPrivateUserByDid } = await import("@/lib/data/user");
-        const { inviteUserToRoom } = await import("@/lib/data/matrix");
-        
-        // Get requester's Matrix token for inviting
-        const requesterUser = await getPrivateUserByDid(userDid);
-        if (!requesterUser?.matrixAccessToken) {
-            return { success: false, message: "You must be connected to Matrix to add members" };
-        }
-
-        for (const newMemberDid of memberDids) {
-            // Check if already a member locally
-            const isAlreadyMember = members.some(m => m.userDid === newMemberDid);
-            
-            if (!isAlreadyMember) {
-                // Add to local DB
-                await addChatRoomMember(newMemberDid, chatRoomId);
-            }
-
-            // Invite to Matrix (always try, in case they are locally added but not in Matrix)
-            if (chatRoom.matrixRoomId) {
-                try {
-                    const newMemberUser = await getPrivateUserByDid(newMemberDid);
-                    if (newMemberUser?.fullMatrixName) {
-                        await inviteUserToRoom(
-                            requesterUser.matrixAccessToken,
-                            chatRoom.matrixRoomId,
-                            newMemberUser.fullMatrixName
-                        );
-                    }
-                } catch (matrixError) {
-                    console.error(`Failed to invite ${newMemberDid} to Matrix room:`, matrixError);
-                    // Don't fail the whole operation, just log
-                }
-            }
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $addToSet: { participants: { $each: uniqueMemberDids } }, $set: { updatedAt: now } },
+        );
+        for (const targetDid of memberDidsNewlyActivated) {
+            await emitGroupChatMembershipSystemEvent({
+                conversationId: chatRoomId,
+                eventType: "group_chat_member_added",
+                actorDid: userDid,
+                targetDid,
+            });
         }
 
         return { success: true };
@@ -908,51 +804,48 @@ export const removeMemberAction = async (
     }
 
     try {
-        const { getChatRoomMembers, removeChatRoomMember } = await import("@/lib/data/chat");
-        
-        // Check if requester is admin
-        const members = await getChatRoomMembers(chatRoomId);
-        const requester = members.find(m => m.userDid === userDid);
-        
-        // Check permissions
-        const isAdmin = requester?.role === "admin";
-        if (!isAdmin) {
-            return { success: false, message: "Only admins can remove members" };
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type === "dm") {
+            return { success: false, message: "Cannot remove members from a direct message" };
         }
 
-        // Cannot remove self using this action (use leave instead)
+        const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+        if (!isRequesterAdmin(userDid, members)) {
+            return { success: false, message: "Only admins can remove members" };
+        }
         if (memberDid === userDid) {
             return { success: false, message: "Use the leave option to remove yourself" };
         }
-
-        // Remove from local DB
-        await removeChatRoomMember(memberDid, chatRoomId);
-
-        // Remove from Matrix
-        const chatRoom = await getChatRoom(chatRoomId);
-        if (chatRoom && chatRoom.matrixRoomId) {
-            try {
-                // We need the member's user ID to kick them from Matrix
-                // Since we only have DID, we need to resolve it or just use the removeUserFromRoom helper 
-                // which might expect a Matrix ID or handle the lookup.
-                // Let's check removeUserFromRoom in matrix.ts. 
-                // It expects userId (Matrix ID) but checks for "User not found" etc.
-                // Actually removeUserFromRoom in matrix.ts takes (userId, roomId) where userId is matrix ID.
-                // We need to find the user's matrix ID.
-                
-                const { getPrivateUserByDid } = await import("@/lib/data/user");
-                const memberUser = await getPrivateUserByDid(memberDid);
-                
-                if (memberUser?.fullMatrixName) {
-                    const { removeUserFromRoom } = await import("@/lib/data/matrix");
-                    // removeUserFromRoom implementation in matrix.ts uses admin access token to kick
-                    await removeUserFromRoom(memberUser.fullMatrixName, chatRoom.matrixRoomId);
-                }
-            } catch (matrixError) {
-                console.error("Failed to remove user from Matrix room:", matrixError);
-                // Don't fail the operation if Matrix kick fails (user might already be gone or other issue)
-            }
+        const targetMemberships = members.filter((member) => member.userDid === memberDid);
+        if (targetMemberships.length === 0) {
+            return { success: false, message: "Member not found" };
         }
+        const targetMembershipIds = targetMemberships.map((member) => member._id).filter(Boolean);
+
+        if (targetMembershipIds.length > 0) {
+            await ChatRoomMembers.updateMany(
+                { _id: { $in: targetMembershipIds } },
+                { $set: { status: "removed", active: false, isActive: false } as any },
+            );
+        } else {
+            await ChatRoomMembers.updateMany(
+                { userDid: memberDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { status: "removed", active: false, isActive: false } as any },
+            );
+        }
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $set: { updatedAt: new Date() } },
+        );
+        await emitGroupChatMembershipSystemEvent({
+            conversationId: chatRoomId,
+            eventType: "group_chat_member_removed",
+            actorDid: userDid,
+            targetDid: memberDid,
+        });
 
         return { success: true };
     } catch (error) {
@@ -971,21 +864,50 @@ export const promoteMemberAction = async (
     }
 
     try {
-        const { getChatRoomMembers, updateChatRoomMemberRole } = await import("@/lib/data/chat");
-        
-        // Check if requester is admin
-        const members = await getChatRoomMembers(chatRoomId);
-        const requester = members.find(m => m.userDid === userDid);
-        
-        // Allow if requester is admin OR if it's an old group (fallback logic)
-        // For security, we should strictly enforce admin role, but for now we'll match the UI logic
-        const isAdmin = requester?.role === "admin" || (requester && !requester.role);
-        
-        if (!isAdmin) {
-            return { success: false, message: "Only admins can promote members" };
+        const conversation = await getMongoConversation(chatRoomId);
+        if (!conversation) {
+            return { success: false, message: "Chat room not found" };
+        }
+        if (conversation.type === "dm") {
+            return { success: false, message: "Cannot promote members in a direct message" };
         }
 
-        await updateChatRoomMemberRole(targetUserDid, chatRoomId, "admin");
+        const members = (await listMongoChatRoomMembers(chatRoomId)).filter(isActiveChatRoomMembership);
+        if (!isRequesterAdmin(userDid, members)) {
+            return { success: false, message: "Only admins can promote members" };
+        }
+        const targetMemberships = members.filter((member) => member.userDid === targetUserDid);
+        if (targetMemberships.length === 0) {
+            return { success: false, message: "Member not found" };
+        }
+        const alreadyAdmin = targetMemberships.some((member) => member.role === "admin");
+        if (alreadyAdmin) {
+            return { success: true };
+        }
+        const targetMembershipIds = targetMemberships.map((member) => member._id).filter(Boolean);
+
+        if (targetMembershipIds.length > 0) {
+            await ChatRoomMembers.updateMany(
+                { _id: { $in: targetMembershipIds } },
+                { $set: { role: "admin" } },
+            );
+        } else {
+            await ChatRoomMembers.updateOne(
+                { userDid: targetUserDid, ...buildMongoMembershipQuery(chatRoomId) },
+                { $set: { role: "admin" } },
+            );
+        }
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(chatRoomId) },
+            { $set: { updatedAt: new Date() } },
+        );
+        await emitGroupChatMembershipSystemEvent({
+            conversationId: chatRoomId,
+            eventType: "group_chat_admin_promoted",
+            actorDid: userDid,
+            targetDid: targetUserDid,
+        });
+
         return { success: true };
     } catch (error) {
         console.error("❌ Error promoting member:", error);

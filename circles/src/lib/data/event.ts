@@ -9,6 +9,8 @@ import { notifyEventInvitation } from "./notifications";
 import { getUserPrivate } from "./user";
 import { isAuthorized } from "../auth/auth";
 import { features } from "./constants";
+import { getCircleById } from "./circle";
+import { isAcceptedConnectionForUserDid } from "./relationships";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -23,6 +25,7 @@ export const SAFE_EVENT_PROJECTION = {
     userGroups: 1,
     location: 1,
     commentPostId: 1,
+    noticeboardPostId: 1,
     images: 1,
     isVirtual: 1,
     virtualUrl: 1,
@@ -39,6 +42,37 @@ export const SAFE_EVENT_PROJECTION = {
 } as const;
 
 type Range = { from?: Date; to?: Date };
+const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
+
+function parseRecurringInstanceId(eventId: string): { baseEventId: string; occurrenceStart: Date } | null {
+    const match = RECURRING_INSTANCE_ID_PATTERN.exec(eventId);
+    if (!match) return null;
+
+    const occurrenceTimestamp = Number(match[2]);
+    if (!Number.isFinite(occurrenceTimestamp)) return null;
+
+    const occurrenceStart = new Date(occurrenceTimestamp);
+    if (Number.isNaN(occurrenceStart.getTime())) return null;
+
+    return {
+        baseEventId: match[1],
+        occurrenceStart,
+    };
+}
+
+function buildRecurringInstance(event: EventDisplay, occurrenceStart: Date): EventDisplay {
+    const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
+    const instanceEnd = new Date(occurrenceStart.getTime() + duration);
+
+    return {
+        ...event,
+        _id: `${event._id}_${occurrenceStart.getTime()}`,
+        startAt: occurrenceStart,
+        endAt: instanceEnd,
+        isRecurringInstance: true,
+        originalEventId: event._id,
+    } as unknown as EventDisplay;
+}
 
 /**
  * Build $match for optional date range. Includes events that overlap the range window.
@@ -55,6 +89,21 @@ function buildRangeMatch(range?: Range) {
         clauses.push({ startAt: { $lte: range.to } });
     }
     return clauses.length ? { $and: clauses } : {};
+}
+
+function normalizeRecurringUntil(endDate?: Date | string): Date | undefined {
+    if (!endDate) return undefined;
+    const parsed = new Date(endDate);
+    if (Number.isNaN(parsed.getTime())) return undefined;
+    if (
+        parsed.getUTCHours() === 0 &&
+        parsed.getUTCMinutes() === 0 &&
+        parsed.getUTCSeconds() === 0 &&
+        parsed.getUTCMilliseconds() === 0
+    ) {
+        parsed.setUTCHours(23, 59, 59, 999);
+    }
+    return parsed;
 }
 
 /**
@@ -77,7 +126,7 @@ function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[]
         freq: rruleFreq,
         interval: interval,
         dtstart: new Date(event.startAt),
-        until: endDate ? new Date(endDate) : undefined,
+        until: normalizeRecurringUntil(endDate),
         count: count,
     });
 
@@ -85,20 +134,7 @@ function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[]
     // Note: rrule.between(after, before, inc)
     const instances = rule.between(range.from, range.to, true);
 
-    return instances.map((date: Date, idx: number) => {
-        // Calculate duration to shift endAt correctly
-        const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
-        const instanceEnd = new Date(date.getTime() + duration);
-
-        return {
-            ...event,
-            _id: `${event._id}_${date.getTime()}`, // Virtual ID
-            startAt: date,
-            endAt: instanceEnd,
-            isRecurringInstance: true,
-            originalEventId: event._id,
-        } as unknown as EventDisplay; // Type assertion since we are adding virtual props
-    });
+    return instances.map((date: Date) => buildRecurringInstance(event, date));
 }
 
 /**
@@ -164,7 +200,10 @@ export const getEventsByCircleId = async (
             }
 
             if (userQueries.length > 0) {
-                matchQuery.$or = [{ circleId }, ...userQueries];
+                // User profile circle:
+// show events the user CREATED or is PARTICIPATING in,
+// regardless of which circle the event belongs to
+matchQuery.$or = userQueries;
                 delete matchQuery.circleId;
             }
         }
@@ -184,7 +223,7 @@ export const getEventsByCircleId = async (
             // 1) Match circle and optional date overlap
             // 1) Match circle and optional date overlap OR recurrence
             {
-                $match: baseMatch,
+                $match: matchQuery,
             },
             ...hideCancelledMatchStage,
 
@@ -361,7 +400,10 @@ export const getEventsByCircleId = async (
             { $sort: { startAt: 1 } },
         ]).toArray()) as EventDisplay[];
 
-        return events;
+        const expandedEvents =
+            range?.from && range?.to ? events.flatMap((event) => expandRecurringEvent(event, range)) : events;
+
+        return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting events by circle ID:", error);
         throw error;
@@ -373,12 +415,15 @@ export const getEventsByCircleId = async (
  */
 export const getEventById = async (eventId: string, userDid: string): Promise<EventDisplay | null> => {
     try {
-        if (!ObjectId.isValid(eventId)) {
+        const recurringInstance = parseRecurringInstanceId(eventId);
+        const lookupEventId = recurringInstance?.baseEventId ?? eventId;
+
+        if (!ObjectId.isValid(lookupEventId)) {
             return null;
         }
 
         const events = (await Events.aggregate([
-            { $match: { _id: new ObjectId(eventId) } },
+            { $match: { _id: new ObjectId(lookupEventId) } },
 
             // Author
             {
@@ -550,7 +595,24 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             },
         ]).toArray()) as EventDisplay[];
 
-        return events.length > 0 ? events[0] : null;
+        if (events.length === 0) {
+            return null;
+        }
+
+        const event = events[0];
+        if (!recurringInstance) {
+            return event;
+        }
+
+        if (!event.recurrence) {
+            return null;
+        }
+
+        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.occurrenceStart);
+        return {
+            ...occurrenceEvent,
+            _id: event._id,
+        } as EventDisplay;
     } catch (error) {
         console.error(`Error getting event by ID (${eventId}):`, error);
         throw error;
@@ -574,6 +636,11 @@ export const inviteUsersToEvent = async (
         return;
     }
 
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return;
+    }
+
     const existingInvitations = await EventInvitations.find({ eventId, userDid: { $in: userDids } }).toArray();
     const existingUserDids = new Set(existingInvitations.map((inv) => inv.userDid));
     const newUserDids = userDids.filter((did) => !existingUserDids.has(did));
@@ -582,11 +649,20 @@ export const inviteUsersToEvent = async (
         return;
     }
 
-    // Only invite users who are permitted to view events in this circle
-    const permissionChecks = await Promise.all(
-        newUserDids.map((did) => isAuthorized(did, circleId, features.events.view)),
-    );
-    const targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx]);
+    let targetUserDids = newUserDids;
+
+    if (circle.circleType === "user" && inviter.did) {
+        const acceptedChecks = await Promise.all(
+            newUserDids.map((did) => isAcceptedConnectionForUserDid(inviter.did!, did)),
+        );
+        targetUserDids = newUserDids.filter((_, idx) => acceptedChecks[idx]);
+    } else {
+        // Only invite users who are permitted to view events in this circle
+        const permissionChecks = await Promise.all(
+            newUserDids.map((did) => isAuthorized(did, circleId, features.events.view)),
+        );
+        targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx]);
+    }
 
     if (targetUserDids.length === 0) {
         return;

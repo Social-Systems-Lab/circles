@@ -115,7 +115,7 @@ export const features = {
             module: "communities",
         } as Feature,
         create: {
-            name: "Create Community",
+            name: "Create Circle",
             handle: "create",
             description: "Create a new circle",
             defaultUserGroups: ["admins", "moderators", "members"],
@@ -625,7 +625,7 @@ export const modules: ModuleInfo[] = [
             "Shows everyone who follows or is part of the circle. Admins can see, manage, and engage with supporters, making it easier to track growth and involvement.",
     },
     {
-        name: "Communities",
+        name: "Circles",
         handle: "communities",
         description:
             "Displays all communities connected to this community. Helps members navigate related communities, deepen partnerships, and organize nested initiatives.",
@@ -654,6 +654,11 @@ export const modules: ModuleInfo[] = [
             "Create and discover upcoming meetups, cleanups and gatherings. Publish event details, locations or virtual links, and manage RSVPs with calendar integration.",
     },
     {
+        name: "Funding Needs",
+        handle: "funding",
+        description: "Enable members-only Funding Needs for this circle.",
+    },
+    {
         name: "Proposals",
         handle: "proposals",
         description:
@@ -673,6 +678,9 @@ export const modules: ModuleInfo[] = [
         readOnly: true,
     },
 ];
+
+// TODO: Re-enable the projects module in public UI once the page is ready.
+export const hiddenPublicModuleHandles: readonly string[] = ["projects"];
 
 export const defaultUserModules = ["home", "feed", "followers", "communities", "settings"];
 export const defaultCircleModules = ["home", "feed", "followers", "discussions", "settings"];

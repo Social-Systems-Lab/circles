@@ -16,13 +16,13 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
     const router = useRouter();
     const pathname = usePathname();
     const isProjectsPage = pathname?.includes("/projects");
-    const entityLabel = isProjectsPage ? "Project" : "Community";
+    const entityLabel = isProjectsPage ? "Project" : "Circle";
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
                 <Button
-                    variant={isCompact ? "ghost" : "outline"}
+                    variant={isCompact ? "ghost" : "default"}
                     className={isCompact ? "h-[32px] w-[32px] p-0" : "gap-2"}
                 >
                     <Plus className="h-4 w-4" />
@@ -44,9 +44,9 @@ export function CreateCircleDialog({ parentCircleId }: { parentCircleId?: string
                     onComplete={(createdCircleId, handle) => {
                         setIsOpen(false);
                         if (handle) {
-                            router.push(`/circles/${handle}`);
+                            router.push(`/circles/${handle}/settings/about`);
                         } else if (createdCircleId) {
-                            router.push(`/circles/${createdCircleId}`);
+                            router.push(`/circles/${createdCircleId}/settings/about`);
                         }
                     }}
                 />

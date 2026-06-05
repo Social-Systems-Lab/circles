@@ -26,6 +26,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
 
 # vercel
@@ -44,3 +45,14 @@ NOTES*
 
 # Local backup files
 *.bak.*
+
+# Local secrets
+.env
+.env.local
+
+# Local-only
+.DS_Store
+backups/
+.DS_Store
+tmp/
+.DS_Store

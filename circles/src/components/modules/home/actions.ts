@@ -1,18 +1,28 @@
 "use server";
 
 import { verifyUserToken } from "@/lib/auth/jwt";
+import { readAuthToken } from "@/lib/auth/cookie";
 import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
 import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import { getCircleById, getCirclePath, updateCircle, getCircleByDid, getCirclesByIds } from "@/lib/data/circle";
+import { DETACH_ADMIN_CHANGE_BLOCK_MESSAGE, getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
 import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
-import { notifyNewMember, sendNotifications } from "@/lib/data/matrix";
+import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
+import {
+    getDmEligibility,
+    getProfileRelationshipState,
+    listToolboxConnectionsForUserDid,
+    ToolboxConnectionsSummary,
+} from "@/lib/data/relationships";
+import { UserRelationships } from "@/lib/data/db";
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 
 type CircleActionResponse = {
     success: boolean;
@@ -32,7 +42,7 @@ export const getUserPrivateAction = async (): Promise<UserPrivate | undefined> =
 
 export const followCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -49,6 +59,15 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
 
         if (!updatedCircle) {
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
+        }
+
+        const existingMember = await getMember(userDid, updatedCircle._id ?? "");
+        if (existingMember) {
+            return {
+                success: true,
+                message: isUser ? "You are already following user" : "You are already following circle",
+                pending: false,
+            };
         }
 
         if (updatedCircle.isPublic) {
@@ -92,7 +111,7 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
 
 export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse> => {
     let isUser = circle?.circleType === "user";
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -111,6 +130,10 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
         }
         const isAdmin = member.userGroups?.includes("admins");
         if (isAdmin) {
+            const pendingDetachRequest = await getPendingDetachCircleRequest(circle._id ?? "");
+            if (pendingDetachRequest) {
+                return { success: false, message: DETACH_ADMIN_CHANGE_BLOCK_MESSAGE };
+            }
             const adminCount = await countAdmins(circle._id ?? "");
             if (adminCount <= 1) {
                 return { success: false, message: "Cannot leave as last admin." };
@@ -127,7 +150,7 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
 };
 
 export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionResponse> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -151,7 +174,7 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
  * Toggle bookmark for a circle. Returns the updated UserPrivate on success.
  */
 export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivate | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
 
     try {
         if (!token) {
@@ -190,7 +213,7 @@ export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivat
 export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
     try {
         // Prefer server-side auth util if available
-        const token = (await cookies()).get("token")?.value;
+        const token = readAuthToken(await cookies());
         if (!token) {
             return [];
         }
@@ -217,7 +240,7 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
  * Pin a circle for the current user. Returns updated UserPrivate.
  */
 export const pinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
         const payload = await verifyUserToken(token);
@@ -237,7 +260,7 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
  * Unpin a circle for the current user. Returns updated UserPrivate.
  */
 export const unpinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
-    const token = (await cookies()).get("token")?.value;
+    const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
         const payload = await verifyUserToken(token);
@@ -346,6 +369,15 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
             throw new Error("User not found");
         }
 
+        if (!recipient?.did) {
+            throw new Error("Recipient not found");
+        }
+
+        const dmEligibility = await getDmEligibility(userDid, recipient.did);
+        if (!dmEligibility.isAllowed) {
+            return null;
+        }
+
         const room = await findOrCreateDMRoomData(user, recipient);
         return room;
     } catch (error) {
@@ -353,3 +385,252 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
         return null;
     }
 }
+
+export const getProfileRelationshipStateAction = async (targetDid: string) => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid || !targetDid || viewerDid === targetDid) {
+        return null;
+    }
+
+    return await getProfileRelationshipState(viewerDid, targetDid);
+};
+
+export const listToolboxConnectionsAction = async (): Promise<ToolboxConnectionsSummary> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return {
+            accepted: [],
+            pendingIncoming: [],
+            pendingOutgoing: [],
+        };
+    }
+
+    return await listToolboxConnectionsForUserDid(userDid);
+};
+
+export const sendConnectRequestAction = async (
+    targetDid: string,
+): Promise<{ success: boolean; message: string }> => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid) {
+        return { success: false, message: "You need to be logged in to add a contact" };
+    }
+
+    if (!targetDid || viewerDid === targetDid) {
+        return { success: false, message: "Invalid contact request" };
+    }
+
+    const viewer = await getCircleByDid(viewerDid);
+    if (!canPerformRestrictedAction(viewer)) {
+        return { success: false, message: getRestrictedActionMessage("add contacts") };
+    }
+
+    try {
+        const targetUser = await getCircleByDid(targetDid);
+        if (!targetUser || targetUser.circleType !== "user") {
+            return { success: false, message: "Recipient not found" };
+        }
+
+        const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
+        if (relationshipState.connectStatus === "accepted") {
+            return { success: false, message: "Contact is already established" };
+        }
+
+        if (relationshipState.connectStatus === "pending_sent") {
+            return { success: true, message: "Contact request already sent" };
+        }
+
+        if (relationshipState.connectStatus === "pending_received") {
+            return { success: false, message: "This user already requested to connect" };
+        }
+
+        const now = new Date();
+
+        await UserRelationships.updateOne(
+            { fromDid: viewerDid, toDid: targetDid },
+            {
+                $set: {
+                    connectStatus: "pending_sent",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: viewerDid,
+                    toDid: targetDid,
+                    isFollowing: false,
+                    dmPermission: "none",
+                    dmPermissionSource: "none",
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        await UserRelationships.updateOne(
+            { fromDid: targetDid, toDid: viewerDid },
+            {
+                $set: {
+                    connectStatus: "pending_received",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: targetDid,
+                    toDid: viewerDid,
+                    isFollowing: false,
+                    dmPermission: "none",
+                    dmPermissionSource: "none",
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        try {
+            const requester = await getCircleByDid(viewerDid);
+            if (requester?.circleType === "user") {
+                await sendNotifications("contact_request_received", [targetUser], {
+                    user: requester,
+                });
+            }
+        } catch (notificationError) {
+            console.error("Failed to create contact request notification", notificationError);
+        }
+
+        return { success: true, message: "Contact request sent" };
+    } catch (error) {
+        console.error("Failed to send connect request", error);
+        return { success: false, message: "Failed to send contact request" };
+    }
+};
+
+export const acceptConnectRequestAction = async (
+    targetDid: string,
+): Promise<{ success: boolean; message: string }> => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid) {
+        return { success: false, message: "You need to be logged in to accept a contact request" };
+    }
+
+    if (!targetDid || viewerDid === targetDid) {
+        return { success: false, message: "Invalid contact request" };
+    }
+
+    try {
+        const targetUser = await getCircleByDid(targetDid);
+        if (!targetUser || targetUser.circleType !== "user") {
+            return { success: false, message: "Requester not found" };
+        }
+
+        const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
+        if (relationshipState.connectStatus !== "pending_received") {
+            return { success: false, message: "No incoming contact request to accept" };
+        }
+
+        const now = new Date();
+        const [viewerEdge, targetEdge] = await Promise.all([
+            UserRelationships.findOne(
+                { fromDid: viewerDid, toDid: targetDid },
+                { projection: { dmPermissionSource: 1 } },
+            ),
+            UserRelationships.findOne(
+                { fromDid: targetDid, toDid: viewerDid },
+                { projection: { dmPermissionSource: 1 } },
+            ),
+        ]);
+
+        await UserRelationships.updateOne(
+            { fromDid: viewerDid, toDid: targetDid },
+            {
+                $set: {
+                    connectStatus: "accepted",
+                    dmPermission: "allowed",
+                    dmPermissionSource: viewerEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: viewerDid,
+                    toDid: targetDid,
+                    isFollowing: false,
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        await UserRelationships.updateOne(
+            { fromDid: targetDid, toDid: viewerDid },
+            {
+                $set: {
+                    connectStatus: "accepted",
+                    dmPermission: "allowed",
+                    dmPermissionSource: targetEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    fromDid: targetDid,
+                    toDid: viewerDid,
+                    isFollowing: false,
+                    createdAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        return { success: true, message: "Contact request accepted" };
+    } catch (error) {
+        console.error("Failed to accept connect request", error);
+        return { success: false, message: "Failed to accept contact request" };
+    }
+};
+
+export const declineConnectRequestAction = async (
+    targetDid: string,
+): Promise<{ success: boolean; message: string }> => {
+    const viewerDid = await getAuthenticatedUserDid();
+    if (!viewerDid) {
+        return { success: false, message: "You need to be logged in to decline a contact request" };
+    }
+
+    if (!targetDid || viewerDid === targetDid) {
+        return { success: false, message: "Invalid contact request" };
+    }
+
+    try {
+        const targetUser = await getCircleByDid(targetDid);
+        if (!targetUser || targetUser.circleType !== "user") {
+            return { success: false, message: "Requester not found" };
+        }
+
+        const relationshipState = await getProfileRelationshipState(viewerDid, targetDid);
+        if (relationshipState.connectStatus !== "pending_received") {
+            return { success: false, message: "No incoming contact request to decline" };
+        }
+
+        const now = new Date();
+
+        await Promise.all([
+            UserRelationships.updateOne(
+                { fromDid: viewerDid, toDid: targetDid },
+                {
+                    $set: {
+                        connectStatus: "none",
+                        updatedAt: now,
+                    },
+                },
+            ),
+            UserRelationships.updateOne(
+                { fromDid: targetDid, toDid: viewerDid },
+                {
+                    $set: {
+                        connectStatus: "none",
+                        updatedAt: now,
+                    },
+                },
+            ),
+        ]);
+
+        return { success: true, message: "Contact request declined" };
+    } catch (error) {
+        console.error("Failed to decline connect request", error);
+        return { success: false, message: "Failed to decline contact request" };
+    }
+};

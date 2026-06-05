@@ -1,4 +1,5 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
+import { getAuthCookieNamesForClearing, readAuthToken } from "@/lib/auth/cookie";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
@@ -16,21 +17,21 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    let userDid = undefined;
+    let userDid: string | undefined = undefined;
 
-    // determine host and port based on environment
-    const host = process.env.NODE_ENV === "production" ? process.env.CIRCLES_HOST : "localhost";
+    const host = process.env.CIRCLES_HOST;
     const port = process.env.CIRCLES_PORT || 3000;
+    const accessApiUrls = getAccessApiUrls(request, host, port);
 
     if (process.env.NODE_ENV === "development") {
         console.log("Requesting access to", request.url);
     }
 
     try {
-        const token = request.cookies.get("token")?.value;
+        const token = readAuthToken(request.cookies);
         if (token) {
             let payload = await verifyUserToken(token);
-            userDid = payload.userDid;
+            userDid = typeof payload.userDid === "string" ? payload.userDid : undefined;
         }
     } catch (error) {
         console.error("Error verifying token", error);
@@ -38,7 +39,9 @@ export async function proxy(request: NextRequest) {
         // If a user has an old/invalid cookie (e.g. after a deploy or secret change),
         // clear it automatically and reload the same URL once.
         const res = NextResponse.redirect(request.nextUrl);
-        res.cookies.set("token", "", { maxAge: 0, path: "/" });
+        for (const cookieName of getAuthCookieNamesForClearing()) {
+            res.cookies.set(cookieName, "", { maxAge: 0, path: "/" });
+        }
         return res;
     }
 
@@ -82,13 +85,7 @@ export async function proxy(request: NextRequest) {
 
     // fetch access rules for specified circle and module
     try {
-        const response = await fetch(`http://${host}:${port}/api/access`, {
-            method: "POST",
-            body: JSON.stringify({ userDid, circleHandle, moduleHandle }),
-            headers: {
-                "Content-Type": "application/json",
-            },
-        });
+        const response = await fetchFirstAccessApi(accessApiUrls, { userDid, circleHandle, moduleHandle });
         const { authenticated, authorized, notFound, notFoundType, error } = await response.json();
         if (error) {
             return redirectToErrorPage(request);
@@ -112,6 +109,67 @@ export async function proxy(request: NextRequest) {
     } catch (error) {
         return redirectToErrorPage(request);
     }
+}
+
+function getAccessApiUrls(request: NextRequest, host: string | undefined, port: string | number) {
+    if (process.env.NODE_ENV === "production") {
+        return [`http://${host}:${port}/api/access`];
+    }
+
+    const urls: string[] = [];
+    const requestOriginAccessUrl = new URL("/api/access", request.url).toString();
+    const hostname = request.nextUrl.hostname;
+    const isLocalHostname = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
+    if (isLocalHostname) {
+        urls.push(requestOriginAccessUrl);
+    }
+
+    const configuredDevOrigin = process.env.CIRCLES_DEV_INTERNAL_ORIGIN;
+    if (configuredDevOrigin) {
+        urls.push(new URL("/api/access", configuredDevOrigin).toString());
+    }
+
+    const devPorts = [process.env.PORT, process.env.CIRCLES_PORT, "3006", "3000"].filter(Boolean);
+    for (const devPort of devPorts) {
+        urls.push(`http://127.0.0.1:${devPort}/api/access`);
+    }
+
+    if (!isLocalHostname) {
+        urls.push(requestOriginAccessUrl);
+    }
+
+    return [...new Set(urls)];
+}
+
+async function fetchFirstAccessApi(
+    accessApiUrls: string[],
+    body: { userDid: string | undefined; circleHandle: string; moduleHandle: string },
+) {
+    let lastError: unknown;
+
+    for (const accessApiUrl of accessApiUrls) {
+        try {
+            const response = await fetch(accessApiUrl, {
+                method: "POST",
+                body: JSON.stringify(body),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.status >= 500) {
+                lastError = new Error(`Access API returned ${response.status} from ${accessApiUrl}`);
+                continue;
+            }
+
+            return response;
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    throw lastError;
 }
 
 function redirectToNotFound(request: NextRequest) {

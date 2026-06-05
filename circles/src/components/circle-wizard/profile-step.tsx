@@ -11,6 +11,14 @@ import { saveProfileAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import MultiImageUploader
+import { Media } from "@/models/models";
+
+const toExistingImageItems = (images?: Media[]): ImageItem[] =>
+    images?.map((media) => ({
+        id: media.fileInfo.url,
+        preview: media.fileInfo.url,
+        existingMediaUrl: media.fileInfo.url,
+    })) || [];
 
 // Create a custom image upload component for the circle wizard (KEEPING FOR PROFILE PICTURE FOR NOW)
 function CircleImageUpload({
@@ -25,13 +33,12 @@ function CircleImageUpload({
     src: string;
     alt: string;
     className?: string;
-    onImageUpdate: (newUrl: string) => void;
+    onImageUpdate: (newUrl: string, file?: File) => void;
     circleData: any;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const { toast } = useToast();
-    const [fileToUpload, setFileToUpload] = useState<File | null>(null);
     const [currentSrc, setCurrentSrc] = useState(src); // Initialize internal state
 
     // Effect to update internal state when src prop changes
@@ -47,9 +54,9 @@ function CircleImageUpload({
 
         setIsUploading(true);
         try {
-            // Create temporary URL for immediate feedback
+            // Create temporary URL for immediate feedback and keep original file for final wizard save
             const tempUrl = URL.createObjectURL(file);
-            onImageUpdate(tempUrl);
+            onImageUpdate(tempUrl, file);
 
             // If we have a circle ID, upload the file immediately
             if (circleData._id) {
@@ -76,8 +83,7 @@ function CircleImageUpload({
                     });
                 }
             } else {
-                // If no circle ID yet, store the file for later upload
-                setFileToUpload(file);
+                // If no circle ID yet, keep the file in parent state for later upload
                 console.log(`CircleImageUpload (${id}): No circle ID yet, storing file for later:`, file.name);
 
                 toast({
@@ -182,7 +188,7 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                         circleData.description,
                         circleData.content,
                         circleData._id,
-                        circleData.picture, // Pass picture data (might be URL or File)
+                        circleData.pictureFile || circleData.picture, // Prefer file so upload is guaranteed during initial create
                         circleData.images, // Pass the images array
                     );
 
@@ -199,7 +205,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             description: circle.description || prev.description,
                             content: circle.content || prev.content,
                             picture: circle.picture?.url || prev.picture, // Update picture URL if changed
-                            images: circle.images || prev.images, // Update images array if changed
+                            pictureFile: undefined,
+                            images: circle.images ? toExistingImageItems(circle.images) : prev.images,
                         }));
                     }
                 }
@@ -236,10 +243,11 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                                 alt="Circle Picture"
                                 className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                 circleData={circleData}
-                                onImageUpdate={(newUrl) => {
+                                onImageUpdate={(newUrl, file) => {
                                     setCircleData((prev) => ({
                                         ...prev,
                                         picture: newUrl,
+                                        pictureFile: file || prev.pictureFile,
                                     }));
                                 }}
                             />
@@ -258,9 +266,8 @@ export default function ProfileStep({ circleData, setCircleData, nextStep, prevS
                             // Pass images from circleData (parent state)
                             initialImages={
                                 circleData.images
-                                    ?.filter((item) => item.existingMediaUrl) // Filter out potential non-Media items if needed
+                                    ?.filter((item) => item.existingMediaUrl)
                                     .map((item) => ({
-                                        // Reconstruct Media structure for initialImages prop
                                         name: "Existing Image",
                                         type: "image/jpeg",
                                         fileInfo: { url: item.existingMediaUrl! },

@@ -149,7 +149,7 @@ export default function MobileEventsPanel() {
     const [user] = useAtom(userAtom);
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [loading, setLoading] = useState(false);
-    const [sort, setSort] = useState<string>("top");
+    const [sort, setSort] = useState<string>("near");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [hideVirtual, setHideVirtual] = useState<boolean>(false);
 
@@ -234,17 +234,18 @@ export default function MobileEventsPanel() {
         list = list.sort((a, b) => byStartAsc(a, b));
 
         return list;
-    }, [events, userLngLat, sort, selectedSdgs]);
+    }, [events, hideVirtual, userLngLat, sort, selectedSdgs]);
 
     return (
         <div className="flex h-full flex-col">
             <div className="px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
                     <ListFilter
-                        defaultValue="top"
+                        defaultValue="near"
                         onFilterChange={setSort}
                         selectedSdgs={selectedSdgs}
                         onSdgChange={setSelectedSdgs}
+                        showSdgFilter={false}
                     />
                     <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
                         <input

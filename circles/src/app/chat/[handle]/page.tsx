@@ -16,48 +16,36 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
         redirect("/welcome");
     }
 
-    // check if user has access to chat room
-    let privateUser = await getUserPrivate(userDid);
-    
-    console.log("Looking for chat with handle:", params.handle);
-    console.log("Available chat handles:", privateUser.chatRoomMemberships.map(m => ({
-        circleHandle: m.chatRoom.circle?.handle,
-        chatHandle: m.chatRoom.handle,
-        name: m.chatRoom.name
-    })));
-    
-    let chatRoom = privateUser.chatRoomMemberships.find((m) => m.chatRoom.circle?.handle === params.handle || m.chatRoom.handle === params.handle)?.chatRoom;
-    if (!chatRoom) {
-        console.error("Chat room not found for handle:", params.handle);
+    const privateUser = await getUserPrivate(userDid);
+    const { resolveMongoConversationAccess } = await import("@/components/modules/chat/mongo-actions");
+    const { listConversationsForUser } = await import("@/lib/data/mongo-chat");
+
+    const slug = params.handle;
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(slug);
+    const circleIds = (privateUser?.memberships || []).map((m) => m.circleId).filter(Boolean);
+    const chats = await listConversationsForUser(userDid, circleIds);
+
+    // 1) If slug is an ObjectId, treat it as conversationId.
+    if (isObjectId) {
+        const access = await resolveMongoConversationAccess(slug, userDid);
+        if (!access.ok || !access.conversation) {
+            redirect("/unauthorized");
+        }
+
+        const chatRoom = chats.find((room) => String(room._id) === slug);
+
+        if (!chatRoom) {
+            redirect("/unauthorized");
+        }
+
+        return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} />;
+    }
+
+    // 2) Otherwise treat slug as handle and redirect to canonical /chat/<conversationId>.
+    const match = chats.find((c) => c.handle === slug || c.circle?.handle === slug);
+    if (!match?._id) {
         redirect("/unauthorized");
     }
 
-    // If this is a DM without a Matrix room, create one
-    console.log("Chat room check:", {
-        isDirect: chatRoom.isDirect,
-        hasMatrixRoomId: !!chatRoom.matrixRoomId,
-        matrixRoomId: chatRoom.matrixRoomId,
-        handle: params.handle
-    });
-    
-    if (chatRoom.isDirect && !chatRoom.matrixRoomId) {
-        console.log("Creating Matrix room for DM without one");
-        const { findOrCreateDMRoom } = await import("@/lib/data/chat");
-        const { getCircleById } = await import("@/lib/data/circle");
-        
-        // Get the other participant
-        const otherParticipantId = chatRoom.dmParticipants?.find((id) => id !== privateUser._id);
-        if (otherParticipantId) {
-            const otherParticipant = await getCircleById(otherParticipantId);
-            if (otherParticipant) {
-                const currentUser = await getCircleById(privateUser._id!);
-                if (currentUser) {
-                    // This will create the Matrix room if it doesn't exist
-                    chatRoom = await findOrCreateDMRoom(currentUser, otherParticipant);
-                }
-            }
-        }
-    }
-
-    return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} />;
+    redirect(`/chat/${match._id}`);
 }

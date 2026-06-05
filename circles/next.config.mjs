@@ -3,9 +3,20 @@
 import fs from "fs";
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
 const version = packageJson.version;
+const devSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.CIRCLES_URL;
+const allowedDevOrigins = [];
+
+if (devSiteUrl) {
+    try {
+        allowedDevOrigins.push(new URL(devSiteUrl).origin);
+    } catch {
+        // Ignore invalid local env values; Next will keep its default dev-origin behavior.
+    }
+}
 
 const nextConfig = {
     output: "standalone",
+    allowedDevOrigins,
     images: {
         remotePatterns: [
             {
@@ -22,13 +33,19 @@ const nextConfig = {
         version,
     },
     async rewrites() {
-        return [
-            {
-                source: "/storage/:path*",
-                destination: "http://minio:9000/circles/:path*",
-            },
-        ];
-    },
+    const minioHost =
+        process.env.NODE_ENV === "production"
+            ? "minio"
+            : process.env.MINIO_HOST || "127.0.0.1";
+    const minioPort = process.env.MINIO_PORT || "9000";
+
+    return [
+        {
+            source: "/storage/:path*",
+            destination: `http://${minioHost}:${minioPort}/circles/:path*`,
+        },
+    ];
+},
     experimental: {
         serverActions: {
             bodySizeLimit: "50mb",

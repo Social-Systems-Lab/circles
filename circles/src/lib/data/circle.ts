@@ -1,6 +1,15 @@
 // circle.ts - circle creation and management
 
-import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
+import {
+    Circle,
+    CirclePublishStatus,
+    CircleType,
+    PlatformMetrics,
+    Post,
+    ServerSettings,
+    SortingOptions,
+    WithMetric,
+} from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
@@ -12,6 +21,7 @@ import { createDefaultFeed } from "./feed";
 import path from "path";
 import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
+import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -27,16 +37,26 @@ export const SAFE_CIRCLE_PROJECTION = {
     content: 1,
     mission: 1,
     isPublic: 1,
+    showAdminsPublicly: 1,
+    isVerified: 1,
+    verificationStatus: 1,
     isMember: 1,
+    manualMember: 1,
+    accountStatus: 1,
+    isFoundingMember: 1,
+    foundingMemberNumber: 1,
+    foundingMemberGrantedAt: 1,
     userGroups: 1,
     enabledModules: 1,
     accessRules: 1,
     members: 1,
     questionnaire: 1,
     parentCircleId: 1,
+    circleLevel: 1,
     createdBy: 1,
     createdAt: 1,
     circleType: 1,
+    publishStatus: 1,
     interests: 1,
     offers_needs: 1,
     location: 1,
@@ -49,9 +69,41 @@ export const SAFE_CIRCLE_PROJECTION = {
     metadata: 1, // Include metadata for shadow post IDs
     socialLinks: 1,
     websiteUrl: 1,
+    representsOrganization: 1,
+    organizationName: 1,
+    officialEmail: 1,
+    donationIntent: 1,
     bookmarkedCircles: 1,
     pinnedCircles: 1,
     hiddenCancelledEventIds: 1,
+} as const;
+
+const DISCOVERY_CIRCLE_PROJECTION = {
+    _id: 1,
+    did: 1,
+    name: 1,
+    handle: 1,
+    picture: 1,
+    images: 1,
+    description: 1,
+    mission: 1,
+    isPublic: 1,
+    isVerified: 1,
+    verificationStatus: 1,
+    isMember: 1,
+    isFoundingMember: 1,
+    foundingMemberNumber: 1,
+    members: 1,
+    createdAt: 1,
+    circleType: 1,
+    publishStatus: 1,
+    interests: 1,
+    location: 1,
+    causes: 1,
+    skills: 1,
+    websiteUrl: 1,
+    representsOrganization: 1,
+    organizationName: 1,
 } as const;
 
 export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {
@@ -97,17 +149,32 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
     return circle;
 };
 
+export const getCirclePublishStatus = (circle?: Partial<Circle> | null): CirclePublishStatus =>
+    circle?.publishStatus ?? "published";
+
+export const isCirclePublished = (circle?: Partial<Circle> | null): boolean =>
+    getCirclePublishStatus(circle) === "published";
+
+export const getPublishedCircleQuery = (): any => ({
+    $or: [{ publishStatus: "published" as const }, { publishStatus: { $exists: false } }],
+});
+
 export const getSwipeCircles = async (): Promise<Circle[]> => {
     let circles: Circle[] = [];
 
     circles = await Circles.find(
         {
-            $or: [
-                { circleType: { $ne: "user" } },
-                { $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }] },
+            $and: [
+                getPublishedCircleQuery(),
+                {
+                    $or: [
+                        { circleType: { $ne: "user" } },
+                        { $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }] },
+                    ],
+                },
             ],
         },
-        { projection: SAFE_CIRCLE_PROJECTION },
+        { projection: DISCOVERY_CIRCLE_PROJECTION },
     ).toArray();
 
     circles.forEach((circle: Circle) => {
@@ -127,12 +194,12 @@ export const getCircles = async (
     includeCreated?: boolean,
     includeMember?: boolean,
 ): Promise<Circle[]> => {
-    let query: any = { circleType: circleType ?? "circle" };
+    let query: any = { $and: [{ circleType: circleType ?? "circle" }, getPublishedCircleQuery()] };
     if (parentCircleId) {
-        query.parentCircleId = parentCircleId;
+        query.$and.push({ parentCircleId });
     }
     if (sdgHandles && sdgHandles.length > 0) {
-        query.causes = { $in: sdgHandles };
+        query.$and.push({ causes: { $in: sdgHandles } });
     }
 
     if (userDid && circleType === "circle") {
@@ -150,9 +217,13 @@ export const getCircles = async (
 
             if (userQueries.length > 0) {
                 query = {
-                    $and: [{ circleType: "circle" }, { $or: [{ parentCircleId }, ...userQueries] }],
+                    $and: [
+                        { circleType: "circle" },
+                        {
+                            $or: [{ $and: [{ parentCircleId }, getPublishedCircleQuery()] }, ...userQueries],
+                        },
+                    ],
                 };
-                delete query.$and[0].parentCircleId;
             }
         }
     }
@@ -249,7 +320,10 @@ export const createDefaultCircle = (): Circle => {
         accessRules: getDefaultAccessRules(),
         questionnaire: [],
         isPublic: true,
+        showAdminsPublicly: false,
         circleType: "circle",
+        circleLevel: "top_level",
+        publishStatus: "published",
     };
     return circle;
 };
@@ -282,6 +356,12 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
     circle.accessRules = getDefaultAccessRules();
     circle.questionnaire = [];
     circle.circleType = circle.circleType || "circle";
+    circle.circleLevel = circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
+    circle.publishStatus = circle.publishStatus || (circle.circleType === "user" ? "published" : "draft");
+    circle.showAdminsPublicly = circle.showAdminsPublicly ?? false;
+    if (!hasCircleImages(circle.images)) {
+        circle.images = [getDefaultHeroImage(circle.handle || circle.did || circle.name)];
+    }
 
     let result = await Circles.insertOne(circle);
     circle._id = result.insertedId.toString();

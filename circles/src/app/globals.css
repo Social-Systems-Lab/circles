@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
-@theme {
-    --color-foreground-rgb: 0, 0, 0;
-    --color-background-start-rgb: 214, 219, 220;
-    --color-background-end-rgb: 255, 255, 255;
-    --color-link-rgb: 33, 100, 205;
-    --color-link-hover-rgb: 21, 67, 139;
+:root {
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 214, 219, 220;
+    --background-end-rgb: 255, 255, 255;
+    --link-rgb: 43, 100, 59;
+    --link-hover-rgb: 32, 80, 46;
 
     --text-size-80: 0.694rem;
     --text-size-90: 0.833rem;
@@ -19,8 +19,7 @@
 }
 
 body {
-    color: rgb(var(--color-foreground-rgb));
-    scrollbar-gutter: stable both-edges;
+    color: rgb(var(--foreground-rgb));
 }
 
 /* fixes issue with shadcn/ui adding padding to body  */
@@ -272,6 +271,57 @@ h1,
         --primary-foreground: 210 40% 98%;
 
         --primary-light: 215.3 100% 70%;
+        --button-primary: 145 36% 32%;
+        --button-primary-hover: 145 39% 27%;
+        --button-primary-foreground: 0 0% 100%;
+        --platform-yellow: 40.7 89.9% 68.8%;
+        --platform-yellow-hover: 40.7 89.9% 68.8%;
+        --platform-yellow-foreground: 36.8 65.2% 22.5%;
+        --bookmark-active: var(--platform-yellow);
+        --bookmark-active-hover: var(--platform-yellow-hover);
+        --bookmark-active-foreground: var(--platform-yellow-foreground);
+        --founding-member-bg: 75 39% 82%;
+        --founding-member-foreground: 74 35% 31%;
+        --task-priority-critical-bg: 12 88% 90%;
+        --task-priority-critical-foreground: 12 48% 31%;
+        --task-priority-high-bg: 46 92% 83%;
+        --task-priority-high-foreground: 30 54% 28%;
+        --task-priority-medium-bg: 68 38% 79%;
+        --task-priority-medium-foreground: 85 41% 26%;
+        --task-priority-low-bg: 106 31% 86%;
+        --task-priority-low-foreground: 118 31% 29%;
+        --task-link: 136 40% 28%;
+        --task-link-hover: 136 43% 22%;
+        --task-stage-open-bg: 106 31% 86%;
+        --task-stage-open-foreground: 118 31% 29%;
+        --task-stage-upcoming-bg: 112 18% 88%;
+        --task-stage-upcoming-foreground: 140 19% 31%;
+        --task-stage-progress-bg: 78 33% 75%;
+        --task-stage-progress-foreground: 90 42% 24%;
+        --task-stage-review-bg: 46 92% 83%;
+        --task-stage-review-foreground: 30 54% 28%;
+        --task-stage-resolved-bg: 132 28% 72%;
+        --task-stage-resolved-foreground: 128 36% 24%;
+        --task-verified-bg: 136 27% 86%;
+        --task-verified-foreground: 132 28% 28%;
+        --calendar-task-bg: 136 36% 34%;
+        --calendar-task-border: 136 39% 27%;
+        --calendar-task-foreground: 0 0% 100%;
+        --shift-banner-info-bg: 132 12% 95%;
+        --shift-banner-info-border: 132 14% 81%;
+        --shift-banner-info-foreground: 138 18% 31%;
+        --shift-banner-pending-bg: 42 62% 94%;
+        --shift-banner-pending-border: 42 43% 79%;
+        --shift-banner-pending-foreground: 28 33% 31%;
+        --shift-banner-confirmed-bg: 108 29% 91%;
+        --shift-banner-confirmed-border: 116 21% 78%;
+        --shift-banner-confirmed-foreground: 120 28% 29%;
+        --verification-panel-bg: 42 56% 95%;
+        --verification-panel-border: 48 34% 81%;
+        --verification-panel-divider: 46 32% 86%;
+        --shift-callout-bg: 42 67% 96%;
+        --shift-callout-border: 14 67% 63%;
+        --shift-callout-accent: 15 52% 38%;
 
         --secondary: 210 40% 96.1%;
         --secondary-foreground: 222.2 47.4% 11.2%;
@@ -304,10 +354,12 @@ h1,
 
 a.textLink {
     color: rgb(var(--link-rgb));
+    text-decoration-color: rgb(var(--link-rgb));
 }
 
 a.textLink:hover {
     color: rgb(var(--link-hover-rgb));
+    text-decoration-color: rgb(var(--link-hover-rgb));
 }
 
 /* Mapbox */
@@ -442,6 +494,11 @@ div.ReactTags__suggestions ul li.ReactTags__activeSuggestion {
 /* react-mentions */
 .flex-grow__suggestions {
     background-color: transparent !important;
+    z-index: 12000 !important;
+}
+
+.flex-grow__suggestions__list {
+    z-index: 12000 !important;
 }
 
 /* Pin effect */

@@ -4,6 +4,7 @@ import {
     Challenge,
     ChatRoomMembership,
     Circle,
+    DonationIntent,
     Membership,
     RegistryInfo,
     UserPrivate,
@@ -18,17 +19,21 @@ import { getEnabledModules } from "../auth/client-auth";
 import { getGroupedUserNotificationSettings } from "@/lib/actions/notificationSettings";
 import { VerificationRequest } from "@/models/models";
 import { db } from "./db";
+import { isVerifiedUser } from "@/lib/auth/verification";
+import { ACTIVE_VERIFICATION_REQUEST_STATUSES } from "./verification-workflow";
+import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 
 export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
     const user = await getUserByDid(userDid);
-    if (user.isVerified) {
+    if (isVerifiedUser(user)) {
         return "verified";
     }
 
     const verificationCollection = db.collection<VerificationRequest>("verifications");
     const existingRequest = await verificationCollection.findOne({
-        userDid: userDid,
-        status: "pending",
+        userDid,
+        $or: [{ requestType: "profile" }, { requestType: { $exists: false } }],
+        status: { $in: [...ACTIVE_VERIFICATION_REQUEST_STATUSES] },
     });
 
     if (existingRequest) {
@@ -95,12 +100,6 @@ export const getPrivateUserByDid = async (did: string): Promise<UserPrivate> => 
     if (user?._id) {
         user._id = user._id.toString();
     }
-    
-    // append matrix username details
-    user.matrixUrl = process.env.NEXT_PUBLIC_MATRIX_URL;
-    if (user.matrixUsername) {
-        user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
-    }
 
     return user;
 };
@@ -135,6 +134,9 @@ export const createNewUser = (
         questionnaire: [],
         isPublic: true,
     };
+    if (!hasCircleImages(user.images)) {
+        user.images = [getDefaultHeroImage(handle || did)];
+    }
     return user;
 };
 
@@ -325,7 +327,6 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
                     circleId: "$chatRoom.circleId",
                     createdAt: "$chatRoom.createdAt",
                     userGroups: "$chatRoom.userGroups",
-                    matrixRoomId: "$chatRoom.matrixRoomId",
                     picture: { $ifNull: ["$circle.picture", "$chatRoom.picture"] },
                     isDirect: "$chatRoom.isDirect",
                     dmParticipants: "$chatRoom.dmParticipants",
@@ -353,12 +354,6 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
     ]).toArray();
 
     user.chatRoomMemberships = chatRoomMemberships as ChatRoomMembership[];
-
-    // append matrix username details
-    user.matrixUrl = process.env.NEXT_PUBLIC_MATRIX_URL;
-    if (user.matrixUsername) {
-        user.fullMatrixName = `@${user.matrixUsername}:${process.env.MATRIX_DOMAIN}`;
-    }
 
     user.accessRules = getDefaultAccessRules();
 
@@ -418,6 +413,102 @@ export const updateUser = async (user: Partial<UserPrivate>, authenticatedUserDi
     // Note: updateUser doesn't handle embedding updates like updateCircle does.
     // This might be intentional if user profile updates don't need embedding updates,
     // or it might be an oversight. Keeping it as is for now.
+};
+
+export const updateDonationIntent = async (userDid: string, donationIntent: DonationIntent): Promise<void> => {
+    const result = await Circles.updateOne(
+        { did: userDid, circleType: "user" },
+        {
+            $set: {
+                donationIntent,
+            },
+        },
+    );
+
+    if (result.matchedCount === 0) {
+        throw new Error("User not found");
+    }
+};
+
+export type OnboardingMcpAmountBucket = "5" | "10" | "25" | "50" | "100+" | "custom";
+
+export type OnboardingMcpStats = {
+    totalUsersWithDonationIntent: number;
+    usersWithAmount: number;
+    totalMonthlyContributionPotential: number;
+    averageMonthlyContributionPotential: number;
+    volunteeringCount: number;
+    skippedCount: number;
+    amountBuckets: Record<OnboardingMcpAmountBucket, number>;
+};
+
+const getOnboardingMcpAmountBucket = (amount: number): OnboardingMcpAmountBucket => {
+    if (amount === 5) return "5";
+    if (amount === 10) return "10";
+    if (amount === 25) return "25";
+    if (amount === 50) return "50";
+    if (amount >= 100) return "100+";
+    return "custom";
+};
+
+export const getOnboardingMcpStats = async (): Promise<OnboardingMcpStats> => {
+    const users = await Circles.find(
+        {
+            circleType: "user",
+            "donationIntent.updatedAt": { $exists: true },
+        },
+        {
+            projection: {
+                donationIntent: 1,
+            },
+        },
+    ).toArray();
+
+    const amountBuckets: Record<OnboardingMcpAmountBucket, number> = {
+        "5": 0,
+        "10": 0,
+        "25": 0,
+        "50": 0,
+        "100+": 0,
+        custom: 0,
+    };
+
+    let usersWithAmount = 0;
+    let totalMonthlyContributionPotential = 0;
+    let volunteeringCount = 0;
+    let skippedCount = 0;
+
+    for (const user of users) {
+        const donationIntent = user.donationIntent;
+        if (!donationIntent) {
+            continue;
+        }
+
+        if (donationIntent.volunteering) {
+            volunteeringCount += 1;
+        }
+
+        if (donationIntent.skipped) {
+            skippedCount += 1;
+        }
+
+        const amount = donationIntent.amount;
+        if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
+            usersWithAmount += 1;
+            totalMonthlyContributionPotential += amount;
+            amountBuckets[getOnboardingMcpAmountBucket(amount)] += 1;
+        }
+    }
+
+    return {
+        totalUsersWithDonationIntent: users.length,
+        usersWithAmount,
+        totalMonthlyContributionPotential,
+        averageMonthlyContributionPotential: usersWithAmount > 0 ? totalMonthlyContributionPotential / usersWithAmount : 0,
+        volunteeringCount,
+        skippedCount,
+        amountBuckets,
+    };
 };
 
 // registers a user in the circles registry
@@ -482,33 +573,7 @@ export const registerUser = async (
     return registryInfo;
 };
 
-export const getUsersByMatrixUsernames = async (usernames: string[]): Promise<Circle[]> => {
-    if (usernames.length === 0) {
-        return [];
-    }
 
-    // Query the database for matching users
-    const users = await Circles.find(
-        { matrixUsername: { $in: usernames } },
-        {
-            projection: {
-                _id: 1,
-                did: 1,
-                name: 1,
-                picture: 1,
-                handle: 1,
-                description: 1,
-                matrixUsername: 1,
-            },
-        },
-    ).toArray();
-
-    // Convert ObjectId to string for `_id`
-    return users.map((user) => ({
-        ...user,
-        _id: user._id?.toString(),
-    })) as Circle[];
-};
 
 /**
  * Add a circle to the user's bookmarks.

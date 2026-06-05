@@ -1,7 +1,7 @@
 // task.ts - Task data access functions
 import { Tasks, Circles, Members, Reactions, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
 import { ObjectId } from "mongodb";
-import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post } from "@/models/models"; // Added Post type
+import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post, TaskPriority, TaskClaim } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
@@ -24,14 +24,124 @@ export const SAFE_TASK_PROJECTION = {
     description: 1,
     stage: 1,
     assignedTo: 1,
+    acceptedAt: 1,
+    acceptedBy: 1,
+    submittedForReviewAt: 1,
+    submittedForReviewBy: 1,
+    reviewRequestedChangesAt: 1,
+    reviewRequestedChangesBy: 1,
+    reviewRequestedChangesNote: 1,
+    claims: 1,
+    claimApprovedAt: 1,
+    claimApprovedBy: 1,
+    verifiedAt: 1,
+    verifiedBy: 1,
+    taskType: 1,
+    slots: 1,
+    shiftStartTime: 1,
+    shiftDurationMinutes: 1,
+    participants: 1,
+    participantNotes: 1,
     userGroups: 1,
     location: 1,
     commentPostId: 1,
+    noticeboardPostId: 1,
     images: 1,
     targetDate: 1,
     goal: 1,
     event: 1,
+    priority: 1,
 } as const;
+
+const buildParticipantProfilesLookupStage = () => ({
+    $lookup: {
+        from: "circles",
+        let: {
+            participantDids: {
+                $ifNull: ["$participants.userDid", []],
+            },
+        },
+        pipeline: [
+            {
+                $match: {
+                    $expr: {
+                        $and: [{ $eq: ["$circleType", "user"] }, { $in: ["$did", "$$participantDids"] }],
+                    },
+                },
+            },
+            {
+                $project: {
+                    ...SAFE_CIRCLE_PROJECTION,
+                    _id: { $toString: "$_id" },
+                },
+            },
+        ],
+        as: "participantProfiles",
+    },
+});
+
+const getViewerMembershipsByCircleId = async (viewerDid?: string): Promise<Map<string, string[]>> => {
+    const viewerMemberships = new Map<string, string[]>();
+    viewerMemberships.set("everyone", ["everyone"]);
+
+    if (!viewerDid) {
+        return viewerMemberships;
+    }
+
+    const memberships = await Members.find({ userDid: viewerDid }).toArray();
+    for (const membership of memberships) {
+        viewerMemberships.set(membership.circleId, membership.userGroups ?? []);
+    }
+
+    return viewerMemberships;
+};
+
+const canViewerAccessTaskUserGroups = (
+    task: Pick<TaskDisplay, "circleId" | "userGroups">,
+    viewerMembershipsByCircleId: Map<string, string[]>,
+): boolean => {
+    if (!task.userGroups || task.userGroups.length === 0) {
+        return true;
+    }
+
+    if (task.userGroups.includes("everyone")) {
+        return true;
+    }
+
+    const viewerGroupsInCircle = viewerMembershipsByCircleId.get(task.circleId) || [];
+    return task.userGroups.some((group) => viewerGroupsInCircle.includes(group));
+};
+
+export const filterTasksForViewer = async (tasks: TaskDisplay[], viewerDid?: string): Promise<TaskDisplay[]> => {
+    const viewerMembershipsByCircleId = await getViewerMembershipsByCircleId(viewerDid);
+    const canViewTasksModuleByCircleId = new Map<string, boolean>();
+    const visibleTasks: TaskDisplay[] = [];
+
+    for (const task of tasks) {
+        const circleId = task.circle?._id || task.circleId;
+        if (!circleId) {
+            continue;
+        }
+
+        let canViewTasksModule = canViewTasksModuleByCircleId.get(circleId);
+        if (canViewTasksModule === undefined) {
+            canViewTasksModule = await isAuthorized(viewerDid, circleId, features.tasks.view);
+            canViewTasksModuleByCircleId.set(circleId, canViewTasksModule);
+        }
+
+        if (!canViewTasksModule) {
+            continue;
+        }
+
+        if (!canViewerAccessTaskUserGroups(task, viewerMembershipsByCircleId)) {
+            continue;
+        }
+
+        visibleTasks.push(task);
+    }
+
+    return visibleTasks;
+};
 
 /**
  * Get all tasks for a circle, including author and assignee details.
@@ -58,6 +168,13 @@ export const getTasksByCircleId = async (
             }
             if (includeAssigned) {
                 userQueries.push({ assignedTo: userDid });
+                userQueries.push({
+                    participants: {
+                        $elemMatch: {
+                            userDid,
+                        },
+                    },
+                });
             }
 
             if (userQueries.length > 0) {
@@ -136,6 +253,7 @@ export const getTasksByCircleId = async (
             },
             // Optional assignee => preserveNullAndEmptyArrays = true
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+            buildParticipantProfilesLookupStage(),
 
             // 3.5) Lookup circle details
             {
@@ -168,6 +286,7 @@ export const getTasksByCircleId = async (
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     assignee: "$assigneeDetails", // null if no match
+                    participantProfiles: "$participantProfiles",
                     circle: "$circleDetails",
                 },
             },
@@ -176,7 +295,7 @@ export const getTasksByCircleId = async (
             { $sort: { createdAt: -1 } },
         ]).toArray()) as TaskDisplay[]; // Updated type
 
-        return tasks; // Renamed variable
+        return await filterTasksForViewer(tasks, userDid);
     } catch (error) {
         console.error("Error getting tasks by circle ID:", error); // Updated error message
         throw error;
@@ -259,6 +378,7 @@ export const getActiveTasksByCircleId = async (circleId: string): Promise<TaskDi
                 },
             },
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+            buildParticipantProfilesLookupStage(),
 
             // 4) Final projection (same as getTasksByCircleId)
             {
@@ -267,6 +387,7 @@ export const getActiveTasksByCircleId = async (circleId: string): Promise<TaskDi
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     assignee: "$assigneeDetails",
+                    participantProfiles: "$participantProfiles",
                 },
             },
 
@@ -302,6 +423,38 @@ export const getTaskById = async (
         const tasks = (await Tasks.aggregate([
             // 1) Match the specific Task by _id
             { $match: { _id: new ObjectId(taskId) } },
+            {
+                $addFields: {
+                    matchedShiftParticipant: {
+                        $first: {
+                            $filter: {
+                                input: { $ifNull: ["$participants", []] },
+                                as: "participant",
+                                cond: {
+                                    $and: [
+                                        { $eq: ["$$participant.userDid", userDid ?? null] },
+                                        { $eq: ["$$participant.attendanceStatus", "attended"] },
+                                        { $ne: ["$$participant.attendanceVerifiedAt", null] },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    contributionVerifiedAt: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedAt", "$verifiedAt"],
+                    },
+                    contributionVerifiedBy: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedBy", "$verifiedBy"],
+                    },
+                    contributionNote: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceNote", "$contributionNote"],
+                    },
+                },
+            },
 
             // 2) Lookup author details
             {
@@ -360,6 +513,7 @@ export const getTaskById = async (
                 },
             },
             { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+            buildParticipantProfilesLookupStage(),
 
             // 4) Lookup circle details
             {
@@ -382,6 +536,33 @@ export const getTaskById = async (
                 },
             },
             { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { verifierDid: "$contributionVerifiedBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$verifierDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$verifierDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "verifierDetails",
+                },
+            },
+            { $unwind: { path: "$verifierDetails", preserveNullAndEmptyArrays: true } },
 
             // --- 5) Lookup Goal Details ---
             {
@@ -421,7 +602,12 @@ export const getTaskById = async (
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     assignee: "$assigneeDetails",
+                    participantProfiles: "$participantProfiles",
                     circle: "$circleDetails",
+                    verifier: "$verifierDetails",
+                    verifiedAt: "$contributionVerifiedAt",
+                    verifiedBy: "$contributionVerifiedBy",
+                    contributionNote: "$contributionNote",
                     goal: "$goalDetails", // Add the looked-up goal data
                 },
             },
@@ -440,6 +626,192 @@ export const getTaskById = async (
     } catch (error) {
         console.error(`Error getting task by ID (${taskId}):`, error);
         throw error; // Re-throw
+    }
+};
+
+export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: string): Promise<{ totalPublicCount: number; visibleTasks: TaskDisplay[] }> => {
+    try {
+        const tasks = (await Tasks.aggregate([
+            {
+                $match: {
+                    $or: [
+                        {
+                            assignedTo: userDid,
+                            stage: "resolved",
+                            verifiedAt: { $exists: true, $ne: null },
+                            verifiedBy: { $exists: true, $ne: null },
+                        },
+                        {
+                            taskType: "shift",
+                            participants: {
+                                $elemMatch: {
+                                    userDid,
+                                    attendanceStatus: "attended",
+                                    attendanceVerifiedAt: { $exists: true, $ne: null },
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $addFields: {
+                    matchedShiftParticipant: {
+                        $first: {
+                            $filter: {
+                                input: { $ifNull: ["$participants", []] },
+                                as: "participant",
+                                cond: {
+                                    $and: [
+                                        { $eq: ["$$participant.userDid", userDid] },
+                                        { $eq: ["$$participant.attendanceStatus", "attended"] },
+                                        { $ne: ["$$participant.attendanceVerifiedAt", null] },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    contributionVerifiedAt: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedAt", "$verifiedAt"],
+                    },
+                    contributionVerifiedBy: {
+                        $ifNull: ["$matchedShiftParticipant.attendanceVerifiedBy", "$verifiedBy"],
+                    },
+                    contributionNote: "$matchedShiftParticipant.attendanceNote",
+                },
+            },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { authorDid: "$createdBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$authorDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$authorDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "authorDetails",
+                },
+            },
+            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { assigneeDid: "$assignedTo" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$assigneeDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$assigneeDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "assigneeDetails",
+                },
+            },
+            { $unwind: { path: "$assigneeDetails", preserveNullAndEmptyArrays: true } },
+            buildParticipantProfilesLookupStage(),
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { cId: { $toObjectId: "$circleId" } },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                        {
+                            $project: {
+                                _id: { $toString: "$_id" },
+                                name: 1,
+                                handle: 1,
+                                picture: 1,
+                                enabledModules: 1,
+                            },
+                        },
+                    ],
+                    as: "circleDetails",
+                },
+            },
+            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: "circles",
+                    let: { verifierDid: "$contributionVerifiedBy" },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ["$did", "$$verifierDid"] },
+                                        { $eq: ["$circleType", "user"] },
+                                        { $ne: ["$$verifierDid", null] },
+                                    ],
+                                },
+                            },
+                        },
+                        {
+                            $project: {
+                                ...SAFE_CIRCLE_PROJECTION,
+                                _id: { $toString: "$_id" },
+                            },
+                        },
+                    ],
+                    as: "verifierDetails",
+                },
+            },
+            { $unwind: { path: "$verifierDetails", preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    ...SAFE_TASK_PROJECTION,
+                    _id: { $toString: "$_id" },
+                    author: "$authorDetails",
+                    assignee: "$assigneeDetails",
+                    participantProfiles: "$participantProfiles",
+                    circle: "$circleDetails",
+                    verifier: "$verifierDetails",
+                    verifiedAt: "$contributionVerifiedAt",
+                    verifiedBy: "$contributionVerifiedBy",
+                    contributionNote: "$contributionNote",
+                },
+            },
+            { $sort: { verifiedAt: -1 } },
+        ]).toArray()) as TaskDisplay[];
+
+        const totalPublicCount = (await filterTasksForViewer(tasks)).length;
+        const visibleTasks = await filterTasksForViewer(tasks, viewerDid);
+        return {
+            totalPublicCount,
+            visibleTasks: visibleTasks.slice(0, 10),
+        };
+    } catch (error) {
+        console.error(`Error getting verified tasks for user ${userDid}:`, error);
+        throw error;
     }
 };
 
@@ -531,7 +903,15 @@ export const createTask = async (taskData: Omit<Task, "_id" | "commentPostId">):
  * @param updates Partial data containing fields to update
  * @returns Boolean indicating success (true) or failure (false)
  */
-export const updateTask = async (taskId: string, updates: Partial<Task>): Promise<boolean> => {
+export const updateTask = async (
+    taskId: string,
+    updates: Omit<Partial<Task>, "goalId" | "eventId" | "priority"> & {
+        goalId?: string;
+        eventId?: string;
+        priority?: TaskPriority | "";
+    },
+    fieldsToUnset: (keyof Task)[] = [],
+): Promise<boolean> => {
     try {
         if (!ObjectId.isValid(taskId)) {
             console.error("Invalid taskId provided for update:", taskId);
@@ -541,7 +921,7 @@ export const updateTask = async (taskId: string, updates: Partial<Task>): Promis
         const updateData: any = { ...updates, updatedAt: new Date() };
         delete updateData._id; // Cannot update _id
 
-        const unsetFields: any = {};
+        const unsetFields: Record<string, string> = {};
 
         // Check if goalId is explicitly being set to empty string (signal for removal)
         if (updateData.hasOwnProperty("goalId") && updateData.goalId === "") {
@@ -552,6 +932,19 @@ export const updateTask = async (taskId: string, updates: Partial<Task>): Promis
         if (updateData.hasOwnProperty("eventId") && updateData.eventId === "") {
             delete updateData.eventId; // Remove from $set
             unsetFields.eventId = ""; // Add to $unset
+        }
+        if (updateData.hasOwnProperty("priority") && updateData.priority === "") {
+            delete updateData.priority;
+            unsetFields.priority = "";
+        }
+        Object.keys(updateData).forEach((key) => {
+            if (typeof updateData[key] === "undefined") {
+                delete updateData[key];
+            }
+        });
+        for (const field of fieldsToUnset) {
+            delete updateData[field];
+            unsetFields[String(field)] = "";
         }
 
         const updateOp: any = {};
@@ -618,13 +1011,23 @@ export const changeTaskStage = async (taskId: string, newStage: TaskStage): Prom
         }
 
         const updates: Partial<Task> = { stage: newStage, updatedAt: new Date() }; // Updated type
-        const unsetFields: any = {};
+        const unsetFields: Record<string, string> = {};
 
         if (newStage === "resolved") {
             updates.resolvedAt = new Date();
         } else {
             // If moving out of resolved, ensure resolvedAt is unset
             unsetFields.resolvedAt = "";
+            unsetFields.verifiedAt = "";
+            unsetFields.verifiedBy = "";
+        }
+
+        if (newStage !== "inProgress") {
+            unsetFields.submittedForReviewAt = "";
+            unsetFields.submittedForReviewBy = "";
+            unsetFields.reviewRequestedChangesAt = "";
+            unsetFields.reviewRequestedChangesBy = "";
+            unsetFields.reviewRequestedChangesNote = "";
         }
 
         const updateOp: any = { $set: updates };
@@ -636,6 +1039,189 @@ export const changeTaskStage = async (taskId: string, newStage: TaskStage): Prom
         return result.matchedCount > 0;
     } catch (error) {
         console.error(`Error changing stage for task (${taskId}):`, error); // Updated error message and param
+        return false;
+    }
+};
+
+export const submitTaskClaim = async (
+    taskId: string,
+    claimantDid: string,
+    note?: string,
+): Promise<{ success: boolean; claim?: TaskClaim; reason?: "duplicate" | "not_claimable" }> => {
+    try {
+        if (!ObjectId.isValid(taskId)) {
+            return { success: false, reason: "not_claimable" };
+        }
+
+        const claim: TaskClaim = {
+            claimId: new ObjectId().toString(),
+            claimantDid,
+            status: "pending",
+            createdAt: new Date(),
+            ...(note ? { note } : {}),
+        };
+
+        const result = await Tasks.updateOne(
+            {
+                _id: new ObjectId(taskId),
+                stage: "open",
+                $and: [
+                    { assignedTo: { $exists: false } },
+                    { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                ],
+                claims: {
+                    $not: {
+                        $elemMatch: {
+                            claimantDid,
+                            status: "pending",
+                        },
+                    },
+                },
+            },
+            {
+                $push: { claims: claim },
+                $set: { updatedAt: new Date() },
+            },
+        );
+
+        if (result.modifiedCount > 0) {
+            return { success: true, claim };
+        }
+
+        const existingTask = await Tasks.findOne(
+            { _id: new ObjectId(taskId) },
+            { projection: { assignedTo: 1, stage: 1, taskType: 1, claims: 1 } },
+        );
+        const hasDuplicatePendingClaim = (existingTask?.claims || []).some(
+            (existingClaim: TaskClaim) => existingClaim.claimantDid === claimantDid && existingClaim.status === "pending",
+        );
+
+        return {
+            success: false,
+            reason: hasDuplicatePendingClaim ? "duplicate" : "not_claimable",
+        };
+    } catch (error) {
+        console.error(`Error submitting task claim (${taskId}):`, error);
+        return { success: false, reason: "not_claimable" };
+    }
+};
+
+export const reviewTaskClaim = async (
+    taskId: string,
+    claimId: string,
+    reviewerDid: string,
+    decision: "approved" | "declined",
+): Promise<boolean> => {
+    try {
+        if (!ObjectId.isValid(taskId)) {
+            return false;
+        }
+
+        const now = new Date();
+        if (decision === "approved") {
+            const task = await Tasks.findOne(
+                {
+                    _id: new ObjectId(taskId),
+                    stage: "open",
+                    $and: [
+                        { assignedTo: { $exists: false } },
+                        { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                    ],
+                    claims: {
+                        $elemMatch: {
+                            claimId,
+                            status: "pending",
+                        },
+                    },
+                },
+                { projection: { claims: 1 } },
+            );
+
+            const approvedClaim = (task?.claims || []).find((claim: TaskClaim) => claim.claimId === claimId && claim.status === "pending");
+            if (!approvedClaim) {
+                return false;
+            }
+
+            const result = await Tasks.updateOne(
+                {
+                    _id: new ObjectId(taskId),
+                    stage: "open",
+                    $and: [
+                        { assignedTo: { $exists: false } },
+                        { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                    ],
+                    claims: {
+                        $elemMatch: {
+                            claimId,
+                            claimantDid: approvedClaim.claimantDid,
+                            status: "pending",
+                        },
+                    },
+                },
+                {
+                    $set: {
+                        assignedTo: approvedClaim.claimantDid,
+                        claimApprovedAt: now,
+                        claimApprovedBy: reviewerDid,
+                        updatedAt: now,
+                        "claims.$[approved].status": "approved",
+                        "claims.$[approved].reviewedAt": now,
+                        "claims.$[approved].reviewedBy": reviewerDid,
+                        "claims.$[others].status": "closed",
+                        "claims.$[others].reviewedAt": now,
+                        "claims.$[others].reviewedBy": reviewerDid,
+                    },
+                    $unset: {
+                        acceptedAt: "",
+                        acceptedBy: "",
+                        submittedForReviewAt: "",
+                        submittedForReviewBy: "",
+                        reviewRequestedChangesAt: "",
+                        reviewRequestedChangesBy: "",
+                        reviewRequestedChangesNote: "",
+                        verifiedAt: "",
+                        verifiedBy: "",
+                    },
+                },
+                {
+                    arrayFilters: [
+                        { "approved.claimId": claimId, "approved.status": "pending" },
+                        { "others.claimId": { $ne: claimId }, "others.status": "pending" },
+                    ],
+                },
+            );
+
+            return result.modifiedCount > 0;
+        }
+
+        const result = await Tasks.updateOne(
+            {
+                _id: new ObjectId(taskId),
+                stage: "open",
+                $and: [
+                    { assignedTo: { $exists: false } },
+                    { $or: [{ taskType: { $exists: false } }, { taskType: "outcome" }] },
+                ],
+                claims: {
+                    $elemMatch: {
+                        claimId,
+                        status: "pending",
+                    },
+                },
+            },
+            {
+                $set: {
+                    updatedAt: now,
+                    "claims.$.status": "declined",
+                    "claims.$.reviewedAt": now,
+                    "claims.$.reviewedBy": reviewerDid,
+                },
+            },
+        );
+
+        return result.modifiedCount > 0;
+    } catch (error) {
+        console.error(`Error reviewing task claim (${taskId}, ${claimId}):`, error);
         return false;
     }
 };
@@ -655,16 +1241,51 @@ export const assignTask = async (taskId: string, assigneeDid: string | undefined
             return false;
         }
 
-        const updateOp: any = { $set: { updatedAt: new Date() } };
+        const now = new Date();
+        const updateOp: any = {
+            $set: { updatedAt: now },
+            $unset: {
+                acceptedAt: "",
+                acceptedBy: "",
+                submittedForReviewAt: "",
+                submittedForReviewBy: "",
+                reviewRequestedChangesAt: "",
+                reviewRequestedChangesBy: "",
+                reviewRequestedChangesNote: "",
+                claimApprovedAt: "",
+                claimApprovedBy: "",
+                verifiedAt: "",
+                verifiedBy: "",
+            },
+        };
         if (assigneeDid && assigneeDid !== "unassigned") {
             // Check for explicit "unassigned" value from select
             updateOp.$set.assignedTo = assigneeDid;
         } else {
             // Unset the assignedTo field if assigneeDid is null, undefined, or "unassigned"
-            updateOp.$unset = { assignedTo: "" };
+            updateOp.$unset.assignedTo = "";
         }
 
-        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp); // Changed Issues to Tasks, param issueId to taskId
+        let updateOptions:
+            | {
+                  arrayFilters: [{ "pending.status": string }];
+              }
+            | undefined;
+
+        if (assigneeDid && assigneeDid !== "unassigned") {
+            const task = await Tasks.findOne({ _id: new ObjectId(taskId) }, { projection: { claims: 1 } });
+            const hasPendingClaims = (task?.claims || []).some((claim: TaskClaim) => claim.status === "pending");
+
+            if (hasPendingClaims) {
+                updateOp.$set["claims.$[pending].status"] = "closed";
+                updateOp.$set["claims.$[pending].reviewedAt"] = now;
+                updateOptions = {
+                    arrayFilters: [{ "pending.status": "pending" }],
+                };
+            }
+        }
+
+        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp, updateOptions); // Changed Issues to Tasks, param issueId to taskId
         return result.matchedCount > 0;
     } catch (error) {
         console.error(`Error assigning task (${taskId}):`, error); // Updated error message and param

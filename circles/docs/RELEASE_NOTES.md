@@ -1,0 +1,65 @@
+# Release Notes
+
+## Current main - Task UX updates
+### Actionable Email Digests
+
+- Moved preference-gated actionable update emails onto a calmer once-daily digest path.
+- The hourly email cron now checks digest eligibility and sends at most one actionable digest per user per day.
+- Essential transactional emails such as verification, password reset, and membership/payment mail remain immediate.
+
+### Shift Tasks
+
+- Added Shift Tasks for scheduled participation work alongside ordinary outcome tasks.
+- Shift Tasks use a sign up -> confirm flow instead of deliverable-style completion.
+- Pending sign-ups remain private to admins and moderators until confirmed.
+- Public visibility and public participant counts are driven by confirmed participants.
+- Added notifications for shift sign-up and shift confirmation.
+
+- Added optional priority to ordinary tasks with Low, Medium, High, and Critical values. Priority is unset by default, and Help Wanted urgency was intentionally not changed in this pass.
+- Main Tasks page now supports multi-select stage filtering, priority filtering, Assigned To sorting, and explicit urgency ordering for priority sorting.
+- Reordered the task form to: Create in, Title, Date + Priority, Description, Image, Location, Goal, Event. Description remains optional, and Goal/Event can still be preselected from their context.
+- Main Tasks page now persists selected stages, selected priorities, sort order, and search text locally for that page only.
+- Resolved tasks are hidden from the active list by default and moved into a bottom expandable section that auto-expands when current filters only match resolved tasks.
+- Task side panel now supports direct priority editing, immediate visual sync for priority and stage changes, and a more stable header layout for long titles.
+- Tasks now record acceptance metadata via `acceptedAt` and `acceptedBy` when the assignee explicitly accepts the work.
+- Self-assignment now auto-accepts the task so assignees do not need a redundant second acceptance step.
+- Added strict task review and verification workflow rules so in-progress work must be submitted for review, verified, and only then resolved.
+- Added the admin-only `Needs Verification` queue in circle tasks so admins can `Mark Verified` or `Request Changes` on submitted work.
+- Added the `Verified Contributions` panel on user profiles with a public contribution count separated from the viewer-visible contribution list.
+- Fixed task preview refresh after Accept Task, Start Progress, Submit for Review, Request Changes, and Mark Verified so the open side panel updates immediately without a manual browser refresh.
+
+### Proof of Humanity MVP
+
+- Added public profile-to-profile human verification with two levels: `real_person` and `met_in_real_life`.
+- Added the `✓ Human` / `Verify Human` profile header control and the sidebar `Proof of Humanity` panel below `Verified Contributions`.
+- Added public verifier visibility, viewer-owned verify/update/remove actions, and hash-linked panel open behavior via `#proof-of-humanity`.
+- Added the `humanityVerifications` Mongo collection with revocation via `revokedAt` instead of hard deletion.
+- Added bell notifications for new verifications and upgrades, with no notification on removal and no notification to the verifier.
+- Deferred trust scores, cluster analysis, avatar badges, reviews/endorsements, and admin moderation UI in this MVP.
+
+### Funding Asks MVP
+
+- Added the demo-safe `Funding Needs` home-page panel and dedicated funding routes under `/circles/[handle]/funding`.
+- Reshaped funding into parent `Funding Request` records with multiple child `Funding Item` entries, where each child item has its own category and price.
+- Added a request-first create/edit flow, draft save/reload, and preserved Back/Next state for parent fields, child items, and image uploads.
+- Replaced live funding actions with demo-only child-item `Fund` buttons that show contextual feedback instead of starting a payment flow.
+- Restricted funding activation and all funding management to Super Admins in this MVP, while keeping viewing members-only on enabled circles.
+- Funding is hidden by default, only available on circle funding surfaces, and excluded from user/profile circles in this pass.
+- Updated the home-page panel to a compact expandable request list instead of stacked full cards.
+- Published funding requests can optionally create linked Noticeboard posts in the same circle.
+- Linked funding posts render as funding preview cards with image, status, amount summary, and a direct `View request` CTA.
+- Deferred payment processing, pooled crowdfunding, paid membership gating, notifications rollout, and map/explore rollout.
+
+## 0.8.16 - 2026-03-28
+- Fixed profile header CTA alignment by anchoring action buttons (Message, Follow, etc.) to the title row instead of the full text column.
+- Removed fragile negative-margin positioning in profile header.
+- Ensures consistent CTA positioning regardless of description length or metadata height.
+- Minor UX improvements:
+  - Latest post ordering refinement
+  - Circle message button routes to admin chat
+  - General UI polish and consistency tweaks
+
+## 0.8.15 - 2025-12-13
+- Added the maintenance notice button from the holding screen to the welcome hero so both variants share the same messaging experience.
+- Updated the default maintenance copy to “Maintenance and updates. We should be running smoothly again on Tuesday, 16 September.” for clarity.
+- Bumped the app version to `0.8.15` to capture these UI changes.

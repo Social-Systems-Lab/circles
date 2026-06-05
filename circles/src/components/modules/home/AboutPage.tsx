@@ -1,47 +1,354 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
-import { Circle } from "@/models/models";
-import { Card, CardContent } from "@/components/ui/card";
+import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Quote, ExternalLink } from "lucide-react";
-import { CirclePicture } from "@/components/modules/circles/circle-picture";
-import CircleTags from "@/components/modules/circles/circle-tags";
-import { sdgs } from "@/lib/data/sdgs";
-import { skills } from "@/lib/data/skills";
+import { MapPin, ExternalLink } from "lucide-react";
+import { getInterestLabel } from "@/lib/data/interests";
+import { getSkillDefinitionByHandle, skillCategoryLabels } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
 import { useAtom } from "jotai";
-import { userAtom } from "@/lib/data/atoms";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { contactCircleAdminsAction } from "@/components/modules/chat/mongo-actions";
+import { isAuthorized } from "@/lib/auth/client-auth";
+import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
-
-// Helper mappings for quick lookup
-const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
-const skillMap = new Map(skills.map((s) => [s.handle, s]));
+import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
+import { FundingPanel } from "@/components/modules/funding/funding-panel";
+import { UpcomingShiftsPanel } from "./upcoming-shifts-panel";
+import type { FundingAskDisplay, TaskDisplay } from "@/models/models";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserPicture } from "../members/user-picture";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { ProofOfHumanityCard } from "./proof-of-humanity-card";
+import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import MembershipCredentialCard from "./MembershipCredentialCard";
+import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
+import { isVerifiedUser } from "@/lib/auth/verification";
+import { useProfileRelationshipState } from "./message-button";
 
 interface AboutPageProps {
     circle: Circle;
+    verifiedContributions?: VerifiedContributionItem[];
+    verifiedContributionPublicCount?: number;
+    fundingPreviewAsks?: FundingAskDisplay[];
+    fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
+    upcomingShiftTasks?: TaskDisplay[];
+    upcomingShiftsVisibility?: "visible" | "sign_in" | "members_only";
+    canCreateFundingAsk?: boolean;
+    showFundingPanel?: boolean;
+    showUpcomingShiftsPanel?: boolean;
+    adminLeaders?: MemberDisplay[];
+    proofOfHumanitySummary?: HumanityVerificationSummary | null;
+    membershipCredential?: CircleMembershipCredentialCardData | null;
 }
 
-export default function AboutPage({ circle }: AboutPageProps) {
+export default function AboutPage({
+    circle,
+    verifiedContributions = [],
+    verifiedContributionPublicCount = 0,
+    fundingPreviewAsks = [],
+    fundingPanelVisibility = "sign_in",
+    upcomingShiftTasks = [],
+    upcomingShiftsVisibility = "sign_in",
+    canCreateFundingAsk = false,
+    showFundingPanel = false,
+    showUpcomingShiftsPanel = false,
+    adminLeaders = [],
+    proofOfHumanitySummary = null,
+    membershipCredential = null,
+}: AboutPageProps) {
     const isCompact = useIsCompact();
+    const isMobile = useIsMobile();
+    const router = useRouter();
+    const { toast } = useToast();
     const [user] = useAtom(userAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
+    const [isInterestsExpanded, setIsInterestsExpanded] = React.useState(false);
+    const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
+    const [isContactDialogOpen, setIsContactDialogOpen] = React.useState(false);
+    const [contactType, setContactType] = React.useState<"offer_help" | "ask_question">("offer_help");
+    const [contactMessage, setContactMessage] = React.useState("");
+    const [contactError, setContactError] = React.useState("");
+    const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
     const isOwner = user?.did === circle.did;
+    const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
+    const isUserProfile = circle.circleType === "user";
+    const [relationshipState] = useProfileRelationshipState(circle, user?.did);
+    const profileOfferSkills = circle.offers?.skills?.length ? circle.offers.skills : circle.skills || [];
+    const currentUserOfferSkills = !isUserProfile
+        ? user?.offers?.skills?.length
+            ? user.offers.skills
+            : user?.skills || []
+        : [];
+    const currentUserOfferSkillSet = new Set(currentUserOfferSkills);
+    const profileInterests = isUserProfile
+        ? circle.interests?.length
+            ? circle.interests
+            : circle.engagements?.interests || []
+        : [];
+    const circleNeeds = !isUserProfile ? circle.needs?.tags || [] : [];
+    const matchingOfferNeedHandles = !isUserProfile
+        ? Array.from(new Set(circleNeeds.filter((handle) => currentUserOfferSkillSet.has(handle))))
+        : [];
+    const matchingOfferNeedSet = new Set(matchingOfferNeedHandles);
+    const nonMatchingNeedHandles = circleNeeds.filter((handle) => !matchingOfferNeedSet.has(handle));
+    const orderedNeeds = [...matchingOfferNeedHandles, ...nonMatchingNeedHandles];
+    const hasMatchingOfferNeeds = !isUserProfile && !!user && matchingOfferNeedHandles.length > 0;
+    const hasMoreSkills = profileOfferSkills.length > 4;
+    const hasMoreInterests = profileInterests.length > 6;
+    const hasMoreNeeds = hasMatchingOfferNeeds ? nonMatchingNeedHandles.length > 0 : circleNeeds.length > 4;
+    const visibleSkills = isSkillsExpanded ? profileOfferSkills : profileOfferSkills.slice(0, 4);
+    const visibleInterests = isInterestsExpanded ? profileInterests : profileInterests.slice(0, 6);
+    const visibleNeeds = isNeedsExpanded
+        ? orderedNeeds
+        : hasMatchingOfferNeeds
+          ? matchingOfferNeedHandles
+          : circleNeeds.slice(0, 4);
+    const remainingSkillsCount = Math.max(profileOfferSkills.length - 4, 0);
+    const remainingInterestsCount = Math.max(profileInterests.length - 6, 0);
+    const remainingNeedsCount = hasMatchingOfferNeeds
+        ? nonMatchingNeedHandles.length
+        : Math.max(circleNeeds.length - 4, 0);
+    const matchedNeedBadgeClassName =
+        "border-transparent bg-[hsl(var(--button-primary))] text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]";
 
-    // Check if sidebar has any content
-    const hasSidebarContent =
+    const renderSkillPopoverBadge = (
+        handle: string,
+        key: string,
+        variant: "skill" | "need" = "skill",
+        badgeClassName?: string,
+    ) => {
+        const skill = getSkillDefinitionByHandle(handle);
+        const skillName = skill?.name || handle;
+        const categoryLabel = skill?.category ? skillCategoryLabels[skill.category] : null;
+
+        return (
+            <Popover key={key}>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`View details for ${skillName}`}
+                    >
+                        <Badge
+                            variant={variant}
+                            className={`cursor-pointer text-sm font-medium ${badgeClassName ?? ""}`}
+                        >
+                            {skillName}
+                        </Badge>
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-3">
+                    <div className="space-y-1.5">
+                        <p className="text-sm font-semibold">{skillName}</p>
+                        {categoryLabel && (
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{categoryLabel}</p>
+                        )}
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                            {skill?.description || "Description not available for this skill yet."}
+                        </p>
+                    </div>
+                </PopoverContent>
+            </Popover>
+        );
+    };
+
+    const hasOverviewDetails =
         !!circle.mission ||
         !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
-        !!(circle.causes && circle.causes.length > 0) ||
+        !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
         !!circle.websiteUrl ||
-        !!(circle.skills && circle.skills.length > 0);
+        !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
+    const hasNeedsMatchingDetails = !isUserProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
+    const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
+    const shouldShowVerifiedContributions = isUserProfile;
+    const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary;
+    const shouldShowMembershipCredential = !isUserProfile && !!membershipCredential;
+    const shouldShowFundingPanel = showFundingPanel;
+    const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
+    const followerCount = circle.members ? Math.max(circle.members - 1, 0) : 0;
+    const followMembership = user?.memberships?.find((membership) => membership.circleId === circle._id);
+    const relationshipStatusLabel = (() => {
+        if (!isUserProfile) {
+            return null;
+        }
 
-    const hasMainContent = !!circle.content || !!circle.description;
+        if (user?.did && circle.did === user.did) {
+            return "Your profile";
+        }
+
+        if (relationshipState?.connectStatus === "accepted") {
+            return "Connected";
+        }
+
+        if (relationshipState?.connectStatus === "pending_sent") {
+            return "Requested";
+        }
+
+        if (followMembership) {
+            return "Following";
+        }
+
+        return null;
+    })();
+    const memberStatusLabel = (() => {
+        if (!isUserProfile) {
+            return null;
+        }
+
+        if (circle.isFoundingMember) {
+            return "Founding Member";
+        }
+
+        if (isVerifiedUser(circle)) {
+            return "Test Pilot";
+        }
+
+        return "Member";
+    })();
+    const profileStatusChips = [
+        relationshipStatusLabel
+            ? {
+                  key: "relationship",
+                  label: relationshipStatusLabel,
+                  className:
+                      relationshipStatusLabel === "Requested"
+                          ? "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600"
+                          : relationshipStatusLabel === "Connected"
+                            ? "bg-[#f3f7f4] text-[#45604d] hover:bg-[#f3f7f4] hover:text-[#45604d]"
+                            : "bg-[#edf4e7] text-[#42553b] hover:bg-[#edf4e7] hover:text-[#42553b]",
+              }
+            : null,
+        memberStatusLabel
+            ? {
+                  key: "member-status",
+                  label: memberStatusLabel,
+                  className:
+                      memberStatusLabel === "Founding Member"
+                          ? "bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--founding-member-foreground))] hover:bg-[hsl(var(--founding-member-bg))] hover:text-[hsl(var(--founding-member-foreground))]"
+                          : memberStatusLabel === "Test Pilot"
+                            ? "bg-[hsl(var(--platform-yellow))] text-[hsl(var(--platform-yellow-foreground))] hover:bg-[hsl(var(--platform-yellow))] hover:text-[hsl(var(--platform-yellow-foreground))]"
+                            : "bg-slate-50 text-slate-700 hover:bg-slate-50 hover:text-slate-700",
+              }
+            : null,
+        {
+            key: "followers",
+            label: `${followerCount} ${followerCount === 1 ? "follower" : "followers"}`,
+            className: "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600",
+        },
+    ].filter((chip): chip is { key: string; label: string; className: string } => Boolean(chip));
+    const shouldShowProfileStatus = isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
+    const hasSidebarContent =
+        shouldShowProfileStatus ||
+        hasOverviewDetails ||
+        hasAdminDetails ||
+        hasNeedsMatchingDetails ||
+        shouldShowProofOfHumanity ||
+        shouldShowMembershipCredential ||
+        shouldShowVerifiedContributions ||
+        shouldShowFundingPanel ||
+        shouldShowUpcomingShiftsPanel;
+
+    const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
+    const canContactCircle = hasMatchingOfferNeeds && !isOwner;
+
+    const getLeaderRole = (leader: MemberDisplay) => {
+        if (leader.userGroups?.includes("admins")) return "Admin";
+        if (leader.userGroups?.includes("moderators")) return "Moderator";
+        return "Member";
+    };
+
+    const openLeaderPreview = (leader: MemberDisplay) => {
+        if (isMobile) {
+            if (leader.handle) {
+                router.push(`/circles/${leader.handle}`);
+            }
+            return;
+        }
+
+        const contentPreviewData: ContentPreviewData = {
+            type: "member",
+            content: leader,
+        };
+
+        setContentPreview((current) => {
+            const isSameLeader =
+                current?.type === "member" &&
+                (current.content as MemberDisplay | undefined)?.userDid === leader.userDid;
+            return isSameLeader && sidePanelContentVisible === "content" ? undefined : contentPreviewData;
+        });
+    };
+
+    const openContactDialog = (nextContactType: "offer_help" | "ask_question" = "offer_help") => {
+        setContactType(nextContactType);
+        setContactError("");
+        setContactMessage("");
+        setIsContactDialogOpen(true);
+    };
+
+    const closeContactDialog = (open: boolean) => {
+        setIsContactDialogOpen(open);
+        if (!open) {
+            setContactError("");
+        }
+    };
+
+    const sendContactMessage = async () => {
+        const trimmed = contactMessage.trim();
+        if (!trimmed) {
+            setContactError("Please add a message before sending.");
+            return;
+        }
+
+        setIsSendingContactMessage(true);
+        setContactError("");
+        try {
+            const result = await contactCircleAdminsAction(
+                String(circle._id || ""),
+                trimmed,
+                matchingOfferNeedHandles,
+                contactType,
+            );
+            if (!result.success || !result.roomId) {
+                setContactError(result.message || "Could not start the conversation.");
+                return;
+            }
+
+            setContactMessage("");
+            setIsContactDialogOpen(false);
+            router.push(`/chat/${result.roomId}`);
+        } catch (error) {
+            console.error("Failed to contact circle admins:", error);
+            toast({
+                title: "Could not send message",
+                description: "Please try again.",
+                variant: "destructive",
+                icon: "error",
+            });
+        } finally {
+            setIsSendingContactMessage(false);
+        }
+    };
 
     return (
         <div className="formatted mx-auto max-w-[1100px] px-0 py-0 md:px-4 md:py-6">
@@ -56,9 +363,23 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             {/* Main Content */}
                             {hasMainContent ? (
                                 <>
-                                    <h1 className="my-4">About</h1>
+                                    <div className="flex flex-row items-center justify-between gap-4">
+                                        <h1 className="my-4">About</h1>
+                                        {canEditAbout && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
+                                    </div>
                                     {circle.content ? (
                                         <RichText content={circle.content} />
+                                    ) : isUserProfile ? (
+                                        <p className="mb-6 text-base text-muted-foreground">
+                                            This profile hasn&apos;t added an About section yet.
+                                        </p>
                                     ) : (
                                         <p className="mb-6 text-base">{circle.description}</p>
                                     )}
@@ -66,126 +387,448 @@ export default function AboutPage({ circle }: AboutPageProps) {
                             ) : (
                                 // Default text if no content or description
                                 <>
-                                    <h1 className="my-4">About</h1>
+                                    <div className="flex flex-row items-center justify-between gap-4">
+                                        <h1 className="my-4">About</h1>
+                                        {canEditAbout && (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
+                                    </div>
                                     <p className="mb-6 text-base text-muted-foreground">
-                                        This circle hasn&apos;t added a description yet.
+                                        {isUserProfile
+                                            ? "This profile hasn't added an About section yet."
+                                            : "This circle hasn&apos;t added a description yet."}
                                     </p>
                                 </>
                             )}
                         </div>
                         <OffersCard circle={circle} isOwner={isOwner} />
-                        <EngagementCard circle={circle} isOwner={isOwner} />
-                        <NeedsCard circle={circle} isOwner={isOwner} />
+                        {isUserProfile && <EngagementCard circle={circle} isOwner={isOwner} />}
+                        {!isUserProfile && <NeedsCard circle={circle} isOwner={isOwner} />}
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}
                 {hasSidebarContent && (
                     <div className="md:col-span-1">
-                        <div
-                            className={`flex flex-col items-center bg-white p-6
-                        ${isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"}
-                        `}
-                        >
-                            {/* Mission */}
-                            {circle.mission && (
-                                <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
-                                    {" "}
-                                    {/* Increased mb */}
-                                    <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
-                                        Mission
-                                    </div>
-                                    <div className="text-[15px] text-foreground">{circle.mission}</div>{" "}
-                                    {/* Increased text size */}
+                        <div className="flex flex-col gap-6">
+                            {shouldShowFundingPanel && (
+                                <div className="md:order-2">
+                                    <FundingPanel
+                                        circleHandle={circle.handle || ""}
+                                        asks={fundingPreviewAsks}
+                                        canCreate={canCreateFundingAsk}
+                                        visibility={fundingPanelVisibility}
+                                    />
                                 </div>
                             )}
 
-                            {/* Location */}
-                            {circle.location &&
-                                (circle.location.city || circle.location.region || circle.location.country) && (
-                                    <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
-                                        {" "}
-                                        {/* Increased mb */}
-                                        <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
-                                            Location
+                            {shouldShowUpcomingShiftsPanel && (
+                                <div className="md:order-3">
+                                    <UpcomingShiftsPanel
+                                        circleHandle={circle.handle || ""}
+                                        shifts={upcomingShiftTasks}
+                                        visibility={upcomingShiftsVisibility}
+                                    />
+                                </div>
+                            )}
+
+                            {hasNeedsMatchingDetails && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 md:order-4 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Needs / Matching
+                                    </div>
+
+                                    {visibleNeeds.length > 0 && (
+                                        <div className={hasMatchingOfferNeeds ? "mb-6 w-full" : "w-full"}>
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Needs
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleNeeds.map((handle, index) => {
+                                                    return renderSkillPopoverBadge(
+                                                        handle,
+                                                        `${handle}-${index}`,
+                                                        "need",
+                                                        matchingOfferNeedSet.has(handle)
+                                                            ? matchedNeedBadgeClassName
+                                                            : undefined,
+                                                    );
+                                                })}
+                                                {hasMoreNeeds && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isNeedsExpanded}
+                                                        aria-label={
+                                                            isNeedsExpanded
+                                                                ? "Show fewer needs"
+                                                                : `Show ${remainingNeedsCount} more needs`
+                                                        }
+                                                        onClick={() => setIsNeedsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsNeedsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isNeedsExpanded ? "Show less" : `+${remainingNeedsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex flex-row items-center text-foreground">
-                                            {" "}
-                                            {/* Added text-foreground */}
-                                            <MapPin className="mr-1.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />{" "}
-                                            {/* Increased icon size & color */}
-                                            <span className="text-[15px]">
-                                                {" "}
-                                                {/* Increased text size */}
-                                                {[circle.location.city, circle.location.region, circle.location.country]
-                                                    .filter(Boolean)
-                                                    .join(", ")}
-                                            </span>
+                                    )}
+
+                                    {hasMatchingOfferNeeds && (
+                                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+                                            <div className="text-sm text-muted-foreground">
+                                                You have {matchingOfferNeedHandles.length} matching{" "}
+                                                {matchingOfferNeedHandles.length === 1 ? "skill" : "skills"}
+                                            </div>
+                                            {canContactCircle && (
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() => openContactDialog("offer_help")}
+                                                    >
+                                                        Offer Help
+                                                    </Button>
+                                                    <button
+                                                        type="button"
+                                                        className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                                                        onClick={() => openContactDialog("ask_question")}
+                                                    >
+                                                        Ask a question first
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                )}
-
-                            {/* SDGs */}
-                            {circle.causes && circle.causes.length > 0 && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">SDGs</div>
-                                    <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
+                                    )}
                                 </div>
                             )}
 
-                            {/* Website */}
-                            {circle.websiteUrl && (
-                                <div className="mb-6 w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        Website
+                            {shouldShowProfileStatus && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 md:order-5 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Relationship
                                     </div>
-                                    <a
-                                        href={circle.websiteUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 break-all text-[15px] text-foreground underline"
-                                    >
-                                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                                        <span>{circle.websiteUrl}</span>
-                                    </a>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        {profileStatusChips.map((chip) => (
+                                            <Badge
+                                                key={chip.key}
+                                                variant="outline"
+                                                className={`border-0 rounded-full px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
+                                            >
+                                                {chip.label}
+                                            </Badge>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Skills/Needs */}
-                            {/* {circle.skills && circle.skills.length > 0 && (
-                                <div className="w-full">
-                                    <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        {" "}
-                                        {circle.circleType === "user" ? "Skills" : "Needs"}
+                            {hasOverviewDetails && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 md:order-6 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Overview
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {circle.skills.map((handle) => {
-                                            const skill = skillMap.get(handle);
-                                            if (!skill) return null;
-                                            return (
-                                                <Badge
-                                                    key={handle}
-                                                    variant="outline"
-                                                    className="flex items-center gap-1.5 px-2.5 py-1.5" // Increased padding
-                                                >
-                                                    <Image
-                                                        src={skill.picture.url}
-                                                        alt=""
-                                                        width={20} // Increased size
-                                                        height={20} // Increased size
-                                                        className="h-5 w-5 rounded-full object-cover" // Increased size
-                                                    />
-                                                    <span className="text-sm font-medium">{skill.name}</span>{" "}
-                                                </Badge>
-                                            );
-                                        })}
-                                    </div>
+                                    {circle.mission && (
+                                        <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
+                                            <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                                Mission
+                                            </div>
+                                            <div className="text-[15px] text-foreground">{circle.mission}</div>
+                                        </div>
+                                    )}
+
+                                    {circle.location &&
+                                        (circle.location.city || circle.location.region || circle.location.country) && (
+                                            <div className="mb-6 flex w-full flex-col text-sm text-muted-foreground">
+                                                <div className="mb-1.5 text-xs font-medium uppercase text-muted-foreground">
+                                                    Location
+                                                </div>
+                                                <div className="flex flex-row items-center text-foreground">
+                                                    <MapPin className="mr-1.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                                                    <span className="text-[15px]">
+                                                        {[
+                                                            circle.location.city,
+                                                            circle.location.region,
+                                                            circle.location.country,
+                                                        ]
+                                                            .filter(Boolean)
+                                                            .join(", ")}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    {!isUserProfile && circle.causes && circle.causes.length > 0 && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                SDGs
+                                            </div>
+                                            <SdgList sdgHandles={circle.causes} className="grid-cols-4" />
+                                        </div>
+                                    )}
+
+                                    {isUserProfile && visibleSkills.length > 0 && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Top Skills & Offers
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleSkills.map((handle) => {
+                                                    return renderSkillPopoverBadge(handle, handle);
+                                                })}
+                                                {hasMoreSkills && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isSkillsExpanded}
+                                                        aria-label={
+                                                            isSkillsExpanded
+                                                                ? "Show fewer skills"
+                                                                : `Show ${remainingSkillsCount} more skills`
+                                                        }
+                                                        onClick={() => setIsSkillsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsSkillsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isSkillsExpanded
+                                                            ? "Show less"
+                                                            : `+${remainingSkillsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isUserProfile && visibleInterests.length > 0 && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Interests
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleInterests.map((handle) => (
+                                                    <Badge
+                                                        key={handle}
+                                                        variant="interest"
+                                                        className="px-3 py-1 text-sm font-medium"
+                                                    >
+                                                        {getInterestLabel(handle)}
+                                                    </Badge>
+                                                ))}
+                                                {hasMoreInterests && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="cursor-pointer border-gray-300 bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-expanded={isInterestsExpanded}
+                                                        aria-label={
+                                                            isInterestsExpanded
+                                                                ? "Show fewer interests"
+                                                                : `Show ${remainingInterestsCount} more interests`
+                                                        }
+                                                        onClick={() => setIsInterestsExpanded((prev) => !prev)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === "Enter" || event.key === " ") {
+                                                                event.preventDefault();
+                                                                setIsInterestsExpanded((prev) => !prev);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isInterestsExpanded
+                                                            ? "Show less"
+                                                            : `+${remainingInterestsCount} more`}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {circle.websiteUrl && (
+                                        <div className="mb-6 w-full">
+                                            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                                                Website
+                                            </div>
+                                            <a
+                                                href={circle.websiteUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-2 break-all text-[15px] text-foreground underline"
+                                            >
+                                                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                                <span>{circle.websiteUrl}</span>
+                                            </a>
+                                        </div>
+                                    )}
                                 </div>
-                            )} */}
+                            )}
+
+                            {shouldShowVerifiedContributions && (
+                                <div
+                                    className={`bg-white p-6 md:order-7 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <VerifiedContributionsPanel
+                                        items={verifiedContributions}
+                                        totalPublicCount={verifiedContributionPublicCount}
+                                    />
+                                </div>
+                            )}
+
+                            {shouldShowProofOfHumanity && proofOfHumanitySummary && (
+                                <div className="md:order-8">
+                                    <ProofOfHumanityCard circle={circle} summary={proofOfHumanitySummary} />
+                                </div>
+                            )}
+
+                            {hasAdminDetails && (
+                                <div
+                                    className={`flex flex-col bg-white p-6 md:order-9 ${
+                                        isCompact ? "rounded-none" : "rounded-[15px] border-0 bg-muted/20 shadow-lg"
+                                    }`}
+                                >
+                                    <div className="mb-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                        Admins
+                                    </div>
+                                    <TooltipProvider>
+                                        <div className="space-y-3">
+                                            {adminLeaders.map((leader) => {
+                                                const role = getLeaderRole(leader);
+                                                return (
+                                                    <Tooltip key={leader.userDid}>
+                                                        <TooltipTrigger asChild>
+                                                            <button
+                                                                type="button"
+                                                                className="flex w-full items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                                onClick={() => openLeaderPreview(leader)}
+                                                                aria-label={`Open ${leader.name}'s profile`}
+                                                            >
+                                                                <div className="shrink-0 rounded-full border-2 border-white bg-white">
+                                                                    <UserPicture
+                                                                        name={leader.name}
+                                                                        picture={leader.picture?.url}
+                                                                        size="34px"
+                                                                    />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate text-[15px] font-medium text-foreground">
+                                                                        {leader.name}
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground">
+                                                                        {role}
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="bottom" className="text-xs">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-semibold">{leader.name}</span>
+                                                                <span className="text-muted-foreground">{role}</span>
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                );
+                                            })}
+                                        </div>
+                                    </TooltipProvider>
+                                </div>
+                            )}
+
+                            {shouldShowMembershipCredential && membershipCredential && (
+                                <div className="md:order-10">
+                                    <MembershipCredentialCard credential={membershipCredential} />
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}{" "}
                 {/* <-- Added missing closing parenthesis */}
             </div>
+            <Dialog open={isContactDialogOpen} onOpenChange={closeContactDialog}>
+                <DialogContent className="sm:max-w-[520px]">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {contactType === "ask_question"
+                                ? "Ask the admins a question"
+                                : `Offer Help to ${circle.name}`}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {contactType === "ask_question"
+                                ? "Your question will create a shared thread with this circle&apos;s admins."
+                                : "Your message will create a shared thread with this circle&apos;s admins."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Textarea
+                            className="focus-visible:border-[hsl(var(--button-primary))] focus-visible:ring-[hsl(var(--button-primary))]"
+                            value={contactMessage}
+                            onChange={(event) => {
+                                setContactMessage(event.target.value);
+                                if (contactError) {
+                                    setContactError("");
+                                }
+                            }}
+                            rows={5}
+                            placeholder={
+                                contactType === "ask_question"
+                                    ? "What would you like to know about helping with this circle?"
+                                    : "Write a short message about how you can help..."
+                            }
+                        />
+                        {contactError && <p className="text-sm text-destructive">{contactError}</p>}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => closeContactDialog(false)}
+                            disabled={isSendingContactMessage}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={sendContactMessage}
+                            disabled={isSendingContactMessage || !contactMessage.trim()}
+                        >
+                            {isSendingContactMessage
+                                ? "Sending..."
+                                : contactType === "ask_question"
+                                  ? "Send Question"
+                                  : "Send Message"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

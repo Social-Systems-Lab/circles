@@ -1,5 +1,7 @@
 import { Toast } from "@/components/ui/use-toast";
-import { CoreMessage } from "ai";
+import type { ChatAttachment } from "@/lib/chat/mongo-types";
+import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
+import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";
@@ -13,6 +15,11 @@ export const handleSchema = z
 
 export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle", "project"]);
+export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
+export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
+export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
+export const accountStatusSchema = z.enum(["pending_verification", "active", "rejected"]);
+export const humanityVerificationLevelSchema = z.enum(["real_person", "met_in_real_life"]);
 export const emailSchema = z.string().email({ message: "Enter valid email" });
 
 const DEFAULT_MAX_IMAGE_FILE_SIZE = 5000000; // 5MB
@@ -68,6 +75,9 @@ export type RegistryInfo = z.infer<typeof registryInfoSchema>;
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export type CircleType = z.infer<typeof circleTypeSchema>;
+export type CircleLevel = z.infer<typeof circleLevelSchema>;
+export type CirclePublishStatus = z.infer<typeof circlePublishStatusSchema>;
+export type HumanityVerificationLevel = z.infer<typeof humanityVerificationLevelSchema>;
 
 export const memberSchema = z.object({
     _id: z.any().optional(),
@@ -217,6 +227,7 @@ export const postSchema = z.object({
     highlightedCommentId: z.string().optional(),
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
+    sharedPostId: z.string().optional(),
     postType: z.enum(["post", "goal", "task", "issue", "proposal", "event", "discussion"]).optional(), // Added discussion
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
     parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
@@ -227,7 +238,7 @@ export const postSchema = z.object({
     linkPreviewDescription: z.string().optional(),
     linkPreviewImage: fileInfoSchema.optional(),
     // Internal Link Preview Fields
-    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal", "event"]).optional(),
+    internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal", "event", "funding"]).optional(),
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
     internalPreviewUrl: z.string().url().optional(),
     sdgs: z.array(z.string()).optional(),
@@ -249,7 +260,17 @@ export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     circle?: Circle;
     feed?: Feed;
     // Populated internal preview data
-    internalPreviewData?: Circle | PostDisplay | TaskDisplay | ProposalDisplay | IssueDisplay | null;
+    internalPreviewData?:
+        | Circle
+        | PostDisplay
+        | TaskDisplay
+        | ProposalDisplay
+        | IssueDisplay
+        | GoalDisplay
+        | EventDisplay
+        | FundingAskDisplay
+        | null;
+    sharedPostData?: PostDisplay | null;
     sdgs?: Cause[];
 }
 
@@ -290,6 +311,7 @@ export const chatRoomSchema = z.object({
     _id: z.any().optional(),
     matrixRoomId: z.string().optional(),
     name: z.string(),
+    description: z.string().optional(),
     handle: handleSchema,
     circleId: z.string().optional(),
     createdAt: z.date(),
@@ -297,12 +319,15 @@ export const chatRoomSchema = z.object({
     picture: fileInfoSchema.optional(),
     isDirect: z.boolean().optional(),
     dmParticipants: z.array(z.string()).optional(),
+    archived: z.boolean().optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export type ChatRoom = z.infer<typeof chatRoomSchema>;
 
 export type ChatRoomDisplay = ChatRoom & {
     circle?: Circle;
+    unreadCount?: number;
 };
 
 export type MatrixMessageContent =
@@ -327,19 +352,23 @@ export type MatrixMessageContent =
     | Record<string, unknown>; // Catch-all for other message types.
 
 export interface ChatMessage {
-    id: string; // Matrix event_id
-    roomId: string; // Matrix room_id
-    createdBy: string; // Matrix sender
-    createdAt: Date; // Timestamp (Matrix origin_server_ts)
-    content: MatrixMessageContent; // Matrix event content
-    type: string; // Matrix event type
+    id: string; // Message/event ID
+    roomId: string; // Conversation ID
+    createdBy: string; // Sender DID
+    createdAt: Date; // Message timestamp
+    content: MatrixMessageContent; // Message content payload
+    type: string; // Message type
     stateKey?: string; // Optional for state events
-    unsigned?: Record<string, unknown>; // Unsigned fields from Matrix
+    unsigned?: Record<string, unknown>; // Optional extra event metadata
     author: Circle; // User data from your database
+    attachments?: ChatAttachment[];
     replyTo?: Partial<ChatMessage>; // The message this is a reply to
     reactions?: Record<string, ReactionAggregation[]>; // { [emoji]: [{sender, eventId}, ...] }
     isRedacted?: boolean;
     status?: "pending" | "sent" | "failed";
+    errorMessage?: string;
+    system?: SystemMessageMetadata;
+
 }
 
 export type ReactionAggregation = {
@@ -434,6 +463,23 @@ export const socialLinkSchema = z.object({
     url: z.string().url(),
 });
 
+export type SocialLink = z.infer<typeof socialLinkSchema>;
+
+export const communityGuidelineRuleIdSchema = z.enum(COMMUNITY_GUIDELINE_RULE_IDS);
+
+export const communityGuidelineAgreementSchema = z.object({
+    accepted: z.boolean(),
+    acceptedAt: z.date().nullable(),
+});
+
+export const communityGuidelineAgreementStateSchema = z.object({
+    truth: communityGuidelineAgreementSchema,
+    constructive: communityGuidelineAgreementSchema,
+    respect: communityGuidelineAgreementSchema,
+    privacy: communityGuidelineAgreementSchema,
+    responsibility: communityGuidelineAgreementSchema,
+});
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -448,15 +494,18 @@ export const circleSchema = z.object({
     content: z.string().optional(),
     mission: z.string().optional(),
     isPublic: z.boolean().optional(),
+    showAdminsPublicly: z.boolean().optional(),
     userGroups: z.array(userGroupSchema).default([]).optional(),
     enabledModules: z.array(z.string()).default([]).optional(),
     accessRules: accessRulesSchema.optional(),
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
     parentCircleId: z.string().optional(),
+    circleLevel: circleLevelSchema.optional(),
     createdBy: didSchema.optional(),
     createdAt: z.date().optional(),
     circleType: circleTypeSchema.optional(),
+    publishStatus: circlePublishStatusSchema.optional(),
     interests: z.array(z.string()).optional(),
     offers_needs: z.array(z.string()).optional(),
     location: locationSchema.optional(),
@@ -467,6 +516,9 @@ export const circleSchema = z.object({
     needs: needsSchema.optional(),
     socialLinks: z.array(socialLinkSchema).optional(),
     websiteUrl: z.string().url().optional(),
+    representsOrganization: z.boolean().optional(),
+    organizationName: z.string().optional(),
+    officialEmail: z.string().email().optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),
@@ -479,6 +531,13 @@ export const circleSchema = z.object({
     hiddenCancelledEventIds: z.array(z.string()).optional(),
     agreedToTos: z.boolean().optional(),
     agreedToEmailUpdates: z.boolean().optional(),
+    emailMissedMessages: z.boolean().optional(),
+    emailTaskAssigned: z.boolean().optional(),
+    emailTaskUpdates: z.boolean().optional(),
+    emailVerificationUpdates: z.boolean().optional(),
+    lastActionableEmailDigestAt: z.date().optional(),
+    communityGuidelinesAcceptance: communityGuidelineAgreementStateSchema.optional(),
+    communityGuidelinesAcceptedAt: z.date().optional(),
     metadata: z.record(z.string(), z.any()).optional(), // For storing additional data like commentPostId
     // Password Reset Fields
     passwordResetToken: z.string().nullable().optional(),
@@ -490,36 +549,164 @@ export const circleSchema = z.object({
     // Platform-level verification
     isVerified: z.boolean().optional(),
     isMember: z.boolean().optional(),
+    verificationStatus: verificationStatusSchema.optional(),
+    verifiedAt: z.date().optional(),
+    verifiedBy: didSchema.optional(),
+    donationIntent: z
+        .object({
+            amount: z.number().nullable(),
+            volunteering: z.boolean(),
+            skipped: z.boolean(),
+            updatedAt: z.date(),
+        })
+        .optional(),
     // Subscription fields
     subscription: z
         .object({
+            provider: z.enum(["donorbox", "stripe"]).optional(),
             donorboxPlanId: z.string().optional(),
             donorboxSubscriptionId: z.string().optional(),
             donorboxDonationId: z.string().optional(),
             donorboxDonorId: z.string().optional(),
-            status: z.enum(["active", "inactive", "cancelled"]).optional(),
+            stripeCustomerId: z.string().optional(),
+            stripeSubscriptionId: z.string().optional(),
+            stripePriceId: z.string().optional(),
+            stripeCheckoutSessionId: z.string().optional(),
+            status: z.enum(["active", "inactive", "cancelled", "past_due", "unpaid", "trialing"]).optional(),
+            membershipState: z
+                .enum(["inactive", "active", "grace_period", "cancelled", "past_due", "unpaid"])
+                .optional(),
+            membershipSource: z.enum(["donorbox", "stripe", "manual", "admin"]).optional(),
             endsAt: z.date().optional(),
+            membershipExpiresAt: z.date().optional(),
+            membershipGraceUntil: z.date().optional(),
+            stripeCurrentPeriodEnd: z.date().optional(),
+            cancelAtPeriodEnd: z.boolean().optional(),
             amount: z.number().optional(),
             currency: z.string().optional(),
+            interval: z.enum(["month", "year"]).optional(),
             startDate: z.date().optional(),
             lastPaymentDate: z.date().optional(),
+            lastWebhookEventId: z.string().optional(),
         })
         .optional(),
     manualMember: z.boolean().optional(),
+    // Account lifecycle
+    accountStatus: accountStatusSchema.optional(),
+    signupOrder: z.number().optional(),
+    isFoundingMember: z.boolean().optional(),
+    foundingMemberNumber: z.number().optional(),
+    foundingMemberGrantedAt: z.date().optional(),
 });
 
 export type Circle = z.infer<typeof circleSchema>;
+export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
+export type AccountStatus = z.infer<typeof accountStatusSchema>;
+
+export const platformSettingsSchema = z.object({
+    _id: z.string().optional(),
+    foundingMemberWindowOpen: z.boolean().optional(),
+    foundingMemberCap: z.number().optional(),
+    signupOrderCounter: z.number().optional(),
+    foundingMemberCounter: z.number().optional(),
+});
+export type PlatformSettings = z.infer<typeof platformSettingsSchema>;
+export type DonationIntent = NonNullable<Circle["donationIntent"]>;
+
+export const verificationRequestStatusSchema = z.enum([
+    "pending",
+    "submitted",
+    "awaiting_admin",
+    "awaiting_applicant",
+    "approved",
+    "rejected",
+]);
+export const verificationRequestTypeSchema = z.enum(["profile", "independent_circle"]);
+export const verificationMessageSenderRoleSchema = z.enum(["admin", "applicant"]);
 
 export const verificationRequestSchema = z.object({
     _id: z.any().optional(),
     userDid: didSchema,
-    status: z.enum(["pending", "approved", "rejected"]).default("pending"),
-    requestedAt: z.date(),
+    requestType: verificationRequestTypeSchema.optional(),
+    targetCircleId: z.string().optional(),
+    status: verificationRequestStatusSchema.default("submitted"),
+    requestedAt: z.date().optional(), // Legacy field retained for older records.
+    submittedAt: z.date().optional(),
+    updatedAt: z.date().optional(),
+    latestMessageAt: z.date().optional(),
     reviewedAt: z.date().optional(),
     reviewedBy: didSchema.optional(), // Admin who reviewed the request
+    decisionReason: z.string().optional(),
 });
 
 export type VerificationRequest = z.infer<typeof verificationRequestSchema>;
+export type VerificationRequestStatus = z.infer<typeof verificationRequestStatusSchema>;
+export type VerificationRequestType = z.infer<typeof verificationRequestTypeSchema>;
+
+export const verificationMessageSchema = z.object({
+    _id: z.any().optional(),
+    requestId: z.string(),
+    senderDid: didSchema,
+    senderRole: verificationMessageSenderRoleSchema,
+    body: z.string(),
+    attachments: z.array(fileInfoSchema).optional(),
+    createdAt: z.date(),
+});
+
+export type VerificationMessage = z.infer<typeof verificationMessageSchema>;
+export type VerificationMessageSenderRole = z.infer<typeof verificationMessageSenderRoleSchema>;
+
+export const detachCircleRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
+
+export const detachCircleRequestSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    parentCircleId: z.string(),
+    requestedByDid: didSchema,
+    requiredAdminDids: z.array(didSchema),
+    approvedByDids: z.array(didSchema).default([]),
+    status: detachCircleRequestStatusSchema.default("pending"),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    decidedAt: z.date().optional(),
+});
+
+export type DetachCircleRequest = z.infer<typeof detachCircleRequestSchema>;
+export type DetachCircleRequestStatus = z.infer<typeof detachCircleRequestStatusSchema>;
+
+export const adminRoleRemovalRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
+
+export const adminRoleRemovalRequestSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    targetUserDid: didSchema,
+    requestedByDid: didSchema,
+    status: adminRoleRemovalRequestStatusSchema.default("pending"),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    decidedAt: z.date().optional(),
+});
+
+export type AdminRoleRemovalRequest = z.infer<typeof adminRoleRemovalRequestSchema>;
+export type AdminRoleRemovalRequestStatus = z.infer<typeof adminRoleRemovalRequestStatusSchema>;
+
+export const attachCircleRequestStatusSchema = z.enum(["pending", "approved", "declined", "cancelled"]);
+
+export const attachCircleRequestSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    fromParentCircleId: z.string().nullable().optional(),
+    toParentCircleId: z.string(),
+    requestedByDid: didSchema,
+    approvedByDid: didSchema.optional(),
+    status: attachCircleRequestStatusSchema.default("pending"),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    decidedAt: z.date().optional(),
+});
+
+export type AttachCircleRequest = z.infer<typeof attachCircleRequestSchema>;
+export type AttachCircleRequestStatus = z.infer<typeof attachCircleRequestStatusSchema>;
 
 export const serverSettingsSchema = z.object({
     _id: z.any().optional(),
@@ -670,8 +857,13 @@ export const passwordFormSchema = z.object({
 
 export type PasswordFormType = z.infer<typeof passwordFormSchema>;
 
+type AiCoreMessageLike = {
+    role: string;
+    content: unknown;
+};
+
 export type Message = {
-    coreMessage: CoreMessage;
+    coreMessage: AiCoreMessageLike;
     inputProvider?: InputProvider;
     toolCall?: boolean;
     suggestion?: string;
@@ -863,7 +1055,8 @@ export type UserToolboxTab =
     | "notifications"
     | "profile"
     | "circles"
-    | "projects"
+    | "bookmarks"
+    | "connections"
     | "tasks"
     | "events"
     | "account"
@@ -920,10 +1113,6 @@ export type AuthInfo = {
     authStatus: "loading" | "authenticated" | "unauthenticated" | "createAccount";
 };
 
-export type MatrixUserCache = {
-    [username: string]: Circle;
-};
-
 export type TabOptions = "following" | "discover";
 
 export type UserSettings = {
@@ -955,9 +1144,18 @@ export type NotificationType =
     | "issue_status_changed" // Issue status changed (e.g., Open -> In Progress, In Progress -> Resolved) - sent to author/assignee
     // Task Notifications (mirroring Issue Notifications)
     | "task_submitted_for_review"
+    | "task_changes_requested"
+    | "task_verified"
     | "task_approved"
     | "task_assigned"
+    | "task_accepted"
+    | "task_shift_signup"
+    | "task_shift_confirmed"
+    | "task_shift_attendance_verified"
     | "task_status_changed"
+    | "task_claim_submitted"
+    | "task_claim_approved"
+    | "task_claim_declined"
     // Goal Notifications
     | "goal_submitted_for_review"
     | "goal_approved"
@@ -975,9 +1173,13 @@ export type NotificationType =
     // User management notifications
     | "user_verified" // User has been verified by an admin
     | "user_verification_request" // User has requested verification
+    | "user_verification_clarification_requested" // Admin requested more verification information
+    | "user_verification_reply_received" // Applicant replied in verification workflow
     | "user_verification_rejected" // User has requested verification - REJECTED
     | "user_becomes_member" // User becomes a platform member
+    | "proof_of_humanity_verified" // A user received a public proof of humanity verification
     | "pm_received" // A private message has been received
+    | "contact_request_received" // A user received a contact request
     // Consolidated Summary Notification Types
     | "COMMUNITY_FOLLOW_REQUEST" // Replaces follow_request
     | "COMMUNITY_NEW_FOLLOWER" // Replaces new_follower
@@ -1015,9 +1217,18 @@ export const notificationTypeValues = [
     "issue_assigned",
     "issue_status_changed",
     "task_submitted_for_review",
+    "task_changes_requested",
+    "task_verified",
     "task_approved",
     "task_assigned",
+    "task_accepted",
+    "task_shift_signup",
+    "task_shift_confirmed",
+    "task_shift_attendance_verified",
     "task_status_changed",
+    "task_claim_submitted",
+    "task_claim_approved",
+    "task_claim_declined",
     "goal_submitted_for_review",
     "goal_approved",
     "goal_status_changed",
@@ -1032,9 +1243,13 @@ export const notificationTypeValues = [
     "ranking_grace_period_ended",
     "user_verified",
     "user_verification_request",
+    "user_verification_clarification_requested",
+    "user_verification_reply_received",
     "user_verification_rejected",
     "user_becomes_member",
+    "proof_of_humanity_verified",
     "pm_received",
+    "contact_request_received",
     // Summary Types (for user configuration)
     "COMMUNITY_FOLLOW_REQUEST",
     "COMMUNITY_NEW_FOLLOWER",
@@ -1094,9 +1309,18 @@ export const summaryNotificationTypeDetails: Record<
         moduleHandle: "tasks", // Tasks module might also handle ranking notifications
         mapsTo: [
             "task_submitted_for_review",
+            "task_changes_requested",
+            "task_verified",
             "task_approved",
             "task_assigned",
+            "task_accepted",
+            "task_shift_signup",
+            "task_shift_confirmed",
+            "task_shift_attendance_verified",
             "task_status_changed",
+            "task_claim_submitted",
+            "task_claim_approved",
+            "task_claim_declined",
             "ranking_stale_reminder",
             "ranking_grace_period_ended",
         ],
@@ -1233,6 +1457,8 @@ export interface ProposalDisplay extends Proposal {
 // Issue stages
 export const issueStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
 export type IssueStage = z.infer<typeof issueStageSchema>;
+export const issueUrgencySchema = z.enum(["low", "medium", "high", "critical"]);
+export type IssueUrgency = z.infer<typeof issueUrgencySchema>;
 
 // Issue model
 export const issueSchema = z.object({
@@ -1251,6 +1477,7 @@ export const issueSchema = z.object({
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the issue
     targetDate: z.date().nullable().optional(), // Target date for issue (optional)
+    urgency: issueUrgencySchema.optional(),
 });
 
 export type Issue = z.infer<typeof issueSchema>;
@@ -1282,6 +1509,35 @@ export type RankedList = z.infer<typeof rankedListSchema>;
 // Task stages (mirroring Issue stages for now)
 export const taskStageSchema = z.enum(["review", "open", "inProgress", "resolved"]);
 export type TaskStage = z.infer<typeof taskStageSchema>;
+export const taskPrioritySchema = z.enum(["low", "medium", "high", "critical"]);
+export type TaskPriority = z.infer<typeof taskPrioritySchema>;
+export const taskTypeSchema = z.enum(["outcome", "shift"]);
+export type TaskType = z.infer<typeof taskTypeSchema>;
+export const taskParticipantAttendanceStatusSchema = z.enum(["attended", "did_not_attend"]);
+export type TaskParticipantAttendanceStatus = z.infer<typeof taskParticipantAttendanceStatusSchema>;
+export const taskClaimStatusSchema = z.enum(["pending", "approved", "declined", "withdrawn", "closed"]);
+export type TaskClaimStatus = z.infer<typeof taskClaimStatusSchema>;
+export const taskClaimSchema = z.object({
+    claimId: z.string(),
+    claimantDid: didSchema,
+    status: taskClaimStatusSchema,
+    createdAt: z.date(),
+    reviewedAt: z.date().optional(),
+    reviewedBy: didSchema.optional(),
+    note: z.string().optional(),
+});
+export type TaskClaim = z.infer<typeof taskClaimSchema>;
+export const taskParticipantSchema = z.object({
+    userDid: didSchema,
+    joinedAt: z.date(),
+    verifiedAt: z.date().optional(),
+    verifiedBy: didSchema.optional(),
+    attendanceStatus: taskParticipantAttendanceStatusSchema.optional(),
+    attendanceVerifiedAt: z.date().optional(),
+    attendanceVerifiedBy: didSchema.optional(),
+    attendanceNote: z.string().optional(),
+});
+export type TaskParticipant = z.infer<typeof taskParticipantSchema>;
 
 // Task model (mirroring Issue model)
 export const taskSchema = z.object({
@@ -1295,13 +1551,33 @@ export const taskSchema = z.object({
     description: z.string(),
     stage: taskStageSchema.default("review"),
     assignedTo: didSchema.optional(), // User DID of the assignee
+    acceptedAt: z.date().optional(),
+    acceptedBy: didSchema.optional(),
+    submittedForReviewAt: z.date().optional(),
+    submittedForReviewBy: didSchema.optional(),
+    reviewRequestedChangesAt: z.date().optional(),
+    reviewRequestedChangesBy: didSchema.optional(),
+    reviewRequestedChangesNote: z.string().optional(),
+    claims: z.array(taskClaimSchema).optional(),
+    claimApprovedAt: z.date().optional(),
+    claimApprovedBy: didSchema.optional(),
+    verifiedAt: z.date().optional(),
+    verifiedBy: didSchema.optional(),
+    taskType: taskTypeSchema.optional(),
+    slots: z.number().int().positive().optional(),
+    shiftStartTime: z.string().optional(),
+    shiftDurationMinutes: z.number().int().positive().optional(),
+    participants: z.array(taskParticipantSchema).optional(),
+    participantNotes: z.string().optional(),
     userGroups: z.array(z.string()).default([]), // User groups that can see this task
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the task
     targetDate: z.date().nullable().optional(), // Target date for task (optional)
     goalId: z.string().optional(), // Optional link to a goal
     eventId: z.string().optional(), // Optional link to an event
+    priority: taskPrioritySchema.optional(),
 });
 
 export type Task = z.infer<typeof taskSchema>;
@@ -1311,9 +1587,96 @@ export interface TaskDisplay extends Task {
     author: Circle; // Creator's details
     assignee?: Circle; // Assignee's details (optional)
     circle?: Circle; // Circle details
+    participantProfiles?: Circle[];
+    verifier?: Circle;
+    contributionNote?: string;
     rank?: number; // Aggregated task rank
     goal?: GoalDisplay; // Associated goal details
     event?: EventDisplay; // Associated event details
+}
+
+export const fundingAskStatusSchema = z.enum(["draft", "open", "in_progress", "completed", "closed"]);
+export type FundingAskStatus = z.infer<typeof fundingAskStatusSchema>;
+
+export const fundingAskCategorySchema = z.enum([
+    "materials",
+    "transport",
+    "clothing",
+    "education",
+    "tools",
+    "household",
+    "health",
+    "other",
+]);
+export type FundingAskCategory = z.infer<typeof fundingAskCategorySchema>;
+
+export const fundingAskTrustBadgeTypeSchema = z.enum(["circle_admin", "verified_member", "proxy_ask", "member_ask"]);
+export type FundingAskTrustBadgeType = z.infer<typeof fundingAskTrustBadgeTypeSchema>;
+
+export const fundingAskCurrencySchema = z.enum(["ZAR", "USD", "EUR"]);
+export type FundingAskCurrency = z.infer<typeof fundingAskCurrencySchema>;
+
+export const fundingAskBeneficiaryTypeSchema = z.enum(["self", "person", "family", "community", "group", "project", "other"]);
+export type FundingAskBeneficiaryType = z.infer<typeof fundingAskBeneficiaryTypeSchema>;
+
+export const fundingAskItemStatusSchema = z.enum(["draft", "open", "completed", "closed"]);
+export type FundingAskItemStatus = z.infer<typeof fundingAskItemStatusSchema>;
+
+export const fundingAskItemSchema = z.object({
+    title: z.string().trim().min(1),
+    category: fundingAskCategorySchema,
+    price: z.number().nonnegative(),
+    currency: fundingAskCurrencySchema,
+    quantity: z.number().positive().optional(),
+    unitLabel: z.string().max(80).optional(),
+    note: z.string().max(280).optional(),
+    status: fundingAskItemStatusSchema.default("open"),
+    // Legacy field kept to normalize pre-reshape documents safely.
+    name: z.string().trim().optional(),
+});
+export type FundingAskItem = z.infer<typeof fundingAskItemSchema>;
+
+export const fundingAskSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    circleHandleSnapshot: z.string(),
+    createdByDid: didSchema,
+    createdByHandleSnapshot: z.string().optional(),
+    title: z.string(),
+    shortStory: z.string(),
+    description: z.string().optional(),
+    category: fundingAskCategorySchema.optional(),
+    amount: z.number().nonnegative().optional(),
+    currency: fundingAskCurrencySchema.optional(),
+    items: z.array(fundingAskItemSchema).default([]).optional(),
+    quantity: z.number().positive().optional(),
+    unitLabel: z.string().max(80).optional(),
+    status: fundingAskStatusSchema.default("draft"),
+    isProxy: z.boolean().default(false),
+    beneficiaryType: fundingAskBeneficiaryTypeSchema.default("self"),
+    beneficiaryName: z.string().optional(),
+    beneficiaryDid: didSchema.optional(),
+    proxyNote: z.string().optional(),
+    completionPlan: z.string().optional(),
+    completionNote: z.string().optional(),
+    coverImage: fileInfoSchema.optional(),
+    trustBadgeType: fundingAskTrustBadgeTypeSchema.default("member_ask"),
+    activeSupporterDid: didSchema.optional(),
+    activeSupporterHandleSnapshot: z.string().optional(),
+    activeSupportStartedAt: z.date().optional(),
+    noticeboardPostId: z.string().optional(),
+    completedAt: z.date().optional(),
+    closedAt: z.date().optional(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
+
+export type FundingAsk = z.infer<typeof fundingAskSchema>;
+
+export interface FundingAskDisplay extends FundingAsk {
+    circle?: Circle;
+    creator?: Circle;
+    activeSupporter?: Circle;
 }
 
 /**
@@ -1355,6 +1718,7 @@ export const eventSchema = z.object({
     userGroups: z.array(z.string()).default([]), // User groups that can see this event
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
+    noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
     // Format
     isVirtual: z.boolean().optional(),
@@ -1466,6 +1830,23 @@ export interface GoalDisplay extends Goal {
     // resultSummary?: string;
     // resultImages?: Media[];
     // resultPostId?: string;
+}
+
+export const humanityVerificationSchema = z.object({
+    _id: z.any().optional(),
+    verifierDid: didSchema,
+    subjectDid: didSchema,
+    level: humanityVerificationLevelSchema,
+    note: z.string().optional(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    revokedAt: z.date().nullable().optional(),
+});
+
+export type HumanityVerification = z.infer<typeof humanityVerificationSchema>;
+
+export interface HumanityVerificationDisplay extends HumanityVerification {
+    verifier?: Circle | null;
 }
 
 export const notificationSchema = z.object({

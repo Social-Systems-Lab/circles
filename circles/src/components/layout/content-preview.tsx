@@ -38,10 +38,12 @@ import TaskDetail from "../modules/tasks/task-detail"; // Added TaskDetail impor
 import EventDetail from "../modules/events/event-detail"; // Added EventDetail import
 import { MapPin, Quote } from "lucide-react";
 import { CirclePicture } from "../modules/circles/circle-picture";
+import { getInterestLabel } from "@/lib/data/interests";
 import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import SdgList from "../modules/sdgs/SdgList";
 import SocialLinks from "../modules/home/social-links";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 const skillMap = new Map(skills.map((s) => [s.handle, s]));
@@ -127,7 +129,7 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                 e.stopPropagation();
                                 setContentPreview(undefined);
                                 window.setTimeout(() => {
-                                    router.push(`/circles/${circle.handle}`);
+                                    router.push(getCircleDefaultPath(circle));
                                 }, closeDelayMs);
                             }}
                         >
@@ -244,9 +246,12 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                     <p className="text-sm text-gray-700">{circle.engagements.text}</p>
                                 )}
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    {circle.engagements.interests?.map((interest) => (
+                                    {(circle.interests?.length
+                                        ? circle.interests
+                                        : circle.engagements?.interests || []
+                                    ).map((interest) => (
                                         <Badge key={interest} variant="outline">
-                                            {interest}
+                                            {getInterestLabel(interest)}
                                         </Badge>
                                     ))}
                                 </div>
@@ -254,10 +259,10 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         )}
 
                         {/* Needs */}
-                        {circle.needs && (
+                        {circle.circleType !== "user" && circle.needs && (
                             <div className="mt-4">
                                 <h3 className="mb-1.5 text-xs font-medium uppercase text-gray-500">
-                                    What I need help with
+                                    What we need help with
                                 </h3>
                                 {circle.needs.text && <p className="text-sm text-gray-700">{circle.needs.text}</p>}
                             </div>

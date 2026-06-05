@@ -1,7 +1,7 @@
 // profile-menu.tsx
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
 import {
@@ -9,57 +9,89 @@ import {
     userToolboxDataAtom,
     sidePanelContentVisibleAtom,
     authInfoAtom,
-    unreadCountsAtom,
+    notificationUnreadCountAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
 import { Bell } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
-import { VerifyAccountButton } from "../modules/auth/verify-account-button";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
+import { listChatRoomsAction } from "../modules/chat/actions";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
     const [authInfo] = useAtom(authInfoAtom);
-    const [user, setUser] = useAtom(userAtom);
+    const [user] = useAtom(userAtom);
     const searchParams = useSearchParams();
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [unreadCounts] = useAtom(unreadCountsAtom);
+    const [notificationUnreadCount, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
+    const [messageUnreadCount, setMessageUnreadCount] = useState(0);
     const pathname = usePathname();
-
-    const totalUnreadMessages = useMemo(() => {
-        if (!user?.chatRoomMemberships) {
-            return 0;
-        }
-
-        // get sum of unread messages in all chat rooms
-        return user?.chatRoomMemberships
-            .map((room) => {
-                const unread = Object.entries(unreadCounts).find(([key]) =>
-                    key.startsWith(room.chatRoom.matrixRoomId!),
-                )?.[1];
-                if (unread) {
-                    return unread;
-                }
-                return 0;
-            })
-            .reduce((acc, val) => acc + val, 0);
-    }, [unreadCounts, user?.chatRoomMemberships]);
-
-    const unreadNotifications = useMemo(() => {
-        if (!user?.matrixNotificationsRoomId) {
-            return 0;
-        }
-        return unreadCounts[user.matrixNotificationsRoomId] || 0;
-    }, [unreadCounts, user?.matrixNotificationsRoomId]);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (!user?.did) {
+            setNotificationUnreadCount(0);
+            setMessageUnreadCount(0);
+            return;
+        }
+
+        let cancelled = false;
+        const loadMessageUnreadCount = async () => {
+            try {
+                const result = await listChatRoomsAction();
+                if (!cancelled) {
+                    const unreadTotal =
+                        result.success && result.rooms
+                            ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
+                            : 0;
+                    setMessageUnreadCount(unreadTotal);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch message unread count:", error);
+                }
+            }
+        };
+
+        const loadNotificationUnreadCount = async () => {
+            try {
+                const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`Failed to load notification unread count (${response.status})`);
+                }
+
+                const data = await response.json();
+                if (!cancelled) {
+                    setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch notification unread count:", error);
+                }
+            }
+        };
+
+        void loadMessageUnreadCount();
+        void loadNotificationUnreadCount();
+        const intervalId = window.setInterval(() => {
+            void loadMessageUnreadCount();
+            void loadNotificationUnreadCount();
+        }, 15000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [setNotificationUnreadCount, user?.did]);
 
     const openUserToolbox = (tab: UserToolboxTab) => {
         if (
@@ -79,11 +111,11 @@ const ProfileMenuBar = () => {
 
     const onSignUpClick = () => {
         let redirectTo = searchParams.get("redirectTo") ?? "/";
-        router.push("/signup?redirectTo=" + redirectTo);
+        router.push("/signup/pilot?redirectTo=" + redirectTo);
     };
 
     // hide when in the welcome screen
-    if (pathname === "/signup" || pathname === "/login") {
+    if (pathname?.startsWith("/signup") || pathname === "/login") {
         return null;
     }
 
@@ -116,12 +148,12 @@ const ProfileMenuBar = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                                onClick={() => openUserToolbox("chat")}
+                                onClick={() => router.push("/chat")}
                             >
                                 <LuMail className="h-5 w-5" />
-                                {totalUnreadMessages > 0 && (
+                                {messageUnreadCount > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                        {totalUnreadMessages}
+                                        {messageUnreadCount}
                                     </span>
                                 )}
                             </Button>
@@ -141,9 +173,9 @@ const ProfileMenuBar = () => {
                                 onClick={() => openUserToolbox("notifications")}
                             >
                                 <Bell className="h-5 w-5" />
-                                {unreadNotifications > 0 && (
+                                {notificationUnreadCount > 0 && (
                                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                        {unreadNotifications}
+                                        {notificationUnreadCount}
                                     </span>
                                 )}
                             </Button>
@@ -151,23 +183,14 @@ const ProfileMenuBar = () => {
                             <Button
                                 className="relative h-auto w-auto rounded-full p-0"
                                 variant="ghost"
-                                onClick={() => router.push(`/circles/${user?.handle}`)}
+                                onClick={() => router.push(getCircleDefaultPath(user))}
                             >
-                                <UserPicture name={user?.name} picture={user?.picture?.url} size="40px" />
-                                {user.isMember && (
-                                    <img
-                                        src="/images/member-badge.png"
-                                        alt="Member Badge"
-                                        className="absolute bottom-0 right-0 h-4 w-4"
-                                    />
-                                )}
-                                {!user.isMember && user.isVerified && (
-                                    <img
-                                        src="/images/verified-badge.png"
-                                        alt="Verified Badge"
-                                        className="absolute bottom-0 right-0 h-4 w-4"
-                                    />
-                                )}
+                                <UserPicture
+                                    name={user?.name}
+                                    picture={user?.picture?.url}
+                                    size="40px"
+                                    circleType="user"
+                                />
                             </Button>
                         </>
                     )}

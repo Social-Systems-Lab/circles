@@ -2,6 +2,12 @@
 services:
     circles:
         image: circles-circles:latest
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+              GIT_SHA: ${GIT_SHA:-unknown}
+              BUILD_TIME: ${BUILD_TIME:-unknown}
         ports:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
@@ -22,6 +28,8 @@ services:
             - POSTMARK_API_TOKEN=${POSTMARK_API_TOKEN}
             - POSTMARK_SENDER_EMAIL=${POSTMARK_SENDER_EMAIL}
             - CIRCLES_URL=${CIRCLES_URL}
+            - NEXT_PUBLIC_CHAT_PROVIDER=mongo
+
         volumes:
             - circles:/circles
             - circles_users:/circles/users
@@ -65,6 +73,8 @@ services:
             - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
         volumes:
             - db:/data/db
+        ports:
+            - "27017:27017"
         restart: always
         networks:
             - webnet
@@ -79,6 +89,8 @@ services:
         command: server /data --console-address :9001
         volumes:
             - storage:/data
+        ports:
+            - "9000:9000"
         restart: unless-stopped
         networks:
             - webnet
@@ -96,6 +108,7 @@ services:
 
     postgres:
         image: postgres:14
+        profiles: ["matrix"]
         restart: always
         env_file:
             - .env
@@ -111,6 +124,7 @@ services:
 
     synapse:
         image: matrixdotorg/synapse:latest
+        profiles: ["matrix"]
         env_file:
             - .env
         restart: always
@@ -147,7 +161,8 @@ services:
             - minio
 
     watchtower:
-        image: containrrr/watchtower
+        image: containrrr/watchtower:1.7.1
+        command: --api-version 1.52
         volumes:
             - /var/run/docker.sock:/var/run/docker.sock
         restart: always

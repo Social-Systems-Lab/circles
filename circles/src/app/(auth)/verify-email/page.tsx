@@ -1,69 +1,98 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { verifyEmailAction } from "./actions"; // This action will be created next
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { verifyEmailAction } from "./actions";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 function VerifyEmailContent() {
     const searchParams = useSearchParams();
-    const router = useRouter();
+    const [title, setTitle] = useState("Email verification");
     const [message, setMessage] = useState("Verifying your email...");
+    const [detail, setDetail] = useState<string | null>(null);
     const [error, setError] = useState(false);
+    const [continueHref, setContinueHref] = useState("/");
+    const [isResolved, setIsResolved] = useState(false);
+    const processedTokenRef = useRef<string | null>(null);
 
     useEffect(() => {
         const token = searchParams.get("token");
 
+        if (token && processedTokenRef.current === token) {
+            return;
+        }
+
         if (token) {
+            processedTokenRef.current = token;
             verifyEmailAction(token)
                 .then((response) => {
                     if (response.success) {
-                        setMessage(response.message || "Email verified successfully! You can now log in.");
+                        setTitle("Email verified");
+                        setMessage(response.message || "Email verified");
+                        setDetail(
+                            "Your email address has been verified. Continue to your profile next to complete your setup. Kamooni member verification happens later from your profile.",
+                        );
+                        setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(false);
-                        // Optional: Redirect to login or dashboard after a delay
-                        // setTimeout(() => {
-                        //     router.push("/login");
-                        // }, 3000);
+                        setIsResolved(true);
                     } else {
-                        setMessage(response.message || "Failed to verify email. The link may be invalid or expired.");
+                        setTitle("Email verification");
+                        setMessage(
+                            response.message || "Failed to verify your email. The email verification link may be invalid or expired.",
+                        );
+                        setDetail(
+                            "If you cannot use the original link right now, you can still continue to your profile, but some account steps may require email verification later.",
+                        );
+                        setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(true);
+                        setIsResolved(true);
                     }
                 })
                 .catch(() => {
+                    setTitle("Email verification");
                     setMessage("An unexpected error occurred. Please try again later.");
+                    setDetail(
+                        "You can continue to your profile for now, but you may need to verify your email before completing some account steps.",
+                    );
                     setError(true);
+                    setIsResolved(true);
                 });
         } else {
-            setMessage("No verification token found. Please check the link or request a new one.");
+            setTitle("Email verification");
+            setMessage("No email verification token was found. Please check the link or request a new one.");
+            setDetail(
+                "If you cannot use the verification link right now, you can continue to your profile for now and come back to email verification later.",
+            );
             setError(true);
+            setIsResolved(true);
         }
-    }, [searchParams, router]);
+    }, [searchParams]);
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 dark:bg-gray-900">
             <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md dark:bg-gray-800">
-                <h1 className="mb-6 text-center text-2xl font-semibold text-gray-900 dark:text-white">
-                    Email Verification
-                </h1>
+                <h1 className="mb-6 text-center text-2xl font-semibold text-gray-900 dark:text-white">{title}</h1>
                 <p className={`text-center ${error ? "text-red-500" : "text-green-500"}`}>{message}</p>
-                {!error && message.includes("successfully") && (
+                {detail && (
                     <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                        Your email has been verified...
+                        {detail}
                     </p>
                 )}
-                {(error || message.includes("successfully")) && (
+                {isResolved && (
                     <div className="mt-6 text-center">
                         <Button asChild>
-                            <Link href="/">Enter</Link>
+                            <Link href={continueHref}>
+                                {error ? "Continue for now" : "Continue to profile setup"}
+                            </Link>
                         </Button>
                     </div>
                 )}
                 {error && message.includes("expired") && (
                     <div className="mt-4 text-center">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                            If your link has expired, you can request a new verification email from your profile
-                            settings or by attempting to log in.
+                            If your email verification link has expired, you can request a new verification email from
+                            your profile settings or by attempting to log in.
                         </p>
                     </div>
                 )}

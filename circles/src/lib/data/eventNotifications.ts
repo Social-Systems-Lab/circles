@@ -1,5 +1,5 @@
 import { Circle, Event as EventModel, EventDisplay, EventStage, UserPrivate } from "@/models/models";
-import { sendNotifications } from "./matrix";
+import { sendNotifications } from "./notifications";
 import { getUserPrivate } from "./user";
 import { getCircleById } from "./circle";
 import { features } from "./constants";

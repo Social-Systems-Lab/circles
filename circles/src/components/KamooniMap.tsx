@@ -4,7 +4,11 @@ import { useEffect, useRef } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
+const mapboxToken =
+    typeof process !== "undefined"
+        ? process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ""
+        : ((globalThis as any)?.process?.env?.NEXT_PUBLIC_MAPBOX_TOKEN ?? "");
+mapboxgl.accessToken = mapboxToken;
 
 export default function KamooniMap() {
     const containerRef = useRef<HTMLDivElement | null>(null);

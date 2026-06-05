@@ -35,6 +35,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isIndependentCircle = circle.circleType !== "user" && circle.circleLevel !== "profile_child";
 
     const form = useForm({
         defaultValues: {
@@ -55,11 +56,17 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     }),
                 ) || [], // Initialize images state
             isPublic: circle.isPublic !== false, // Default to true if not set
+            showAdminsPublicly: circle.showAdminsPublicly !== false, // Keep existing circles visible unless explicitly turned off
             location: circle.location || {},
             socialLinks: circle.socialLinks || [],
             websiteUrl: circle.websiteUrl || "",
+            representsOrganization: circle.representsOrganization === true,
+            organizationName: circle.organizationName || "",
+            officialEmail: circle.officialEmail || "",
         },
     });
+
+    const representsOrganization = form.watch("representsOrganization");
 
     const onSubmit = async (data: {
         _id: any;
@@ -72,9 +79,13 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
         // cover?: any; // Remove cover
         images?: ImageItem[]; // Add images
         isPublic?: boolean;
+        showAdminsPublicly?: boolean;
         location?: any;
         socialLinks?: any;
         websiteUrl?: string;
+        representsOrganization?: boolean;
+        organizationName?: string;
+        officialEmail?: string;
     }) => {
         setIsSubmitting(true);
         try {
@@ -158,26 +169,117 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             )}
                         />
 
-                        <Controller
-                            name="websiteUrl"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicTextField
-                                    field={{
-                                        name: "websiteUrl",
-                                        type: "text",
-                                        label: "Website",
-                                        placeholder: "https://your-website.org",
-                                        description: {
-                                            circle: "Your community or organization website.",
-                                            user: "Your personal website.",
-                                        },
-                                    }}
-                                    formField={field}
+                        {!isIndependentCircle || !representsOrganization ? (
+                            <Controller
+                                name="websiteUrl"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicTextField
+                                        field={{
+                                            name: "websiteUrl",
+                                            type: "text",
+                                            label: "Website",
+                                            placeholder: "https://your-website.org",
+                                            description: {
+                                                circle: "Your community or organization website.",
+                                                user: "Your personal website.",
+                                            },
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )}
+                            />
+                        ) : null}
+
+                        {isIndependentCircle ? (
+                            <div className="space-y-4 rounded-lg border bg-slate-50 p-4">
+                                <div className="space-y-1">
+                                    <h3 className="font-medium">Organization Claim</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Independent circles that represent an existing organization may require extra
+                                        verification, such as an official email tied to that organization.
+                                    </p>
+                                </div>
+
+                                <Controller
+                                    name="representsOrganization"
                                     control={form.control as unknown as Control}
+                                    render={({ field }) => (
+                                        <DynamicSwitchField
+                                            field={{
+                                                name: "representsOrganization",
+                                                type: "switch",
+                                                label: "This circle represents an existing organization",
+                                            }}
+                                            formField={field}
+                                            control={form.control as unknown as Control}
+                                        />
+                                    )}
                                 />
-                            )}
-                        />
+
+                                {representsOrganization ? (
+                                    <div className="space-y-4">
+                                        <Controller
+                                            name="organizationName"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicTextField
+                                                    field={{
+                                                        name: "organizationName",
+                                                        type: "text",
+                                                        label: "Official organization name",
+                                                        placeholder: "Official organization name",
+                                                        description:
+                                                            "Store the formal organization name exactly as admins should review it.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+
+                                        <Controller
+                                            name="websiteUrl"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicTextField
+                                                    field={{
+                                                        name: "websiteUrl",
+                                                        type: "text",
+                                                        label: "Official website",
+                                                        placeholder: "https://organization.org",
+                                                        description:
+                                                            "This website is used as organization-claim evidence during verification review.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+
+                                        <Controller
+                                            name="officialEmail"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicTextField
+                                                    field={{
+                                                        name: "officialEmail",
+                                                        type: "text",
+                                                        label: "Official email",
+                                                        placeholder: "name@organization.org",
+                                                        description:
+                                                            "Use an email address connected to the organization if available.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
 
                         <Controller
                             name="description"
@@ -240,6 +342,14 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             )}
                         />
 
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Visibility</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                         <Controller
                             name="isPublic"
                             control={form.control as unknown as Control}
@@ -252,6 +362,26 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         description: {
                                             circle: "When set to public, users can follow the circle without requiring approval from admins.",
                                             user: "When set to public people can follow you without requiring your approval.",
+                                        },
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
+                            )}
+                        />
+
+                        <Controller
+                            name="showAdminsPublicly"
+                            control={form.control as unknown as Control}
+                            render={({ field }) => (
+                                <DynamicSwitchField
+                                    field={{
+                                        name: "showAdminsPublicly",
+                                        type: "switch",
+                                        label: "Show admins publicly",
+                                        description: {
+                                            circle: "Show the Admins panel on your circle home page.",
+                                            user: "Show the Admins panel on your circle home page.",
                                         },
                                     }}
                                     formField={field}

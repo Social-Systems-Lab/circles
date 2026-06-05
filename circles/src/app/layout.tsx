@@ -1,6 +1,6 @@
 // layout.tsx - global app layout with the main navigation bar
 import { ReactScan } from "../components/utils/react-scan";
-import { Wix_Madefor_Display, Libre_Franklin, Inter, Bebas_Neue } from "next/font/google";
+import { Wix_Madefor_Display, Libre_Franklin, Bebas_Neue } from "next/font/google";
 import "@app/globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Provider } from "jotai";
@@ -18,7 +18,6 @@ import { SidePanel } from "@/components/layout/side-panel";
 import { Metadata } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { MapboxInitializer } from "@/components/map/map-initializer";
-import { SupportButton } from "@/components/layout/support-button";
 import { FeedPostDialog } from "@/components/global-create/feed-post-dialog"; // Import FeedPostDialog
 
 // Disable caching for this layout to prevent the "hard refresh bug"
@@ -27,7 +26,6 @@ export const fetchCache = "force-no-store";
 export const revalidate = 0;
 const enableReactScan = false;
 
-const inter = Inter({ subsets: ["latin"] });
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
 const libre = Libre_Franklin({ subsets: ["latin"], variable: "--font-libre-franklin" });
 
@@ -51,7 +49,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                 <head>
                     <meta name="app-version" content={process.env.version} />
                 </head>
-                <body className={inter.className} suppressHydrationWarning>
+                <body suppressHydrationWarning>
                     <main className="relative flex flex-col md:flex-row">
                         <GlobalNav />
                         <div className="relative flex w-full flex-row overflow-hidden">
@@ -70,7 +68,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                         <UnreadCountCalculator /> {/* Calculates unread counts for notifications */}
                         <BackgroundMessagePoller /> {/* Polls for messages in all chat rooms */}
                         <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
-                        <SupportButton />
                         <FeedPostDialog /> {/* Add FeedPostDialog here */}
                     </main>
                     <Script id="version-check">

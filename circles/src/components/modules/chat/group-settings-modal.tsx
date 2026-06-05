@@ -2,10 +2,15 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
+import { HiLightBulb } from "react-icons/hi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChatRoomDisplay } from "@/models/models";
+import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
+import { ChatRoomDisplay, Circle, ContentPreviewData } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
+import { useAtom, useAtomValue } from "jotai";
+import { useRouter } from "next/navigation";
+import { useIsCompact } from "@/components/utils/use-is-compact";
 
 interface GroupSettingsModalProps {
     open: boolean;
@@ -14,8 +19,47 @@ interface GroupSettingsModalProps {
     isAdmin: boolean;
 }
 
+const OPEN_TOPIC_EVENT = "kamooni:open-topic";
+
 export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: GroupSettingsModalProps) {
     const [activeTab, setActiveTab] = useState("info");
+    const [canEditInfo, setCanEditInfo] = useState(false);
+
+    useEffect(() => {
+        if (chatRoom.isDirect && activeTab === "members") {
+            setActiveTab("info");
+        }
+    }, [activeTab, chatRoom.isDirect]);
+
+    useEffect(() => {
+        if (!open || !chatRoom?._id) {
+            setCanEditInfo(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const checkEditPermission = async () => {
+            try {
+                const { canEditGroupInfoAction } = await import("./actions");
+                const result = await canEditGroupInfoAction(chatRoom._id as string);
+                if (!cancelled) {
+                    setCanEditInfo(result.success && result.isAdmin === true);
+                }
+            } catch (error) {
+                console.error("Error checking group info permissions:", error);
+                if (!cancelled) {
+                    setCanEditInfo(false);
+                }
+            }
+        };
+
+        void checkEditPermission();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, chatRoom?._id]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -28,14 +72,20 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                 </DialogHeader>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsList className={`grid w-full ${chatRoom.isDirect ? "grid-cols-4" : "grid-cols-5"}`}>
                         <TabsTrigger value="info" className="flex items-center gap-2">
                             <Info className="h-4 w-4" />
                             <span className="hidden sm:inline">Info</span>
                         </TabsTrigger>
-                        <TabsTrigger value="members" className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <span className="hidden sm:inline">Members</span>
+                        {!chatRoom.isDirect && (
+                            <TabsTrigger value="members" className="flex items-center gap-2">
+                                <Users className="h-4 w-4" />
+                                <span className="hidden sm:inline">Members</span>
+                            </TabsTrigger>
+                        )}
+                        <TabsTrigger value="threads" className="flex items-center gap-2">
+                            <HiLightBulb className="h-4 w-4" />
+                            <span className="hidden sm:inline">Topics</span>
                         </TabsTrigger>
                         <TabsTrigger value="media" className="flex items-center gap-2">
                             <ImageIcon className="h-4 w-4" />
@@ -49,19 +99,38 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
 
                     <div className="flex-1 overflow-y-auto mt-4">
                         <TabsContent value="info" className="mt-0">
-                            <InfoTab chatRoom={chatRoom} isAdmin={isAdmin} />
+                            <InfoTab chatRoom={chatRoom} canEditInfo={canEditInfo} onOpenChange={onOpenChange} />
                         </TabsContent>
 
-                        <TabsContent value="members" className="mt-0">
-                            <MembersTab chatRoom={chatRoom} isAdmin={isAdmin} />
-                        </TabsContent>
+                        {!chatRoom.isDirect && (
+                            <TabsContent value="members" className="mt-0">
+                                <MembersTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
+                            </TabsContent>
+                        )}
 
+                        <TabsContent value="threads" className="mt-0">
+                            <ThreadsTab
+                                chatRoom={chatRoom}
+                                isActive={activeTab === "threads"}
+                                onOpenTopic={(topicId) => {
+                                    window.dispatchEvent(
+                                        new CustomEvent(OPEN_TOPIC_EVENT, {
+                                            detail: {
+                                                conversationId: chatRoom._id as string,
+                                                topicId,
+                                            },
+                                        }),
+                                    );
+                                    onOpenChange(false);
+                                }}
+                            />
+                        </TabsContent>
                         <TabsContent value="media" className="mt-0">
-                            <MediaTab chatRoom={chatRoom} />
+                            <MediaTab chatRoom={chatRoom} isActive={activeTab === "media"} />
                         </TabsContent>
 
                         <TabsContent value="settings" className="mt-0">
-                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin} />
+                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
                         </TabsContent>
                     </div>
                 </Tabs>
@@ -71,12 +140,62 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
 }
 
 // Info Tab Component
-function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
+function InfoTab({
+    chatRoom,
+    canEditInfo,
+    onOpenChange,
+}: {
+    chatRoom: ChatRoomDisplay;
+    canEditInfo: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const initialDescription = typeof chatRoom.description === "string" ? chatRoom.description : "";
     const [isEditing, setIsEditing] = useState(false);
     const [editedName, setEditedName] = useState(chatRoom.name);
-    const [editedDescription, setEditedDescription] = useState("");
+    const [editedDescription, setEditedDescription] = useState(initialDescription);
     const [isSaving, setIsSaving] = useState(false);
+    const [memberCount, setMemberCount] = useState<number>(
+        typeof (chatRoom as any).memberCount === "number" ? ((chatRoom as any).memberCount as number) : 0,
+    );
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [user] = useAtom(userAtom);
+    const [, setContentPreview] = useAtom(contentPreviewAtom);
+    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
+    const isCompact = useIsCompact();
+    const router = useRouter();
+    const dmContact = chatRoom.isDirect
+        ? (((chatRoom as any).participantCircles as Circle[] | undefined) || []).find(
+              (participant) => participant?.did && participant.did !== user?.did,
+          )
+        : undefined;
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchMemberCount = async () => {
+            try {
+                const { getActiveChatRoomMemberCountAction } = await import("./actions");
+                const result = await getActiveChatRoomMemberCountAction(chatRoom._id as string);
+                if (!cancelled && result.success && typeof result.memberCount === "number") {
+                    setMemberCount(result.memberCount);
+                }
+            } catch (error) {
+                console.error("Error fetching member count:", error);
+            }
+        };
+
+        void fetchMemberCount();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatRoom._id]);
+
+    useEffect(() => {
+        setEditedName(chatRoom.name);
+        setEditedDescription(typeof chatRoom.description === "string" ? chatRoom.description : "");
+        setIsEditing(false);
+    }, [chatRoom._id, chatRoom.name, chatRoom.description]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -137,8 +256,34 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
 
     const handleCancel = () => {
         setEditedName(chatRoom.name);
-        setEditedDescription("");
+        setEditedDescription(typeof chatRoom.description === "string" ? chatRoom.description : "");
         setIsEditing(false);
+    };
+
+    const handleContactNameClick = () => {
+        if (!dmContact?.handle) {
+            return;
+        }
+
+        if (isCompact) {
+            onOpenChange(false);
+            router.push(`/circles/${dmContact.handle}`);
+            return;
+        }
+
+        const contentPreviewData: ContentPreviewData = {
+            type: "user",
+            content: dmContact,
+        };
+
+        setContentPreview((current) => {
+            const isCurrentlyPreviewing =
+                current?.type === "user" &&
+                current?.content?._id === dmContact._id &&
+                sidePanelContentVisible === "content";
+            return isCurrentlyPreviewing ? undefined : contentPreviewData;
+        });
+        onOpenChange(false);
     };
 
     return (
@@ -153,7 +298,7 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
                     }}
                     size="120px"
                 />
-                {isAdmin && (
+                {canEditInfo && (
                     <>
                         <input
                             type="file"
@@ -175,44 +320,62 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
 
             {/* Group Name */}
             <div>
-                <label className="text-sm font-medium text-gray-500">Group Name</label>
+                <label className="text-sm font-medium text-gray-500">{chatRoom.isDirect ? "Contact name" : "Group Name"}</label>
                 <div className="mt-1">
-                    {isAdmin && isEditing ? (
+                    {canEditInfo && isEditing ? (
                         <input
                             type="text"
                             value={editedName}
                             onChange={(e) => setEditedName(e.target.value)}
                             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Group name"
+                            placeholder={chatRoom.isDirect ? "Contact name" : "Group name"}
                         />
+                    ) : chatRoom.isDirect && dmContact ? (
+                        <button
+                            type="button"
+                            onClick={handleContactNameClick}
+                            className="text-left text-lg font-medium text-gray-900 transition-colors hover:text-blue-600 hover:underline underline-offset-2"
+                        >
+                            {chatRoom.name}
+                        </button>
                     ) : (
                         <p className="text-lg font-medium">{chatRoom.name}</p>
                     )}
                 </div>
             </div>
 
-            {/* Group Description */}
-            <div>
-                <label className="text-sm font-medium text-gray-500">Description</label>
-                <div className="mt-1">
-                    {isAdmin && isEditing ? (
-                        <textarea
-                            value={editedDescription}
-                            onChange={(e) => setEditedDescription(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Add group description"
-                            rows={3}
-                        />
-                    ) : (
-                        <p className="text-sm text-gray-600">
-                            {editedDescription || "No description"}
-                        </p>
-                    )}
-                </div>
-            </div>
+            {!chatRoom.isDirect && (
+                <>
+                    {/* Group Description */}
+                    <div>
+                        <label className="text-sm font-medium text-gray-500">Description</label>
+                        <div className="mt-1">
+                            {canEditInfo && isEditing ? (
+                                <textarea
+                                    value={editedDescription}
+                                    onChange={(e) => setEditedDescription(e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Add group description"
+                                    rows={3}
+                                />
+                            ) : (
+                                <p className="text-sm text-gray-600">
+                                    {editedDescription || "No description"}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Group Info */}
+                    <div className="space-y-2 text-sm text-gray-600">
+                        <p>Created {new Date(chatRoom.createdAt).toLocaleDateString()}</p>
+                        <p>Group · {memberCount} {memberCount === 1 ? "member" : "members"}</p>
+                    </div>
+                </>
+            )}
 
             {/* Edit/Save/Cancel Buttons */}
-            {isAdmin && (
+            {canEditInfo && (
                 <div className="flex gap-2">
                     {isEditing ? (
                         <>
@@ -242,17 +405,13 @@ function InfoTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: bo
                 </div>
             )}
 
-            {/* Group Info */}
-            <div className="space-y-2 text-sm text-gray-600">
-                <p>Created {new Date(chatRoom.createdAt).toLocaleDateString()}</p>
-                <p>Group · 0 members</p>
-            </div>
         </div>
     );
 }
 
 // Members Tab Component
 function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
+    const user = useAtomValue(userAtom);
     const [members, setMembers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -554,12 +713,14 @@ function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin:
                                                 Make admin
                                             </button>
                                         )}
-                                        <button 
-                                            onClick={() => handleRemove(member.userDid)}
-                                            className="text-sm text-red-600 hover:underline"
-                                        >
-                                            Remove
-                                        </button>
+                                        {member.userDid !== user?.did && (
+                                            <button
+                                                onClick={() => handleRemove(member.userDid)}
+                                                className="text-sm text-red-600 hover:underline"
+                                            >
+                                                Remove from group
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -572,26 +733,163 @@ function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin:
 }
 
 // Media Tab Component
-function MediaTab({ chatRoom }: { chatRoom: ChatRoomDisplay }) {
+type ConversationMediaItem = {
+    url: string;
+    mime: string;
+    name?: string;
+    size?: number;
+    kind: "image" | "video" | "file";
+    createdAt: string | Date;
+    messageId: string;
+};
+
+const formatBytes = (value?: number): string => {
+    if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return "";
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+function MediaTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive: boolean }) {
+    const [activeMediaType, setActiveMediaType] = useState<"image" | "video" | "file">("image");
+    const [mediaItems, setMediaItems] = useState<ConversationMediaItem[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isActive || !chatRoom?._id) {
+            return;
+        }
+
+        let cancelled = false;
+        const loadMedia = async () => {
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                const { listConversationMediaAction } = await import("./actions");
+                const result = await listConversationMediaAction(chatRoom._id as string);
+                if (cancelled) return;
+                if (result.success) {
+                    setMediaItems(result.media || []);
+                } else {
+                    setError(result.message || "Failed to load media");
+                    setMediaItems([]);
+                }
+            } catch (loadError) {
+                console.error("Error loading conversation media:", loadError);
+                if (!cancelled) {
+                    setError("Failed to load media");
+                    setMediaItems([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        void loadMedia();
+        return () => {
+            cancelled = true;
+        };
+    }, [isActive, chatRoom?._id]);
+
+    const images = mediaItems.filter((item) => item.kind === "image");
+    const videos = mediaItems.filter((item) => item.kind === "video");
+    const files = mediaItems.filter((item) => item.kind === "file");
+    const visibleItems = activeMediaType === "image" ? images : activeMediaType === "video" ? videos : files;
+
     return (
         <div className="space-y-4">
             <div className="flex gap-2 border-b">
-                <button className="px-4 py-2 border-b-2 border-blue-500 font-medium">
+                <button
+                    onClick={() => setActiveMediaType("image")}
+                    className={`px-4 py-2 ${activeMediaType === "image" ? "border-b-2 border-blue-500 font-medium" : "text-gray-500 hover:text-gray-700"}`}
+                >
                     Images
                 </button>
-                <button className="px-4 py-2 text-gray-500 hover:text-gray-700">
+                <button
+                    onClick={() => setActiveMediaType("video")}
+                    className={`px-4 py-2 ${activeMediaType === "video" ? "border-b-2 border-blue-500 font-medium" : "text-gray-500 hover:text-gray-700"}`}
+                >
                     Videos
                 </button>
-                <button className="px-4 py-2 text-gray-500 hover:text-gray-700">
+                <button
+                    onClick={() => setActiveMediaType("file")}
+                    className={`px-4 py-2 ${activeMediaType === "file" ? "border-b-2 border-blue-500 font-medium" : "text-gray-500 hover:text-gray-700"}`}
+                >
                     Files
                 </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-                <p className="col-span-3 text-center text-sm text-gray-500 py-8">
-                    No media shared yet
-                </p>
-            </div>
+            {isLoading && <p className="text-center text-sm text-gray-500 py-8">Loading media...</p>}
+            {!isLoading && error && <p className="text-center text-sm text-red-500 py-8">{error}</p>}
+
+            {!isLoading && !error && activeMediaType === "image" && (
+                <div className="grid grid-cols-3 gap-2">
+                    {visibleItems.length === 0 ? (
+                        <p className="col-span-3 text-center text-sm text-gray-500 py-8">No media shared yet</p>
+                    ) : (
+                        visibleItems.map((item) => (
+                            <a key={`${item.messageId}-${item.url}`} href={item.url} target="_blank" rel="noopener noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={item.url}
+                                    alt={item.name || "Image attachment"}
+                                    className="h-24 w-full rounded-md object-cover hover:opacity-90"
+                                />
+                            </a>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {!isLoading && !error && activeMediaType === "video" && (
+                <div className="space-y-3">
+                    {visibleItems.length === 0 ? (
+                        <p className="text-center text-sm text-gray-500 py-8">No media shared yet</p>
+                    ) : (
+                        visibleItems.map((item) => (
+                            <div key={`${item.messageId}-${item.url}`} className="rounded-lg border p-3">
+                                <video controls className="w-full rounded-md max-h-64">
+                                    <source src={item.url} type={item.mime || "video/mp4"} />
+                                </video>
+                                <div className="mt-2 text-sm text-gray-600">
+                                    <p className="truncate font-medium text-gray-800">{item.name || "Video file"}</p>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {!isLoading && !error && activeMediaType === "file" && (
+                <div className="space-y-2">
+                    {visibleItems.length === 0 ? (
+                        <p className="text-center text-sm text-gray-500 py-8">No media shared yet</p>
+                    ) : (
+                        visibleItems.map((item) => (
+                            <a
+                                key={`${item.messageId}-${item.url}`}
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50"
+                            >
+                                <div className="min-w-0">
+                                    <p className="truncate font-medium text-gray-800">{item.name || "File attachment"}</p>
+                                    <p className="text-xs text-gray-500">
+                                        {item.mime}
+                                        {item.size ? ` · ${formatBytes(item.size)}` : ""}
+                                    </p>
+                                </div>
+                                <span className="ml-3 text-xs text-blue-600">Open</span>
+                            </a>
+                        ))
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -600,6 +898,43 @@ function MediaTab({ chatRoom }: { chatRoom: ChatRoomDisplay }) {
 function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
     const [isLeaving, setIsLeaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [announcementBody, setAnnouncementBody] = useState("");
+    const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
+    const [announcementNotice, setAnnouncementNotice] = useState<string | null>(null);
+    const [announcementError, setAnnouncementError] = useState<string | null>(null);
+
+    const handleSendAnnouncement = async () => {
+        if (!isAdmin || chatRoom.isDirect) {
+            return;
+        }
+
+        const trimmedBody = announcementBody.trim();
+        if (!trimmedBody) {
+            setAnnouncementError("Announcement message cannot be empty");
+            setAnnouncementNotice(null);
+            return;
+        }
+
+        setIsSendingAnnouncement(true);
+        setAnnouncementError(null);
+        setAnnouncementNotice(null);
+        try {
+            const { sendGroupAnnouncementAction } = await import("./actions");
+            const result = await sendGroupAnnouncementAction(chatRoom._id as string, trimmedBody);
+            if (result.success) {
+                setAnnouncementBody("");
+                setAnnouncementNotice("Announcement sent to this group chat.");
+                return;
+            }
+
+            setAnnouncementError(result.message || "Failed to send announcement");
+        } catch (error) {
+            console.error("Error sending announcement:", error);
+            setAnnouncementError("Failed to send announcement");
+        } finally {
+            setIsSendingAnnouncement(false);
+        }
+    };
 
     const handleLeaveGroup = async () => {
         if (!confirm(`Are you sure you want to leave this ${chatRoom.isDirect ? "chat" : "group"}?`)) {
@@ -651,6 +986,34 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
 
     return (
         <div className="space-y-4">
+            {isAdmin && !chatRoom.isDirect && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="font-medium text-slate-900">Send Announcement</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                        Sends a system announcement to this existing group chat. Replies are disabled by default.
+                    </p>
+                    <textarea
+                        value={announcementBody}
+                        onChange={(event) => setAnnouncementBody(event.target.value)}
+                        rows={4}
+                        placeholder="Write announcement (Markdown supported)"
+                        className="mt-3 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                        <p className="text-xs text-slate-500">System sender uses existing Kamooni conventions.</p>
+                        <button
+                            onClick={handleSendAnnouncement}
+                            disabled={isSendingAnnouncement || !announcementBody.trim()}
+                            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isSendingAnnouncement ? "Sending..." : "Send announcement"}
+                        </button>
+                    </div>
+                    {announcementNotice && <p className="mt-2 text-sm text-green-700">{announcementNotice}</p>}
+                    {announcementError && <p className="mt-2 text-sm text-red-600">{announcementError}</p>}
+                </div>
+            )}
+
             {/* Mute Notifications */}
             <div className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
                 <div>
@@ -682,6 +1045,87 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
                     {isDeleting ? "Deleting..." : "Delete Group"}
                 </button>
             )}
+        </div>
+    );
+}
+
+function ThreadsTab({
+    chatRoom,
+    isActive,
+    onOpenTopic,
+}: {
+    chatRoom: ChatRoomDisplay;
+    isActive: boolean;
+    onOpenTopic: (topicId: string) => void;
+}) {
+    const [threads, setThreads] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isActive || !chatRoom?._id) return;
+        let cancelled = false;
+
+        const loadThreads = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const { listThreadsAction } = await import("./mongo-actions");
+                const result = await listThreadsAction(chatRoom._id as string);
+                if (cancelled) return;
+                if (result.success) {
+                    setThreads(result.threads || []);
+                } else {
+                    setError(result.message || "Failed to load threads");
+                }
+            } catch (e) {
+                if (!cancelled) setError("Failed to load threads");
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
+        };
+
+        void loadThreads();
+        return () => { cancelled = true; };
+    }, [isActive, chatRoom?._id]);
+
+    if (isLoading) return <p className="text-center text-sm text-gray-500 py-8">Loading threads...</p>;
+    if (error) return <p className="text-center text-sm text-red-500 py-8">{error}</p>;
+    if (threads.length === 0) return <p className="text-center text-sm text-gray-500 py-8">No threads yet</p>;
+
+    return (
+        <div className="space-y-3">
+            {threads.map((thread) => (
+                <button
+                    key={thread._id}
+                    type="button"
+                    className="w-full rounded-xl border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50"
+                    onClick={() => onOpenTopic(thread._id)}
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-gray-900">{thread.thread?.title}</p>
+                            {thread.thread?.hashtags && thread.thread.hashtags.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                    {thread.thread.hashtags.map((tag: string) => (
+                                        <span key={tag} className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {thread.body ? (
+                                <p className="mt-1 text-sm text-gray-500 line-clamp-2">{thread.body}</p>
+                            ) : null}
+                            <p className="mt-2 text-xs text-gray-400">
+                                {thread.thread?.replyCount || 0} {thread.thread?.replyCount === 1 ? "reply" : "replies"} ·{" "}
+                                {new Date(thread.thread?.updatedAt || thread.createdAt).toLocaleDateString()}
+                            </p>
+                        </div>
+                        <span className="shrink-0 text-xs font-medium text-blue-600">Open</span>
+                    </div>
+                </button>
+            ))}
         </div>
     );
 }

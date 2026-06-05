@@ -9,22 +9,19 @@ import { motion } from "framer-motion";
 import CircleSwipeCard from "./circle-swipe-card";
 import { MapDisplay } from "@/components/map/map";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
-    RefreshCw,
     Hand,
     Home,
     Search,
+    SlidersHorizontal,
     X,
     ArrowLeft,
     ChevronRight,
     ChevronLeft,
-    Globe,
-    CalendarIcon,
-    AudioLines,
-    ChevronDown,
 } from "lucide-react"; // Added ArrowLeft
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -41,11 +38,9 @@ import {
     sidePanelSearchStateAtom,
     mapSearchCommandAtom,
     drawerContentAtom,
-    feedPanelDockedAtom,
 } from "@/lib/data/atoms";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CirclePicture } from "./circle-picture";
 import { completeSwipeOnboardingAction } from "./swipe-actions";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -60,6 +55,7 @@ import { getOpenEventsForMapAction } from "./map-explorer-actions";
 import { EventDisplay } from "@/models/models";
 import ActivityPanel from "@/components/layout/activity-panel";
 import MobileEventsPanel from "@/components/modules/events/mobile-events-panel";
+import { sdgs } from "@/lib/data/sdgs";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -137,10 +133,10 @@ const CategoryFilterCarousel: React.FC<CategoryFilterProps & { className?: strin
     }, [evaluateScrollability]);
 
     return (
-        <div className={cn("relative flex min-w-0 flex-1 items-center", className)}>
+        <div className={cn("relative inline-flex min-w-0 items-center", className)}>
             <div
                 ref={scrollAreaRef}
-                className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto overflow-y-hidden mx-[22px] px-1 scroll-smooth"
+                className="no-scrollbar flex max-w-full items-center gap-2 overflow-x-auto overflow-y-hidden mx-[22px] px-1 scroll-smooth"
             >
                 <CategoryFilter {...props} />
             </div>
@@ -176,7 +172,6 @@ interface MapExplorerProps {
 }
 
 type ViewMode = "cards" | "explore";
-type DrawerContent = "explore" | "noticeboard" | "preview" | "events";
 
 // Define snap point indices for clarity
 const SNAP_INDEX_CLOSED = -1; // Not used by resizing drawer, but conceptually useful
@@ -184,6 +179,81 @@ const SNAP_INDEX_PEEK = 0; // Smallest height (e.g., 100px)
 const SNAP_INDEX_HALF = 1; // Medium height (e.g., 40%)
 const SNAP_INDEX_OPEN = 2; // Large height (e.g., 80%)
 const SNAP_INDEX_FULL = 3; // Full height (e.g., 100%)
+
+const RESULT_TYPE_OPTIONS = [
+    { value: "users", label: "People" },
+    { value: "communities", label: "Circles" },
+    { value: "events", label: "Events" },
+] as const;
+
+const SEARCH_CATEGORY_LABELS: Record<string, string> = {
+    users: "people",
+    communities: "circles",
+    events: "events",
+};
+
+const getCircleTypeForSearchCategory = (category: string | null) => {
+    if (category === "communities") return "circle";
+    if (category === "users") return "user";
+    return null;
+};
+
+const getSearchCategoryLabel = (category: string | null) => {
+    if (!category) return "results";
+    return SEARCH_CATEGORY_LABELS[category] ?? category;
+};
+
+const buildSearchEmptyState = ({
+    hasSearched,
+    query,
+    selectedCategory,
+    selectedSdgs,
+    dateLabel,
+    hasDateFilter,
+}: {
+    hasSearched: boolean;
+    query: string;
+    selectedCategory: string | null;
+    selectedSdgs: SDG[];
+    dateLabel: string;
+    hasDateFilter: boolean;
+}) => {
+    if (!hasSearched) {
+        return {
+            title: "No circles in this view yet",
+            description: "Try a different result type or loosen the active filters.",
+        };
+    }
+
+    const trimmedQuery = query.trim();
+    const context: string[] = [];
+
+    if (trimmedQuery) {
+        context.push(`for "${trimmedQuery}"`);
+    }
+
+    if (selectedCategory) {
+        context.push(`in ${getSearchCategoryLabel(selectedCategory)}`);
+    }
+
+    if (selectedSdgs.length > 0) {
+        context.push(
+            `with ${selectedSdgs.length} SDG filter${selectedSdgs.length === 1 ? "" : "s"}`,
+        );
+    }
+
+    if (hasDateFilter) {
+        context.push(`inside ${dateLabel}`);
+    }
+
+    return {
+        title: `No ${selectedCategory ? getSearchCategoryLabel(selectedCategory) : "results"} found`,
+        description:
+            context.length > 0
+                ? `Nothing matched ${context.join(" ")}. Try widening a filter or switching result types.`
+                : "Try a broader query or remove a filter.",
+    };
+};
 
 export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles, mapboxKey }) => {
     // --- State ---
@@ -193,7 +263,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [displayedContent, setDisplayedContent] = useAtom(displayedContentAtom);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom); // Get value and setter
     const isMobile = useIsMobile();
-    const { windowWidth, windowHeight } = useWindowDimensions();
+    const { windowHeight } = useWindowDimensions();
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -204,6 +274,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [allSearchResults, setAllSearchResults] = useState<WithMetric<Circle>[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [openAdvancedSection, setOpenAdvancedSection] = useState<string>("calendar");
     const [drawerContent, setDrawerContent] = useAtom(drawerContentAtom);
     // Events dataset for map
     const [eventsForMap, setEventsForMap] = useState<EventDisplay[]>([]);
@@ -226,10 +298,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         }
         return list;
     }, [eventsForMap, selectedSdgs, hasSearched, searchQuery]);
-    // Resonance filter state (min similarity threshold) and current dataset range
-    const [simPercent, setSimPercent] = useState<number>(0);
-    const [simRange, setSimRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
-
     // Date range filter
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const dateLabel = useMemo(() => {
@@ -240,6 +308,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         }
         return format(new Date(), "MMM d, yyyy");
     }, [dateRange]);
+    const hasDateFilter = Boolean(dateRange?.from || dateRange?.to);
 
     const withinDateRange = useCallback(
         (d?: Date | string) => {
@@ -260,46 +329,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const [triggerSnapIndex, setTriggerSnapIndex] = useState<number>(-1);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [panelMode, setSidePanelMode] = useAtom(sidePanelModeAtom);
-    const [feedPanelDocked] = useAtom(feedPanelDockedAtom);
     const [, setSearchPanelState] = useAtom(sidePanelSearchStateAtom);
     const [mapSearchCommand] = useAtom(mapSearchCommandAtom);
     const [lastSearchCmdTs, setLastSearchCmdTs] = useState<number>(-1);
-    const showTopSearchInput = isMobile || panelMode !== "search";
-
-    const sliderLeft = useMemo(() => {
-        if (isMobile) {
-            return "50%";
-        }
-        if (!windowWidth) {
-            return "50%";
-        }
-
-        const NAV_WIDTH_DESKTOP = 72;
-        const DESKTOP_PANEL_WIDTH = 420;
-        const OVERLAY_PANEL_WIDTH = DESKTOP_PANEL_WIDTH; // Events overlay uses the same footprint
-
-        const isEventsOverlay =
-            !isMobile && pathname === "/explore" && panelMode === "events";
-        const isActivityOverlay =
-            !isMobile && pathname === "/explore" && panelMode === "activity" && !feedPanelDocked;
-
-        const isOverlayPanel = isEventsOverlay || isActivityOverlay;
-        const panelWidth = !isMobile && panelMode !== "none" && !isOverlayPanel ? DESKTOP_PANEL_WIDTH : 0;
-        const navWidth = isMobile ? 0 : NAV_WIDTH_DESKTOP;
-        const mapWidth = windowWidth - navWidth - panelWidth;
-
-        if (mapWidth <= 0) {
-            return "50%";
-        }
-
-        let center = navWidth + panelWidth + mapWidth / 2;
-
-        if (isEventsOverlay) {
-            center += OVERLAY_PANEL_WIDTH / 2;
-        }
-
-        return `${center}px`;
-    }, [isMobile, panelMode, pathname, windowWidth, feedPanelDocked]);
 
     // --- Memos ---
     const snapPoints = useMemo(() => [100, windowHeight * 0.4, windowHeight * 0.8, windowHeight], [windowHeight]);
@@ -307,7 +339,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filterCirclesByCategory = useCallback((circles: WithMetric<Circle>[], category: string | null) => {
         // ... (no changes) ...
         if (!category) return circles;
-        const typeToFilter = category === "communities" ? "circle" : category === "projects" ? "project" : "user";
+        if (category === "events") return circles;
+        const typeToFilter = category === "communities" ? "circle" : "user";
         return circles.filter((c) => c.circleType === typeToFilter);
     }, []);
 
@@ -328,10 +361,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     const filteredSearchResults = useMemo(() => {
         let results = allSearchResults;
 
-        if (selectedCategory) {
-            const typeToFilter =
-                selectedCategory === "communities" ? "circle" : selectedCategory === "projects" ? "project" : "user";
-            results = results.filter((result) => result.circleType === typeToFilter);
+        const selectedCircleType = getCircleTypeForSearchCategory(selectedCategory);
+        if (selectedCircleType) {
+            results = results.filter((result) => result.circleType === selectedCircleType);
         }
 
         if (selectedSdgs.length > 0) {
@@ -341,6 +373,19 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
         return results;
     }, [allSearchResults, selectedCategory, selectedSdgs]);
+
+    const searchEmptyState = useMemo(
+        () =>
+            buildSearchEmptyState({
+                hasSearched,
+                query: searchQuery,
+                selectedCategory,
+                selectedSdgs,
+                dateLabel,
+                hasDateFilter,
+            }),
+        [hasSearched, searchQuery, selectedCategory, selectedSdgs, dateLabel, hasDateFilter],
+    );
 
     const countsDatasetCircles = useMemo(() => {
         // Use all results (no category filter); apply SDG filter to reflect current SDG context
@@ -380,6 +425,64 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         return map;
     }, [hasSearched, allSearchResults, allDiscoverableCircles]);
 
+    const activeAdvancedFilterCount = useMemo(() => {
+        let count = 0;
+        if (selectedSdgs.length > 0) count += 1;
+        if (hasDateFilter) count += 1;
+        return count;
+    }, [selectedSdgs.length, hasDateFilter]);
+
+    const handleAdvancedSdgToggle = useCallback(
+        (sdg: SDG) => {
+            const isSelected = selectedSdgs.some((selected) => selected.handle === sdg.handle);
+            if (isSelected) {
+                setSelectedSdgs(selectedSdgs.filter((selected) => selected.handle !== sdg.handle));
+                return;
+            }
+            setSelectedSdgs([...selectedSdgs, sdg]);
+        },
+        [selectedSdgs],
+    );
+
+    const handleClearAdvancedFilters = useCallback(() => {
+        setSelectedSdgs([]);
+        setDateRange(undefined);
+    }, []);
+
+    useEffect(() => {
+        if (!hasSearched) {
+            return;
+        }
+
+        setSearchPanelState({
+            query: searchQuery,
+            isSearching,
+            hasSearched,
+            selectedCategory: selectedCategory ?? null,
+            selectedSdgHandles: selectedSdgs.map((sdg) => sdg.handle),
+            selectedDateLabel: hasDateFilter ? dateLabel : null,
+            items: (selectedCategory === "events" ? filteredEventsForMap : filteredSearchResults) as any,
+            counts: {
+                communities: categoryCounts.communities,
+                projects: categoryCounts.projects,
+                users: categoryCounts.users,
+                events: filteredEventsForMap.length,
+            },
+        });
+    }, [
+        hasSearched,
+        searchQuery,
+        isSearching,
+        selectedCategory,
+        selectedSdgs,
+        hasDateFilter,
+        dateLabel,
+        filteredSearchResults,
+        filteredEventsForMap,
+        categoryCounts,
+        setSearchPanelState,
+    ]);
+
     // Determine data source for the drawer list
     // Base circles used for map/list before mapping to Content
     const baseCircles = useMemo(() => {
@@ -404,33 +507,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         filterCirclesByCategory,
     ]);
 
-    // Compute current similarity range from dataset
-    const simStats = useMemo(() => {
-        const sims = baseCircles.map((c) => c.metrics?.similarity).filter((s): s is number => s !== undefined);
-        if (sims.length === 0) return { min: 0, max: 1 };
-        return { min: Math.min(...sims), max: Math.max(...sims) };
-    }, [baseCircles]);
-
-    // Keep state in sync with dataset range
-    useEffect(() => {
-        setSimRange(simStats);
-    }, [simStats]);
-
-    const simThreshold = useMemo(() => {
-        const min = simRange.min ?? 0;
-        const max = simRange.max ?? 1;
-        const span = Math.max(0, max - min);
-        return span === 0 ? min : min + (simPercent / 100) * span;
-    }, [simRange.min, simRange.max, simPercent]);
-
     const drawerListData = useMemo(() => {
         let list = baseCircles;
-        list = list.filter((c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= simThreshold);
         if (dateRange?.from || dateRange?.to) {
             list = list.filter((c) => withinDateRange((c as any).createdAt));
         }
         return list;
-    }, [baseCircles, simThreshold, dateRange, withinDateRange]);
+    }, [baseCircles, dateRange, withinDateRange]);
 
     // --- Callbacks ---
     const handleSwiped = useCallback((circle: Circle, direction: "left" | "right") => {
@@ -456,7 +539,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     );
 
     const handleSearchTrigger = useCallback(async () => {
-        const searchCategoriesForBackend = ["circles", "users"];
+        const searchCategoriesForBackend = ["circles", "users", "projects"];
         const sdgHandles = selectedSdgs.map((sdg) => sdg.handle);
         if (!searchQuery.trim() && sdgHandles.length === 0) {
             // If clearing search via empty query, reset state
@@ -478,6 +561,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: false,
                 selectedCategory: null,
                 selectedSdgHandles: [],
+                selectedDateLabel: null,
                 items: [],
                 counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
             });
@@ -492,6 +576,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             hasSearched: false,
             selectedCategory: selectedCategory ?? null,
             selectedSdgHandles: sdgHandles,
+            selectedDateLabel: hasDateFilter ? dateLabel : null,
             items: [],
             counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
         });
@@ -510,22 +595,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             setAllSearchResults(results);
 
             // Compute filtered list and counts for left panel now
-            let filtered = results;
-            if (selectedCategory) {
-                const typeToFilter =
-                    selectedCategory === "communities"
-                        ? "circle"
-                        : selectedCategory === "projects"
-                          ? "project"
-                          : "user";
-                filtered = filtered.filter((r) => r.circleType === typeToFilter);
-            }
-            if (selectedSdgs.length > 0) {
-                const sdgHandlesLocal = selectedSdgs.map((s) => s.handle);
-                filtered = filtered.filter((c) => c.causes?.some((cause) => sdgHandlesLocal.includes(cause)));
-            }
+            const selectedCircleType = getCircleTypeForSearchCategory(selectedCategory);
+            const filteredForCounts =
+                selectedSdgs.length > 0
+                    ? results.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)))
+                    : results;
+            const filtered = selectedCircleType
+                ? filteredForCounts.filter((r) => r.circleType === selectedCircleType)
+                : filteredForCounts;
             const counts = { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length };
-            filtered.forEach((r: any) => {
+            filteredForCounts.forEach((r: any) => {
                 if (r.circleType === "circle") counts.communities++;
                 else if (r.circleType === "project") counts.projects++;
                 else if (r.circleType === "user") counts.users++;
@@ -537,8 +616,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: true,
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
-                // Include events in search results panel (events first for clarity)
-                items: [...filteredEventsForMap, ...filtered] as any,
+                selectedDateLabel: hasDateFilter ? dateLabel : null,
+                items: (selectedCategory === "events" ? filteredEventsForMap : filtered) as any,
                 counts,
             });
             setSidePanelMode("search");
@@ -556,6 +635,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 hasSearched: true,
                 selectedCategory: selectedCategory ?? null,
                 selectedSdgHandles: sdgHandles,
+                selectedDateLabel: hasDateFilter ? dateLabel : null,
                 items: [],
                 counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
             });
@@ -572,6 +652,13 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         selectedCategory,
         filterCirclesByCategory,
         setContentPreview,
+        hasDateFilter,
+        dateLabel,
+        filteredEventsForMap,
+        isMobile,
+        router,
+        setSearchPanelState,
+        setSidePanelMode,
     ]);
 
     const handleClearSearch = useCallback(() => {
@@ -580,6 +667,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setHasSearched(false);
         setSelectedCategory(null);
         setSelectedSdgs([]);
+        setDateRange(undefined);
+        setShowAdvancedFilters(false);
+        setOpenAdvancedSection("calendar");
         const resetMapData = filterCirclesByCategory(allDiscoverableCircles, null)
             .map((circle) => mapItemToContent(circle))
             .filter((c): c is Content => c !== null);
@@ -595,6 +685,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             hasSearched: false,
             selectedCategory: null,
             selectedSdgHandles: [],
+            selectedDateLabel: null,
             items: [],
             counts: { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length },
         });
@@ -605,35 +696,16 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         allDiscoverableCircles,
         filterCirclesByCategory,
         setContentPreview, // Add dependency
+        filteredEventsForMap.length,
+        setSearchPanelState,
+        setSidePanelMode,
+        setDateRange,
     ]);
 
     const handleTriggerConsumed = useCallback(() => {
         console.log("Drawer consumed trigger, resetting triggerSnapIndex to -1");
         setTriggerSnapIndex(-1);
     }, []);
-
-    // Quick date range presets for the date filter
-    const setQuickDateRange = useCallback(
-        (preset: "today" | "7d" | "30d" | "all") => {
-            const now = new Date();
-            const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-            if (preset === "all") {
-                setDateRange(undefined);
-                return;
-            }
-            if (preset === "today") {
-                setDateRange({ from: startOfDay(now), to: undefined });
-                return;
-            }
-
-            const days = preset === "7d" ? 7 : 30;
-            const from = new Date(now);
-            from.setDate(now.getDate() - (days - 1));
-            setDateRange({ from: startOfDay(from), to: undefined });
-        },
-        [setDateRange],
-    );
 
     const handleExplore = () => {
         setViewMode("explore");
@@ -797,9 +869,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 return;
             }
             let circles = baseCircles;
-            circles = circles.filter(
-                (c) => c.metrics?.similarity === undefined || c.metrics!.similarity >= simThreshold,
-            );
             if (dateRange?.from || dateRange?.to) {
                 circles = circles.filter((c) => withinDateRange((c as any).createdAt));
             }
@@ -814,7 +883,6 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [
         viewMode,
         baseCircles,
-        simThreshold,
         dateRange,
         withinDateRange,
         setDisplayedContent,
@@ -838,7 +906,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             }
         }
         // Add dependencies that should trigger this logic
-    }, [contentPreview, isMobile, viewMode, hasSearched, drawerContent]);
+    }, [contentPreview, isMobile, viewMode, hasSearched, drawerContent, setDrawerContent]);
 
     // Reset drawer and preview when switching view modes or leaving mobile explore
     useEffect(() => {
@@ -877,6 +945,91 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
     if (!isMounted) return null;
 
+    const advancedFiltersContent = (
+        <div className="space-y-3">
+            {activeAdvancedFilterCount > 0 && (
+                <div className="flex justify-end">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-full px-3 text-xs text-gray-600"
+                        onClick={handleClearAdvancedFilters}
+                    >
+                        Clear all
+                    </Button>
+                </div>
+            )}
+
+            <Accordion
+                type="single"
+                collapsible
+                value={openAdvancedSection}
+                onValueChange={(value) => setOpenAdvancedSection(value)}
+                className="space-y-3"
+            >
+                <AccordionItem className="overflow-hidden rounded-[24px] border border-gray-200 bg-white px-0 shadow-sm" value="calendar">
+                    <AccordionTrigger className="px-4 py-4 text-left hover:no-underline">
+                        <div className="space-y-1">
+                            <div className="text-sm font-semibold text-gray-900">Calendar</div>
+                            <div className="text-xs text-gray-500">{hasDateFilter ? dateLabel : "Select dates"}</div>
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-4">
+                            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                                <Calendar
+                                    mode="range"
+                                    selected={dateRange}
+                                    onSelect={setDateRange as any}
+                                    numberOfMonths={1}
+                                    defaultMonth={dateRange?.from ?? new Date()}
+                                    className="mx-auto"
+                                />
+                            </div>
+                            {hasDateFilter && (
+                                <div className="flex justify-end">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 rounded-full px-3 text-xs text-gray-600"
+                                        onClick={() => setDateRange(undefined)}
+                                    >
+                                        Clear date
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem className="overflow-hidden rounded-[24px] border border-gray-200 bg-white px-0 shadow-sm" value="sdgs">
+                    <AccordionTrigger className="px-4 py-4 text-left hover:no-underline">
+                        <div className="space-y-1">
+                            <div className="text-sm font-semibold text-gray-900">SDGs</div>
+                            <div className="text-xs text-gray-500">
+                                {selectedSdgs.length > 0 ? `${selectedSdgs.length} selected` : "Any SDG"}
+                            </div>
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-3">
+                            <div className="max-h-[19rem] overflow-y-auto overscroll-contain pr-1">
+                                <SdgPanel
+                                    visibleSdgs={sdgs}
+                                    selectedSdgs={selectedSdgs}
+                                    onToggle={handleAdvancedSdgToggle}
+                                    gridCols={isMobile ? "grid-cols-2" : "grid-cols-4"}
+                                    onClear={() => setSelectedSdgs([])}
+                                    showSearch={false}
+                                />
+                            </div>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+        </div>
+    );
+
     // --- Render ---
     return (
         <div className="relative flex w-full flex-row overflow-hidden md:h-full">
@@ -900,198 +1053,109 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
                 {/* Search Bar & Filters (Only in Explore Mode) */}
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
-                    <div className="flex flex-1 flex-col gap-2 min-w-0">
-                        <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
-                            {/* Search Input (hidden on desktop when panel is open) */}
-                            {showTopSearchInput && (
-                                <div className="flex flex-shrink-0 items-center rounded-full bg-white p-1 px-4 shadow-md">
-                                    <input
-                                        type="text"
-                                        placeholder="Search..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
-                                        className="w-36 border-none bg-transparent pl-1 outline-none focus:ring-0 sm:w-60"
-                                    />
-                                    {searchQuery && (
-                                        <Button
-                                            onClick={handleClearSearch}
-                                            size="sm"
-                                            variant="ghost"
-                                            className="ml-1 p-1"
-                                            aria-label="Clear search"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    )}
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                            <div className="flex w-full md:w-[23.5rem] md:max-w-[23.5rem] md:flex-none items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                                <input
+                                    type="text"
+                                    placeholder="Search people, circles, and events"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
+                                    className="min-w-0 flex-1 border-none bg-transparent pl-1 text-sm outline-none focus:ring-0 sm:text-base"
+                                />
+                                {isMobile ? (
                                     <Button
-                                        onClick={handleSearchTrigger}
+                                        type="button"
                                         size="sm"
                                         variant="ghost"
-                                        disabled={isSearching || !searchQuery.trim()}
-                                        aria-label="Search"
+                                        className="relative ml-1 h-9 w-9 rounded-full p-0"
+                                        onClick={() => setShowAdvancedFilters(true)}
+                                        aria-label="Open advanced search"
                                     >
-                                        {isSearching ? "..." : <Search className="h-4 w-4" />}
+                                        <SlidersHorizontal className="h-4 w-4" />
+                                        {activeAdvancedFilterCount > 0 && (
+                                            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+                                        )}
                                     </Button>
-                                </div>
-                            )}
-                            {/* Filters */}
-                            {!isMobile && (
-                                <CategoryFilterCarousel
-                                    categories={["communities", "projects", "users", "events"]}
-                                    categoryCounts={categoryCounts}
-                                    selectedCategory={selectedCategory}
-                                    onSelectionChange={setSelectedCategory}
-                                    hasSearched={true}
-                                    displayLabelMap={{ users: "people" }}
-                                />
-                            )}
-                        </div>
-
-                        {/* Resonance slider + Date & SDG filters */}
-                        <div
-                            className={cn(
-                                "fixed z-40 flex items-center justify-center gap-2 rounded-full bg-white/90 px-3 py-2 shadow-md backdrop-blur-sm sm:px-4",
-                                "flex-nowrap",
-                                isMobile
-                                    ? "bottom-24 w-auto max-w-[calc(100%-3rem)] -translate-x-1/2"
-                                    : "bottom-6 max-w-[680px] -translate-x-1/2",
-                            )}
-                            style={{ left: sliderLeft }}
-                        >
-                            <TooltipProvider delayDuration={200}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span className="flex items-center gap-1 text-xs font-medium text-gray-700">
-                                            <AudioLines className="h-4 w-4 text-indigo-500" />
-                                        </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right">
-                                        <p>Minimum similarity threshold. Higher = closer match.</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-
-                            <div className="w-[140px] shrink-0 sm:w-[220px] md:w-[260px]">
-                                <Slider
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    value={[simPercent]}
-                                    onValueChange={(v) => setSimPercent(v[0])}
-                                />
+                                ) : (
+                                    <Popover open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className="relative ml-1 h-9 w-9 rounded-full p-0"
+                                                aria-label="Open advanced search"
+                                            >
+                                                <SlidersHorizontal className="h-4 w-4" />
+                                                {activeAdvancedFilterCount > 0 && (
+                                                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            align="start"
+                                            sideOffset={10}
+                                            className="w-[min(27rem,calc(100vw-2rem))] overflow-hidden rounded-[26px] border border-gray-200/80 bg-[#faf9f7] p-3 shadow-2xl"
+                                        >
+                                            {advancedFiltersContent}
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
+                                {searchQuery || activeAdvancedFilterCount > 0 ? (
+                                    <Button
+                                        onClick={handleClearSearch}
+                                        size="sm"
+                                        variant="ghost"
+                                        className="ml-1 h-9 w-9 rounded-full p-0"
+                                        aria-label="Clear search"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                ) : null}
+                                <Button
+                                    onClick={handleSearchTrigger}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="ml-1 h-9 w-9 rounded-full p-0"
+                                    disabled={isSearching || (!searchQuery.trim() && selectedSdgs.length === 0)}
+                                    aria-label="Search"
+                                >
+                                    {isSearching ? "..." : <Search className="h-4 w-4" />}
+                                </Button>
                             </div>
 
-                            <span className="shrink-0 rounded-full bg-gray-100/80 px-2.5 py-1 text-[11px] font-medium text-gray-700 ring-1 ring-black/5">
-                                {Math.round(simPercent)}%
-                            </span>
-
-                            <div className="mx-2 hidden h-4 w-px bg-gray-200/80 sm:block" />
-
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <button className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200/70 bg-white/70 px-2 py-0.5 text-[11px] text-gray-700 shadow-sm hover:bg-white">
-                                        <CalendarIcon className="h-3.5 w-3.5 text-gray-600" />
-                                        <span className="max-w-[160px] truncate">{dateLabel}</span>
-                                        <ChevronDown className="h-3 w-3 text-gray-500" />
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="w-auto rounded-xl border border-gray-100 p-3 shadow-xl"
-                                    align="start"
-                                >
-                                    <div className="mb-2 flex gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 px-2 text-xs"
-                                            onClick={() => setQuickDateRange("today")}
-                                        >
-                                            Today
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 px-2 text-xs"
-                                            onClick={() => setQuickDateRange("7d")}
-                                        >
-                                            7d
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 px-2 text-xs"
-                                            onClick={() => setQuickDateRange("30d")}
-                                        >
-                                            30d
-                                        </Button>
-                                    </div>
-                                    <Calendar
-                                        mode="range"
-                                        selected={dateRange}
-                                        onSelect={setDateRange as any}
-                                        numberOfMonths={2}
-                                        defaultMonth={dateRange?.from}
-                                    />
-                                    <div className="mt-3 flex justify-end">
-                                        <Button variant="ghost" size="sm" onClick={() => setDateRange(undefined)}>
-                                            Clear
-                                        </Button>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-
-                            <div className="mx-2 hidden h-4 w-px bg-gray-200/80 sm:block" />
-
-                            <SdgFilter
-                                selectedSdgs={selectedSdgs}
-                                onSelectionChange={setSelectedSdgs}
-                                displayAs="popover"
-                                gridCols="grid-cols-3"
-                                sdgCounts={sdgCounts}
-                                trigger={
-                                    <Button
-                                        variant="ghost"
-                                        className="flex h-auto shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/40 px-2 py-0.5 text-[11px] text-gray-700 shadow-sm backdrop-blur data-[selected=true]:border-primary data-[selected=true]:bg-white"
-                                        data-selected={selectedSdgs.length > 0}
-                                    >
-                                        {selectedSdgs.length === 0 ? (
-                                            <Image
-                                                src="/images/sdgs/SDG_Wheel_WEB.png"
-                                                alt="SDG Wheel"
-                                                width={16}
-                                                height={16}
-                                                className="h-4 w-4"
-                                            />
-                                        ) : (
-                                            <div
-                                                className="flex flex-row -space-x-2"
-                                                style={{
-                                                    width: `calc(16px + ${12 * Math.min(selectedSdgs.length - 1, 2)}px)`,
-                                                }}
-                                            >
-                                                {selectedSdgs.slice(0, 3).map((sdg) => (
-                                                    <Image
-                                                        key={sdg.handle}
-                                                        src={sdg.picture?.url ?? "/images/default-picture.png"}
-                                                        alt={sdg.name}
-                                                        width={16}
-                                                        height={16}
-                                                        className="h-4 w-4 rounded-full border-2 border-white object-cover"
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                        <span className="hidden sm:inline">
-                                            SDGs {selectedSdgs.length > 0 && `(${selectedSdgs.length})`}
-                                        </span>
-                                    </Button>
-                                }
+                            <CategoryFilterCarousel
+                                className="min-w-0 md:w-auto md:max-w-[calc(100%-24.5rem)] md:flex-none"
+                                categories={RESULT_TYPE_OPTIONS.map((option) => option.value)}
+                                categoryCounts={{
+                                    communities: categoryCounts.communities,
+                                    events: categoryCounts.events,
+                                    users: categoryCounts.users,
+                                }}
+                                selectedCategory={selectedCategory}
+                                onSelectionChange={setSelectedCategory}
+                                hasSearched={true}
+                                displayLabelMap={{ users: "people", communities: "circles", events: "events" }}
                             />
                         </div>
                     </div>
                 )}
             </div>
+
+            {isMobile && (
+                <Dialog open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+                    <DialogContent className="top-auto left-0 right-0 bottom-0 max-h-[85vh] max-w-none translate-x-0 translate-y-0 rounded-t-[28px] rounded-b-none border-0 p-0 sm:rounded-t-[28px]">
+                        <DialogHeader className="sr-only">
+                            <DialogTitle>Search filters</DialogTitle>
+                        </DialogHeader>
+                        <div className="max-h-[calc(85vh-5rem)] overflow-y-auto bg-[#faf9f7] px-5 pb-6 pt-4">
+                            {advancedFiltersContent}
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* Cards View */}
             {viewMode === "cards" && (
@@ -1175,9 +1239,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 animate={{ opacity: 1 }}
                                 className="ml-2 flex max-w-[400px] flex-col items-center gap-4 rounded-xl border bg-white p-8 shadow-lg"
                             >
-                                <div className="text-xl font-semibold">No communities to show!</div>
+                                <div className="text-xl font-semibold">No circles to show!</div>
                                 <p className="text-center text-gray-600">
-                                    You might have seen, followed, or ignored all available communities.
+                                    You might have seen, followed, or ignored all available circles.
                                 </p>
                                 <div className="flex flex-row gap-2">
                                     <Button onClick={handleExplore} className="mt-4 gap-2">
@@ -1340,11 +1404,12 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             <div className="mx-0 px-4 pb-4">
                                 {isSearching && <p className="py-4 text-center">Loading...</p>}
                                 {!isSearching && drawerListData.length === 0 && (
-                                    <p className="py-4 text-center text-sm text-gray-500">
-                                        {hasSearched
-                                            ? `No results found for "${searchQuery}".`
-                                            : "No communities found."}
-                                    </p>
+                                    <div className="py-6 text-center">
+                                        <p className="text-sm font-medium text-gray-900">{searchEmptyState.title}</p>
+                                        <p className="mx-auto mt-2 max-w-sm text-sm text-gray-500">
+                                            {searchEmptyState.description}
+                                        </p>
+                                    </div>
                                 )}
                                 {!isSearching && drawerListData.length > 0 && (
                                     <ul className="space-y-2">

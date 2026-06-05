@@ -8,6 +8,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
 import { EventClickArg } from "@fullcalendar/core";
 import { useRouter } from "next/navigation";
+import { CheckSquare } from "lucide-react";
 import { EventDisplay } from "@/models/models";
 
 // FullCalendar styles (plugin CSS)
@@ -15,7 +16,13 @@ import { EventDisplay } from "@/models/models";
 type CalendarViewProps = {
     circleHandle: string;
     events: EventDisplay[];
-    milestones?: { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string }[];
+    milestones?: {
+        id: string;
+        type: "goal" | "task" | "issue";
+        title: string;
+        date: Date | string;
+        circleHandle?: string;
+    }[];
 };
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
@@ -47,14 +54,18 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
         const milestoneItems =
             (milestones || []).map((m) => ({
                 id: `m:${m.type}:${m.id}`,
-                title: (m.type === "goal" ? "🎯 " : m.type === "task" ? "🧩 " : "🐞 ") + m.title,
+                title: m.title,
                 start: m.date ? new Date(m.date) : undefined,
                 end: undefined,
                 allDay: true,
                 extendedProps: {
                     type: m.type,
                     itemId: m.id,
+                    circleHandle: m.circleHandle,
                 },
+                backgroundColor: m.type === "task" ? "hsl(var(--calendar-task-bg))" : undefined,
+                borderColor: m.type === "task" ? "hsl(var(--calendar-task-border))" : undefined,
+                textColor: m.type === "task" ? "hsl(var(--calendar-task-foreground))" : undefined,
             })) || [];
 
         return [...eventItems, ...milestoneItems];
@@ -75,14 +86,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
         const ext = (clickInfo.event.extendedProps as any) || {};
         const type = ext.type as string | undefined;
         const itemId = (ext.itemId as string | undefined) || clickInfo.event.id;
+        const targetCircleHandle = (ext.circleHandle as string | undefined) || circleHandle;
         if (!itemId) return;
 
         if (type === "goal") {
-            router.push(`/circles/${circleHandle}/goals/${itemId}`);
+            router.push(`/circles/${targetCircleHandle}/goals/${itemId}`);
         } else if (type === "task") {
-            router.push(`/circles/${circleHandle}/tasks/${itemId}`);
+            router.push(`/circles/${targetCircleHandle}/tasks/${itemId}`);
         } else if (type === "issue") {
-            router.push(`/circles/${circleHandle}/issues/${itemId}`);
+            router.push(`/circles/${targetCircleHandle}/issues/${itemId}`);
         } else {
             // default to event
             router.push(`/circles/${circleHandle}/events/${itemId}`);
@@ -95,9 +107,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
 
         // Condensed rendering for milestones (goal/task/issue)
         if (type === "goal" || type === "task" || type === "issue") {
+            const icon =
+                type === "goal" ? (
+                    <span className="select-none">🎯</span>
+                ) : type === "task" ? (
+                    <CheckSquare className="h-3.5 w-3.5 shrink-0 rounded-sm bg-white/20 p-[1px] text-white ring-1 ring-white/35" />
+                ) : (
+                    <span className="select-none">🐞</span>
+                );
+
             return (
-                <div className="max-w-full truncate text-xs" title={arg.event.title}>
-                    {arg.event.title}
+                <div className="flex max-w-full items-center gap-1 truncate text-xs" title={arg.event.title}>
+                    {icon}
+                    <span className="truncate">{arg.event.title}</span>
                 </div>
             );
         }

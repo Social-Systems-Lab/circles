@@ -30,7 +30,7 @@ import { FaLock } from "react-icons/fa6";
 import { FaCheck } from "react-icons/fa";
 import { features, modules } from "@/lib/data/constants";
 import { sdgs } from "@/lib/data/sdgs";
-import { skills } from "@/lib/data/skills";
+import { getSkillDefinitionsByHandles, groupSkillDefinitions, skills } from "@/lib/data/skills";
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Search, XCircle } from "lucide-react";
 import { getMemberAccessLevel, isAuthorized } from "@/lib/auth/client-auth";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -1052,18 +1052,47 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
 
     const initialItems = itemType === "sdgs" ? sdgs : skills;
     const fetchMatchedItems = itemType === "sdgs" ? fetchSdgsMatchedToCircle : fetchSkillsMatchedToCircle;
+    const selectedHandles = Array.isArray(formField.value) ? formField.value : [];
+
+    const selectedSkillItems = useMemo(() => {
+        if (itemType !== "skills") return [];
+        return getSkillDefinitionsByHandles(selectedHandles);
+    }, [itemType, selectedHandles]);
+
+    const availableItems = useMemo(() => {
+        if (itemType !== "skills") return allItems;
+
+        const itemsByHandle = new Map<string, any>();
+
+        for (const item of allItems) {
+            itemsByHandle.set(item.handle, item);
+        }
+
+        for (const item of selectedSkillItems) {
+            itemsByHandle.set(item.handle, item);
+        }
+
+        return Array.from(itemsByHandle.values());
+    }, [allItems, itemType, selectedSkillItems]);
 
     const visibleItems = useMemo(() => {
+        const sourceItems = itemType === "skills" ? availableItems : allItems;
+
         if (searchText) {
-            return allItems.filter(
+            return sourceItems.filter(
                 (item) =>
                     item.name.toLowerCase().includes(searchText.toLowerCase()) ||
                     item.description.toLowerCase().includes(searchText.toLowerCase()),
             );
         } else {
-            return allItems;
+            return sourceItems;
         }
-    }, [allItems, searchText]);
+    }, [allItems, availableItems, itemType, searchText]);
+
+    const groupedVisibleSkills = useMemo(() => {
+        if (itemType !== "skills") return [];
+        return groupSkillDefinitions(visibleItems as any[]);
+    }, [itemType, visibleItems]);
 
     useEffect(() => {
         startTransition(async () => {
@@ -1109,20 +1138,47 @@ const ItemSelectionField: React.FC<ItemSelectionFieldProps> = ({
                             </div>
                         )}
 
-                        {visibleItems.map((item) => (
-                            <ItemGridCard
-                                key={item.handle}
-                                item={item}
-                                isSelected={(formField.value || []).includes(item.handle)}
-                                onToggle={() => handleItemToggle(item)}
-                                isCause={itemType === "sdgs"}
-                            />
-                        ))}
+                        {itemType === "skills"
+                            ? groupedVisibleSkills.map((group) => (
+                                  <div key={group.key} className="col-span-3 space-y-3">
+                                      <div className="px-1">
+                                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                              {group.label}
+                                          </p>
+                                          {group.description && (
+                                              <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
+                                          )}
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-4">
+                                          {group.skills.map((item) => (
+                                              <ItemGridCard
+                                                  key={item.handle}
+                                                  item={item}
+                                                  isSelected={selectedHandles.includes(item.handle)}
+                                                  onToggle={() => handleItemToggle(item)}
+                                                  isCause={false}
+                                              />
+                                          ))}
+                                      </div>
+                                  </div>
+                              ))
+                            : visibleItems.map((item) => (
+                                  <ItemGridCard
+                                      key={item.handle}
+                                      item={item}
+                                      isSelected={selectedHandles.includes(item.handle)}
+                                      onToggle={() => handleItemToggle(item)}
+                                      isCause={itemType === "sdgs"}
+                                  />
+                              ))}
                     </div>
                 </ScrollArea>
                 <div className="flex flex-wrap">
-                    {(formField.value || []).map((handle: string) => {
-                        const item = allItems.find((i) => i.handle === handle);
+                    {selectedHandles.map((handle: string) => {
+                        const item =
+                            itemType === "skills"
+                                ? selectedSkillItems.find((skill) => skill.handle === handle)
+                                : allItems.find((i) => i.handle === handle);
                         if (item) {
                             return (
                                 <SelectedItemBadge

@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { useRouter } from "next/navigation";
-import { getAllUsersAction, createGroupChatAction } from "./actions";
+import { getChatContactsAction, createMongoGroupChatAction, findOrCreateDMConversationAction } from "./actions";
 import { getUserPrivateAction } from "../home/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
     const [groupAvatarPreview, setGroupAvatarPreview] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
 
+
     useEffect(() => {
         if (isOpen && allUsers.length === 0) {
             fetchUsers();
@@ -51,12 +52,12 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
             setGroupAvatar(null);
             setGroupAvatarPreview(null);
         }
-    }, [isOpen]);
+    }, [isOpen, allUsers.length]);
 
     const fetchUsers = async () => {
         try {
             setIsLoadingUsers(true);
-            const users = await getAllUsersAction();
+            const users = await getChatContactsAction();
             setAllUsers(users || []);
         } catch (err) {
             console.error("Error fetching users:", err);
@@ -66,44 +67,41 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
     };
 
     const filteredUsers = useMemo(() => {
-        const term = searchTerm.toLowerCase();
+        const term = searchTerm.trim().toLowerCase();
+
         return allUsers.filter((u) => {
-            if (u._id === user?._id) return false; // Exclude self
+            // Exclude self
+            if (u._id && user?._id && String(u._id) === String(user._id)) {
+                return false;
+            }
+            if (!term) return true;
+
             const nameMatch = u.name?.toLowerCase().includes(term);
             const handleMatch = u.handle?.toLowerCase().includes(term);
+
             return nameMatch || handleMatch;
         });
     }, [allUsers, searchTerm, user?._id]);
 
     const handleUserClick = (clickedUser: Circle) => {
         if (step === "select-type") {
-            // Check for existing DM
-            const existingMembership = user?.chatRoomMemberships?.find((m) => {
-                return (
-                    m.chatRoom.isDirect &&
-                    m.chatRoom.dmParticipants?.includes(clickedUser._id as string)
-                );
-            });
+            onClose();
+            setTimeout(async () => {
+                const result = await findOrCreateDMConversationAction(clickedUser);
+                if (result.success && result.chatRoom?._id) {
+                    router.push("/chat/" + result.chatRoom._id);
+                } else {
+                    toast({
+                        title: "Could not start chat",
+                        description: result.message || "Failed to start the direct message",
+                        variant: "destructive",
+                    });
+                }
+            }, 0);
+            return;
+        }
 
-            if (existingMembership) {
-                router.push(`/chat/${clickedUser.handle}`);
-                onClose();
-            } else {
-                // Route to chat page which handles DM creation via URL or state
-                // For now, let's just push to the chat route and let it handle it
-                // Or we can use the existing DmChatModal logic.
-                // Simpler: Just push to /chat/[handle], the ChatRoom component handles "new" DMs if implemented
-                // But wait, ChatRoom expects an existing room usually.
-                // Let's stick to the existing pattern: Route to /chat/[handle].
-                // If the room doesn't exist, the ChatRoom component might need to handle it or we create it here.
-                // Actually, the ChatSearch uses DmChatModal to create the room first.
-                // Let's assume we can just route for now, or we might need to trigger DmChatModal.
-                // For this implementation, let's just route and assume the chat page handles it or the user sends a message to create it.
-                // Actually, better UX: Open the DM directly.
-                router.push(`/chat/${clickedUser.handle}`);
-                onClose();
-            }
-        } else if (step === "select-members") {
+        if (step === "select-members") {
             toggleMemberSelection(clickedUser);
         }
     };
@@ -141,7 +139,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                 formData.append("avatar", groupAvatar);
             }
 
-            const result = await createGroupChatAction(formData);
+            const result = await createMongoGroupChatAction(formData);
 
             if (result.success && result.roomId) {
                 toast({
@@ -187,7 +185,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                             </Button>
                         )}
                         <DialogTitle>
-                            {step === "select-type" && "New Chat"}
+                            {step === "select-type" && "New Message"}
                             {step === "select-members" && "Add Members"}
                             {step === "group-details" && "New Group"}
                         </DialogTitle>
@@ -294,6 +292,10 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                                     {isLoadingUsers ? (
                                         <div className="flex justify-center p-4">
                                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        </div>
+                                    ) : filteredUsers.length === 0 ? (
+                                        <div className="p-4 text-center text-sm text-muted-foreground">
+                                            No contacts yet
                                         </div>
                                     ) : (
                                         filteredUsers.map((u) => {

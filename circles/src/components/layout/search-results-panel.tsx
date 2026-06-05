@@ -1,29 +1,87 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useAtom } from "jotai";
-import { sidePanelSearchStateAtom, contentPreviewAtom, zoomContentAtom, sidePanelModeAtom, mapSearchCommandAtom } from "@/lib/data/atoms";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { X, Search, Calendar as CalendarIcon } from "lucide-react";
+import { sidePanelSearchStateAtom, contentPreviewAtom, zoomContentAtom } from "@/lib/data/atoms";
+import { Calendar as CalendarIcon } from "lucide-react";
 import Indicators from "@/components/utils/indicators";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { Content, ContentPreviewData, EventDisplay } from "@/models/models";
 import { format } from "date-fns";
 
+const SEARCH_CATEGORY_LABELS: Record<string, string> = {
+    users: "people",
+    communities: "circles",
+    events: "events",
+};
+
 export default function SearchResultsPanel() {
     const [searchState] = useAtom(sidePanelSearchStateAtom);
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [, setZoomContent] = useAtom(zoomContentAtom);
-    const [, setSidePanelMode] = useAtom(sidePanelModeAtom);
-    const [, setMapSearchCommand] = useAtom(mapSearchCommandAtom);
-
-    const [query, setQuery] = useState(searchState.query || "");
-    useEffect(() => {
-        setQuery(searchState.query || "");
-    }, [searchState.query]);
 
     const items = searchState.items || [];
+    const filterSummary = useMemo(() => {
+        const parts: string[] = [];
+
+        if (searchState.selectedCategory) {
+            parts.push(SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory);
+        }
+
+        if ((searchState.selectedSdgHandles || []).length > 0) {
+            parts.push(`${(searchState.selectedSdgHandles || []).length} SDG`);
+        }
+
+        if (searchState.selectedDateLabel) {
+            parts.push(searchState.selectedDateLabel);
+        }
+
+        return parts.join(" · ");
+    }, [searchState.selectedCategory, searchState.selectedSdgHandles, searchState.selectedDateLabel]);
+
+    const emptyState = useMemo(() => {
+        const trimmedQuery = searchState.query.trim();
+        const context: string[] = [];
+
+        if (trimmedQuery) {
+            context.push(`for "${trimmedQuery}"`);
+        }
+
+        if (searchState.selectedCategory) {
+            context.push(
+                `in ${SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory}`,
+            );
+        }
+
+        if ((searchState.selectedSdgHandles || []).length > 0) {
+            context.push(
+                `with ${(searchState.selectedSdgHandles || []).length} SDG filter${
+                    (searchState.selectedSdgHandles || []).length === 1 ? "" : "s"
+                }`,
+            );
+        }
+
+        if (searchState.selectedDateLabel) {
+            context.push(`inside ${searchState.selectedDateLabel}`);
+        }
+
+        return {
+            title: `No ${
+                searchState.selectedCategory
+                    ? SEARCH_CATEGORY_LABELS[searchState.selectedCategory] ?? searchState.selectedCategory
+                    : "results"
+            } found`,
+            description:
+                context.length > 0
+                    ? `Nothing matched ${context.join(" ")}. Try broadening the query or removing a filter.`
+                    : "Try a broader query or switch result types.",
+        };
+    }, [
+        searchState.query,
+        searchState.selectedCategory,
+        searchState.selectedSdgHandles,
+        searchState.selectedDateLabel,
+    ]);
 
     // No header in side panel per design; keep internal state if needed later
 
@@ -52,51 +110,25 @@ export default function SearchResultsPanel() {
 
     return (
         <div className="flex h-full w-full flex-col bg-white">
-            {/* Header with search input moved into panel */}
             <div className="sticky top-0 z-10 border-b bg-white px-3 py-2">
                 <div className="mb-2 text-sm font-semibold">Search results</div>
-                <div className="flex items-center gap-2">
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                setMapSearchCommand({ query, timestamp: Date.now() });
-                            }
-                        }}
-                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-gray-300"
-                    />
-                    {query && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="px-2"
-                            onClick={() => setMapSearchCommand({ query: "", timestamp: Date.now() })}
-                            aria-label="Clear search"
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    )}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={!query.trim()}
-                        onClick={() => setMapSearchCommand({ query, timestamp: Date.now() })}
-                        aria-label="Search"
-                    >
-                        <Search className="h-4 w-4" />
-                    </Button>
-                </div>
+                {searchState.query && <div className="text-sm text-gray-700">Query: “{searchState.query}”</div>}
                 <div className="mt-1 text-xs text-gray-500">
-                    {searchState.isSearching ? "Searching…" : `${items.length} result${items.length === 1 ? "" : "s"}`}
+                    {searchState.isSearching
+                        ? "Searching…"
+                        : `${items.length} result${items.length === 1 ? "" : "s"}`}
                 </div>
+                {filterSummary && <div className="mt-1 text-xs text-gray-500">Filters: {filterSummary}</div>}
             </div>
             <div className="flex-1 overflow-y-auto scrollbar-hover stable-scrollbar">
                 {searchState.isSearching && <div className="p-4 text-sm text-gray-600">Loading…</div>}
                 {!searchState.isSearching && items.length === 0 && searchState.hasSearched && (
-                    <div className="p-4 text-sm text-gray-500">No results found.</div>
+                    <div className="p-4">
+                        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center">
+                            <div className="text-sm font-medium text-gray-900">{emptyState.title}</div>
+                            <div className="mt-2 text-sm text-gray-500">{emptyState.description}</div>
+                        </div>
+                    </div>
                 )}
                 {!searchState.isSearching && items.length > 0 && (
                     <ul className="space-y-1">

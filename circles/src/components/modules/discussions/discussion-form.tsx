@@ -26,6 +26,7 @@ import {
     UserPrivate,
     ProposalDisplay,
     IssueDisplay,
+    FundingAskDisplay,
     TaskDisplay,
     Cause as SDG,
 } from "@/models/models";
@@ -50,13 +51,6 @@ import LocationPicker from "@/components/forms/location-picker";
 import SdgFilter from "@/components/modules/search/sdg-filter";
 import { useAtom } from "jotai";
 import { imageGalleryAtom } from "@/lib/data/atoms";
-import { Mention, MentionsInput } from "react-mentions";
-import {
-    defaultMentionsInputStyle,
-    defaultMentionStyle,
-    handleMentionQuery,
-    renderCircleSuggestion,
-} from "../feeds/post-list";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getFullLocationName } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -113,10 +107,10 @@ type LinkPreviewData = {
 };
 
 type InternalPreviewDisplayData = {
-    type: "circle" | "post" | "proposal" | "issue" | "task";
+    type: "circle" | "post" | "proposal" | "issue" | "task" | "funding";
     id: string;
     url: string;
-    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay;
+    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay;
 };
 
 const postMentionsInputStyle = {
@@ -146,15 +140,19 @@ const postMentionsInputStyle = {
         wordBreak: "break-word" as const,
     },
     suggestions: {
+        zIndex: 12000,
         control: {
             backgroundColor: "transparent",
         },
         list: {
-            backgroundColor: "transparent",
-            border: "0px solid rgba(0,0,0,0.15)",
+            backgroundColor: "white",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: "15px",
             fontSize: 14,
-            overflow: "hidden",
+            boxShadow: "0 12px 32px rgba(15, 23, 42, 0.18)",
+            maxHeight: "240px",
+            overflowY: "auto" as const,
+            zIndex: 80,
         },
         item: {
             backgroundColor: "white",
@@ -193,7 +191,12 @@ export function DiscussionForm({
     const [showPollCreator, setShowPollCreator] = useState(false);
     const [selectedCircleId, setSelectedCircleId] = useState<string | null>(initialSelectedCircleId || null);
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
-    const [images, setImages] = useState<ImageItem[]>([]);
+    const [images, setImages] = useState<ImageItem[]>(
+        initialPost?.media?.map((m) => ({
+            preview: m.fileInfo.url,
+            media: m,
+        })) || [],
+    );
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
@@ -301,9 +304,10 @@ export function DiscussionForm({
     const cancelInternalFetchRef = useRef<() => void>(() => {});
 
     const extractFirstUrl = (text: string): { url: string; isInternal: boolean } | null => {
+        const textWithoutMentions = text.replace(/\[[^\]]+\]\(\/circles\/[^)]+\)/g, "");
         const externalUrlRegex = /(https?:\/\/[^\s]+)/g;
         const internalUrlRegex = /(\/circles\/[a-zA-Z0-9\-\/]+)/g;
-        const internalMatches = text.match(internalUrlRegex);
+        const internalMatches = textWithoutMentions.match(internalUrlRegex);
         if (internalMatches) {
             const url = internalMatches[0];
             const postRegex = /^\/circles\/[a-zA-Z0-9\-]+\/post\/[a-zA-Z0-9]+$/;
@@ -314,7 +318,7 @@ export function DiscussionForm({
                 return { url: url, isInternal: true };
             }
         }
-        const externalMatches = text.match(externalUrlRegex);
+        const externalMatches = textWithoutMentions.match(externalUrlRegex);
         if (externalMatches) {
             return { url: externalMatches[0], isInternal: false };
         }
@@ -567,7 +571,10 @@ export function DiscussionForm({
                     });
                     return;
                 }
-                const circleHandle = selectedCircle?.handle || initialPost?.circle?.handle;
+                const circleHandle =
+                    initialPost?.circle?.handle ||
+                    selectedCircle?.handle ||
+                    (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
                 if (circleHandle) {
                     window.location.href = `/circles/${circleHandle}/discussions/${initialPost!._id}`;
                 } else {
@@ -585,16 +592,15 @@ export function DiscussionForm({
                     });
                     return;
                 } else {
+                    const circleHandle =
+                        selectedCircle?.handle ||
+                        (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
                     // navigate to the newly created forum post
-                    if (response.post?._id) {
-                        if (selectedCircle?.handle) {
-                            window.location.href = `/circles/${selectedCircle.handle}/discussions/${response.post._id}`;
-                        } else {
-                            window.location.reload();
-                        }
+                    if (response.post?._id && circleHandle) {
+                        window.location.href = `/circles/${circleHandle}/discussions/${response.post._id}`;
                     } else {
-                        if (selectedCircle?.handle) {
-                            window.location.href = `/circles/${selectedCircle.handle}/discussions`;
+                        if (circleHandle) {
+                            window.location.href = `/circles/${circleHandle}/discussions`;
                         } else {
                             window.location.reload();
                         }
@@ -619,8 +625,8 @@ export function DiscussionForm({
     }
 
     return (
-        <div {...getRootProps()} className="flex h-full flex-col">
-            <div className="flex flex-grow flex-col overflow-hidden p-4">
+        <div {...getRootProps()} className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-0 flex-grow flex-col overflow-hidden p-4">
                 {/* Header section */}
                 <div className="mb-[5px] flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -665,7 +671,7 @@ export function DiscussionForm({
                 {/* Conditional Content Area */}
                 {selectedCircleId && (
                     <>
-                        <div className="flex-grow overflow-y-auto pr-2">
+                        <div className="min-h-0 flex-grow overflow-y-auto pr-2">
                             {!user.isVerified && (
                                 <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                                     <div className="flex items-center">
@@ -689,23 +695,14 @@ export function DiscussionForm({
                                 </div>
                             </div>
                             <Label className="mb-1 block text-sm font-medium text-gray-600">Content</Label>
-                            <MentionsInput
+                            {/* TODO: Mentions intentionally disabled for launch. Rebuild later using the working chat mention path as the reference. */}
+                            <Textarea
                                 value={postContent}
                                 onChange={(e) => setPostContent(e.target.value)}
                                 placeholder="Write your forum post..."
-                                className="flex-grow"
+                                className="min-h-[400px] resize-none rounded-xl border-gray-200 px-3 py-3 text-[1.25rem] leading-[1.875rem] shadow-none focus-visible:ring-0"
                                 autoFocus
-                                style={postMentionsInputStyle}
-                            >
-                                <Mention
-                                    trigger="@"
-                                    data={handleMentionQuery}
-                                    style={defaultMentionStyle}
-                                    displayTransform={(id, display) => `${display}`}
-                                    renderSuggestion={renderCircleSuggestion}
-                                    markup="[__display__](/circles/__id__)"
-                                />
-                            </MentionsInput>
+                            />
                             {isPreviewLoading && (
                                 <div className="mt-4 flex items-center justify-center rounded-lg border p-4">
                                     <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-500" />
@@ -908,7 +905,7 @@ export function DiscussionForm({
                                 </div>
                             )}
                         </div>
-                        <div className="mt-auto flex items-center justify-between border-t pt-4">
+                        <div className="mt-auto flex shrink-0 items-center justify-between border-t pt-4">
                             <div className="flex space-x-2">
                                 <div>
                                     <input {...getInputProps()} className="hidden" id="image-picker-input" />

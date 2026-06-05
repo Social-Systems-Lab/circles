@@ -1,10 +1,12 @@
 //task-list.tsx
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useTransition, useCallback, useMemo } from "react";
+import { formatDistanceToNow } from "date-fns";
 import {
     ColumnDef,
     ColumnFiltersState,
+    Row,
     SortingState,
     flexRender,
     getCoreRowModel,
@@ -14,32 +16,12 @@ import {
 } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
+import { Circle, ContentPreviewData, TaskDisplay, TaskStage, TaskPermissions, TaskPriority } from "@/models/models"; // Use Task types, Added ContentPreviewData, TaskPermissions
 import { Button } from "@/components/ui/button";
-import {
-    ArrowDown,
-    ArrowUp,
-    Loader2,
-    MoreHorizontal,
-    Plus,
-    CheckCircle,
-    Clock,
-    Play,
-    User,
-    TriangleAlert,
-    CheckCircle2,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Loader2, MoreHorizontal, Plus, User } from "lucide-react";
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -57,25 +39,47 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { deleteTaskAction } from "@/app/circles/[handle]/tasks/actions";
+import {
+    deleteTaskAction,
+    getTaskAction,
+    getTasksAction,
+    requestTaskChangesAction,
+    submitTaskClaimAction,
+    verifyTaskCompletionAction,
+} from "@/app/circles/[handle]/tasks/actions";
 import { UserPicture } from "../members/user-picture";
 import { motion } from "framer-motion";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { features, RANKING_STALENESS_DAYS } from "@/lib/data/constants"; // Added constants import
+import { features } from "@/lib/data/constants";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { useAtom } from "jotai";
 import { userAtom, contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import Link from "next/link"; // Will be removed for the button
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import TaskPrioritizationModal from "./task-prioritization-modal"; // Import the modal
 import { CreateTaskDialog } from "@/components/global-create/create-task-dialog"; // Import CreateTaskDialog
-import { PiRanking, PiRankingBold, PiUser, PiUsersThree } from "react-icons/pi";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import {
+    getShiftConfirmedParticipants,
+    getShiftConfirmedSummary,
+    getShiftDisplayStatus,
+    getShiftPendingSummary,
+    type ShiftDisplayStatus,
+    isShiftTask as isShiftTaskItem,
+} from "./shift-task-utils";
+import {
+    getShiftStageInfo,
+    getTaskStageInfo,
+    taskPriorityBadgeClasses,
+    taskPriorityLabels,
+    taskTitleLinkClassName,
+    getTaskWorkflowStatusBadge,
+} from "./task-ui";
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -89,12 +93,27 @@ interface TasksListProps {
     hideRank?: boolean;
     inToolbox?: boolean;
     onTaskNavigate?: () => void;
+    persistViewState?: boolean;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
     if (!sortDir) return null;
     return sortDir === "asc" ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />;
 };
+
+const allTaskStages: TaskStage[] = ["open", "inProgress", "review", "resolved"];
+const allTaskPriorities: TaskPriority[] = ["low", "medium", "high", "critical"];
+const defaultTasksListSorting: SortingState = [{ id: "createdAt", desc: true }];
+const tasksListViewStateVersion = 1;
+const taskPrioritySortOrder: Record<TaskPriority, number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+};
+const getSortableCircleLabel = (circle?: Circle) =>
+    circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
+const sortableTaskColumnIds = new Set(["title", "priority", "stage", "assignee", "circle", "targetDate", "createdAt"]);
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -108,69 +127,159 @@ const tableRowVariants = {
     }),
 };
 
-const formatExpiryDate = (expiryDate: Date): string => {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Reset time part for accurate date comparison
-    today.setHours(0, 0, 0, 0);
-    tomorrow.setHours(0, 0, 0, 0);
-    const expiryDateOnly = new Date(expiryDate);
-    expiryDateOnly.setHours(0, 0, 0, 0);
-
-    if (expiryDateOnly.getTime() === today.getTime()) {
-        return "end of today";
+const getWorkflowStatusBadge = (task: TaskDisplay) => {
+    if (isShiftTaskItem(task)) {
+        return null;
     }
-    if (expiryDateOnly.getTime() === tomorrow.getTime()) {
-        return "tomorrow";
-    }
-    // Example: "April 15th" - adjust formatting as needed
-    return expiryDate.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+    return getTaskWorkflowStatusBadge(task);
 };
 
-// Helper function for stage badge styling and icons
-const getStageInfo = (stage: TaskStage) => {
-    // Updated type
-    switch (stage) {
-        case "review":
-            return { color: "bg-yellow-200 text-yellow-800", icon: Clock, text: "Review" };
-        case "open":
-            return { color: "bg-blue-200 text-blue-800", icon: Play, text: "Open" };
-        case "inProgress":
-            return { color: "bg-orange-200 text-orange-800", icon: Loader2, text: "In Progress" };
-        case "resolved":
-            return { color: "bg-green-200 text-green-800", icon: CheckCircle, text: "Resolved" };
-        default:
-            return { color: "bg-gray-200 text-gray-800", icon: Clock, text: "Unknown" };
+const ShiftAllocationPreview = ({ task, showPendingHint }: { task: TaskDisplay; showPendingHint: boolean }) => {
+    const confirmedParticipants = getShiftConfirmedParticipants(task);
+    const pendingSummary = showPendingHint ? getShiftPendingSummary(task) : null;
+    const confirmedSummary = getShiftConfirmedSummary(task);
+    const slots = Math.max(task.slots ?? 0, confirmedParticipants.length);
+
+    return (
+        <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+                {confirmedParticipants.map(({ participant, profile }) => (
+                    <div key={participant.userDid} title={profile?.name || participant.userDid}>
+                        <UserPicture name={profile?.name} picture={profile?.picture?.url} size="28px" />
+                    </div>
+                ))}
+                {Array.from({ length: Math.max(slots - confirmedParticipants.length, 0) }).map((_, index) => (
+                    <Avatar
+                        key={`shift-open-slot-${task._id}-${index}`}
+                        className="h-7 w-7 border border-dashed border-slate-300 bg-slate-50"
+                    >
+                        <AvatarFallback className="bg-transparent text-slate-400">
+                            <User className="h-3.5 w-3.5" />
+                        </AvatarFallback>
+                    </Avatar>
+                ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-medium text-slate-700">{confirmedSummary}</span>
+                {pendingSummary && <span className="text-amber-700">{pendingSummary}</span>}
+            </div>
+        </div>
+    );
+};
+
+const getPendingClaims = (task: TaskDisplay) => (task.claims ?? []).filter((claim) => claim.status === "pending");
+
+const canViewerClaimTask = (task: TaskDisplay, currentUserDid?: string, isCircleMember?: boolean) =>
+    !isShiftTaskItem(task) &&
+    task.stage === "open" &&
+    !task.assignedTo &&
+    Boolean(isCircleMember) &&
+    !getPendingClaims(task).some((claim) => claim.claimantDid === currentUserDid);
+
+type PersistedTasksListViewState = {
+    version: number;
+    searchText: string;
+    sorting: SortingState;
+    selectedStages: TaskStage[];
+    selectedPriorities: TaskPriority[];
+};
+
+type VerificationQueueAction = "verify" | "requestChanges";
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+const sanitizeSelectedStages = (value: unknown): TaskStage[] => {
+    if (!Array.isArray(value)) {
+        return allTaskStages;
     }
+
+    const nextStages = Array.from(
+        new Set(value.filter((item): item is TaskStage => allTaskStages.includes(item as TaskStage))),
+    );
+
+    return nextStages.length > 0 ? nextStages : allTaskStages;
+};
+
+const sanitizeSelectedPriorities = (value: unknown): TaskPriority[] => {
+    if (!Array.isArray(value)) {
+        return allTaskPriorities;
+    }
+
+    const nextPriorities = Array.from(
+        new Set(value.filter((item): item is TaskPriority => allTaskPriorities.includes(item as TaskPriority))),
+    );
+
+    return nextPriorities.length > 0 ? nextPriorities : allTaskPriorities;
+};
+
+const sanitizeSorting = (value: unknown): SortingState => {
+    if (!Array.isArray(value)) {
+        return defaultTasksListSorting;
+    }
+
+    const nextSorting = value
+        .filter(
+            (item): item is { id: string; desc: boolean } =>
+                isRecord(item) &&
+                typeof item.id === "string" &&
+                sortableTaskColumnIds.has(item.id) &&
+                typeof item.desc === "boolean",
+        )
+        .map((item) => ({ id: item.id, desc: item.desc }));
+
+    return nextSorting.length > 0 ? nextSorting : defaultTasksListSorting;
+};
+
+const sanitizePersistedTasksListViewState = (value: unknown): PersistedTasksListViewState | null => {
+    if (!isRecord(value) || value.version !== tasksListViewStateVersion) {
+        return null;
+    }
+
+    return {
+        version: tasksListViewStateVersion,
+        searchText: typeof value.searchText === "string" ? value.searchText : "",
+        sorting: sanitizeSorting(value.sorting),
+        selectedStages: sanitizeSelectedStages(value.selectedStages),
+        selectedPriorities: sanitizeSelectedPriorities(value.selectedPriorities),
+    };
+};
+
+const formatTaskDate = (value?: Date | null) => {
+    if (!value) {
+        return "No due date";
+    }
+
+    return new Date(value).toLocaleDateString();
 };
 
 const TasksList: React.FC<TasksListProps> = ({
     tasksData,
     circle,
     permissions,
-    hideRank,
     inToolbox,
     onTaskNavigate,
+    persistViewState = false,
 }) => {
     // Renamed component, props
-    const { tasks, hasUserRanked, totalRankers, unrankedCount, userRankBecameStaleAt } = tasksData;
+    const { tasks } = tasksData;
     const [user] = useAtom(userAtom);
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeAssigned, setIncludeAssigned] = useState(true);
     const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
     const data = React.useMemo(() => {
-        const baseTasks =
-            circle.circleType === "user" && user?.did === circle.did ? filteredTasks : tasks;
+        const baseTasks = circle.circleType === "user" && user?.did === circle.did ? filteredTasks : tasks;
 
         if (inToolbox) {
-            return baseTasks.filter((task) => task.stage !== "resolved");
+            return baseTasks.filter(
+                (task) =>
+                    task.stage !== "resolved" &&
+                    (!isShiftTaskItem(task) || getShiftDisplayStatus(task) !== "completed"),
+            );
         }
 
         return baseTasks;
     }, [tasks, filteredTasks, circle.circleType, circle.did, user?.did, inToolbox]);
-    const [sorting, setSorting] = React.useState<SortingState>([{ id: "rank", desc: false }]);
+    const [sorting, setSorting] = React.useState<SortingState>(defaultTasksListSorting);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
     const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState<boolean>(false); // Renamed state
     const [selectedTask, setSelectedTask] = useState<TaskDisplay | null>(null); // Renamed state, updated type
@@ -178,12 +287,38 @@ const TasksList: React.FC<TasksListProps> = ({
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();
-    const [stageFilter, setStageFilter] = useState<TaskStage | "all">("all"); // Updated type
+    const [searchText, setSearchText] = useState("");
+    const isCircleMember =
+        circle.did === user?.did ||
+        Boolean(user?.memberships?.some((membership) => String(membership.circle?._id) === String(circle._id)));
+    const [selectedStages, setSelectedStages] = useState<TaskStage[]>(allTaskStages);
+    const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>(allTaskPriorities);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [showRankModal, setShowRankModal] = useState(false); // State for modal
     const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false); // State for Create Task Dialog
-    const isMobile = useIsMobile();
+    const [isResolvedSectionOpen, setIsResolvedSectionOpen] = useState(false);
+    const [pendingVerificationAction, setPendingVerificationAction] = useState<{
+        taskId: string;
+        action: VerificationQueueAction;
+    } | null>(null);
+    const [hiddenVerificationTaskIds, setHiddenVerificationTaskIds] = useState<string[]>([]);
+    const shouldPersistViewState = persistViewState && !inToolbox;
+    const showProfileCircleColumn = circle.circleType === "user" && user?.did === circle.did && !inToolbox;
+    const showProfileAuthorColumn = circle.circleType === "user" && user?.did === circle.did && !inToolbox;
+    const showProfileCircleAvatarColumn = showProfileCircleColumn;
+    const tasksListViewStateStorageKey = useMemo(() => {
+        if (!shouldPersistViewState) {
+            return null;
+        }
+
+        const userKey = user?.did || "anonymous";
+        const circleKey = circle.handle || String(circle._id || "unknown-circle");
+        return `tasks-list-view:${userKey}:${circleKey}`;
+    }, [shouldPersistViewState, user?.did, circle.handle, circle._id]);
+
+    useEffect(() => {
+        setFilteredTasks(tasksData.tasks);
+    }, [tasksData.tasks]);
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -195,6 +330,11 @@ const TasksList: React.FC<TasksListProps> = ({
 
         fetchTasks();
     }, [includeCreated, includeAssigned, circle, user]);
+
+    useEffect(() => {
+        setHiddenVerificationTaskIds([]);
+        setPendingVerificationAction(null);
+    }, [tasks]);
 
     const openAuthor = useCallback(
         (author: Circle) => {
@@ -220,104 +360,128 @@ const TasksList: React.FC<TasksListProps> = ({
         [openAuthor],
     );
 
-    const stalenessInfo = useMemo(() => {
-        if (!userRankBecameStaleAt || unrankedCount === 0) {
-            return { isStale: false, expiryDate: null, expiryDateString: "" };
-        }
-        const becameStaleDate = new Date(userRankBecameStaleAt); // Ensure it's a Date
-        const expiryDate = new Date(becameStaleDate);
-        expiryDate.setDate(expiryDate.getDate() + RANKING_STALENESS_DAYS);
-
-        const now = new Date();
-        // Check if grace period has actually expired already
-        if (now > expiryDate) {
-            // This case means the backend should have excluded it,
-            // but we handle it defensively in UI.
-            // You might show a different "expired" message here if needed.
-            return { isStale: true, expiryDate: expiryDate, expiryDateString: "past", isExpired: true };
-        }
-
-        return {
-            isStale: true,
-            expiryDate: expiryDate,
-            expiryDateString: formatExpiryDate(expiryDate),
-            isExpired: false,
-        };
-    }, [userRankBecameStaleAt, unrankedCount]);
-
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
+        if (tasksListViewStateStorageKey) {
+            try {
+                const rawState = localStorage.getItem(tasksListViewStateStorageKey);
+                if (rawState) {
+                    const savedState = sanitizePersistedTasksListViewState(JSON.parse(rawState));
+                    if (savedState) {
+                        setSearchText(savedState.searchText);
+                        setSorting(savedState.sorting);
+                        setSelectedStages(savedState.selectedStages);
+                        setSelectedPriorities(savedState.selectedPriorities);
+                    }
+                }
+            } catch {
+                // Ignore unreadable persisted state and fall back to defaults.
+            }
+        }
+
         setIsMounted(true);
+    }, [tasksListViewStateStorageKey]);
+
+    const areAllStagesSelected = selectedStages.length === allTaskStages.length;
+    const stageFilterLabel = useMemo(() => {
+        if (areAllStagesSelected) {
+            return "All Stages";
+        }
+        if (selectedStages.length === 1) {
+            return getTaskStageInfo(selectedStages[0]).text;
+        }
+        return `${selectedStages.length} Stages`;
+    }, [areAllStagesSelected, selectedStages]);
+    const areAllPrioritiesSelected = selectedPriorities.length === allTaskPriorities.length;
+    const priorityFilterLabel = useMemo(() => {
+        if (areAllPrioritiesSelected) {
+            return "All Priorities";
+        }
+        if (selectedPriorities.length === 1) {
+            return taskPriorityLabels[selectedPriorities[0]];
+        }
+        return `${selectedPriorities.length} Priorities`;
+    }, [areAllPrioritiesSelected, selectedPriorities]);
+
+    const toggleStageFilter = useCallback((stage: TaskStage) => {
+        setSelectedStages((currentStages) => {
+            if (currentStages.includes(stage)) {
+                const nextStages = currentStages.filter((value) => value !== stage);
+                return nextStages.length === 0 ? allTaskStages : nextStages;
+            }
+
+            return [...currentStages, stage];
+        });
     }, []);
+    const togglePriorityFilter = useCallback((priority: TaskPriority) => {
+        setSelectedPriorities((currentPriorities) => {
+            if (currentPriorities.includes(priority)) {
+                const nextPriorities = currentPriorities.filter((value) => value !== priority);
+                return nextPriorities.length === 0 ? allTaskPriorities : nextPriorities;
+            }
+
+            return [...currentPriorities, priority];
+        });
+    }, []);
+
+    const refreshOpenTaskPreview = useCallback(
+        async (taskId: string) => {
+            if (!circle.handle) {
+                return;
+            }
+
+            const updatedTask = await getTaskAction(circle.handle, taskId);
+            if (!updatedTask) {
+                return;
+            }
+
+            setContentPreview((currentPreview) => {
+                if (currentPreview?.type !== "task" || currentPreview.content._id !== updatedTask._id) {
+                    return currentPreview;
+                }
+
+                return {
+                    ...currentPreview,
+                    content: updatedTask,
+                };
+            });
+        },
+        [circle.handle, setContentPreview],
+    );
 
     const columns = React.useMemo<ColumnDef<TaskDisplay>[]>( // Updated type
         () => [
-            // --- Column 1: Aggregated Rank ---
             {
-                accessorKey: "rank",
-                header: ({ column }) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    className="p-1"
-                                >
-                                    {/* Icon for aggregated rank */}
-                                    <PiRankingBold className="h-4 w-4" />
-                                    <SortIcon sortDir={column.getIsSorted()} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Sort by Aggregated Rank</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                ),
+                id: "circleAvatar",
+                header: () => <span className="sr-only">Circle</span>,
                 cell: (info) => {
-                    const rank = info.getValue() as number | undefined;
-                    return rank !== undefined ? (
-                        <span className="inline-block min-w-[20px] rounded bg-gray-200 px-1.5 py-0.5 text-center text-xs font-semibold text-gray-700">
-                            {rank}
-                        </span>
-                    ) : (
-                        <span className="text-gray-400">-</span>
+                    const taskCircle = info.row.original.circle;
+
+                    if (!showProfileCircleAvatarColumn || !taskCircle) {
+                        return null;
+                    }
+
+                    const avatar = <CirclePicture circle={taskCircle} size="24px" />;
+
+                    if (!taskCircle.handle) {
+                        return <div className="flex w-8 justify-center">{avatar}</div>;
+                    }
+
+                    return (
+                        <div className="flex w-8 justify-center">
+                            <Link
+                                href={`/circles/${taskCircle.handle}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                aria-label={taskCircle.name || taskCircle.handle}
+                            >
+                                {avatar}
+                            </Link>
+                        </div>
                     );
                 },
-                enableSorting: true,
-            },
-            // --- Column 2: User's Rank (NEW) ---
-            {
-                accessorKey: "userRank", // Access the new data field
-                header: ({ column }) => (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                                    className="p-1"
-                                >
-                                    {/* Icon indicating user-specific rank */}
-                                    <User className="h-4 w-4" />
-                                    <SortIcon sortDir={column.getIsSorted()} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Sort by Your Rank</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                ),
-                cell: (info) => {
-                    const userRank = info.getValue() as number | undefined;
-                    return userRank !== undefined ? (
-                        <span className="inline-block min-w-[20px] rounded border border-blue-300 bg-blue-100 px-1.5 py-0.5 text-center text-xs font-semibold text-blue-800">
-                            {userRank}
-                        </span>
-                    ) : (
-                        <span className="text-gray-400">-</span>
-                    );
-                },
-                enableSorting: true, // Allow sorting by user rank
+                enableSorting: false,
             },
             {
                 accessorKey: "title",
@@ -329,25 +493,91 @@ const TasksList: React.FC<TasksListProps> = ({
                 ),
                 cell: (info) => {
                     const task = info.row.original; // Renamed variable
+                    const isShiftTask = isShiftTaskItem(task);
+                    const taskCircleHandle = task.circle?.handle || circle.handle;
                     return (
-                        <Link
-                            href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`} // Updated path
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (inToolbox) {
-                                    onTaskNavigate?.();
-                                }
-                            }}
-                            className="flex items-center font-medium text-blue-600 hover:underline" // Added flex
-                        >
-                            {info.getValue() as string}
-                            {task.circle && task.circle._id !== circle._id && (
-                                <div className="ml-2">
-                                    <CirclePicture circle={task.circle} size="24px" />
+                        <div className="flex min-w-0 flex-col gap-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                                <Link
+                                    href={`/circles/${taskCircleHandle}/tasks/${task._id}#circle-tabs`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (inToolbox) {
+                                            onTaskNavigate?.();
+                                        }
+                                    }}
+                                    className={cn("truncate", taskTitleLinkClassName)}
+                                >
+                                    {info.getValue() as string}
+                                </Link>
+                            </div>
+                            {isShiftTask && (
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <Badge className="border-transparent bg-sky-100 text-sky-800">Shift</Badge>
+                                    <span className="font-medium text-slate-700">{getShiftConfirmedSummary(task)}</span>
+                                    {permissions.canModerate && getShiftPendingSummary(task) && (
+                                        <span className="text-amber-700">{getShiftPendingSummary(task)}</span>
+                                    )}
                                 </div>
                             )}
-                        </Link>
+                        </div>
                     );
+                },
+            },
+            {
+                accessorKey: "circle",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Circle / Project
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const taskCircle = info.getValue() as Circle | undefined;
+
+                    if (!taskCircle) {
+                        return <span className="text-gray-500">Unknown</span>;
+                    }
+
+                    return <span>{taskCircle.name}</span>;
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const circleA = getSortableCircleLabel(rowA.getValue(id) as Circle | undefined);
+                    const circleB = getSortableCircleLabel(rowB.getValue(id) as Circle | undefined);
+
+                    return circleA.localeCompare(circleB);
+                },
+            },
+            {
+                accessorKey: "priority",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Priority
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const priority = info.getValue() as TaskPriority | undefined;
+                    return priority ? (
+                        <Badge className={taskPriorityBadgeClasses[priority]}>{taskPriorityLabels[priority]}</Badge>
+                    ) : null;
+                },
+                filterFn: (row, id, value) => {
+                    if (!Array.isArray(value) || value.length === 0) {
+                        return true;
+                    }
+
+                    const rowValue = row.getValue(id) as TaskPriority | undefined;
+                    return rowValue ? value.includes(rowValue) : false;
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const priorityA = rowA.getValue(id) as TaskPriority | undefined;
+                    const priorityB = rowB.getValue(id) as TaskPriority | undefined;
+
+                    const rankA = priorityA ? taskPrioritySortOrder[priorityA] : 0;
+                    const rankB = priorityB ? taskPrioritySortOrder[priorityB] : 0;
+
+                    return rankA - rankB;
                 },
             },
             {
@@ -359,24 +589,124 @@ const TasksList: React.FC<TasksListProps> = ({
                     </Button>
                 ),
                 cell: (info) => {
-                    const stage = info.getValue() as TaskStage; // Updated type
-                    const { color, icon: Icon, text } = getStageInfo(stage);
+                    const task = info.row.original;
+                    const workflowStatus = getWorkflowStatusBadge(task);
+                    const {
+                        color,
+                        icon: Icon,
+                        text,
+                    } = isShiftTaskItem(task)
+                        ? getShiftStageInfo(getShiftDisplayStatus(task))
+                        : getTaskStageInfo(info.getValue() as TaskStage);
                     return (
-                        <Badge className={`${color} items-center gap-1`}>
-                            <Icon className="h-3 w-3" />
-                            {text}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                            <Badge className={`${color} w-fit items-center gap-1`}>
+                                <Icon className="h-3 w-3" />
+                                {text}
+                            </Badge>
+                            {workflowStatus && (
+                                <Badge className={`${workflowStatus.className} w-fit`}>{workflowStatus.label}</Badge>
+                            )}
+                        </div>
                     );
                 },
-                filterFn: (row, id, value) => row.getValue(id) === value,
+                filterFn: (row, id, value) => {
+                    if (!Array.isArray(value) || value.length === 0) {
+                        return true;
+                    }
+
+                    return value.includes(row.getValue(id));
+                },
             },
             {
                 accessorKey: "assignee",
-                header: "Assigned To",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Assigned to
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
                 cell: (info) => {
+                    const task = info.row.original;
+                    if (isShiftTaskItem(task)) {
+                        return (
+                            <ShiftAllocationPreview
+                                task={task}
+                                showPendingHint={permissions.canModerate}
+                            />
+                        );
+                    }
+
                     const assignee = info.getValue() as Circle | undefined;
                     if (!assignee) {
-                        return <span className="text-gray-500">Unassigned</span>;
+                        const pendingClaims = getPendingClaims(task);
+                        const currentUserPendingClaim = pendingClaims.some((claim) => claim.claimantDid === user?.did);
+                        const pendingClaimCount = pendingClaims.length;
+                        const canClaim = canViewerClaimTask(task, user?.did, isCircleMember);
+                        const isClaimableListState = task.stage === "open";
+
+                        return (
+                            <div className="flex min-w-0 flex-col gap-1">
+                                {isClaimableListState ? (
+                                    <Badge
+                                        variant="outline"
+                                        className="w-fit border-amber-300 bg-amber-50 text-amber-800"
+                                    >
+                                        Unclaimed
+                                    </Badge>
+                                ) : (
+                                    <span className="text-gray-500">Unassigned</span>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    {isClaimableListState && pendingClaimCount > 0 && permissions.canAssign && (
+                                        <span className="text-amber-700">
+                                            {pendingClaimCount} pending claim{pendingClaimCount === 1 ? "" : "s"}
+                                        </span>
+                                    )}
+                                    {isClaimableListState && currentUserPendingClaim ? (
+                                        <Badge
+                                            variant="outline"
+                                            className="w-fit border-amber-200 bg-amber-50 text-amber-700"
+                                        >
+                                            Claim pending
+                                        </Badge>
+                                    ) : isClaimableListState && canClaim ? (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 border-[hsl(var(--task-link))]/25 px-2 text-xs font-medium text-[hsl(var(--task-link))] hover:bg-[hsl(var(--task-link))]/5 hover:text-[hsl(var(--task-link-hover))]"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                startTransition(async () => {
+                                                    const result = await submitTaskClaimAction(circle.handle!, task._id as string);
+
+                                                    if (!result.success) {
+                                                        toast({
+                                                            title: "Error",
+                                                            description: result.message || "Failed to submit claim",
+                                                            variant: "destructive",
+                                                        });
+                                                        return;
+                                                    }
+
+                                                    await refreshOpenTaskPreview(task._id as string);
+                                                    router.refresh();
+                                                    toast({
+                                                        title: "Success",
+                                                        description: result.message || "Task claim submitted",
+                                                    });
+                                                });
+                                            }}
+                                            disabled={isPending}
+                                        >
+                                            {isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                                            Claim task
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            </div>
+                        );
                     }
                     return (
                         <TooltipProvider>
@@ -389,7 +719,19 @@ const TasksList: React.FC<TasksListProps> = ({
                                             openAssignee(assignee); // Call the correct handler
                                         }}
                                     >
-                                        <UserPicture name={assignee.name} picture={assignee.picture?.url} size="32px" />
+                                        <div
+                                            className={
+                                                info.row.original.stage === "open" && !info.row.original.acceptedAt
+                                                    ? "opacity-45"
+                                                    : ""
+                                            }
+                                        >
+                                            <UserPicture
+                                                name={assignee.name}
+                                                picture={assignee.picture?.url}
+                                                size="32px"
+                                            />
+                                        </div>
                                         {!isCompact && <span>{assignee.name}</span>}
                                     </div>
                                 </TooltipTrigger>
@@ -397,6 +739,45 @@ const TasksList: React.FC<TasksListProps> = ({
                             </Tooltip>
                         </TooltipProvider>
                     );
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const assigneeA = getSortableCircleLabel(rowA.getValue(id) as Circle | undefined);
+                    const assigneeB = getSortableCircleLabel(rowB.getValue(id) as Circle | undefined);
+
+                    if (assigneeA === assigneeB) {
+                        return 0;
+                    }
+
+                    if (!assigneeA) {
+                        return 1;
+                    }
+
+                    if (!assigneeB) {
+                        return -1;
+                    }
+
+                    return assigneeA.localeCompare(assigneeB);
+                },
+            },
+            {
+                accessorKey: "targetDate",
+                header: ({ column }) => (
+                    <Button variant="ghost" onClick={() => column.toggleSorting()}>
+                        Due Date
+                        <SortIcon sortDir={column.getIsSorted()} />
+                    </Button>
+                ),
+                cell: (info) => {
+                    const targetDate = info.getValue() as Date | null | undefined;
+                    return <span className={targetDate ? "" : "text-gray-500"}>{formatTaskDate(targetDate)}</span>;
+                },
+                sortingFn: (rowA, rowB, id) => {
+                    const valueA = rowA.getValue(id) as Date | null | undefined;
+                    const valueB = rowB.getValue(id) as Date | null | undefined;
+                    const timeA = valueA ? new Date(valueA).getTime() : Number.POSITIVE_INFINITY;
+                    const timeB = valueB ? new Date(valueB).getTime() : Number.POSITIVE_INFINITY;
+
+                    return timeA - timeB;
                 },
             },
             {
@@ -442,7 +823,23 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle, circle._id, openAssignee, openAuthor, inToolbox, onTaskNavigate], // Add dependencies
+        [
+            isCompact,
+            circle.handle,
+            isCircleMember,
+            isPending,
+            openAssignee,
+            openAuthor,
+            inToolbox,
+            onTaskNavigate,
+            permissions.canAssign,
+            permissions.canModerate,
+            refreshOpenTaskPreview,
+            router,
+            showProfileCircleAvatarColumn,
+            toast,
+            user?.did,
+        ],
     );
 
     const table = useReactTable({
@@ -457,24 +854,57 @@ const TasksList: React.FC<TasksListProps> = ({
             sorting,
             columnFilters,
             columnVisibility: {
-                rank: !hideRank && !inToolbox,
-                userRank: hasUserRanked && !hideRank && !inToolbox,
+                circleAvatar: showProfileCircleAvatarColumn && !isCompact,
                 title: true,
+                circle: showProfileCircleColumn && !isCompact,
+                priority: true,
                 stage: true,
                 assignee: !isCompact && !inToolbox,
-                author: !isCompact && !inToolbox,
-                createdAt: !isCompact && !inToolbox,
+                targetDate: !isCompact && !inToolbox,
+                author: showProfileAuthorColumn && !isCompact,
+                createdAt: false,
             },
         },
     });
 
     useEffect(() => {
-        if (stageFilter !== "all") {
-            table.getColumn("stage")?.setFilterValue(stageFilter);
-        } else {
+        table.getColumn("title")?.setFilterValue(searchText || undefined);
+    }, [searchText, table]);
+    useEffect(() => {
+        if (areAllStagesSelected) {
             table.getColumn("stage")?.setFilterValue(undefined);
+            return;
         }
-    }, [stageFilter, table]);
+
+        table.getColumn("stage")?.setFilterValue(selectedStages);
+    }, [areAllStagesSelected, selectedStages, table]);
+    useEffect(() => {
+        if (areAllPrioritiesSelected) {
+            table.getColumn("priority")?.setFilterValue(undefined);
+            return;
+        }
+
+        table.getColumn("priority")?.setFilterValue(selectedPriorities);
+    }, [areAllPrioritiesSelected, selectedPriorities, table]);
+    useEffect(() => {
+        if (!isMounted || !tasksListViewStateStorageKey) {
+            return;
+        }
+
+        const nextState: PersistedTasksListViewState = {
+            version: tasksListViewStateVersion,
+            searchText,
+            sorting,
+            selectedStages,
+            selectedPriorities,
+        };
+
+        try {
+            localStorage.setItem(tasksListViewStateStorageKey, JSON.stringify(nextState));
+        } catch {
+            // Ignore storage write failures and keep the current in-memory state.
+        }
+    }, [isMounted, searchText, selectedPriorities, selectedStages, sorting, tasksListViewStateStorageKey]);
 
     const onConfirmDeleteTask = async () => {
         // Renamed function
@@ -500,14 +930,17 @@ const TasksList: React.FC<TasksListProps> = ({
 
     const handleRowClick = (task: TaskDisplay) => {
         // Renamed param, type
+        const taskCircleHandle = task.circle?.handle || circle.handle;
+        const taskCircle = task.circle || circle;
+
         if (inToolbox) {
-            router.push(`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`); // Updated path
+            router.push(`/circles/${taskCircleHandle}/tasks/${task._id}#circle-tabs`);
             onTaskNavigate?.();
             return;
         }
 
         if (isCompact) {
-            router.push(`/circles/${circle.handle}/tasks/${task._id}`); // Updated path
+            router.push(`/circles/${taskCircleHandle}/tasks/${task._id}`);
             return;
         }
 
@@ -515,7 +948,7 @@ const TasksList: React.FC<TasksListProps> = ({
         let contentPreviewData: ContentPreviewData = {
             type: "task", // Use the correct type
             content: task, // Renamed param
-            props: { circle, permissions }, // Pass required props
+            props: { circle: taskCircle, permissions }, // Pass required props
         };
         setContentPreview((x) => {
             // Toggle behavior: if clicking the same task again while preview is open, close it.
@@ -525,12 +958,94 @@ const TasksList: React.FC<TasksListProps> = ({
         });
     };
 
+    const canManageTaskVerification = useCallback(
+        (task: TaskDisplay) => {
+            const isAuthor = user?.did === task.createdBy;
+            return isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate;
+        },
+        [permissions.canAssign, permissions.canModerate, permissions.canResolve, user?.did],
+    );
+
+    const runVerificationQueueAction = useCallback(
+        (task: TaskDisplay, action: VerificationQueueAction) => {
+            const taskId = task._id as string;
+            setPendingVerificationAction({ taskId, action });
+
+            startTransition(async () => {
+                const result =
+                    action === "verify"
+                        ? await verifyTaskCompletionAction(circle.handle!, taskId)
+                        : await requestTaskChangesAction(circle.handle!, taskId);
+
+                if (!result.success) {
+                    setPendingVerificationAction(null);
+                    toast({
+                        title: "Error",
+                        description:
+                            result.message ||
+                            (action === "verify" ? "Failed to verify task" : "Failed to request changes"),
+                        variant: "destructive",
+                    });
+                    return;
+                }
+
+                setHiddenVerificationTaskIds((currentTaskIds) =>
+                    currentTaskIds.includes(taskId) ? currentTaskIds : [...currentTaskIds, taskId],
+                );
+
+                await refreshOpenTaskPreview(taskId);
+                router.refresh();
+                setPendingVerificationAction(null);
+                toast({
+                    title: "Success",
+                    description: result.message || (action === "verify" ? "Task verified" : "Changes requested"),
+                });
+            });
+        },
+        [circle.handle, refreshOpenTaskPreview, router, startTransition, toast],
+    );
+
     // Check create permission for the button using the user object
     const canCreateTask = isAuthorized(user, circle, features.tasks.create);
 
     if (!isMounted) {
         return null; // Prevent rendering until mounted
     }
+
+    const tableRows = table.getRowModel().rows;
+    const isResolvedListTask = (task: TaskDisplay) =>
+        isShiftTaskItem(task) ? getShiftDisplayStatus(task) === "completed" : task.stage === "resolved";
+    const activeRows = inToolbox ? tableRows : tableRows.filter((row) => !isResolvedListTask(row.original));
+    const resolvedRows = inToolbox ? [] : tableRows.filter((row) => isResolvedListTask(row.original));
+    const shouldAutoExpandResolvedSection = !inToolbox && activeRows.length === 0 && resolvedRows.length > 0;
+    const resolvedSectionOpen = shouldAutoExpandResolvedSection || isResolvedSectionOpen;
+    const verificationQueueTasks = !inToolbox
+        ? data
+              .filter(
+                  (task) =>
+                      (task.taskType ?? "outcome") !== "shift" &&
+                      task.stage === "inProgress" &&
+                      Boolean(task.submittedForReviewAt) &&
+                      !task.verifiedAt &&
+                      canManageTaskVerification(task) &&
+                      !hiddenVerificationTaskIds.includes(task._id as string),
+              )
+              .sort(
+                  (taskA, taskB) =>
+                      new Date(taskA.submittedForReviewAt as Date).getTime() -
+                      new Date(taskB.submittedForReviewAt as Date).getTime(),
+              )
+        : [];
+    const shouldShowVerificationQueue =
+        !inToolbox &&
+        (verificationQueueTasks.length > 0 ||
+            permissions.canAssign ||
+            permissions.canResolve ||
+            permissions.canModerate);
+    const activeEmptyMessage =
+        !inToolbox && resolvedRows.length > 0
+            ? "No active tasks match the current filters. Resolved matches are available below."
+            : "No tasks found.";
 
     const handleCreateTaskSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
@@ -548,70 +1063,133 @@ const TasksList: React.FC<TasksListProps> = ({
         }
     };
 
+    const renderTaskRow = (row: Row<TaskDisplay>, index: number) => {
+        const task = row.original;
+        const isAuthor = user?.did === task.createdBy;
+        const canEdit = (isAuthor && task.stage === "review") || permissions.canModerate;
+        const canDelete = isAuthor || permissions.canModerate;
+        const isShiftTask = isShiftTaskItem(task);
+        const isPreviewedTask =
+            (contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content";
+
+        return (
+            <motion.tr
+                key={row.id}
+                custom={index}
+                initial="hidden"
+                animate="visible"
+                variants={tableRowVariants}
+                className={[
+                    "cursor-pointer",
+                    row.getIsSelected() ? "bg-muted" : "",
+                    isPreviewedTask
+                        ? "bg-gray-100"
+                        : isShiftTask
+                          ? "bg-sky-50/40 hover:bg-sky-50/70"
+                          : "hover:bg-gray-50",
+                ]
+                    .filter(Boolean)
+                    .join(" ")}
+                onClick={() => handleRowClick(task)}
+            >
+                {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                ))}
+                {!inToolbox && (
+                    <TableCell className="w-[40px]">
+                        {(canEdit || canDelete) && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {canEdit && (
+                                        <DropdownMenuItem
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push(`/circles/${circle.handle}/tasks/${task._id}/edit`);
+                                            }}
+                                            disabled={task.stage === "resolved"}
+                                        >
+                                            Edit
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canDelete && (
+                                        <DropdownMenuItem
+                                            className="text-red-600"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedTask(task);
+                                                setDeleteTaskDialogOpen(true);
+                                            }}
+                                        >
+                                            Delete
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </TableCell>
+                )}
+            </motion.tr>
+        );
+    };
+
+    const renderTaskTable = (rows: Row<TaskDisplay>[], emptyMessage: string) => (
+        <div className="overflow-hidden rounded-[15px] shadow-lg">
+            <Table className="overflow-hidden">
+                <TableHeader className="bg-white">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                        <TableRow key={headerGroup.id} className="!border-b-0">
+                            {headerGroup.headers.map((header) => (
+                                <TableHead key={header.id}>
+                                    {header.isPlaceholder
+                                        ? null
+                                        : flexRender(header.column.columnDef.header, header.getContext())}
+                                </TableHead>
+                            ))}
+                            {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
+                        </TableRow>
+                    ))}
+                </TableHeader>
+                <TableBody className="bg-white">
+                    {rows.length ? (
+                        rows.map((row, index) => renderTaskRow(row, index))
+                    ) : (
+                        <TableRow>
+                            <TableCell
+                                colSpan={columns.length + 1}
+                                className={inToolbox ? "p-8 text-center text-muted-foreground" : "h-24 text-center"}
+                            >
+                                {emptyMessage}
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
+
     return (
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                    {/* --- START: Rank Stats and Nudge Boxes --- */}
-                    {!inToolbox && hasUserRanked && !hideRank && (
-                        <div className="mb-3 rounded border bg-blue-50 p-3 text-sm text-blue-800 shadow-sm">
-                            <p className="flex items-center">
-                                <PiUsersThree className="mr-2 h-5 w-5 flex-shrink-0" />
-                                You&apos;ve ranked these tasks.{" "}
-                                <span>
-                                    {" "}
-                                    Currently, <span className="mx-1 font-semibold">{totalRankers}</span>{" "}
-                                    {totalRankers === 1 ? "user" : "users"} contributed to the aggregated ranking.
-                                </span>
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Show nudge only if user has ranked */}
-                    {!inToolbox && hasUserRanked && unrankedCount > 0 && !hideRank && (
-                        <div
-                            className="mb-4 cursor-pointer rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 shadow-sm transition-colors hover:bg-yellow-100"
-                            onClick={() => setShowRankModal(true)} // Open rank modal on click
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => e.key === "Enter" && setShowRankModal(true)} // Accessibility
-                        >
-                            <p className="flex items-center">
-                                <TriangleAlert className="mr-2 h-5 w-5 flex-shrink-0 text-yellow-600" />
-                                You have{" "}
-                                <span className="mx-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-                                    {unrankedCount}
-                                </span>{" "}
-                                unranked task{unrankedCount !== 1 ? "s" : ""}.
-                                {!isMobile && (
-                                    <>
-                                        {" "}
-                                        Please update by{" "}
-                                        <span className="mx-1 font-semibold">{stalenessInfo.expiryDateString}</span>
-                                        to ensure your ranking continues to be counted. Click here to rank.
-                                    </>
-                                )}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Show success message only if user has ranked and count is 0 */}
-                    {!inToolbox && hasUserRanked && unrankedCount === 0 && !hideRank && (
-                        <div className="mb-4 rounded border border-green-400 bg-green-50 p-3 text-sm text-green-800 shadow-sm">
-                            <p className="flex items-center">
-                                <CheckCircle2 className="mr-2 h-5 w-5 flex-shrink-0 text-green-600" />
-                                Nicely done! You&apos;ve ranked all available tasks.
-                            </p>
-                        </div>
-                    )}
-
                     {!inToolbox && (
-                        <div className="flex w-full flex-row items-center gap-2">
+                        <div className="flex w-full flex-wrap items-center gap-2">
                             <div className="flex flex-1 flex-col">
                                 <Input
                                     placeholder="Search tasks by title..." // Updated placeholder
-                                    value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-                                    onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+                                    value={searchText}
+                                    onChange={(event) => setSearchText(event.target.value)}
                                 />
                             </div>
                             {canCreateTask && (
@@ -619,29 +1197,62 @@ const TasksList: React.FC<TasksListProps> = ({
                                     <Plus className="mr-2 h-4 w-4" /> Create Task
                                 </Button>
                             )}
-                            {/* Add Rank Button */}
-                            {isAuthorized(user, circle, features.tasks.rank) && !hideRank && (
-                                <Button onClick={() => setShowRankModal(true)}>
-                                    <PiRanking className="mr-2 h-4 w-4" /> Rank
-                                </Button>
-                            )}
-                            <Select
-                                value={stageFilter}
-                                onValueChange={(value) => setStageFilter(value as TaskStage | "all")} // Updated type
-                            >
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Filter by stage" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Stages</SelectItem>
-                                    <SelectItem value="review">Review</SelectItem>
-                                    <SelectItem value="open">Open</SelectItem>
-                                    <SelectItem value="inProgress">In Progress</SelectItem>
-                                    <SelectItem value="resolved">Resolved</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {/* Placeholder for Assignee Filter */}
-                            {/* <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>...</Select> */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="min-w-[180px] justify-between">
+                                        {stageFilterLabel}
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[220px]">
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault();
+                                            setSelectedStages(allTaskStages);
+                                        }}
+                                    >
+                                        All Stages
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {allTaskStages.map((stage) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={stage}
+                                            checked={selectedStages.includes(stage)}
+                                            onCheckedChange={() => toggleStageFilter(stage)}
+                                        >
+                                            {getTaskStageInfo(stage).text}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="min-w-[180px] justify-between">
+                                        {priorityFilterLabel}
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[220px]">
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault();
+                                            setSelectedPriorities(allTaskPriorities);
+                                        }}
+                                    >
+                                        All Priorities
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    {allTaskPriorities.map((priority) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={priority}
+                                            checked={selectedPriorities.includes(priority)}
+                                            onCheckedChange={() => togglePriorityFilter(priority)}
+                                        >
+                                            {taskPriorityLabels[priority]}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     )}
                     {!inToolbox && circle.circleType === "user" && user?.did === circle.did && (
@@ -660,125 +1271,131 @@ const TasksList: React.FC<TasksListProps> = ({
                                     checked={includeAssigned}
                                     onCheckedChange={(checked) => setIncludeAssigned(Boolean(checked))}
                                 />
-                                <Label htmlFor="includeAssigned">Show assigned</Label>
+                                <Label htmlFor="includeAssigned">Show assigned / participating</Label>
                             </div>
                         </div>
                     )}
 
-                    <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
-                        <Table className="overflow-hidden">
-                            <TableHeader className="bg-white">
-                                {table.getHeaderGroups().map((headerGroup) => (
-                                    <TableRow key={headerGroup.id} className="!border-b-0">
-                                        {headerGroup.headers.map((header) => (
-                                            <TableHead key={header.id}>
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(header.column.columnDef.header, header.getContext())}
-                                            </TableHead>
-                                        ))}
-                                        {/* Adjust colspan if rank header is added */}
-                                        {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
-                                    </TableRow>
-                                ))}
-                            </TableHeader>
-                            <TableBody className="bg-white">
-                                {table.getRowModel().rows?.length ? (
-                                    table.getRowModel().rows.map((row, index) => {
-                                        const task = row.original; // Renamed variable
-                                        const isAuthor = user?.did === task.createdBy; // Renamed variable
-                                        // Determine if edit/delete should be shown
-                                        const canEdit =
-                                            (isAuthor && task.stage === "review") || permissions.canModerate; // Renamed variable
-                                        const canDelete = isAuthor || permissions.canModerate;
+                    {shouldShowVerificationQueue && (
+                        <div className="mt-4 overflow-hidden rounded-[15px] border border-[hsl(var(--verification-panel-border))] bg-[hsl(var(--verification-panel-bg))] shadow-sm">
+                            <div className="border-b border-[hsl(var(--verification-panel-border))] px-4 py-3">
+                                <h2 className="text-sm font-semibold text-slate-900">Needs Verification</h2>
+                            </div>
+
+                            {verificationQueueTasks.length > 0 ? (
+                                <div className="divide-y divide-[hsl(var(--verification-panel-divider))]">
+                                    {verificationQueueTasks.map((task) => {
+                                        const submittedForReviewAt = task.submittedForReviewAt
+                                            ? formatDistanceToNow(new Date(task.submittedForReviewAt), {
+                                                  addSuffix: true,
+                                              })
+                                            : "just now";
+                                        const isVerifyPending =
+                                            pendingVerificationAction?.taskId === task._id &&
+                                            pendingVerificationAction?.action === "verify";
+                                        const isRequestChangesPending =
+                                            pendingVerificationAction?.taskId === task._id &&
+                                            pendingVerificationAction?.action === "requestChanges";
 
                                         return (
-                                            <motion.tr
-                                                key={row.id}
-                                                custom={index}
-                                                initial="hidden"
-                                                animate="visible"
-                                                variants={tableRowVariants}
-                                                className={`cursor-pointer
-                                                    ${row.getIsSelected() ? "bg-muted" : ""}
-                                                    ${(contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"} // Updated type, variable
-                                                `}
-                                                onClick={() => handleRowClick(task)} // Renamed param
+                                            <div
+                                                key={task._id as string}
+                                                className="flex cursor-pointer flex-col gap-3 px-4 py-3 hover:bg-white/60 md:flex-row md:items-center md:justify-between"
+                                                onClick={() => handleRowClick(task)}
                                             >
-                                                {/* Start children immediately */}
-                                                {row.getVisibleCells().map((cell) => (
-                                                    <TableCell key={cell.id}>
-                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                    </TableCell>
-                                                ))}
-                                                {/* No space after map */}
-                                                {!inToolbox && (
-                                                    <TableCell className="w-[40px]">
-                                                        {(canEdit || canDelete) && (
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        className="h-8 w-8 p-0"
-                                                                        onClick={(e) => e.stopPropagation()} // Prevent row click
-                                                                    >
-                                                                        <span className="sr-only">Open menu</span>
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                    <DropdownMenuSeparator />
-                                                                    {canEdit && (
-                                                                        <DropdownMenuItem
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                router.push(
-                                                                                    `/circles/${circle.handle}/tasks/${task._id}/edit`, // Updated path
-                                                                                );
-                                                                            }}
-                                                                            disabled={task.stage === "resolved"} // Can't edit resolved tasks, Renamed variable
-                                                                        >
-                                                                            Edit
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                    {canDelete && (
-                                                                        <DropdownMenuItem
-                                                                            className="text-red-600"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setSelectedTask(task); // Renamed state setter, param
-                                                                                setDeleteTaskDialogOpen(true); // Renamed state setter
-                                                                            }}
-                                                                        >
-                                                                            Delete
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        )}
-                                                    </TableCell>
-                                                )}
-                                            </motion.tr>
+                                                <div className="min-w-0">
+                                                    <Link
+                                                        href={`/circles/${circle.handle}/tasks/${task._id}#circle-tabs`}
+                                                        className={cn("block truncate", taskTitleLinkClassName)}
+                                                        onClick={(event) => event.stopPropagation()}
+                                                    >
+                                                        {task.title}
+                                                    </Link>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                                        <div className="flex items-center gap-2">
+                                                            {task.assignee ? (
+                                                                <>
+                                                                    <UserPicture
+                                                                        name={task.assignee.name}
+                                                                        picture={task.assignee.picture?.url}
+                                                                        size="18px"
+                                                                    />
+                                                                    <span>{task.assignee.name}</span>
+                                                                </>
+                                                            ) : (
+                                                                <span>Unassigned</span>
+                                                            )}
+                                                        </div>
+                                                        <span>Submitted {submittedForReviewAt}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    className="flex flex-wrap items-center gap-2"
+                                                    onClick={(event) => event.stopPropagation()}
+                                                >
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => runVerificationQueueAction(task, "verify")}
+                                                        disabled={isPending}
+                                                    >
+                                                        {isVerifyPending ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : null}
+                                                        Mark Verified
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            runVerificationQueueAction(task, "requestChanges")
+                                                        }
+                                                        disabled={isPending}
+                                                    >
+                                                        {isRequestChangesPending ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : null}
+                                                        Request Changes
+                                                    </Button>
+                                                </div>
+                                            </div>
                                         );
-                                    })
-                                ) : (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={columns.length + 1}
-                                            className={
-                                                inToolbox
-                                                    ? "p-8 text-center text-muted-foreground"
-                                                    : "h-24 text-center"
-                                            }
-                                        >
-                                            No tasks found. {/* Updated text */}
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="px-4 py-6 text-sm text-muted-foreground">
+                                    No tasks awaiting verification
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="mt-3">{renderTaskTable(activeRows, activeEmptyMessage)}</div>
+
+                    {!inToolbox && resolvedRows.length > 0 && (
+                        <Collapsible
+                            open={resolvedSectionOpen}
+                            onOpenChange={setIsResolvedSectionOpen}
+                            className="mt-6 overflow-hidden rounded-[15px] border border-gray-200 bg-white shadow-lg"
+                        >
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="flex w-full items-center justify-between rounded-none px-4 py-6 text-left text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                    <span>Review resolved tasks ({resolvedRows.length})</span>
+                                    <ChevronDown
+                                        className={`h-4 w-4 transition-transform ${
+                                            resolvedSectionOpen ? "rotate-180" : ""
+                                        }`}
+                                    />
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="border-t border-gray-200 p-4 pt-0">
+                                <div className="pt-4">{renderTaskTable(resolvedRows, "No resolved tasks found.")}</div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    )}
 
                     <Dialog open={deleteTaskDialogOpen} onOpenChange={setDeleteTaskDialogOpen}>
                         {/* Renamed state */}
@@ -807,10 +1424,6 @@ const TasksList: React.FC<TasksListProps> = ({
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
-                    {/* Render Prioritization Modal */}
-                    {showRankModal && (
-                        <TaskPrioritizationModal circle={circle} onClose={() => setShowRankModal(false)} />
-                    )}
 
                     {/* Render CreateTaskDialog */}
                     {canCreateTask && (

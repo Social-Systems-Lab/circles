@@ -5,6 +5,7 @@ import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features, modules } from "@/lib/data/constants";
+import { getUserPrivate } from "@/lib/data/user";
 
 export async function savePages(values: { _id: any; enabledModules: string[] }): Promise<FormSubmitResponse> {
     console.log("Saving circle modules with values", values);
@@ -30,6 +31,17 @@ export async function savePages(values: { _id: any; enabledModules: string[] }):
         let existingCircle = await getCircleById(values._id);
         if (!existingCircle) {
             throw new Error("Circle not found");
+        }
+        const user = await getUserPrivate(userDid);
+        const fundingWasEnabled = existingCircle.enabledModules?.includes("funding") ?? false;
+        const fundingWillBeEnabled = values.enabledModules.includes("funding");
+
+        if (fundingWillBeEnabled && existingCircle.circleType !== "circle") {
+            return { success: false, message: "Funding Needs can only be enabled on circles in this MVP." };
+        }
+
+        if (fundingWasEnabled !== fundingWillBeEnabled && !user.isAdmin) {
+            return { success: false, message: "Only Super Admins can enable or disable Funding Needs." };
         }
 
         // go through all modules and see which should be enabled

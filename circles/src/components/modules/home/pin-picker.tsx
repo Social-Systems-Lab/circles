@@ -32,16 +32,16 @@ const PinPicker: React.FC<PinPickerProps> = ({ open, onOpenChange, onSelect, cla
   useEffect(() => {
     if (!open) return;
     let active = true;
-    const handler = setTimeout(async () => {
+        const handler = setTimeout(async () => {
       try {
         setLoading(true);
         const url =
           query.trim().length > 0
-            ? `/api/circles/search?q=${encodeURIComponent(query.trim())}&limit=20`
+            ? `/api/circles/search?q=${encodeURIComponent(query.trim())}&limit=20&type=circle`
             : `/api/circles/search?q=${encodeURIComponent("")}&limit=0`; // return []
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to search");
-        const circles = (await res.json()) as Circle[];
+        const { circles } = (await res.json()) as { circles: Circle[] };
         if (active) setResults(circles);
       } catch (e) {
         if (active) setResults([]);

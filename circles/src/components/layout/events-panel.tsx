@@ -160,7 +160,7 @@ export default function EventsPanel() {
     const [user] = useAtom(userAtom);
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [loading, setLoading] = useState(false);
-    const [sort, setSort] = useState<string>("top");
+    const [sort, setSort] = useState<string>("near");
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>([]);
     const [hideVirtual, setHideVirtual] = useState<boolean>(false);
 
@@ -250,7 +250,10 @@ export default function EventsPanel() {
         });
 
         return list;
-    }, [events, userLngLat, sort, selectedSdgs]);
+    }, [events, hideVirtual, userLngLat, sort, selectedSdgs]);
+
+    const totalCount = filteredSorted.length;
+    const mappedCount = filteredSorted.filter((e: any) => !!e?.location?.lngLat).length;
 
     return (
         <div className="flex h-full w-full flex-col">
@@ -263,10 +266,11 @@ export default function EventsPanel() {
             <div className="px-2">
                 <div className="flex items-center justify-between gap-3">
                     <ListFilter
-                        defaultValue="top"
+                        defaultValue="near"
                         onFilterChange={setSort}
                         selectedSdgs={selectedSdgs}
                         onSdgChange={setSelectedSdgs}
+                        showSdgFilter={false}
                     />
                     <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
                         <input
@@ -282,6 +286,11 @@ export default function EventsPanel() {
             <div className="scrollbar-hover stable-scrollbar flex-1 overflow-y-auto p-2 pt-0">
                 {filteredSorted.length === 0 && !loading && (
                     <div className="p-6 text-center text-sm text-muted-foreground">No upcoming events found.</div>
+                )}
+                {mappedCount < totalCount && (
+                    <div className="px-1 pb-2 text-sm text-stone-500">
+                        📍 {mappedCount} pinned · {totalCount - mappedCount} online only
+                    </div>
                 )}
                 <div className="flex flex-col gap-2">
                     {filteredSorted.map((e) => (

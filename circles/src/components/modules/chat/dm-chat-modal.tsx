@@ -7,20 +7,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "../circles/circle-picture";
-import { findOrCreateDMRoomAction } from "./actions";
+import { findOrCreateDMConversationAction, sendMongoMessageAction } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { sendRoomMessage } from "@/lib/data/client-matrix";
 
 interface DMModalProps {
     recipient: Circle;
     onClose: () => void;
     initialMessage?: string;
+    source?: "composer" | "profile";
 }
 
-export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initialMessage }) => {
-    const [user, setUser] = useAtom(userAtom);
+export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initialMessage, source = "composer" }) => {
+    const [user] = useAtom(userAtom);
     const [message, setMessage] = useState(initialMessage || "");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
@@ -32,34 +32,40 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
         setLoading(true);
 
         try {
-            // Get or create the DM room
-            const result = await findOrCreateDMRoomAction(recipient);
-
-            if (!result.success) {
+            const result = await findOrCreateDMConversationAction(recipient, { source });
+            const conversationId = result.chatRoom?._id || result.chatRoom?.handle;
+            if (!result.success || !conversationId) {
                 toast({
                     title: "Send Error",
-                    description: "Failed to send chat message: " + result.message,
+                    description: result.message || "Failed to start the direct message",
                     variant: "destructive",
                     icon: "error",
                 });
                 return;
             }
 
-            // send the message
-            await sendRoomMessage(user.matrixAccessToken!, user.matrixUrl!, result.chatRoom!.matrixRoomId!, message);
-
-            // update user private data as it will have new chat membership data
-            if (result.user) {
-                setUser(result.user);
+            const sendResult = await sendMongoMessageAction(conversationId, message);
+            if (!sendResult.success) {
+                toast({
+                    title: "Send Error",
+                    description: sendResult.message || "Failed to send chat message",
+                    variant: "destructive",
+                    icon: "error",
+                });
+                return;
             }
-
-            // Redirect to the chat
-            router.push(`/chat/${recipient.handle}`);
+            router.push("/chat/" + conversationId);
+            onClose();
         } catch (error) {
             console.error("Error sending DM:", error);
+            toast({
+                title: "Send Error",
+                description: error instanceof Error ? error.message : "Failed to send chat message",
+                variant: "destructive",
+                icon: "error",
+            });
         } finally {
             setLoading(false);
-            onClose();
         }
     };
 

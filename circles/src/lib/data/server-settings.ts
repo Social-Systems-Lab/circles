@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Sdgs, Circles, ServerSettingsCollection, Skills } from "./db";
+import { Sdgs, Circles, Skills, getDb } from "./db";
 import { Circle, RegistryInfo, ServerSettings } from "@/models/models";
 import { createDefaultCircle } from "./circle";
 import { ObjectId } from "mongodb";
@@ -65,7 +65,11 @@ export const getServerSettings = async (): Promise<ServerSettings> => {
         };
     }
 
+    const db = await getDb();
+    const ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
+
     let serverSettings = await ServerSettingsCollection.findOne({});
+
     if (!serverSettings) {
         // initialize server data
         await ServerSettingsCollection.insertOne({});
@@ -137,12 +141,16 @@ export const getServerSettings = async (): Promise<ServerSettings> => {
 };
 
 export const updateServerSettings = async (serverSettings: ServerSettings): Promise<void> => {
+    const db = await getDb();
+    const ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
+
     let { _id, ...serverSettingsWithoutId } = serverSettings;
     let result = await ServerSettingsCollection.updateOne({}, { $set: serverSettingsWithoutId });
     if (result.matchedCount === 0) {
         throw new Error("Server settings not found");
     }
 };
+
 
 export const urlIsLocal = (url: string | undefined): boolean => {
     if (!url) return true;

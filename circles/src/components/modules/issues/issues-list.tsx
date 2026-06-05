@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useTransition, ChangeEvent } from "react";
+import React, { useEffect, useState, useTransition } from "react";
+import { format } from "date-fns";
 import {
     ColumnDef,
     ColumnFiltersState,
+    Row,
     SortingState,
     flexRender,
     getCoreRowModel,
@@ -16,25 +18,22 @@ import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
-    SelectGroup,
     SelectItem,
-    SelectLabel,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select"; // Added SelectGroup, SelectLabel
-import { Circle, ContentPreviewData, IssueDisplay, IssueStage } from "@/models/models"; // Use Issue types, Added ContentPreviewData
+} from "@/components/ui/select";
+import { Circle, ContentPreviewData, IssueDisplay, IssueStage, IssueUrgency } from "@/models/models"; // Use Issue types, Added ContentPreviewData
 import { Button } from "@/components/ui/button";
 import {
     ArrowDown,
     ArrowUp,
+    ChevronDown,
     Loader2,
     MoreHorizontal,
     Plus,
     CheckCircle,
-    XCircle,
     Clock,
     Play,
-    User,
 } from "lucide-react"; // Added icons
 import {
     DropdownMenu,
@@ -71,6 +70,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Define Permissions type based on what IssuesModule passes
 type IssuePermissions = {
@@ -114,9 +114,23 @@ const getStageInfo = (stage: IssueStage) => {
     }
 };
 
+const getUrgencyInfo = (urgency?: IssueUrgency) => {
+    switch (urgency) {
+        case "low":
+            return { label: "Low", badgeClassName: "bg-green-100 text-green-800" };
+        case "medium":
+            return { label: "Medium", badgeClassName: "bg-blue-100 text-blue-800" };
+        case "high":
+            return { label: "High", badgeClassName: "bg-orange-100 text-orange-800" };
+        case "critical":
+            return { label: "Critical", badgeClassName: "bg-red-100 text-red-800" };
+        default:
+            return { label: "Not set", badgeClassName: "bg-slate-100 text-slate-700" };
+    }
+};
+
 const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) => {
     // Removed currentUserDid from props
-    const data = React.useMemo(() => issues, [issues]);
     const [user] = useAtom(userAtom); // Get user from atom
     const [sorting, setSorting] = React.useState<SortingState>([{ id: "createdAt", desc: true }]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -133,8 +147,14 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeAssigned, setIncludeAssigned] = useState(true);
     const [filteredIssues, setFilteredIssues] = useState(issues);
+    const [isResolvedSectionOpen, setIsResolvedSectionOpen] = useState(false);
+    const displayedIssues = React.useMemo(() => filteredIssues, [filteredIssues]);
     // Add assignee filter state if needed later
     // const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+
+    useEffect(() => {
+        setFilteredIssues(issues);
+    }, [issues]);
 
     useEffect(() => {
         const fetchIssues = async () => {
@@ -146,6 +166,30 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
 
         fetchIssues();
     }, [includeCreated, includeAssigned, circle, user]);
+
+    const openAuthor = React.useCallback(
+        (author: Circle) => {
+            if (isCompact) {
+                router.push(`/circles/${author.handle}`); // Navigate to user profile page on compact
+                return;
+            }
+            // Open user preview in side panel
+            let contentPreviewData: ContentPreviewData = { type: "user", content: author };
+            setContentPreview((x) => {
+                const isCurrentlyPreviewing =
+                    x?.type === "user" && x?.content._id === author._id && sidePanelContentVisible === "content";
+                return isCurrentlyPreviewing ? undefined : contentPreviewData;
+            });
+        },
+        [isCompact, router, setContentPreview, sidePanelContentVisible],
+    );
+
+    const openAssignee = React.useCallback(
+        (assignee: Circle) => {
+            openAuthor(assignee); // Reuse the same logic as opening author profile
+        },
+        [openAuthor],
+    );
 
     const columns = React.useMemo<ColumnDef<IssueDisplay>[]>(
         () => [
@@ -159,17 +203,26 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                 ),
                 cell: (info) => {
                     const issue = info.row.original;
+                    const urgencyInfo = getUrgencyInfo(issue.urgency);
                     return (
                         <Link
                             href={`/circles/${circle.handle}/issues/${issue._id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="font-medium text-blue-600 hover:underline"
+                            className="flex flex-col gap-1 font-medium text-blue-600 hover:underline"
                         >
-                            {info.getValue() as string}
-                            {issue.circle && issue.circle._id !== circle._id && (
-                                <div className="ml-2">
-                                    <CirclePicture circle={issue.circle} size="24px" />
-                                </div>
+                            <div className="flex items-center gap-2">
+                                <span>{info.getValue() as string}</span>
+                                <Badge className={`shrink-0 ${urgencyInfo.badgeClassName}`}>{urgencyInfo.label}</Badge>
+                                {issue.circle && issue.circle._id !== circle._id && (
+                                    <div className="ml-2">
+                                        <CirclePicture circle={issue.circle} size="24px" />
+                                    </div>
+                                )}
+                            </div>
+                            {issue.targetDate && (
+                                <span className="text-xs text-muted-foreground">
+                                    Target date {format(new Date(issue.targetDate), "PPP")}
+                                </span>
                             )}
                         </Link>
                     );
@@ -267,11 +320,11 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                 cell: (info) => new Date(info.getValue() as Date).toLocaleDateString(),
             },
         ],
-        [isCompact, circle.handle], // Add dependencies
+        [isCompact, circle._id, circle.handle, openAssignee, openAuthor],
     );
 
     const table = useReactTable({
-        data: data,
+        data: displayedIssues,
         columns,
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -292,6 +345,12 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
             table.getColumn("stage")?.setFilterValue(undefined);
         }
     }, [stageFilter, table]);
+
+    useEffect(() => {
+        if (stageFilter === "resolved") {
+            setIsResolvedSectionOpen(true);
+        }
+    }, [stageFilter]);
 
     const onConfirmDeleteIssue = async () => {
         if (!selectedIssue) return;
@@ -334,24 +393,6 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
         });
     };
 
-    const openAuthor = (author: Circle) => {
-        if (isCompact) {
-            router.push(`/circles/${author.handle}`); // Navigate to user profile page on compact
-            return;
-        }
-        // Open user preview in side panel
-        let contentPreviewData: ContentPreviewData = { type: "user", content: author };
-        setContentPreview((x) => {
-            const isCurrentlyPreviewing =
-                x?.type === "user" && x?.content._id === author._id && sidePanelContentVisible === "content";
-            return isCurrentlyPreviewing ? undefined : contentPreviewData;
-        });
-    };
-
-    const openAssignee = (assignee: Circle) => {
-        openAuthor(assignee); // Reuse the same logic as opening author profile
-    };
-
     // Check create permission for the button using the user object
     const canCreateIssue = isAuthorized(user, circle, features.issues.create);
 
@@ -368,11 +409,119 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
         }
     };
 
+    const renderIssueRow = (row: Row<IssueDisplay>, index: number) => {
+        const issue = row.original;
+        const isAuthor = user?.did === issue.createdBy;
+        const canEdit = (isAuthor && issue.stage === "review") || permissions.canModerate;
+        const canDelete = isAuthor || permissions.canModerate;
+
+        return (
+            <motion.tr
+                key={row.id}
+                custom={index}
+                initial="hidden"
+                animate="visible"
+                variants={tableRowVariants}
+                className={`cursor-pointer
+                    ${row.getIsSelected() ? "bg-muted" : ""}
+                    ${(contentPreview?.content as IssueDisplay)?._id === issue._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"}
+                `}
+                onClick={() => handleRowClick(issue)}
+            >
+                {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                ))}
+                <TableCell className="w-[40px]">
+                    {(canEdit || canDelete) && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {canEdit && (
+                                    <DropdownMenuItem
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            router.push(`/circles/${circle.handle}/issues/${issue._id}/edit`);
+                                        }}
+                                        disabled={issue.stage === "resolved"}
+                                    >
+                                        Edit
+                                    </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                    <DropdownMenuItem
+                                        className="text-red-600"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedIssue(issue);
+                                            setDeleteIssueDialogOpen(true);
+                                        }}
+                                    >
+                                        Delete
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+                </TableCell>
+            </motion.tr>
+        );
+    };
+
+    const renderIssueTable = (rows: Row<IssueDisplay>[], emptyMessage: string) => (
+        <div className="overflow-hidden rounded-[15px] shadow-lg">
+            <Table className="overflow-hidden">
+                <TableHeader className="bg-white">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                        <TableRow key={headerGroup.id} className="!border-b-0">
+                            {headerGroup.headers.map((header) => (
+                                <TableHead key={header.id}>
+                                    {header.isPlaceholder
+                                        ? null
+                                        : flexRender(header.column.columnDef.header, header.getContext())}
+                                </TableHead>
+                            ))}
+                            <TableHead className="w-[40px]"></TableHead>
+                        </TableRow>
+                    ))}
+                </TableHeader>
+                <TableBody className="bg-white">
+                    {rows.length ? (
+                        rows.map((row, index) => renderIssueRow(row, index))
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={columns.length + 1} className="p-8 text-center text-muted-foreground">
+                                {emptyMessage}
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
+
+    const allRows = table.getRowModel().rows;
+    const activeRows = allRows.filter((row) => row.original.stage !== "resolved");
+    const resolvedRows = allRows.filter((row) => row.original.stage === "resolved");
+    const activeEmptyMessage = stageFilter === "resolved" ? "No active issues match the current filters." : "No issues found.";
+
     return (
         <TooltipProvider>
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-4 ml-2 mr-2 mt-4 flex max-w-[1100px] flex-1 flex-col">
-                    <div className="flex w-full flex-row items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2">
                         <div className="flex flex-1 flex-col">
                             <Input
                                 placeholder="Search issues by title..."
@@ -425,110 +574,33 @@ const IssuesList: React.FC<IssuesListProps> = ({ issues, circle, permissions }) 
                         </div>
                     )}
 
-                    <div className="mt-3 overflow-hidden rounded-[15px] shadow-lg">
-                        <Table className="overflow-hidden">
-                            <TableHeader className="bg-white">
-                                {table.getHeaderGroups().map((headerGroup) => (
-                                    <TableRow key={headerGroup.id} className="!border-b-0">
-                                        {headerGroup.headers.map((header) => (
-                                            <TableHead key={header.id}>
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(header.column.columnDef.header, header.getContext())}
-                                            </TableHead>
-                                        ))}
-                                        <TableHead className="w-[40px]"></TableHead>
-                                    </TableRow>
-                                ))}
-                            </TableHeader>
-                            <TableBody className="bg-white">
-                                {table.getRowModel().rows?.length ? (
-                                    table.getRowModel().rows.map((row, index) => {
-                                        const issue = row.original;
-                                        const isAuthor = user?.did === issue.createdBy; // Check against user object's DID
-                                        // Determine if edit/delete should be shown
-                                        const canEdit =
-                                            (isAuthor && issue.stage === "review") || permissions.canModerate;
-                                        const canDelete = isAuthor || permissions.canModerate;
+                    <div className="mt-3">{renderIssueTable(activeRows, activeEmptyMessage)}</div>
 
-                                        return (
-                                            <motion.tr
-                                                key={row.id}
-                                                custom={index}
-                                                initial="hidden"
-                                                animate="visible"
-                                                variants={tableRowVariants}
-                                                className={`cursor-pointer
-                                                    ${row.getIsSelected() ? "bg-muted" : ""}
-                                                    ${(contentPreview?.content as IssueDisplay)?._id === issue._id && sidePanelContentVisible === "content" ? "bg-gray-100" : "hover:bg-gray-50"}
-                                                `}
-                                                onClick={() => handleRowClick(issue)}
-                                            >
-                                                {/* Start children immediately */}
-                                                {row.getVisibleCells().map((cell) => (
-                                                    <TableCell key={cell.id}>
-                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                    </TableCell>
-                                                ))}
-                                                {/* No space after map */}
-                                                <TableCell className="w-[40px]">
-                                                    {(canEdit || canDelete) && (
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    className="h-8 w-8 p-0"
-                                                                    onClick={(e) => e.stopPropagation()} // Prevent row click
-                                                                >
-                                                                    <span className="sr-only">Open menu</span>
-                                                                    <MoreHorizontal className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                                <DropdownMenuSeparator />
-                                                                {canEdit && (
-                                                                    <DropdownMenuItem
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            router.push(
-                                                                                `/circles/${circle.handle}/issues/${issue._id}/edit`,
-                                                                            );
-                                                                        }}
-                                                                        disabled={issue.stage === "resolved"} // Can't edit resolved issues
-                                                                    >
-                                                                        Edit
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                {canDelete && (
-                                                                    <DropdownMenuItem
-                                                                        className="text-red-600"
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setSelectedIssue(issue);
-                                                                            setDeleteIssueDialogOpen(true);
-                                                                        }}
-                                                                    >
-                                                                        Delete
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    )}
-                                                </TableCell>
-                                            </motion.tr>
-                                        );
-                                    })
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={columns.length + 1} className="h-24 text-center">
-                                            No issues found.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                    {resolvedRows.length > 0 && (
+                        <Collapsible
+                            open={isResolvedSectionOpen}
+                            onOpenChange={setIsResolvedSectionOpen}
+                            className="mt-6 overflow-hidden rounded-[15px] border border-gray-200 bg-white shadow-lg"
+                        >
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="flex w-full items-center justify-between rounded-none px-4 py-6 text-left text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                    <span>Resolved issues ({resolvedRows.length})</span>
+                                    <ChevronDown
+                                        className={`h-4 w-4 transition-transform ${
+                                            isResolvedSectionOpen ? "rotate-180" : ""
+                                        }`}
+                                    />
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="border-t border-gray-200 p-4 pt-0">
+                                <div className="pt-4">{renderIssueTable(resolvedRows, "No resolved issues found.")}</div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    )}
+
                     <Dialog open={deleteIssueDialogOpen} onOpenChange={setDeleteIssueDialogOpen}>
                         <DialogContent
                             onInteractOutside={(e) => {

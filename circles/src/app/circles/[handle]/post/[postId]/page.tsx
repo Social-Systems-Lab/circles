@@ -1,13 +1,14 @@
 // /src/app/circles/[handle]/post/[postId]/page.tsx
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getFeed, getPost, getAllComments } from "@/lib/data/feed";
+import { canUserViewPost, getFeed, getPost, getAllComments, getShareablePostPreview } from "@/lib/data/feed";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CommentDisplay, PostDisplay } from "@/models/models";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { PostItem } from "@/components/modules/feeds/post-list";
+import { getUserByDid } from "@/lib/data/user";
 
 type SinglePostPageProps = {
     params: Promise<{ handle: string; postId: string }>;
@@ -16,42 +17,49 @@ type SinglePostPageProps = {
 export default async function SinglePostPage(props: SinglePostPageProps) {
     const params = await props.params;
     const userDid = await getAuthenticatedUserDid();
-    let postId = params.postId;
-    let handle = params.handle;
-
-    console.log("handle", handle, "postId", postId);
-
-    if (!userDid) {
-        redirect("/unauthenticated");
-    }
+    const postId = params.postId;
+    const handle = params.handle;
 
     // Get the circle by handle
     const circle = await getCircleByHandle(handle);
     if (!circle) {
-        redirect("/not-found");
+        notFound();
     }
 
     // Get the post by ID
     const post = await getPost(postId);
     if (!post) {
-        redirect("/not-found");
+        notFound();
     }
 
     // Get the feed the post belongs to
     const feed = await getFeed(post.feedId);
     if (!feed) {
         console.error(`Feed not found for post: ${postId} with feedId: ${post.feedId}`);
-        redirect("/not-found");
+        notFound();
     }
 
-    console.log(`Single post view: ${postId} in feed: ${feed.handle} of circle: ${circle.name}`);
+    if (feed.circleId !== circle._id) {
+        notFound();
+    }
+
+    const canViewPost = await canUserViewPost(post, userDid);
+    if (!canViewPost) {
+        const reason = userDid ? "unauthorized" : "unauthenticated";
+        redirect(`/circles/${handle}/access-denied?reason=${reason}&module=feed&redirectTo=${encodeURIComponent(`/circles/${handle}/post/${postId}`)}`);
+    }
 
     // Get all comments for the post
     const comments = (await getAllComments(postId, userDid)) as CommentDisplay[];
+    const author = await getUserByDid(post.createdBy);
+    const sharedPostData = post.sharedPostId ? await getShareablePostPreview(post.sharedPostId, userDid) : null;
 
     const postWithComments: PostDisplay = {
         ...post,
-        author: circle,
+        author: author || circle,
+        circle,
+        feed,
+        sharedPostData,
     } as PostDisplay;
 
     return (

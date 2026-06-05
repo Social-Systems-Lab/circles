@@ -57,11 +57,6 @@ export default function SdgsStep({ circleData, setCircleData, nextStep, prevStep
     };
 
     const handleNext = () => {
-        if (circleData.selectedSdgs.length < 1) {
-            setSdgsError("Please select at least one SDG");
-            return;
-        }
-
         startTransition(async () => {
             // Get the sdg handles
             const sdgHandles = circleData.selectedSdgs.map((sdg) => sdg.handle);
@@ -106,7 +101,7 @@ export default function SdgsStep({ circleData, setCircleData, nextStep, prevStep
         <div className="space-y-4">
             <h2 className="text-2xl font-bold">Choose SDGs</h2>
             <p className="text-gray-500">
-                {`Select Sustainable Development Goals (SDGs) that align with your ${entityLabelLower}'s mission:`}
+                {`Select Sustainable Development Goals (SDGs) that align with your ${entityLabelLower}'s mission. This is optional.`}
             </p>
 
             <div className="relative">

@@ -56,6 +56,7 @@ import { useRouter } from "next/navigation";
 import {
     defaultMentionsInputStyle,
     defaultMentionStyle,
+    getMentionsPortalHost,
     handleMentionQuery,
     renderCircleSuggestion,
     LikeButton, // Import LikeButton if used within CommentItem
@@ -361,6 +362,9 @@ const CommentItem = ({
                                         className="flex-grow rounded-[20px] bg-gray-200" // Slightly different bg for editing
                                         style={defaultMentionsInputStyle}
                                         autoFocus
+                                        suggestionsPortalHost={getMentionsPortalHost()}
+                                        allowSuggestionsAboveCursor={true}
+                                        forceSuggestionsAboveCursor={true}
                                     >
                                         <Mention
                                             trigger="@"
@@ -452,6 +456,9 @@ const CommentItem = ({
                                 className="flex-grow rounded-[20px] bg-gray-100" // Consistent style
                                 style={defaultMentionsInputStyle}
                                 autoFocus
+                                suggestionsPortalHost={getMentionsPortalHost()}
+                                allowSuggestionsAboveCursor={true}
+                                forceSuggestionsAboveCursor={true}
                             >
                                 <Mention
                                     trigger="@"
@@ -539,9 +546,16 @@ interface CommentSectionProps {
     circle: Circle; // Circle context for permissions
     user: UserPrivate | null; // Current user
     initialCommentCount?: number; // Optional initial count to avoid extra fetch if 0
+    hideWhenEmpty?: boolean;
 }
 
-export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, user, initialCommentCount = -1 }) => {
+export const CommentSection: React.FC<CommentSectionProps> = ({
+    postId,
+    circle,
+    user,
+    initialCommentCount = -1,
+    hideWhenEmpty = false,
+}) => {
     const [comments, setComments] = useState<CommentDisplay[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -588,6 +602,10 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, 
             .filter((c) => !c.parentCommentId) // Filter for top-level comments
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // Sort by creation time
     }, [comments]);
+
+    if (!isLoading && !error && hideWhenEmpty && topLevelComments.length === 0) {
+        return null;
+    }
 
     const handleAddComment = () => {
         if (!newCommentContent.trim() || isSubmittingComment || !user) return;
@@ -702,6 +720,9 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ postId, circle, 
                                     className="flex-grow rounded-[20px] bg-gray-100" // Use flex-grow here
                                     style={defaultMentionsInputStyle}
                                     disabled={isSubmittingComment}
+                                    suggestionsPortalHost={getMentionsPortalHost()}
+                                    allowSuggestionsAboveCursor={true}
+                                    forceSuggestionsAboveCursor={true}
                                 >
                                     <Mention
                                         trigger="@"

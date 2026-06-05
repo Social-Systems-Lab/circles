@@ -21,12 +21,13 @@ import {
     extractMentions,
     getPostsWithMetrics,
     getPostsFromMultipleFeeds,
-    getFeedsByCircleId,
+    getAccessibleFeedIdsForUser,
     getPostsFromMultipleFeedsWithMetrics,
     getPublicFeeds,
     getPublicUserFeed, // Added getPublicUserFeed
     createFeed,
     createDefaultFeed,
+    getShareablePostPreview,
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -34,10 +35,12 @@ import { features } from "@/lib/data/constants";
 import { sdgs } from "@/lib/data/sdgs";
 import { getProposalById } from "@/lib/data/proposal";
 import { getIssueById } from "@/lib/data/issue";
+import { getFundingAskById } from "@/lib/data/funding";
 import {
     Media,
     ProposalDisplay,
     IssueDisplay,
+    FundingAskDisplay,
     Post,
     postSchema,
     Comment,
@@ -50,7 +53,7 @@ import {
     FileInfo, // Added FileInfo
 } from "@/models/models";
 import { revalidatePath } from "next/cache";
-import { getCircleById, getCirclePath, getCirclesBySearchQuery, getCircleByHandle } from "@/lib/data/circle"; // Added getCircleByHandle
+import { getCircleById, getCirclePath, getCircleByHandle } from "@/lib/data/circle"; // Added getCircleByHandle
 import { getLinkPreview } from "link-preview-js"; // Removed LinkPreview import
 import { getUserByDid, getUserById, getUserPrivate, getVerificationStatus } from "@/lib/data/user";
 import { redirect } from "next/navigation";
@@ -63,6 +66,8 @@ import {
     notifyCommentMentions,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
+import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { getMentionableUserIdsForUserDid, searchMentionableUsersForUserDid } from "@/lib/data/chat";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -99,37 +104,7 @@ export async function getAggregatePostsAction(
         return getGlobalPostsAction(userDid, limit, skip, sortingOptions, sdgHandles);
     }
 
-    const user = await getUserPrivate(userDid);
-    const accessibleFeeds: string[] = [];
-
-    if (circleHandle) {
-        const circle = await getCircleByHandle(circleHandle);
-        if (circle) {
-            const feeds = await getFeedsByCircleId(circle._id.toString());
-            const membership = user.memberships.find((m) => m.circleId === circle._id.toString());
-            if (membership) {
-                for (const feed of feeds) {
-                    if (feed.userGroups.some((group) => membership.userGroups.includes(group))) {
-                        accessibleFeeds.push(feed._id?.toString());
-                    }
-                }
-            }
-        }
-    } else {
-        for (const membership of user.memberships) {
-            if (membership.circle.handle === "default") {
-                continue;
-            }
-
-            const { circleId, userGroups } = membership;
-            const feeds = await getFeedsByCircleId(circleId);
-            for (const feed of feeds) {
-                if (feed.userGroups.some((group) => userGroups.includes(group))) {
-                    accessibleFeeds.push(feed._id?.toString());
-                }
-            }
-        }
-    }
+    const accessibleFeeds = await getAccessibleFeedIdsForUser(userDid, circleHandle);
 
     if (accessibleFeeds.length === 0) {
         return [];
@@ -158,6 +133,20 @@ type ExpectedPreview = {
     mediaType?: string;
     contentType?: string;
     favicons?: string[];
+};
+
+const mentionPermissionErrorMessage = "You can only mention people you can message.";
+
+const validateMentionPermissions = async (userDid: string, mentions?: Array<{ id: string }>): Promise<void> => {
+    if (!mentions?.length) {
+        return;
+    }
+
+    const mentionableUserIds = await getMentionableUserIdsForUserDid(userDid);
+    const hasBlockedMention = mentions.some((mention) => !mentionableUserIds.has(mention.id));
+    if (hasBlockedMention) {
+        throw new Error(mentionPermissionErrorMessage);
+    }
 };
 
 export async function getLinkPreviewAction(url: string): Promise<{
@@ -244,6 +233,7 @@ export type InternalLinkPreviewResult =
     | { type: "post"; data: PostDisplay }
     | { type: "proposal"; data: ProposalDisplay }
     | { type: "issue"; data: IssueDisplay }
+    | { type: "funding"; data: FundingAskDisplay }
     | { error: string }; // For not found, unauthorized, or other errors
 
 export async function getInternalLinkPreviewData(url: string): Promise<InternalLinkPreviewResult> {
@@ -260,11 +250,13 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
         const postRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/post\/([a-zA-Z0-9]+)$/;
         const proposalRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/proposals\/([a-zA-Z0-9]+)$/;
         const issueRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/issues\/([a-zA-Z0-9]+)$/;
+        const fundingRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/funding\/([a-zA-Z0-9]+)$/;
         const circleRegex = /^\/circles\/([a-zA-Z0-9\-]+)(?:\/.*)?$/; // Matches base circle URL and subpaths
 
         const postMatch = pathname.match(postRegex);
         const proposalMatch = pathname.match(proposalRegex);
         const issueMatch = pathname.match(issueRegex);
+        const fundingMatch = pathname.match(fundingRegex);
         const circleMatch = pathname.match(circleRegex);
 
         if (postMatch) {
@@ -327,6 +319,13 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
             // if (issue.assignedTo && !issue.assignee) issue.assignee = await getUserByDid(issue.assignedTo); // Likely not needed anymore
             if (!issue.circle) issue.circle = circle;
             return { type: "issue", data: issue };
+        } else if (fundingMatch) {
+            const [, handle, askId] = fundingMatch;
+            const circle = await getCircleByHandle(handle);
+            if (!circle) return { error: "Circle not found" };
+            const ask = await getFundingAskById(circle, askId, userDid);
+            if (!ask) return { error: "Funding request not found" };
+            return { type: "funding", data: ask };
         } else if (circleMatch) {
             const [, handle] = circleMatch;
             const circle = await getCircleByHandle(handle);
@@ -376,11 +375,16 @@ export async function createPostAction(
     if (!userDid) {
         return { success: false, message: "You need to be logged in to create a post" };
     }
+    const currentUser = await getUserPrivate(userDid);
+    if (!canPerformRestrictedAction(currentUser)) {
+        return { success: false, message: getRestrictedActionMessage("create posts") };
+    }
 
     try {
         const content = formData.get("content") as string;
         const title = (formData.get("title") as string) || "";
         const circleId = formData.get("circleId") as string;
+        const sharedPostId = (formData.get("sharedPostId") as string) || undefined;
         const locationStr = formData.get("location") as string;
         const postType = (formData.get("postType") as string) || undefined;
         const location = locationStr ? JSON.parse(locationStr) : undefined;
@@ -388,8 +392,8 @@ export async function createPostAction(
         // Get user groups from form data
         const userGroups = formData.getAll("userGroups") as string[];
 
-        // Title is required for posts
-        if (!title || !title.trim()) {
+        // Title is required for normal posts, but shares can be comment-only.
+        if (!sharedPostId && (!title || !title.trim())) {
             return { success: false, message: "Title is required" };
         }
 
@@ -413,6 +417,16 @@ export async function createPostAction(
         const sdgsStr = formData.get("sdgs") as string;
         const sdgs = sdgsStr ? JSON.parse(sdgsStr) : undefined;
 
+        const targetCircle = await getCircleById(circleId);
+        if (!targetCircle) {
+            return { success: false, message: "Target circle not found" };
+        }
+
+        const isOwnProfileFeed = targetCircle.circleType === "user" && targetCircle._id === currentUser._id;
+        if (targetCircle.circleType === "user" && !isOwnProfileFeed) {
+            return { success: false, message: "You are not authorized to create posts on this profile" };
+        }
+
         // Get the default feed for this circle
         let feed = await getFeedByHandle(circleId, "default"); // Changed to let
 
@@ -428,13 +442,20 @@ export async function createPostAction(
         console.log("Creating post in feed", feed._id, "for circle", circleId, "by user", userDid);
 
         const feedId = feed._id.toString();
-        const authorized = await isAuthorized(userDid, circleId, features.feed.post);
+        const authorized = isOwnProfileFeed ? true : await isAuthorized(userDid, circleId, features.feed.post);
         if (!authorized) {
             return { success: false, message: "You are not authorized to create posts on the noticeboard" };
         }
 
+        if (sharedPostId) {
+            const shareablePost = await getShareablePostPreview(sharedPostId, userDid);
+            if (!shareablePost) {
+                return { success: false, message: "Original post unavailable." };
+            }
+        }
+
         let post: Post = {
-            title: title.trim(),
+            title: title.trim() || undefined,
             content,
             feedId,
             createdBy: userDid,
@@ -442,6 +463,7 @@ export async function createPostAction(
             reactions: {},
             comments: 0,
             location,
+            sharedPostId,
             userGroups: userGroups.length > 0 ? userGroups : ["everyone"], // Use provided user groups or default to everyone
             // --- Add Link Preview Fields ---
             linkPreviewUrl: linkPreviewUrl || undefined,
@@ -466,6 +488,7 @@ export async function createPostAction(
 
         // parse mentions in the comment content
         const mentions = extractMentions(post.content);
+        await validateMentionPermissions(userDid, mentions);
         post.mentions = mentions;
         let newPost = await createPost(post);
 
@@ -521,8 +544,7 @@ export async function createPostAction(
 
         // Ensure 'feed' module is enabled if posting to user's own circle
         try {
-            const targetCircle = await getCircleById(circleId);
-            if (targetCircle && targetCircle.circleType === "user" && targetCircle.did === userDid) {
+            if (isOwnProfileFeed) {
                 await ensureModuleIsEnabledOnCircle(circleId, "feed", userDid);
             }
         } catch (moduleEnableError) {
@@ -607,6 +629,7 @@ export async function updatePostAction(
 
         // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging
         updatedPost.mentions = extractMentions(content);
+        await validateMentionPermissions(userDid, updatedPost.mentions);
         let existingMedia: Media[] = [];
         let mediaStr = formData.getAll("existingMedia") as string[];
         if (mediaStr) {
@@ -772,6 +795,7 @@ export async function createCommentAction(
 
         // parse mentions in the comment content
         const mentions = extractMentions(comment.content);
+        await validateMentionPermissions(userDid, mentions);
         comment.mentions = mentions;
 
         try {
@@ -898,6 +922,7 @@ export async function editCommentAction(
         }
 
         const updatedMentions = extractMentions(updatedContent);
+        await validateMentionPermissions(userDid, updatedMentions);
         await updateComment(commentId, updatedContent, updatedMentions);
 
         // Send notifications for new mentions
@@ -1088,7 +1113,12 @@ export async function searchCirclesAction(
     query: string,
 ): Promise<{ success: boolean; circles?: Circle[]; message?: string }> {
     try {
-        const circles = await getCirclesBySearchQuery(query, 10);
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: true, circles: [] };
+        }
+
+        const circles = await searchMentionableUsersForUserDid(userDid, decodeURIComponent(query), 10);
         return { success: true, circles };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to search circles." };

@@ -10,7 +10,7 @@ import { getActiveGoalsByCircleId } from "./goal";
 import { getActiveIssuesByCircleId } from "./issue";
 import { getActiveProposalsByCircleId } from "./proposal";
 // Removed incorrect logger import, will use console.*
-import { sendNotifications } from "./matrix"; // Import the actual sending function
+import { sendNotifications } from "./notifications"; // Import the actual sending function
 import { getUserPrivate } from "./user"; // To fetch recipient details
 
 // --- Constants ---
@@ -493,7 +493,7 @@ export const getAggregateRanking = async (
 export const processRankingsPeriodically = async () => {
     console.log("Starting periodic ranking processing...");
     const now = new Date();
-    const itemTypesToProcess: ItemType[] = ["tasks", "goals", "issues", "proposals"]; // Add other types as needed
+    const itemTypesToProcess: ItemType[] = ["goals", "issues", "proposals"];
 
     try {
         // 1. Find all circles that might have rankings (e.g., based on enabled modules)

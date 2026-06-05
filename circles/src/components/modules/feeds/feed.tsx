@@ -2,9 +2,10 @@
 "use client";
 
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, Feed, PostDisplay, Cause as SDG } from "@/models/models"; // Removed DynamicForm and Page imports
+import { Circle, Feed, PostDisplay, Cause as SDG, SortingOptions } from "@/models/models"; // Removed DynamicForm and Page imports
 import { CreateNewPost } from "./create-new-post";
 import PostList from "./post-list";
+import { PostGrid } from "./post-grid";
 import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -12,7 +13,6 @@ import { isAuthorized } from "@/lib/auth/client-auth";
 import { useRouter } from "next/navigation";
 import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
-import emptyFeed from "@images/empty-feed.png";
 import Image from "next/image";
 import kamooniLogo from "@images/kamooni_logo.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
@@ -26,20 +26,24 @@ export type FeedComponentProps = {
     circle: Circle;
     posts: PostDisplay[];
     feed: Feed;
+    defaultSort?: SortingOptions;
     onFilterChange?: (filter: string) => void;
     onSdgChange?: (sdgs: SDG[]) => void;
     selectedSdgsExternal?: SDG[];
     isLoading?: boolean;
+    viewMode?: "list" | "grid"; // Add viewMode prop
 };
 
 export const FeedComponent = ({
     circle,
     posts,
     feed,
+    defaultSort = "new",
     onFilterChange,
     onSdgChange,
     selectedSdgsExternal,
     isLoading = false,
+    viewMode = "list", // Default to list view
 }: FeedComponentProps) => {
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
@@ -68,7 +72,7 @@ export const FeedComponent = ({
 
     const containerStyle = {
         flexGrow: isCompact ? "1" : "3",
-        maxWidth: isCompact ? "none" : "700px",
+        maxWidth: isCompact ? "none" : viewMode === "grid" ? "1280px" : "700px",
     };
 
     if (isLoading) {
@@ -89,18 +93,30 @@ export const FeedComponent = ({
         >
             <div className="flex w-full flex-col">
                 {canPost && (
-                    <div>
-                        {/* className="mt-6" */}
-                        <CreateNewPost circle={circle} feed={feed} />
+                    <div className="flex w-full justify-center">
+                        <div className="w-full max-w-[700px]">
+                            <CreateNewPost circle={circle} feed={feed} />
+                        </div>
                     </div>
                 )}
-                <ListFilter
-                    onFilterChange={onFilterChange ?? handleFilterChange}
-                    onSdgChange={onSdgChange ?? handleSdgSelectionChange}
-                    selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
-                />
+                <div className="flex w-full justify-center">
+                    <div className="w-full max-w-[700px]">
+                        <ListFilter
+                            key={defaultSort}
+                            defaultValue={defaultSort}
+                            onFilterChange={onFilterChange ?? handleFilterChange}
+                            onSdgChange={onSdgChange ?? handleSdgSelectionChange}
+                            selectedSdgs={selectedSdgsExternal ?? selectedSdgs}
+                            showSdgFilter={false}
+                        />
+                    </div>
+                </div>
 
-                <PostList posts={posts} feed={feed} circle={circle} />
+                {viewMode === "grid" ? (
+                    <PostGrid posts={posts} feed={feed} circle={circle} isLoading={false} />
+                ) : (
+                    <PostList posts={posts} feed={feed} circle={circle} />
+                )}
             </div>
         </div>
     );
@@ -110,6 +126,7 @@ export type AggregateFeedComponentProps = {
     posts: PostDisplay[];
     userFeed: Feed | null;
     activeTab: string;
+    defaultSort?: SortingOptions;
     showCreateNew?: boolean; // when false, hide "create post" in aggregate view (e.g., side panel)
     compact?: boolean; // when true, render list in compact/mobile style (e.g., side panel)
     fullWidth?: boolean; // when true, allow the feed to span the available viewport width
@@ -120,6 +137,7 @@ export const AggregateFeedComponent = ({
     posts,
     userFeed,
     activeTab,
+    defaultSort = "new",
     showCreateNew = true,
     compact = false,
     fullWidth = false,
@@ -199,7 +217,12 @@ export const AggregateFeedComponent = ({
                         <CreateNewPost circle={user as Circle} feed={userFeed} />
                     </div>
                 )}
-                <Image src={emptyFeed} alt="No noticeboard posts yet" width={isMobile ? 230 : 300} />
+                <Image
+                    src="/images/illustrations/noticeboard-empty-state.png"
+                    alt="No noticeboard posts yet"
+                    width={isMobile ? 230 : 300}
+                    height={isMobile ? 230 : 300}
+                />
                 <h4>No noticeboard posts</h4>
                 <div className="max-w-[700px] pl-4 pr-4">
                     We couldn&apos;t find any noticeboard posts. Try the discover tab to find new content and start
@@ -235,12 +258,16 @@ export const AggregateFeedComponent = ({
                     </div>
                 )}
                 <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <ListFilter
-                            onFilterChange={handleFilterChange}
-                            onSdgChange={handleSdgSelectionChange}
-                            selectedSdgs={selectedSdgs}
-                        />
+                    <div className="flex w-full justify-center">
+                        <div className="w-full md:w-auto">
+                            <ListFilter
+                                defaultValue={defaultSort}
+                                onFilterChange={handleFilterChange}
+                                onSdgChange={handleSdgSelectionChange}
+                                selectedSdgs={selectedSdgs}
+                                showSdgFilter={false}
+                            />
+                        </div>
                     </div>
                 </div>
 

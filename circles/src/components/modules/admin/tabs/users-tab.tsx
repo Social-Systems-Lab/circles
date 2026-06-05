@@ -4,14 +4,18 @@ import { useState, useEffect, useTransition } from "react"; // Added useTransiti
 import {
     getEntitiesByType,
     deleteEntity,
-    toggleUserVerification,
     toggleManualMembership,
     refreshSubscriptionStatus,
+    verifyAccount,
+    rejectAccount,
+    grantFoundingMember,
+    revokeFoundingMember,
 } from "../actions";
-import { initiatePasswordReset } from "@/lib/auth/actions"; // Import the new action
+// toggleUserVerification removed from UI — superseded by verifyAccount. Action retained in actions.ts for future cleanup.
+import { initiatePasswordReset } from "@/lib/auth/actions";
 import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
-import { Trash2, RefreshCw, Search, KeyRound, CheckCircle, XCircle, UserCheck, UserX, RefreshCcw } from "lucide-react"; // Added KeyRound icon
+import { Trash2, RefreshCw, Search, KeyRound, UserCheck, UserX, RefreshCcw, Star, StarOff, ShieldCheck, ShieldX } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,10 +52,13 @@ export default function UsersTab() {
     const [resetLinkDialogOpen, setResetLinkDialogOpen] = useState(false); // State for reset link dialog
     const [resetLink, setResetLink] = useState(""); // State to store the reset link
     const [resettingUser, setResettingUser] = useState<Circle | null>(null); // State to store user being reset
-    const [isResetting, startResetTransition] = useTransition(); // Transition for reset action
-    const [isVerifying, startVerifyTransition] = useTransition();
+    const [isResetting, startResetTransition] = useTransition();
     const [isTogglingMember, startMemberToggleTransition] = useTransition();
     const [isRefreshingSub, startRefreshingSubTransition] = useTransition();
+    const [isVerifyingAccount, startVerifyAccountTransition] = useTransition();
+    const [isRejectingAccount, startRejectAccountTransition] = useTransition();
+    const [isTogglingFounding, startFoundingTransition] = useTransition();
+    const [statusFilter, setStatusFilter] = useState<string>("all");
     const { toast } = useToast();
     const setContentPreview = useSetAtom(contentPreviewAtom);
 
@@ -110,37 +117,6 @@ export default function UsersTab() {
             setDeleteDialogOpen(false);
             setUserToDelete(null);
         }
-    };
-
-    const handleToggleVerification = async (user: Circle) => {
-        if (!user._id) return;
-
-        startVerifyTransition(async () => {
-            try {
-                const result = await toggleUserVerification(user._id, !user.isVerified);
-
-                if (result.success) {
-                    toast({
-                        title: "Success",
-                        description: result.message,
-                    });
-                    // Update local state
-                    setUsers(users.map((u) => (u._id === user._id ? { ...u, isVerified: !u.isVerified } : u)));
-                } else {
-                    toast({
-                        title: "Error",
-                        description: result.message,
-                        variant: "destructive",
-                    });
-                }
-            } catch (error) {
-                toast({
-                    title: "Error",
-                    description: "Failed to toggle user verification",
-                    variant: "destructive",
-                });
-            }
-        });
     };
 
     const handleToggleMember = async (user: Circle) => {
@@ -216,12 +192,44 @@ export default function UsersTab() {
         );
     };
 
-    const filteredUsers = users.filter(
-        (user) =>
+    const handleVerifyAccount = (user: Circle) => {
+        if (!user._id) return;
+        startVerifyAccountTransition(async () => {
+            const result = await verifyAccount(user._id);
+            toast({ title: result.success ? "Success" : "Error", description: result.message, variant: result.success ? "default" : "destructive" });
+            if (result.success) setUsers(users.map((u) => u._id === user._id ? { ...u, accountStatus: "active", isVerified: true, verificationStatus: "verified" } : u));
+        });
+    };
+
+    const handleRejectAccount = (user: Circle) => {
+        if (!user._id) return;
+        startRejectAccountTransition(async () => {
+            const result = await rejectAccount(user._id);
+            toast({ title: result.success ? "Success" : "Error", description: result.message, variant: result.success ? "default" : "destructive" });
+            if (result.success) setUsers(users.map((u) => u._id === user._id ? { ...u, accountStatus: "rejected" as any } : u));
+        });
+    };
+
+    const handleToggleFounding = (user: Circle) => {
+        if (!user._id) return;
+        startFoundingTransition(async () => {
+            const result = user.isFoundingMember ? await revokeFoundingMember(user._id) : await grantFoundingMember(user._id);
+            toast({ title: result.success ? "Success" : "Error", description: result.message, variant: result.success ? "default" : "destructive" });
+            if (result.success) await fetchUsers();
+        });
+    };
+
+    const filteredUsers = users.filter((user) => {
+        const matchesSearch =
             user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user.handle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+            user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus =
+            statusFilter === "all" ||
+            (user as any).accountStatus === statusFilter ||
+            (statusFilter === "no_status" && !(user as any).accountStatus);
+        return matchesSearch && matchesStatus;
+    });
 
     const handlePreview = async (did: string) => {
         const user = await getUserByDidAction(did);
@@ -267,15 +275,28 @@ export default function UsersTab() {
 
     return (
         <div className="space-y-4">
-            <div className="mb-4 flex items-center justify-between">
-                <div className="relative w-full max-w-sm">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search users..."
-                        className="pl-8"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative w-64">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search users..."
+                            className="pl-8"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <select
+                        className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                        <option value="all">All statuses</option>
+                        <option value="pending_verification">Pending verification</option>
+                        <option value="active">Active</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="no_status">No status (legacy)</option>
+                    </select>
                 </div>
                 <Button variant="outline" size="sm" onClick={fetchUsers} disabled={loading}>
                     {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -288,18 +309,13 @@ export default function UsersTab() {
                     <RefreshCw className="h-8 w-8 animate-spin" />
                 </div>
             ) : (
-                <div className="rounded-md border">
+                <div className="rounded-md border overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Handle</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>Subscription</TableHead>
-                                <TableHead>Admin</TableHead>
-                                <TableHead>Verified</TableHead>
-                                <TableHead>Manual Member</TableHead>
-                                <TableHead>Created</TableHead>
+                                <TableHead>Status</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -332,44 +348,38 @@ export default function UsersTab() {
                                                 </Button>
                                             </div>
                                         </TableCell>
-                                        <TableCell>{user.handle}</TableCell>
                                         <TableCell>{user.email || "No email"}</TableCell>
-                                        <TableCell>{user.subscription?.status ?? "Inactive"}</TableCell>
                                         <TableCell>
-                                            {user.isAdmin ? (
-                                                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                                    Yes
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                                    No
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.isVerified ? (
-                                                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                                                    Yes
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                                    No
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.manualMember ? (
-                                                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                                                    Yes
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
-                                                    No
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Unknown"}
+                                            <div className="flex flex-wrap gap-1">
+                                                {user.isAdmin && (
+                                                    <span className="rounded-full bg-purple-100 px-2 py-1 text-xs text-purple-800">Admin</span>
+                                                )}
+                                                {(user as any).accountStatus === "pending_verification" && (
+                                                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">Pending</span>
+                                                )}
+                                                {(user as any).accountStatus === "active" && (
+                                                    <span className="rounded-full bg-green-100 px-2 py-1 text-xs text-green-800">Active</span>
+                                                )}
+                                                {(user as any).accountStatus === "rejected" && (
+                                                    <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-800">Rejected</span>
+                                                )}
+                                                {user.isVerified && (
+                                                    <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">Verified</span>
+                                                )}
+                                                {user.manualMember && (
+                                                    <span className="rounded-full bg-teal-100 px-2 py-1 text-xs text-teal-800">Manual</span>
+                                                )}
+                                                {(user as any).isFoundingMember && (
+                                                    <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800">
+                                                        Founder #{(user as any).foundingMemberNumber}
+                                                    </span>
+                                                )}
+                                                {(user as any).signupOrder && (
+                                                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
+                                                        #{(user as any).signupOrder}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell className="space-x-1 text-right">
                                             {/* Reset Password Button */}
@@ -386,22 +396,6 @@ export default function UsersTab() {
                                                     <KeyRound className="h-4 w-4 text-blue-500" />
                                                 )}
                                             </Button>
-                                            {/* Verify Button */}
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleToggleVerification(user)}
-                                                disabled={isVerifying}
-                                                title={user.isVerified ? "Unverify User" : "Verify User"}
-                                            >
-                                                {isVerifying ? (
-                                                    <RefreshCw className="h-4 w-4 animate-spin" />
-                                                ) : user.isVerified ? (
-                                                    <XCircle className="h-4 w-4 text-yellow-500" />
-                                                ) : (
-                                                    <CheckCircle className="h-4 w-4 text-green-500" />
-                                                )}
-                                            </Button>
                                             {/* Manual Member Button */}
                                             <Button
                                                 variant="ghost"
@@ -410,8 +404,8 @@ export default function UsersTab() {
                                                 disabled={isTogglingMember}
                                                 title={
                                                     user.manualMember
-                                                        ? "Remove Manual Membership"
-                                                        : "Make Manual Member"
+                                                        ? "Remove Membership"
+                                                        : "Make Member"
                                                 }
                                             >
                                                 {isTogglingMember ? (
@@ -434,6 +428,54 @@ export default function UsersTab() {
                                                     <RefreshCw className="h-4 w-4 animate-spin" />
                                                 ) : (
                                                     <RefreshCcw className="h-4 w-4 text-blue-500" />
+                                                )}
+                                            </Button>
+                                            {/* Verify Account Button */}
+                                            {(user as any).accountStatus !== "active" && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleVerifyAccount(user)}
+                                                    disabled={isVerifyingAccount}
+                                                    title="Verify Account (activate)"
+                                                >
+                                                    {isVerifyingAccount ? (
+                                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <ShieldCheck className="h-4 w-4 text-green-600" />
+                                                    )}
+                                                </Button>
+                                            )}
+                                            {/* Reject Account Button */}
+                                            {(user as any).accountStatus === "pending_verification" && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleRejectAccount(user)}
+                                                    disabled={isRejectingAccount}
+                                                    title="Reject Account"
+                                                >
+                                                    {isRejectingAccount ? (
+                                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <ShieldX className="h-4 w-4 text-red-600" />
+                                                    )}
+                                                </Button>
+                                            )}
+                                            {/* Grant/Revoke Founding Member Button */}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleToggleFounding(user)}
+                                                disabled={isTogglingFounding}
+                                                title={(user as any).isFoundingMember ? "Revoke Founding Member" : "Grant Founding Member"}
+                                            >
+                                                {isTogglingFounding ? (
+                                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                                ) : (user as any).isFoundingMember ? (
+                                                    <StarOff className="h-4 w-4 text-amber-500" />
+                                                ) : (
+                                                    <Star className="h-4 w-4 text-amber-400" />
                                                 )}
                                             </Button>
                                             {/* Delete Button */}

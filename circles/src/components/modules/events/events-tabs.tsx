@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CalendarView from "./calendar";
-import EventTimeline from "./event-timeline";
-import { EventDisplay, Circle } from "@/models/models";
+import EventTimeline, { type ShiftTimelineItem } from "./event-timeline";
+import { EventDisplay, Circle, TaskDisplay } from "@/models/models";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getEventsAction } from "@/app/circles/[handle]/events/actions";
@@ -15,6 +15,7 @@ import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
+import { getShiftEndAt, getShiftStartAt, isShiftTask } from "../tasks/shift-task-utils";
 
 type Props = {
     circle: Circle;
@@ -22,7 +23,13 @@ type Props = {
     canCreate: boolean;
 };
 
-type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string };
+type Milestone = {
+    id: string;
+    type: "goal" | "task" | "issue";
+    title: string;
+    date: Date | string;
+    circleHandle?: string;
+};
 
 function EventsTabsContent({ circle, events, canCreate }: Props) {
     const searchParams = useSearchParams();
@@ -40,24 +47,40 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
     const [includeParticipating, setIncludeParticipating] = useState(true);
     const [filteredEvents, setFilteredEvents] = useState(events);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
+    const [shifts, setShifts] = useState<ShiftTimelineItem[]>([]);
+
+    const getCanonicalEventId = useCallback((event: EventDisplay) => {
+        const rawId = (event as any).originalEventId ?? (event as any)._id;
+        return rawId?.toString?.() || rawId || "";
+    }, []);
 
     const handleEventHidden = useCallback(
         (eventId: string) => {
             if (!eventId) return;
             setFilteredEvents((prev) =>
                 prev.filter((evt) => {
-                    const id = ((evt as any)._id?.toString?.() || (evt as any)._id || "") as string;
+                    const id = getCanonicalEventId(evt);
                     return id !== eventId;
                 }),
             );
         },
-        [setFilteredEvents],
+        [getCanonicalEventId, setFilteredEvents],
     );
 
     useEffect(() => {
         const fetchEvents = async () => {
             if (circle.circleType === "user" && user?.did === circle.did) {
-                const data = await getEventsAction(circle.handle!, undefined, includeCreated, includeParticipating);
+                const now = new Date();
+                const lastYear = new Date(now);
+                lastYear.setFullYear(now.getFullYear() - 1);
+                const nextYear = new Date(now);
+                nextYear.setFullYear(now.getFullYear() + 1);
+                const data = await getEventsAction(
+                    circle.handle!,
+                    { from: lastYear.toISOString(), to: nextYear.toISOString() },
+                    includeCreated,
+                    includeParticipating,
+                );
                 setFilteredEvents(data.events);
             }
         };
@@ -88,13 +111,40 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                     }));
 
                 const taskMilestones: Milestone[] = (tasksRes?.tasks || [])
-                    .filter((t: any) => t?.targetDate && t?.stage !== "resolved")
+                    .filter((t: any) => t?.targetDate && t?.stage !== "resolved" && !isShiftTask(t))
                     .map((t: any) => ({
                         id: (t as any)._id?.toString?.() || t._id,
                         type: "task",
                         title: t.title,
                         date: t.targetDate,
+                        circleHandle: t.circle?.handle,
                     }));
+
+                const now = new Date();
+                const shiftItems: ShiftTimelineItem[] = (tasksRes?.tasks || [])
+                    .filter((task: TaskDisplay) => isShiftTask(task))
+                    .map((task: TaskDisplay) => {
+                        const startAt = getShiftStartAt(task);
+                        const endAt = getShiftEndAt(task);
+                        return {
+                            id: (task as any)._id?.toString?.() || String(task._id || ""),
+                            task,
+                            circleHandle: task.circle?.handle,
+                            startAt: startAt?.toISOString() ?? null,
+                            endAt: endAt?.toISOString() ?? null,
+                        };
+                    })
+                    .filter((shift) => {
+                        if (!shift.startAt) {
+                            return false;
+                        }
+
+                        if (shift.endAt) {
+                            return new Date(shift.endAt) >= now;
+                        }
+
+                        return new Date(shift.startAt) >= now;
+                    });
 
                 const issueMilestones: Milestone[] = (issuesRes || [])
                     .filter((i: any) => i?.targetDate && i?.stage !== "resolved")
@@ -106,8 +156,10 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                     }));
 
                 setMilestones([...goalMilestones, ...taskMilestones, ...issueMilestones]);
+                setShifts(shiftItems);
             } catch (e) {
                 setMilestones([]);
+                setShifts([]);
             }
         };
 
@@ -152,7 +204,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                             {canCreate && (
                                 <Link
                                     href={`/circles/${circle.handle}/events/create`}
-                                    className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                                    className="inline-flex items-center rounded-md bg-[hsl(var(--button-primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--button-primary-foreground))] hover:bg-[hsl(var(--button-primary-hover))]"
                                 >
                                     Create Event
                                 </Link>
@@ -184,6 +236,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                         <EventTimeline
                             circleHandle={circle.handle!}
                             events={filteredEvents}
+                            shifts={shifts}
                             milestones={milestones}
                             onEventHidden={handleEventHidden}
                         />

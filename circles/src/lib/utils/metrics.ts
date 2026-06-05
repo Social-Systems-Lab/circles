@@ -2,10 +2,10 @@ import { Circle, LngLat, MemberDisplay, Metrics, Post, PostDisplay, SortingOptio
 import { getVbdSimilarity } from "../data/vdb";
 
 const defaultWeights: Weights = {
-    similarity: 0.25,
+    similarity: 0,
     proximity: 0.25,
-    recentness: 0.25,
-    popularity: 0.25,
+    recentness: 0.35,
+    popularity: 0.4,
     activity: 0,
 };
 
@@ -21,6 +21,8 @@ const getWeightsBySortingOptions = (sortingOptions?: SortingOptions, customWeigh
             return { similarity: 0, proximity: 0, recentness: 0, popularity: 0, activity: 1 };
         case "pop":
             return { similarity: 0, proximity: 0, recentness: 0, popularity: 1, activity: 0 };
+        case "top":
+            return defaultWeights;
         case "custom":
             return customWeights ?? defaultWeights;
         default:
@@ -48,9 +50,11 @@ export const getMetrics = async (
         return metrics;
     }
 
-    let weights = getWeightsBySortingOptions(sortingOptions);
+    let weights = getWeightsBySortingOptions(sortingOptions, customWeights);
     if (user) {
-        metrics.similarity = await getSimilarity(user, item);
+        if (weights.similarity > 0) {
+            metrics.similarity = await getSimilarity(user, item);
+        }
         metrics.distance = calculateDistance(user.location?.lngLat, item.location?.lngLat);
         metrics.proximity = getProximity(user.location?.lngLat, item.location?.lngLat);
     }

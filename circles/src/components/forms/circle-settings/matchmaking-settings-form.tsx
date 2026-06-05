@@ -25,10 +25,11 @@ export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps
         defaultValues: {
             _id: circle._id,
             causes: circle.causes || [],
+            skills: circle.skills || [],
         },
     });
 
-    const onSubmit = async (data: { _id: any; causes?: string[] }) => {
+    const onSubmit = async (data: { _id: any; causes?: string[]; skills?: string[] }) => {
         setIsSubmitting(true);
         try {
             const result = await saveMatchmaking(data);
@@ -59,6 +60,35 @@ export function MatchmakingSettingsForm({ circle }: MatchmakingSettingsFormProps
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Skills</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="mb-4 text-sm text-muted-foreground">
+                            Select your core skills from the shared taxonomy. These power onboarding, profile display,
+                            and future matching.
+                        </p>
+                        <Controller
+                            name="skills"
+                            control={form.control}
+                            render={({ field }) => (
+                                <DynamicField
+                                    field={{
+                                        name: "skills",
+                                        type: "skills",
+                                        label: "Skills",
+                                        placeholder: "Search skills...",
+                                        description: "Select the skills you want listed on this profile.",
+                                    }}
+                                    formField={field}
+                                    control={form.control as unknown as Control}
+                                />
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>SDGs</CardTitle>

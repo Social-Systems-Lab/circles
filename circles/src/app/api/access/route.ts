@@ -1,4 +1,4 @@
-import { getCircleByHandle, getDefaultCircle } from "@/lib/data/circle";
+import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
@@ -21,7 +21,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
         }
 
-        // Check if module is enabled using enabledModules
+        if (!isCirclePublished(circle)) {
+            const membership = userDid ? await getMember(userDid, circle._id) : null;
+            const canViewUnpublished = circle.createdBy === userDid || membership?.userGroups?.includes("admins");
+            if (!canViewUnpublished) {
+                return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
+            }
+        }
+
+        const isFundingRoute = moduleHandle === "funding";
+        if (isFundingRoute && circle.circleType !== "circle") {
+            return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
+        }
+
+        // Check if module is enabled using enabledModules.
         const moduleEnabled = isModuleEnabled(circle, moduleHandle);
         if (!moduleEnabled) {
             return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
@@ -33,9 +46,9 @@ export async function POST(req: Request) {
         // First try module-specific access rule
         let allowedUserGroups = accessRules[moduleHandle]?.view;
 
-        // If still not found, use default permissions for everyone
+        // If still not found, funding defaults to members-only and all other routes preserve the older everyone fallback.
         if (!allowedUserGroups) {
-            allowedUserGroups = ["everyone"];
+            allowedUserGroups = isFundingRoute ? ["admins", "moderators", "members"] : ["everyone"];
         }
 
         // if the module allows access to "everyone", consider it authorized

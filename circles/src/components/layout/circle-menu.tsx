@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; defaultCircle: Circle }) {
     const [circleMenuOpen, setCircleMenuOpen] = useState(false);
@@ -36,13 +37,13 @@ export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; 
             return;
         }
 
-        router.push(`/circles/${circle.handle}`);
+        router.push(getCircleDefaultPath(circle));
     };
 
     const handleUserClick = () => {
         if (!user) return;
         setCircleMenuOpen(false);
-        router.push(`/circles/${user.handle}`);
+        router.push(getCircleDefaultPath(user));
     };
 
     return (

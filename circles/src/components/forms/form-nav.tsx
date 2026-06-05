@@ -57,8 +57,8 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, className, ...p
                         className={cn(
                             buttonVariants({ variant: "ghost" }),
                             pathname === getPath(item)
-                                ? "bg-muted hover:bg-muted"
-                                : "hover:bg-transparent hover:underline",
+                                ? "bg-muted text-[hsl(var(--task-link))] hover:bg-muted hover:text-[hsl(var(--task-link-hover))]"
+                                : "text-[hsl(var(--task-link))] hover:bg-transparent hover:text-[hsl(var(--task-link-hover))] hover:underline",
                             "justify-start",
                         )}
                         style={{

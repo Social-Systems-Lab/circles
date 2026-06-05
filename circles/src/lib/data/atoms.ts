@@ -8,13 +8,12 @@ import {
     PostDisplay,
     UserToolboxData,
     AuthInfo,
-    MatrixUserCache,
     UserSettings,
     Feed, // Added Feed
     ChatMessage,
 } from "@/models/models";
 import { atom } from "jotai";
-import { RoomData } from "./client-matrix";
+
 import { atomWithStorage } from "jotai/utils";
 
 export const userAtom = atom<UserPrivate | undefined>(undefined);
@@ -38,6 +37,7 @@ export type SidePanelSearchState = {
     hasSearched: boolean;
     selectedCategory?: string | null;
     selectedSdgHandles?: string[];
+    selectedDateLabel?: string | null;
     items: (Circle | MemberDisplay)[];
     counts?: { communities: number; projects: number; users: number; events: number };
 };
@@ -50,15 +50,16 @@ export const sidePanelSearchStateAtom = atom<SidePanelSearchState>({
     hasSearched: false,
     selectedCategory: null,
     selectedSdgHandles: [],
+    selectedDateLabel: null,
     items: [],
 });
 export const focusPostAtom = atom<PostDisplay | undefined>(undefined);
 export const imageGalleryAtom = atom<{ images: Media[]; initialIndex: number } | null>(null);
-export const matrixUserCacheAtom = atom<MatrixUserCache>({});
 
 export const unreadCountsAtom = atom<Record<string, number>>({});
+export const notificationUnreadCountAtom = atom<number>(0);
 export const latestMessagesAtom = atom<Record<string, any>>({});
-export const roomDataAtom = atom<Record<string, RoomData>>({});
+export const roomDataAtom = atom<Record<string, any>>({});
 export const roomMessagesAtom = atom<Record<string, ChatMessage[]>>({});
 export const lastReadTimestampsAtom = atom<Record<string, number>>({});
 export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", {
@@ -70,6 +71,7 @@ export type CreatePostDialogAtomProps = {
     isOpen: boolean;
     circle?: Circle; // The circle context for the post
     feed?: Feed; // The feed context for the post
+    sharedPost?: PostDisplay | null;
 };
 
 export const createPostDialogAtom = atom<CreatePostDialogAtomProps>({ isOpen: false });

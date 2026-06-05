@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
 import { Feeds, Events, EventInvitations } from "@/lib/data/db";
+import { createDefaultFeed, createPost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
     Circle,
     Media,
@@ -16,7 +17,9 @@ import {
     EventStage,
     CircleType,
     eventVisibilitySchema,
+    Post,
     TaskDisplay,
+    postSchema,
 } from "@/models/models";
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -46,6 +49,10 @@ import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
+import {
+    listAcceptedConnectionsForUserDid,
+    searchAcceptedConnectionsForUserDid,
+} from "@/lib/data/relationships";
 
 // ----- Types -----
 
@@ -140,6 +147,100 @@ function parseDate(val: string): Date {
     }
     return d;
 }
+
+function normalizeRecurrenceEndDate(endDate?: Date): Date | undefined {
+    if (!endDate) return undefined;
+    if (
+        endDate.getUTCHours() === 0 &&
+        endDate.getUTCMinutes() === 0 &&
+        endDate.getUTCSeconds() === 0 &&
+        endDate.getUTCMilliseconds() === 0
+    ) {
+        const normalized = new Date(endDate);
+        normalized.setUTCHours(23, 59, 59, 999);
+        return normalized;
+    }
+    return endDate;
+}
+
+const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") === "true";
+
+const getEventInternalPreviewUrl = (circleHandle: string, eventId: string) => {
+    const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
+    return `${baseUrl}/circles/${circleHandle}/events/${eventId}?source=noticeboard`;
+};
+
+const buildEventNoticeboardPostContent = (event: Pick<EventModel, "description">) => {
+    const description = event.description.trim();
+    return description ? `Attend this event. ${description}` : "Attend this event.";
+};
+
+const upsertEventNoticeboardPost = async ({
+    circle,
+    circleHandle,
+    event,
+}: {
+    circle: Circle;
+    circleHandle: string;
+    event: Pick<EventModel, "_id" | "title" | "description" | "createdBy" | "noticeboardPostId">;
+}): Promise<string | null> => {
+    if (!circle._id || !event._id) {
+        return null;
+    }
+
+    let feed = await getFeedByHandle(circle._id.toString(), "default");
+    if (!feed) {
+        feed = await createDefaultFeed(circle._id.toString());
+    }
+    if (!feed?._id) {
+        throw new Error("Noticeboard feed not found.");
+    }
+
+    const eventId = event._id.toString();
+    const postData: Partial<Post> = {
+        title: event.title,
+        content: buildEventNoticeboardPostContent(event),
+        feedId: feed._id.toString(),
+        createdBy: event.createdBy,
+        createdAt: new Date(),
+        editedAt: new Date(),
+        reactions: {},
+        comments: 0,
+        userGroups: ["admins", "moderators", "members"],
+        postType: "post",
+        internalPreviewType: "event",
+        internalPreviewId: eventId,
+        internalPreviewUrl: getEventInternalPreviewUrl(circleHandle, eventId),
+    };
+
+    if (event.noticeboardPostId) {
+        try {
+            await updatePost({
+                _id: event.noticeboardPostId,
+                title: postData.title,
+                content: postData.content,
+                editedAt: new Date(),
+                userGroups: postData.userGroups,
+                postType: postData.postType,
+                internalPreviewType: postData.internalPreviewType,
+                internalPreviewId: postData.internalPreviewId,
+                internalPreviewUrl: postData.internalPreviewUrl,
+            });
+            return event.noticeboardPostId;
+        } catch (error) {
+            console.error("Failed to update linked noticeboard post for event:", error);
+        }
+    }
+
+    const createdPost = await createPost(
+        await postSchema.parseAsync({
+            ...postData,
+            createdAt: new Date(),
+            editedAt: undefined,
+        }),
+    );
+    return createdPost._id?.toString?.() ?? createdPost._id ?? null;
+};
 
 // ----- Actions -----
 
@@ -272,6 +373,7 @@ export async function createEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
             return {
@@ -299,10 +401,9 @@ export async function createEventAction(
         let recurrenceData: EventModel["recurrence"] = undefined;
         if (data.recurrence) {
             recurrenceData = JSON.parse(data.recurrence);
-            // Ensure dates are parsed back to Date objects if needed (though JSON.parse usually keeps strings)
-             if (recurrenceData?.endDate) {
-                 recurrenceData.endDate = new Date(recurrenceData.endDate);
-             }
+            if (recurrenceData?.endDate) {
+                recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
+            }
         }
 
         // Handle images
@@ -367,6 +468,30 @@ export async function createEventAction(
             console.error("Failed to ensure events module is enabled on user circle:", err);
         }
 
+        if (shouldPublishToNoticeboard(formData)) {
+            try {
+                const noticeboardPostId = await upsertEventNoticeboardPost({
+                    circle,
+                    circleHandle,
+                    event: created,
+                });
+                if (noticeboardPostId && noticeboardPostId !== created.noticeboardPostId) {
+                    await Events.updateOne(
+                        { _id: new ObjectId(created._id!.toString()) },
+                        { $set: { noticeboardPostId } },
+                    );
+                    revalidatePath(`/circles/${circleHandle}/feed`);
+                }
+            } catch (error) {
+                console.error("Failed to create linked noticeboard post for event:", error);
+                return {
+                    success: true,
+                    message: "Event created, but Noticeboard post could not be created.",
+                    eventId: created._id?.toString(),
+                };
+            }
+        }
+
         return { success: true, message: "Event created successfully", eventId: created._id?.toString() };
     } catch (error) {
         console.error("Error creating event:", error);
@@ -413,6 +538,7 @@ export async function updateEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
             return {
@@ -440,7 +566,7 @@ export async function updateEventAction(
             try {
                 recurrenceData = JSON.parse(rawRecurrence);
                 if (recurrenceData?.endDate) {
-                    recurrenceData.endDate = new Date(recurrenceData.endDate);
+                    recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
                 }
             } catch (e) { 
                 console.error("[updateEventAction] Failed to parse recurrence:", e);
@@ -522,6 +648,29 @@ export async function updateEventAction(
 
         const success = await updateEventDb(eventId, updateData, user);
         if (!success) return { success: false, message: "Failed to update event" };
+
+        if (shouldPublishToNoticeboard(formData)) {
+            try {
+                const noticeboardPostId = await upsertEventNoticeboardPost({
+                    circle,
+                    circleHandle,
+                    event: {
+                        ...event,
+                        ...updateData,
+                        _id: eventId,
+                        createdBy: event.createdBy,
+                        noticeboardPostId: event.noticeboardPostId,
+                    },
+                });
+                if (noticeboardPostId && noticeboardPostId !== event.noticeboardPostId) {
+                    await Events.updateOne({ _id: new ObjectId(eventId) }, { $set: { noticeboardPostId } });
+                }
+                revalidatePath(`/circles/${circleHandle}/feed`);
+            } catch (error) {
+                console.error("Failed to create linked noticeboard post for event:", error);
+                return { success: true, message: "Event updated, but Noticeboard post could not be created." };
+            }
+        }
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
@@ -947,6 +1096,12 @@ export async function getCircleMembersAction(circleHandle: string): Promise<GetC
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return defaultResult;
 
+        if (circle.circleType === "user") {
+            return {
+                members: await listAcceptedConnectionsForUserDid(userDid),
+            };
+        }
+
         const members = await getMembers(circle._id!.toString());
         const memberDids = members.map((m) => m.userDid);
         const users = await getCirclesByDids(memberDids);
@@ -1044,6 +1199,11 @@ export async function searchEligibleUsersAction(
         // Ensure current user can view events in this circle
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return defaultResult;
+
+        if (circle.circleType === "user") {
+            const circles = await searchAcceptedConnectionsForUserDid(userDid, query, limit);
+            return { circles };
+        }
 
         const { circles } = await getCirclesBySearchQueryAction(query, limit, "user");
 

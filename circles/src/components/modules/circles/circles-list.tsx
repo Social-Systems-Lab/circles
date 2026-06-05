@@ -27,6 +27,7 @@ import emptyFeed from "@images/empty-feed.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
 
@@ -135,7 +136,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
 
     const handleCircleClick = (circle: Circle) => {
         if (isMobile) {
-            router.push(`/circles/${circle.handle}`);
+            router.push(getCircleDefaultPath(circle));
             return;
         }
 
@@ -161,7 +162,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                     style={{ paddingRight: isCompact && !isMobile ? "16px" : "0" }}
                 >
                     <Input
-                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "communities"}...`}
+                        placeholder={`Search ${isProjectsList ? "projects" : inUser ? "users" : "circles"}...`}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="flex-1"
@@ -299,7 +300,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                                         className="m-2 mt-4 w-full"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            router.push(`/circles/${circle.handle}`);
+                                            router.push(getCircleDefaultPath(circle));
                                         }}
                                     >
                                         Open

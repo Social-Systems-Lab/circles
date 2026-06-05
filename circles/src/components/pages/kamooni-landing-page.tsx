@@ -8,6 +8,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ChevronRight } from "lucide-react";
 import { Montserrat, Noto_Serif } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { DEFAULT_WELCOME_BANNER_TEXT } from "@/config/platform-banner";
+import type { PlatformBannerType } from "@/config/platform-banner";
 
 const montserrat = Montserrat({
     subsets: ["latin"],
@@ -24,14 +26,34 @@ export type KamooniLandingVariant = "welcome" | "holding";
 interface KamooniLandingPageProps {
     variant?: KamooniLandingVariant;
     maintenanceMessage?: string;
+    banner?: {
+        type: PlatformBannerType;
+        text: string;
+        ctaEnabled?: boolean;
+        ctaLabel?: string;
+        ctaUrl?: string;
+    } | null;
 }
 
 export default function KamooniLandingPage({
     variant = "welcome",
-    maintenanceMessage = "Kamooni is being updated after a malware incident. We should be running smoothly again by Wednesday, 28 January, 2026.",
+    maintenanceMessage = DEFAULT_WELCOME_BANNER_TEXT,
+    banner = null,
 }: KamooniLandingPageProps) {
     const [showAllFaqs, setShowAllFaqs] = useState(false);
     const isHoldingPage = variant === "holding";
+    const resolvedBanner = banner?.text?.trim()
+        ? banner
+        : {
+              type: "alert" as const,
+              text: maintenanceMessage,
+              ctaEnabled: false,
+              ctaLabel: "",
+              ctaUrl: "",
+          };
+    const normalizedBannerCtaUrl = resolvedBanner.ctaUrl?.trim() || "";
+    const hasBannerCta = !!resolvedBanner.ctaEnabled && !!resolvedBanner.ctaLabel?.trim() && !!normalizedBannerCtaUrl;
+    const isExternalBannerCta = /^https?:\/\//i.test(normalizedBannerCtaUrl);
 
     const faqItems = [
         {
@@ -231,12 +253,35 @@ export default function KamooniLandingPage({
                     <p className="mb-8 text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] sm:text-2xl">
                         No Ads. No Big Tech. Ethical and Open-Source
                     </p>
-                    <Button
-                        onClick={(event) => event.preventDefault()}
-                        className="mb-6 cursor-default bg-[#c84521] px-8 py-3 text-lg font-semibold text-white shadow-md shadow-black/10 transition-colors hover:bg-[#a83218]"
+                    <div
+                        className={cn(
+                            "mx-auto mb-6 w-full max-w-3xl rounded-md border px-4 py-3 text-left text-sm font-semibold leading-relaxed shadow-md shadow-black/10 sm:px-6 sm:text-base",
+                            resolvedBanner.type === "alert" &&
+                                "border-[#9f2f14] bg-[#c84521] text-white backdrop-blur-[1px]",
+                            resolvedBanner.type === "announcement" &&
+                                "border-[#b28900] bg-[#d4a106] text-white",
+                            resolvedBanner.type === "cta" && "border-kam-button-red-orange bg-white/95 text-kam-gray-dark",
+                        )}
                     >
-                        {maintenanceMessage}
-                    </Button>
+                        <p className="whitespace-normal break-words">{resolvedBanner.text}</p>
+                        {hasBannerCta && (
+                            <div className="mt-3 flex justify-center">
+                                <Link
+                                    href={normalizedBannerCtaUrl}
+                                    target={isExternalBannerCta ? "_blank" : undefined}
+                                    rel={isExternalBannerCta ? "noopener noreferrer" : undefined}
+                                >
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-white bg-white text-kam-button-red-orange hover:bg-white/90"
+                                    >
+                                        {resolvedBanner.ctaLabel}
+                                    </Button>
+                                </Link>
+                            </div>
+                        )}
+                    </div>
                     {isHoldingPage ? (
                         <p className="text-lg font-medium text-white">
                             We&apos;re making some improvements right now. Thanks for your patience while we deploy the
@@ -244,7 +289,7 @@ export default function KamooniLandingPage({
                         </p>
                     ) : (
                         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                            <Link href="/signup">
+                            <Link href="/signup/pilot">
                                 <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                                     Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                                 </Button>
@@ -317,7 +362,7 @@ export default function KamooniLandingPage({
                         </p>
                         {!isHoldingPage && (
                             <div className="mt-8 text-center">
-                                <Link href="/signup">
+                                <Link href="/signup/pilot">
                                     <Button className="bg-kam-button-red-orange px-8 py-3 text-lg text-white hover:bg-kam-button-red-orange/90">
                                         Test Pilot Signup <ChevronRight className="ml-2 h-5 w-5" />
                                     </Button>
@@ -492,15 +537,15 @@ export default function KamooniLandingPage({
             {/* Footer */}
             <footer className="bg-kam-gray-dark py-8 text-white">
                 <div className="container mx-auto flex flex-col items-center justify-between px-4 text-center text-sm sm:flex-row sm:text-left">
-                    <p>© {new Date().getFullYear()} Kamooni. All rights reserved.</p>
+                    <p>
+                        © {new Date().getFullYear()} Kamooni. Platform code is open source under the MIT License. The
+                        Kamooni brand is a trademark of the Social Systems Foundation.
+                    </p>
                     <div className="mt-4 flex space-x-4 sm:mt-0">
                         <Link href="https://socialsystems.io" className="hover:underline">
                             Social Systems Lab
                         </Link>
-                        <Link href="https://instagram.com/kamooni.network" className="hover:underline">
-                            Instagram
-                        </Link>
-                        <Link href="mailto:info@kamooni.org" className="hover:underline">
+                        <Link href="mailto:hello@socialsystems.io" className="hover:underline">
                             Contact
                         </Link>
                     </div>

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { Circle, Skill } from "@/models/models";
-import { skills } from "@/lib/data/skills";
+import { getSkillByHandle } from "@/lib/data/skills";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import SdgList from "../sdgs/SdgList";
 
@@ -10,7 +10,7 @@ type CauseSkillItemProps = {
 };
 
 const CauseSkillItem: React.FC<CauseSkillItemProps> = ({ handle, type }) => {
-    const item = skills.find((x) => x.handle === handle) as Skill;
+    const item = getSkillByHandle(handle) as Skill;
 
     if (!item) {
         return null;

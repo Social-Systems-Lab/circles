@@ -18,7 +18,7 @@ import ProfileSummary from "./profile-summary";
 import { Cause, Circle, ONBOARDING_STEPS, OnboardingStep, Skill } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { sdgs } from "@/lib/data/sdgs";
-import { skills } from "@/lib/data/skills";
+import { getSkillsByHandles } from "@/lib/data/skills";
 
 export type Quest = {
     id: number;
@@ -56,6 +56,8 @@ export default function Onboarding() {
     const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
+    const shouldSkipAutoOnboarding =
+        user?.metadata?.onboardingFlow === "v2-signup" || user?.metadata?.onboardingFlow === "pilot-quick-signup";
 
     // Filter steps based on what's already completed
     const steps = useMemo(() => {
@@ -128,12 +130,13 @@ export default function Onboarding() {
     useEffect(() => {
         if (!user) return;
         if (authInfo.authStatus !== "authenticated") return;
+        if (shouldSkipAutoOnboarding) return;
 
         // Check if there are any steps to show
         if (steps.length > 0 && !hasClosedOnboarding) {
             setIsOpen(true);
         }
-    }, [user, authInfo, hasClosedOnboarding, steps]);
+    }, [user, authInfo, hasClosedOnboarding, shouldSkipAutoOnboarding, steps]);
 
     // Effect to initialize and keep user data in sync
     useEffect(() => {
@@ -145,7 +148,7 @@ export default function Onboarding() {
                 name: user.name || "",
                 mission: user.mission || "",
                 selectedSdgs: user.causes?.map((x) => sdgs.find((y) => y.handle === x)).filter(Boolean) as Cause[],
-                selectedSkills: user.skills?.map((x) => skills.find((y) => y.handle === x) as Skill) ?? [],
+                selectedSkills: getSkillsByHandles(user.skills) as Skill[],
                 selectedQuests: prev?.selectedQuests ?? [],
                 picture: user.picture?.url || "/images/default-user-picture.png",
             };

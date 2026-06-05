@@ -4,6 +4,8 @@ import {
     Comment,
     Post,
     NotificationType,
+    SummaryNotificationType,
+    summaryNotificationTypeDetails,
     Proposal,
     ProposalDisplay,
     ProposalStage,
@@ -17,7 +19,8 @@ import {
     GoalStage,
     Event,
 } from "@/models/models";
-import { sendNotifications } from "./matrix";
+import { DefaultNotificationSettings, Notifications, UserNotificationSettings } from "./db";
+import { sanitizeObjectForJSON } from "../utils/sanitize";
 import { getUser, getUserPrivate } from "./user";
 import { getFeed, getPost } from "./feed";
 import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";
@@ -29,9 +32,290 @@ import { getGoalById } from "./goal"; // Import getGoalById
 import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
-import { sanitizeObjectForJSON } from "../utils/sanitize";
 
-export async function sendVerificationRequestNotification(user: Circle, admins: UserPrivate[]): Promise<void> {
+Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
+Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
+
+const getSummaryNotificationType = (type: string): SummaryNotificationType | null => {
+    const directMatch = Object.keys(summaryNotificationTypeDetails).find((summaryType) => summaryType === type);
+    if (directMatch) {
+        return directMatch as SummaryNotificationType;
+    }
+
+    const summaryMatch = Object.entries(summaryNotificationTypeDetails).find(([, detail]) =>
+        detail.mapsTo?.includes(type as NotificationType),
+    );
+    return summaryMatch ? (summaryMatch[0] as SummaryNotificationType) : null;
+};
+
+const getNotificationPreferenceContext = (
+    type: string,
+    payload: any,
+    recipientDid: string,
+): { entityType: "CIRCLE" | "USER"; entityId: string; summaryType: SummaryNotificationType } | null => {
+    const summaryType = getSummaryNotificationType(type);
+    if (!summaryType) {
+        return null;
+    }
+
+    if (summaryType === "ACCOUNT_ALL") {
+        return { entityType: "USER", entityId: recipientDid, summaryType };
+    }
+
+    const circleId =
+        payload?.circle?._id?.toString?.() ||
+        payload?.circle?._id ||
+        payload?.project?._id?.toString?.() ||
+        payload?.project?._id;
+
+    if (!circleId) {
+        return null;
+    }
+
+    return { entityType: "CIRCLE", entityId: String(circleId), summaryType };
+};
+
+const buildNotificationBody = (type: string, payload: any): string => {
+    const actorName = payload?.user?.name || payload?.author?.name || "Someone";
+    const circleName = payload?.circle?.name || payload?.project?.name || "a circle";
+    const proposalName = payload?.proposalName || payload?.proposal?.name || "a proposal";
+    const issueTitle = payload?.issueTitle || payload?.issue?.title || "an issue";
+    const taskTitle = payload?.taskTitle || payload?.task?.title || "a task";
+    const goalTitle = payload?.goalTitle || payload?.goal?.title || "a goal";
+    const eventName = payload?.eventName || payload?.eventTitle || "an event";
+
+    switch (type) {
+        case "follow_request":
+            return `${actorName} requested to follow ${circleName}`;
+        case "new_follower":
+            return `${actorName} is now following ${circleName}`;
+        case "follow_accepted":
+        case "new_following":
+        case "new_member":
+            return `Your access to ${circleName} was approved`;
+        case "post_comment":
+            return `${actorName} commented on your post`;
+        case "comment_reply":
+            return `${actorName} replied to your comment`;
+        case "post_like":
+            return `${actorName} liked your post`;
+        case "comment_like":
+            return `${actorName} liked your comment`;
+        case "post_mention":
+            return `${actorName} mentioned you in a post`;
+        case "comment_mention":
+            return `${actorName} mentioned you in a comment`;
+        case "proposal_submitted_for_review":
+            return `${actorName} submitted ${proposalName} for review`;
+        case "proposal_moved_to_voting":
+            return `${proposalName} moved to voting`;
+        case "proposal_approved_for_voting":
+            return `${proposalName} was approved for voting`;
+        case "proposal_resolved":
+        case "proposal_resolved_voter":
+            return `${proposalName} was resolved`;
+        case "proposal_vote":
+            return `${actorName} voted on your proposal`;
+        case "issue_submitted_for_review":
+            return `${actorName} submitted ${issueTitle} for review`;
+        case "issue_approved":
+            return `${issueTitle} was approved`;
+        case "issue_assigned":
+            return `${actorName} assigned you to ${issueTitle}`;
+        case "issue_status_changed":
+            return `${actorName} updated ${issueTitle}`;
+        case "task_submitted_for_review":
+            return `${actorName} submitted ${taskTitle} for review`;
+        case "task_changes_requested":
+            return `${actorName} requested changes to ${taskTitle}`;
+        case "task_verified":
+            return `${taskTitle} was verified`;
+        case "task_approved":
+            return `${taskTitle} was approved`;
+        case "task_assigned":
+            return `${actorName} assigned you to ${taskTitle}`;
+        case "task_accepted":
+            return `${actorName} accepted ‘${taskTitle}’`;
+        case "task_shift_signup":
+            return `${actorName} signed up for ${taskTitle}`;
+        case "task_shift_confirmed":
+            return `${actorName} confirmed you for ${taskTitle}`;
+        case "task_shift_attendance_verified":
+            return `Your attendance for ${taskTitle} was verified`;
+        case "task_status_changed":
+            return `${actorName} updated ${taskTitle}`;
+        case "task_claim_submitted":
+            return `${actorName} claimed ${taskTitle}`;
+        case "task_claim_approved":
+            return `${taskTitle} claim approved`;
+        case "task_claim_declined":
+            return `${taskTitle} claim declined`;
+        case "goal_submitted_for_review":
+            return `${actorName} submitted ${goalTitle} for review`;
+        case "goal_approved":
+            return `${goalTitle} was approved`;
+        case "goal_status_changed":
+            return `${actorName} updated ${goalTitle}`;
+        case "goal_completed":
+            return `${goalTitle} was completed`;
+        case "proposal_to_goal":
+            return `${proposalName} became a goal`;
+        case "event_submitted_for_review":
+            return `${actorName} submitted ${eventName} for review`;
+        case "event_approved":
+            return `${eventName} was approved`;
+        case "event_status_changed":
+            return `${actorName} updated ${eventName}`;
+        case "event_invitation":
+            return `${actorName} invited you to ${eventName}`;
+        case "ranking_stale_reminder":
+            return "Your ranking needs attention";
+        case "ranking_grace_period_ended":
+            return "Your ranking grace period ended";
+        case "user_verified":
+            return "Your account has been verified";
+        case "user_verification_request":
+            return payload?.messageBody || `${actorName} requested account verification`;
+        case "user_verification_rejected":
+            return "Your account verification request was rejected";
+        case "user_becomes_member":
+            return "You are now a founding member";
+        case "proof_of_humanity_verified":
+            return payload?.messageBody || `${actorName} publicly verified your profile`;
+        case "pm_received":
+            if (payload?.contactType === "ask_question") {
+                return `${actorName} asked for help in ${circleName}`;
+            }
+            if (payload?.contactType === "offer_help") {
+                return `${actorName} offered help in ${circleName}`;
+            }
+            return `${actorName} sent you a direct message`;
+        case "contact_request_received":
+            return `${actorName} sent you a contact request`;
+        default:
+            return payload?.messageBody || "New notification";
+    }
+};
+
+const isNotificationEnabledForRecipient = async (type: string, recipientDid: string, payload: any): Promise<boolean> => {
+    const context = getNotificationPreferenceContext(type, payload, recipientDid);
+    if (!context) {
+        return true;
+    }
+
+    const userSetting = await UserNotificationSettings.findOne({
+        userId: recipientDid,
+        entityType: context.entityType,
+        entityId: context.entityId,
+        notificationType: context.summaryType,
+    });
+    if (typeof userSetting?.isEnabled === "boolean") {
+        return userSetting.isEnabled;
+    }
+
+    const defaultSetting = await DefaultNotificationSettings.findOne({
+        entityType: context.entityType,
+        notificationType: context.summaryType,
+    });
+
+    return typeof defaultSetting?.defaultIsEnabled === "boolean" ? defaultSetting.defaultIsEnabled : true;
+};
+
+export async function sendNotifications(type: string, recipients: any[], payload: any) {
+    const uniqueRecipients = Array.from(
+        new Map(
+            (recipients || [])
+                .filter((recipient) => typeof recipient?.did === "string" && recipient.did.length > 0)
+                .map((recipient) => [recipient.did, recipient]),
+        ).values(),
+    );
+
+    if (uniqueRecipients.length === 0) {
+        return;
+    }
+
+    const createdAt = new Date();
+    const notificationContent = sanitizeObjectForJSON({
+        ...(payload || {}),
+        body: payload?.body || payload?.messageBody || buildNotificationBody(type, payload),
+    });
+
+    const docs = [];
+    for (const recipient of uniqueRecipients) {
+        if (!(await isNotificationEnabledForRecipient(type, recipient.did, payload))) {
+            continue;
+        }
+
+        docs.push({
+            userId: recipient.did,
+            type,
+            content: notificationContent,
+            isRead: false,
+            createdAt,
+        });
+    }
+
+    if (!docs.length) {
+        return;
+    }
+
+    await Notifications.insertMany(docs as any[]);
+}
+
+type NotificationQueryOptions = {
+    excludeTypes?: string[];
+};
+
+const buildNotificationQuery = (userDid: string, options?: NotificationQueryOptions) => {
+    const query: Record<string, any> = { userId: userDid };
+    if (options?.excludeTypes?.length) {
+        query.type = { $nin: options.excludeTypes };
+    }
+    return query;
+};
+
+export async function listNotificationsForUser(
+    userDid: string,
+    limit: number = 50,
+    options?: NotificationQueryOptions,
+) {
+    return await Notifications.find(buildNotificationQuery(userDid, options))
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(limit)
+        .toArray();
+}
+
+export async function getUnreadNotificationCountForUser(userDid: string, options?: NotificationQueryOptions) {
+    return await Notifications.countDocuments({ ...buildNotificationQuery(userDid, options), isRead: false });
+}
+
+export async function markAllNotificationsReadForUser(userDid: string) {
+    return await Notifications.updateMany({ userId: userDid, isRead: false }, { $set: { isRead: true } });
+}
+export async function notifyNewMember(userDid: string, circle: Circle, followRequest: boolean = false): Promise<void> {
+    try {
+        const recipient = await getUserPrivate(userDid);
+        if (!recipient) return;
+
+        await sendNotifications(
+            followRequest ? "new_following" : "new_member",
+            [recipient],
+            sanitizeObjectForJSON({
+                circle,
+                userDid,
+                followRequest,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyNewMember:", error);
+    }
+}
+
+export async function sendVerificationRequestNotification(
+    user: Circle,
+    admins: UserPrivate[],
+    options?: { messageBody?: string; url?: string },
+): Promise<void> {
     try {
         console.log(`🔔 [NOTIFY] Sending user_verification_request to ${admins.length} admins`);
         await sendNotifications(
@@ -39,12 +323,70 @@ export async function sendVerificationRequestNotification(user: Circle, admins: 
             admins,
             sanitizeObjectForJSON({
                 user,
-                messageBody: `User ${user.name} (@${user.handle}) has requested account verification.`,
-                url: `/admin?tab=users`,
+                messageBody: options?.messageBody || `User ${user.name} (@${user.handle}) has requested account verification.`,
+                url: options?.url || `/admin?tab=verification-requests`,
             }),
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in sendVerificationRequestNotification:", error);
+    }
+}
+
+export async function sendDetachCircleRequestNotification(
+    requester: UserPrivate,
+    circle: Circle,
+    admins: UserPrivate[],
+    options?: { messageBody?: string; url?: string },
+): Promise<void> {
+    try {
+        if (!admins.length) {
+            return;
+        }
+
+        await sendNotifications(
+            "user_verification_request",
+            admins,
+            sanitizeObjectForJSON({
+                user: requester,
+                circle,
+                messageBody:
+                    options?.messageBody ||
+                    `${requester.name || "An admin"} requested to make ${circle.name || "this circle"} an independent circle.`,
+                url: options?.url,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendDetachCircleRequestNotification:", error);
+    }
+}
+
+export async function sendAttachCircleRequestNotification(
+    requester: UserPrivate,
+    circle: Circle,
+    targetParentCircle: Circle,
+    admins: UserPrivate[],
+    options?: { messageBody?: string; url?: string },
+): Promise<void> {
+    try {
+        if (!admins.length) {
+            return;
+        }
+
+        await sendNotifications(
+            "user_verification_request",
+            admins,
+            sanitizeObjectForJSON({
+                user: requester,
+                circle,
+                targetParentCircle,
+                messageBody:
+                    options?.messageBody ||
+                    `${requester.name || "An admin"} requested to move ${circle.name || "this circle"} under ${targetParentCircle.name || "this parent circle"}.`,
+                url: options?.url,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in sendAttachCircleRequestNotification:", error);
     }
 }
 
@@ -1297,16 +1639,28 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
         const circle = await getTaskCircle(task); // Renamed helper function
         if (!circle) return;
 
-        // Find DIDs of users with review permission (excluding the submitter)
-        const reviewerDids = (await getAuthorizedMembers(circle, features.tasks?.review)) // Updated feature check
-            .map((user) => user.did)
-            .filter((did): did is string => !!did && did !== submitter.did);
+        const recipientDids = new Set<string>();
 
-        if (reviewerDids.length === 0) {
-            console.log("🔔 [NOTIFY] No reviewer DIDs found to notify for task:", task._id); // Updated message
+        if (task.createdBy && task.createdBy !== submitter.did) {
+            recipientDids.add(task.createdBy);
+        }
+
+        const reviewerGroups = await Promise.all([
+            getAuthorizedMembers(circle, features.tasks?.review),
+            getAuthorizedMembers(circle, features.tasks?.resolve),
+        ]);
+
+        reviewerGroups
+            .flat()
+            .map((user) => user.did)
+            .filter((did): did is string => !!did && did !== submitter.did)
+            .forEach((did) => recipientDids.add(did));
+
+        if (recipientDids.size === 0) {
+            console.log("🔔 [NOTIFY] No recipients found to notify for task review submission:", task._id);
             return;
         }
-        const reviewerUserPrivates = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+        const reviewerUserPrivates = (await Promise.all(Array.from(recipientDids).map((did) => getUserPrivate(did)))).filter(
             (up): up is UserPrivate => up !== null,
         );
 
@@ -1330,6 +1684,41 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
         );
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskSubmittedForReview:", error); // Updated message
+    }
+}
+
+export async function notifyTaskChangesRequested(
+    task: TaskDisplay,
+    requester: Circle,
+    note?: string,
+): Promise<void> {
+    try {
+        if (!task.assignedTo || task.assignedTo === requester.did) {
+            return;
+        }
+
+        const assignee = await getUserPrivate(task.assignedTo);
+        if (!assignee) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_changes_requested",
+            [assignee],
+            sanitizeObjectForJSON({
+                circle,
+                user: requester,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+                reviewRequestedChangesNote: note,
+            }),
+        );
+
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskChangesRequested:", error);
     }
 }
 
@@ -1413,8 +1802,253 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
                 assigneeName: assignee.name, // Add assignee name for context
             }),
         );
+
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
+    }
+}
+
+export async function notifyTaskClaimSubmitted(task: TaskDisplay, claimant: Circle): Promise<void> {
+    try {
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        const reviewerDids = (await getAuthorizedMembers(circle, features.tasks?.assign))
+            .map((user) => user.did)
+            .filter((did): did is string => Boolean(did) && did !== claimant.did);
+
+        if (reviewerDids.length === 0) {
+            return;
+        }
+
+        const recipients = (await Promise.all(reviewerDids.map((did) => getUserPrivate(did)))).filter(
+            (user): user is UserPrivate => user !== null,
+        );
+
+        if (recipients.length === 0) {
+            return;
+        }
+
+        await sendNotifications(
+            "task_claim_submitted",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: claimant,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskClaimSubmitted:", error);
+    }
+}
+
+export async function notifyTaskClaimApproved(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+    try {
+        if (reviewer.did === claimant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_claim_approved",
+            [claimant],
+            sanitizeObjectForJSON({
+                circle,
+                user: reviewer,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskClaimApproved:", error);
+    }
+}
+
+export async function notifyTaskClaimDeclined(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+    try {
+        if (reviewer.did === claimant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_claim_declined",
+            [claimant],
+            sanitizeObjectForJSON({
+                circle,
+                user: reviewer,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskClaimDeclined:", error);
+    }
+}
+
+/**
+ * Send notification when a task is accepted by the assignee
+ */
+export async function notifyTaskAccepted(task: TaskDisplay, accepter: Circle, recipient: UserPrivate): Promise<void> {
+    try {
+        console.log("🔔 [NOTIFY] notifyTaskAccepted called:", {
+            taskId: task._id,
+            accepterDid: accepter.did,
+            recipientDid: recipient.did,
+        });
+
+        if (accepter.did === recipient.did) {
+            console.log("🔔 [NOTIFY] Skipping task_accepted notification - accepter is recipient");
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_accepted",
+            [recipient],
+            sanitizeObjectForJSON({
+                circle,
+                user: accepter,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskAccepted:", error);
+    }
+}
+
+export async function notifyTaskShiftSignup(task: TaskDisplay, participant: Circle): Promise<void> {
+    try {
+        if ((task.taskType ?? "outcome") !== "shift") {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        const adminDids = (await getAuthorizedMembers(circle, features.tasks?.moderate))
+            .map((user) => user.did)
+            .filter((did): did is string => Boolean(did) && did !== participant.did);
+
+        if (adminDids.length === 0) {
+            return;
+        }
+
+        const recipients = (await Promise.all(adminDids.map((did) => getUserPrivate(did)))).filter(
+            (user): user is UserPrivate => user !== null,
+        );
+
+        if (recipients.length === 0) {
+            return;
+        }
+
+        await sendNotifications(
+            "task_shift_signup",
+            recipients,
+            sanitizeObjectForJSON({
+                circle,
+                user: participant,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskShiftSignup:", error);
+    }
+}
+
+export async function notifyTaskShiftConfirmed(
+    task: TaskDisplay,
+    confirmer: Circle,
+    participant: UserPrivate,
+): Promise<void> {
+    try {
+        if ((task.taskType ?? "outcome") !== "shift" || confirmer.did === participant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_shift_confirmed",
+            [participant],
+            sanitizeObjectForJSON({
+                circle,
+                user: confirmer,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskShiftConfirmed:", error);
+    }
+}
+
+export async function notifyTaskShiftAttendanceVerified(
+    task: TaskDisplay,
+    verifier: Circle,
+    participant: UserPrivate,
+): Promise<void> {
+    try {
+        if ((task.taskType ?? "outcome") !== "shift" || verifier.did === participant.did) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_shift_attendance_verified",
+            [participant],
+            sanitizeObjectForJSON({
+                circle,
+                user: verifier,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskShiftAttendanceVerified:", error);
+    }
+}
+
+export async function notifyTaskVerified(task: TaskDisplay, verifier: Circle): Promise<void> {
+    try {
+        if (!task.assignedTo || task.assignedTo === verifier.did) {
+            return;
+        }
+
+        const assignee = await getUserPrivate(task.assignedTo);
+        if (!assignee) {
+            return;
+        }
+
+        const circle = await getTaskCircle(task);
+        if (!circle) return;
+
+        await sendNotifications(
+            "task_verified",
+            [assignee],
+            sanitizeObjectForJSON({
+                circle,
+                user: verifier,
+                taskId: task._id?.toString(),
+                taskTitle: task.title,
+            }),
+        );
+
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyTaskVerified:", error);
     }
 }
 
@@ -1475,6 +2109,7 @@ export async function notifyTaskStatusChanged( // Renamed function
                 taskNewStage: task.stage, // Renamed property
             }),
         );
+
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
     }
