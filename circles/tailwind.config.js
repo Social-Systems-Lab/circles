@@ -1,9 +1,6 @@
-import type { Config } from "tailwindcss";
-const { fontFamily } = require("tailwindcss/defaultTheme");
-
+/** @type {import("tailwindcss").Config} */
 const config = {
-    mode: "jit",
-    darkMode: ["class"],
+    darkMode: "class",
     content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
     prefix: "",
     theme: {
@@ -167,7 +164,7 @@ const config = {
     },
     plugins: [
         require("tailwindcss-animate"),
-        function ({ addUtilities }: any) {
+        function ({ addUtilities }) {
             addUtilities({
                 ".clip-hexagon": {
                     clipPath: "polygon(50% 0%, 90% 25%, 90% 75%, 50% 100%, 10% 75%, 10% 25%)",
@@ -193,6 +190,6 @@ const config = {
             });
         },
     ],
-} satisfies Config;
+};
 
-export default config;
+module.exports = config;

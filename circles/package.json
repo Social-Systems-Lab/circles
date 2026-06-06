@@ -102,7 +102,7 @@
         "sharp": "0.34.5",
         "sonner": "^1.7.4",
         "stripe": "^22.0.2",
-        "tailwind-merge": "^2.6.0",
+        "tailwind-merge": "^3.6.0",
         "tailwindcss-animate": "^1.0.7",
         "uuid": "14.0.0",
         "vaul": "^1.1.2",
@@ -111,6 +111,7 @@
     },
     "devDependencies": {
         "@playwright/test": "^1.60.0",
+        "@tailwindcss/postcss": "^4.3.0",
         "@types/fs-extra": "^11.0.4",
         "@types/jsonwebtoken": "^9.0.9",
         "@types/lodash": "^4.17.16",
@@ -129,8 +130,8 @@
         "patch-package": "^8.0.0",
         "postcss": "^8.5.15",
         "prettier": "^3.5.3",
-        "prettier-plugin-tailwindcss": "^0.5.14",
-        "tailwindcss": "^3.4.17",
+        "prettier-plugin-tailwindcss": "^0.8.0",
+        "tailwindcss": "^4.3.0",
         "typescript": "6.0.3"
     },
     "overrides": {
