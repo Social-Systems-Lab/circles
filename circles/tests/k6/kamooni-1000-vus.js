@@ -2,7 +2,7 @@ import http from "k6/http";
 import { check, sleep } from "k6";
 import { Trend } from "k6/metrics";
 
-const BASE_URL = (__ENV.BASE_URL || "https://kamooni.org").replace(/\/$/, "");
+const BASE_URL = (__ENV.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const VUS = Number(__ENV.VUS || "1000");
 const DURATION = __ENV.DURATION || "5m";
 const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME_SECONDS || "1");
