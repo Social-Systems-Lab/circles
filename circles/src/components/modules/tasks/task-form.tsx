@@ -572,7 +572,6 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                                             disabled={(date: Date) =>
                                                                 date < new Date("1900-01-01") || isSubmitting
                                                             }
-                                                            initialFocus
                                                         />
                                                     </PopoverContent>
                                                 </Popover>

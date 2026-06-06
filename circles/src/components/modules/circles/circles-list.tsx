@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Circle, ContentPreviewData, WithMetric, Cause as SDG } from "@/models/models"; // Removed Page import
 import { Button } from "@/components/ui/button";
@@ -111,7 +111,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
         }
     }, []);
 
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: {},
         visible: {
             transition: {
@@ -120,7 +120,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
         },
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { opacity: 0, y: 20 },
         visible: (index: number) => ({
             opacity: 1,

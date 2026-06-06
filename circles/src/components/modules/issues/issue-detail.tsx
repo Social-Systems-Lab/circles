@@ -618,7 +618,6 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                                         selected={selectedTargetDate}
                                         onSelect={setSelectedTargetDate}
                                         disabled={(date: Date) => date < new Date("1900-01-01") || isPending}
-                                        initialFocus
                                     />
                                 </PopoverContent>
                             </Popover>

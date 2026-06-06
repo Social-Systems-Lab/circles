@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Circle, Feed, PostDisplay } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
@@ -54,7 +54,7 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
         return parts.join(", ");
     };
 
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: {},
         visible: {
             transition: {
@@ -63,7 +63,7 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
         },
     };
 
-    const itemVariants = {
+    const itemVariants: Variants = {
         hidden: { opacity: 0, y: 20 },
         visible: (index: number) => ({
             opacity: 1,
