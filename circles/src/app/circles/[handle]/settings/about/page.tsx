@@ -12,6 +12,18 @@ import { CircleStructureCard } from "./circle-structure-card";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
 
+async function publishCircleFormAction(formData: FormData): Promise<void> {
+    "use server";
+
+    await publishCircleAction(formData);
+}
+
+async function submitCircleForVerificationFormAction(formData: FormData): Promise<void> {
+    "use server";
+
+    await submitCircleForVerificationAction(formData);
+}
+
 type PageProps = {
     params: Promise<{ handle: string }>;
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -103,12 +115,12 @@ export default async function AboutSettingsPage(props: PageProps) {
                         </div>
                         {isDraft ? (
                             isProfileCircle ? (
-                                <form action={publishCircleAction}>
+                                <form action={publishCircleFormAction}>
                                     <input type="hidden" name="circleId" value={circle._id} />
                                     <Button type="submit">Publish circle</Button>
                                 </form>
                             ) : (
-                                <form action={submitCircleForVerificationAction}>
+                                <form action={submitCircleForVerificationFormAction}>
                                     <input type="hidden" name="circleId" value={circle._id} />
                                     <Button type="submit" variant="outline" disabled={!verificationReadiness.isReady}>
                                         Submit for verification

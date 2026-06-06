@@ -1,5 +1,5 @@
 import Image from "next/image";
-import unauthenticated from "@images/unauthenticated.png";
+import unauthenticated from "@images/illustrations/access-denied.png";
 import RedirectButtons from "@/components/redirectPage/redirect-buttons";
 
 export default function Unauthenticated() {

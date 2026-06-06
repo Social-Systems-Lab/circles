@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processMessageEmailReminderById } from "@/lib/data/message-reminders";
+import { hasValidBearerToken } from "@/lib/security/request-auth";
 
 export async function POST(req: NextRequest) {
     const authToken = process.env.CRON_SECRET;
     const bearerToken = req.headers.get("authorization");
 
-    if (!authToken || !bearerToken || bearerToken.split(" ")[1] !== authToken) {
+    if (!hasValidBearerToken(bearerToken, authToken)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

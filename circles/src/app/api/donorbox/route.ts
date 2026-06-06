@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import { db } from "@/lib/data/db";
 import { ObjectId } from "mongodb";
 import { sendUserBecomesMemberNotification } from "@/lib/data/notifications";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendEmail } from "@/lib/data/email";
+import { verifyDonorboxSignature } from "@/lib/security/donorbox";
 
 const DONORBOX_WEBHOOK_SECRET = process.env.DONORBOX_WEBHOOK_SECRET;
 
@@ -15,34 +15,27 @@ export async function POST(req: NextRequest) {
     }
 
     const signatureHeader = req.headers.get("donorbox-signature");
-    if (!signatureHeader) {
-        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
-    }
-
-    const [timestamp, signature] = signatureHeader.split(",");
     const body = await req.text();
 
-    const expectedSignature = crypto
-        .createHmac("sha256", DONORBOX_WEBHOOK_SECRET)
-        .update(`${timestamp}.${body}`)
-        .digest("hex");
-
-    if (signature !== expectedSignature) {
+    if (!verifyDonorboxSignature({ body, header: signatureHeader, secret: DONORBOX_WEBHOOK_SECRET })) {
         return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    let events = JSON.parse(body);
+    let events;
+    try {
+        events = JSON.parse(body);
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
     if (!Array.isArray(events)) {
         events = [events];
     }
 
     try {
         console.log("--- Donorbox Webhook Received ---");
-        console.log("Payload:", JSON.stringify(events, null, 2));
 
         for (const event of events) {
-            console.log("Processing event:", JSON.stringify(event, null, 2));
-
             // A new subscription should be a recurring donation.
             if (event.event_name === "donation.created" && event.donation?.recurring === true) {
                 console.log("Detected a recurring donation. Handling as a new subscription.");

@@ -1,4 +1,4 @@
-FROM imbios/bun-node:18-slim AS deps
+FROM imbios/bun-node:22-slim AS deps
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -29,7 +29,7 @@ RUN VERSION="$(node -p "require('./package.json').version")" && \
     printf 'version=%s\ngitSha=%s\nbuildTime=%s\n' "$VERSION" "$GIT_SHA_VALUE" "$BUILD_TIME_VALUE" > /app/VERSION
 
 # Production image, copy all the files and run next
-FROM node:18-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
@@ -48,7 +48,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Install sharp into runtime node_modules (do not rely on Next standalone tracing)
-RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps sharp@0.33.5
+RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps sharp@0.34.5
 
 ARG GIT_SHA=unknown
 ARG BUILD_TIME

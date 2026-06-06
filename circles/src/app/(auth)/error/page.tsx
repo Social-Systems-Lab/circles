@@ -1,5 +1,5 @@
 import Image from "next/image";
-import notFound from "@images/not-found.png";
+import notFound from "@images/illustrations/page-not-found.png";
 import RedirectButtons from "@/components/redirectPage/redirect-buttons";
 
 export default function Error() {
