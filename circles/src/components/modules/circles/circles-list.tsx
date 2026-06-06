@@ -23,7 +23,7 @@ import Indicators from "@/components/utils/indicators";
 import { ListFilter } from "@/components/utils/list-filter";
 import { SdgPanel } from "../search/SdgPanel";
 import { sdgs } from "@/lib/data/sdgs";
-import emptyFeed from "@images/empty-feed.png";
+import emptyFeed from "@images/illustrations/noticeboard-empty-state.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
 import dynamic from "next/dynamic";

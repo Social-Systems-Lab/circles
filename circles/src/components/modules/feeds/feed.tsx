@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import kamooniLogo from "@images/kamooni_logo.png";
+import kamooniLogo from "@images/kamooni-logo.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { useEffect, useState, useMemo } from "react";

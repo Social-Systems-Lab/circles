@@ -5,6 +5,18 @@ import { getMember } from "@/lib/data/member";
 import { getUserPendingMembershipRequests } from "@/lib/data/membership-requests";
 import { requestMembershipAction, cancelMembershipRequestAction } from "@/components/circle/actions";
 
+async function requestMembershipFormAction(formData: FormData): Promise<void> {
+    "use server";
+
+    await requestMembershipAction(formData);
+}
+
+async function cancelMembershipRequestFormAction(formData: FormData): Promise<void> {
+    "use server";
+
+    await cancelMembershipRequestAction(formData);
+}
+
 type PageProps = {
     params: Promise<{ handle: string }>;
     searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -70,7 +82,7 @@ export default async function AccessDeniedPage({ params, searchParams }: PagePro
                                 <span className="inline-flex items-center rounded-md bg-amber-100 px-3 py-1.5 text-sm text-amber-800">
                                     Request pending
                                 </span>
-                                <form action={cancelMembershipRequestAction}>
+                                <form action={cancelMembershipRequestFormAction}>
                                     <input type="hidden" name="circleId" value={circle?._id ?? ""} />
                                     <input type="hidden" name="redirectTo" value={redirectTo} />
                                     <button
@@ -82,7 +94,7 @@ export default async function AccessDeniedPage({ params, searchParams }: PagePro
                                 </form>
                             </>
                         ) : (
-                            <form action={requestMembershipAction}>
+                            <form action={requestMembershipFormAction}>
                                 <input type="hidden" name="circleId" value={circle?._id ?? ""} />
                                 <input type="hidden" name="redirectTo" value={redirectTo} />
                                 <button
