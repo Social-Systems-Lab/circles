@@ -19,6 +19,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
 import { listChatRoomsAction } from "../modules/chat/actions";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { useIsMobile } from "@/components/utils/use-is-mobile";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -30,6 +31,7 @@ const ProfileMenuBar = () => {
     const [notificationUnreadCount, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
     const [messageUnreadCount, setMessageUnreadCount] = useState(0);
     const pathname = usePathname();
+    const isMobile = useIsMobile();
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -123,6 +125,8 @@ const ProfileMenuBar = () => {
         return null;
     }
 
+    const isMobileExplore = isMobile && pathname === "/explore";
+
     return (
         <div className="flex items-center justify-center gap-1 overflow-visible">
             <>
@@ -144,41 +148,45 @@ const ProfileMenuBar = () => {
 
                     {authInfo.authStatus === "authenticated" && user && (
                         <>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                                onClick={() => router.push("/chat")}
-                            >
-                                <LuMail className="h-5 w-5" />
-                                {messageUnreadCount > 0 && (
-                                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                        {messageUnreadCount}
-                                    </span>
-                                )}
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                                onClick={() => openUserToolbox("events")}
-                            >
-                                <LuClipboardCheck className="h-5 w-5" />
-                            </Button>
+                            {!isMobileExplore && (
+                                <>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                        onClick={() => router.push("/chat")}
+                                    >
+                                        <LuMail className="h-5 w-5" />
+                                        {messageUnreadCount > 0 && (
+                                            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                                                {messageUnreadCount}
+                                            </span>
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                        onClick={() => openUserToolbox("events")}
+                                    >
+                                        <LuClipboardCheck className="h-5 w-5" />
+                                    </Button>
 
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                                onClick={() => openUserToolbox("notifications")}
-                            >
-                                <Bell className="h-5 w-5" />
-                                {notificationUnreadCount > 0 && (
-                                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                                        {notificationUnreadCount}
-                                    </span>
-                                )}
-                            </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                        onClick={() => openUserToolbox("notifications")}
+                                    >
+                                        <Bell className="h-5 w-5" />
+                                        {notificationUnreadCount > 0 && (
+                                            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                                                {notificationUnreadCount}
+                                            </span>
+                                        )}
+                                    </Button>
+                                </>
+                            )}
 
                             <Button
                                 className="relative h-auto w-auto rounded-full p-0"

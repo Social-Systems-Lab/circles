@@ -945,6 +945,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
 
     if (!isMounted) return null;
 
+    const mobileTopControlsLeft = 12;
+    const mobileTopControlsRight = 128;
+
     const advancedFiltersContent = (
         <div className="space-y-3">
             {activeAdvancedFilterCount > 0 && (
@@ -1044,9 +1047,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             <div
                 className={`absolute ${isMobile ? "flex-col" : "flex-row"} z-[30] flex gap-2`} // allow profile icons to sit above
                 style={{
-                    left: !isMobile && panelMode !== "none" ? 440 : 16,
-                    right: isMobile ? 16 : 280, // Reduced from 420 to 280 to give more space to pills
-                    top: 16,
+                    left: isMobile ? mobileTopControlsLeft : panelMode !== "none" ? 440 : 16,
+                    right: isMobile ? mobileTopControlsRight : 280, // Reserve space on mobile for avatar/action buttons.
+                    top: isMobile ? 12 : 16,
                 }}
             >
                 {/* View Mode Toggle removed: Explore mode only */}
@@ -1055,7 +1058,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                 {viewMode === "explore" && !(sidePanelContentVisible === "toolbox" && isMobile) && (
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex w-full flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                            <div className="flex w-full md:w-[23.5rem] md:max-w-[23.5rem] md:flex-none items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                            <div className="flex w-full max-w-[calc(100vw-140px)] md:w-[23.5rem] md:max-w-[23.5rem] md:flex-none items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
                                 <input
                                     type="text"
                                     placeholder="Search people, circles, and events"

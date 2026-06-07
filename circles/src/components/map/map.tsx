@@ -3,6 +3,7 @@
 import React, { useCallback } from "react";
 import { useEffect, useRef, useState } from "react";
 import { AiOutlineRead } from "react-icons/ai";
+import { HiOutlineCheck, HiOutlineChevronDown } from "react-icons/hi";
 import { LiaGlobeAfricaSolid } from "react-icons/lia";
 import { sidePanelWidth } from "../../app/constants";
 import useWindowDimensions from "@/components/utils/use-window-dimensions";
@@ -74,6 +75,35 @@ const getMarkerInitials = (content: Content): string => {
         return words[0].slice(0, 2).toUpperCase();
     }
     return `${words[0][0] ?? ""}${words[words.length - 1][0] ?? ""}`.toUpperCase();
+};
+
+type MapStylePreference = "natural" | "classic";
+
+const MAP_STYLE_STORAGE_KEY = "kamooni.mapStylePreference";
+
+const parseMapStylePreference = (value: string | null | undefined): MapStylePreference =>
+    value === "classic" ? "classic" : "natural";
+
+const MAP_STYLES: Record<MapStylePreference, { label: string; url: string; hiddenLayers: string[] }> = {
+    natural: {
+        label: "Natural globe",
+        url: "mapbox://styles/mapbox/satellite-streets-v12",
+        hiddenLayers: [
+            "country-label",
+            "state-label",
+            "settlement-major-label",
+            "settlement-minor-label",
+            "settlement-subdivision-label",
+            "admin-0-boundary",
+            "admin-0-boundary-bg",
+            "admin-1-boundary",
+        ],
+    },
+    classic: {
+        label: "Classic map",
+        url: "mapbox://styles/mapbox/streets-v12",
+        hiddenLayers: [],
+    },
 };
 
 const getMarkerImageUrl = (content: Content): string | undefined => {
@@ -295,12 +325,14 @@ const createMarkerElement = (
 
 const MapBox = ({
     mapboxKey,
+    mapStylePreference,
     panelMode,
     windowWidth,
     windowHeight,
     feedPanelDocked,
 }: {
     mapboxKey: string;
+    mapStylePreference: MapStylePreference;
     panelMode?: string;
     windowWidth: number;
     windowHeight: number;
@@ -328,6 +360,10 @@ const MapBox = ({
     const popupRef = useRef<HTMLDivElement | null>(null);
     const popupContentRef = useRef<Content | null>(null);
     const popupCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mapStylePreferenceRef = useRef<MapStylePreference>(mapStylePreference);
+    const appliedMapStyleRef = useRef<MapStylePreference>(mapStylePreference);
+
+    mapStylePreferenceRef.current = mapStylePreference;
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -512,14 +548,50 @@ const MapBox = ({
 
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
-            style: "mapbox://styles/mapbox/streets-v12",
+            style: MAP_STYLES[appliedMapStyleRef.current].url,
+            projection: "globe",
             center: [lng, lat],
             zoom: zoom,
             //maxZoom: 12, // Limit maximum zoom to city level
         });
 
+        map.current.on("style.load", () => {
+            const currentMap = map.current;
+            if (!currentMap) {
+                return;
+            }
+
+            try {
+                currentMap.setProjection("globe");
+            } catch {
+                // Ignore projection support differences across style lifecycle states.
+            }
+
+            const styleConfig = MAP_STYLES[mapStylePreferenceRef.current];
+            if (mapStylePreferenceRef.current === "natural") {
+                styleConfig.hiddenLayers.forEach((layerId) => {
+                    if (currentMap.getLayer(layerId)) {
+                        currentMap.setLayoutProperty(layerId, "visibility", "none");
+                    }
+                });
+            }
+        });
+
         map.current.on("render", syncMarkerPositions);
     }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent, syncMarkerPositions]);
+
+    useEffect(() => {
+        if (!map.current) {
+            return;
+        }
+
+        if (appliedMapStyleRef.current === mapStylePreference) {
+            return;
+        }
+
+        appliedMapStyleRef.current = mapStylePreference;
+        map.current.setStyle(MAP_STYLES[mapStylePreference].url);
+    }, [mapStylePreference]);
 
     // Ensure Mapbox resizes when container size changes (handles animations and window resize)
     useEffect(() => {
@@ -783,12 +855,48 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
     }, [windowWidth]);
 
     const widthTransition = isResizing ? "none" : "width 0.35s ease-in-out";
+    const [mapStylePreference, setMapStylePreference] = useState<MapStylePreference>("natural");
+    const [isMapStyleMenuOpen, setIsMapStyleMenuOpen] = useState(false);
+    const mapStyleMenuRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (mapboxKey) {
             setMapboxKey(mapboxKey);
         }
     }, [mapboxKey, setMapboxKey]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        setMapStylePreference(parseMapStylePreference(window.localStorage.getItem(MAP_STYLE_STORAGE_KEY)));
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        window.localStorage.setItem(MAP_STYLE_STORAGE_KEY, mapStylePreference);
+    }, [mapStylePreference]);
+
+    useEffect(() => {
+        if (!isMapStyleMenuOpen) {
+            return;
+        }
+
+        const handlePointerDown = (event: MouseEvent) => {
+            if (!mapStyleMenuRef.current?.contains(event.target as Node)) {
+                setIsMapStyleMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handlePointerDown);
+        return () => {
+            document.removeEventListener("mousedown", handlePointerDown);
+        };
+    }, [isMapStyleMenuOpen]);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -822,11 +930,56 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
                     >
                         <MapBox
                             mapboxKey={mapboxKey}
+                            mapStylePreference={mapStylePreference}
                             panelMode={panelMode}
                             windowWidth={windowWidth}
                             windowHeight={windowHeight}
                             feedPanelDocked={feedPanelDocked}
                         />
+                        <div
+                            ref={mapStyleMenuRef}
+                            className={`absolute z-40 ${isMobile ? "bottom-[46px] left-3" : "left-4 top-20"}`}
+                        >
+                            <button
+                                type="button"
+                                aria-haspopup="menu"
+                                aria-expanded={isMapStyleMenuOpen}
+                                aria-label="Map style"
+                                className="flex items-center gap-2 rounded-full border border-white/30 bg-black/35 px-3 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition hover:bg-black/45"
+                                onClick={() => setIsMapStyleMenuOpen((open) => !open)}
+                            >
+                                <LiaGlobeAfricaSolid size="18px" />
+                                <span>{isMobile ? "Map" : MAP_STYLES[mapStylePreference].label}</span>
+                                <HiOutlineChevronDown className="opacity-80" size="16px" />
+                            </button>
+                            {isMapStyleMenuOpen && (
+                                <div
+                                    role="menu"
+                                    className={`absolute min-w-[170px] rounded-2xl border border-white/20 bg-[#101418]/90 p-1.5 text-white shadow-2xl backdrop-blur-md ${
+                                        isMobile ? "bottom-full mb-2 mt-0" : "left-0"
+                                    }`}
+                                >
+                                    {(Object.entries(MAP_STYLES) as [MapStylePreference, (typeof MAP_STYLES)[MapStylePreference]][]).map(
+                                        ([value, config]) => (
+                                            <button
+                                                key={value}
+                                                type="button"
+                                                role="menuitemradio"
+                                                aria-checked={mapStylePreference === value}
+                                                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-white/10"
+                                                onClick={() => {
+                                                    setMapStylePreference(value);
+                                                    setIsMapStyleMenuOpen(false);
+                                                }}
+                                            >
+                                                <span>{config.label}</span>
+                                                {mapStylePreference === value ? <HiOutlineCheck size="16px" /> : null}
+                                            </button>
+                                        ),
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </>
             )}
