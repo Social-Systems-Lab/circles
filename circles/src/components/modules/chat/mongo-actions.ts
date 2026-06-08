@@ -53,6 +53,10 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
     return url;
 };
 
+const isUploadedFileLike = (value: FormDataEntryValue | null): value is File => {
+    return !!value && typeof value !== "string" && typeof value.arrayBuffer === "function" && typeof value.size === "number";
+};
+
 const ensureVerifiedMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
     const user = await Circles.findOne(
         { did: userDid },
@@ -936,7 +940,7 @@ export const createMongoGroupChatAction = async (
     try {
         let picture: { url: string } | undefined;
 
-        if (avatarFile instanceof File && avatarFile.size > 0) {
+        if (isUploadedFileLike(avatarFile) && avatarFile.size > 0) {
             const MAX_SIZE = 5 * 1024 * 1024;
             if (avatarFile.size > MAX_SIZE) {
                 return { success: false, message: "File size exceeds 5MB limit" };
