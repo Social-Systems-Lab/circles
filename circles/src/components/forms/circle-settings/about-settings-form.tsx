@@ -127,6 +127,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
         }
     };
 
+    const renderSaveButton = () => (
+        <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Save Changes"}
+        </Button>
+    );
+
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted space-y-6">
@@ -345,6 +351,8 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     </CardContent>
                 </Card>
 
+                {renderSaveButton()}
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Visibility</CardTitle>
@@ -443,6 +451,8 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     </CardContent>
                 </Card>
 
+                {renderSaveButton()}
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Location</CardTitle>
@@ -512,9 +522,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     </CardContent>
                 </Card>
 
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Saving..." : "Save Changes"}
-                </Button>
+                {renderSaveButton()}
 
                 <Controller
                     name="_id"
