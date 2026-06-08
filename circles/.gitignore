@@ -56,3 +56,6 @@ backups/
 .DS_Store
 tmp/
 .DS_Store
+
+# Local runtime data
+circles/

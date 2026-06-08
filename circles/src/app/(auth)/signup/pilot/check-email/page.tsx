@@ -7,56 +7,46 @@ type PageProps = {
         email?: string;
         handle?: string;
         redirectTo?: string;
-        devVerificationToken?: string;
-        devVerificationUrl?: string;
+        intent?: string;
     }>;
 };
+
+function normalizePeerifyIntent(value?: string): "fan" | "artist" | "host" | null {
+    return value === "fan" || value === "artist" || value === "host" ? value : null;
+}
 
 export default async function PilotCheckEmailPage(props: PageProps) {
     const searchParams = await props.searchParams;
     const handle = searchParams.handle?.trim();
     const redirectTo = searchParams.redirectTo?.trim();
-    const continueUrl = handle ? `/circles/${handle}` : redirectTo || "/";
-    const devVerificationToken =
-        process.env.NODE_ENV !== "production" ? searchParams.devVerificationToken?.trim() || null : null;
-    const devVerificationHref = devVerificationToken ? `/verify-email?token=${encodeURIComponent(devVerificationToken)}` : null;
+    const peerifyIntent = normalizePeerifyIntent(searchParams.intent);
+    const continueUrl = redirectTo
+        ? redirectTo
+        : handle
+          ? `/circles/${handle}/home`
+          : "/";
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[#f7fbff] px-4 py-10">
-            <Card className="w-full max-w-xl border-[#d8e7f3] shadow-sm">
+        <div className="flex min-h-screen items-center justify-center bg-[#f7f2ea] px-4 py-10">
+            <Card className="w-full max-w-xl border-[#e3d5c2] bg-[#faf6ef] shadow-sm">
                 <CardHeader className="space-y-2">
-                    <CardTitle className="text-3xl">Check your email</CardTitle>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Peerify Pilot Signup</p>
+                    <CardTitle className="text-3xl text-[#181512]">Check your email</CardTitle>
+                    <p className="text-sm text-[#6b5f52]">
                         We&apos;ve sent a verification link to your email address. Verify your email before continuing
                         with profile setup so we know we can reach you.
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                        This step only confirms your email address. After that, you can continue to your profile,
-                        complete it, and request Kamooni member verification later.
+                    <p className="text-sm text-[#6b5f52]">
+                        This step only confirms your email address. After that, you can continue into Peerify and choose what
+                        you want to do first.
                     </p>
-                    {searchParams.email ? (
-                        <p className="text-sm font-medium text-slate-700">{searchParams.email}</p>
-                    ) : null}
+                    {searchParams.email ? <p className="text-sm font-medium text-[#181512]">{searchParams.email}</p> : null}
                 </CardHeader>
                 <CardContent className="space-y-5">
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                    <div className="rounded-lg border border-[#e3d5c2] bg-white/70 p-4 text-sm text-[#181512]">
                         <div className="font-medium">Next step</div>
                         <p className="mt-1">Open the verification link we sent to your email.</p>
                     </div>
-
-                    {devVerificationHref ? (
-                        <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
-                            <div className="font-medium">Development helper</div>
-                            <p className="mt-1 text-sky-900">
-                                Local development only: use this email verification link for testing.
-                            </p>
-                            <div className="mt-3">
-                                <Button asChild>
-                                    <Link href={devVerificationHref}>Open email verification link</Link>
-                                </Button>
-                            </div>
-                        </div>
-                    ) : null}
 
                     <div className="flex flex-wrap gap-3">
                         <Button asChild variant="outline">
@@ -64,9 +54,9 @@ export default async function PilotCheckEmailPage(props: PageProps) {
                         </Button>
                     </div>
 
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-[#6b5f52]">
                         Having trouble? You can{" "}
-                        <Link href={continueUrl} className="underline hover:text-foreground">
+                        <Link href={continueUrl} className="underline hover:text-[#181512]">
                             continue for now
                         </Link>
                         , but some account steps may require email verification.

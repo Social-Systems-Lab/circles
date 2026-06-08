@@ -91,6 +91,10 @@ const initialDonationIntent: DonationIntentValue = {
     later: false,
 };
 
+function normalizePeerifyIntent(value: string | null): "fan" | "artist" | "host" | null {
+    return value === "fan" || value === "artist" || value === "host" ? value : null;
+}
+
 function sanitizeHandle(value: string) {
     return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/_/g, "-");
 }
@@ -617,7 +621,12 @@ export function OnboardingSignupFlow() {
                     : prev,
             );
 
-            setCompletionRedirectUrl(`/circles/${createdUserHandle}/home`);
+            const redirectTo = searchParams?.get("redirectTo");
+            const peerifyIntent = normalizePeerifyIntent(searchParams?.get("intent") ?? null);
+            const nextUrl =
+                redirectTo || (peerifyIntent ? `/onboarding/peerify?intent=${peerifyIntent}` : `/circles/${createdUserHandle}/home`);
+
+            setCompletionRedirectUrl(nextUrl);
         } catch (error) {
             toast({
                 title: "Error",

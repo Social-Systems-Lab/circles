@@ -17,11 +17,19 @@ export const verifyUserToken = async (token: string): Promise<JWTPayload> => {
     return payload;
 };
 
+const shouldUseSecureCookie = (): boolean => {
+    if (process.env.CIRCLES_COOKIE_SECURE !== undefined) {
+        return process.env.CIRCLES_COOKIE_SECURE === "true";
+    }
+
+    return process.env.NODE_ENV === "production";
+};
+
 export const createSession = async (token: string) => {
     // create a cookie-based session
     (await cookies()).set(AUTH_COOKIE_NAME, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: shouldUseSecureCookie(),
         sameSite: "lax",
         maxAge: 60 * 60 * 24 * 90, // 90 days
         path: "/",

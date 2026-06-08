@@ -89,6 +89,10 @@ function getErrors(state: PilotSignupState): PilotSignupErrors {
     return errors;
 }
 
+function normalizePeerifyIntent(value: string | null): "fan" | "artist" | "host" | null {
+    return value === "fan" || value === "artist" || value === "host" ? value : null;
+}
+
 export function PilotSignupForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -158,18 +162,21 @@ export function PilotSignupForm() {
 
             toast({
                 title: "Account created",
-                description: "Now verify your email. You can complete your profile and request Kamooni verification later.",
+                description: "Now verify your email. You can continue into Peerify after that.",
             });
 
             const nextParams = new URLSearchParams();
             nextParams.set("email", state.email.trim());
             nextParams.set("handle", result.data.user.handle || sanitizeHandle(state.handle));
-            if (process.env.NODE_ENV !== "production" && result.data.devVerificationToken) {
-                nextParams.set("devVerificationToken", result.data.devVerificationToken);
-            }
+
             const redirectTo = searchParams?.get("redirectTo");
             if (redirectTo) {
                 nextParams.set("redirectTo", redirectTo);
+            }
+
+            const peerifyIntent = normalizePeerifyIntent(searchParams?.get("intent") ?? null);
+            if (peerifyIntent) {
+                nextParams.set("intent", peerifyIntent);
             }
 
             router.push(`/signup/pilot/check-email?${nextParams.toString()}`);
@@ -185,12 +192,13 @@ export function PilotSignupForm() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[#f7fbff] px-4 py-10">
-            <Card className="w-full max-w-md border-[#d8e7f3] shadow-sm">
+        <div className="flex min-h-screen items-center justify-center bg-[#f7f2ea] px-4 py-10">
+            <Card className="w-full max-w-md border-[#e3d5c2] bg-[#faf6ef] shadow-sm">
                 <CardHeader className="space-y-2">
-                    <CardTitle className="text-2xl">Pilot quick signup</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        Start with the essentials. You can add a profile picture and About text later.
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Peerify Pilot Signup</p>
+                    <CardTitle className="text-2xl text-[#181512]">Create your personal account</CardTitle>
+                    <p className="text-sm text-[#6b5f52]">
+                        Start with the essentials. You can choose what you want to do first on Peerify right after signup.
                     </p>
                 </CardHeader>
                 <CardContent>
@@ -274,20 +282,19 @@ export function PilotSignupForm() {
                                 autoComplete="nickname"
                                 placeholder="your-handle"
                             />
-                            <p className="text-sm text-muted-foreground">
-                                This defaults from your first and last name. You can still edit it before creating
-                                your account.
+                            <p className="text-sm text-[#6b5f52]">
+                                This defaults from your first and last name. You can still edit it before creating your account.
                             </p>
                             {errors.handle ? <p className="text-sm text-red-600">{errors.handle}</p> : null}
                         </div>
 
-                        <Button type="submit" disabled={isSubmitting} className="w-full">
+                        <Button type="submit" disabled={isSubmitting} className="w-full bg-[#e8720c] text-[#181512] hover:bg-[#ff8c2a]">
                             {isSubmitting ? "Creating account..." : "Create account"}
                         </Button>
 
-                        <p className="text-center text-sm text-muted-foreground">
+                        <p className="text-center text-sm text-[#6b5f52]">
                             Already have an account?{" "}
-                            <Link href="/login" className="underline hover:text-foreground">
+                            <Link href="/login" className="underline hover:text-[#181512]">
                                 Log in
                             </Link>
                         </p>

@@ -40,7 +40,7 @@ export default function GlobalNav() {
                 }
             ></div>
             <div
-                className={`fixed bottom-0 z-[300] w-full bg-white shadow-md md:top-0 md:h-full md:w-[72px] md:shadow-none`}
+                className={`fixed bottom-0 z-[300] w-full bg-[#181512] text-[#faf6ef] shadow-md md:top-0 md:h-full md:w-[72px] md:border-r md:border-[#2b251f] md:shadow-none`}
                 style={
                     isMobile
                         ? {
@@ -51,16 +51,17 @@ export default function GlobalNav() {
                 }
             >
                 <div className={`flex h-[56px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
-                    <Link href="/circles/kamooni">
+                    <Link href="/explore" aria-label="Peerify home">
                         <div className="group relative ml-4 mr-4 hidden flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4 md:flex">
                             <div className="relative">
                                 <div className="relative h-[50px] w-[50px] transform cursor-pointer">
                                     <Image
-                                        src={"/images/logo-test3.jpg"}
-                                        alt="Logo"
-                                        className="h-[50px] w-[50px] overflow-hidden rounded-full bg-white object-cover"
+                                        src={"/peerify/logo-mark.png"}
+                                        alt="Peerify"
+                                        className="h-[50px] w-[50px] object-contain"
                                         width={100}
                                         height={100}
+                                        priority
                                     />
                                 </div>
                             </div>

@@ -55,8 +55,11 @@ export function LoginForm(): React.ReactElement {
                 setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
 
                 // redirect to requested page
-                let redirectUrl = searchParams?.get("redirectTo") ?? `/circles/${result.data.user.handle}`;
-                router.push(redirectUrl);
+                const redirectUrl = searchParams?.get("redirectTo") ?? `/circles/${result.data.user.handle}`;
+
+                // Use a full navigation after login so the next server-rendered page
+                // sees the freshly-set auth cookie/session.
+                window.location.assign(redirectUrl);
             } else {
                 toast({
                     title: "Login Failed",
