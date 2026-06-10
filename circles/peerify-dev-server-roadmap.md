@@ -125,3 +125,27 @@ Peerify pilot domain is now live:
   - CIRCLES_COOKIE_SECURE=true
 
 Direct IP dev access may still load at http://65.21.91.96:3000, but secure-cookie login/session testing should now be done through https://peerify.one.
+
+## 2026-06-10 protected route /error fix
+
+After enabling HTTPS and setting secure cookies, signup/login worked, and `/onboarding/peerify?intent=artist` remained logged in. However, the post-signup personal profile route redirected to `/error`:
+
+- `/circles/<handle>/home` -> `/error`
+
+Cause:
+- Production middleware calls the internal access API using `CIRCLES_HOST` and `CIRCLES_PORT`.
+- These values were missing from `.env.local`, so protected `/circles/...` routes could not complete their access check.
+
+Fix added to server `.env.local`:
+
+```env
+CIRCLES_HOST=127.0.0.1
+CIRCLES_PORT=3000
+
+PM2 was restarted with .env.local explicitly loaded.
+
+Result:
+
+/circles/<handle>/home returns 200 OK.
+/onboarding/peerify?intent=artist returns 200 OK.
+Secure-cookie login/session works through https://peerify.one.
