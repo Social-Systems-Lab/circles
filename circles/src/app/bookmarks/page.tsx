@@ -12,7 +12,7 @@ export default async function BookmarksPage() {
     return (
       <div className="mx-auto max-w-5xl p-6">
         <h1 className="mb-2 text-2xl font-bold">Bookmarks</h1>
-        <p className="text-gray-600">You need to be logged in to view your bookmarked circles.</p>
+        <p className="text-gray-600">You need to be logged in to view your saved profiles.</p>
         <div className="mt-4">
           <Link href="/welcome" className="text-blue-600 hover:underline">
             Go to Welcome
@@ -47,14 +47,14 @@ export default async function BookmarksPage() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <h1 className="mb-1 text-2xl font-bold">Bookmarks</h1>
-      <p className="mb-4 text-sm text-gray-600">Pinned circles appear first and also count as bookmarks.</p>
+      <p className="mb-4 text-sm text-gray-600">Pinned profiles appear first and also count as saved profiles.</p>
 
       {!hasAny ? (
         <div className="rounded-md border bg-white p-6 text-center text-gray-600">
-          No bookmarks yet. Visit a circle and click the Bookmark button to add it here.
+          No saved profiles yet. Visit an artist, host, or community profile and click Bookmark to add it here.
           <div className="mt-3">
             <Link href="/explore" className="text-blue-600 hover:underline">
-              Explore circles
+              Explore Peerify
             </Link>
           </div>
         </div>
@@ -73,7 +73,7 @@ export default async function BookmarksPage() {
 
           {remaining.length > 0 && (
             <>
-              <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">All bookmarks</h2>
+              <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">All saved profiles</h2>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                 {remaining.map((c) => (
                   <BookmarkCard key={`b-${c._id}`} circle={c} pinned={false} />

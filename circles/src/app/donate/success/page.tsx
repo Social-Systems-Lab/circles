@@ -11,7 +11,7 @@ export default function DonateSuccessPage() {
                         Your donation was received
                     </h1>
                     <p className="mt-5 text-lg leading-8 text-kam-gray-dark/80">
-                        Thank you for supporting Kamooni. Your one-off donation helps fund the community infrastructure
+                        Thank you for supporting Peerify. Your one-off donation helps fund the community infrastructure
                         that keeps the platform open, ethical, and available to more people.
                     </p>
                     <div className="mt-8">
@@ -19,7 +19,7 @@ export default function DonateSuccessPage() {
                             href="/welcome"
                             className="inline-flex items-center rounded-md bg-[hsl(var(--button-primary))] px-5 py-3 text-sm font-medium text-[hsl(var(--button-primary-foreground))]"
                         >
-                            Back to Kamooni
+                            Back to Peerify
                         </Link>
                     </div>
                 </div>
