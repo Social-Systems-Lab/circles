@@ -87,3 +87,23 @@ Future cleanup tasks:
    - then artist/host/fan-specific setup.
 5. Add a deploy script so the standalone asset copy sequence is not manual.
 6. Move to HTTPS and set `CIRCLES_COOKIE_SECURE=true`.
+
+## 2026-06-10 layout split attempt note
+
+A first attempt was made to split the public pages from the inherited Circles app shell by moving the main app routes into an `(app)` route group.
+
+Result:
+- Build could be made to pass after import-path updates.
+- Public/app routes returned 200.
+- However, the landing page visuals broke, especially image placement and sizing.
+- The attempt was rolled back to `main`.
+
+Decision:
+- Do not move the full app route tree yet.
+- Next attempt should be smaller:
+  1. preserve the current working landing page,
+  2. isolate only the public landing/signup surfaces where possible,
+  3. avoid large route-folder moves until visual regressions are better understood.
+
+Current dev URL:
+- http://65.21.91.96:3000
