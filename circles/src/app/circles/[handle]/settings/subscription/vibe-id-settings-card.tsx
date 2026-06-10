@@ -188,7 +188,7 @@ export function VibeIdSettingsCard({
                 <CardHeader className="space-y-2 pb-5">
                     <CardTitle className="text-2xl font-semibold tracking-tight">VibeID</CardTitle>
                     <CardDescription className="max-w-2xl text-sm leading-6">
-                        Connect VibeID to this Kamooni account so you can sign in without your password.
+                        Connect VibeID to this Peerify account so you can sign in without your password.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
