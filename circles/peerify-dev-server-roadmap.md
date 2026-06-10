@@ -149,3 +149,39 @@ Result:
 /circles/<handle>/home returns 200 OK.
 /onboarding/peerify?intent=artist returns 200 OK.
 Secure-cookie login/session works through https://peerify.one.
+
+## 2026-06-10 production build environment note
+
+The Peerify server `.env.local` must not contain `NODE_ENV=development`.
+
+Problem observed:
+- `npm run build` failed during prerendering `/404` or `/500`.
+- Error: `<Html> should not be imported outside of pages/_document`.
+- The app source did not contain a bad `next/document` import.
+- The root cause was `NODE_ENV=development` being set inside `.env.local`.
+
+Fix:
+- Remove `NODE_ENV` from `.env.local`.
+- Let Next.js set `NODE_ENV` itself during build/runtime.
+
+Required production server values include:
+
+NEXT_PUBLIC_APP_URL=https://peerify.one
+CIRCLES_COOKIE_SECURE=true
+CIRCLES_HOST=127.0.0.1
+CIRCLES_PORT=3000
+
+Useful recovery sequence:
+
+cd ~/apps/peerify/circles
+perl -ni -e 'print unless /^\s*NODE_ENV\s*=/' .env.local
+unset NODE_ENV
+rm -rf .next
+npm run build
+./scripts/deploy-peerify.sh
+
+Status after fix:
+- Build succeeds.
+- Deploy succeeds.
+- `https://peerify.one` returns `200 OK`.
+- `/circles/<handle>/home` returns `200 OK`.
