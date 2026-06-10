@@ -113,7 +113,7 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                     templateModel: {
                         name: user.name || "User",
                         actionUrl: resetLink,
-                        product_name: "Kamooni", // Or from process.env
+                        product_name: "Peerify", // Or from process.env
                         product_url: baseUrl,
                         support_url: `${baseUrl}/support`, // Example, adjust as needed
                         // For operating_system and browser_name, you'd need to find a way to pass these

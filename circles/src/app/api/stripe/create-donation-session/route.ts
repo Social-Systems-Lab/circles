@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
                     price_data: {
                         currency: "eur",
                         product_data: {
-                            name: "Kamooni general donation",
+                            name: "Peerify general donation",
                         },
                         unit_amount: amount * 100,
                     },

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
             ok: false,
             access: "denied",
             error: "subject_not_found",
-            message: "Credential subject is not linked to a Kamooni account.",
+            message: "Credential subject is not linked to a Peerify account.",
         });
     }
 

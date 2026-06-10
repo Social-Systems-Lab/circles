@@ -92,10 +92,10 @@ export default function ChatPage() {
                 <Image src="/images/illustrations/mailbox.png" alt="No messages yet" width={300} height={300} />
                 <h4 className="text-lg font-semibold">No Messages Yet</h4>
                 <p className="max-w-md text-center text-sm text-gray-500">
-                    You haven&apos;t joined any message groups yet. Try discover new circles to message in.
+                    You haven&apos;t joined any message groups yet. Try exploring artists, hosts, and music communities to message.
                 </p>
                 <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
-                    Discover
+                    Explore Peerify
                 </Button>
             </div>
         );

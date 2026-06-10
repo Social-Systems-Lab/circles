@@ -97,7 +97,7 @@ function DonateContent() {
                             Make a one-off donation
                         </h1>
                         <p className="mt-5 text-lg leading-8 text-kam-gray-dark/80">
-                            This page is for public one-off donations to support Kamooni&apos;s shared community
+                            This page is for public one-off donations to support Peerify&apos;s shared community
                             infrastructure. It is separate from the monthly and yearly supporter membership flow.
                         </p>
                     </div>
