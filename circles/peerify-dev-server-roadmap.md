@@ -107,3 +107,21 @@ Decision:
 
 Current dev URL:
 - http://65.21.91.96:3000
+
+## 2026-06-10 HTTPS pilot domain checkpoint
+
+Peerify pilot domain is now live:
+
+- Public pilot URL: https://peerify.one
+- www URL: https://www.peerify.one
+- DNS:
+  - peerify.one -> 65.21.91.96
+  - www.peerify.one -> 65.21.91.96
+- Nginx proxies peerify.one and www.peerify.one to the app on localhost:3000.
+- Certbot / Let's Encrypt HTTPS is active.
+- HTTP redirects to HTTPS.
+- `.env.local` was updated on the server:
+  - NEXT_PUBLIC_APP_URL=https://peerify.one
+  - CIRCLES_COOKIE_SECURE=true
+
+Direct IP dev access may still load at http://65.21.91.96:3000, but secure-cookie login/session testing should now be done through https://peerify.one.
