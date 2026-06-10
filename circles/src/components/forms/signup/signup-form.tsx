@@ -139,7 +139,7 @@ export function SignupForm(): React.ReactElement {
                                         description: {
                                             // Updated description for user, added back circle for type compatibility
                                             user: "Choose a unique handle (lowercase, numbers, hyphens). Spaces automatically become hyphens.",
-                                            circle: "Choose a unique handle for the circle.", // Generic circle description
+                                            circle: "Choose a unique handle for your profile.", // Generic circle description
                                         },
                                         required: true,
                                     }}

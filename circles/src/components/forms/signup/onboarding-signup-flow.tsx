@@ -48,7 +48,7 @@ const SHORT_BIO_MAX_LENGTH = 200;
 const SKILLS_PROMPT_TEXT = "Choose a few skill areas you could help others with";
 const SKILLS_HELPER_TEXT = "Choose at least 2. You can change or add more later.";
 const INTERESTS_PROMPT_TEXT =
-    "Pick a few topics you care about so Kamooni can connect you with relevant projects, events, and communities.";
+    "Pick a few topics you care about so Peerify can connect you with artists, hosts, events, and local music communities.";
 const INTERESTS_HELPER_TEXT = "Choose at least 2. You can change or add more later.";
 
 const stepTitles = ["Welcome", "Account", "Skills", "Interests", "Profile", "Support"] as const;
@@ -167,7 +167,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
                         compact ? "h-12 w-12 p-2.5" : "h-16 w-16 p-3 sm:h-20 sm:w-20 sm:p-4",
                     )}
                 >
-                    <Image src="/images/kamooni_logo.png" alt="Kamooni logo" fill className="object-contain p-2" />
+                    <Image src="/images/kamooni_logo.png" alt="Peerify logo" fill className="object-contain p-2" />
                 </div>
                 <div className="relative">
                     <div
@@ -699,7 +699,7 @@ export function OnboardingSignupFlow() {
                                         {stepIndex === 0 &&
                                             "Join people building communities, projects, and practical alternatives together."}
                                         {stepIndex === 1 &&
-                                            "A simple start: your name, login details, and the handle others will use to find you on Kamooni."}
+                                            "A simple start: your name, login details, and the handle others will use to find you on Peerify."}
                                         {stepIndex === 2 && SKILLS_PROMPT_TEXT}
                                         {stepIndex === 3 && INTERESTS_PROMPT_TEXT}
                                         {stepIndex === 4 &&
@@ -714,7 +714,7 @@ export function OnboardingSignupFlow() {
                                 <div className="space-y-8">
                                     <div className="rounded-[24px] border border-white/70 bg-white/70 p-6 shadow-[0_10px_35px_rgba(123,81,24,0.08)]">
                                         <p className="text-base leading-7 text-kam-gray-dark/80">
-                                            Kamooni helps people discover communities, contribute skills, collaborate on
+                                            Peerify helps people explore artists, hosts, and music communities, connect around
                                             projects, and build trust through action.
                                         </p>
                                     </div>
@@ -826,7 +826,7 @@ export function OnboardingSignupFlow() {
                                                 className="h-12 border-[#d9c7a0] bg-white/80"
                                             />
                                             <p className="text-sm text-kam-gray-dark/60">
-                                                This is the handle others will use to find you on Kamooni.
+                                                This is the handle others will use to find you on Peerify.
                                             </p>
                                             {errors.handle && <p className="text-sm text-red-600">{errors.handle}</p>}
                                         </div>
