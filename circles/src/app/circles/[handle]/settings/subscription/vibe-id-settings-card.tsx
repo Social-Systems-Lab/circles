@@ -228,9 +228,9 @@ export function VibeIdSettingsCard({
                                             <WalletCards className="h-4 w-4" />
                                             Credential
                                         </div>
-                                        <div className="text-base font-semibold text-foreground">Kamooni membership</div>
+                                        <div className="text-base font-semibold text-foreground">Peerify membership</div>
                                         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                            Claim this credential in VibeID to keep a signed proof of your active Kamooni membership.
+                                            Claim this credential in VibeID to keep a signed proof of your active Peerify membership.
                                         </p>
                                     </div>
                                     <Badge variant={membershipCredential ? "outline" : "secondary"} className="w-fit gap-1">
@@ -270,7 +270,7 @@ export function VibeIdSettingsCard({
                                     </div>
                                 ) : (
                                     <p className="mt-4 text-sm text-muted-foreground">
-                                        A membership credential becomes available here when your Kamooni membership is active.
+                                        A membership credential becomes available here when your Peerify membership is active.
                                     </p>
                                 )}
                             </div>
