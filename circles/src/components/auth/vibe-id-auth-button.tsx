@@ -78,7 +78,7 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
 
         toast({
             title: "VibeID sign-in complete",
-            description: "Welcome to Kamooni.",
+            description: "Welcome to Peerify.",
         });
 
         const redirectUrl = searchParams?.get("redirectTo") ?? `/circles/${user.handle}`;
@@ -124,7 +124,7 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
                     return;
                 }
 
-                setStatusText("Continue in the Kamooni signup wizard to finish creating your account.");
+                setStatusText("Continue in the Peerify signup flow to finish creating your account.");
                 return;
             }
 

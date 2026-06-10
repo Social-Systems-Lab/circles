@@ -79,15 +79,15 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                     </div>
                 </div>
             </div>
-            <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Welcome, Changemaker!</h2>
+            <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Welcome to Peerify!</h2>
             <p className="text-gray-600">
-                Your journey in Kamooni begins now. Here&apos;s a glimpse of the world you&apos;re about to enter:
+                Your Peerify journey begins now. Here&apos;s a glimpse of the music community you&apos;re about to enter:
             </p>
             {platformMetrics ? (
                 <div className="grid grid-cols-2 gap-4">
                     <Card className="bg-white p-4">
                         <h3 className="mb-0 mt-0 text-lg font-semibold">{platformMetrics.users}</h3>
-                        <p className="text-sm text-gray-500">Fellow changemakers</p>
+                        <p className="text-sm text-gray-500">Artists and listeners</p>
                     </Card>
                     <Card className="bg-white p-4">
                         <h3 className="mb-0 mt-0 text-lg font-semibold">{platformMetrics.circles}</h3>

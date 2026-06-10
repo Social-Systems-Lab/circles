@@ -247,7 +247,7 @@ export function VerifyAccountButton({
                             <DialogHeader>
                                 <DialogTitle>Submit profile for review</DialogTitle>
                                 <DialogDescription>
-                                    Your profile will be submitted to Kamooni admins for review. You&apos;ll be
+                                    Your profile will be submitted to Peerify admins for review. You&apos;ll be
                                     notified when your verification request has been reviewed. Email verification is
                                     separate and only confirms your email address.
                                 </DialogDescription>
@@ -257,7 +257,7 @@ export function VerifyAccountButton({
                                 <div className="space-y-3 rounded-lg border border-[#eadcc0] bg-[#fff9ef] p-4">
                                     <div className="space-y-1">
                                         <div className="text-sm font-medium text-foreground">
-                                            Kamooni is community-supported. Would you consider becoming a Founding
+                                            Peerify is community-supported. Would you consider becoming a Founding
                                             Supporter from €1/month?
                                         </div>
                                         <p className="text-xs text-muted-foreground">
