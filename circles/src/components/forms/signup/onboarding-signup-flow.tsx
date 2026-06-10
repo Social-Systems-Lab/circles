@@ -167,7 +167,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
                         compact ? "h-12 w-12 p-2.5" : "h-16 w-16 p-3 sm:h-20 sm:w-20 sm:p-4",
                     )}
                 >
-                    <Image src="/images/kamooni_logo.png" alt="Peerify logo" fill className="object-contain p-2" />
+                    <Image src="/peerify/logo-mark.png" alt="Peerify logo" fill className="object-contain p-2" />
                 </div>
                 <div className="relative">
                     <div
@@ -176,7 +176,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
                             compact ? "text-2xl sm:text-[2rem]" : "text-[2.1rem] sm:text-[2.7rem]",
                         )}
                     >
-                        Kamooni
+                        Peerify
                     </div>
                     <div className={cn("text-kam-gray-dark/72 mt-1", compact ? "text-sm" : "text-base sm:text-lg")}>
                         Find the others
@@ -714,8 +714,8 @@ export function OnboardingSignupFlow() {
                                 <div className="space-y-8">
                                     <div className="rounded-[24px] border border-white/70 bg-white/70 p-6 shadow-[0_10px_35px_rgba(123,81,24,0.08)]">
                                         <p className="text-base leading-7 text-kam-gray-dark/80">
-                                            Peerify helps people explore artists, hosts, and music communities, connect around
-                                            projects, and build trust through action.
+                                            Peerify helps people explore artists, hosts, and music communities, connect through
+                                            local music, and build trust through real-world experiences.
                                         </p>
                                     </div>
 
