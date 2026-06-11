@@ -51,7 +51,7 @@ export async function GET(
       lower.endsWith(".svg") ? "image/svg+xml" :
       "application/octet-stream";
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,
