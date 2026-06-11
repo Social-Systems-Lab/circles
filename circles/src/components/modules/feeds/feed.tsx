@@ -14,7 +14,6 @@ import { useRouter } from "next/navigation";
 import { ListFilter } from "@/components/utils/list-filter";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import peerifyLogo from "@public/peerify/logo-mark.png";
 import { updateQueryParam } from "@/lib/utils/helpers-client";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { useEffect, useState, useMemo } from "react";
@@ -79,7 +78,7 @@ export const FeedComponent = ({
         return (
             <div className="flex h-full min-h-[320px] w-full flex-1 items-center justify-center" style={containerStyle}>
                 <div className="flex w-full max-w-[700px] flex-col items-center text-center">
-                    <Image src={peerifyLogo} alt="Peerify logo" width={72} height={72} priority />
+                    <Image src="/peerify/logo-mark.png" alt="Peerify logo" width={72} height={72} priority />
                     <p className="mt-4 text-sm font-medium text-gray-600">Feed loading…</p>
                 </div>
             </div>
@@ -200,7 +199,7 @@ export const AggregateFeedComponent = ({
                         fullWidth ? "mx-auto max-w-[760px] px-4 sm:px-6 lg:px-8" : ""
                     }`}
                 >
-                    <Image src={peerifyLogo} alt="Peerify logo" width={72} height={72} priority />
+                    <Image src="/peerify/logo-mark.png" alt="Peerify logo" width={72} height={72} priority />
                     <p className="mt-4 text-base font-medium text-gray-600">Feed loading…</p>
                 </div>
             </div>
