@@ -66,19 +66,19 @@ export function CodeOfConductAgreement({
                     <span className="text-sm font-semibold uppercase tracking-[0.18em]">Pilot Verification</span>
                 </div>
                 <div className="mt-3 space-y-2">
-                    <h2 className="text-2xl font-semibold">Agree to the Kamooni Code of Conduct</h2>
+                    <h2 className="text-2xl font-semibold">Agree to the Peerify Code of Conduct</h2>
                     <p className="max-w-2xl text-sm leading-7 text-stone-600">
-                        To keep Kamooni useful and trustworthy, please agree to use the platform honestly,
+                        To keep Peerify useful, welcoming, and trustworthy, please agree to use the platform honestly,
                         respectfully, and constructively. This includes representing yourself truthfully, treating
-                        others with respect, protecting private information, avoiding spam or manipulation, and helping
-                        keep community spaces safe and useful.
+                        artists, fans, and hosts with respect, protecting private information, avoiding spam or
+                        manipulation, and helping keep community spaces safe and useful.
                     </p>
                 </div>
             </div>
 
             <div className="space-y-6 px-6 py-6 sm:px-8 sm:py-7">
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-                    This agreement is part of Kamooni profile verification. Email verification remains a separate step
+                    This agreement is part of Peerify profile verification. Email verification remains a separate step
                     that only confirms your email address.
                 </div>
 
@@ -92,7 +92,7 @@ export function CodeOfConductAgreement({
                             className="mt-1"
                         />
                         <Label htmlFor="pilot-code-of-conduct" className="text-sm leading-6 text-stone-800">
-                            I agree to the Kamooni Code of Conduct.
+                            I agree to the Peerify Code of Conduct.
                         </Label>
                     </div>
                 </div>
