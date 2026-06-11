@@ -25,7 +25,6 @@ export async function GET(
   const bucket = process.env.MINIO_BUCKET || "circles";
 
   const objectName = (path || []).join("/");
-  console.log("[storage proxy] request", { bucket, objectName, host, port });
   if (!objectName) {
     return NextResponse.json({ error: "Missing object path" }, { status: 400 });
   }
@@ -39,11 +38,8 @@ export async function GET(
   });
 
   try {
-    console.log("[storage proxy] before getObject", { bucket, objectName });
     const stream = await client.getObject(bucket, objectName);
-    console.log("[storage proxy] after getObject", { bucket, objectName });
     const buffer = await streamToBuffer(stream);
-    console.log("[storage proxy] after streamToBuffer", { bucket, objectName, bytes: buffer.length });
 
     const lower = objectName.toLowerCase();
     const contentType =
