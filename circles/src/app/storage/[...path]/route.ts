@@ -17,11 +17,7 @@ export async function GET(
 ) {
   const { path } = await params;
 
-  // (keep your existing production guard if you want it)
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not available in production" }, { status: 404 });
-  }
-
+  // Production storage proxy is intentionally enabled.
   const host = process.env.MINIO_HOST || "127.0.0.1";
   const port = parseInt(process.env.MINIO_PORT || "9000", 10);
   const accessKey = process.env.MINIO_ROOT_USERNAME || "minioadmin";
@@ -29,6 +25,7 @@ export async function GET(
   const bucket = process.env.MINIO_BUCKET || "circles";
 
   const objectName = (path || []).join("/");
+  console.log("[storage proxy] request", { bucket, objectName, host, port });
   if (!objectName) {
     return NextResponse.json({ error: "Missing object path" }, { status: 400 });
   }
@@ -42,8 +39,11 @@ export async function GET(
   });
 
   try {
+    console.log("[storage proxy] before getObject", { bucket, objectName });
     const stream = await client.getObject(bucket, objectName);
+    console.log("[storage proxy] after getObject", { bucket, objectName });
     const buffer = await streamToBuffer(stream);
+    console.log("[storage proxy] after streamToBuffer", { bucket, objectName, bytes: buffer.length });
 
     const lower = objectName.toLowerCase();
     const contentType =
