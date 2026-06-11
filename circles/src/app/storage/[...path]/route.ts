@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client as MinioClient } from "minio";
 
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return Buffer.concat(chunks);
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -33,6 +43,7 @@ export async function GET(
 
   try {
     const stream = await client.getObject(bucket, objectName);
+    const buffer = await streamToBuffer(stream);
 
     const lower = objectName.toLowerCase();
     const contentType =
@@ -43,7 +54,7 @@ export async function GET(
       lower.endsWith(".svg") ? "image/svg+xml" :
       "application/octet-stream";
 
-    return new NextResponse(stream as any, {
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
