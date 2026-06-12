@@ -132,7 +132,8 @@ const EventCard: React.FC<{
     onNavigate?: () => void;
 }> = ({ e, circleHandle, condensed, canManageJoinLink, onHideCancelled, hidePending, onNavigate }) => {
     const stage = e.stage;
-    const isDraft = stage === "review";
+    const isDraft = stage === "draft";
+    const isReview = stage === "review";
     const isCancelled = stage === "cancelled";
     const attendees = e.attendees ?? 0;
     const ongoing = isOngoing(e);
@@ -147,7 +148,7 @@ const EventCard: React.FC<{
         <Card
             className={cn(
                 "relative h-full max-w-2xl transition-shadow duration-200 ease-in-out group-hover:shadow-lg",
-                isDraft && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-90",
+                (isDraft || isReview) && "border-dashed border-yellow-400 bg-yellow-50/30 opacity-90",
                 isCancelled && "border-dashed border-red-400 bg-red-50/40 opacity-75",
                 ongoing && !isCancelled && "border-2 border-red-500",
             )}
@@ -186,6 +187,15 @@ const EventCard: React.FC<{
                             </div>
                             <div className="flex items-center gap-1">
                                 {isDraft && (
+                                    <Badge
+                                        variant="outline"
+                                        className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
+                                    >
+                                        <Clock className="mr-1 h-3 w-3" />
+                                        Draft
+                                    </Badge>
+                                )}
+                                {isReview && (
                                     <Badge
                                         variant="outline"
                                         className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"

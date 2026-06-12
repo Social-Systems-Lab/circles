@@ -151,39 +151,37 @@ export const getEventsByCircleId = async (
     try {
         const dateMatch = buildRangeMatch(range);
         const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
+        const canReview = await isAuthorized(userDid, circleId, features.events.review);
+        const canModerate = await isAuthorized(userDid, circleId, features.events.moderate);
+        const canManageUnpublished = canReview || canModerate;
         const matchQuery: any = {
             circleId,
             $or: [
-                 dateMatch,
-                 { recurrence: { $exists: true } } // Always fetch recurring events to check for expansion
-            ]
+                dateMatch,
+                { recurrence: { $exists: true } }, // Always fetch recurring events to check for expansion
+            ],
         };
         // Clean up if dateMatch is empty (meaning no range)
         if (Object.keys(dateMatch).length === 0) {
             delete matchQuery.$or;
         } else {
-             // If we have a range, use the $or. But wait, $or requires array of expressions.
-             // If dateMatch is empty, $or is invalid if used blindly.
-             // A better way: match (circleId) AND ( (dateMatch) OR (recurrence exists) )
-             // If dateMatch is empty, this logic simplifies to just circleId.
-             // Code below handles this manually.
+            // If we have a range, use the $or. But wait, $or requires array of expressions.
+            // If dateMatch is empty, $or is invalid if used blindly.
+            // A better way: match (circleId) AND ( (dateMatch) OR (recurrence exists) )
+            // If dateMatch is empty, this logic simplifies to just circleId.
+            // Code below handles this manually.
         }
 
         const baseMatch: any = { circleId };
         if (Object.keys(dateMatch).length > 0) {
-            baseMatch.$or = [
-                dateMatch,
-                { "recurrence": { $exists: true, $ne: null } }
-            ];
+            baseMatch.$or = [dateMatch, { recurrence: { $exists: true, $ne: null } }];
         }
 
         let hiddenCancelledObjectIds: ObjectId[] = [];
         try {
             const viewer = await getUserPrivate(userDid);
             const hiddenIds = (viewer?.hiddenCancelledEventIds || []) as string[];
-            hiddenCancelledObjectIds = hiddenIds
-                .filter((id) => ObjectId.isValid(id))
-                .map((id) => new ObjectId(id));
+            hiddenCancelledObjectIds = hiddenIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         } catch (err) {
             hiddenCancelledObjectIds = [];
         }
@@ -201,11 +199,29 @@ export const getEventsByCircleId = async (
 
             if (userQueries.length > 0) {
                 // User profile circle:
-// show events the user CREATED or is PARTICIPATING in,
-// regardless of which circle the event belongs to
-matchQuery.$or = userQueries;
+                // show events the user CREATED or is PARTICIPATING in,
+                // regardless of which circle the event belongs to
+                matchQuery.$or = userQueries;
                 delete matchQuery.circleId;
             }
+        }
+
+        if (matchQuery.circleId) {
+            matchQuery.$and = [
+                ...(matchQuery.$and || []),
+                canManageUnpublished
+                    ? {}
+                    : {
+                          $or: [{ stage: { $nin: ["draft", "review"] } }, { createdBy: userDid }],
+                      },
+            ];
+        } else {
+            matchQuery.$and = [
+                ...(matchQuery.$and || []),
+                {
+                    $or: [{ stage: { $nin: ["draft", "review"] } }, { createdBy: userDid }],
+                },
+            ];
         }
 
         const hideCancelledMatchStage =
@@ -600,6 +616,18 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
         }
 
         const event = events[0];
+        const canReview = await isAuthorized(userDid, event.circleId, features.events.review);
+        const canModerate = await isAuthorized(userDid, event.circleId, features.events.moderate);
+        const canManageUnpublished = canReview || canModerate;
+
+        if (
+            (event.stage === "draft" || event.stage === "review") &&
+            event.createdBy !== userDid &&
+            !canManageUnpublished
+        ) {
+            return null;
+        }
+
         if (!recurringInstance) {
             return event;
         }
@@ -830,6 +858,7 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
 
         // Delete RSVPs
         await EventRsvps.deleteMany({ eventId });
+        await EventInvitations.deleteMany({ eventId });
 
         // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
         // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });

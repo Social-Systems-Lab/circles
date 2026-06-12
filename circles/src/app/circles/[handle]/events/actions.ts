@@ -4,8 +4,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
-import { Feeds, Events, EventInvitations } from "@/lib/data/db";
-import { createDefaultFeed, createPost, getFeedByHandle, updatePost } from "@/lib/data/feed";
+import { Feeds, Events, EventInvitations, EventRsvps } from "@/lib/data/db";
+import { createDefaultFeed, createPost, deletePost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
     Circle,
     Media,
@@ -49,10 +49,7 @@ import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
-import {
-    listAcceptedConnectionsForUserDid,
-    searchAcceptedConnectionsForUserDid,
-} from "@/lib/data/relationships";
+import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
 
 // ----- Types -----
 
@@ -165,6 +162,12 @@ function normalizeRecurrenceEndDate(endDate?: Date): Date | undefined {
 
 const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") === "true";
 
+const parseRequestedStage = (formData: FormData): "draft" | "open" | "preserve" => {
+    const value = formData.get("submitStage");
+    if (value === "preserve") return "preserve";
+    return value === "open" ? "open" : "draft";
+};
+
 const getEventInternalPreviewUrl = (circleHandle: string, eventId: string) => {
     const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
     return `${baseUrl}/circles/${circleHandle}/events/${eventId}?source=noticeboard`;
@@ -240,6 +243,17 @@ const upsertEventNoticeboardPost = async ({
         }),
     );
     return createdPost._id?.toString?.() ?? createdPost._id ?? null;
+};
+
+const removeEventNoticeboardPost = async (noticeboardPostId?: string | null) => {
+    if (!noticeboardPostId) {
+        return;
+    }
+    try {
+        await deletePost(noticeboardPostId);
+    } catch (error) {
+        console.error("Failed to delete linked noticeboard post for event:", error);
+    }
 };
 
 // ----- Actions -----
@@ -356,6 +370,9 @@ export async function createEventAction(
 
         const canCreate = await isAuthorized(userDid, circle._id as string, features.events.create);
         if (!canCreate) return { success: false, message: "Not authorized to create events" };
+        const canPublish =
+            (await isAuthorized(userDid, circle._id as string, features.events.review)) ||
+            (await isAuthorized(userDid, circle._id as string, features.events.moderate));
 
         const validated = createEventSchema.safeParse({
             title: formData.get("title"),
@@ -382,6 +399,7 @@ export async function createEventAction(
             };
         }
         const data = validated.data;
+        const requestedStage = parseRequestedStage(formData);
 
         // Parse primitives
         const startAt = parseDate(data.startAt);
@@ -438,7 +456,7 @@ export async function createEventAction(
             description: data.description,
             images: uploadedImages,
             location: locationData,
-            stage: "draft",
+            stage: requestedStage === "open" && canPublish ? "open" : "draft",
             userGroups: data.userGroups || [],
             isVirtual,
             virtualUrl,
@@ -468,7 +486,7 @@ export async function createEventAction(
             console.error("Failed to ensure events module is enabled on user circle:", err);
         }
 
-        if (shouldPublishToNoticeboard(formData)) {
+        if (shouldPublishToNoticeboard(formData) && created.stage === "open") {
             try {
                 const noticeboardPostId = await upsertEventNoticeboardPost({
                     circle,
@@ -492,7 +510,11 @@ export async function createEventAction(
             }
         }
 
-        return { success: true, message: "Event created successfully", eventId: created._id?.toString() };
+        return {
+            success: true,
+            message: created.stage === "open" ? "Event published successfully" : "Event saved as draft",
+            eventId: created._id?.toString(),
+        };
     } catch (error) {
         console.error("Error creating event:", error);
         return { success: false, message: "Failed to create event" };
@@ -519,6 +541,7 @@ export async function updateEventAction(
 
         const isAuthor = userDid === event.createdBy;
         const canModerate = await isAuthorized(userDid, circle._id as string, features.events.moderate);
+        const canPublish = canModerate || (await isAuthorized(userDid, circle._id as string, features.events.review));
         const canEdit = isAuthor || canModerate;
         if (!canEdit) return { success: false, message: "Not authorized to update this event" };
 
@@ -547,6 +570,7 @@ export async function updateEventAction(
             };
         }
         const data = validated.data;
+        const requestedStage = parseRequestedStage(formData);
 
         let locationData: EventModel["location"] = event.location;
         if (data.location) {
@@ -556,7 +580,6 @@ export async function updateEventAction(
                 /* already validated */
             }
         }
-
 
         let recurrenceData: EventModel["recurrence"] | null = event.recurrence ?? undefined;
         const rawRecurrence = formData.get("recurrence") as string | null;
@@ -568,12 +591,12 @@ export async function updateEventAction(
                 if (recurrenceData?.endDate) {
                     recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
                 }
-            } catch (e) { 
+            } catch (e) {
                 console.error("[updateEventAction] Failed to parse recurrence:", e);
             }
         } else if (rawRecurrence === "") {
-             console.log("[updateEventAction] Clearing recurrence");
-             recurrenceData = null; // Explicitly clear
+            console.log("[updateEventAction] Clearing recurrence");
+            recurrenceData = null; // Explicitly clear
         }
 
         // Reconcile images
@@ -620,6 +643,9 @@ export async function updateEventAction(
         const startAt = data.startAt ? parseDate(data.startAt) : event.startAt;
         const endAt = data.endAt ? parseDate(data.endAt) : event.endAt;
 
+        const nextStage =
+            requestedStage === "preserve" ? event.stage : requestedStage === "open" && canPublish ? "open" : "draft";
+
         const updateData: Partial<EventModel> = {
             title: data.title,
             description: data.description,
@@ -640,6 +666,7 @@ export async function updateEventAction(
                     : undefined,
             visibility: (data.visibility as any) ?? event.visibility,
             recurrence: recurrenceData as any,
+            stage: nextStage,
             updatedAt: new Date(),
         };
 
@@ -649,7 +676,12 @@ export async function updateEventAction(
         const success = await updateEventDb(eventId, updateData, user);
         if (!success) return { success: false, message: "Failed to update event" };
 
-        if (shouldPublishToNoticeboard(formData)) {
+        if (updateData.stage === "draft") {
+            await removeEventNoticeboardPost(event.noticeboardPostId);
+            if (event.noticeboardPostId) {
+                await Events.updateOne({ _id: new ObjectId(eventId) }, { $unset: { noticeboardPostId: "" } });
+            }
+        } else if (shouldPublishToNoticeboard(formData)) {
             try {
                 const noticeboardPostId = await upsertEventNoticeboardPost({
                     circle,
@@ -674,7 +706,10 @@ export async function updateEventAction(
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
-        return { success: true, message: "Event updated successfully" };
+        return {
+            success: true,
+            message: updateData.stage === "open" ? "Event published successfully" : "Event saved as draft",
+        };
     } catch (error) {
         console.error("Error updating event:", error);
         return { success: false, message: "Failed to update event" };
@@ -706,6 +741,8 @@ export async function deleteEventAction(
         if (event.images?.length) {
             await Promise.allSettled(event.images.map((img) => deleteFile(img.fileInfo.url)));
         }
+
+        await removeEventNoticeboardPost(event.noticeboardPostId);
 
         const success = await deleteEventDb(eventId);
         if (!success) return { success: false, message: "Failed to delete event" };
@@ -747,6 +784,11 @@ export async function changeEventStageAction(
         } else if (currentStage === "draft" && newStage === "review") {
             // Author can submit for review; reviewers can also move directly to review if needed
             allowed = userDid === event.createdBy || canReview;
+        } else if (
+            (currentStage === "review" || currentStage === "open" || currentStage === "cancelled") &&
+            newStage === "draft"
+        ) {
+            allowed = userDid === event.createdBy || canModerate;
         } else if ((currentStage === "draft" || currentStage === "review") && newStage === "open") {
             // Reviewers can open directly from draft, or after review
             allowed = canReview;
@@ -759,8 +801,33 @@ export async function changeEventStageAction(
             return { success: false, message: `Not authorized to move event from ${currentStage} to ${newStage}` };
         }
 
-        const success = await changeEventStageDb(eventId, newStage);
+        let success = false;
+        if (currentStage === "open" && newStage === "cancelled") {
+            const activeRsvpCount = await EventRsvps.countDocuments({
+                eventId,
+                status: { $in: ["going", "interested", "waitlist"] },
+            });
+
+            if (activeRsvpCount === 0) {
+                await removeEventNoticeboardPost(event.noticeboardPostId);
+                success = await deleteEventDb(eventId);
+                if (!success) return { success: false, message: "Failed to withdraw event" };
+
+                revalidatePath(`/circles/${circleHandle}/events`);
+                revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+                return { success: true, message: "Event withdrawn" };
+            }
+        }
+
+        success = await changeEventStageDb(eventId, newStage);
         if (!success) return { success: false, message: "Failed to change event stage" };
+
+        if (newStage === "draft") {
+            await removeEventNoticeboardPost(event.noticeboardPostId);
+            if (event.noticeboardPostId) {
+                await Events.updateOne({ _id: new ObjectId(eventId) }, { $unset: { noticeboardPostId: "" } });
+            }
+        }
 
         // Send notifications based on transition
         try {
@@ -797,7 +864,15 @@ export async function changeEventStageAction(
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
 
-        return { success: true, message: `Event stage changed to ${newStage}` };
+        return {
+            success: true,
+            message:
+                newStage === "draft"
+                    ? "Event reverted to draft"
+                    : newStage === "open"
+                      ? "Event published"
+                      : `Event stage changed to ${newStage}`,
+        };
     } catch (error) {
         console.error("Error changing event stage:", error);
         return { success: false, message: "Failed to change event stage" };
@@ -1239,10 +1314,7 @@ export async function hideCancelledEventAction(
             return { success: false, message: "Invalid event ID" };
         }
 
-        const [event, user] = await Promise.all([
-            getEventById(eventId, userDid),
-            getPrivateUserByDid(userDid),
-        ]);
+        const [event, user] = await Promise.all([getEventById(eventId, userDid), getPrivateUserByDid(userDid)]);
 
         if (!event) {
             return { success: false, message: "Event not found" };
@@ -1297,10 +1369,7 @@ export async function unhideCancelledEventAction(
             return { success: false, message: "Invalid event ID" };
         }
 
-        const [event, user] = await Promise.all([
-            getEventById(eventId, userDid),
-            getPrivateUserByDid(userDid),
-        ]);
+        const [event, user] = await Promise.all([getEventById(eventId, userDid), getPrivateUserByDid(userDid)]);
 
         if (!event) {
             return { success: false, message: "Event not found" };
