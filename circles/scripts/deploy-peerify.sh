@@ -3,6 +3,15 @@ set -euo pipefail
 
 cd ~/apps/peerify/circles
 
+echo "Loading production environment..."
+if [ -f .env.local ]; then
+  set -a
+  source .env.local
+  set +a
+fi
+
+export NODE_ENV=production
+
 echo "Cleaning old build..."
 rm -rf .next
 
