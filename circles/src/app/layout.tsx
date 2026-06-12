@@ -110,7 +110,14 @@ export async function generateMetadata(): Promise<Metadata> {
             template: `%s | ${appConfig.name}`,
         },
         description: appConfig.description,
-        icons: [appConfig.brand.icon],
+        icons: {
+            icon: [
+                { url: "/peerify/favicon.ico", sizes: "any" },
+                { url: "/peerify/favicon.png", type: "image/png" },
+            ],
+            shortcut: "/peerify/favicon.ico",
+            apple: "/peerify/favicon.png",
+        },
         openGraph: {
             title: `${appConfig.name} — ${appConfig.tagline}`,
             description: appConfig.description,
