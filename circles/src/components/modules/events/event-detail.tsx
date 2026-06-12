@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useTransition } from "react";
@@ -119,8 +118,8 @@ export default function EventDetail({
     const locationLabel = event.isVirtual && !locationText ? "Virtual" : locationText;
     const hasMapLocation = Boolean(event.location?.lngLat);
     const resolvedDistance = hasMapLocation
-        ? (event as any).distance ??
-          (event.location?.lngLat && user ? haversineKm(event.location.lngLat, getUserLocation(user)) : undefined)
+        ? ((event as any).distance ??
+          (event.location?.lngLat && user ? haversineKm(event.location.lngLat, getUserLocation(user)) : undefined))
         : undefined;
 
     const handleAddressClick = () => {
@@ -192,10 +191,26 @@ export default function EventDetail({
         startTransition(async () => {
             const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "open");
             if (res.success) {
-                toast({ title: "Event opened" });
+                toast({ title: res.message || "Event published" });
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to open", variant: "destructive" });
+            }
+        });
+    };
+
+    const onRevertToDraft = () => {
+        startTransition(async () => {
+            const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "draft");
+            if (res.success) {
+                toast({ title: res.message || "Event reverted to draft" });
+                router.refresh();
+            } else {
+                toast({
+                    title: "Error",
+                    description: res.message || "Failed to revert event",
+                    variant: "destructive",
+                });
             }
         });
     };
@@ -204,7 +219,7 @@ export default function EventDetail({
         startTransition(async () => {
             const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "cancelled");
             if (res.success) {
-                toast({ title: "Event cancelled" });
+                toast({ title: res.message || "Event cancelled" });
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to cancel", variant: "destructive" });
@@ -341,19 +356,20 @@ export default function EventDetail({
                                                 title="Zoom to location"
                                             >
                                                 <MapPin className="mr-1 h-3 w-3 text-primary" />
-                                                <span className="truncate max-w-[200px]">
+                                                <span className="max-w-[200px] truncate">
                                                     {event.isVirtual && !locationText ? "Virtual" : locationText}
                                                     {event.isHybrid ? " · Hybrid" : ""}
                                                 </span>
                                             </button>
                                         </HoverCardTrigger>
-                                        {resolvedDistance !== undefined && resolvedDistance !== Number.POSITIVE_INFINITY && (
-                                            <HoverCardContent className="w-auto p-2" side="top" align="center">
-                                                <div className="text-xs font-medium">
-                                                    {getDistanceString(resolvedDistance)} from your location
-                                                </div>
-                                            </HoverCardContent>
-                                        )}
+                                        {resolvedDistance !== undefined &&
+                                            resolvedDistance !== Number.POSITIVE_INFINITY && (
+                                                <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                                    <div className="text-xs font-medium">
+                                                        {getDistanceString(resolvedDistance)} from your location
+                                                    </div>
+                                                </HoverCardContent>
+                                            )}
                                     </HoverCard>
                                 ) : (
                                     <span>
@@ -425,7 +441,9 @@ export default function EventDetail({
                         variant="secondary"
                         onClick={() => {
                             if (onOpen) onOpen();
-                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}#circle-tabs`);
+                            router.push(
+                                `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}#circle-tabs`,
+                            );
                         }}
                     >
                         Open Event
@@ -481,8 +499,8 @@ export default function EventDetail({
                                 {endFmt ? `${startFmt} — ${endFmt}` : startFmt}
                             </span>
                         )}
-                        {(locationText || event.isVirtual || event.isHybrid) && (
-                            hasMapLocation ? (
+                        {(locationText || event.isVirtual || event.isHybrid) &&
+                            (hasMapLocation ? (
                                 <HoverCard openDelay={0} closeDelay={0}>
                                     <HoverCardTrigger asChild>
                                         <button
@@ -491,19 +509,20 @@ export default function EventDetail({
                                             onClick={handleAddressClick}
                                         >
                                             <MapPin className="h-4 w-4 text-primary" />
-                                            <span className="truncate max-w-[220px] text-left">
+                                            <span className="max-w-[220px] truncate text-left">
                                                 {locationLabel}
                                                 {event.isHybrid ? " · Hybrid" : ""}
                                             </span>
                                         </button>
                                     </HoverCardTrigger>
-                                    {resolvedDistance !== undefined && resolvedDistance !== Number.POSITIVE_INFINITY && (
-                                        <HoverCardContent className="w-auto p-2" side="top" align="center">
-                                            <div className="text-xs font-medium">
-                                                {getDistanceString(resolvedDistance)} from your location
-                                            </div>
-                                        </HoverCardContent>
-                                    )}
+                                    {resolvedDistance !== undefined &&
+                                        resolvedDistance !== Number.POSITIVE_INFINITY && (
+                                            <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                                <div className="text-xs font-medium">
+                                                    {getDistanceString(resolvedDistance)} from your location
+                                                </div>
+                                            </HoverCardContent>
+                                        )}
                                 </HoverCard>
                             ) : (
                                 <span className="inline-flex items-center gap-1">
@@ -511,8 +530,7 @@ export default function EventDetail({
                                     {locationLabel}
                                     {event.isHybrid ? " · Hybrid" : ""}
                                 </span>
-                            )
-                        )}
+                            ))}
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -548,12 +566,18 @@ export default function EventDetail({
                     )}
                     {(event.stage === "draft" || event.stage === "review") && canReview && (
                         <Button disabled={isPending} onClick={onOpenNow}>
-                            Open
+                            Publish event
                         </Button>
                     )}
+                    {(event.stage === "review" || event.stage === "open" || event.stage === "cancelled") &&
+                        (isAuthor || canModerate) && (
+                            <Button disabled={isPending} variant="outline" onClick={onRevertToDraft}>
+                                Revert to draft
+                            </Button>
+                        )}
                     {event.stage === "open" && (canReview || canModerate) && (
                         <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
-                            Cancel
+                            Cancel event
                         </Button>
                     )}
                     {(event.stage === "cancelled" || isEventHidden) && (
@@ -590,9 +614,9 @@ export default function EventDetail({
                                                     joinState.isEnabled && "bg-green-600 text-white hover:bg-green-700",
                                                     !joinState.isEnabled &&
                                                         !joinState.isMissingLink &&
-                                                        "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:opacity-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700",
+                                                        "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700 disabled:opacity-100",
                                                     joinState.isMissingLink &&
-                                                        "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:opacity-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900",
+                                                        "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900 disabled:opacity-100",
                                                 )}
                                                 onClick={() => {
                                                     if (joinState.isEnabled && joinState.href) {

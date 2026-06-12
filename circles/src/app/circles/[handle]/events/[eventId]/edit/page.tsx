@@ -32,6 +32,7 @@ export default async function EditEventPage(props: PageProps) {
 
     const isAuthor = userDid === event.createdBy;
     const canModerate = await isAuthorized(userDid, circle._id as string, features.events.moderate);
+    const canPublish = canModerate || (await isAuthorized(userDid, circle._id as string, features.events.review));
     const canEdit = isAuthor || canModerate;
     if (!canEdit) {
         return (
@@ -61,7 +62,7 @@ export default async function EditEventPage(props: PageProps) {
             </div>
 
             <div className="p-4">
-                <EventForm circleHandle={circle.handle!} event={event} />
+                <EventForm circleHandle={circle.handle!} event={event} canPublish={canPublish} />
             </div>
         </div>
     );

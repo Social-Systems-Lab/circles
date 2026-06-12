@@ -16,19 +16,14 @@ import LocationPicker from "@/components/forms/location-picker";
 import TimePicker from "@/components/forms/time-picker";
 import { format, addHours, setHours, setMinutes } from "date-fns";
 import { Bold, Italic, List, Link as LinkIcon, Heading1, Heading2 } from "lucide-react";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Props = {
     circleHandle?: string; // optional, can come from context or picker
     event?: EventDisplay | null;
     showCirclePicker?: boolean;
     initialSelectedCircleId?: string;
+    canPublish?: boolean;
 };
 
 function toISOStringLocal(date: Date) {
@@ -57,7 +52,13 @@ function toUtcEndOfDayIso(dateOnly: string) {
 import CircleSelector from "@/components/global-create/circle-selector";
 import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
 
-export default function EventForm({ circleHandle, event, showCirclePicker, initialSelectedCircleId }: Props) {
+export default function EventForm({
+    circleHandle,
+    event,
+    showCirclePicker,
+    initialSelectedCircleId,
+    canPublish,
+}: Props) {
     console.log("EventForm mounted/updated. Event recurrence:", event?.recurrence);
     const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
     const router = useRouter();
@@ -80,21 +81,21 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
     const [recurrenceFreq, setRecurrenceFreq] = useState<"daily" | "weekly" | "monthly" | "yearly">(
-        event?.recurrence?.frequency || "daily"
+        event?.recurrence?.frequency || "daily",
     );
     const [recurrenceInterval, setRecurrenceInterval] = useState<string>(
-        event?.recurrence?.interval ? String(event?.recurrence.interval) : "1"
+        event?.recurrence?.interval ? String(event?.recurrence.interval) : "1",
     );
     const [recurrenceEndMode, setRecurrenceEndMode] = useState<"date" | "count">(
-        event?.recurrence?.count ? "count" : "date"
+        event?.recurrence?.count ? "count" : "date",
     );
     const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>(
         event?.recurrence?.endDate
             ? formatDate(new Date(event.recurrence.endDate))
-            : formatDate(addHours(new Date(), 24 * 7)) // Default to one week later
+            : formatDate(addHours(new Date(), 24 * 7)), // Default to one week later
     );
     const [recurrenceCount, setRecurrenceCount] = useState<string>(
-        event?.recurrence?.count ? String(event.recurrence.count) : "7"
+        event?.recurrence?.count ? String(event.recurrence.count) : "7",
     );
 
     const [startDate, setStartDate] = useState(() =>
@@ -130,7 +131,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
             const newCursorPos = start + prefix.length + selection.length + suffix.length;
             textarea.setSelectionRange(
                 start + prefix.length,
-                selection.length ? start + prefix.length + selection.length : start + prefix.length
+                selection.length ? start + prefix.length + selection.length : start + prefix.length,
             );
         }, 0);
     };
@@ -186,8 +187,15 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
         setSelectedCircle(circle?.handle);
     }, []);
 
-    const onSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const submitEvent = (submitStage: "draft" | "open" | "preserve") => {
+        if (submitStage === "open" && !canPublish) {
+            toast({
+                title: "Not allowed",
+                description: "You do not have permission to publish this event.",
+                variant: "destructive",
+            });
+            return;
+        }
 
         // Basic client checks
         if (!title || !description) {
@@ -262,6 +270,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                     fd.set("recurrence", "");
                 }
                 fd.set("publishToNoticeboard", String(publishToNoticeboard));
+                fd.set("submitStage", submitStage);
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
@@ -296,7 +305,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
     };
 
     return (
-        <form className="space-y-6" onSubmit={onSubmit}>
+        <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
             {showCirclePicker && itemDetail && (
                 <div>
                     <CircleSelector
@@ -469,12 +478,12 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                                     setIsRecurring(checked);
                                     if (checked) {
                                         // Reset end date to start date to avoid multi-day recurrence confusion
-                                        setEndDate(startDate); 
+                                        setEndDate(startDate);
                                         if (!recurrenceFreq) {
                                             setRecurrenceFreq("daily");
                                             setRecurrenceInterval("1");
                                             setRecurrenceEndMode("date");
-                                            setRecurrenceEndDate(endDate); 
+                                            setRecurrenceEndDate(endDate);
                                         }
                                     }
                                 }}
@@ -658,9 +667,20 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
             </div>
 
             <div className="flex gap-3">
-                <Button type="submit" disabled={isPending}>
-                    {isPending ? "Saving..." : event ? "Update Event" : "Create Draft"}
-                </Button>
+                {event?.stage === "draft" || !event ? (
+                    <Button type="button" disabled={isPending} onClick={() => submitEvent("draft")}>
+                        {isPending ? "Saving..." : event ? "Save draft" : "Save as draft"}
+                    </Button>
+                ) : (
+                    <Button type="button" disabled={isPending} onClick={() => submitEvent("preserve")}>
+                        {isPending ? "Saving..." : "Save changes"}
+                    </Button>
+                )}
+                {canPublish && (event?.stage === "draft" || !event) && (
+                    <Button type="button" disabled={isPending} onClick={() => submitEvent("open")}>
+                        {isPending ? "Saving..." : "Publish event"}
+                    </Button>
+                )}
                 <Button type="button" variant="outline" onClick={() => router.back()}>
                     Cancel
                 </Button>

@@ -27,6 +27,9 @@ export default async function CreateEventPage(props: PageProps) {
     }
 
     const canCreateEvents = await isAuthorized(userDid, circle._id as string, features.events.create);
+    const canPublishEvents =
+        (await isAuthorized(userDid, circle._id as string, features.events.review)) ||
+        (await isAuthorized(userDid, circle._id as string, features.events.moderate));
     if (!canCreateEvents) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
@@ -51,7 +54,7 @@ export default async function CreateEventPage(props: PageProps) {
                         Back to Events
                     </Link>
                 </Button>
-                <h1 className="text-2xl font-bold">Create Draft</h1>
+                <h1 className="text-2xl font-bold">Create Event</h1>
             </div>
 
             <div className="p-4">
@@ -59,6 +62,7 @@ export default async function CreateEventPage(props: PageProps) {
                     circleHandle={circleHandle}
                     showCirclePicker
                     initialSelectedCircleId={circle._id?.toString()}
+                    canPublish={canPublishEvents}
                 />
             </div>
         </div>
