@@ -40,7 +40,7 @@ export default function GlobalNav() {
                 }
             ></div>
             <div
-                className={`fixed bottom-0 z-[300] w-full bg-[#181512] text-[#faf6ef] shadow-md md:top-0 md:h-full md:w-[72px] md:border-r md:border-[#2b251f] md:shadow-none`}
+                className={`fixed bottom-0 z-[300] w-full bg-white shadow-md md:top-0 md:h-full md:w-[72px] md:shadow-none`}
                 style={
                     isMobile
                         ? {
