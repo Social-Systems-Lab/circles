@@ -1,14 +1,6 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import {
-    createSignInChallenge,
-    createSignInDeepLink,
-    parseCallbackPayload,
-    verifySignInCallback,
-    type VibeCallbackPayload,
-    type VibeProfile,
-} from "@vibe-id/core";
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { addMember } from "@/lib/data/member";
@@ -18,11 +10,51 @@ import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 import { createNewUser, getUserPrivate } from "@/lib/data/user";
 import { createUserSession, getAuthenticatedUserDid, PUBLIC_KEY_FILENAME, USERS_DIR } from "@/lib/auth/auth";
+import { isVibeIdEnabled, VIBE_ID_DISABLED_MESSAGE } from "@/lib/vibe-id/config";
 import type { Circle } from "@/models/models";
 
 const REQUEST_TTL_MS = 5 * 60 * 1000;
 const COMPLETED_TTL_MS = 10 * 60 * 1000;
-type VibeIdProfile = VibeProfile;
+type VibeIdProfile = {
+    displayName?: string;
+    email?: string;
+    skills?: string[];
+    interests?: string[];
+    [key: string]: unknown;
+};
+
+type VibeCallbackPayload = {
+    requestId?: string;
+    status?: string;
+    error?: string;
+    message?: string;
+    [key: string]: unknown;
+};
+
+type VibeCoreModule = {
+    createSignInChallenge(input: { requestId: string; origin: string; ttlMs: number; nowMs: number }): {
+        payload: string;
+        expiresAt: number;
+    };
+    createSignInDeepLink(input: { payload: string; callbackUrl: string; requestId: string }): string;
+    parseCallbackPayload(payload: unknown): VibeCallbackPayload;
+    verifySignInCallback(input: {
+        callbackPayload: VibeCallbackPayload;
+        challengePayload: string;
+    }): {
+        ok: true;
+        verified: {
+            did: string;
+            profile?: VibeIdProfile;
+        };
+    } | {
+        ok: false;
+        error: string;
+        message: string;
+    };
+};
+
+let vibeCoreModulePromise: Promise<VibeCoreModule> | null = null;
 
 type VibeIdRequestDoc = {
     _id?: ObjectId;
@@ -43,6 +75,24 @@ type VibeIdRequestDoc = {
 };
 
 const getRequestsCollection = () => db.collection<VibeIdRequestDoc>("vibeIdSignInRequests");
+
+async function loadVibeIdCore(): Promise<VibeCoreModule> {
+    if (!isVibeIdEnabled()) {
+        throw new Error(VIBE_ID_DISABLED_MESSAGE);
+    }
+
+    if (!vibeCoreModulePromise) {
+        vibeCoreModulePromise = (
+            new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<VibeCoreModule>
+        )("@vibe-id/core").catch((error: unknown) => {
+            vibeCoreModulePromise = null;
+            const reason = error instanceof Error ? error.message : "unknown error";
+            throw new Error(`VibeID is unavailable: ${reason}`);
+        });
+    }
+
+    return vibeCoreModulePromise;
+}
 
 function normalizeSiteOrigin(request: NextRequest): string {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.CIRCLES_URL || request.nextUrl.origin;
@@ -207,6 +257,7 @@ async function refreshVibeIdProfileForUser(user: Circle, profile?: VibeIdProfile
 }
 
 export async function createVibeIdRequest(request: NextRequest): Promise<NextResponse> {
+    const { createSignInChallenge, createSignInDeepLink } = await loadVibeIdCore();
     const body = await request.json().catch(() => ({}));
     const intent = body?.intent === "link" ? "link" : "signin";
     const linkUserDid = intent === "link" ? await getAuthenticatedUserDid() : undefined;
@@ -250,6 +301,7 @@ export async function createVibeIdRequest(request: NextRequest): Promise<NextRes
 }
 
 export async function handleVibeIdCallback(request: NextRequest): Promise<NextResponse> {
+    const { parseCallbackPayload, verifySignInCallback } = await loadVibeIdCore();
     const rawPayload = await request.json().catch(() => null);
     const payload: VibeCallbackPayload = parseCallbackPayload(rawPayload);
     const requestId = payload.requestId ?? "";

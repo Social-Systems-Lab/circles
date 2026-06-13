@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
+import { isVibeIdEnabled } from "@/lib/vibe-id/config";
 import type { UserPrivate } from "@/models/models";
 
 type VibeIdRequest = {
@@ -39,6 +40,7 @@ type VibeIdAuthButtonProps = {
 };
 
 export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup }: VibeIdAuthButtonProps) {
+    const vibeIdEnabled = isVibeIdEnabled();
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -70,6 +72,10 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
             }
         };
     }, []);
+
+    if (!vibeIdEnabled) {
+        return null;
+    }
 
     const finishAuthentication = (user: UserPrivate) => {
         setUser(user);

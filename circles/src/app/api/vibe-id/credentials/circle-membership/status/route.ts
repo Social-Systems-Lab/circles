@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Circles } from "@/lib/data/db";
 import { getMember } from "@/lib/data/member";
+import { isVibeIdEnabled, VIBE_ID_DISABLED_MESSAGE } from "@/lib/vibe-id/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+    if (!isVibeIdEnabled()) {
+        return NextResponse.json({ status: "disabled", message: VIBE_ID_DISABLED_MESSAGE }, { status: 404 });
+    }
+
     const circleId = request.nextUrl.searchParams.get("circleId")?.trim() || "";
     const subjectDid = request.nextUrl.searchParams.get("subjectDid")?.trim() || "";
 

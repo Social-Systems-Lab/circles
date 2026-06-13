@@ -14,6 +14,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { isVibeIdEnabled } from "@/lib/vibe-id/config";
 import type { Circle } from "@/models/models";
 import type { PlatformMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 
@@ -63,6 +64,7 @@ export function VibeIdSettingsCard({
     user: Circle;
     membershipCredential?: PlatformMembershipCredentialCardData | null;
 }) {
+    const vibeIdEnabled = isVibeIdEnabled();
     const { toast } = useToast();
     const [linkedVibeId, setLinkedVibeId] = useState(getLinkedVibeId(user));
     const [copied, setCopied] = useState(false);
@@ -89,6 +91,10 @@ export function VibeIdSettingsCard({
             }
         };
     }, []);
+
+    if (!vibeIdEnabled) {
+        return null;
+    }
 
     const pollStatus = async (statusUrl: string) => {
         try {

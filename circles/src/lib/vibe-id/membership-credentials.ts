@@ -1,5 +1,6 @@
 import crypto, { type JsonWebKey, type KeyObject } from "crypto";
 import { ObjectId } from "mongodb";
+import { isVibeIdEnabled } from "@/lib/vibe-id/config";
 import type { Circle, Member } from "@/models/models";
 
 const CREDENTIAL_KIND = "credential.v1";
@@ -97,6 +98,11 @@ function getSiteOrigin(): string {
 
 function getIssuerKeyMaterial(): IssuerKeyMaterial | null {
     if (issuerKeyMaterial !== undefined) {
+        return issuerKeyMaterial;
+    }
+
+    if (!isVibeIdEnabled()) {
+        issuerKeyMaterial = null;
         return issuerKeyMaterial;
     }
 

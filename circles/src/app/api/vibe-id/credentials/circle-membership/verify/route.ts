@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { Circles } from "@/lib/data/db";
 import { getMember } from "@/lib/data/member";
 import { verifyCircleMembershipCredentialEnvelope } from "@/lib/vibe-id/membership-credentials";
+import { isVibeIdEnabled, VIBE_ID_DISABLED_MESSAGE } from "@/lib/vibe-id/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+    if (!isVibeIdEnabled()) {
+        return NextResponse.json(
+            { ok: false, access: "denied", message: VIBE_ID_DISABLED_MESSAGE },
+            { status: 404 },
+        );
+    }
+
     const body = await request.json().catch(() => null);
     const envelope = body?.kind === "credential.v1" ? body : body?.envelope;
     const verification = verifyCircleMembershipCredentialEnvelope(envelope);
