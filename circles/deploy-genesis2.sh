@@ -36,6 +36,9 @@ export GIT_SHA BUILD_TIME
 echo "Deploying SHA: $GIT_SHA"
 echo "Build time (UTC): $BUILD_TIME"
 
+echo "Running branding guard for Kamooni..."
+./scripts/check-branding-guard.sh kamooni
+
 docker compose build circles
 docker compose up -d --no-deps --force-recreate circles
 

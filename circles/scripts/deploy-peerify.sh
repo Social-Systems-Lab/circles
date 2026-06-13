@@ -12,6 +12,9 @@ fi
 
 export NODE_ENV=production
 
+echo "Running branding guard for Peerify..."
+./scripts/check-branding-guard.sh peerify
+
 echo "Cleaning old build..."
 rm -rf .next
 
