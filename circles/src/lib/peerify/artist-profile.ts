@@ -96,6 +96,19 @@ const DEFAULT_ARTIST_PROFILE: PeerifyArtistProfile = {
 
 const asString = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
+const normalizeExternalUrl = (value: unknown): string => {
+    const nextValue = asString(value);
+    if (!nextValue) {
+        return "";
+    }
+
+    if (/^https?:\/\//i.test(nextValue)) {
+        return nextValue;
+    }
+
+    return `https://${nextValue}`;
+};
+
 const asStringArray = (value: unknown): string[] => {
     if (!Array.isArray(value)) {
         return [];
@@ -133,7 +146,7 @@ const normalizeMusicLinks = (value: unknown): Partial<Record<PeerifyMusicLinkKey
     const result: Partial<Record<PeerifyMusicLinkKey, string>> = {};
 
     (Object.keys(PEERIFY_MUSIC_LINK_LABELS) as PeerifyMusicLinkKey[]).forEach((key) => {
-        const nextValue = asString(input[key]);
+        const nextValue = normalizeExternalUrl(input[key]);
         if (nextValue) {
             result[key] = nextValue;
         }
@@ -154,7 +167,7 @@ export const normalizePeerifyArtistProfile = (value: unknown): PeerifyArtistProf
         baseCity: asString(input.baseCity),
         genres: asStringArray(input.genres),
         musicLinks: normalizeMusicLinks(input.musicLinks),
-        featuredLink: asString(input.featuredLink),
+        featuredLink: normalizeExternalUrl(input.featuredLink),
         lookingFor: asStringArray(input.lookingFor),
         bookingEnabled: input.bookingEnabled === true,
         bookingSettings: {

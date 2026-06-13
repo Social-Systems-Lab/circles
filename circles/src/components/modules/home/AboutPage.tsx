@@ -541,34 +541,19 @@ export default function AboutPage({
                                             <div className="mb-3 text-sm font-medium uppercase tracking-wide text-[#8f5a2a]">
                                                 Booking Information
                                             </div>
-                                            <div className="grid gap-3 text-sm text-[#6a4728] sm:grid-cols-2">
-                                                {bookingSettings.localBookingsOnly && <div>Local bookings only</div>}
-                                                {typeof bookingSettings.travelRadiusKm === "number" && (
-                                                    <div>Travel radius: {bookingSettings.travelRadiusKm} km</div>
-                                                )}
-                                                {typeof bookingSettings.minimumAudienceSize === "number" && (
-                                                    <div>Minimum audience: {bookingSettings.minimumAudienceSize}</div>
-                                                )}
-                                                {typeof bookingSettings.preferredAudienceSize === "number" && (
-                                                    <div>Preferred audience: {bookingSettings.preferredAudienceSize}</div>
-                                                )}
-                                                {typeof bookingSettings.baseFee === "number" && (
-                                                    <div>
-                                                        Base fee: {bookingSettings.currency || ""} {bookingSettings.baseFee}
-                                                    </div>
-                                                )}
-                                                {bookingSettings.preferredEventTypes?.length ? (
-                                                    <div className="sm:col-span-2">
-                                                        Preferred events: {bookingSettings.preferredEventTypes.join(", ")}
-                                                    </div>
-                                                ) : null}
-                                                {bookingSettings.technicalNeeds && (
-                                                    <div className="sm:col-span-2">Technical needs: {bookingSettings.technicalNeeds}</div>
-                                                )}
-                                                {bookingSettings.notes && (
-                                                    <div className="sm:col-span-2">Notes: {bookingSettings.notes}</div>
-                                                )}
-                                            </div>
+                                            {bookingDetails.length > 0 ? (
+                                                <div className="grid gap-3 text-sm text-[#6a4728] sm:grid-cols-2">
+                                                    {bookingDetails.map((detail) => (
+                                                        <div key={detail} className={detail.includes(":") && detail.length > 40 ? "sm:col-span-2" : ""}>
+                                                            {detail}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-[#6a4728]">
+                                                    Open to booking enquiries. Details can be worked out directly with the artist.
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                 </div>
