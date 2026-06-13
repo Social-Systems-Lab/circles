@@ -30,6 +30,7 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
+import { normalizePeerifyArtistProfile, type PeerifyArtistProfile } from "@/lib/peerify/artist-profile";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -494,6 +495,8 @@ export async function saveAbout(values: {
     representsOrganization?: boolean;
     organizationName?: string;
     officialEmail?: string;
+    peerifyArtistIntent?: boolean;
+    peerifyArtistProfile?: PeerifyArtistProfile;
 }): Promise<FormSubmitResponse> {
     console.log("Saving circle about with values (images length):", values.images?.length);
 
@@ -540,6 +543,33 @@ export async function saveAbout(values: {
             circleUpdateData.representsOrganization = undefined;
             circleUpdateData.organizationName = undefined;
             circleUpdateData.officialEmail = undefined;
+        }
+
+        if (existingCircle.circleType === "user") {
+            const existingMetadata =
+                existingCircle.metadata && typeof existingCircle.metadata === "object" && !Array.isArray(existingCircle.metadata)
+                    ? { ...(existingCircle.metadata as Record<string, unknown>) }
+                    : {};
+            const existingPeerify =
+                existingMetadata.peerify && typeof existingMetadata.peerify === "object" && !Array.isArray(existingMetadata.peerify)
+                    ? { ...(existingMetadata.peerify as Record<string, unknown>) }
+                    : {};
+
+            if (values.peerifyArtistIntent) {
+                existingPeerify.intent = "artist";
+                existingPeerify.artistProfile = normalizePeerifyArtistProfile(values.peerifyArtistProfile);
+            } else if ("peerify" in existingMetadata) {
+                delete existingPeerify.intent;
+                delete existingPeerify.artistProfile;
+            }
+
+            if (Object.keys(existingPeerify).length > 0) {
+                existingMetadata.peerify = existingPeerify;
+            } else {
+                delete existingMetadata.peerify;
+            }
+
+            circleUpdateData.metadata = existingMetadata;
         }
 
         // Handle picture upload (keeping existing logic for profile picture)

@@ -4,7 +4,7 @@ import React from "react";
 import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, ExternalLink } from "lucide-react";
+import { MapPin, ExternalLink, CalendarRange, Music2, HandCoins } from "lucide-react";
 import { getInterestLabel } from "@/lib/data/interests";
 import { getSkillDefinitionByHandle, skillCategoryLabels } from "@/lib/data/skills";
 import { useIsCompact } from "@/components/utils/use-is-compact";
@@ -14,6 +14,9 @@ import { useAtom } from "jotai";
 import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
     Dialog,
@@ -43,6 +46,13 @@ import MembershipCredentialCard from "./MembershipCredentialCard";
 import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { useProfileRelationshipState } from "./message-button";
+import {
+    getPeerifyArtistProfile,
+    hasPeerifyArtistIntent,
+    hasPeerifyArtistProfileContent,
+    PEERIFY_MUSIC_LINK_LABELS,
+    type PeerifyMusicLinkKey,
+} from "@/lib/peerify/artist-profile";
 
 interface AboutPageProps {
     circle: Circle;
@@ -90,10 +100,36 @@ export default function AboutPage({
     const [contactMessage, setContactMessage] = React.useState("");
     const [contactError, setContactError] = React.useState("");
     const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
+    const [isPledgeDialogOpen, setIsPledgeDialogOpen] = React.useState(false);
+    const [isBookDialogOpen, setIsBookDialogOpen] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
     const isUserProfile = circle.circleType === "user";
     const [relationshipState] = useProfileRelationshipState(circle, user?.did);
+    const isPeerifyArtistProfile = isUserProfile && hasPeerifyArtistIntent(circle);
+    const peerifyArtistProfile = getPeerifyArtistProfile(circle);
+    const hasPeerifyContent = isPeerifyArtistProfile && hasPeerifyArtistProfileContent(peerifyArtistProfile);
+    const bookingSettings = peerifyArtistProfile.bookingSettings;
+    const peerifyMusicLinks = (Object.entries(peerifyArtistProfile.musicLinks) as [PeerifyMusicLinkKey, string][])
+        .filter(([, url]) => Boolean(url));
+    const bookingDetails = [
+        bookingSettings.localBookingsOnly ? "Local bookings only" : null,
+        typeof bookingSettings.travelRadiusKm === "number" ? `Travel radius: ${bookingSettings.travelRadiusKm} km` : null,
+        typeof bookingSettings.minimumAudienceSize === "number"
+            ? `Minimum audience: ${bookingSettings.minimumAudienceSize}`
+            : null,
+        typeof bookingSettings.preferredAudienceSize === "number"
+            ? `Preferred audience: ${bookingSettings.preferredAudienceSize}`
+            : null,
+        typeof bookingSettings.baseFee === "number"
+            ? `Base fee: ${bookingSettings.currency || ""} ${bookingSettings.baseFee}`.trim()
+            : null,
+        bookingSettings.preferredEventTypes?.length
+            ? `Preferred events: ${bookingSettings.preferredEventTypes.join(", ")}`
+            : null,
+        bookingSettings.technicalNeeds ? `Technical needs: ${bookingSettings.technicalNeeds}` : null,
+        bookingSettings.notes ? `Notes: ${bookingSettings.notes}` : null,
+    ].filter((item): item is string => Boolean(item));
     const profileOfferSkills = circle.offers?.skills?.length ? circle.offers.skills : circle.skills || [];
     const currentUserOfferSkills = !isUserProfile
         ? user?.offers?.skills?.length
@@ -271,6 +307,7 @@ export default function AboutPage({
 
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
+    const shouldShowPeerifyArtistCard = hasPeerifyContent;
 
     const getLeaderRole = (leader: MemberDisplay) => {
         if (leader.userGroups?.includes("admins")) return "Admin";
@@ -350,6 +387,28 @@ export default function AboutPage({
         }
     };
 
+    const openBookDialog = () => {
+        if (!peerifyArtistProfile.bookingEnabled) {
+            return;
+        }
+        setIsBookDialogOpen(true);
+    };
+
+    const submitPrototypeDialog = (kind: "pledge" | "booking") => {
+        toast({
+            title: kind === "pledge" ? "Pledge captured locally" : "Booking enquiry captured locally",
+            description:
+                kind === "pledge"
+                    ? "This MVP dialog is non-binding and does not save or send anything yet."
+                    : "This MVP dialog is a non-binding prototype and does not confirm or save a booking yet.",
+        });
+        if (kind === "pledge") {
+            setIsPledgeDialogOpen(false);
+            return;
+        }
+        setIsBookDialogOpen(false);
+    };
+
     return (
         <div className="formatted mx-auto max-w-[1100px] px-0 py-0 md:px-4 md:py-6">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -357,6 +416,164 @@ export default function AboutPage({
                 {/* Adjust column span based on sidebar visibility */}
                 <div className={hasSidebarContent ? "md:col-span-2" : "md:col-span-3"}>
                     <div className="space-y-6">
+                        {shouldShowPeerifyArtistCard && (
+                            <div
+                                id="artist-actions"
+                                className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}
+                            >
+                                <div className="flex flex-col gap-6">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="space-y-3">
+                                            <div className="flex flex-wrap gap-2">
+                                                {peerifyArtistProfile.artistTypes.map((item) => (
+                                                    <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
+                                                        {item}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                            {peerifyArtistProfile.genres.length > 0 && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {peerifyArtistProfile.genres.map((genre) => (
+                                                        <Badge key={genre} className="rounded-full px-3 py-1">
+                                                            {genre}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {peerifyArtistProfile.baseCity && (
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                    <MapPin className="h-4 w-4" />
+                                                    <span>{peerifyArtistProfile.baseCity}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col gap-2 sm:min-w-[180px]">
+                                            <Button type="button" onClick={() => setIsPledgeDialogOpen(true)}>
+                                                Pledge Interest
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant={peerifyArtistProfile.bookingEnabled ? "default" : "outline"}
+                                                onClick={openBookDialog}
+                                                disabled={!peerifyArtistProfile.bookingEnabled}
+                                            >
+                                                Book Enquiry
+                                            </Button>
+                                            {!peerifyArtistProfile.bookingEnabled && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    Booking enquiries are not enabled on this profile yet.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {peerifyMusicLinks.length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                                <Music2 className="h-4 w-4" />
+                                                <span>Listen</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-3">
+                                                {peerifyMusicLinks.map(([key, url]) => (
+                                                    <a
+                                                        key={key}
+                                                        href={url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm hover:bg-muted"
+                                                    >
+                                                        {PEERIFY_MUSIC_LINK_LABELS[key]}
+                                                        <ExternalLink className="h-4 w-4" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {peerifyArtistProfile.lookingFor.length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                                <HandCoins className="h-4 w-4" />
+                                                <span>Open To</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {peerifyArtistProfile.lookingFor.map((item) => (
+                                                    <Badge key={item} variant="secondary" className="rounded-full px-3 py-1">
+                                                        {item}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(peerifyArtistProfile.availability || peerifyArtistProfile.featuredLink) && (
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            {peerifyArtistProfile.availability && (
+                                                <div className="rounded-xl border bg-muted/30 p-4">
+                                                    <div className="mb-2 flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                                        <CalendarRange className="h-4 w-4" />
+                                                        <span>Availability</span>
+                                                    </div>
+                                                    <p className="text-sm text-foreground">{peerifyArtistProfile.availability}</p>
+                                                </div>
+                                            )}
+                                            {peerifyArtistProfile.featuredLink && (
+                                                <div className="rounded-xl border bg-muted/30 p-4">
+                                                    <div className="mb-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                                        Featured Link
+                                                    </div>
+                                                    <a
+                                                        href={peerifyArtistProfile.featuredLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-2 break-all text-sm underline"
+                                                    >
+                                                        {peerifyArtistProfile.featuredLink}
+                                                        <ExternalLink className="h-4 w-4" />
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {peerifyArtistProfile.bookingEnabled && (
+                                        <div className="rounded-xl border border-[#e7d8c7] bg-[#f6efe6] p-4">
+                                            <div className="mb-3 text-sm font-medium uppercase tracking-wide text-[#8f5a2a]">
+                                                Booking Information
+                                            </div>
+                                            <div className="grid gap-3 text-sm text-[#6a4728] sm:grid-cols-2">
+                                                {bookingSettings.localBookingsOnly && <div>Local bookings only</div>}
+                                                {typeof bookingSettings.travelRadiusKm === "number" && (
+                                                    <div>Travel radius: {bookingSettings.travelRadiusKm} km</div>
+                                                )}
+                                                {typeof bookingSettings.minimumAudienceSize === "number" && (
+                                                    <div>Minimum audience: {bookingSettings.minimumAudienceSize}</div>
+                                                )}
+                                                {typeof bookingSettings.preferredAudienceSize === "number" && (
+                                                    <div>Preferred audience: {bookingSettings.preferredAudienceSize}</div>
+                                                )}
+                                                {typeof bookingSettings.baseFee === "number" && (
+                                                    <div>
+                                                        Base fee: {bookingSettings.currency || ""} {bookingSettings.baseFee}
+                                                    </div>
+                                                )}
+                                                {bookingSettings.preferredEventTypes?.length ? (
+                                                    <div className="sm:col-span-2">
+                                                        Preferred events: {bookingSettings.preferredEventTypes.join(", ")}
+                                                    </div>
+                                                ) : null}
+                                                {bookingSettings.technicalNeeds && (
+                                                    <div className="sm:col-span-2">Technical needs: {bookingSettings.technicalNeeds}</div>
+                                                )}
+                                                {bookingSettings.notes && (
+                                                    <div className="sm:col-span-2">Notes: {bookingSettings.notes}</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <div
                             className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}
                         >
@@ -827,6 +1044,101 @@ export default function AboutPage({
                                   : "Send Message"}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={isPledgeDialogOpen} onOpenChange={setIsPledgeDialogOpen}>
+                <DialogContent className="sm:max-w-[560px]">
+                    <DialogHeader>
+                        <DialogTitle>Pledge interest for {circle.name}</DialogTitle>
+                        <DialogDescription>
+                            This is non-binding and not a ticket purchase. It helps signal local demand and support.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form
+                        className="space-y-4"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            submitPrototypeDialog("pledge");
+                        }}
+                    >
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Input placeholder="Your city / location" />
+                            <Input placeholder="Maximum ticket amount" type="number" min="0" />
+                        </div>
+                        <Input placeholder="Preferred event type" />
+                        <div className="space-y-2">
+                            <Label>Willingness to help</Label>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {[
+                                    "Attend",
+                                    "Promote",
+                                    "Maybe host",
+                                    "Space for 20–30 people",
+                                    "Local transport",
+                                    "Spare room",
+                                    "Food / hospitality",
+                                    "Sound / equipment",
+                                ].map((option) => (
+                                    <label key={option} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                                        <Checkbox />
+                                        <span>{option}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <Textarea rows={4} placeholder="Optional note" />
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsPledgeDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit">Record Prototype Pledge</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={isBookDialogOpen} onOpenChange={setIsBookDialogOpen}>
+                <DialogContent className="sm:max-w-[620px]">
+                    <DialogHeader>
+                        <DialogTitle>Booking enquiry for {circle.name}</DialogTitle>
+                        <DialogDescription>
+                            This is a booking enquiry only. It is not a confirmed booking and does not create a binding agreement.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form
+                        className="space-y-4"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            submitPrototypeDialog("booking");
+                        }}
+                    >
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Input placeholder="Booker location" />
+                            <Input placeholder="Event type" />
+                            <Input placeholder="Expected audience size" type="number" min="0" />
+                            <Input placeholder="Possible date or date range" />
+                        </div>
+                        <Input placeholder="Venue / home setting" />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {[
+                                "Accommodation available",
+                                "Local transport available",
+                                "Food / hospitality available",
+                                "Sound equipment available",
+                            ].map((option) => (
+                                <label key={option} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                                    <Checkbox />
+                                    <span>{option}</span>
+                                </label>
+                            ))}
+                        </div>
+                        <Textarea rows={5} placeholder="Message to artist" />
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsBookDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit">Record Prototype Enquiry</Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
         </div>

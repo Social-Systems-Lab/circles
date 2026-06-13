@@ -16,15 +16,9 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { MessageButton } from "./message-button";
 import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
-import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog"; // Changed Popover to Dialog
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Settings } from "lucide-react";
+import { MapPin, Settings } from "lucide-react";
 import Link from "next/link";
 import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
@@ -40,6 +34,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { getPeerifyArtistProfile, hasPeerifyArtistIntent } from "@/lib/peerify/artist-profile";
 
 type HomeContentProps = {
     circle: Circle;
@@ -70,6 +66,9 @@ export default function HomeContent({
     const settingsButtonTitle = isUser ? "Profile settings" : "Circle settings";
     const settingsButtonClassName =
         "h-9 w-9 shrink-0 rounded-full border border-emerald-950 bg-emerald-950 text-white shadow-sm transition-colors hover:bg-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-950 focus-visible:ring-offset-2";
+    const isPeerifyArtistProfile = isUser && hasPeerifyArtistIntent(circle);
+    const peerifyArtistProfile = getPeerifyArtistProfile(circle);
+    const coverImage = circle.images?.[0]?.fileInfo?.url;
 
     const isMember = useMemo(() => {
         if (!user) return false;
@@ -145,11 +144,22 @@ export default function HomeContent({
 
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-0 ml-4 mr-4 flex max-w-[1100px] flex-1 flex-col">
+                    {coverImage && (
+                        <div className="relative mb-4 h-36 overflow-hidden rounded-[20px] md:h-48">
+                            <Image
+                                src={coverImage}
+                                alt={`${circle.name || "Profile"} cover`}
+                                fill
+                                className="object-cover"
+                                priority
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
+                        </div>
+                    )}
                     <div className={`relative flex ${isCompact ? "flex-col items-center justify-center" : "flex-row"}`}>
                         <div
                             className={`relative flex ${isCompact ? "h-[50px] w-[100px]" : "h-[125px] w-[150px] min-w-[150px]"}`}
                         >
-                            {/* Position the circle picture differently when compact. */}
                             <div
                                 className={`absolute ${
                                     isCompact ? "left-1/2 top-[-50px] -translate-x-1/2" : "top-[-25px]"
@@ -236,7 +246,6 @@ export default function HomeContent({
                             </>
                         )}
 
-                        {/* Center the text in compact mode. */}
                         <div
                             className={`flex flex-col justify-start p-4 pl-6 ${
                                 isCompact ? "items-center text-center" : "min-w-0 flex-1 items-start"
@@ -371,6 +380,46 @@ export default function HomeContent({
                                     ) : (
                                         (circle.description ?? circle.mission)
                                     )}
+                                </div>
+                            )}
+                            {isPeerifyArtistProfile && (
+                                <div className={`flex w-full flex-col gap-3 ${isCompact ? "items-center" : "items-start"} py-2`}>
+                                    <div className="flex flex-wrap gap-2">
+                                        {peerifyArtistProfile.artistTypes.map((item) => (
+                                            <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
+                                                {item}
+                                            </Badge>
+                                        ))}
+                                        {peerifyArtistProfile.genres.slice(0, 4).map((genre) => (
+                                            <Badge key={genre} className="rounded-full px-3 py-1">
+                                                {genre}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    {peerifyArtistProfile.baseCity && (
+                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                            <MapPin className="h-4 w-4" />
+                                            <span>{peerifyArtistProfile.baseCity}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button asChild size="sm">
+                                            <Link href={`${circle.handle ? `/circles/${circle.handle}/home` : "#"}#artist-actions`}>
+                                                Pledge
+                                            </Link>
+                                        </Button>
+                                        {peerifyArtistProfile.bookingEnabled ? (
+                                            <Button asChild size="sm">
+                                                <Link href={`${circle.handle ? `/circles/${circle.handle}/home` : "#"}#artist-actions`}>
+                                                    Book
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" variant="outline" disabled>
+                                                Book
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                             {!isUser && memberCount > 0 && (
