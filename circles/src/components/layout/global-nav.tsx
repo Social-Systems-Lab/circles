@@ -51,13 +51,13 @@ export default function GlobalNav() {
                 }
             >
                 <div className={`flex h-[56px] flex-row items-center justify-center md:h-auto md:w-[72px] md:flex-col`}>
-                    <Link href="/explore" aria-label="Peerify home">
+                    <Link href="/explore" aria-label="Kamooni home">
                         <div className="group relative ml-4 mr-4 hidden flex-shrink-0 flex-col items-center justify-center md:mb-4 md:ml-0 md:mr-0 md:mt-4 md:flex">
                             <div className="relative">
                                 <div className="relative h-[50px] w-[50px] transform cursor-pointer">
                                     <Image
-                                        src={"/peerify/logo-mark.png"}
-                                        alt="Peerify"
+                                        src={"/images/landing/kamooni-emblem-yellow.png"}
+                                        alt="Kamooni"
                                         className="h-[50px] w-[50px] object-contain"
                                         width={100}
                                         height={100}
