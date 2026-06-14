@@ -1,13 +1,14 @@
 import "@/components/pages/peerify-landing-page.css";
 import PeerifyLandingPage from "@/components/pages/peerify-landing-page";
-import { appConfig } from "@/config/app";
+import { getActiveBanner } from "@/lib/data/system-banners";
 
 export const metadata = {
-    title: `Welcome | ${appConfig.name}`,
+    title: "Welcome | Peerify",
 };
 
 export const dynamic = "force-dynamic";
 
 export default async function WelcomePage() {
+    await getActiveBanner();
     return <PeerifyLandingPage />;
 }

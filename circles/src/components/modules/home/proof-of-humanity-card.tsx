@@ -76,7 +76,7 @@ export function ProofOfHumanityHeaderAction({
     if (summary.totalActiveCount > 0) {
         return (
             <Button asChild variant="outline" size="sm" className={headerHumanButtonClassName}>
-                <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>✓ Human</Link>
+                <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>✓ Verified</Link>
             </Button>
         );
     }
@@ -87,7 +87,7 @@ export function ProofOfHumanityHeaderAction({
 
     return (
         <Button asChild variant="outline" size="sm" className={headerVerifyHumanButtonClassName}>
-            <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>Verify Human</Link>
+            <Link href={`/circles/${circle.handle}/home#proof-of-humanity`}>Verify profile</Link>
         </Button>
     );
 }
@@ -189,8 +189,10 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
         <>
             <div id="proof-of-humanity" className="flex flex-col rounded-[15px] border-0 bg-muted/20 p-6 shadow-lg">
                 <div>
-                    <h2 className="text-base font-semibold text-foreground">Proof of Humanity</h2>
-                    <p className="mt-2 text-sm text-muted-foreground">{summaryLine}</p>
+                    <h2 className="text-base font-semibold text-foreground">Peerify verification</h2>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {summaryLine}. Public trust signals for authentic profiles and safer music communities.
+                    </p>
                 </div>
 
                 <button
@@ -200,7 +202,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                     aria-expanded={isExpanded}
                     aria-controls="proof-of-humanity-details"
                 >
-                    <span>Verifications</span>
+                    <span>Verification details</span>
                     {isExpanded ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
                     ) : (
@@ -228,8 +230,8 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                 <div className="text-sm font-medium text-foreground">Your verification</div>
                                 <div className="mt-1 text-sm text-muted-foreground">
                                     {viewerVerification.level === "met_in_real_life"
-                                        ? "You have publicly confirmed that you have met this person physically, in person."
-                                        : "You have publicly confirmed that this is a real person."}
+                                        ? "You have publicly confirmed that you have met the person behind this profile in real life."
+                                        : "You have publicly confirmed that there is a real person behind this profile."}
                                 </div>
                                 {viewerVerification.note && (
                                     <p className="mt-2 text-sm text-foreground">
@@ -251,7 +253,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                         setIsDialogOpen(true);
                                     }}
                                 >
-                                    Verify Human
+                                    Add verification
                                 </Button>
                             )}
                             {summary.canCurrentViewerVerify && viewerVerification && (
@@ -284,10 +286,10 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-[520px]">
-                    <DialogHeader>
-                        <DialogTitle>{viewerVerification ? "Update your verification" : "Verify Human"}</DialogTitle>
+                        <DialogHeader>
+                        <DialogTitle>{viewerVerification ? "Update your verification" : "Verify this profile"}</DialogTitle>
                         <DialogDescription>
-                            Choose the level of public confirmation you want to give for this profile.
+                            Help keep Peerify human. Choose the level of public verification you want to give this profile.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -308,7 +310,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                         }}
                                     />
                                     <Label htmlFor="proof-level-real-person" className="cursor-pointer leading-5">
-                                        I confirm this is a real person
+                                        I confirm there is a real person behind this profile
                                     </Label>
                                 </div>
                                 <div className="flex items-start gap-3 rounded-lg border p-3">
@@ -324,7 +326,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                         }}
                                     />
                                     <Label htmlFor="proof-level-met-in-real-life" className="cursor-pointer leading-5">
-                                        We have met physically, in person
+                                        We have met in person
                                     </Label>
                                 </div>
                             </div>
@@ -337,7 +339,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
                                 value={note}
                                 onChange={(event) => setNote(event.target.value)}
                                 maxLength={280}
-                                placeholder="Optional context that will be shown publicly."
+                                placeholder="Optional context about how you know them. This will be shown publicly."
                             />
                         </div>
 
@@ -373,7 +375,7 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
 
 function VerifierRow({ verification }: { verification: HumanityVerificationDisplay }) {
     const verifierName = verification.verifier?.name || verification.verifier?.handle || verification.verifierDid;
-    const levelLabel = verification.level === "met_in_real_life" ? "Met in real life" : "Real person";
+    const levelLabel = verification.level === "met_in_real_life" ? "Met in person" : "Real person";
 
     return (
         <div className="rounded-xl border border-border/70 bg-background/80 p-3">

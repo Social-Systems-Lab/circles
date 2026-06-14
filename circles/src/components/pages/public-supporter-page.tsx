@@ -61,7 +61,7 @@ export default function PublicSupporterPage() {
                 <section className="page-head">
                     <div className="inner">
                         <div className="emblem-wrap">
-                            <Image className="emblem" src="/images/landing/kamooni-emblem-yellow.png" alt="Kamooni" width={140} height={140} priority />
+                            <Image className="emblem" src="/images/landing/kamooni-emblem-yellow.png" alt="Peerify" width={140} height={140} priority />
                         </div>
                         <span className="eyebrow">— A long-term partnership</span>
                         <h1>
@@ -77,7 +77,7 @@ export default function PublicSupporterPage() {
                         <h2>
                             Digital public <em>infrastructure.</em>
                         </h2>
-                        <p>Kamooni is building digital public infrastructure for trust, coordination, and community action. Your support funds a stable, ad-free, non-extractive platform and ongoing maintenance, stewardship, and the professional development capacity needed to keep it healthy.</p>
+                        <p>Peerify is building community-owned digital infrastructure for music discovery, trusted profiles, local events, and direct artist support. Your support funds a stable, ad-free platform and the stewardship needed to keep it healthy.</p>
                     </div>
                 </section>
 
@@ -87,7 +87,7 @@ export default function PublicSupporterPage() {
                         <h2>
                             Better systems, <em>together.</em>
                         </h2>
-                        <p>Kamooni exists to offer an alternative layer. A place where trust is earned through contribution rather than visibility, where ethical producers and conscious consumers can find one another, and where the environment is designed for cooperation rather than competition.</p>
+                        <p>Peerify exists to offer an alternative layer for live music. A place where trust is earned through participation rather than hype, where artists, listeners, and hosts can find one another, and where the environment is designed for cooperation rather than extraction.</p>
                     </div>
                 </section>
 
@@ -103,7 +103,7 @@ export default function PublicSupporterPage() {
                                     <li>
                                         <strong>€500 per month</strong>, ongoing financial support
                                     </li>
-                                    <li>Alignment with Kamooni&apos;s principles</li>
+                                    <li>Alignment with Peerify&apos;s principles</li>
                                     <li>Willingness to participate as a responsible actor in a shared ecosystem</li>
                                 </ul>
                             </div>
@@ -112,7 +112,7 @@ export default function PublicSupporterPage() {
                                 <ul>
                                     <li>A stable, long-term relationship with a values-aligned platform</li>
                                     <li>
-                                        A dedicated <strong>Ecosystem Supporter Circle</strong> on Kamooni
+                                        A dedicated <strong>Ecosystem Supporter Circle</strong> on Peerify
                                     </li>
                                     <li>The ability to present who you are, what you stand for, and how you operate</li>
                                     <li>Opportunities to build real, lasting relationships with conscious consumers and community actors</li>
@@ -124,7 +124,7 @@ export default function PublicSupporterPage() {
 
                 <section className="section">
                     <div className="container">
-                        <span className="eyebrow">— Your Circle on Kamooni</span>
+                        <span className="eyebrow">— Your Circle on Peerify</span>
                         <h2>
                             Not a billboard. <em>A workshop with the door open.</em>
                         </h2>
@@ -173,7 +173,7 @@ export default function PublicSupporterPage() {
                             ))}
                         </ul>
                         <p>
-                            Kamooni reserves the right to refuse or end partnerships that violate these principles. <strong>Alignment protects the ecosystem for everyone.</strong>
+                            Peerify reserves the right to refuse or end partnerships that violate these principles. <strong>Alignment protects the ecosystem for everyone.</strong>
                         </p>
                     </div>
                 </section>
@@ -195,7 +195,7 @@ export default function PublicSupporterPage() {
                         <h2>
                             The bigger <em>picture.</em>
                         </h2>
-                        <p>Kamooni&apos;s long-term aim is to become a federated, member-governed digital commons. A trusted coordination layer for regenerative communities, and a bridge between ethical production, community action, and collective care.</p>
+                        <p>Peerify&apos;s long-term aim is to become a member-governed digital commons for music communities. A trusted layer for discovery, support, coordination, and collective care around live music.</p>
                     </div>
                 </section>
 
@@ -227,7 +227,7 @@ export default function PublicSupporterPage() {
 
                 <section className="pullquote">
                     <p>
-                        &quot;We support Kamooni because better systems don&apos;t appear by themselves. <em>They are built and cared for together.</em>&quot;
+                        &quot;We support Peerify because better music communities don&apos;t appear by themselves. <em>They are built and cared for together.</em>&quot;
                     </p>
                     <p className="attrib">— A simple way to say it</p>
                 </section>
@@ -239,7 +239,7 @@ export default function PublicSupporterPage() {
                             Let&apos;s <em>talk.</em>
                         </h2>
                         <p>Ecosystem Support is values-led and relationship-based. It&apos;s for organisations and individuals who understand that markets alone don&apos;t create healthy societies, that infrastructure shapes behaviour, and that supporting the commons is part of ethical participation.</p>
-                        <a className="btn-primary" href="mailto:hello@socialsystems.io?subject=Kamooni%20Ecosystem%20Supporter">
+                        <a className="btn-primary" href="mailto:hello@socialsystems.io?subject=Peerify%20Ecosystem%20Supporter">
                             Get in touch
                             <ArrowIcon />
                         </a>
@@ -252,7 +252,7 @@ export default function PublicSupporterPage() {
                 <footer>
                     <div className="container">
                         <div className="row">
-                            <span>Kamooni — The Social Impact Network. Open-source, member-shaped.</span>
+                            <span>Peerify — community-driven music discovery and support. Open-source, member-shaped.</span>
                             <div className="links">
                                 <a href="https://www.socialsystems.io/">Social Systems Lab</a>
                                 <a href="https://www.socialsystems.io/foundation/">Foundation</a>

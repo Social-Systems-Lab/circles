@@ -179,7 +179,7 @@ function BrandHeader({ compact }: { compact: boolean }) {
                         Peerify
                     </div>
                     <div className={cn("text-kam-gray-dark/72 mt-1", compact ? "text-sm" : "text-base sm:text-lg")}>
-                        Find the others
+                        Find your music people
                     </div>
                 </div>
             </div>
@@ -688,7 +688,7 @@ export function OnboardingSignupFlow() {
                                 </div>
                                 <div className="mt-6">
                                     <h1 className="font-[family-name:var(--font-noto-serif)] text-3xl leading-tight text-kam-gray-dark sm:text-4xl">
-                                        {stepIndex === 0 && "Find the others"}
+                                        {stepIndex === 0 && "Find your music people"}
                                         {stepIndex === 1 && "Create your account"}
                                         {stepIndex === 2 && "How you can contribute"}
                                         {stepIndex === 3 && "What you care about"}
@@ -697,7 +697,7 @@ export function OnboardingSignupFlow() {
                                     </h1>
                                     <p className="text-kam-gray-dark/72 mt-3 max-w-2xl text-sm leading-6 sm:text-base">
                                         {stepIndex === 0 &&
-                                            "Join people building communities, projects, and practical alternatives together."}
+                                            "Join artists, listeners, hosts, and supporters building real music communities together."}
                                         {stepIndex === 1 &&
                                             "A simple start: your name, login details, and the handle others will use to find you on Peerify."}
                                         {stepIndex === 2 && SKILLS_PROMPT_TEXT}
@@ -714,8 +714,8 @@ export function OnboardingSignupFlow() {
                                 <div className="space-y-8">
                                     <div className="rounded-[24px] border border-white/70 bg-white/70 p-6 shadow-[0_10px_35px_rgba(123,81,24,0.08)]">
                                         <p className="text-base leading-7 text-kam-gray-dark/80">
-                                            Peerify helps people explore artists, hosts, and music communities, connect through
-                                            local music, and build trust through real-world experiences.
+                                            Peerify helps artists, fans, and hosts discover each other, organise live
+                                            music, and build trust through real participation.
                                         </p>
                                     </div>
 

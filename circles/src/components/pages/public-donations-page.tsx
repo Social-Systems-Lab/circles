@@ -61,13 +61,13 @@ export default function PublicDonationsPage() {
                 <section className="page-head">
                     <div className="inner">
                         <div className="emblem-wrap">
-                            <Image className="emblem" src="/images/landing/kamooni-emblem-yellow.png" alt="Kamooni" width={140} height={140} priority />
+                            <Image className="emblem" src="/images/landing/kamooni-emblem-yellow.png" alt="Peerify" width={140} height={140} priority />
                         </div>
                         <h1>
-                            Support <em>Kamooni.</em>
+                            Support <em>Peerify.</em>
                         </h1>
                         <p className="lede">
-                            Kamooni is run by the <strong>Social Systems Foundation</strong>. As a non-profit entity, we depend on voluntary support from people and businesses who share our values and believe in our work. Every donation keeps the platform open, ad-free, and independent. For everyone.
+                            Peerify is run by the <strong>Social Systems Foundation</strong>. As a non-profit project, we depend on voluntary support from people who want a healthier music ecosystem. Every donation helps keep the platform open, human, and independent.
                         </p>
                     </div>
                 </section>
@@ -82,7 +82,7 @@ export default function PublicDonationsPage() {
                                 <h3>
                                     Become a <em>supporting member.</em>
                                 </h3>
-                                <p>Once you have created a profile on Kamooni, you can choose to become a supporting member at the level that works for you. Recurring support is what keeps the platform stable and predictable.</p>
+                                <p>Once you have created a profile on Peerify, you can choose to become a supporting member at the level that works for you. Recurring support is what keeps the platform stable and predictable.</p>
                                 <p>You&apos;ll find the details under:</p>
                                 <span className="path">
                                     <code>Settings → Account settings</code>
@@ -132,7 +132,7 @@ export default function PublicDonationsPage() {
                 <footer>
                     <div className="container">
                         <div className="row">
-                            <span>Kamooni — The Social Impact Network. Open-source, member-shaped.</span>
+                            <span>Peerify — community-driven music discovery and support. Open-source, member-shaped.</span>
                             <div className="links">
                                 <a href="https://www.socialsystems.io/">Social Systems Lab</a>
                                 <a href="https://www.socialsystems.io/foundation/">Foundation</a>
