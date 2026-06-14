@@ -680,7 +680,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                 <ArtistTextField
                                                     label="Featured link"
                                                     placeholder="https://..."
-                                                    description="Optional single call-to-action link for your newest release, press kit, or campaign."
+                                                    description="Optional single call-to-action link for your newest release, press kit, or tour pledge."
                                                     value={field.value}
                                                     onChange={field.onChange}
                                                 />

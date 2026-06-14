@@ -71,7 +71,7 @@ export async function requestVerification(
             return {
                 success: false,
                 requiresCommunityGuidelines: true,
-                message: "Please agree to Kamooni's core community rules before requesting verification.",
+                message: "Please agree to Peerify's core community rules before requesting verification.",
             };
         }
 

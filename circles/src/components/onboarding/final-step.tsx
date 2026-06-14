@@ -65,9 +65,8 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                     <div className="max-w-[350px] rounded-lg bg-white p-4 text-center">
                         <PiQuotesFill className="mx-auto mb-2 text-blue-500" />
                         <p className="mb-2 text-sm italic text-gray-800">
-                            &quot;We believe in humanity and that if given the chance to fully nurture, explore and
-                            express our true nature as a social and collaborative species we could be a pretty decent
-                            curator to the living system that is our planet.&quot;
+                            &quot;The best music scenes stay human. Real artists, real listeners, real hosts, and small
+                            acts of trust are what turn a platform into a living community.&quot;
                         </p>
                         <div className="flex items-center justify-center space-x-2">
                             {/* <Avatar>
@@ -100,15 +99,15 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                 </div>
             )}
             <p className="text-gray-600">
-                Get ready to connect with allies, join communities, and embark on world-changing quests!
+                Get ready to discover artists, support local shows, and build real musical connections.
             </p>
             <p className="text-sm text-gray-600">
-                Remember, you&apos;re part of a supportive community. Don&apos;t hesitate to reach out, collaborate, and
-                make a difference together!
+                Peerify works best when people show up for each other. Follow through, stay curious, and help keep
+                the scene welcoming and real.
             </p>
             <div className="mt-4 flex items-center justify-center">
                 <Button onClick={handleComplete} className="mx-auto rounded-full" disabled={isSubmitting}>
-                    Begin Your Adventure
+                    Start exploring
                 </Button>
             </div>
         </div>

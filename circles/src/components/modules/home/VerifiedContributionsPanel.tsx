@@ -74,7 +74,7 @@ export default function VerifiedContributionsPanel({
         <div className="w-full">
             <div>
                 <h2 className="text-base font-semibold text-foreground">Verified Contributions</h2>
-                <p className="mt-1 text-xs text-muted-foreground">Verified work completed on Kamooni</p>
+                <p className="mt-1 text-xs text-muted-foreground">Verified contributions visible on Peerify</p>
             </div>
             {!hasAnyContributions ? (
                 <div className="mt-2 space-y-1">

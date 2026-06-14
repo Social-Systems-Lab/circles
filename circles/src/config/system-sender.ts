@@ -6,7 +6,7 @@ export type SystemSenderIdentity = {
 };
 
 const KAMOONI_SYSTEM_SENDER: SystemSenderIdentity = {
-    displayName: "Kamooni",
+    displayName: "Peerify",
     handle: "kamooni",
     did: "system:kamooni",
     avatarUrl: "/images/kamooni_logo.png",

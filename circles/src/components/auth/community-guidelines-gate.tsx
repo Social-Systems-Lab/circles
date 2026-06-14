@@ -179,7 +179,7 @@ export function CommunityGuidelinesAgreementFlow({
                                 </span>
                             </div>
                             <h2 className="text-2xl font-semibold text-[#2d2116] sm:text-[2rem]">
-                                Kamooni&apos;s core community rules
+                                Peerify&apos;s core community rules
                             </h2>
                         </div>
                         <div className="min-w-[160px] text-right">
@@ -207,7 +207,7 @@ export function CommunityGuidelinesAgreementFlow({
                                     Verification starts with a shared standard.
                                 </h3>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    To request account verification, you first need to actively agree to Kamooni&apos;s
+                                    To request account verification, you first need to actively agree to Peerify&apos;s
                                     five core community rules.
                                 </p>
                                 <p className="text-base leading-7 text-[#4c3b29]">
@@ -226,8 +226,9 @@ export function CommunityGuidelinesAgreementFlow({
                                     Trust comes before verification.
                                 </h3>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    Verification signals credibility on Kamooni. These rules set the baseline for
-                                    honest participation, respect, privacy, and responsible behavior.
+                                    Verification signals credibility on Peerify. These rules set the baseline for
+                                    honest participation, respect, privacy, and responsible behavior across artist,
+                                    listener, and host communities.
                                 </p>
                                 <p className="text-base leading-7 text-[#4c3b29]">
                                     You will agree to each rule one by one. Each agreement is saved with its own
@@ -289,7 +290,7 @@ export function CommunityGuidelinesAgreementFlow({
                                     You&apos;re confirmed.
                                 </h3>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    You have actively agreed to all five of Kamooni&apos;s core community rules. Your
+                                    You have actively agreed to all five of Peerify&apos;s core community rules. Your
                                     verification request is ready to continue.
                                 </p>
                                 <div className="grid gap-3 sm:grid-cols-2">

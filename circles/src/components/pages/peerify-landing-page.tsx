@@ -18,13 +18,13 @@ const FEATURES = [
     {
         tag: "Fans & artists",
         title: "Map-based discovery",
-        body: "Browse artists worldwide or filter by your city, genre, or touring status. See pledge campaigns building in real time. No algorithm — just geography and music.",
+        body: "Browse artists worldwide or filter by your city, genre, or touring status. See tour pledges building in real time. No algorithm — just geography and music.",
         icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>,
     },
     {
         tag: "The core mechanic",
         title: "Pledge to bring them here",
-        body: "Found an artist you want to bring to your city? Start or join a pledge campaign. When it tips, a tour team forms and the show moves from possibility to plan.",
+        body: "Found an artist you want to bring to your city? Start or join a tour pledge. When it tips, a tour team forms and the show moves from possibility to plan.",
         icon: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>,
     },
     {
@@ -42,7 +42,7 @@ const FEATURES = [
     {
         tag: "Tour support",
         title: "Join the tour team",
-        body: "When a pledge campaign hits 10%, a tour team forms. Offer a spare room, a meal, transport, or a stage. Community makes tours possible, and you get to make new friends along the way.",
+        body: "When a tour pledge hits 10%, a tour team forms. Offer a spare room, a meal, transport, or a stage. Community makes tours possible, and you get to make new friends along the way.",
         icon: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
     },
     {
@@ -56,7 +56,7 @@ const FEATURES = [
 // ─── Steps ────────────────────────────────────────────────────────────────────
 const STEPS = [
     { n: "01", title: "Discover on the map",    body: "Browse artists worldwide or filter by your city, genre, or touring status. Find someone whose music you love and who hasn’t played near you yet." },
-    { n: "02", title: "Pledge to bring them",   body: "Start or join a pledge campaign. Watch it grow. When it tips, a tour team forms and the show moves from possibility to real life." },
+    { n: "02", title: "Pledge to bring them",   body: "Start or join a tour pledge. Watch it grow. When it tips, a tour team forms and the show moves from possibility to real life." },
     { n: "03", title: "Help make it happen",    body: "Offer a spare room, a meal, transport, or a space to play. The tour team builds the tour together with the artists. Peer-to-peer all the way through." },
     { n: "04", title: "Show up & support", body: "Attend the show, buy the record, spread the word. Your membership credit goes directly to artists. Every purchase, every play counts." },
 ]
@@ -105,7 +105,7 @@ export default function PeerifyLandingPage() {
                         <div className={"textCol"}>
                             <p className={"sLabel"}>The idea</p>
                             <h2 className={"serif"}>A map of music<br />happening near you</h2>
-                            <p>Peerify starts with a map — not an algorithm. Every artist, every home concert, every pledge campaign has a place on it. Browse by location, genre, or tour route. Find music that belongs to your city.</p>
+                            <p>Peerify starts with a map — not an algorithm. Every artist, every home concert, every tour pledge has a place on it. Browse by location, genre, or tour route. Find music that belongs to your city.</p>
                             <p>When you find an artist you love who hasn’t played your city yet, you pledge to bring them. When enough fans pledge, the show becomes real. It’s that simple.</p>
                             <Link href="/explore" className={"btnOrange"} style={{ marginTop: "8px" }}>See the map</Link>
                         </div>

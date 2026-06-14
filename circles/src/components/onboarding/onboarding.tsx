@@ -187,7 +187,7 @@ export default function Onboarding() {
         case "skills":
           return "Your Skills and Powers";
         case "final":
-          return "Welcome, Changemaker!";
+          return "Welcome to Peerify";
         default:
           return "Onboarding";
     }
