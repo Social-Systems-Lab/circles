@@ -262,7 +262,7 @@ export default function HomeContent({
                                             circle.name
                                         )}
                                     </h4>
-                                    {proofOfHumanitySummary && (
+                                    {proofOfHumanitySummary && !isPeerifyArtistProfile && (
                                         <ProofOfHumanityHeaderAction circle={circle} summary={proofOfHumanitySummary} />
                                     )}
                                 </div>
@@ -363,7 +363,7 @@ export default function HomeContent({
                                     )}
                                 </div>
                             )}
-                            {isOwnUserProfile ? (
+                            {isOwnUserProfile && !isPeerifyArtistProfile ? (
                                 <div className="flex items-center gap-2 pt-1">
                                     <VerifyAccountButton />
                                 </div>
@@ -402,24 +402,6 @@ export default function HomeContent({
                                             <span>{peerifyArtistProfile.baseCity}</span>
                                         </div>
                                     )}
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button asChild size="sm">
-                                            <Link href={`${circle.handle ? `/circles/${circle.handle}/home` : "#"}#artist-actions`}>
-                                                Pledge
-                                            </Link>
-                                        </Button>
-                                        {peerifyArtistProfile.bookingEnabled ? (
-                                            <Button asChild size="sm">
-                                                <Link href={`${circle.handle ? `/circles/${circle.handle}/home` : "#"}#artist-actions`}>
-                                                    Book
-                                                </Link>
-                                            </Button>
-                                        ) : (
-                                            <Button size="sm" variant="outline" disabled>
-                                                Book
-                                            </Button>
-                                        )}
-                                    </div>
                                 </div>
                             )}
                             {!isUser && memberCount > 0 && (

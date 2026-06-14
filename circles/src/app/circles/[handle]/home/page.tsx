@@ -18,6 +18,7 @@ import {
     getLinkedVibeIdDid,
     type CircleMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
+import { hasPeerifyArtistIntent } from "@/lib/peerify/artist-profile";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -34,6 +35,7 @@ export default async function CircleHomePage(props: PageProps) {
     if (!circle) {
         notFound();
     }
+    const isPeerifyArtistProfile = circle.circleType === "user" && hasPeerifyArtistIntent(circle);
 
     let verifiedContributions: VerifiedContributionItem[] = [];
     let verifiedContributionPublicCount = 0;
@@ -44,7 +46,9 @@ export default async function CircleHomePage(props: PageProps) {
     let canCreateFundingAsk = false;
     let membershipCredential: CircleMembershipCredentialCardData | null = null;
     const proofOfHumanitySummary =
-        circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, viewerDid) : null;
+        circle.circleType === "user" && circle.did && !isPeerifyArtistProfile
+            ? await getHumanityVerificationSummary(circle.did, viewerDid)
+            : null;
     const showFundingPanel = isFundingEnabledForCircle(circle);
     const showUpcomingShiftsPanel = circle.circleType !== "user" && (circle.enabledModules?.includes("tasks") ?? false);
     const showAdminsPublicly = circle.showAdminsPublicly !== false;
@@ -53,7 +57,7 @@ export default async function CircleHomePage(props: PageProps) {
             ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
             : [];
 
-    if (circle.circleType === "user" && circle.did) {
+    if (circle.circleType === "user" && circle.did && !isPeerifyArtistProfile) {
         const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);
         const permissionsByCircleId = new Map<string, TaskPermissions>();
         verifiedContributionPublicCount = totalPublicCount;

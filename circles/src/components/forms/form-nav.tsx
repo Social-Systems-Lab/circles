@@ -38,7 +38,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, className, ...p
     return (
         <>
             <nav
-                className={cn("flex", className)}
+                className={cn("relative z-20 flex w-full bg-background/95", className)}
                 style={{
                     position: isCompact ? "relative" : "relative",
                     marginLeft: isCompact ? "10px" : "20px",

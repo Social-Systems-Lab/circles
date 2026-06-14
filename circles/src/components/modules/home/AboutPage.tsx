@@ -260,15 +260,16 @@ export default function AboutPage({
     };
 
     const hasOverviewDetails =
-        !!circle.mission ||
-        !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
-        !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
-        !!circle.websiteUrl ||
-        !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0));
+        !isPeerifyArtistProfile &&
+        (!!circle.mission ||
+            !!(circle.location && (circle.location.city || circle.location.region || circle.location.country)) ||
+            !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
+            !!circle.websiteUrl ||
+            !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0)));
     const hasNeedsMatchingDetails = !isUserProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
     const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
-    const shouldShowVerifiedContributions = isUserProfile;
-    const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary;
+    const shouldShowVerifiedContributions = isUserProfile && !isPeerifyArtistProfile;
+    const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary && !isPeerifyArtistProfile;
     const shouldShowMembershipCredential = !isUserProfile && !!membershipCredential;
     const shouldShowFundingPanel = showFundingPanel;
     const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
@@ -343,7 +344,8 @@ export default function AboutPage({
             className: "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600",
         },
     ].filter((chip): chip is { key: string; label: string; className: string } => Boolean(chip));
-    const shouldShowProfileStatus = isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
+    const shouldShowProfileStatus =
+        isUserProfile && !isPeerifyArtistProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
     const hasSidebarContent =
         shouldShowProfileStatus ||
         hasOverviewDetails ||
@@ -358,6 +360,13 @@ export default function AboutPage({
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
     const shouldShowPeerifyArtistCard = hasPeerifyContent;
+    const shouldShowPeerifyArtistSupportCards = !isPeerifyArtistProfile;
+    const aboutHeading = isPeerifyArtistProfile ? "About the Artist" : "About";
+    const emptyAboutText = isPeerifyArtistProfile
+        ? "This artist hasn't added a longer background or story yet."
+        : isUserProfile
+          ? "This profile hasn't added an About section yet."
+          : "This circle hasn't added a description yet.";
 
     const getLeaderRole = (leader: MemberDisplay) => {
         if (leader.userGroups?.includes("admins")) return "Admin";
@@ -564,6 +573,14 @@ export default function AboutPage({
                                 <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div className="space-y-3">
+                                            <div className="space-y-1">
+                                                <div className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                                                    Artist Profile
+                                                </div>
+                                                <p className="max-w-2xl text-sm text-muted-foreground">
+                                                    Listen, follow along, or help make a local show happen.
+                                                </p>
+                                            </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {peerifyArtistProfile.artistTypes.map((item) => (
                                                     <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
@@ -587,7 +604,7 @@ export default function AboutPage({
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="flex flex-col gap-2 sm:min-w-[180px]">
+                                        <div className="flex flex-wrap gap-2 sm:max-w-[260px] sm:justify-end">
                                             <Button type="button" onClick={openPledgeDialog}>
                                                 Pledge Interest
                                             </Button>
@@ -599,13 +616,13 @@ export default function AboutPage({
                                             >
                                                 Book Enquiry
                                             </Button>
-                                            {!peerifyArtistProfile.bookingEnabled && (
-                                                <p className="text-xs text-muted-foreground">
-                                                    Booking enquiries are not enabled on this profile yet.
-                                                </p>
-                                            )}
                                         </div>
                                     </div>
+                                    {!peerifyArtistProfile.bookingEnabled && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Booking enquiries are not enabled on this profile yet.
+                                        </p>
+                                    )}
 
                                     {peerifyMusicLinks.length > 0 && (
                                         <div className="space-y-3">
@@ -706,7 +723,7 @@ export default function AboutPage({
                             {hasMainContent ? (
                                 <>
                                     <div className="flex flex-row items-center justify-between gap-4">
-                                        <h1 className="my-4">About</h1>
+                                        <h1 className="my-4">{aboutHeading}</h1>
                                         {canEditAbout && (
                                             <Button
                                                 variant="outline"
@@ -719,9 +736,7 @@ export default function AboutPage({
                                     {circle.content ? (
                                         <RichText content={circle.content} />
                                     ) : isUserProfile ? (
-                                        <p className="mb-6 text-base text-muted-foreground">
-                                            This profile hasn&apos;t added an About section yet.
-                                        </p>
+                                        <p className="mb-6 text-base text-muted-foreground">{emptyAboutText}</p>
                                     ) : (
                                         <p className="mb-6 text-base">{circle.description}</p>
                                     )}
@@ -730,7 +745,7 @@ export default function AboutPage({
                                 // Default text if no content or description
                                 <>
                                     <div className="flex flex-row items-center justify-between gap-4">
-                                        <h1 className="my-4">About</h1>
+                                        <h1 className="my-4">{aboutHeading}</h1>
                                         {canEditAbout && (
                                             <Button
                                                 variant="outline"
@@ -740,16 +755,14 @@ export default function AboutPage({
                                             </Button>
                                         )}
                                     </div>
-                                    <p className="mb-6 text-base text-muted-foreground">
-                                        {isUserProfile
-                                            ? "This profile hasn't added an About section yet."
-                                            : "This circle hasn&apos;t added a description yet."}
-                                    </p>
+                                    <p className="mb-6 text-base text-muted-foreground">{emptyAboutText}</p>
                                 </>
                             )}
                         </div>
-                        <OffersCard circle={circle} isOwner={isOwner} />
-                        {isUserProfile && <EngagementCard circle={circle} isOwner={isOwner} />}
+                        {shouldShowPeerifyArtistSupportCards && <OffersCard circle={circle} isOwner={isOwner} />}
+                        {shouldShowPeerifyArtistSupportCards && isUserProfile && (
+                            <EngagementCard circle={circle} isOwner={isOwner} />
+                        )}
                         {!isUserProfile && <NeedsCard circle={circle} isOwner={isOwner} />}
                     </div>
                 </div>

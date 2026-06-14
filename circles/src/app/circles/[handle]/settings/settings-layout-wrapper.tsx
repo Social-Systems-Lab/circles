@@ -85,18 +85,19 @@ export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrappe
 
     return (
         <div
-            className="flex w-full"
+            className="relative z-10 flex w-full"
             style={{
                 flexDirection: isCompact ? "column" : "row",
                 paddingTop: isCompact ? "0" : "20px",
             }}
         >
             <div
-                className="relative flex flex-col items-center pb-2"
+                className="relative z-10 flex flex-col items-center pb-2"
                 style={{
                     flex: isCompact ? "0" : "1",
                     alignItems: isCompact ? "normal" : "flex-end",
-                    minWidth: isCompact ? "0px" : "240px",
+                    minWidth: isCompact ? "0px" : "272px",
+                    paddingLeft: isCompact ? "0px" : "16px",
                 }}
             >
                 <FormNav items={navItems} circle={circle} />
