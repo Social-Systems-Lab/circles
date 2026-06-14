@@ -39,6 +39,29 @@ export type PeerifyMetadata = {
     artistProfile?: PeerifyArtistProfile;
 };
 
+export type PeerifyArtistEnquiryType = "pledge" | "booking";
+
+export type PeerifyPledgeEnquiryInput = {
+    fanLocation?: string;
+    maximumTicketAmount?: string;
+    preferredEventType?: string;
+    helpOptions?: string[];
+    note?: string;
+};
+
+export type PeerifyBookingEnquiryInput = {
+    bookerLocation?: string;
+    eventType?: string;
+    expectedAudienceSize?: string;
+    possibleDateRange?: string;
+    setting?: string;
+    accommodationAvailable?: boolean;
+    localTransportAvailable?: boolean;
+    foodHospitalityAvailable?: boolean;
+    soundEquipmentAvailable?: boolean;
+    message?: string;
+};
+
 export const PEERIFY_ARTIST_TYPE_OPTIONS = [
     "Solo artist",
     "Band",
@@ -70,6 +93,24 @@ export const PEERIFY_EVENT_TYPE_OPTIONS = [
     "Community event",
     "Support slot",
     "Workshop",
+] as const;
+
+export const PEERIFY_PLEDGE_HELP_OPTIONS = [
+    "Attend",
+    "Promote",
+    "Maybe host",
+    "Space for 20-30 people",
+    "Local transport",
+    "Spare room",
+    "Food / hospitality",
+    "Sound / equipment",
+] as const;
+
+export const PEERIFY_BOOKING_SUPPORT_OPTIONS = [
+    "Accommodation available",
+    "Local transport available",
+    "Food / hospitality available",
+    "Sound equipment available",
 ] as const;
 
 export const PEERIFY_MUSIC_LINK_LABELS: Record<PeerifyMusicLinkKey, string> = {
@@ -219,3 +260,64 @@ export const hasPeerifyArtistProfileContent = (profile: PeerifyArtistProfile): b
     profile.lookingFor.length > 0 ||
     profile.bookingEnabled ||
     Boolean(profile.availability);
+
+const formatArtistName = (circle?: Partial<Circle> | null): string => asString(circle?.name) || "Unknown artist";
+
+const formatBulletLines = (items: string[]): string =>
+    items.length > 0 ? items.map((item) => `- ${item}`).join("\n") : "- None specified";
+
+const withFallback = (value: string | undefined, fallback = "Not specified"): string => {
+    const nextValue = asString(value);
+    return nextValue || fallback;
+};
+
+export const formatPeerifyPledgeEnquiryMessage = (
+    circle: Partial<Circle> | null | undefined,
+    enquiry: PeerifyPledgeEnquiryInput,
+): string => {
+    const helpOptions = asStringArray(enquiry.helpOptions);
+    return [
+        "Peerify pledge enquiry",
+        "",
+        "This is a non-binding pledge of interest, not a ticket purchase.",
+        "",
+        `Artist: ${formatArtistName(circle)}`,
+        `Fan location: ${withFallback(enquiry.fanLocation)}`,
+        `Maximum ticket amount: ${withFallback(enquiry.maximumTicketAmount)}`,
+        `Preferred event type: ${withFallback(enquiry.preferredEventType)}`,
+        "Can help with:",
+        formatBulletLines(helpOptions),
+        "",
+        `Note: ${withFallback(enquiry.note, "None")}`,
+    ].join("\n");
+};
+
+export const formatPeerifyBookingEnquiryMessage = (
+    circle: Partial<Circle> | null | undefined,
+    enquiry: PeerifyBookingEnquiryInput,
+): string => {
+    const supportLines = [
+        `Accommodation: ${enquiry.accommodationAvailable ? "yes" : "no"}`,
+        `Local transport: ${enquiry.localTransportAvailable ? "yes" : "no"}`,
+        `Food / hospitality: ${enquiry.foodHospitalityAvailable ? "yes" : "no"}`,
+        `Sound equipment: ${enquiry.soundEquipmentAvailable ? "yes" : "no"}`,
+    ];
+
+    return [
+        "Peerify booking enquiry",
+        "",
+        "This is a booking enquiry only. It is not a confirmed booking or agreement.",
+        "",
+        `Artist: ${formatArtistName(circle)}`,
+        `Booker location: ${withFallback(enquiry.bookerLocation)}`,
+        `Event type: ${withFallback(enquiry.eventType)}`,
+        `Expected audience size: ${withFallback(enquiry.expectedAudienceSize)}`,
+        `Possible date/date range: ${withFallback(enquiry.possibleDateRange)}`,
+        `Setting: ${withFallback(enquiry.setting)}`,
+        "",
+        "Available support:",
+        formatBulletLines(supportLines),
+        "",
+        `Message: ${withFallback(enquiry.message, "None")}`,
+    ].join("\n");
+};

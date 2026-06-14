@@ -32,6 +32,14 @@ import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 import { getDmEligibility } from "@/lib/data/relationships";
+import {
+    formatPeerifyBookingEnquiryMessage,
+    formatPeerifyPledgeEnquiryMessage,
+    hasPeerifyArtistIntent,
+    type PeerifyArtistEnquiryType,
+    type PeerifyBookingEnquiryInput,
+    type PeerifyPledgeEnquiryInput,
+} from "@/lib/peerify/artist-profile";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -109,6 +117,44 @@ const buildChatRoomMembershipFilter = (userDid: string, conversationId: string):
     }
 
     return { userDid, chatRoomId: conversationId };
+};
+
+const clampText = (value: unknown, maxLength: number): string => {
+    if (typeof value !== "string") {
+        return "";
+    }
+
+    return value.trim().slice(0, maxLength);
+};
+
+const clampStringArray = (value: unknown, maxItems: number, maxItemLength: number): string[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item) => clampText(item, maxItemLength))
+        .filter(Boolean)
+        .slice(0, maxItems);
+};
+
+const findDirectConversationByDid = async (participantDids: [string, string]) => {
+    const participants = [...participantDids].sort();
+    const dmHandle = `dm-${participants[0]}-${participants[1]}`;
+
+    return (
+        (await ChatConversations.findOne({
+            type: "dm",
+            handle: dmHandle,
+            participants: { $all: participants },
+            archived: { $ne: true },
+        })) ||
+        (await ChatConversations.findOne({
+            type: "dm",
+            participants: { $all: participants },
+            archived: { $ne: true },
+        }))
+    );
 };
 
 const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>): Circle =>
@@ -877,23 +923,9 @@ export const findOrCreateDMConversationAction = async (
 
     await findOrCreateDmConversation(currentUser, recipient);
 
-    // DM rooms use handle: dm-<didA>-<didB> (sorted)
-    const participants = [currentUser.did!, recipient.did!].sort();
-    const dmHandle = `dm-${participants[0]}-${participants[1]}`;
     // Why this broke: list-based rediscovery depends on Members -> allowedCircleIds.
     // In prod, incomplete Members can hide the DM even when it was just created.
-    const dmConversation =
-        (await ChatConversations.findOne({
-            type: "dm",
-            handle: dmHandle,
-            participants: { $all: participants },
-            archived: { $ne: true },
-        })) ||
-        (await ChatConversations.findOne({
-            type: "dm",
-            participants: { $all: participants },
-            archived: { $ne: true },
-        }));
+    const dmConversation = await findDirectConversationByDid([currentUser.did!, recipient.did!]);
 
     if (!dmConversation) {
         return { success: false, message: "Failed to create DM room" };
@@ -901,6 +933,116 @@ export const findOrCreateDMConversationAction = async (
 
     const chatRoom = await mapConversationToChatRoomDisplay(userDid, dmConversation as any);
     return chatRoom ? { success: true, chatRoom } : { success: false, message: "Failed to create DM room" };
+};
+
+export const sendPeerifyArtistEnquiryAction = async ({
+    artistCircleId,
+    enquiryType,
+    pledge,
+    booking,
+}: {
+    artistCircleId: string;
+    enquiryType: PeerifyArtistEnquiryType;
+    pledge?: PeerifyPledgeEnquiryInput;
+    booking?: PeerifyBookingEnquiryInput;
+}): Promise<{ success: boolean; roomId?: string; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to contact this artist" };
+    }
+
+    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "send artist enquiries");
+    if (verificationMessage) {
+        return { success: false, message: verificationMessage };
+    }
+
+    if (!artistCircleId) {
+        return { success: false, message: "Missing artist profile" };
+    }
+
+    const artist = await getCircleById(artistCircleId);
+    if (!artist?._id || artist.circleType !== "user" || !artist.did) {
+        return { success: false, message: "Artist profile not found" };
+    }
+
+    if (!hasPeerifyArtistIntent(artist)) {
+        return { success: false, message: "This profile is not accepting Peerify artist enquiries" };
+    }
+
+    const sender = await getCircleByDid(userDid);
+    if (!sender?._id || !sender.did) {
+        return { success: false, message: "Could not resolve your profile" };
+    }
+
+    if (sender.did === artist.did) {
+        return { success: false, message: "You cannot send an enquiry to yourself" };
+    }
+
+    const normalizedPledge: PeerifyPledgeEnquiryInput = {
+        fanLocation: clampText(pledge?.fanLocation, 120),
+        maximumTicketAmount: clampText(pledge?.maximumTicketAmount, 80),
+        preferredEventType: clampText(pledge?.preferredEventType, 80),
+        helpOptions: clampStringArray(pledge?.helpOptions, 8, 80),
+        note: clampText(pledge?.note, 1000),
+    };
+    const normalizedBooking: PeerifyBookingEnquiryInput = {
+        bookerLocation: clampText(booking?.bookerLocation, 120),
+        eventType: clampText(booking?.eventType, 80),
+        expectedAudienceSize: clampText(booking?.expectedAudienceSize, 80),
+        possibleDateRange: clampText(booking?.possibleDateRange, 160),
+        setting: clampText(booking?.setting, 120),
+        accommodationAvailable: booking?.accommodationAvailable === true,
+        localTransportAvailable: booking?.localTransportAvailable === true,
+        foodHospitalityAvailable: booking?.foodHospitalityAvailable === true,
+        soundEquipmentAvailable: booking?.soundEquipmentAvailable === true,
+        message: clampText(booking?.message, 1000),
+    };
+
+    const messageBody =
+        enquiryType === "pledge"
+            ? formatPeerifyPledgeEnquiryMessage(artist, normalizedPledge)
+            : formatPeerifyBookingEnquiryMessage(artist, normalizedBooking);
+
+    if (enquiryType === "pledge" && !normalizedPledge.fanLocation && !normalizedPledge.note) {
+        return { success: false, message: "Add at least your location or a note before sending." };
+    }
+
+    if (enquiryType === "booking" && !normalizedBooking.bookerLocation && !normalizedBooking.message) {
+        return { success: false, message: "Add at least your location or a message before sending." };
+    }
+
+    try {
+        await findOrCreateDmConversation(sender, artist);
+        const dmConversation = await findDirectConversationByDid([sender.did, artist.did]);
+
+        if (!dmConversation?._id) {
+            return { success: false, message: "Failed to create direct conversation" };
+        }
+
+        const conversationId = String(dmConversation._id);
+        const doc = await createMessage({
+            conversationId,
+            senderDid: userDid,
+            body: messageBody,
+            createdAt: new Date(),
+        });
+
+        await sendConversationMessageNotifications({
+            conversationId,
+            conversation: dmConversation,
+            senderDid: userDid,
+            messageBody,
+            messageId: doc._id as string,
+        });
+
+        return { success: true, roomId: conversationId };
+    } catch (error) {
+        console.error("❌ Error sending Peerify artist enquiry:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to send artist enquiry",
+        };
+    }
 };
 
 export const createMongoGroupChatAction = async (

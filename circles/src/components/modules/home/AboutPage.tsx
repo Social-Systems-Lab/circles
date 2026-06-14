@@ -27,7 +27,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { contactCircleAdminsAction } from "@/components/modules/chat/mongo-actions";
+import { contactCircleAdminsAction, sendPeerifyArtistEnquiryAction } from "@/components/modules/chat/mongo-actions";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
@@ -48,6 +48,8 @@ import { isVerifiedUser } from "@/lib/auth/verification";
 import { useProfileRelationshipState } from "./message-button";
 import {
     getPeerifyArtistProfile,
+    PEERIFY_BOOKING_SUPPORT_OPTIONS,
+    PEERIFY_PLEDGE_HELP_OPTIONS,
     hasPeerifyArtistIntent,
     hasPeerifyArtistProfileContent,
     PEERIFY_MUSIC_LINK_LABELS,
@@ -69,6 +71,48 @@ interface AboutPageProps {
     proofOfHumanitySummary?: HumanityVerificationSummary | null;
     membershipCredential?: CircleMembershipCredentialCardData | null;
 }
+
+type PledgeFormState = {
+    fanLocation: string;
+    maximumTicketAmount: string;
+    preferredEventType: string;
+    helpOptions: string[];
+    note: string;
+};
+
+type BookingFormState = {
+    bookerLocation: string;
+    eventType: string;
+    expectedAudienceSize: string;
+    possibleDateRange: string;
+    setting: string;
+    accommodationAvailable: boolean;
+    localTransportAvailable: boolean;
+    foodHospitalityAvailable: boolean;
+    soundEquipmentAvailable: boolean;
+    message: string;
+};
+
+const EMPTY_PLEDGE_FORM: PledgeFormState = {
+    fanLocation: "",
+    maximumTicketAmount: "",
+    preferredEventType: "",
+    helpOptions: [],
+    note: "",
+};
+
+const EMPTY_BOOKING_FORM: BookingFormState = {
+    bookerLocation: "",
+    eventType: "",
+    expectedAudienceSize: "",
+    possibleDateRange: "",
+    setting: "",
+    accommodationAvailable: false,
+    localTransportAvailable: false,
+    foodHospitalityAvailable: false,
+    soundEquipmentAvailable: false,
+    message: "",
+};
 
 export default function AboutPage({
     circle,
@@ -102,6 +146,12 @@ export default function AboutPage({
     const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
     const [isPledgeDialogOpen, setIsPledgeDialogOpen] = React.useState(false);
     const [isBookDialogOpen, setIsBookDialogOpen] = React.useState(false);
+    const [pledgeForm, setPledgeForm] = React.useState<PledgeFormState>(EMPTY_PLEDGE_FORM);
+    const [bookingForm, setBookingForm] = React.useState<BookingFormState>(EMPTY_BOOKING_FORM);
+    const [pledgeError, setPledgeError] = React.useState("");
+    const [bookingError, setBookingError] = React.useState("");
+    const [isSubmittingPledge, setIsSubmittingPledge] = React.useState(false);
+    const [isSubmittingBooking, setIsSubmittingBooking] = React.useState(false);
     const isOwner = user?.did === circle.did;
     const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
     const isUserProfile = circle.circleType === "user";
@@ -391,22 +441,112 @@ export default function AboutPage({
         if (!peerifyArtistProfile.bookingEnabled) {
             return;
         }
+        if (!user?.did) {
+            router.push(`/login?redirectTo=${encodeURIComponent(`/circles/${circle.handle}/home`)}`);
+            return;
+        }
+        setBookingError("");
         setIsBookDialogOpen(true);
     };
 
-    const submitPrototypeDialog = (kind: "pledge" | "booking") => {
-        toast({
-            title: kind === "pledge" ? "Pledge captured locally" : "Booking enquiry captured locally",
-            description:
-                kind === "pledge"
-                    ? "This MVP dialog is non-binding and does not save or send anything yet."
-                    : "This MVP dialog is a non-binding prototype and does not confirm or save a booking yet.",
-        });
-        if (kind === "pledge") {
-            setIsPledgeDialogOpen(false);
+    const openPledgeDialog = () => {
+        if (!user?.did) {
+            router.push(`/login?redirectTo=${encodeURIComponent(`/circles/${circle.handle}/home`)}`);
             return;
         }
-        setIsBookDialogOpen(false);
+        setPledgeError("");
+        setIsPledgeDialogOpen(true);
+    };
+
+    const togglePledgeHelpOption = (option: string, checked: boolean) => {
+        setPledgeForm((current) => ({
+            ...current,
+            helpOptions: checked
+                ? Array.from(new Set([...current.helpOptions, option]))
+                : current.helpOptions.filter((item) => item !== option),
+        }));
+    };
+
+    const updateBookingSupport = (key: keyof Pick<
+        BookingFormState,
+        "accommodationAvailable" | "localTransportAvailable" | "foodHospitalityAvailable" | "soundEquipmentAvailable"
+    >, checked: boolean) => {
+        setBookingForm((current) => ({
+            ...current,
+            [key]: checked,
+        }));
+    };
+
+    const submitPledgeEnquiry = async () => {
+        if (!user?.did) {
+            router.push(`/login?redirectTo=${encodeURIComponent(`/circles/${circle.handle}/home`)}`);
+            return;
+        }
+
+        setIsSubmittingPledge(true);
+        setPledgeError("");
+
+        try {
+            const result = await sendPeerifyArtistEnquiryAction({
+                artistCircleId: String(circle._id || ""),
+                enquiryType: "pledge",
+                pledge: pledgeForm,
+            });
+
+            if (!result.success || !result.roomId) {
+                setPledgeError(result.message || "Could not send your pledge enquiry.");
+                return;
+            }
+
+            setPledgeForm(EMPTY_PLEDGE_FORM);
+            setIsPledgeDialogOpen(false);
+            toast({
+                title: "Pledge enquiry sent",
+                description: "Your pledge enquiry has been sent to the artist.",
+            });
+            router.push(`/chat/${result.roomId}`);
+        } catch (error) {
+            console.error("Failed to send Peerify pledge enquiry:", error);
+            setPledgeError("Could not send your pledge enquiry. Please try again.");
+        } finally {
+            setIsSubmittingPledge(false);
+        }
+    };
+
+    const submitBookingEnquiry = async () => {
+        if (!user?.did) {
+            router.push(`/login?redirectTo=${encodeURIComponent(`/circles/${circle.handle}/home`)}`);
+            return;
+        }
+
+        setIsSubmittingBooking(true);
+        setBookingError("");
+
+        try {
+            const result = await sendPeerifyArtistEnquiryAction({
+                artistCircleId: String(circle._id || ""),
+                enquiryType: "booking",
+                booking: bookingForm,
+            });
+
+            if (!result.success || !result.roomId) {
+                setBookingError(result.message || "Could not send your booking enquiry.");
+                return;
+            }
+
+            setBookingForm(EMPTY_BOOKING_FORM);
+            setIsBookDialogOpen(false);
+            toast({
+                title: "Booking enquiry sent",
+                description: "Your booking enquiry has been sent to the artist.",
+            });
+            router.push(`/chat/${result.roomId}`);
+        } catch (error) {
+            console.error("Failed to send Peerify booking enquiry:", error);
+            setBookingError("Could not send your booking enquiry. Please try again.");
+        } finally {
+            setIsSubmittingBooking(false);
+        }
     };
 
     return (
@@ -448,7 +588,7 @@ export default function AboutPage({
                                             )}
                                         </div>
                                         <div className="flex flex-col gap-2 sm:min-w-[180px]">
-                                            <Button type="button" onClick={() => setIsPledgeDialogOpen(true)}>
+                                            <Button type="button" onClick={openPledgeDialog}>
                                                 Pledge Interest
                                             </Button>
                                             <Button
@@ -1031,7 +1171,15 @@ export default function AboutPage({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-            <Dialog open={isPledgeDialogOpen} onOpenChange={setIsPledgeDialogOpen}>
+            <Dialog
+                open={isPledgeDialogOpen}
+                onOpenChange={(open) => {
+                    setIsPledgeDialogOpen(open);
+                    if (!open) {
+                        setPledgeError("");
+                    }
+                }}
+            >
                 <DialogContent className="sm:max-w-[560px]">
                     <DialogHeader>
                         <DialogTitle>Pledge interest for {circle.name}</DialogTitle>
@@ -1043,45 +1191,78 @@ export default function AboutPage({
                         className="space-y-4"
                         onSubmit={(event) => {
                             event.preventDefault();
-                            submitPrototypeDialog("pledge");
+                            void submitPledgeEnquiry();
                         }}
                     >
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <Input placeholder="Your city / location" />
-                            <Input placeholder="Maximum ticket amount" type="number" min="0" />
+                            <Input
+                                placeholder="Your city / location"
+                                value={pledgeForm.fanLocation}
+                                onChange={(event) => setPledgeForm((current) => ({ ...current, fanLocation: event.target.value }))}
+                            />
+                            <Input
+                                placeholder="Maximum ticket amount"
+                                type="number"
+                                min="0"
+                                value={pledgeForm.maximumTicketAmount}
+                                onChange={(event) =>
+                                    setPledgeForm((current) => ({ ...current, maximumTicketAmount: event.target.value }))
+                                }
+                            />
                         </div>
-                        <Input placeholder="Preferred event type" />
+                        <Input
+                            placeholder="Preferred event type"
+                            value={pledgeForm.preferredEventType}
+                            onChange={(event) =>
+                                setPledgeForm((current) => ({ ...current, preferredEventType: event.target.value }))
+                            }
+                        />
                         <div className="space-y-2">
                             <Label>Willingness to help</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
-                                {[
-                                    "Attend",
-                                    "Promote",
-                                    "Maybe host",
-                                    "Space for 20–30 people",
-                                    "Local transport",
-                                    "Spare room",
-                                    "Food / hospitality",
-                                    "Sound / equipment",
-                                ].map((option) => (
+                                {PEERIFY_PLEDGE_HELP_OPTIONS.map((option) => (
                                     <label key={option} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
-                                        <Checkbox />
+                                        <Checkbox
+                                            checked={pledgeForm.helpOptions.includes(option)}
+                                            onCheckedChange={(checked) => togglePledgeHelpOption(option, checked === true)}
+                                        />
                                         <span>{option}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
-                        <Textarea rows={4} placeholder="Optional note" />
+                        <Textarea
+                            rows={4}
+                            placeholder="Optional note"
+                            value={pledgeForm.note}
+                            onChange={(event) => setPledgeForm((current) => ({ ...current, note: event.target.value }))}
+                        />
+                        {pledgeError && <p className="text-sm text-destructive">{pledgeError}</p>}
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsPledgeDialogOpen(false)}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsPledgeDialogOpen(false)}
+                                disabled={isSubmittingPledge}
+                            >
                                 Cancel
                             </Button>
-                            <Button type="submit">Record Prototype Pledge</Button>
+                            <Button type="submit" disabled={isSubmittingPledge}>
+                                {isSubmittingPledge ? "Sending..." : "Send Pledge Enquiry"}
+                            </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
-            <Dialog open={isBookDialogOpen} onOpenChange={setIsBookDialogOpen}>
+            <Dialog
+                open={isBookDialogOpen}
+                onOpenChange={(open) => {
+                    setIsBookDialogOpen(open);
+                    if (!open) {
+                        setBookingError("");
+                    }
+                }}
+            >
                 <DialogContent className="sm:max-w-[620px]">
                     <DialogHeader>
                         <DialogTitle>Booking enquiry for {circle.name}</DialogTitle>
@@ -1093,35 +1274,95 @@ export default function AboutPage({
                         className="space-y-4"
                         onSubmit={(event) => {
                             event.preventDefault();
-                            submitPrototypeDialog("booking");
+                            void submitBookingEnquiry();
                         }}
                     >
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <Input placeholder="Booker location" />
-                            <Input placeholder="Event type" />
-                            <Input placeholder="Expected audience size" type="number" min="0" />
-                            <Input placeholder="Possible date or date range" />
+                            <Input
+                                placeholder="Booker location"
+                                value={bookingForm.bookerLocation}
+                                onChange={(event) =>
+                                    setBookingForm((current) => ({ ...current, bookerLocation: event.target.value }))
+                                }
+                            />
+                            <Input
+                                placeholder="Event type"
+                                value={bookingForm.eventType}
+                                onChange={(event) =>
+                                    setBookingForm((current) => ({ ...current, eventType: event.target.value }))
+                                }
+                            />
+                            <Input
+                                placeholder="Expected audience size"
+                                type="number"
+                                min="0"
+                                value={bookingForm.expectedAudienceSize}
+                                onChange={(event) =>
+                                    setBookingForm((current) => ({ ...current, expectedAudienceSize: event.target.value }))
+                                }
+                            />
+                            <Input
+                                placeholder="Possible date or date range"
+                                value={bookingForm.possibleDateRange}
+                                onChange={(event) =>
+                                    setBookingForm((current) => ({ ...current, possibleDateRange: event.target.value }))
+                                }
+                            />
                         </div>
-                        <Input placeholder="Venue / home setting" />
+                        <Input
+                            placeholder="Venue / home setting"
+                            value={bookingForm.setting}
+                            onChange={(event) => setBookingForm((current) => ({ ...current, setting: event.target.value }))}
+                        />
                         <div className="grid gap-3 sm:grid-cols-2">
-                            {[
-                                "Accommodation available",
-                                "Local transport available",
-                                "Food / hospitality available",
-                                "Sound equipment available",
-                            ].map((option) => (
+                            {PEERIFY_BOOKING_SUPPORT_OPTIONS.map((option) => (
                                 <label key={option} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
-                                    <Checkbox />
+                                    <Checkbox
+                                        checked={
+                                            option === "Accommodation available"
+                                                ? bookingForm.accommodationAvailable
+                                                : option === "Local transport available"
+                                                  ? bookingForm.localTransportAvailable
+                                                  : option === "Food / hospitality available"
+                                                    ? bookingForm.foodHospitalityAvailable
+                                                    : bookingForm.soundEquipmentAvailable
+                                        }
+                                        onCheckedChange={(checked) =>
+                                            updateBookingSupport(
+                                                option === "Accommodation available"
+                                                    ? "accommodationAvailable"
+                                                    : option === "Local transport available"
+                                                      ? "localTransportAvailable"
+                                                      : option === "Food / hospitality available"
+                                                        ? "foodHospitalityAvailable"
+                                                        : "soundEquipmentAvailable",
+                                                checked === true,
+                                            )
+                                        }
+                                    />
                                     <span>{option}</span>
                                 </label>
                             ))}
                         </div>
-                        <Textarea rows={5} placeholder="Message to artist" />
+                        <Textarea
+                            rows={5}
+                            placeholder="Message to artist"
+                            value={bookingForm.message}
+                            onChange={(event) => setBookingForm((current) => ({ ...current, message: event.target.value }))}
+                        />
+                        {bookingError && <p className="text-sm text-destructive">{bookingError}</p>}
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsBookDialogOpen(false)}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBookDialogOpen(false)}
+                                disabled={isSubmittingBooking}
+                            >
                                 Cancel
                             </Button>
-                            <Button type="submit">Record Prototype Enquiry</Button>
+                            <Button type="submit" disabled={isSubmittingBooking}>
+                                {isSubmittingBooking ? "Sending..." : "Send Booking Enquiry"}
+                            </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
