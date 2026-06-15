@@ -19,6 +19,13 @@ import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 import { hasContributorPerks } from "@/lib/auth/perks";
+import {
+    normalizePeerifyArtistProfile,
+    PEERIFY_MANAGED_IDENTITY_TYPE_LABELS,
+    PEERIFY_MANAGED_IDENTITY_TYPES,
+    type PeerifyIdentityType,
+} from "@/lib/peerify/artist-profile";
+import { generateSlug } from "@/lib/utils";
 
 const canCreateIndependentCircle = (user: UserPrivate | undefined) => hasContributorPerks(user);
 
@@ -213,6 +220,124 @@ export async function createCircleAction(circleData: CircleData, userDid: string
         };
     } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to create circle.";
+        return { success: false, message: message + " " + JSON.stringify(error) };
+    }
+}
+
+export async function createPeerifyManagedArtistIdentityAction(input: {
+    name: string;
+    handle: string;
+    description: string;
+    baseCity: string;
+    identityType: PeerifyIdentityType;
+}) {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in" };
+        }
+
+        const currentUser = await getUserPrivate(userDid);
+        if (!currentUser) {
+            return { success: false, message: "Could not resolve your profile" };
+        }
+
+        if (!canPerformRestrictedAction(currentUser)) {
+            return { success: false, message: getRestrictedActionMessage("create circles") };
+        }
+
+        const name = input.name.trim();
+        if (!name) {
+            return { success: false, message: "Artist or project name is required" };
+        }
+
+        const description = input.description.trim();
+        if (!description) {
+            return { success: false, message: "Short bio is required" };
+        }
+
+        const baseCity = input.baseCity.trim();
+        if (!baseCity) {
+            return { success: false, message: "Base city is required" };
+        }
+
+        if (!PEERIFY_MANAGED_IDENTITY_TYPES.includes(input.identityType)) {
+            return { success: false, message: "Unsupported Peerify identity type" };
+        }
+
+        const parentCircleId = currentUser._id?.toString();
+        if (!parentCircleId) {
+            return { success: false, message: "Could not resolve your profile circle" };
+        }
+
+        const authorized = await authorizeCircleCreation(currentUser, userDid, "circle", "profile_child", parentCircleId);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to create new circles" };
+        }
+
+        const handle = generateSlug(input.handle)
+            .replace(/_/g, "-")
+            .replace(/^-+|-+$/g, "");
+        if (!handle || handle.length < 3 || handle.length > 20 || !/^[a-z0-9-]+$/.test(handle)) {
+            return { success: false, message: "handle-invalid" };
+        }
+
+        const existingCircle = await getCircleByHandle(handle);
+        if (existingCircle) {
+            return { success: false, message: "handle" };
+        }
+
+        const identityType = input.identityType;
+        const newCircle = await createCircle(
+            {
+                name,
+                handle,
+                isPublic: true,
+                description,
+                content: "",
+                mission: "",
+                circleType: "circle",
+                circleLevel: "profile_child",
+                createdBy: userDid,
+                publishStatus: "published",
+                parentCircleId,
+                picture: { url: "/images/default-picture.png" },
+                causes: [],
+                skills: [],
+                metadata: {
+                    peerify: {
+                        managedIdentity: true,
+                        identityType,
+                        artistProfile: normalizePeerifyArtistProfile({
+                            artistTypes: [],
+                            baseCity,
+                            genres: [],
+                            musicLinks: {},
+                            lookingFor: [],
+                            bookingEnabled: false,
+                            bookingSettings: {},
+                            availability: "",
+                        }),
+                    },
+                },
+            },
+            userDid,
+        );
+
+        await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
+        await ensureModuleIsEnabledOnCircle(parentCircleId, "communities", userDid);
+
+        return {
+            success: true,
+            message: "Artist identity created successfully",
+            data: {
+                circleId: newCircle._id,
+                handle: newCircle.handle,
+                identityLabel: PEERIFY_MANAGED_IDENTITY_TYPE_LABELS[identityType],
+            },
+        };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to create artist identity.";
         return { success: false, message: message + " " + JSON.stringify(error) };
     }
 }

@@ -1,5 +1,8 @@
 import { Circle } from "@/models/models";
 
+export type PeerifyIdentityType = "artist" | "band" | "dj" | "producer";
+export const PEERIFY_MANAGED_IDENTITY_TYPES = ["artist", "band", "dj", "producer"] as const;
+
 export type PeerifyMusicLinkKey =
     | "bandcamp"
     | "spotify"
@@ -36,6 +39,8 @@ export type PeerifyArtistProfile = {
 
 export type PeerifyMetadata = {
     intent?: string;
+    managedIdentity?: boolean;
+    identityType?: PeerifyIdentityType;
     artistProfile?: PeerifyArtistProfile;
 };
 
@@ -72,6 +77,40 @@ export const PEERIFY_ARTIST_TYPE_OPTIONS = [
     "Acoustic act",
     "Collective",
 ] as const;
+
+export const PEERIFY_MANAGED_IDENTITY_TYPE_OPTIONS: ReadonlyArray<{
+    value: PeerifyIdentityType;
+    label: string;
+    description: string;
+}> = [
+    {
+        value: "artist",
+        label: "Artist / Solo Project",
+        description: "A public identity for a solo act or personal music project.",
+    },
+    {
+        value: "band",
+        label: "Band",
+        description: "A public identity for a band or group.",
+    },
+    {
+        value: "dj",
+        label: "DJ",
+        description: "A public identity for a DJ project.",
+    },
+    {
+        value: "producer",
+        label: "Producer",
+        description: "A public identity for a producer or beatmaker project.",
+    },
+] as const;
+
+export const PEERIFY_MANAGED_IDENTITY_TYPE_LABELS: Record<PeerifyIdentityType, string> = {
+    artist: "Artist / Solo Project",
+    band: "Band",
+    dj: "DJ",
+    producer: "Producer",
+};
 
 export const PEERIFY_LOOKING_FOR_OPTIONS = [
     "Shows",
@@ -239,6 +278,10 @@ export const getPeerifyMetadata = (circle?: Partial<Circle> | null): PeerifyMeta
 
     return {
         intent: asString(input.intent) || undefined,
+        managedIdentity: input.managedIdentity === true,
+        identityType: PEERIFY_MANAGED_IDENTITY_TYPES.includes(asString(input.identityType) as PeerifyIdentityType)
+            ? (asString(input.identityType) as PeerifyIdentityType)
+            : undefined,
         artistProfile: normalizePeerifyArtistProfile(input.artistProfile),
     };
 };
@@ -249,6 +292,40 @@ export const getPeerifyArtistProfile = (circle?: Partial<Circle> | null): Peerif
 export const hasPeerifyArtistIntent = (circle?: Partial<Circle> | null): boolean => {
     const peerifyMetadata = getPeerifyMetadata(circle);
     return peerifyMetadata.intent === "artist";
+};
+
+export const isPeerifyManagedIdentity = (circle?: Partial<Circle> | null): boolean =>
+    getPeerifyMetadata(circle).managedIdentity === true;
+
+export const getPeerifyIdentityType = (circle?: Partial<Circle> | null): PeerifyIdentityType | undefined =>
+    getPeerifyMetadata(circle).identityType;
+
+export const isPeerifyArtistIdentity = (circle?: Partial<Circle> | null): boolean => {
+    if (hasPeerifyArtistIntent(circle)) {
+        return true;
+    }
+
+    const peerifyMetadata = getPeerifyMetadata(circle);
+    return (
+        peerifyMetadata.managedIdentity === true &&
+        typeof peerifyMetadata.identityType === "string" &&
+        PEERIFY_MANAGED_IDENTITY_TYPES.includes(peerifyMetadata.identityType as PeerifyIdentityType)
+    );
+};
+
+export const getPeerifyArtistIdentityLabel = (circle?: Partial<Circle> | null): string => {
+    const identityType = getPeerifyIdentityType(circle);
+    return identityType ? PEERIFY_MANAGED_IDENTITY_TYPE_LABELS[identityType] : "Artist";
+};
+
+export const getPeerifyArtistTypeBadges = (circle?: Partial<Circle> | null): string[] => {
+    const artistTypes = getPeerifyArtistProfile(circle).artistTypes;
+    if (artistTypes.length > 0) {
+        return artistTypes;
+    }
+
+    const identityType = getPeerifyIdentityType(circle);
+    return identityType ? [PEERIFY_MANAGED_IDENTITY_TYPE_LABELS[identityType]] : [];
 };
 
 export const hasPeerifyArtistProfileContent = (profile: PeerifyArtistProfile): boolean =>

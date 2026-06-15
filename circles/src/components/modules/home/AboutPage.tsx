@@ -48,10 +48,12 @@ import { isVerifiedUser } from "@/lib/auth/verification";
 import { useProfileRelationshipState } from "./message-button";
 import {
     getPeerifyArtistProfile,
+    getPeerifyArtistIdentityLabel,
+    getPeerifyArtistTypeBadges,
     PEERIFY_BOOKING_SUPPORT_OPTIONS,
     PEERIFY_PLEDGE_HELP_OPTIONS,
-    hasPeerifyArtistIntent,
     hasPeerifyArtistProfileContent,
+    isPeerifyArtistIdentity,
     PEERIFY_MUSIC_LINK_LABELS,
     type PeerifyMusicLinkKey,
 } from "@/lib/peerify/artist-profile";
@@ -156,9 +158,13 @@ export default function AboutPage({
     const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
     const isUserProfile = circle.circleType === "user";
     const [relationshipState] = useProfileRelationshipState(circle, user?.did);
-    const isPeerifyArtistProfile = isUserProfile && hasPeerifyArtistIntent(circle);
+    const isPeerifyArtistProfile = isPeerifyArtistIdentity(circle);
     const peerifyArtistProfile = getPeerifyArtistProfile(circle);
-    const hasPeerifyContent = isPeerifyArtistProfile && hasPeerifyArtistProfileContent(peerifyArtistProfile);
+    const peerifyIdentityLabel = getPeerifyArtistIdentityLabel(circle);
+    const peerifyArtistTypeBadges = getPeerifyArtistTypeBadges(circle);
+    const hasPeerifyContent =
+        isPeerifyArtistProfile &&
+        (hasPeerifyArtistProfileContent(peerifyArtistProfile) || peerifyArtistTypeBadges.length > 0);
     const bookingSettings = peerifyArtistProfile.bookingSettings;
     const peerifyMusicLinks = (Object.entries(peerifyArtistProfile.musicLinks) as [PeerifyMusicLinkKey, string][])
         .filter(([, url]) => Boolean(url));
@@ -267,10 +273,10 @@ export default function AboutPage({
             !!circle.websiteUrl ||
             !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0)));
     const hasNeedsMatchingDetails = !isUserProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
-    const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
+    const hasAdminDetails = !isUserProfile && !isPeerifyArtistProfile && adminLeaders.length > 0;
     const shouldShowVerifiedContributions = isUserProfile && !isPeerifyArtistProfile;
     const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary && !isPeerifyArtistProfile;
-    const shouldShowMembershipCredential = !isUserProfile && !!membershipCredential;
+    const shouldShowMembershipCredential = !isUserProfile && !isPeerifyArtistProfile && !!membershipCredential;
     const shouldShowFundingPanel = showFundingPanel;
     const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
     const followerCount = circle.members ? Math.max(circle.members - 1, 0) : 0;
@@ -361,7 +367,7 @@ export default function AboutPage({
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
     const shouldShowPeerifyArtistCard = hasPeerifyContent;
     const shouldShowPeerifyArtistSupportCards = !isPeerifyArtistProfile;
-    const aboutHeading = isPeerifyArtistProfile ? "About the Artist" : "About";
+    const aboutHeading = isPeerifyArtistProfile ? `About the ${peerifyIdentityLabel}` : "About";
     const emptyAboutText = isPeerifyArtistProfile
         ? "This artist hasn't added a longer background or story yet."
         : isUserProfile
@@ -575,14 +581,14 @@ export default function AboutPage({
                                         <div className="space-y-3">
                                             <div className="space-y-1">
                                                 <div className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                                                    Artist Profile
+                                                    {peerifyIdentityLabel}
                                                 </div>
                                                 <p className="max-w-2xl text-sm text-muted-foreground">
                                                     Listen, follow along, or help make a local show happen.
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
-                                                {peerifyArtistProfile.artistTypes.map((item) => (
+                                                {peerifyArtistTypeBadges.map((item) => (
                                                     <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
                                                         {item}
                                                     </Badge>

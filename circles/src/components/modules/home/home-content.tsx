@@ -35,7 +35,11 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { getPeerifyArtistProfile, hasPeerifyArtistIntent } from "@/lib/peerify/artist-profile";
+import {
+    getPeerifyArtistProfile,
+    getPeerifyArtistTypeBadges,
+    isPeerifyArtistIdentity,
+} from "@/lib/peerify/artist-profile";
 
 type HomeContentProps = {
     circle: Circle;
@@ -66,8 +70,9 @@ export default function HomeContent({
     const settingsButtonTitle = isUser ? "Profile settings" : "Circle settings";
     const settingsButtonClassName =
         "h-9 w-9 shrink-0 rounded-full border border-emerald-950 bg-emerald-950 text-white shadow-sm transition-colors hover:bg-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-950 focus-visible:ring-offset-2";
-    const isPeerifyArtistProfile = isUser && hasPeerifyArtistIntent(circle);
+    const isPeerifyArtistProfile = isPeerifyArtistIdentity(circle);
     const peerifyArtistProfile = getPeerifyArtistProfile(circle);
+    const peerifyArtistTypeBadges = getPeerifyArtistTypeBadges(circle);
     const isMember = useMemo(() => {
         if (!user) return false;
         const membership = user.memberships?.find((m) => m.circleId === circle._id);
@@ -371,7 +376,7 @@ export default function HomeContent({
                             {isPeerifyArtistProfile && (
                                 <div className={`flex w-full flex-col gap-3 ${isCompact ? "items-center" : "items-start"} py-2`}>
                                     <div className="flex flex-wrap gap-2">
-                                        {peerifyArtistProfile.artistTypes.map((item) => (
+                                        {peerifyArtistTypeBadges.map((item) => (
                                             <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
                                                 {item}
                                             </Badge>

@@ -30,7 +30,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
     getPeerifyArtistProfile,
+    getPeerifyArtistIdentityLabel,
     hasPeerifyArtistIntent,
+    isPeerifyManagedIdentity,
     PEERIFY_ARTIST_TYPE_OPTIONS,
     PEERIFY_EVENT_TYPE_OPTIONS,
     PEERIFY_LOOKING_FOR_OPTIONS,
@@ -236,6 +238,8 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isIndependentCircle = circle.circleType !== "user" && circle.circleLevel !== "profile_child";
     const isUserProfile = circle.circleType === "user";
+    const isPeerifyManagedArtistCircle = isPeerifyManagedIdentity(circle);
+    const canEditPeerifyArtistProfile = isUserProfile || isPeerifyManagedArtistCircle;
     const artistProfileDefaults = buildArtistProfileFormDefaults(circle);
 
     const form = useForm<AboutSettingsFormValues>({
@@ -569,32 +573,43 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     </CardContent>
                 </Card>
 
-                {isUserProfile ? (
+                {canEditPeerifyArtistProfile ? (
                     <Card>
                         <CardHeader>
-                            <CardTitle>Peerify Artist Profile</CardTitle>
+                            <CardTitle>
+                                {isPeerifyManagedArtistCircle
+                                    ? `${getPeerifyArtistIdentityLabel(circle)} Identity`
+                                    : "Peerify Artist Profile"}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <Controller
-                                name="peerifyArtistIntent"
-                                control={form.control}
-                                render={({ field }) => (
-                                    <div className="space-y-2">
-                                        <Label>Enable artist profile</Label>
-                                        <div className="flex items-center gap-3 rounded-lg border p-4">
-                                            <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
-                                            <div>
-                                                <p className="font-medium">This profile represents an artist or music project</p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    This turns on Peerify artist metadata and public artist sections.
-                                                </p>
+                            {isUserProfile ? (
+                                <Controller
+                                    name="peerifyArtistIntent"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <div className="space-y-2">
+                                            <Label>Enable artist profile</Label>
+                                            <div className="flex items-center gap-3 rounded-lg border p-4">
+                                                <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
+                                                <div>
+                                                    <p className="font-medium">This profile represents an artist or music project</p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        This turns on Peerify artist metadata and public artist sections.
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-                            />
+                                    )}
+                                />
+                            ) : (
+                                <div className="rounded-lg border bg-slate-50 p-4 text-sm text-muted-foreground">
+                                    This managed identity is published as a public Peerify{" "}
+                                    {getPeerifyArtistIdentityLabel(circle).toLowerCase()}.
+                                </div>
+                            )}
 
-                            {peerifyArtistIntent ? (
+                            {peerifyArtistIntent || isPeerifyManagedArtistCircle ? (
                                 <>
                                     <Controller
                                         name="peerifyArtistProfile.artistTypes"

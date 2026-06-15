@@ -13,11 +13,13 @@ import {
     ChevronRight,
     Calendar,
     Hammer,
+    Music4,
 } from "lucide-react";
 
 // Define types for creatable items
 export type CreatableItemKey =
     | "community"
+    | "artist_identity"
     | "project"
     | "task"
     | "goal"
@@ -27,7 +29,7 @@ export type CreatableItemKey =
     | "event"
     | "discussion";
 
-const visibleGlobalCreateItemKeys: CreatableItemKey[] = ["community", "post", "event", "goal"];
+const visibleGlobalCreateItemKeys: CreatableItemKey[] = ["artist_identity", "community", "post", "event", "goal"];
 
 export interface CreatableItemDetail {
     key: CreatableItemKey;
@@ -41,6 +43,14 @@ export interface CreatableItemDetail {
 // Define the items that can be created
 export const creatableItemsList: CreatableItemDetail[] = [
     // Added export
+    {
+        key: "artist_identity",
+        title: "Artist Identity",
+        description: "Create a managed public Peerify artist, band, DJ, or producer profile.",
+        icon: Music4,
+        moduleHandle: "communities",
+        createFeatureHandle: "create",
+    },
     {
         key: "community",
         title: "Circle",
@@ -118,6 +128,7 @@ export const creatableItemsList: CreatableItemDetail[] = [
 interface GlobalCreateDialogContentProps {
     onCloseMainDialog: () => void; // To close this selection dialog
     onSelectItemType: (itemKey: CreatableItemKey) => void; // New prop to inform parent of selection
+    setCreatePeerifyArtistOpen: (open: boolean) => void;
     setCreateCommunityOpen: (open: boolean) => void;
     setCreateProjectOpen: (open: boolean) => void;
 }
@@ -125,6 +136,7 @@ interface GlobalCreateDialogContentProps {
 export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps> = ({
     onCloseMainDialog,
     onSelectItemType,
+    setCreatePeerifyArtistOpen,
     setCreateCommunityOpen,
     setCreateProjectOpen,
 }) => {
@@ -133,7 +145,9 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
     const handleItemClick = (itemKey: CreatableItemKey) => {
         onCloseMainDialog(); // Close this selection dialog
 
-        if (itemKey === "community") {
+        if (itemKey === "artist_identity") {
+            setCreatePeerifyArtistOpen(true);
+        } else if (itemKey === "community") {
             setCreateCommunityOpen(true);
         } else if (itemKey === "project") {
             setCreateProjectOpen(true);

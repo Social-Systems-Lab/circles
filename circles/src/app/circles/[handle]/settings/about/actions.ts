@@ -30,7 +30,12 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
-import { normalizePeerifyArtistProfile, type PeerifyArtistProfile } from "@/lib/peerify/artist-profile";
+import {
+    getPeerifyIdentityType,
+    isPeerifyManagedIdentity,
+    normalizePeerifyArtistProfile,
+    type PeerifyArtistProfile,
+} from "@/lib/peerify/artist-profile";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -569,6 +574,21 @@ export async function saveAbout(values: {
                 delete existingMetadata.peerify;
             }
 
+            circleUpdateData.metadata = existingMetadata;
+        } else if (isPeerifyManagedIdentity(existingCircle)) {
+            const existingMetadata =
+                existingCircle.metadata && typeof existingCircle.metadata === "object" && !Array.isArray(existingCircle.metadata)
+                    ? { ...(existingCircle.metadata as Record<string, unknown>) }
+                    : {};
+            const existingPeerify =
+                existingMetadata.peerify && typeof existingMetadata.peerify === "object" && !Array.isArray(existingMetadata.peerify)
+                    ? { ...(existingMetadata.peerify as Record<string, unknown>) }
+                    : {};
+
+            existingPeerify.managedIdentity = true;
+            existingPeerify.identityType = getPeerifyIdentityType(existingCircle);
+            existingPeerify.artistProfile = normalizePeerifyArtistProfile(values.peerifyArtistProfile);
+            existingMetadata.peerify = existingPeerify;
             circleUpdateData.metadata = existingMetadata;
         }
 

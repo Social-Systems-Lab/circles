@@ -35,7 +35,7 @@ import { getDmEligibility } from "@/lib/data/relationships";
 import {
     formatPeerifyBookingEnquiryMessage,
     formatPeerifyPledgeEnquiryMessage,
-    hasPeerifyArtistIntent,
+    isPeerifyArtistIdentity,
     type PeerifyArtistEnquiryType,
     type PeerifyBookingEnquiryInput,
     type PeerifyPledgeEnquiryInput,
@@ -961,11 +961,11 @@ export const sendPeerifyArtistEnquiryAction = async ({
     }
 
     const artist = await getCircleById(artistCircleId);
-    if (!artist?._id || artist.circleType !== "user" || !artist.did) {
+    if (!artist?._id) {
         return { success: false, message: "Artist profile not found" };
     }
 
-    if (!hasPeerifyArtistIntent(artist)) {
+    if (!isPeerifyArtistIdentity(artist)) {
         return { success: false, message: "This profile is not accepting Peerify artist enquiries" };
     }
 
@@ -974,7 +974,7 @@ export const sendPeerifyArtistEnquiryAction = async ({
         return { success: false, message: "Could not resolve your profile" };
     }
 
-    if (sender.did === artist.did) {
+    if (artist.circleType === "user" && artist.did && sender.did === artist.did) {
         return { success: false, message: "You cannot send an enquiry to yourself" };
     }
 
@@ -1012,30 +1012,34 @@ export const sendPeerifyArtistEnquiryAction = async ({
     }
 
     try {
-        await findOrCreateDmConversation(sender, artist);
-        const dmConversation = await findDirectConversationByDid([sender.did, artist.did]);
+        if (artist.circleType === "user" && artist.did) {
+            await findOrCreateDmConversation(sender, artist);
+            const dmConversation = await findDirectConversationByDid([sender.did, artist.did]);
 
-        if (!dmConversation?._id) {
-            return { success: false, message: "Failed to create direct conversation" };
+            if (!dmConversation?._id) {
+                return { success: false, message: "Failed to create direct conversation" };
+            }
+
+            const conversationId = String(dmConversation._id);
+            const doc = await createMessage({
+                conversationId,
+                senderDid: userDid,
+                body: messageBody,
+                createdAt: new Date(),
+            });
+
+            await sendConversationMessageNotifications({
+                conversationId,
+                conversation: dmConversation,
+                senderDid: userDid,
+                messageBody,
+                messageId: doc._id as string,
+            });
+
+            return { success: true, roomId: conversationId };
         }
 
-        const conversationId = String(dmConversation._id);
-        const doc = await createMessage({
-            conversationId,
-            senderDid: userDid,
-            body: messageBody,
-            createdAt: new Date(),
-        });
-
-        await sendConversationMessageNotifications({
-            conversationId,
-            conversation: dmConversation,
-            senderDid: userDid,
-            messageBody,
-            messageId: doc._id as string,
-        });
-
-        return { success: true, roomId: conversationId };
+        return await contactCircleAdminsAction(String(artist._id), messageBody, [], "ask_question");
     } catch (error) {
         console.error("❌ Error sending Peerify artist enquiry:", error);
         return {
