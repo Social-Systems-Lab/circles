@@ -1,13 +1,13 @@
 import type { Media } from "@/models/models";
 
 export const DEFAULT_HERO_IMAGE_URLS = [
-    "/images/default-heroes/kamooni-hero-01.webp",
-    "/images/default-heroes/kamooni-hero-02.webp",
-    "/images/default-heroes/kamooni-hero-03.webp",
-    "/images/default-heroes/kamooni-hero-04.webp",
-    "/images/default-heroes/kamooni-hero-05.webp",
-    "/images/default-heroes/kamooni-hero-06.webp",
-    "/images/default-heroes/kamooni-hero-07.webp",
+    "/peerify/artist.jpg",
+    "/peerify/fans.jpg",
+    "/peerify/hosts.jpg",
+    "/peerify/everyone.jpg",
+    "/peerify/about.jpg",
+    "/peerify/contact.jpg",
+    "/peerify/involved.jpg",
 ] as const;
 
 const getStableHeroIndex = (stableKey?: string): number => {
@@ -27,8 +27,8 @@ export const getDefaultHeroImage = (stableKey?: string): Media => {
     const url = DEFAULT_HERO_IMAGE_URLS[getStableHeroIndex(stableKey)];
 
     return {
-        name: url.split("/").pop() ?? "kamooni-default-hero.webp",
-        type: "image/webp",
+        name: url.split("/").pop() ?? "peerify-default-hero.jpg",
+        type: "image/jpeg",
         fileInfo: { url },
     };
 };

@@ -276,12 +276,12 @@ h1,
         --button-primary: 145 36% 32%;
         --button-primary-hover: 145 39% 27%;
         --button-primary-foreground: 0 0% 100%;
-        --platform-yellow: 40.7 89.9% 68.8%;
-        --platform-yellow-hover: 40.7 89.9% 68.8%;
-        --platform-yellow-foreground: 36.8 65.2% 22.5%;
-        --bookmark-active: var(--platform-yellow);
-        --bookmark-active-hover: var(--platform-yellow-hover);
-        --bookmark-active-foreground: var(--platform-yellow-foreground);
+        --platform-yellow: 34 100% 93%;
+        --platform-yellow-hover: 32 100% 89%;
+        --platform-yellow-foreground: 24 78% 38%;
+        --bookmark-active: 31 100% 90%;
+        --bookmark-active-hover: 28 100% 86%;
+        --bookmark-active-foreground: 24 82% 36%;
         --founding-member-bg: 75 39% 82%;
         --founding-member-foreground: 74 35% 31%;
         --task-priority-critical-bg: 12 88% 90%;

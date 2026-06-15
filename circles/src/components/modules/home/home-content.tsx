@@ -68,8 +68,6 @@ export default function HomeContent({
         "h-9 w-9 shrink-0 rounded-full border border-emerald-950 bg-emerald-950 text-white shadow-sm transition-colors hover:bg-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-950 focus-visible:ring-offset-2";
     const isPeerifyArtistProfile = isUser && hasPeerifyArtistIntent(circle);
     const peerifyArtistProfile = getPeerifyArtistProfile(circle);
-    const coverImage = circle.images?.[0]?.fileInfo?.url;
-
     const isMember = useMemo(() => {
         if (!user) return false;
         const membership = user.memberships?.find((m) => m.circleId === circle._id);
@@ -144,18 +142,6 @@ export default function HomeContent({
 
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-0 ml-4 mr-4 flex max-w-[1100px] flex-1 flex-col">
-                    {coverImage && (
-                        <div className="relative mb-4 h-36 overflow-hidden rounded-[20px] md:h-48">
-                            <Image
-                                src={coverImage}
-                                alt={`${circle.name || "Profile"} cover`}
-                                fill
-                                className="object-cover"
-                                priority
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
-                        </div>
-                    )}
                     <div className={`relative flex ${isCompact ? "flex-col items-center justify-center" : "flex-row"}`}>
                         <div
                             className={`relative flex ${isCompact ? "h-[50px] w-[100px]" : "h-[125px] w-[150px] min-w-[150px]"}`}

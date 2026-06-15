@@ -137,15 +137,14 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
     if (posts.length === 0) {
         return (
             <div className="flex h-full flex-col items-center justify-center py-12">
-                <Image
-                    src="/images/illustrations/noticeboard-empty-state.png"
-                    alt="No posts yet"
-                    width={isMobile ? 230 : 300}
-                    height={isMobile ? 230 : 300}
-                />
-                <h4>No posts yet</h4>
-                <div className="max-w-[700px] pl-4 pr-4 text-center">
-                    There are no posts on this noticeboard yet. Be the first to share something!
+                <div className="flex w-full max-w-[560px] flex-col items-center rounded-[28px] border border-[#e8dfd2] bg-[#f7f2ea] px-6 py-10 text-center shadow-[0_24px_60px_rgba(24,21,18,0.08)]">
+                    <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-[#fff4e8] ring-1 ring-[#efdfca]">
+                        <Image src="/peerify/logo-mark.png" alt="Peerify logo" width={52} height={52} priority />
+                    </div>
+                    <h4 className="mt-5 text-xl font-semibold text-[#181512]">No feed posts yet</h4>
+                    <div className="mt-3 max-w-[420px] text-sm leading-6 text-[#6b5f52]">
+                        This space is ready for the first update. Share a post to get the conversation started.
+                    </div>
                 </div>
             </div>
         );

@@ -7,6 +7,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import { appConfig } from "@/config/app";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -70,10 +71,25 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
         circle = await getDefaultCircle();
     }
 
-    let title = circle.name;
-    let description = circle.description ?? circle.mission;
-    let icon = "/images/default-picture.png";
-    //let icon = circle.picture?.url ?? "/images/default-picture.png"; // Use a default icon if none is set
+    const title = circle.name;
+    const description = circle.description ?? circle.mission;
 
-    return { title: title, description: description, icons: [icon] };
+    return {
+        title,
+        description,
+        icons: {
+            icon: [
+                { url: "/peerify/favicon.ico", sizes: "any" },
+                { url: "/peerify/favicon.png", type: "image/png" },
+            ],
+            shortcut: "/peerify/favicon.ico",
+            apple: "/peerify/favicon.png",
+        },
+        openGraph: {
+            title,
+            description: description ?? appConfig.description,
+            siteName: appConfig.name,
+            type: "profile",
+        },
+    };
 }
