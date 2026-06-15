@@ -38,6 +38,7 @@ import {
     PEERIFY_LOOKING_FOR_OPTIONS,
     type PeerifyArtistProfile,
 } from "@/lib/peerify/artist-profile";
+import { ABOUT_IMAGE_UPLOAD_MAX_BYTES, ABOUT_IMAGE_UPLOAD_MAX_MB } from "@/lib/image-upload-limits";
 
 type AboutSettingsFormValues = {
     _id: any;
@@ -339,9 +340,17 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                 });
             }
         } catch (error) {
+            const message = error instanceof Error ? error.message : "An unexpected error occurred";
+            const hasPendingImageUploads =
+                form.getValues("picture") instanceof File ||
+                form.getValues("images")?.some((imageItem) => imageItem.file instanceof File);
+            const uploadMessage =
+                hasPendingImageUploads && message === "An unexpected response was received from the server."
+                    ? `The image upload was rejected by the server. Please upload images under ${ABOUT_IMAGE_UPLOAD_MAX_MB} MB.`
+                    : message;
             toast({
                 title: "Error",
-                description: error instanceof Error ? error.message : "An unexpected error occurred",
+                description: uploadMessage,
                 variant: "destructive",
             });
         } finally {
@@ -994,6 +1003,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         },
                                         imagePreviewWidth: 120,
                                         imagePreviewHeight: 120,
+                                        imageMaxSize: ABOUT_IMAGE_UPLOAD_MAX_BYTES,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
@@ -1013,11 +1023,29 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     </p>
                                     <MultiImageUploader
                                         initialImages={circle.images || []} // Pass original images
-                                        onChange={field.onChange} // Let the uploader manage state and report changes
+                                        onChange={(items) => {
+                                            form.clearErrors("images");
+                                            field.onChange(items);
+                                        }} // Let the uploader manage state and report changes
+                                        maxFileSize={ABOUT_IMAGE_UPLOAD_MAX_BYTES}
+                                        maxFileSizeLabel={`${ABOUT_IMAGE_UPLOAD_MAX_MB} MB`}
+                                        onValidationError={(message) => {
+                                            form.setError("images", { type: "manual", message });
+                                            toast({
+                                                title: "Image too large",
+                                                description: message,
+                                                variant: "destructive",
+                                            });
+                                        }}
                                         enableReordering={true}
                                         maxImages={10} // Example limit
                                         previewMode="compact"
                                     />
+                                    {form.formState.errors.images?.message ? (
+                                        <p className="text-sm font-medium text-destructive">
+                                            {String(form.formState.errors.images.message)}
+                                        </p>
+                                    ) : null}
                                 </div>
                             )}
                         />

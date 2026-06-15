@@ -36,6 +36,11 @@ import {
     normalizePeerifyArtistProfile,
     type PeerifyArtistProfile,
 } from "@/lib/peerify/artist-profile";
+import {
+    ABOUT_IMAGE_UPLOAD_MAX_BYTES,
+    ABOUT_IMAGE_UPLOAD_TOO_LARGE_MESSAGE,
+    formatFileSizeMB,
+} from "@/lib/image-upload-limits";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -48,6 +53,22 @@ const normalizeWebsiteUrl = (url?: string) => {
 const normalizeOfficialEmail = (email?: string) => {
     const normalized = email?.trim().toLowerCase();
     return normalized ? normalized : undefined;
+};
+
+const validateAboutImageUpload = (file: any): string | null => {
+    if (!isFile(file)) {
+        return null;
+    }
+
+    if (typeof file.type === "string" && !file.type.startsWith("image/")) {
+        return "Only image uploads are supported.";
+    }
+
+    if (typeof file.size === "number" && file.size > ABOUT_IMAGE_UPLOAD_MAX_BYTES) {
+        return `${ABOUT_IMAGE_UPLOAD_TOO_LARGE_MESSAGE} Selected file is ${formatFileSizeMB(file.size)}.`;
+    }
+
+    return null;
 };
 
 async function revalidateCircleDetachPaths(circleId: string, parentCircleId?: string | null) {
@@ -590,6 +611,20 @@ export async function saveAbout(values: {
             existingPeerify.artistProfile = normalizePeerifyArtistProfile(values.peerifyArtistProfile);
             existingMetadata.peerify = existingPeerify;
             circleUpdateData.metadata = existingMetadata;
+        }
+
+        const pictureUploadError = validateAboutImageUpload(values.picture);
+        if (pictureUploadError) {
+            return { success: false, message: pictureUploadError };
+        }
+
+        if (values.images) {
+            for (const imageItem of values.images) {
+                const imageUploadError = validateAboutImageUpload(imageItem.file);
+                if (imageUploadError) {
+                    return { success: false, message: imageUploadError };
+                }
+            }
         }
 
         // Handle picture upload (keeping existing logic for profile picture)

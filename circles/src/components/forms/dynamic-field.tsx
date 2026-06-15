@@ -163,11 +163,26 @@ export const DynamicPasswordField: React.FC<RenderFieldProps> = ({ field, formFi
 export const DynamicImageField: React.FC<RenderFieldProps> = ({ field, formField, readOnly, isUser }) => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(formField.value?.url || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { clearErrors, setError } = useFormContext();
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        formField.onChange(e.target.files && e.target.files?.[0]);
-
         const file = e.target.files?.[0];
+        if (!file) {
+            return;
+        }
+
+        if (field.imageMaxSize && file.size > field.imageMaxSize) {
+            e.target.value = "";
+            setError(field.name, {
+                type: "manual",
+                message: `Image is too large. Please upload an image under ${Math.round(field.imageMaxSize / 1024 / 1024)} MB.`,
+            });
+            return;
+        }
+
+        clearErrors(field.name);
+        formField.onChange(file);
+
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {

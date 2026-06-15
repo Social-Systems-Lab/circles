@@ -43,6 +43,9 @@ type MultiImageUploaderProps = {
     initialImages?: Media[]; // Existing images to load
     onChange: (items: ImageItem[]) => void; // Callback when images change
     maxImages?: number;
+    maxFileSize?: number;
+    maxFileSizeLabel?: string;
+    onValidationError?: (message: string) => void;
     previewMode?: "compact" | "large";
     enableReordering?: boolean;
     className?: string;
@@ -53,6 +56,9 @@ export function MultiImageUploader({
     initialImages = [],
     onChange,
     maxImages = 10,
+    maxFileSize,
+    maxFileSizeLabel,
+    onValidationError,
     previewMode = "large",
     enableReordering = true,
     className,
@@ -137,7 +143,21 @@ export function MultiImageUploader({
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
         accept: { "image/*": [] },
+        maxSize: maxFileSize,
         maxFiles: maxImages,
+        onDropRejected: (fileRejections) => {
+            setDragging(false);
+            const hasOversizedFile = fileRejections.some((rejection) =>
+                rejection.errors.some((error) => error.code === "file-too-large"),
+            );
+            if (hasOversizedFile) {
+                onValidationError?.(
+                    maxFileSizeLabel
+                        ? `Image is too large. Please upload an image under ${maxFileSizeLabel}.`
+                        : "Image is too large.",
+                );
+            }
+        },
         onDragEnter: () => setDragging(true),
         onDragLeave: () => setDragging(false),
         onDropAccepted: () => setDragging(false),
@@ -336,7 +356,10 @@ export function MultiImageUploader({
                     <p className="text-sm text-gray-600">
                         <span className="font-semibold text-indigo-600">Click to upload</span> or drag and drop
                     </p>
-                    <p className="text-xs text-gray-500">Images (up to {maxImages})</p>
+                    <p className="text-xs text-gray-500">
+                        Images (up to {maxImages}
+                        {maxFileSizeLabel ? `, ${maxFileSizeLabel} each` : ""})
+                    </p>
                 </div>
                 {dragging &&
                     !isDragActive && ( // Show overlay only when dragging files over the window but not the dropzone itself
