@@ -23,6 +23,7 @@ import { v5 as uuidv5 } from "uuid";
 let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
 let hasLoggedVdbDisabled = false;
+const loggedEmbeddingSkipMessages = new Set<string>();
 
 const isVdbEnabled = () => {
     const flag = process.env.VDB_ENABLED;
@@ -52,23 +53,73 @@ const logVdbDisabled = (context: string) => {
     }
 };
 
+const logEmbeddingSkip = (message: string) => {
+    if (!loggedEmbeddingSkipMessages.has(message)) {
+        console.info(message);
+        loggedEmbeddingSkipMessages.add(message);
+    }
+};
+
+const hasConfiguredOpenAiKey = () => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    return typeof apiKey === "string" && apiKey.trim().length > 0;
+};
+
+const hasConfiguredQdrant = () => {
+    const qdrantUrl = process.env.QDRANT_URL?.trim();
+    const qdrantHost = process.env.QDRANT_HOST?.trim();
+    return Boolean(qdrantUrl || qdrantHost);
+};
+
+const shouldRunEmbeddings = (context: string) => {
+    if (!isVdbEnabled()) {
+        logVdbDisabled(context);
+        return false;
+    }
+
+    if (!hasConfiguredOpenAiKey()) {
+        logEmbeddingSkip(`Skipping ${context}: OPENAI_API_KEY is not configured`);
+        return false;
+    }
+
+    if (!hasConfiguredQdrant()) {
+        logEmbeddingSkip(`Skipping ${context}: Qdrant is not configured`);
+        return false;
+    }
+
+    return true;
+};
+
 export const getQdrantClient = async () => {
     if (!isVdbEnabled()) {
         throw new VdbDisabledError();
     }
 
     if (!qdrantClient) {
-        qdrantClient = new QdrantClient({
-            host: process.env.QDRANT_HOST ?? "qdrant",
-            port: 6333,
-            // url: `http://${process.env.QDRANT_HOST ?? "qdrant"}:6333`,
-            timeout: 30000,
-        });
+        const qdrantUrl = process.env.QDRANT_URL?.trim();
+        const qdrantHost = process.env.QDRANT_HOST?.trim();
+
+        qdrantClient = new QdrantClient(
+            qdrantUrl
+                ? {
+                      url: qdrantUrl,
+                      timeout: 30000,
+                  }
+                : {
+                      host: qdrantHost || "qdrant",
+                      port: 6333,
+                      timeout: 30000,
+                  },
+        );
     }
     return qdrantClient;
 };
 
 export const getOpenAiClient = () => {
+    if (!hasConfiguredOpenAiKey()) {
+        throw new Error("OPENAI_API_KEY is not configured");
+    }
+
     if (!openAiClient) {
         openAiClient = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
@@ -118,6 +169,10 @@ const getEmbeddings = async (textArray: string[]) => {
 };
 
 export const upsertVdbCollections = async () => {
+    if (!shouldRunEmbeddings("vector database upsert")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     const response = await client.getCollections();
@@ -317,11 +372,20 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
         return;
     }
 
+    if (!shouldRunEmbeddings("circle embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     console.log("Getting embeddings for circles. Count:", circles.length);
 
     const embeddings = await getEmbeddings(circles.map((circle) => formatCircleForEmbedding(circle)));
+
+    if (embeddings.length !== circles.length) {
+        logEmbeddingSkip("Skipping circle embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     console.log("Embeddings generated. Count:", embeddings.length);
 
@@ -357,6 +421,10 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
 
 // Repeat similar logic for posts, sdgs, and skills
 export const upsertVbdPosts = async (posts: PostDisplay[]) => {
+    if (!shouldRunEmbeddings("post embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     // Ensure all posts have valid `_id` fields
@@ -369,6 +437,11 @@ export const upsertVbdPosts = async (posts: PostDisplay[]) => {
     console.log("Getting embeddings for posts...");
 
     const embeddings = await getEmbeddings(validPosts.map((post) => formatPostForEmbedding(post)));
+
+    if (embeddings.length !== validPosts.length) {
+        logEmbeddingSkip("Skipping post embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const qdrantPoints = validPosts.map((post, i) => ({
         id: uuidv5(post._id!.toString(), postNs), // Ensure `_id` is stringified
@@ -388,6 +461,10 @@ export const upsertVbdPosts = async (posts: PostDisplay[]) => {
 
 // Upsert function for sdgs
 export const upsertVbdSdgs = async () => {
+    if (!shouldRunEmbeddings("sdg embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     // Ensure all sdgs have valid `handle` fields
@@ -400,6 +477,11 @@ export const upsertVbdSdgs = async () => {
     console.log("Getting embeddings for sdgs...");
 
     const embeddings = await getEmbeddings(validSdgs.map((sdg) => formatSdgForEmbedding(sdg)));
+
+    if (embeddings.length !== validSdgs.length) {
+        logEmbeddingSkip("Skipping sdg embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const qdrantPoints = validSdgs.map((sdg, i) => ({
         id: uuidv5(sdg.handle as string, sdgNs), // Ensure handle is always a string
@@ -418,6 +500,10 @@ export const upsertVbdSdgs = async () => {
 
 // Upsert function for skills
 export const upsertVbdSkills = async () => {
+    if (!shouldRunEmbeddings("skill embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     // Ensure all skills have valid `handle` fields
@@ -430,6 +516,11 @@ export const upsertVbdSkills = async () => {
     console.log("Getting embeddings for skills...");
 
     const embeddings = await getEmbeddings(validSkills.map((skill) => formatSkillForEmbedding(skill)));
+
+    if (embeddings.length !== validSkills.length) {
+        logEmbeddingSkip("Skipping skill embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const qdrantPoints = validSkills.map((skill, i) => ({
         id: uuidv5(skill.handle, skillNs), // Ensure handle is always a string
@@ -448,6 +539,10 @@ export const upsertVbdSkills = async () => {
 
 // New: Upsert function for events
 export const upsertVbdEvents = async (events: Event[]) => {
+    if (!shouldRunEmbeddings("event embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     const valid = (events || []).filter((e) => e && (e as any)._id);
@@ -459,6 +554,11 @@ export const upsertVbdEvents = async (events: Event[]) => {
     console.log("Getting embeddings for events...");
 
     const embeddings = await getEmbeddings(valid.map((e) => formatEventForEmbedding(e)));
+
+    if (embeddings.length !== valid.length) {
+        logEmbeddingSkip("Skipping event embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const points = valid.map((e, i) => ({
         id: uuidv5((e as any)._id.toString(), eventNs),
@@ -488,6 +588,10 @@ export const upsertVbdEvents = async (events: Event[]) => {
 
 // New: Upsert function for proposals
 export const upsertVbdProposals = async (proposals: Proposal[]) => {
+    if (!shouldRunEmbeddings("proposal embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     const valid = (proposals || []).filter((p) => p && (p as any)._id);
@@ -499,6 +603,11 @@ export const upsertVbdProposals = async (proposals: Proposal[]) => {
     console.log("Getting embeddings for proposals...");
 
     const embeddings = await getEmbeddings(valid.map((p) => formatProposalForEmbedding(p)));
+
+    if (embeddings.length !== valid.length) {
+        logEmbeddingSkip("Skipping proposal embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const points = valid.map((p, i) => ({
         id: uuidv5((p as any)._id.toString(), proposalNs),
@@ -522,6 +631,10 @@ export const upsertVbdProposals = async (proposals: Proposal[]) => {
 
 // New: Upsert function for tasks
 export const upsertVbdTasks = async (tasks: Task[]) => {
+    if (!shouldRunEmbeddings("task embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     const valid = (tasks || []).filter((t) => t && (t as any)._id);
@@ -533,6 +646,11 @@ export const upsertVbdTasks = async (tasks: Task[]) => {
     console.log("Getting embeddings for tasks...");
 
     const embeddings = await getEmbeddings(valid.map((t) => formatTaskForEmbedding(t)));
+
+    if (embeddings.length !== valid.length) {
+        logEmbeddingSkip("Skipping task embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const points = valid.map((t, i) => ({
         id: uuidv5((t as any)._id.toString(), taskNs),
@@ -556,6 +674,10 @@ export const upsertVbdTasks = async (tasks: Task[]) => {
 
 // New: Upsert function for issues
 export const upsertVbdIssues = async (issues: Issue[]) => {
+    if (!shouldRunEmbeddings("issue embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     const valid = (issues || []).filter((x) => x && (x as any)._id);
@@ -567,6 +689,11 @@ export const upsertVbdIssues = async (issues: Issue[]) => {
     console.log("Getting embeddings for issues...");
 
     const embeddings = await getEmbeddings(valid.map((x) => formatIssueForEmbedding(x)));
+
+    if (embeddings.length !== valid.length) {
+        logEmbeddingSkip("Skipping issue embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const points = valid.map((x, i) => ({
         id: uuidv5((x as any)._id.toString(), issueNs),
@@ -589,6 +716,10 @@ export const upsertVbdIssues = async (issues: Issue[]) => {
 
 // New: Upsert function for goals
 export const upsertVbdGoals = async (goals: Goal[]) => {
+    if (!shouldRunEmbeddings("goal embeddings")) {
+        return;
+    }
+
     const client = await getQdrantClient();
 
     const valid = (goals || []).filter((g) => g && (g as any)._id);
@@ -600,6 +731,11 @@ export const upsertVbdGoals = async (goals: Goal[]) => {
     console.log("Getting embeddings for goals...");
 
     const embeddings = await getEmbeddings(valid.map((g) => formatGoalForEmbedding(g)));
+
+    if (embeddings.length !== valid.length) {
+        logEmbeddingSkip("Skipping goal embeddings upsert: embeddings could not be generated");
+        return;
+    }
 
     const points = valid.map((g, i) => ({
         id: uuidv5((g as any)._id.toString(), goalNs),
@@ -768,6 +904,10 @@ export const semanticSearchContent = async (options: {
 
     if (!isVdbEnabled()) {
         logVdbDisabled("semantic search");
+        return [];
+    }
+
+    if (!shouldRunEmbeddings("semantic search")) {
         return [];
     }
 
