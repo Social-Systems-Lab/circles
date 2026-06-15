@@ -22,8 +22,9 @@ import { RiMegaphoneLine } from "react-icons/ri";
 import { PiScroll } from "react-icons/pi";
 
 export default function GlobalNavItems() {
-    const activeNavClassName = "text-[#e0a82a]";
+    const activeNavClassName = "text-[#e8720c]";
     const inactiveNavClassName = "text-[#b9afa2]";
+    const hoverNavClassName = "hover:bg-[#241f1a] hover:text-[#ff8c2a]";
     const pathname = usePathname();
     const router = useRouter();
     const [user, setUser] = useAtom(userAtom);
@@ -76,7 +77,7 @@ export default function GlobalNavItems() {
                             setSidePanelMode("none");
                             setDrawerContent("explore");
                         }}
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#241f1a] ${
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg transition-colors md:w-[64px] md:pb-2 md:pt-2 ${hoverNavClassName} ${
                             pathname === "/explore" &&
                             panelMode !== "activity" &&
                             panelMode !== "events" &&
@@ -116,7 +117,7 @@ export default function GlobalNavItems() {
                     }}
                 >
                     <motion.div
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#241f1a] ${
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg transition-colors md:w-[64px] md:pb-2 md:pt-2 ${hoverNavClassName} ${
                             (pathname === "/explore" && panelMode === "activity") ||
                             (isMobile && drawerContent === "noticeboard" && pathname === "/explore")
                                 ? activeNavClassName
@@ -156,7 +157,7 @@ export default function GlobalNavItems() {
                     }}
                 >
                     <motion.div
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#241f1a] ${
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg transition-colors md:w-[64px] md:pb-2 md:pt-2 ${hoverNavClassName} ${
                             (pathname === "/explore" && panelMode === "events") ||
                             (isMobile && drawerContent === "events" && pathname === "/explore")
                                 ? activeNavClassName
@@ -184,7 +185,7 @@ export default function GlobalNavItems() {
                 <Link href={"/bookmarks"}>
                     <motion.div
                         onClick={() => setSidePanelMode("none")}
-                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg md:w-[64px] md:pb-2 md:pt-2 md:hover:bg-[#241f1a] ${
+                        className={`flex flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg transition-colors md:w-[64px] md:pb-2 md:pt-2 ${hoverNavClassName} ${
                             pathname === "/bookmarks" ? activeNavClassName : inactiveNavClassName
                         }`}
                         whileHover={{ scale: 1.1 }}

@@ -9,7 +9,7 @@ const KAMOONI_SYSTEM_SENDER: SystemSenderIdentity = {
     displayName: "Peerify",
     handle: "kamooni",
     did: "system:kamooni",
-    avatarUrl: "/images/kamooni_logo.png",
+    avatarUrl: "/peerify/logo-mark.png",
 };
 
 export const getKamooniSystemSender = (): SystemSenderIdentity => ({
