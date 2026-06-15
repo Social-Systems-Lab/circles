@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
+const localPort = process.env.PLAYWRIGHT_PORT || "3100";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${localPort}`;
 const healthURL = process.env.PLAYWRIGHT_HEALTH_URL || `${baseURL}/api/version`;
 
 export default defineConfig({
@@ -19,7 +20,7 @@ export default defineConfig({
     webServer: process.env.PLAYWRIGHT_BASE_URL
         ? undefined
         : {
-              command: "bun run dev",
+              command: `node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port ${localPort}`,
               url: healthURL,
               reuseExistingServer: true,
               timeout: 240_000,
