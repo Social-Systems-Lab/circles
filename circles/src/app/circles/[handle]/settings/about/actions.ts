@@ -664,13 +664,18 @@ export async function saveAbout(values: {
         circleUpdateData.images = finalMediaArray;
         // --- End Handle 'images' array ---
 
+        const previousCirclePath = await getCirclePath(existingCircle);
+
         // update the circle
         await updateCircle(circleUpdateData, userDid);
 
         // clear page cache
-        let circlePath = await getCirclePath(circleUpdateData);
+        const updatedCircle = await getCircleById(String(values._id));
+        const circlePath = updatedCircle ? await getCirclePath(updatedCircle) : previousCirclePath;
+        revalidatePath(previousCirclePath);
+        revalidatePath(`${previousCirclePath}settings/about`);
+        revalidatePath(circlePath);
         revalidatePath(`${circlePath}settings/about`);
-        revalidatePath(circlePath); // revalidate home page too
 
         // Check if handle was updated and return it for potential redirect
         const handleChanged = values.handle && values.handle !== existingCircle.handle;

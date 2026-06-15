@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Peerify default artist avatar</title>
+  <desc id="desc">Simple human avatar wearing sunglasses.</desc>
+  <rect width="256" height="256" rx="48" fill="#f2e7d8"/>
+  <circle cx="128" cy="102" r="54" fill="#f4c7a1"/>
+  <path d="M74 92c8-34 30-50 54-50 29 0 53 19 59 54-10-8-21-10-31-10-11 0-18 3-28 7-9 4-20 7-35 7-8 0-14-2-19-8Z" fill="#2b241d"/>
+  <path d="M87 106h28c7 0 13 6 13 13v4c0 7-6 13-13 13H87c-7 0-13-6-13-13v-4c0-7 6-13 13-13Zm54 0h28c7 0 13 6 13 13v4c0 7-6 13-13 13h-28c-7 0-13-6-13-13v-4c0-7 6-13 13-13Z" fill="#1c1a19"/>
+  <rect x="122" y="117" width="12" height="7" rx="3.5" fill="#1c1a19"/>
+  <path d="M93 173c12-12 25-18 35-18s23 6 35 18" fill="none" stroke="#8c5e3b" stroke-linecap="round" stroke-width="8"/>
+  <path d="M56 240c8-42 36-70 72-70s64 28 72 70" fill="#c96f2c"/>
+  <path d="M90 195c9 9 22 14 38 14s29-5 38-14v45H90v-45Z" fill="#fff3df" opacity=".35"/>
+</svg>

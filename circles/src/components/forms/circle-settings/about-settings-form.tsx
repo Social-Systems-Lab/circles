@@ -250,7 +250,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
             description: circle.description || "",
             content: circle.content || "",
             mission: circle.mission || "",
-            picture: undefined as any, // Keep picture for now
+            picture: (circle.picture as any) || undefined, // Keep current picture for preview/update
             // cover: undefined as any, // Remove cover
             images:
                 circle.images?.map(

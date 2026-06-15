@@ -39,6 +39,7 @@ import {
     getPeerifyArtistProfile,
     getPeerifyArtistTypeBadges,
     isPeerifyArtistIdentity,
+    isPeerifyManagedIdentity,
 } from "@/lib/peerify/artist-profile";
 
 type HomeContentProps = {
@@ -71,8 +72,12 @@ export default function HomeContent({
     const settingsButtonClassName =
         "h-9 w-9 shrink-0 rounded-full border border-emerald-950 bg-emerald-950 text-white shadow-sm transition-colors hover:bg-emerald-900 focus-visible:ring-2 focus-visible:ring-emerald-950 focus-visible:ring-offset-2";
     const isPeerifyArtistProfile = isPeerifyArtistIdentity(circle);
+    const isPeerifyManagedArtistIdentity = isPeerifyManagedIdentity(circle);
     const peerifyArtistProfile = getPeerifyArtistProfile(circle);
     const peerifyArtistTypeBadges = getPeerifyArtistTypeBadges(circle);
+    const circlePictureUrl =
+        circle?.picture?.url ??
+        (isPeerifyManagedArtistIdentity ? "/peerify/default-artist-avatar.svg" : "/images/default-picture.png");
     const isMember = useMemo(() => {
         if (!user) return false;
         const membership = user.memberships?.find((m) => m.circleId === circle._id);
@@ -160,7 +165,7 @@ export default function HomeContent({
                                     {authorizedToEdit ? (
                                         <EditableImage
                                             id="picture"
-                                            src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                            src={circlePictureUrl}
                                             alt="Picture"
                                             className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
                                             fill
@@ -172,7 +177,7 @@ export default function HomeContent({
                                         <>
                                             <Image
                                                 className="rounded-full border-2 border-white bg-white object-cover shadow-lg"
-                                                src={circle?.picture?.url ?? "/images/default-picture.png"}
+                                                src={circlePictureUrl}
                                                 alt="Picture"
                                                 fill
                                                 sizes="(max-width: 768px) 100px, 150px"
@@ -329,7 +334,7 @@ export default function HomeContent({
                                 </div>
                             )}
 
-                            {!isKamooniRootCircle && parentCircle && (
+                            {!isKamooniRootCircle && parentCircle && !isPeerifyManagedArtistIdentity && (
                                 <div className="mt-3">
                                     {resolvedCircleLevel === "profile_child" ? (
                                         <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
@@ -375,6 +380,16 @@ export default function HomeContent({
                             )}
                             {isPeerifyArtistProfile && (
                                 <div className={`flex w-full flex-col gap-3 ${isCompact ? "items-center" : "items-start"} py-2`}>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button asChild size="sm">
+                                            <a href="#artist-actions">Pledge Interest</a>
+                                        </Button>
+                                        {peerifyArtistProfile.bookingEnabled ? (
+                                            <Button asChild size="sm" variant="outline">
+                                                <a href="#artist-actions">Book Enquiry</a>
+                                            </Button>
+                                        ) : null}
+                                    </div>
                                     <div className="flex flex-wrap gap-2">
                                         {peerifyArtistTypeBadges.map((item) => (
                                             <Badge key={item} variant="outline" className="rounded-full px-3 py-1">

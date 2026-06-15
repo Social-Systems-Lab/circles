@@ -347,9 +347,12 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
         }
 
         await updateCircle(updateData, userDid);
-        let circlePath = await getCirclePath({ _id: circleId } as Circle);
-        revalidatePath(circlePath);
         let circle = await getCircleById(circleId);
+        if (circle) {
+            let circlePath = await getCirclePath(circle);
+            revalidatePath(circlePath);
+            revalidatePath(`${circlePath}settings/about`);
+        }
 
         return { success: true, message: `Circle updated successfully`, circle };
     } catch (error) {

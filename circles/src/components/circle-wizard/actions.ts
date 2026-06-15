@@ -299,9 +299,9 @@ export async function createPeerifyManagedArtistIdentityAction(input: {
                 circleType: "circle",
                 circleLevel: "profile_child",
                 createdBy: userDid,
-                publishStatus: "published",
+                publishStatus: "draft",
                 parentCircleId,
-                picture: { url: "/images/default-picture.png" },
+                picture: { url: "/peerify/default-artist-avatar.svg" },
                 causes: [],
                 skills: [],
                 metadata: {
