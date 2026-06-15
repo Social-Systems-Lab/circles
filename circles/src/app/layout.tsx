@@ -56,10 +56,10 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                 <Provider>
                     {process.env.NODE_ENV === "development" && enableReactScan && <ReactScan />}
                     <main>
-                        <GlobalNav />
-                        <div className="relative flex w-full flex-row overflow-hidden">
+                        <div className="relative flex min-h-screen w-full flex-col overflow-hidden md:flex-row">
+                            <GlobalNav />
                             <SidePanel />
-                            <div className="relative min-h-[calc(100%-72px)] w-full overflow-x-hidden md:min-h-screen">
+                            <div className="relative min-h-screen w-full overflow-x-hidden">
                                 {children}
                             </div>
                         </div>
