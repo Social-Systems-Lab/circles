@@ -13,13 +13,21 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
-import { Bell } from "lucide-react";
-import { UserToolboxTab } from "@/models/models";
+import { Bell, ChevronRight } from "lucide-react";
+import { Circle, UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
 import { listChatRoomsAction } from "../modules/chat/actions";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
+
+const getManagedIdentities = (user?: Circle & { memberships?: Array<{ circle: Circle; userGroups?: string[] }> }) =>
+    user?.memberships
+        ?.filter((membership) => isPeerifyManagedIdentity(membership.circle))
+        .filter((membership) => membership.userGroups?.includes("admins"))
+        .map((membership) => membership.circle) ?? [];
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -126,6 +134,11 @@ const ProfileMenuBar = () => {
     }
 
     const isMobileExplore = isMobile && pathname === "/explore";
+    const managedIdentities = getManagedIdentities(user);
+
+    const openProfile = (target: Circle) => {
+        router.push(getCircleDefaultPath(target));
+    };
 
     return (
         <div className="flex items-center justify-center gap-1 overflow-visible">
@@ -188,18 +201,81 @@ const ProfileMenuBar = () => {
                                 </>
                             )}
 
-                            <Button
-                                className="relative h-auto w-auto rounded-full p-0"
-                                variant="ghost"
-                                onClick={() => router.push(getCircleDefaultPath(user))}
-                            >
-                                <UserPicture
-                                    name={user?.name}
-                                    picture={user?.picture?.url}
-                                    size="40px"
-                                    circleType="user"
-                                />
-                            </Button>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button className="relative h-auto w-auto rounded-full p-0" variant="ghost">
+                                        <UserPicture
+                                            name={user?.name}
+                                            picture={user?.picture?.url}
+                                            size="40px"
+                                            circleType="user"
+                                        />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent align="end" className="w-80 p-2">
+                                    <div className="flex flex-col">
+                                        <button
+                                            type="button"
+                                            className="flex w-full items-center gap-3 rounded-md p-2 text-left hover:bg-muted"
+                                            onClick={() => openProfile(user)}
+                                        >
+                                            <UserPicture
+                                                name={user.name}
+                                                picture={user.picture?.url}
+                                                size="36px"
+                                                circleType="user"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-sm font-semibold">{user.name}</div>
+                                                <div className="truncate text-xs text-muted-foreground">
+                                                    Personal profile
+                                                </div>
+                                            </div>
+                                        </button>
+
+                                        {managedIdentities.length > 0 && (
+                                            <div className="mt-1 border-t pt-1">
+                                                {managedIdentities.map((identity) => (
+                                                    <button
+                                                        key={identity._id}
+                                                        type="button"
+                                                        className="flex w-full items-center gap-3 rounded-md p-2 text-left hover:bg-muted"
+                                                        onClick={() => openProfile(identity)}
+                                                    >
+                                                        <UserPicture
+                                                            name={identity.name}
+                                                            picture={
+                                                                identity.picture?.url ??
+                                                                "/peerify/default-artist-avatar.svg"
+                                                            }
+                                                            size="36px"
+                                                            circleType="circle"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="truncate text-sm font-semibold">
+                                                                {identity.name}
+                                                            </div>
+                                                            <div className="truncate text-xs text-muted-foreground">
+                                                                Peerify identity
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            className="mt-1 justify-between border-t pt-3 text-sm"
+                                            onClick={() => router.push("/profiles")}
+                                        >
+                                            See all profiles / identities
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </>
                     )}
                 </div>

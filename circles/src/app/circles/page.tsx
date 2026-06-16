@@ -4,6 +4,7 @@ import CirclesTabs from "@/components/modules/circles/circles-tab";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCirclesByIds, getCirclesWithMetrics, getMetricsForCircles } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
 import { Circle, SortingOptions, WithMetric } from "@/models/models";
 
 type CirclesProps = {
@@ -32,7 +33,12 @@ export default async function Home(props: CirclesProps) {
         if (activeTab === "following" || !activeTab) {
             const memberIds =
                 user?.memberships
-                    ?.filter((m) => m.circle.circleType === filterType && m.circle.handle !== "default")
+                    ?.filter(
+                        (m) =>
+                            m.circle.circleType === filterType &&
+                            m.circle.handle !== "default" &&
+                            !isPeerifyManagedIdentity(m.circle),
+                    )
                     ?.map((membership) => membership.circle?._id) || [];
             let memberCircles = await getCirclesByIds(memberIds);
             circles = await getMetricsForCircles(memberCircles, userDid, searchParams?.sort as SortingOptions);
