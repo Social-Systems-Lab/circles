@@ -1,5 +1,7 @@
 import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -7,6 +9,7 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { features } from "@/lib/data/constants";
 import { listPeerifyPledgesForArtist, type PeerifyPledgeRecord } from "@/lib/data/peerify-pledges";
 import { isPeerifyManagedIdentity, PEERIFY_PLEDGE_HELP_OPTIONS } from "@/lib/peerify/artist-profile";
+import { ArrowLeft, LockKeyhole, Pencil } from "lucide-react";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -40,13 +43,14 @@ const countBy = (items: string[]): Array<{ label: string; count: number }> => {
         .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 };
 
-const StatCard = ({ label, value }: { label: string; value: string | number }) => (
-    <Card>
+const StatCard = ({ label, value, description }: { label: string; value: string | number; description: string }) => (
+    <Card className="rounded-lg border-slate-200 bg-white shadow-none">
         <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">{label}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
             <div className="text-2xl font-semibold text-[#231f1a]">{value}</div>
+            <p className="text-xs text-slate-500">{description}</p>
         </CardContent>
     </Card>
 );
@@ -80,39 +84,90 @@ export default async function PeerifyPledgesPage({ params }: PageProps) {
 
     return (
         <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
-            <div>
-                <p className="text-sm font-medium text-muted-foreground">Peerify demand map</p>
-                <h1 className="mt-1 text-3xl font-semibold text-[#231f1a]">Pledges for {circle.name}</h1>
-                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Structured pledge interest from fans and supporters. These are non-binding signals, not ticket
-                    purchases or confirmed bookings.
-                </p>
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="max-w-3xl">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary" className="gap-1 rounded-full px-3 py-1">
+                                <LockKeyhole className="h-3.5 w-3.5" />
+                                Private to profile managers
+                            </Badge>
+                            <Badge variant="outline" className="rounded-full px-3 py-1">
+                                Non-binding demand signals
+                            </Badge>
+                        </div>
+                        <p className="mt-5 text-sm font-medium text-slate-500">Peerify artist intelligence</p>
+                        <h1 className="mt-1 text-3xl font-semibold text-[#231f1a] sm:text-4xl">Pledge Dashboard</h1>
+                        <p className="mt-3 max-w-2xl text-base text-slate-600">
+                            See where fans want you to play, what they might pay, and who can help make a show happen.
+                        </p>
+                        <p className="mt-3 max-w-2xl text-sm text-slate-500">
+                            Pledges are non-binding signals, not ticket purchases or confirmed bookings. Individual
+                            pledge details are visible only to profile managers/admins.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                        <Button asChild variant="outline">
+                            <Link href={`/circles/${handle}/home`}>
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to artist profile
+                            </Link>
+                        </Button>
+                        <Button asChild>
+                            <Link href={`/circles/${handle}/settings/about`}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit artist profile
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
             </div>
 
             <section className="grid gap-4 md:grid-cols-4">
-                <StatCard label="Total pledges" value={pledges.length} />
-                <StatCard label="Estimated ticket value" value={estimatedTicketValue ? estimatedTicketValue : "-"} />
-                <StatCard label="Cities / locations" value={locationBreakdown.length} />
-                <StatCard label="People offering help" value={offeredHelpCount} />
+                <StatCard label="Total pledges" value={pledges.length} description="Fans who raised their hand" />
+                <StatCard
+                    label="Estimated ticket value"
+                    value={estimatedTicketValue ? estimatedTicketValue : "-"}
+                    description="Sum of numeric max amounts"
+                />
+                <StatCard label="Locations" value={locationBreakdown.length} description="Distinct cities or areas" />
+                <StatCard
+                    label="People offering help"
+                    value={offeredHelpCount}
+                    description="Support beyond attending"
+                />
             </section>
 
-            <section className="grid gap-4 lg:grid-cols-2">
-                <BreakdownCard title="Pledges by location" items={locationBreakdown} emptyLabel="No locations yet." />
-                <BreakdownCard title="Help offers" items={helpCounts} emptyLabel="No help offers yet." />
-            </section>
+            {pledges.length === 0 ? (
+                <Card className="rounded-lg border-dashed border-slate-300 bg-slate-50 shadow-none">
+                    <CardContent className="flex min-h-40 flex-col items-center justify-center px-6 py-10 text-center">
+                        <h2 className="text-xl font-semibold text-[#231f1a]">No pledges yet</h2>
+                        <p className="mt-2 max-w-xl text-sm text-slate-600">
+                            No pledges yet. When fans signal interest in a local show, their responses will appear here.
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <>
+                    <section className="grid gap-4 lg:grid-cols-2">
+                        <BreakdownCard
+                            title="Pledges by location"
+                            items={locationBreakdown}
+                            emptyLabel="No locations yet."
+                        />
+                        <BreakdownCard title="Help offers" items={helpCounts} emptyLabel="No help offers yet." />
+                    </section>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg">Pledge list</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {pledges.length > 0 ? (
-                        <PledgeTable pledges={pledges} />
-                    ) : (
-                        <p className="text-sm text-muted-foreground">No pledges yet.</p>
-                    )}
-                </CardContent>
-            </Card>
+                    <Card className="rounded-lg border-slate-200 bg-white shadow-none">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Pledge list</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <PledgeTable pledges={pledges} />
+                        </CardContent>
+                    </Card>
+                </>
+            )}
         </main>
     );
 }
@@ -127,7 +182,7 @@ function BreakdownCard({
     emptyLabel: string;
 }) {
     return (
-        <Card>
+        <Card className="rounded-lg border-slate-200 bg-white shadow-none">
             <CardHeader>
                 <CardTitle className="text-lg">{title}</CardTitle>
             </CardHeader>

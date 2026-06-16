@@ -6,6 +6,7 @@ import { FormNav, NavItem } from "@/components/forms/form-nav";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
+import { usePathname } from "next/navigation";
 
 type SettingsForm = {
     name: string | UserAndCircleInfo;
@@ -71,6 +72,8 @@ export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrappe
     const isCompact = useIsCompact();
     const isUser = circle.circleType === "user";
     const [user] = useAtom(userAtom);
+    const pathname = usePathname();
+    const hideSettingsNav = pathname.endsWith("/settings/pledges");
     const navItems = settingsForms
         .filter((item) => {
             if (item.handle === "subscription") {
@@ -91,17 +94,19 @@ export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrappe
                 paddingTop: isCompact ? "0" : "20px",
             }}
         >
-            <div
-                className="relative z-10 flex flex-col items-center pb-2"
-                style={{
-                    flex: isCompact ? "0" : "1",
-                    alignItems: isCompact ? "normal" : "flex-end",
-                    minWidth: isCompact ? "0px" : "272px",
-                    paddingLeft: isCompact ? "0px" : "16px",
-                }}
-            >
-                <FormNav items={navItems} circle={circle} />
-            </div>
+            {!hideSettingsNav && (
+                <div
+                    className="relative z-10 flex flex-col items-center pb-2"
+                    style={{
+                        flex: isCompact ? "0" : "1",
+                        alignItems: isCompact ? "normal" : "flex-end",
+                        minWidth: isCompact ? "0px" : "272px",
+                        paddingLeft: isCompact ? "0px" : "16px",
+                    }}
+                >
+                    <FormNav items={navItems} circle={circle} />
+                </div>
+            )}
             {children}
         </div>
     );
