@@ -43,6 +43,7 @@ export default async function ProfilesPage() {
             canPublish: false,
             avatarFallback: "/images/default-user-picture.png",
             editHref: `/circles/${user.handle}/settings/about`,
+            pledgesHref: null,
         },
         ...managedIdentities.map((identity) => ({
             circle: identity,
@@ -51,6 +52,7 @@ export default async function ProfilesPage() {
             canPublish: (identity.publishStatus ?? "published") === "draft",
             avatarFallback: "/peerify/default-artist-avatar.svg",
             editHref: `/circles/${identity.handle}/settings/about`,
+            pledgesHref: `/circles/${identity.handle}/pledges`,
         })),
     ];
 
@@ -93,6 +95,11 @@ export default async function ProfilesPage() {
                             <Button asChild variant="outline" size="sm">
                                 <Link href={getCircleDefaultPath(row.circle)}>View</Link>
                             </Button>
+                            {row.pledgesHref ? (
+                                <Button asChild variant="outline" size="sm">
+                                    <Link href={row.pledgesHref}>Pledges</Link>
+                                </Button>
+                            ) : null}
                             {row.canPublish && row.circle._id ? (
                                 <PublishManagedProfileButton circleId={row.circle._id} label="Publish" />
                             ) : null}

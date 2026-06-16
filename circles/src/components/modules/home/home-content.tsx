@@ -18,7 +18,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { NotificationSettingsDialog } from "@/components/notifications/NotificationSettingsDialog";
 import { Button } from "@/components/ui/button";
-import { MapPin, Settings } from "lucide-react";
+import { BarChart3, MapPin, Settings } from "lucide-react";
 import Link from "next/link";
 import { PublishManagedProfileButton } from "@/components/profiles/publish-managed-profile-button";
 import { VerifyAccountButton } from "../auth/verify-account-button";
@@ -78,6 +78,7 @@ export default function HomeContent({
     const peerifyArtistTypeBadges = getPeerifyArtistTypeBadges(circle);
     const showManagedDraftBanner =
         authorizedToEdit && isPeerifyManagedArtistIdentity && (circle.publishStatus ?? "published") === "draft";
+    const showPledgesDashboardButton = authorizedToEdit && isPeerifyManagedArtistIdentity && Boolean(circle.handle);
     const circlePictureUrl =
         circle?.picture?.url ??
         (isPeerifyManagedArtistIdentity ? "/peerify/default-artist-avatar.svg" : "/images/default-picture.png");
@@ -146,8 +147,8 @@ export default function HomeContent({
                         <DialogDescription className="space-y-3">
                             <p>You are now a test pilot!</p>
                             <p>
-                                Click <strong>Request Verification</strong> when you&apos;re ready to become a
-                                verified member.
+                                Click <strong>Request Verification</strong> when you&apos;re ready to become a verified
+                                member.
                             </p>
                             <p>
                                 You may later connect with others who can verify that you&apos;re human and not a bot.
@@ -167,8 +168,8 @@ export default function HomeContent({
                     {showManagedDraftBanner && (
                         <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
                             <p>
-                                <span className="font-semibold">Draft profile</span> — only you and profile managers
-                                can see this. Publish when you&apos;re ready to share it.
+                                <span className="font-semibold">Draft profile</span> — only you and profile managers can
+                                see this. Publish when you&apos;re ready to share it.
                             </p>
                             {circle._id ? (
                                 <PublishManagedProfileButton
@@ -188,7 +189,9 @@ export default function HomeContent({
                                     isCompact ? "left-1/2 top-[-50px] -translate-x-1/2" : "top-[-25px]"
                                 }`}
                             >
-                                <div className={`relative ${isCompact ? "h-[100px] w-[100px]" : "h-[150px] w-[150px]"}`}>
+                                <div
+                                    className={`relative ${isCompact ? "h-[100px] w-[100px]" : "h-[150px] w-[150px]"}`}
+                                >
                                     {authorizedToEdit ? (
                                         <EditableImage
                                             id="picture"
@@ -238,7 +241,9 @@ export default function HomeContent({
                                 </div>
 
                                 <div className="absolute right-0 top-0 flex flex-row items-center gap-1 pt-2">
-                                    {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
+                                    {user && circle.circleType === "circle" && isMember && (
+                                        <ChatButton circle={circle} />
+                                    )}
                                     {!isUser && !isPeerifyManagedArtistIdentity && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
@@ -331,7 +336,9 @@ export default function HomeContent({
 
                             {isCompact && !isUser && (
                                 <div className="flex w-full flex-wrap items-center justify-center gap-2 pb-2 pt-3">
-                                    {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
+                                    {user && circle.circleType === "circle" && isMember && (
+                                        <ChatButton circle={circle} />
+                                    )}
                                     {!isPeerifyManagedArtistIdentity && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
@@ -406,9 +413,15 @@ export default function HomeContent({
                                 </div>
                             )}
                             {isPeerifyArtistProfile && (
-                                <div className={`flex w-full flex-col gap-3 ${isCompact ? "items-center" : "items-start"} py-2`}>
+                                <div
+                                    className={`flex w-full flex-col gap-3 ${isCompact ? "items-center" : "items-start"} py-2`}
+                                >
                                     <div className="flex flex-wrap gap-2">
-                                        <Button type="button" size="sm" onClick={() => openPeerifyArtistEnquiry("pledge")}>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => openPeerifyArtistEnquiry("pledge")}
+                                        >
                                             Pledge Interest
                                         </Button>
                                         {peerifyArtistProfile.bookingEnabled ? (
@@ -419,6 +432,14 @@ export default function HomeContent({
                                                 onClick={() => openPeerifyArtistEnquiry("booking")}
                                             >
                                                 Book Enquiry
+                                            </Button>
+                                        ) : null}
+                                        {showPledgesDashboardButton ? (
+                                            <Button asChild size="sm" variant="outline">
+                                                <Link href={`/circles/${circle.handle}/pledges`}>
+                                                    <BarChart3 className="mr-2 h-4 w-4" />
+                                                    Pledges
+                                                </Link>
                                             </Button>
                                         ) : null}
                                     </div>

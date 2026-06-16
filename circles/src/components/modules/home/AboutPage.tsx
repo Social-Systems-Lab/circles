@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { contactCircleAdminsAction, sendPeerifyArtistEnquiryAction } from "@/components/modules/chat/mongo-actions";
+import { createPeerifyPledgeAction } from "@/components/modules/home/peerify-pledge-actions";
 import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
@@ -54,6 +55,7 @@ import {
     PEERIFY_PLEDGE_HELP_OPTIONS,
     hasPeerifyArtistProfileContent,
     isPeerifyArtistIdentity,
+    isPeerifyManagedIdentity,
     PEERIFY_MUSIC_LINK_LABELS,
     type PeerifyMusicLinkKey,
 } from "@/lib/peerify/artist-profile";
@@ -159,6 +161,7 @@ export default function AboutPage({
     const isUserProfile = circle.circleType === "user";
     const [relationshipState] = useProfileRelationshipState(circle, user?.did);
     const isPeerifyArtistProfile = isPeerifyArtistIdentity(circle);
+    const isPeerifyManagedArtistIdentity = isPeerifyManagedIdentity(circle);
     const peerifyArtistProfile = getPeerifyArtistProfile(circle);
     const peerifyIdentityLabel = getPeerifyArtistIdentityLabel(circle);
     const peerifyArtistTypeBadges = getPeerifyArtistTypeBadges(circle);
@@ -166,11 +169,14 @@ export default function AboutPage({
         isPeerifyArtistProfile &&
         (hasPeerifyArtistProfileContent(peerifyArtistProfile) || peerifyArtistTypeBadges.length > 0);
     const bookingSettings = peerifyArtistProfile.bookingSettings;
-    const peerifyMusicLinks = (Object.entries(peerifyArtistProfile.musicLinks) as [PeerifyMusicLinkKey, string][])
-        .filter(([, url]) => Boolean(url));
+    const peerifyMusicLinks = (
+        Object.entries(peerifyArtistProfile.musicLinks) as [PeerifyMusicLinkKey, string][]
+    ).filter(([, url]) => Boolean(url));
     const bookingDetails = [
         bookingSettings.localBookingsOnly ? "Local bookings only" : null,
-        typeof bookingSettings.travelRadiusKm === "number" ? `Travel radius: ${bookingSettings.travelRadiusKm} km` : null,
+        typeof bookingSettings.travelRadiusKm === "number"
+            ? `Travel radius: ${bookingSettings.travelRadiusKm} km`
+            : null,
         typeof bookingSettings.minimumAudienceSize === "number"
             ? `Minimum audience: ${bookingSettings.minimumAudienceSize}`
             : null,
@@ -508,10 +514,16 @@ export default function AboutPage({
         }));
     };
 
-    const updateBookingSupport = (key: keyof Pick<
-        BookingFormState,
-        "accommodationAvailable" | "localTransportAvailable" | "foodHospitalityAvailable" | "soundEquipmentAvailable"
-    >, checked: boolean) => {
+    const updateBookingSupport = (
+        key: keyof Pick<
+            BookingFormState,
+            | "accommodationAvailable"
+            | "localTransportAvailable"
+            | "foodHospitalityAvailable"
+            | "soundEquipmentAvailable"
+        >,
+        checked: boolean,
+    ) => {
         setBookingForm((current) => ({
             ...current,
             [key]: checked,
@@ -528,6 +540,27 @@ export default function AboutPage({
         setPledgeError("");
 
         try {
+            if (isPeerifyManagedArtistIdentity) {
+                const result = await createPeerifyPledgeAction({
+                    artistCircleId: String(circle._id || ""),
+                    pledge: pledgeForm,
+                });
+
+                if (!result.success) {
+                    setPledgeError(result.message || "Could not add your pledge.");
+                    return;
+                }
+
+                setPledgeForm(EMPTY_PLEDGE_FORM);
+                setIsPledgeDialogOpen(false);
+                toast({
+                    title: "Pledge added",
+                    description: result.message || "Thanks — your pledge has been added to this artist's support map.",
+                });
+                router.refresh();
+                return;
+            }
+
             const result = await sendPeerifyArtistEnquiryAction({
                 artistCircleId: String(circle._id || ""),
                 enquiryType: "pledge",
@@ -548,7 +581,7 @@ export default function AboutPage({
             router.push(`/chat/${result.roomId}`);
         } catch (error) {
             console.error("Failed to send Peerify pledge enquiry:", error);
-            setPledgeError("Could not send your pledge enquiry. Please try again.");
+            setPledgeError("Could not submit your pledge. Please try again.");
         } finally {
             setIsSubmittingPledge(false);
         }
@@ -615,7 +648,11 @@ export default function AboutPage({
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {peerifyArtistTypeBadges.map((item) => (
-                                                    <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
+                                                    <Badge
+                                                        key={item}
+                                                        variant="outline"
+                                                        className="rounded-full px-3 py-1"
+                                                    >
                                                         {item}
                                                     </Badge>
                                                 ))}
@@ -674,7 +711,11 @@ export default function AboutPage({
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {peerifyArtistProfile.lookingFor.map((item) => (
-                                                    <Badge key={item} variant="secondary" className="rounded-full px-3 py-1">
+                                                    <Badge
+                                                        key={item}
+                                                        variant="secondary"
+                                                        className="rounded-full px-3 py-1"
+                                                    >
                                                         {item}
                                                     </Badge>
                                                 ))}
@@ -690,7 +731,9 @@ export default function AboutPage({
                                                         <CalendarRange className="h-4 w-4" />
                                                         <span>Availability</span>
                                                     </div>
-                                                    <p className="text-sm text-foreground">{peerifyArtistProfile.availability}</p>
+                                                    <p className="text-sm text-foreground">
+                                                        {peerifyArtistProfile.availability}
+                                                    </p>
                                                 </div>
                                             )}
                                             {peerifyArtistProfile.featuredLink && (
@@ -720,14 +763,22 @@ export default function AboutPage({
                                             {bookingDetails.length > 0 ? (
                                                 <div className="grid gap-3 text-sm text-[#6a4728] sm:grid-cols-2">
                                                     {bookingDetails.map((detail) => (
-                                                        <div key={detail} className={detail.includes(":") && detail.length > 40 ? "sm:col-span-2" : ""}>
+                                                        <div
+                                                            key={detail}
+                                                            className={
+                                                                detail.includes(":") && detail.length > 40
+                                                                    ? "sm:col-span-2"
+                                                                    : ""
+                                                            }
+                                                        >
                                                             {detail}
                                                         </div>
                                                     ))}
                                                 </div>
                                             ) : (
                                                 <p className="text-sm text-[#6a4728]">
-                                                    Open to booking enquiries. Details can be worked out directly with the artist.
+                                                    Open to booking enquiries. Details can be worked out directly with
+                                                    the artist.
                                                 </p>
                                             )}
                                         </div>
@@ -907,7 +958,7 @@ export default function AboutPage({
                                             <Badge
                                                 key={chip.key}
                                                 variant="outline"
-                                                className={`border-0 rounded-full px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
+                                                className={`rounded-full border-0 px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
                                             >
                                                 {chip.label}
                                             </Badge>
@@ -1230,7 +1281,9 @@ export default function AboutPage({
                             <Input
                                 placeholder="Your city / location"
                                 value={pledgeForm.fanLocation}
-                                onChange={(event) => setPledgeForm((current) => ({ ...current, fanLocation: event.target.value }))}
+                                onChange={(event) =>
+                                    setPledgeForm((current) => ({ ...current, fanLocation: event.target.value }))
+                                }
                             />
                             <Input
                                 placeholder="Maximum ticket amount"
@@ -1238,7 +1291,10 @@ export default function AboutPage({
                                 min="0"
                                 value={pledgeForm.maximumTicketAmount}
                                 onChange={(event) =>
-                                    setPledgeForm((current) => ({ ...current, maximumTicketAmount: event.target.value }))
+                                    setPledgeForm((current) => ({
+                                        ...current,
+                                        maximumTicketAmount: event.target.value,
+                                    }))
                                 }
                             />
                         </div>
@@ -1253,10 +1309,15 @@ export default function AboutPage({
                             <Label>Willingness to help</Label>
                             <div className="grid gap-3 sm:grid-cols-2">
                                 {PEERIFY_PLEDGE_HELP_OPTIONS.map((option) => (
-                                    <label key={option} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                                    <label
+                                        key={option}
+                                        className="flex items-start gap-3 rounded-lg border p-3 text-sm"
+                                    >
                                         <Checkbox
                                             checked={pledgeForm.helpOptions.includes(option)}
-                                            onCheckedChange={(checked) => togglePledgeHelpOption(option, checked === true)}
+                                            onCheckedChange={(checked) =>
+                                                togglePledgeHelpOption(option, checked === true)
+                                            }
                                         />
                                         <span>{option}</span>
                                     </label>
@@ -1280,7 +1341,13 @@ export default function AboutPage({
                                 Cancel
                             </Button>
                             <Button type="submit" disabled={isSubmittingPledge}>
-                                {isSubmittingPledge ? "Sending..." : "Send Pledge Enquiry"}
+                                {isSubmittingPledge
+                                    ? isPeerifyManagedArtistIdentity
+                                        ? "Adding..."
+                                        : "Sending..."
+                                    : isPeerifyManagedArtistIdentity
+                                      ? "Add Pledge"
+                                      : "Send Pledge Enquiry"}
                             </Button>
                         </DialogFooter>
                     </form>
@@ -1299,7 +1366,8 @@ export default function AboutPage({
                     <DialogHeader>
                         <DialogTitle>Booking enquiry for {circle.name}</DialogTitle>
                         <DialogDescription>
-                            This is a booking enquiry only. It is not a confirmed booking and does not create a binding agreement.
+                            This is a booking enquiry only. It is not a confirmed booking and does not create a binding
+                            agreement.
                         </DialogDescription>
                     </DialogHeader>
                     <form
@@ -1330,7 +1398,10 @@ export default function AboutPage({
                                 min="0"
                                 value={bookingForm.expectedAudienceSize}
                                 onChange={(event) =>
-                                    setBookingForm((current) => ({ ...current, expectedAudienceSize: event.target.value }))
+                                    setBookingForm((current) => ({
+                                        ...current,
+                                        expectedAudienceSize: event.target.value,
+                                    }))
                                 }
                             />
                             <Input
@@ -1344,7 +1415,9 @@ export default function AboutPage({
                         <Input
                             placeholder="Venue / home setting"
                             value={bookingForm.setting}
-                            onChange={(event) => setBookingForm((current) => ({ ...current, setting: event.target.value }))}
+                            onChange={(event) =>
+                                setBookingForm((current) => ({ ...current, setting: event.target.value }))
+                            }
                         />
                         <div className="grid gap-3 sm:grid-cols-2">
                             {PEERIFY_BOOKING_SUPPORT_OPTIONS.map((option) => (
@@ -1380,7 +1453,9 @@ export default function AboutPage({
                             rows={5}
                             placeholder="Message to artist"
                             value={bookingForm.message}
-                            onChange={(event) => setBookingForm((current) => ({ ...current, message: event.target.value }))}
+                            onChange={(event) =>
+                                setBookingForm((current) => ({ ...current, message: event.target.value }))
+                            }
                         />
                         {bookingError && <p className="text-sm text-destructive">{bookingError}</p>}
                         <DialogFooter>
