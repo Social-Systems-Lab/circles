@@ -13,7 +13,7 @@ import {
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
-import { Bell, ChevronRight } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Circle, UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
@@ -28,6 +28,11 @@ const getManagedIdentities = (user?: Circle & { memberships?: Array<{ circle: Ci
         ?.filter((membership) => isPeerifyManagedIdentity(membership.circle))
         .filter((membership) => membership.userGroups?.includes("admins"))
         .map((membership) => membership.circle) ?? [];
+
+const getCircleHandleFromPath = (pathname?: string | null): string | undefined => {
+    if (!pathname?.startsWith("/circles/")) return undefined;
+    return pathname.split("/").filter(Boolean)[1];
+};
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -135,10 +140,23 @@ const ProfileMenuBar = () => {
 
     const isMobileExplore = isMobile && pathname === "/explore";
     const managedIdentities = getManagedIdentities(user);
+    const currentCircleHandle = getCircleHandleFromPath(pathname);
+    const currentVisibleIdentity = user
+        ? (managedIdentities.find((identity) => identity.handle === currentCircleHandle) ?? user)
+        : undefined;
+    const hasIdentityChoices = managedIdentities.length > 0;
 
     const openProfile = (target: Circle) => {
         router.push(getCircleDefaultPath(target));
     };
+
+    const renderCurrentMarker = (target: Circle) =>
+        currentVisibleIdentity && target.handle === currentVisibleIdentity.handle ? (
+            <div className="flex items-center gap-1 text-xs font-medium text-[#1f6b45]">
+                <Check className="h-3.5 w-3.5" />
+                Current
+            </div>
+        ) : null;
 
     return (
         <div className="flex items-center justify-center gap-1 overflow-visible">
@@ -205,11 +223,16 @@ const ProfileMenuBar = () => {
                                 <PopoverTrigger asChild>
                                     <Button className="relative h-auto w-auto rounded-full p-0" variant="ghost">
                                         <UserPicture
-                                            name={user?.name}
-                                            picture={user?.picture?.url}
+                                            name={currentVisibleIdentity?.name ?? user.name}
+                                            picture={currentVisibleIdentity?.picture?.url ?? user.picture?.url}
                                             size="40px"
-                                            circleType="user"
+                                            circleType={currentVisibleIdentity?.circleType ?? "user"}
                                         />
+                                        {hasIdentityChoices && (
+                                            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-[#231f1a] text-white shadow-sm">
+                                                <ChevronDown className="h-3 w-3" />
+                                            </span>
+                                        )}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent align="end" className="w-80 p-2">
@@ -231,6 +254,7 @@ const ProfileMenuBar = () => {
                                                     Personal profile
                                                 </div>
                                             </div>
+                                            {renderCurrentMarker(user)}
                                         </button>
 
                                         {managedIdentities.length > 0 && (
@@ -259,6 +283,7 @@ const ProfileMenuBar = () => {
                                                                 Peerify identity
                                                             </div>
                                                         </div>
+                                                        {renderCurrentMarker(identity)}
                                                     </button>
                                                 ))}
                                             </div>
