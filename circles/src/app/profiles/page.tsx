@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PublishManagedProfileButton } from "@/components/profiles/publish-managed-profile-button";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
@@ -10,6 +11,17 @@ import { getPeerifyArtistIdentityLabel, isPeerifyManagedIdentity } from "@/lib/p
 import { Circle } from "@/models/models";
 
 const getAvatarUrl = (circle: Circle, fallback: string) => circle.picture?.url ?? fallback;
+const getStatusLabel = (status: string) => {
+    if (status === "published") {
+        return "Published";
+    }
+
+    if (status === "pending_verification") {
+        return "Pending verification";
+    }
+
+    return "Draft";
+};
 
 export default async function ProfilesPage() {
     const userDid = await getAuthenticatedUserDid();
@@ -28,6 +40,7 @@ export default async function ProfilesPage() {
             circle: user,
             label: "Personal profile",
             status: user.publishStatus ?? "published",
+            canPublish: false,
             avatarFallback: "/images/default-user-picture.png",
             editHref: `/circles/${user.handle}/settings/about`,
         },
@@ -35,6 +48,7 @@ export default async function ProfilesPage() {
             circle: identity,
             label: getPeerifyArtistIdentityLabel(identity),
             status: identity.publishStatus ?? "published",
+            canPublish: (identity.publishStatus ?? "published") === "draft",
             avatarFallback: "/peerify/default-artist-avatar.svg",
             editHref: `/circles/${identity.handle}/settings/about`,
         })),
@@ -73,12 +87,17 @@ export default async function ProfilesPage() {
                         </Link>
 
                         <div className="flex items-center gap-2 sm:justify-end">
-                            <Badge variant={row.status === "published" ? "secondary" : "outline"}>{row.status}</Badge>
+                            <Badge variant={row.status === "published" ? "secondary" : "outline"}>
+                                {getStatusLabel(row.status)}
+                            </Badge>
                             <Button asChild variant="outline" size="sm">
                                 <Link href={getCircleDefaultPath(row.circle)}>View</Link>
                             </Button>
-                            <Button asChild size="sm">
-                                <Link href={row.editHref}>Edit</Link>
+                            {row.canPublish && row.circle._id ? (
+                                <PublishManagedProfileButton circleId={row.circle._id} label="Publish" />
+                            ) : null}
+                            <Button asChild size="sm" variant={row.canPublish ? "outline" : "default"}>
+                                <Link href={row.editHref}>{row.canPublish ? "Edit / publish" : "Edit"}</Link>
                             </Button>
                         </div>
                     </div>

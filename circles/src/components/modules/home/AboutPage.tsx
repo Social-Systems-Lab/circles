@@ -452,7 +452,7 @@ export default function AboutPage({
         }
     };
 
-    const openBookDialog = () => {
+    const openBookDialog = React.useCallback(() => {
         if (!peerifyArtistProfile.bookingEnabled) {
             return;
         }
@@ -462,16 +462,42 @@ export default function AboutPage({
         }
         setBookingError("");
         setIsBookDialogOpen(true);
-    };
+    }, [circle.handle, peerifyArtistProfile.bookingEnabled, router, user?.did]);
 
-    const openPledgeDialog = () => {
+    const openPledgeDialog = React.useCallback(() => {
         if (!user?.did) {
             router.push(`/login?redirectTo=${encodeURIComponent(`/circles/${circle.handle}/home`)}`);
             return;
         }
         setPledgeError("");
         setIsPledgeDialogOpen(true);
-    };
+    }, [circle.handle, router, user?.did]);
+
+    React.useEffect(() => {
+        const openArtistEnquiry = (event: Event) => {
+            const detail = (event as CustomEvent<{ type?: string }>).detail;
+            if (detail?.type === "booking") {
+                openBookDialog();
+                return;
+            }
+
+            if (detail?.type === "pledge") {
+                openPledgeDialog();
+            }
+        };
+
+        window.addEventListener("peerify:open-artist-enquiry", openArtistEnquiry);
+        return () => window.removeEventListener("peerify:open-artist-enquiry", openArtistEnquiry);
+    }, [openBookDialog, openPledgeDialog]);
+
+    React.useEffect(() => {
+        const artistAction = new URLSearchParams(window.location.search).get("artistAction");
+        if (artistAction === "booking") {
+            openBookDialog();
+        } else if (artistAction === "pledge") {
+            openPledgeDialog();
+        }
+    }, [openBookDialog, openPledgeDialog]);
 
     const togglePledgeHelpOption = (option: string, checked: boolean) => {
         setPledgeForm((current) => ({
@@ -609,19 +635,6 @@ export default function AboutPage({
                                                     <span>{peerifyArtistProfile.baseCity}</span>
                                                 </div>
                                             )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 sm:max-w-[260px] sm:justify-end">
-                                            <Button type="button" onClick={openPledgeDialog}>
-                                                Pledge Interest
-                                            </Button>
-                                            <Button
-                                                type="button"
-                                                variant={peerifyArtistProfile.bookingEnabled ? "default" : "outline"}
-                                                onClick={openBookDialog}
-                                                disabled={!peerifyArtistProfile.bookingEnabled}
-                                            >
-                                                Book Enquiry
-                                            </Button>
                                         </div>
                                     </div>
                                     {!peerifyArtistProfile.bookingEnabled && (

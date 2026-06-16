@@ -20,6 +20,7 @@ import { NotificationSettingsDialog } from "@/components/notifications/Notificat
 import { Button } from "@/components/ui/button";
 import { MapPin, Settings } from "lucide-react";
 import Link from "next/link";
+import { PublishManagedProfileButton } from "@/components/profiles/publish-managed-profile-button";
 import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
@@ -75,6 +76,8 @@ export default function HomeContent({
     const isPeerifyManagedArtistIdentity = isPeerifyManagedIdentity(circle);
     const peerifyArtistProfile = getPeerifyArtistProfile(circle);
     const peerifyArtistTypeBadges = getPeerifyArtistTypeBadges(circle);
+    const showManagedDraftBanner =
+        authorizedToEdit && isPeerifyManagedArtistIdentity && (circle.publishStatus ?? "published") === "draft";
     const circlePictureUrl =
         circle?.picture?.url ??
         (isPeerifyManagedArtistIdentity ? "/peerify/default-artist-avatar.svg" : "/images/default-picture.png");
@@ -125,6 +128,15 @@ export default function HomeContent({
         }
     };
 
+    const openPeerifyArtistEnquiry = (type: "pledge" | "booking") => {
+        if (circle.handle && !window.location.pathname.endsWith(`/circles/${circle.handle}/home`)) {
+            window.location.href = `/circles/${circle.handle}/home?artistAction=${type}#artist-actions`;
+            return;
+        }
+
+        window.dispatchEvent(new CustomEvent("peerify:open-artist-enquiry", { detail: { type } }));
+    };
+
     return (
         <>
             <Dialog open={showWelcomeDialog} onOpenChange={handleWelcomeDialogChange}>
@@ -152,6 +164,21 @@ export default function HomeContent({
 
             <div className="flex flex-1 flex-row justify-center">
                 <div className="mb-0 ml-4 mr-4 flex max-w-[1100px] flex-1 flex-col">
+                    {showManagedDraftBanner && (
+                        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+                            <p>
+                                <span className="font-semibold">Draft profile</span> — only you and profile managers
+                                can see this. Publish when you&apos;re ready to share it.
+                            </p>
+                            {circle._id ? (
+                                <PublishManagedProfileButton
+                                    circleId={circle._id}
+                                    label="Publish profile"
+                                    className="shrink-0 bg-amber-900 text-white hover:bg-amber-800"
+                                />
+                            ) : null}
+                        </div>
+                    )}
                     <div className={`relative flex ${isCompact ? "flex-col items-center justify-center" : "flex-row"}`}>
                         <div
                             className={`relative flex ${isCompact ? "h-[50px] w-[100px]" : "h-[125px] w-[150px] min-w-[150px]"}`}
@@ -212,7 +239,7 @@ export default function HomeContent({
 
                                 <div className="absolute right-0 top-0 flex flex-row items-center gap-1 pt-2">
                                     {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
-                                    {!isUser && <InviteButton circle={circle} />}
+                                    {!isUser && !isPeerifyManagedArtistIdentity && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (
@@ -272,7 +299,7 @@ export default function HomeContent({
                                         {user && circle.circleType === "circle" && isMember && (
                                             <ChatButton circle={circle} />
                                         )}
-                                        {!isUser && <InviteButton circle={circle} />}
+                                        {!isUser && !isPeerifyManagedArtistIdentity && <InviteButton circle={circle} />}
                                         {user && <FollowButton circle={circle} />}
                                         {user && <BookmarkButton circle={circle} iconOnly />}
                                         {showSettingsButton && (
@@ -305,7 +332,7 @@ export default function HomeContent({
                             {isCompact && !isUser && (
                                 <div className="flex w-full flex-wrap items-center justify-center gap-2 pb-2 pt-3">
                                     {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
-                                    <InviteButton circle={circle} />
+                                    {!isPeerifyManagedArtistIdentity && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (
@@ -381,12 +408,17 @@ export default function HomeContent({
                             {isPeerifyArtistProfile && (
                                 <div className={`flex w-full flex-col gap-3 ${isCompact ? "items-center" : "items-start"} py-2`}>
                                     <div className="flex flex-wrap gap-2">
-                                        <Button asChild size="sm">
-                                            <a href="#artist-actions">Pledge Interest</a>
+                                        <Button type="button" size="sm" onClick={() => openPeerifyArtistEnquiry("pledge")}>
+                                            Pledge Interest
                                         </Button>
                                         {peerifyArtistProfile.bookingEnabled ? (
-                                            <Button asChild size="sm" variant="outline">
-                                                <a href="#artist-actions">Book Enquiry</a>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => openPeerifyArtistEnquiry("booking")}
+                                            >
+                                                Book Enquiry
                                             </Button>
                                         ) : null}
                                     </div>
@@ -402,15 +434,28 @@ export default function HomeContent({
                                             </Badge>
                                         ))}
                                     </div>
-                                    {peerifyArtistProfile.baseCity && (
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            <MapPin className="h-4 w-4" />
-                                            <span>{peerifyArtistProfile.baseCity}</span>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600">
+                                        {peerifyArtistProfile.baseCity && (
+                                            <span className="inline-flex items-center gap-2">
+                                                <MapPin className="h-4 w-4" />
+                                                <span>{peerifyArtistProfile.baseCity}</span>
+                                            </span>
+                                        )}
+                                        <span className="inline-flex items-center gap-2">
+                                            <FaUsers />
+                                            <span>
+                                                {memberCount} {memberCount === 1 ? "Follower" : "Followers"}
+                                            </span>
+                                        </span>
+                                    </div>
+                                    {!peerifyArtistProfile.bookingEnabled && (
+                                        <div className="text-xs text-muted-foreground">
+                                            Booking enquiries are not enabled on this profile yet.
                                         </div>
                                     )}
                                 </div>
                             )}
-                            {!isUser && memberCount > 0 && (
+                            {!isUser && !isPeerifyArtistProfile && memberCount > 0 && (
                                 <div className="flex flex-row items-center justify-center text-gray-600">
                                     <FaUsers />
                                     <p className="m-0 ml-2">
