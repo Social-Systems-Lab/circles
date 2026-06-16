@@ -436,7 +436,7 @@ export default function HomeContent({
                                         ) : null}
                                         {showPledgesDashboardButton ? (
                                             <Button asChild size="sm" variant="outline">
-                                                <Link href={`/circles/${circle.handle}/pledges`}>
+                                                <Link href={`/circles/${circle.handle}/settings/pledges`}>
                                                     <BarChart3 className="mr-2 h-4 w-4" />
                                                     Pledges
                                                 </Link>

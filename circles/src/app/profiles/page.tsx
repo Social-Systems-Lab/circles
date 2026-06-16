@@ -52,7 +52,7 @@ export default async function ProfilesPage() {
             canPublish: (identity.publishStatus ?? "published") === "draft",
             avatarFallback: "/peerify/default-artist-avatar.svg",
             editHref: `/circles/${identity.handle}/settings/about`,
-            pledgesHref: `/circles/${identity.handle}/pledges`,
+            pledgesHref: `/circles/${identity.handle}/settings/pledges`,
         })),
     ];
 

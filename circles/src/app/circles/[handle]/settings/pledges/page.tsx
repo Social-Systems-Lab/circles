@@ -63,7 +63,7 @@ export default async function PeerifyPledgesPage({ params }: PageProps) {
     const canManage = await isAuthorized(userDid, circle._id, features.settings.edit_about);
 
     if (!canManage) {
-        redirect(`/circles/${handle}/access-denied?module=pledges&redirectTo=/circles/${handle}/pledges`);
+        redirect(`/circles/${handle}/access-denied?module=pledges&redirectTo=/circles/${handle}/settings/pledges`);
     }
 
     const pledges = await listPeerifyPledgesForArtist(circle._id);
