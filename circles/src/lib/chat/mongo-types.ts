@@ -9,7 +9,13 @@ export type ChatConversationMetadata = {
     senderHandle?: string;
     senderName?: string;
     senderAvatarUrl?: string;
-    contactType?: "offer_help" | "ask_question";
+    contactType?: "offer_help" | "ask_question" | "booking";
+    artistCircleId?: string;
+    bookerDid?: string;
+    bookerName?: string;
+    bookerLocation?: string;
+    eventType?: string;
+    possibleDateRange?: string;
 };
 
 export type ChatAttachment = {

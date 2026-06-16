@@ -84,6 +84,8 @@ const ensureVerifiedMessagingUser = async (userDid: string, action: string): Pro
 
 const CIRCLE_CONTACT_SOURCE = "circle_contact";
 const CIRCLE_CONTACT_VERSION = "v1";
+const PEERIFY_BOOKING_SOURCE = "peerify_booking_enquiry";
+const PEERIFY_BOOKING_VERSION = "v1";
 type CircleContactType = "offer_help" | "ask_question";
 
 const sanitizeHandleSegment = (value: string): string =>
@@ -95,6 +97,20 @@ const sanitizeHandleSegment = (value: string): string =>
 const buildCircleContactHandle = (circleId: string, requesterDid: string): string => {
     const safeRequester = sanitizeHandleSegment(requesterDid) || "member";
     return `contact-circle-${circleId}-${safeRequester}`;
+};
+
+const buildPeerifyBookingConversationName = (booking: PeerifyBookingEnquiryInput, requesterName: string): string => {
+    const eventType = booking.eventType || booking.setting;
+    if (eventType && booking.bookerLocation) {
+        return `Booking enquiry: ${eventType} in ${booking.bookerLocation}`;
+    }
+    if (booking.bookerLocation) {
+        return `Booking enquiry from ${requesterName} - ${booking.bookerLocation}`;
+    }
+    if (eventType) {
+        return `Booking enquiry: ${eventType}`;
+    }
+    return `Booking enquiry from ${requesterName}`;
 };
 
 const isActiveGroupMembership = (membership: any): boolean => {
@@ -195,7 +211,9 @@ const sendConversationMessageNotifications = async ({
     messageId?: string;
 }) => {
     const isDirectMessage = conversation?.type === "dm";
-    const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
+    const isCircleContact =
+        conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE ||
+        conversation?.metadata?.source === PEERIFY_BOOKING_SOURCE;
     if (!isDirectMessage && !isCircleContact) {
         return;
     }
@@ -935,6 +953,104 @@ export const findOrCreateDMConversationAction = async (
     return chatRoom ? { success: true, chatRoom } : { success: false, message: "Failed to create DM room" };
 };
 
+const createPeerifyBookingConversation = async ({
+    artist,
+    sender,
+    booking,
+    messageBody,
+    senderDid,
+}: {
+    artist: Circle;
+    sender: Circle;
+    booking: PeerifyBookingEnquiryInput;
+    messageBody: string;
+    senderDid: string;
+}): Promise<{ success: boolean; roomId?: string; message?: string }> => {
+    const artistCircleId = String(artist._id || "");
+    const adminRows = await Members.find(
+        { circleId: artistCircleId, userGroups: "admins" },
+        { projection: { userDid: 1 } },
+    ).toArray();
+    const adminDids = Array.from(
+        new Set(
+            adminRows
+                .map((row: any) => (typeof row?.userDid === "string" ? row.userDid : undefined))
+                .filter((did): did is string => !!did),
+        ),
+    );
+
+    if (adminDids.length === 0) {
+        return { success: false, message: "No artist admins available for booking enquiries yet" };
+    }
+
+    const now = new Date();
+    const adminDidSet = new Set(adminDids);
+    const participants = Array.from(new Set([senderDid, ...adminDids]));
+    const conversationName = buildPeerifyBookingConversationName(booking, sender.name?.trim() || "A member");
+    const safeRequester = sanitizeHandleSegment(senderDid) || "member";
+    const uniqueId = new ObjectId().toHexString();
+    const conversation = await createConversation({
+        type: "group",
+        circleId: artistCircleId,
+        name: conversationName,
+        handle: `peerify-booking-${artistCircleId}-${safeRequester}-${uniqueId}`,
+        participants,
+        createdAt: now,
+        updatedAt: now,
+        metadata: {
+            source: PEERIFY_BOOKING_SOURCE,
+            version: PEERIFY_BOOKING_VERSION,
+            contactType: "booking",
+            artistCircleId,
+            bookerDid: senderDid,
+            bookerName: sender.name?.trim() || undefined,
+            bookerLocation: booking.bookerLocation || undefined,
+            eventType: booking.eventType || undefined,
+            possibleDateRange: booking.possibleDateRange || undefined,
+        },
+    });
+
+    const conversationId = String(conversation._id);
+    for (const participantDid of participants) {
+        const role = adminDidSet.has(participantDid) ? "admin" : "member";
+        await ChatRoomMembers.updateOne(
+            buildChatRoomMembershipFilter(participantDid, conversationId),
+            {
+                $setOnInsert: {
+                    userDid: participantDid,
+                    chatRoomId: conversationId,
+                    joinedAt: now,
+                },
+                $set: {
+                    circleId: artistCircleId,
+                    role,
+                    status: "active",
+                    active: true,
+                    isActive: true,
+                } as any,
+            },
+            { upsert: true },
+        );
+    }
+
+    const doc = await createMessage({
+        conversationId,
+        senderDid,
+        body: messageBody,
+        createdAt: now,
+    });
+
+    await sendConversationMessageNotifications({
+        conversationId,
+        conversation,
+        senderDid,
+        messageBody,
+        messageId: doc._id as string,
+    });
+
+    return { success: true, roomId: conversationId };
+};
+
 export const sendPeerifyArtistEnquiryAction = async ({
     artistCircleId,
     enquiryType,
@@ -1037,6 +1153,16 @@ export const sendPeerifyArtistEnquiryAction = async ({
             });
 
             return { success: true, roomId: conversationId };
+        }
+
+        if (enquiryType === "booking") {
+            return await createPeerifyBookingConversation({
+                artist,
+                sender,
+                booking: normalizedBooking,
+                messageBody,
+                senderDid: userDid,
+            });
         }
 
         return await contactCircleAdminsAction(String(artist._id), messageBody, [], "ask_question");

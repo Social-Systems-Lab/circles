@@ -113,6 +113,8 @@ const inferMediaKind = (mimeType?: string, name?: string): ConversationMediaKind
     return "file";
 };
 
+const PEERIFY_BOOKING_SOURCE = "peerify_booking_enquiry";
+
 export const createConversation = async (conversation: ChatConversation): Promise<ChatConversation> => {
     const result = await ChatConversations.insertOne(conversation);
     return normalizeConversation({ ...conversation, _id: result.insertedId.toString() });
@@ -326,6 +328,7 @@ const mapConversationsToChatRoomDisplays = async (
 
     return conversations.map((conversation) => {
         const isDirect = conversation.type === "dm";
+        const isPeerifyBooking = conversation.metadata?.source === PEERIFY_BOOKING_SOURCE;
         const circle = conversation.circleId ? circleById.get(conversation.circleId) : undefined;
         const participantDids = Array.from(new Set((conversation.participants || []).filter(Boolean)));
         const participantCircles = participantDids
@@ -348,9 +351,13 @@ const mapConversationsToChatRoomDisplays = async (
         return {
             _id: conversation._id.toString(),
             matrixRoomId: conversation._id.toString(),
-            name: circle?.name || otherCircle?.name || conversation.name || "Chat",
+            name: isPeerifyBooking
+                ? conversation.name || circle?.name || "Booking enquiry"
+                : circle?.name || otherCircle?.name || conversation.name || "Chat",
             description: conversation.description || circle?.description,
-            handle: circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
+            handle: isPeerifyBooking
+                ? conversation.handle || circle?.handle || "chat"
+                : circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
             circleId: conversation.circleId,
             createdAt: conversation.createdAt,
             userGroups: [],
