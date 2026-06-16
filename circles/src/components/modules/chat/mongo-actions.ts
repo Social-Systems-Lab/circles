@@ -36,6 +36,7 @@ import {
     formatPeerifyBookingEnquiryMessage,
     formatPeerifyPledgeEnquiryMessage,
     isPeerifyArtistIdentity,
+    isPeerifyManagedIdentity,
     type PeerifyArtistEnquiryType,
     type PeerifyBookingEnquiryInput,
     type PeerifyPledgeEnquiryInput,
@@ -196,6 +197,37 @@ const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>)
         },
         circleType: "user",
     } as Circle);
+
+const getPeerifyBookingDisplayContext = async (
+    conversation: any,
+): Promise<{ artist: Circle; bookerDid: string } | null> => {
+    const metadata = conversation?.metadata as Record<string, unknown> | undefined;
+    const circleId = typeof conversation?.circleId === "string" ? conversation.circleId : undefined;
+    const bookerDid = typeof metadata?.bookerDid === "string" ? metadata.bookerDid : undefined;
+
+    if (metadata?.source !== PEERIFY_BOOKING_SOURCE || !circleId || !bookerDid) {
+        return null;
+    }
+
+    const artist = await getCircleById(circleId);
+    if (!artist?._id || !isPeerifyArtistIdentity(artist) || !isPeerifyManagedIdentity(artist)) {
+        return null;
+    }
+
+    return { artist, bookerDid };
+};
+
+const getPeerifyBookingDisplayAuthor = (
+    senderDid: string | undefined,
+    fallbackAuthor: Circle,
+    context: { artist: Circle; bookerDid: string } | null,
+): Circle => {
+    if (!senderDid || !context || senderDid === context.bookerDid) {
+        return fallbackAuthor;
+    }
+
+    return context.artist;
+};
 
 const sendConversationMessageNotifications = async ({
     conversationId,
@@ -435,6 +467,7 @@ export const fetchRecentMessagesAction = async (
         const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
         const fallbackSystemAuthor = getSystemTemplateAuthor(conversationMetadata);
         const conversationRepliesDisabled = conversationMetadata?.repliesDisabled === true;
+        const peerifyBookingDisplayContext = await getPeerifyBookingDisplayContext(access.conversation);
 
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
@@ -469,7 +502,7 @@ export const fetchRecentMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
-            const author =
+            const fallbackAuthor =
                 (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
@@ -478,11 +511,21 @@ export const fetchRecentMessagesAction = async (
                           name: doc.senderDid,
                           picture: { url: "/placeholder.svg" },
                       } as Circle));
+            const author = getPeerifyBookingDisplayAuthor(doc.senderDid, fallbackAuthor, peerifyBookingDisplayContext);
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
-            const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) || { _id: replyDoc.senderDid, name: replyDoc.senderDid }
+            const replyFallbackAuthor = replyDoc
+                ? (senderByDid.get(replyDoc.senderDid) ||
+                      ({ _id: replyDoc.senderDid, name: replyDoc.senderDid } as Circle))
                 : undefined;
+            const replyAuthor =
+                replyDoc && replyFallbackAuthor
+                    ? getPeerifyBookingDisplayAuthor(
+                          replyDoc.senderDid,
+                          replyFallbackAuthor,
+                          peerifyBookingDisplayContext,
+                      )
+                    : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
                       ...attachment,
@@ -568,6 +611,7 @@ export const fetchMongoMessagesAction = async (
         const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
         const fallbackSystemAuthor = getSystemTemplateAuthor(conversationMetadata);
         const conversationRepliesDisabled = conversationMetadata?.repliesDisabled === true;
+        const peerifyBookingDisplayContext = await getPeerifyBookingDisplayContext(access.conversation);
 
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
@@ -602,7 +646,7 @@ export const fetchMongoMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
-            const author =
+            const fallbackAuthor =
                 (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
@@ -611,9 +655,10 @@ export const fetchMongoMessagesAction = async (
                           name: doc.senderDid,
                           picture: { url: "/placeholder.svg" },
                       } as Circle));
+            const author = getPeerifyBookingDisplayAuthor(doc.senderDid, fallbackAuthor, peerifyBookingDisplayContext);
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
-            const replyAuthor = replyDoc
+            const replyFallbackAuthor = replyDoc
                 ? senderByDid.get(replyDoc.senderDid) ||
                   (isSystemMessageSource(replyDoc.source)
                       ? fallbackSystemAuthor
@@ -623,6 +668,14 @@ export const fetchMongoMessagesAction = async (
                             picture: { url: "/placeholder.svg" },
                         } as Circle))
                 : undefined;
+            const replyAuthor =
+                replyDoc && replyFallbackAuthor
+                    ? getPeerifyBookingDisplayAuthor(
+                          replyDoc.senderDid,
+                          replyFallbackAuthor,
+                          peerifyBookingDisplayContext,
+                      )
+                    : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
                       ...attachment,
@@ -1596,13 +1649,48 @@ export const fetchThreadRepliesAction = async (
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
         );
+        const peerifyBookingDisplayContext = await getPeerifyBookingDisplayContext(access.conversation);
 
         const enriched = docs.map((doc) => {
             const circle = senderByDid.get(doc.senderDid);
-            const fullName = circle?.name || "";
-            const firstName = fullName.trim().split(" ")[0] || circle?.handle || doc.senderDid;
+            const fallbackAuthor =
+                circle ||
+                ({
+                    _id: doc.senderDid,
+                    name: doc.senderDid,
+                    picture: { url: "/placeholder.svg" },
+                } as Circle);
+            const displayAuthor = getPeerifyBookingDisplayAuthor(
+                doc.senderDid,
+                fallbackAuthor,
+                peerifyBookingDisplayContext,
+            );
+            const fullName = displayAuthor?.name || "";
+            const isArtistSideReply =
+                !!peerifyBookingDisplayContext && doc.senderDid !== peerifyBookingDisplayContext.bookerDid;
+            const authorName = isArtistSideReply
+                ? fullName || displayAuthor?.handle || doc.senderDid
+                : fullName.trim().split(" ")[0] || displayAuthor?.handle || doc.senderDid;
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthorCircle = replyDoc ? senderByDid.get(replyDoc.senderDid) : undefined;
+            const replyFallbackAuthor =
+                replyDoc && replyAuthorCircle
+                    ? replyAuthorCircle
+                    : replyDoc
+                      ? ({
+                            _id: replyDoc.senderDid,
+                            name: replyDoc.senderDid,
+                            picture: { url: "/placeholder.svg" },
+                        } as Circle)
+                      : undefined;
+            const replyAuthor =
+                replyDoc && replyFallbackAuthor
+                    ? getPeerifyBookingDisplayAuthor(
+                          replyDoc.senderDid,
+                          replyFallbackAuthor,
+                          peerifyBookingDisplayContext,
+                      )
+                    : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
                       ...attachment,
@@ -1612,17 +1700,12 @@ export const fetchThreadRepliesAction = async (
             return {
                 ...doc,
                 _id: doc._id?.toString(),
-                authorName: firstName,
-                authorPicture: circle?.picture?.url || null,
+                authorName,
+                authorPicture: displayAuthor?.picture?.url || null,
                 replyTo: replyDoc
                     ? {
                           id: replyDoc._id,
-                          author:
-                              replyAuthorCircle || {
-                                  _id: replyDoc.senderDid,
-                                  name: replyDoc.senderDid,
-                                  picture: { url: "/placeholder.svg" },
-                              },
+                          author: replyAuthor,
                           content: { msgtype: "m.text", body: replyDoc.body },
                           attachments: normalizedReplyAttachments,
                       }
@@ -1676,6 +1759,7 @@ export const fetchTopicStartersAction = async (
         const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
         const fallbackSystemAuthor = getSystemTemplateAuthor(conversationMetadata);
         const conversationRepliesDisabled = conversationMetadata?.repliesDisabled === true;
+        const peerifyBookingDisplayContext = await getPeerifyBookingDisplayContext(access.conversation);
 
         const senderDids = Array.from(new Set(docs.map((doc) => doc.senderDid)));
         const senders = senderDids.length ? await getCirclesByDids(senderDids) : [];
@@ -1701,7 +1785,7 @@ export const fetchTopicStartersAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
-            const author =
+            const fallbackAuthor =
                 (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
@@ -1710,6 +1794,7 @@ export const fetchTopicStartersAction = async (
                           name: doc.senderDid,
                           picture: { url: "/placeholder.svg" },
                       } as Circle));
+            const author = getPeerifyBookingDisplayAuthor(doc.senderDid, fallbackAuthor, peerifyBookingDisplayContext);
 
             const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {
                 if (!acc[reaction.emoji]) acc[reaction.emoji] = [];
