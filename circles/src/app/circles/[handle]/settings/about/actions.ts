@@ -33,8 +33,11 @@ import { getVerificationReadiness } from "@/lib/verification-readiness";
 import {
     getPeerifyIdentityType,
     isPeerifyManagedIdentity,
+    isPeerifyVenueIdentity,
     normalizePeerifyArtistProfile,
+    normalizePeerifyVenueProfile,
     type PeerifyArtistProfile,
+    type PeerifyVenueProfile,
 } from "@/lib/peerify/artist-profile";
 import {
     ABOUT_IMAGE_UPLOAD_MAX_BYTES,
@@ -523,6 +526,7 @@ export async function saveAbout(values: {
     officialEmail?: string;
     peerifyArtistIntent?: boolean;
     peerifyArtistProfile?: PeerifyArtistProfile;
+    peerifyVenueProfile?: PeerifyVenueProfile;
 }): Promise<FormSubmitResponse> {
     console.log("Saving circle about with values (images length):", values.images?.length);
 
@@ -608,7 +612,11 @@ export async function saveAbout(values: {
 
             existingPeerify.managedIdentity = true;
             existingPeerify.identityType = getPeerifyIdentityType(existingCircle);
-            existingPeerify.artistProfile = normalizePeerifyArtistProfile(values.peerifyArtistProfile);
+            if (isPeerifyVenueIdentity(existingCircle)) {
+                existingPeerify.venueProfile = normalizePeerifyVenueProfile(values.peerifyVenueProfile);
+            } else {
+                existingPeerify.artistProfile = normalizePeerifyArtistProfile(values.peerifyArtistProfile);
+            }
             existingMetadata.peerify = existingPeerify;
             circleUpdateData.metadata = existingMetadata;
         }

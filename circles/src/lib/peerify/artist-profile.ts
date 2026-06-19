@@ -51,11 +51,54 @@ export type PeerifyArtistProfile = {
     availability?: string;
 };
 
+export type PeerifyVenueAddressVisibility = "private" | "city_area" | "public";
+export type PeerifyVenueFeeCoveredBy = "venue" | "artist" | "shared" | "not_specified";
+
+export type PeerifyVenueProfile = {
+    venueType?: string;
+    publicCity?: string;
+    address?: string;
+    addressVisibility?: PeerifyVenueAddressVisibility;
+    capacityStanding?: string;
+    capacitySeated?: string;
+    typicalShowCapacity?: string;
+    accessibilityNotes?: string;
+    agePolicy?: string;
+    paAvailable?: boolean;
+    inHouseEngineer?: boolean;
+    backline?: string;
+    lighting?: string;
+    loadInNotes?: string;
+    parkingNotes?: string;
+    minimumFee?: string;
+    doorSplit?: string;
+    houseCut?: string;
+    peerifyFeeCoveredBy?: PeerifyVenueFeeCoveredBy;
+    availableDays?: string;
+    typicalResponseTime?: string;
+    bookingNote?: string;
+    bookingEnquiriesEnabled?: boolean;
+    greenRoom?: boolean;
+    foodDrink?: string;
+    accommodationHelp?: string;
+    localTransportHelp?: string;
+    merchTable?: boolean;
+    guestListPolicy?: string;
+    houseRules?: string;
+    soundCurfew?: string;
+    cancellationPolicy?: string;
+    safetyPolicy?: string;
+    website?: string;
+    instagram?: string;
+    contactEmail?: string;
+};
+
 export type PeerifyMetadata = {
     intent?: string;
     managedIdentity?: boolean;
     identityType?: PeerifyIdentityType;
     artistProfile?: PeerifyArtistProfile;
+    venueProfile?: PeerifyVenueProfile;
 };
 
 export type PeerifyArtistEnquiryType = "pledge" | "booking";
@@ -189,6 +232,45 @@ const DEFAULT_ARTIST_PROFILE: PeerifyArtistProfile = {
     availability: "",
 };
 
+const DEFAULT_VENUE_PROFILE: PeerifyVenueProfile = {
+    venueType: "",
+    publicCity: "",
+    address: "",
+    addressVisibility: "private",
+    capacityStanding: "",
+    capacitySeated: "",
+    typicalShowCapacity: "",
+    accessibilityNotes: "",
+    agePolicy: "",
+    paAvailable: false,
+    inHouseEngineer: false,
+    backline: "",
+    lighting: "",
+    loadInNotes: "",
+    parkingNotes: "",
+    minimumFee: "",
+    doorSplit: "",
+    houseCut: "",
+    peerifyFeeCoveredBy: "not_specified",
+    availableDays: "",
+    typicalResponseTime: "",
+    bookingNote: "",
+    bookingEnquiriesEnabled: false,
+    greenRoom: false,
+    foodDrink: "",
+    accommodationHelp: "",
+    localTransportHelp: "",
+    merchTable: false,
+    guestListPolicy: "",
+    houseRules: "",
+    soundCurfew: "",
+    cancellationPolicy: "",
+    safetyPolicy: "",
+    website: "",
+    instagram: "",
+    contactEmail: "",
+};
+
 const asString = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
 const normalizeExternalUrl = (value: unknown): string => {
@@ -231,6 +313,18 @@ const asOptionalNumber = (value: unknown): number | undefined => {
 
 const asOptionalBoolean = (value: unknown): boolean | undefined =>
     typeof value === "boolean" ? value : undefined;
+
+const normalizeVenueAddressVisibility = (value: unknown): PeerifyVenueAddressVisibility => {
+    const nextValue = asString(value);
+    return nextValue === "city_area" || nextValue === "public" || nextValue === "private" ? nextValue : "private";
+};
+
+const normalizeVenueFeeCoveredBy = (value: unknown): PeerifyVenueFeeCoveredBy => {
+    const nextValue = asString(value);
+    return nextValue === "venue" || nextValue === "artist" || nextValue === "shared" || nextValue === "not_specified"
+        ? nextValue
+        : "not_specified";
+};
 
 const normalizeMusicLinks = (value: unknown): Partial<Record<PeerifyMusicLinkKey, string>> => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -283,6 +377,53 @@ export const normalizePeerifyArtistProfile = (value: unknown): PeerifyArtistProf
     };
 };
 
+export const normalizePeerifyVenueProfile = (value: unknown): PeerifyVenueProfile => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { ...DEFAULT_VENUE_PROFILE };
+    }
+
+    const input = value as Record<string, unknown>;
+
+    return {
+        venueType: asString(input.venueType),
+        publicCity: asString(input.publicCity),
+        address: asString(input.address),
+        addressVisibility: normalizeVenueAddressVisibility(input.addressVisibility),
+        capacityStanding: asString(input.capacityStanding),
+        capacitySeated: asString(input.capacitySeated),
+        typicalShowCapacity: asString(input.typicalShowCapacity),
+        accessibilityNotes: asString(input.accessibilityNotes),
+        agePolicy: asString(input.agePolicy),
+        paAvailable: input.paAvailable === true,
+        inHouseEngineer: input.inHouseEngineer === true,
+        backline: asString(input.backline),
+        lighting: asString(input.lighting),
+        loadInNotes: asString(input.loadInNotes),
+        parkingNotes: asString(input.parkingNotes),
+        minimumFee: asString(input.minimumFee),
+        doorSplit: asString(input.doorSplit),
+        houseCut: asString(input.houseCut),
+        peerifyFeeCoveredBy: normalizeVenueFeeCoveredBy(input.peerifyFeeCoveredBy),
+        availableDays: asString(input.availableDays),
+        typicalResponseTime: asString(input.typicalResponseTime),
+        bookingNote: asString(input.bookingNote),
+        bookingEnquiriesEnabled: input.bookingEnquiriesEnabled === true,
+        greenRoom: input.greenRoom === true,
+        foodDrink: asString(input.foodDrink),
+        accommodationHelp: asString(input.accommodationHelp),
+        localTransportHelp: asString(input.localTransportHelp),
+        merchTable: input.merchTable === true,
+        guestListPolicy: asString(input.guestListPolicy),
+        houseRules: asString(input.houseRules),
+        soundCurfew: asString(input.soundCurfew),
+        cancellationPolicy: asString(input.cancellationPolicy),
+        safetyPolicy: asString(input.safetyPolicy),
+        website: normalizeExternalUrl(input.website),
+        instagram: normalizeExternalUrl(input.instagram),
+        contactEmail: asString(input.contactEmail),
+    };
+};
+
 export const getPeerifyMetadata = (circle?: Partial<Circle> | null): PeerifyMetadata => {
     const peerify = (circle?.metadata as Record<string, unknown> | undefined)?.peerify;
     if (!peerify || typeof peerify !== "object" || Array.isArray(peerify)) {
@@ -298,11 +439,15 @@ export const getPeerifyMetadata = (circle?: Partial<Circle> | null): PeerifyMeta
             ? (asString(input.identityType) as PeerifyIdentityType)
             : undefined,
         artistProfile: normalizePeerifyArtistProfile(input.artistProfile),
+        venueProfile: normalizePeerifyVenueProfile(input.venueProfile),
     };
 };
 
 export const getPeerifyArtistProfile = (circle?: Partial<Circle> | null): PeerifyArtistProfile =>
     getPeerifyMetadata(circle).artistProfile ?? { ...DEFAULT_ARTIST_PROFILE, bookingSettings: {}, musicLinks: {} };
+
+export const getPeerifyVenueProfile = (circle?: Partial<Circle> | null): PeerifyVenueProfile =>
+    getPeerifyMetadata(circle).venueProfile ?? { ...DEFAULT_VENUE_PROFILE };
 
 export const hasPeerifyArtistIntent = (circle?: Partial<Circle> | null): boolean => {
     const peerifyMetadata = getPeerifyMetadata(circle);
