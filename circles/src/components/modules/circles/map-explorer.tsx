@@ -181,8 +181,8 @@ const SNAP_INDEX_OPEN = 2; // Large height (e.g., 80%)
 const SNAP_INDEX_FULL = 3; // Full height (e.g., 100%)
 
 const RESULT_TYPE_OPTIONS = [
-    { value: "users", label: "People" },
-    { value: "communities", label: "Circles" },
+    { value: "users", label: "Artists" },
+    { value: "communities", label: "Venues" },
     { value: "events", label: "Events" },
 ] as const;
 
@@ -1061,7 +1061,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                             <div className="flex w-full max-w-[calc(100vw-140px)] md:w-[23.5rem] md:max-w-[23.5rem] md:flex-none items-center rounded-full bg-white/95 p-1 pl-4 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
                                 <input
                                     type="text"
-                                    placeholder="Search people, circles, and events"
+                                    placeholder="Search artists, venues, and events"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && handleSearchTrigger()}
@@ -1140,7 +1140,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
                                 selectedCategory={selectedCategory}
                                 onSelectionChange={setSelectedCategory}
                                 hasSearched={true}
-                                displayLabelMap={{ users: "people", communities: "circles", events: "events" }}
+                                displayLabelMap={{ users: "Artists", communities: "Venues", events: "Events" }}
                             />
                         </div>
                     </div>

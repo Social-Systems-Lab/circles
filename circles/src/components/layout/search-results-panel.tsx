@@ -10,8 +10,8 @@ import { Content, ContentPreviewData, EventDisplay } from "@/models/models";
 import { format } from "date-fns";
 
 const SEARCH_CATEGORY_LABELS: Record<string, string> = {
-    users: "people",
-    communities: "circles",
+    users: "artists",
+    communities: "venues",
     events: "events",
 };
 
