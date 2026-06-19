@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,16 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { generateSlug } from "@/lib/utils";
-import {
-    PEERIFY_MANAGED_IDENTITY_TYPE_OPTIONS,
-    type PeerifyArtistIdentityType,
-} from "@/lib/peerify/artist-profile";
-import { createPeerifyManagedArtistIdentityAction } from "@/components/circle-wizard/actions";
+import { createPeerifyManagedVenueIdentityAction } from "@/components/circle-wizard/actions";
 import { getUserPrivateAction } from "@/components/modules/home/actions";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 
-interface CreatePeerifyArtistDialogProps {
+interface CreatePeerifyVenueDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onSuccess: (data?: { id?: string; circleHandle?: string }) => void;
@@ -26,7 +22,6 @@ interface CreatePeerifyArtistDialogProps {
 type FormState = {
     name: string;
     handle: string;
-    identityType: PeerifyArtistIdentityType;
     description: string;
     baseCity: string;
 };
@@ -34,26 +29,20 @@ type FormState = {
 const EMPTY_FORM: FormState = {
     name: "",
     handle: "",
-    identityType: "artist",
     description: "",
     baseCity: "",
 };
 
-export function CreatePeerifyArtistDialog({
+export function CreatePeerifyVenueDialog({
     isOpen,
     onOpenChange,
     onSuccess,
-}: CreatePeerifyArtistDialogProps) {
+}: CreatePeerifyVenueDialogProps) {
     const { toast } = useToast();
     const [, setUser] = useAtom(userAtom);
     const [isPending, startTransition] = useTransition();
     const [form, setForm] = useState<FormState>(EMPTY_FORM);
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
-
-    const selectedIdentity = useMemo(
-        () => PEERIFY_MANAGED_IDENTITY_TYPE_OPTIONS.find((option) => option.value === form.identityType),
-        [form.identityType],
-    );
 
     const resetForm = () => {
         setForm(EMPTY_FORM);
@@ -64,7 +53,7 @@ export function CreatePeerifyArtistDialog({
         const nextErrors: Partial<Record<keyof FormState, string>> = {};
 
         if (!form.name.trim()) {
-            nextErrors.name = "Artist or project name is required";
+            nextErrors.name = "Venue name is required";
         }
 
         if (!form.handle.trim()) {
@@ -74,15 +63,15 @@ export function CreatePeerifyArtistDialog({
             form.handle.trim().length > 20 ||
             !/^[a-z0-9-]*$/.test(form.handle.trim())
         ) {
-            nextErrors.handle = "Use 3–20 lowercase letters, numbers, and hyphens.";
+            nextErrors.handle = "Use 3-20 lowercase letters, numbers, and hyphens.";
         }
 
         if (!form.description.trim()) {
-            nextErrors.description = "Short bio is required";
+            nextErrors.description = "Short description is required";
         }
 
         if (!form.baseCity.trim()) {
-            nextErrors.baseCity = "Base city is required";
+            nextErrors.baseCity = "Venue location is required";
         }
 
         setErrors(nextErrors);
@@ -106,7 +95,7 @@ export function CreatePeerifyArtistDialog({
         }
 
         startTransition(async () => {
-            const result = await createPeerifyManagedArtistIdentityAction(form);
+            const result = await createPeerifyManagedVenueIdentityAction(form);
 
             if (!result.success) {
                 if (result.message === "handle") {
@@ -120,28 +109,28 @@ export function CreatePeerifyArtistDialog({
                 if (result.message === "handle-invalid") {
                     setErrors((current) => ({
                         ...current,
-                        handle: "Use 3–20 lowercase letters, numbers, and hyphens.",
+                        handle: "Use 3-20 lowercase letters, numbers, and hyphens.",
                     }));
                     return;
                 }
 
-                if (result.message === "Artist or project name is required") {
+                if (result.message === "Venue name is required") {
                     setErrors((current) => ({ ...current, name: result.message }));
                     return;
                 }
 
-                if (result.message === "Short bio is required") {
+                if (result.message === "Short description is required") {
                     setErrors((current) => ({ ...current, description: result.message }));
                     return;
                 }
 
-                if (result.message === "Base city is required") {
+                if (result.message === "Venue location is required") {
                     setErrors((current) => ({ ...current, baseCity: result.message }));
                     return;
                 }
 
                 toast({
-                    title: "Could not create artist identity",
+                    title: "Could not create venue identity",
                     description: result.message || "Please try again.",
                     variant: "destructive",
                 });
@@ -151,10 +140,8 @@ export function CreatePeerifyArtistDialog({
             const userData = await getUserPrivateAction();
             setUser(userData);
             toast({
-                title: "Artist identity created",
-                description: selectedIdentity
-                    ? `${selectedIdentity.label} created successfully.`
-                    : "Artist identity created successfully.",
+                title: "Venue identity created",
+                description: "Venue profile created successfully.",
             });
             onSuccess({
                 id: result.data?.circleId,
@@ -177,92 +164,58 @@ export function CreatePeerifyArtistDialog({
         >
             <DialogContent className="sm:max-w-[680px]">
                 <DialogHeader>
-                    <DialogTitle>Create Artist Identity</DialogTitle>
+                    <DialogTitle>Create Venue Identity</DialogTitle>
                     <DialogDescription>
-                        Create a public Peerify identity that stays separate from your private account.
+                        Create a public Peerify venue or host profile that stays separate from your private account.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-6">
-                    <div className="space-y-3">
-                        <div>
-                            <Label>Identity type</Label>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                This decides the initial Peerify identity metadata for the new public profile.
-                            </p>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            {PEERIFY_MANAGED_IDENTITY_TYPE_OPTIONS.map((option) => {
-                                const selected = form.identityType === option.value;
-                                return (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => {
-                                            setErrors((current) => ({ ...current, identityType: undefined }));
-                                            setForm((current) => ({ ...current, identityType: option.value }));
-                                        }}
-                                        className={`rounded-xl border p-4 text-left transition ${
-                                            selected
-                                                ? "border-[#231f1a] bg-[#231f1a] text-white"
-                                                : "border-[#e4dacc] bg-[#fcfbf8] text-[#2f2923]"
-                                        }`}
-                                    >
-                                        <div className="font-semibold">{option.label}</div>
-                                        <div className={`mt-1 text-sm ${selected ? "text-[#efe8de]" : "text-[#6f6559]"}`}>
-                                            {option.description}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2 sm:col-span-2">
-                            <Label htmlFor="peerify-name">Artist / project name</Label>
+                            <Label htmlFor="peerify-venue-name">Venue / place name</Label>
                             <Input
-                                id="peerify-name"
+                                id="peerify-venue-name"
                                 value={form.name}
                                 onChange={(event) => updateField("name", event.target.value)}
-                                placeholder="Moonlit Choir"
+                                placeholder="The Listening Room"
                             />
                             {errors.name ? <p className="text-sm text-red-500">{errors.name}</p> : null}
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="peerify-handle">Handle</Label>
+                            <Label htmlFor="peerify-venue-handle">Handle</Label>
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-muted-foreground">@</span>
                                 <Input
-                                    id="peerify-handle"
+                                    id="peerify-venue-handle"
                                     value={form.handle}
                                     onChange={(event) => updateField("handle", event.target.value)}
-                                    placeholder="moonlit-choir"
+                                    placeholder="the-listening-room"
                                 />
                             </div>
                             {errors.handle ? <p className="text-sm text-red-500">{errors.handle}</p> : null}
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="peerify-base-city">Base city / location</Label>
+                            <Label htmlFor="peerify-venue-location">City / location</Label>
                             <Input
-                                id="peerify-base-city"
+                                id="peerify-venue-location"
                                 value={form.baseCity}
                                 onChange={(event) => updateField("baseCity", event.target.value)}
-                                placeholder="Berlin"
+                                placeholder="Copenhagen"
                             />
                             {errors.baseCity ? <p className="text-sm text-red-500">{errors.baseCity}</p> : null}
                         </div>
 
                         <div className="space-y-2 sm:col-span-2">
-                            <Label htmlFor="peerify-description">Short bio</Label>
+                            <Label htmlFor="peerify-venue-description">Short description</Label>
                             <Textarea
-                                id="peerify-description"
+                                id="peerify-venue-description"
                                 rows={4}
                                 value={form.description}
                                 onChange={(event) => updateField("description", event.target.value)}
-                                placeholder="A short public intro for this artist identity."
+                                placeholder="A short public intro for this venue or host space."
                             />
                             {errors.description ? <p className="text-sm text-red-500">{errors.description}</p> : null}
                         </div>
@@ -277,7 +230,7 @@ export function CreatePeerifyArtistDialog({
                                 Cancel
                             </Button>
                             <Button type="button" onClick={handleSubmit} disabled={isPending}>
-                                {isPending ? "Creating..." : "Create Artist Identity"}
+                                {isPending ? "Creating..." : "Create Venue Identity"}
                             </Button>
                         </div>
                     </div>
@@ -287,4 +240,4 @@ export function CreatePeerifyArtistDialog({
     );
 }
 
-export default CreatePeerifyArtistDialog;
+export default CreatePeerifyVenueDialog;

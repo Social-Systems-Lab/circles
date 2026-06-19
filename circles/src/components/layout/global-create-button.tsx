@@ -25,6 +25,7 @@ import { CreateEventDialog } from "@/components/global-create/create-event-dialo
 import { CreateCommunityDialog } from "@/components/global-create/create-community-dialog"; // Updated Import
 import { CreateProjectDialog } from "@/components/global-create/create-project-dialog";
 import { CreatePeerifyArtistDialog } from "@/components/global-create/create-peerify-artist-dialog";
+import { CreatePeerifyVenueDialog } from "@/components/global-create/create-peerify-venue-dialog";
 
 export function GlobalCreateButton() {
     const router = useRouter(); // Initialize router
@@ -59,6 +60,7 @@ export function GlobalCreateButton() {
     const [isCreateCommunityOpen, setCreateCommunityOpen] = useState(false);
     const [isCreateProjectOpen, setCreateProjectOpen] = useState(false);
     const [isCreatePeerifyArtistOpen, setCreatePeerifyArtistOpen] = useState(false);
+    const [isCreatePeerifyVenueOpen, setCreatePeerifyVenueOpen] = useState(false);
 
     const handleItemCreatedSuccess = (
         itemKey: CreatableItemKey,
@@ -70,6 +72,7 @@ export function GlobalCreateButton() {
         setSelectedItemTypeForCreation(null);
         setCreateCommunityOpen(false);
         setCreatePeerifyArtistOpen(false);
+        setCreatePeerifyVenueOpen(false);
 
         const id = typeof payload === "string" ? payload : payload?.id;
         const circleHandle = typeof payload === "string" ? payload : payload?.circleHandle;
@@ -78,6 +81,7 @@ export function GlobalCreateButton() {
             // Map itemKey to path segment
             const pathSegmentMap: Record<CreatableItemKey, string | null> = {
                 artist_identity: null,
+                venue_identity: null,
                 post: "post", // Or the correct path for posts if different
                 task: "tasks",
                 goal: "goals",
@@ -90,7 +94,7 @@ export function GlobalCreateButton() {
             };
             const pathSegment = pathSegmentMap[itemKey];
             // For community and project, the ID is the handle itself; navigate directly to the circle
-            if (itemKey === "artist_identity") {
+            if (itemKey === "artist_identity" || itemKey === "venue_identity") {
                 router.push(`/circles/${circleHandle ?? id}/home`);
             } else if (itemKey === "community" || itemKey === "project") {
                 router.push(`/circles/${circleHandle ?? id}/settings/about`);
@@ -184,6 +188,7 @@ export function GlobalCreateButton() {
                         onCloseMainDialog={() => setIsMainDialogOpen(false)}
                         onSelectItemType={handleSelectItemType}
                         setCreatePeerifyArtistOpen={setCreatePeerifyArtistOpen}
+                        setCreatePeerifyVenueOpen={setCreatePeerifyVenueOpen}
                         setCreateCommunityOpen={setCreateCommunityOpen}
                         setCreateProjectOpen={setCreateProjectOpen}
                     />
@@ -234,6 +239,11 @@ export function GlobalCreateButton() {
                 isOpen={isCreatePeerifyArtistOpen}
                 onOpenChange={setCreatePeerifyArtistOpen}
                 onSuccess={(data) => handleItemCreatedSuccess("artist_identity", data)}
+            />
+            <CreatePeerifyVenueDialog
+                isOpen={isCreatePeerifyVenueOpen}
+                onOpenChange={setCreatePeerifyVenueOpen}
+                onSuccess={(data) => handleItemCreatedSuccess("venue_identity", data)}
             />
             <CreateProjectDialog
                 isOpen={isCreateProjectOpen}

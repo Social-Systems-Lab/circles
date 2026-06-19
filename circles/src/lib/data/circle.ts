@@ -104,6 +104,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     websiteUrl: 1,
     representsOrganization: 1,
     organizationName: 1,
+    metadata: 1,
 } as const;
 
 export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {

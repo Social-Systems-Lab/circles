@@ -56,6 +56,7 @@ import { EventDisplay } from "@/models/models";
 import ActivityPanel from "@/components/layout/activity-panel";
 import MobileEventsPanel from "@/components/modules/events/mobile-events-panel";
 import { sdgs } from "@/lib/data/sdgs";
+import { isPeerifyArtistIdentity, isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -187,15 +188,9 @@ const RESULT_TYPE_OPTIONS = [
 ] as const;
 
 const SEARCH_CATEGORY_LABELS: Record<string, string> = {
-    users: "people",
-    communities: "circles",
+    users: "artists",
+    communities: "venues",
     events: "events",
-};
-
-const getCircleTypeForSearchCategory = (category: string | null) => {
-    if (category === "communities") return "circle";
-    if (category === "users") return "user";
-    return null;
 };
 
 const getSearchCategoryLabel = (category: string | null) => {
@@ -340,8 +335,9 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         // ... (no changes) ...
         if (!category) return circles;
         if (category === "events") return circles;
-        const typeToFilter = category === "communities" ? "circle" : "user";
-        return circles.filter((c) => c.circleType === typeToFilter);
+        if (category === "users") return circles.filter((circle) => isPeerifyArtistIdentity(circle));
+        if (category === "communities") return circles.filter((circle) => isPeerifyVenueIdentity(circle));
+        return circles;
     }, []);
 
     const displayedSwipeCircles = useMemo(() => {
@@ -359,12 +355,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
     }, [allDiscoverableCircles, user]);
 
     const filteredSearchResults = useMemo(() => {
-        let results = allSearchResults;
-
-        const selectedCircleType = getCircleTypeForSearchCategory(selectedCategory);
-        if (selectedCircleType) {
-            results = results.filter((result) => result.circleType === selectedCircleType);
-        }
+        let results = filterCirclesByCategory(allSearchResults, selectedCategory);
 
         if (selectedSdgs.length > 0) {
             const sdgHandles = selectedSdgs.map((s) => s.handle);
@@ -372,7 +363,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         }
 
         return results;
-    }, [allSearchResults, selectedCategory, selectedSdgs]);
+    }, [allSearchResults, selectedCategory, selectedSdgs, filterCirclesByCategory]);
 
     const searchEmptyState = useMemo(
         () =>
@@ -406,9 +397,8 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             events: filteredEventsForMap.length,
         };
         countsDatasetCircles?.forEach((result) => {
-            if (result.circleType === "circle") counts.communities++;
-            else if (result.circleType === "project") counts.projects++;
-            else if (result.circleType === "user") counts.users++;
+            if (isPeerifyVenueIdentity(result)) counts.communities++;
+            else if (isPeerifyArtistIdentity(result)) counts.users++;
         });
         return counts;
     }, [countsDatasetCircles, filteredEventsForMap.length]);
@@ -595,19 +585,15 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             setAllSearchResults(results);
 
             // Compute filtered list and counts for left panel now
-            const selectedCircleType = getCircleTypeForSearchCategory(selectedCategory);
             const filteredForCounts =
                 selectedSdgs.length > 0
                     ? results.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)))
                     : results;
-            const filtered = selectedCircleType
-                ? filteredForCounts.filter((r) => r.circleType === selectedCircleType)
-                : filteredForCounts;
+            const filtered = filterCirclesByCategory(filteredForCounts, selectedCategory);
             const counts = { communities: 0, projects: 0, users: 0, events: filteredEventsForMap.length };
             filteredForCounts.forEach((r: any) => {
-                if (r.circleType === "circle") counts.communities++;
-                else if (r.circleType === "project") counts.projects++;
-                else if (r.circleType === "user") counts.users++;
+                if (isPeerifyVenueIdentity(r)) counts.communities++;
+                else if (isPeerifyArtistIdentity(r)) counts.users++;
             });
 
             setSearchPanelState({

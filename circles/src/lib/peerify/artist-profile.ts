@@ -1,7 +1,10 @@
 import { Circle } from "@/models/models";
 
-export type PeerifyIdentityType = "artist" | "band" | "dj" | "producer";
-export const PEERIFY_MANAGED_IDENTITY_TYPES = ["artist", "band", "dj", "producer"] as const;
+export type PeerifyArtistIdentityType = "artist" | "band" | "dj" | "producer";
+export type PeerifyVenueIdentityType = "venue";
+export type PeerifyIdentityType = PeerifyArtistIdentityType | PeerifyVenueIdentityType;
+export const PEERIFY_ARTIST_IDENTITY_TYPES = ["artist", "band", "dj", "producer"] as const;
+export const PEERIFY_MANAGED_IDENTITY_TYPES = [...PEERIFY_ARTIST_IDENTITY_TYPES, "venue"] as const;
 
 export type PeerifyMusicLinkKey =
     | "bandcamp"
@@ -79,7 +82,7 @@ export const PEERIFY_ARTIST_TYPE_OPTIONS = [
 ] as const;
 
 export const PEERIFY_MANAGED_IDENTITY_TYPE_OPTIONS: ReadonlyArray<{
-    value: PeerifyIdentityType;
+    value: PeerifyArtistIdentityType;
     label: string;
     description: string;
 }> = [
@@ -110,6 +113,7 @@ export const PEERIFY_MANAGED_IDENTITY_TYPE_LABELS: Record<PeerifyIdentityType, s
     band: "Band",
     dj: "DJ",
     producer: "Producer",
+    venue: "Venue",
 };
 
 export const PEERIFY_LOOKING_FOR_OPTIONS = [
@@ -309,8 +313,13 @@ export const isPeerifyArtistIdentity = (circle?: Partial<Circle> | null): boolea
     return (
         peerifyMetadata.managedIdentity === true &&
         typeof peerifyMetadata.identityType === "string" &&
-        PEERIFY_MANAGED_IDENTITY_TYPES.includes(peerifyMetadata.identityType as PeerifyIdentityType)
+        PEERIFY_ARTIST_IDENTITY_TYPES.includes(peerifyMetadata.identityType as PeerifyArtistIdentityType)
     );
+};
+
+export const isPeerifyVenueIdentity = (circle?: Partial<Circle> | null): boolean => {
+    const peerifyMetadata = getPeerifyMetadata(circle);
+    return peerifyMetadata.managedIdentity === true && peerifyMetadata.identityType === "venue";
 };
 
 export const getPeerifyArtistIdentityLabel = (circle?: Partial<Circle> | null): string => {

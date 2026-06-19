@@ -14,12 +14,14 @@ import {
     Calendar,
     Hammer,
     Music4,
+    MapPin,
 } from "lucide-react";
 
 // Define types for creatable items
 export type CreatableItemKey =
     | "community"
     | "artist_identity"
+    | "venue_identity"
     | "project"
     | "task"
     | "goal"
@@ -29,7 +31,14 @@ export type CreatableItemKey =
     | "event"
     | "discussion";
 
-const visibleGlobalCreateItemKeys: CreatableItemKey[] = ["artist_identity", "community", "post", "event", "goal"];
+const visibleGlobalCreateItemKeys: CreatableItemKey[] = [
+    "artist_identity",
+    "venue_identity",
+    "community",
+    "post",
+    "event",
+    "goal",
+];
 
 export interface CreatableItemDetail {
     key: CreatableItemKey;
@@ -48,6 +57,14 @@ export const creatableItemsList: CreatableItemDetail[] = [
         title: "Artist Identity",
         description: "Create a managed public Peerify artist, band, DJ, or producer profile.",
         icon: Music4,
+        moduleHandle: "communities",
+        createFeatureHandle: "create",
+    },
+    {
+        key: "venue_identity",
+        title: "Venue Identity",
+        description: "Create a managed public Peerify venue, host, or music place profile.",
+        icon: MapPin,
         moduleHandle: "communities",
         createFeatureHandle: "create",
     },
@@ -129,6 +146,7 @@ interface GlobalCreateDialogContentProps {
     onCloseMainDialog: () => void; // To close this selection dialog
     onSelectItemType: (itemKey: CreatableItemKey) => void; // New prop to inform parent of selection
     setCreatePeerifyArtistOpen: (open: boolean) => void;
+    setCreatePeerifyVenueOpen: (open: boolean) => void;
     setCreateCommunityOpen: (open: boolean) => void;
     setCreateProjectOpen: (open: boolean) => void;
 }
@@ -137,6 +155,7 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
     onCloseMainDialog,
     onSelectItemType,
     setCreatePeerifyArtistOpen,
+    setCreatePeerifyVenueOpen,
     setCreateCommunityOpen,
     setCreateProjectOpen,
 }) => {
@@ -147,6 +166,8 @@ export const GlobalCreateDialogContent: React.FC<GlobalCreateDialogContentProps>
 
         if (itemKey === "artist_identity") {
             setCreatePeerifyArtistOpen(true);
+        } else if (itemKey === "venue_identity") {
+            setCreatePeerifyVenueOpen(true);
         } else if (itemKey === "community") {
             setCreateCommunityOpen(true);
         } else if (itemKey === "project") {
