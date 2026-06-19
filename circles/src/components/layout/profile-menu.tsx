@@ -21,7 +21,11 @@ import { listChatRoomsAction } from "../modules/chat/actions";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
+import {
+    getPeerifyIdentityAvatarUrl,
+    PEERIFY_DEFAULT_PROFILE_AVATAR_URL,
+    isPeerifyManagedIdentity,
+} from "@/lib/peerify/artist-profile";
 
 const getManagedIdentities = (user?: Circle & { memberships?: Array<{ circle: Circle; userGroups?: string[] }> }) =>
     user?.memberships
@@ -224,7 +228,11 @@ const ProfileMenuBar = () => {
                                     <Button className="relative h-auto w-auto rounded-full p-0" variant="ghost">
                                         <UserPicture
                                             name={currentVisibleIdentity?.name ?? user.name}
-                                            picture={currentVisibleIdentity?.picture?.url ?? user.picture?.url}
+                                            picture={
+                                                currentVisibleIdentity && isPeerifyManagedIdentity(currentVisibleIdentity)
+                                                    ? getPeerifyIdentityAvatarUrl(currentVisibleIdentity)
+                                                    : user.picture?.url ?? PEERIFY_DEFAULT_PROFILE_AVATAR_URL
+                                            }
                                             size="40px"
                                             circleType={currentVisibleIdentity?.circleType ?? "user"}
                                         />
@@ -244,7 +252,7 @@ const ProfileMenuBar = () => {
                                         >
                                             <UserPicture
                                                 name={user.name}
-                                                picture={user.picture?.url}
+                                                picture={user.picture?.url ?? PEERIFY_DEFAULT_PROFILE_AVATAR_URL}
                                                 size="36px"
                                                 circleType="user"
                                             />
@@ -268,10 +276,7 @@ const ProfileMenuBar = () => {
                                                     >
                                                         <UserPicture
                                                             name={identity.name}
-                                                            picture={
-                                                                identity.picture?.url ??
-                                                                "/peerify/default-artist-avatar.svg"
-                                                            }
+                                                            picture={getPeerifyIdentityAvatarUrl(identity)}
                                                             size="36px"
                                                             circleType="circle"
                                                         />

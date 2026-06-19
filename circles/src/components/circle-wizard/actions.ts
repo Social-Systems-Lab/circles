@@ -20,6 +20,7 @@ import { CircleData } from "./circle-wizard";
 import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
 import { hasContributorPerks } from "@/lib/auth/perks";
 import {
+    getPeerifyDefaultAvatarUrl,
     normalizePeerifyArtistProfile,
     PEERIFY_ARTIST_IDENTITY_TYPES,
     PEERIFY_MANAGED_IDENTITY_TYPE_LABELS,
@@ -301,7 +302,7 @@ export async function createPeerifyManagedArtistIdentityAction(input: {
                 createdBy: userDid,
                 publishStatus: "draft",
                 parentCircleId,
-                picture: { url: "/peerify/default-artist-avatar.svg" },
+                picture: { url: getPeerifyDefaultAvatarUrl(identityType) },
                 causes: [],
                 skills: [],
                 metadata: {
@@ -413,7 +414,7 @@ export async function createPeerifyManagedVenueIdentityAction(input: {
                 createdBy: userDid,
                 publishStatus: "draft",
                 parentCircleId,
-                picture: { url: "/images/default-picture.png" },
+                picture: { url: getPeerifyDefaultAvatarUrl("venue") },
                 causes: [],
                 skills: [],
                 metadata: {

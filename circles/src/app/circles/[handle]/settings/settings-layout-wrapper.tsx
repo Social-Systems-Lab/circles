@@ -7,6 +7,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
 import { usePathname } from "next/navigation";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
 
 type SettingsForm = {
     name: string | UserAndCircleInfo;
@@ -74,8 +75,13 @@ export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrappe
     const [user] = useAtom(userAtom);
     const pathname = usePathname();
     const hideSettingsNav = pathname.endsWith("/settings/pledges");
+    const hidePeerifySdgSettings = isUser || isPeerifyManagedIdentity(circle);
     const navItems = settingsForms
         .filter((item) => {
+            if (item.handle === "matchmaking" && hidePeerifySdgSettings) {
+                return false;
+            }
+
             if (item.handle === "subscription") {
                 return user?.handle === circle.handle;
             }

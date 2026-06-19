@@ -37,7 +37,6 @@ const visibleGlobalCreateItemKeys: CreatableItemKey[] = [
     "community",
     "post",
     "event",
-    "goal",
 ];
 
 export interface CreatableItemDetail {
@@ -71,7 +70,7 @@ export const creatableItemsList: CreatableItemDetail[] = [
     {
         key: "community",
         title: "Circle",
-        description: "Start a new circle or group.",
+        description: "Start a new community or group.",
         icon: Users,
         moduleHandle: "communities",
         createFeatureHandle: "create",

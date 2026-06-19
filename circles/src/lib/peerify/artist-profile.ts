@@ -6,6 +6,17 @@ export type PeerifyIdentityType = PeerifyArtistIdentityType | PeerifyVenueIdenti
 export const PEERIFY_ARTIST_IDENTITY_TYPES = ["artist", "band", "dj", "producer"] as const;
 export const PEERIFY_MANAGED_IDENTITY_TYPES = [...PEERIFY_ARTIST_IDENTITY_TYPES, "venue"] as const;
 
+export const PEERIFY_DEFAULT_PROFILE_AVATAR_URL = "/peerify/default-profile-avatar.png";
+export const PEERIFY_DEFAULT_ARTIST_AVATAR_URL = "/peerify/default-artist-avatar.png";
+export const PEERIFY_DEFAULT_BAND_AVATAR_URL = "/peerify/default-band-avatar.png";
+export const PEERIFY_DEFAULT_VENUE_AVATAR_URL = "/peerify/default-venue-avatar.png";
+
+const PEERIFY_LEGACY_DEFAULT_AVATAR_URLS = new Set([
+    "/peerify/default-artist-avatar.svg",
+    "/images/default-picture.png",
+    "/images/default-user-picture.png",
+]);
+
 export type PeerifyMusicLinkKey =
     | "bandcamp"
     | "spotify"
@@ -320,6 +331,27 @@ export const isPeerifyArtistIdentity = (circle?: Partial<Circle> | null): boolea
 export const isPeerifyVenueIdentity = (circle?: Partial<Circle> | null): boolean => {
     const peerifyMetadata = getPeerifyMetadata(circle);
     return peerifyMetadata.managedIdentity === true && peerifyMetadata.identityType === "venue";
+};
+
+export const getPeerifyDefaultAvatarUrl = (identityType?: PeerifyIdentityType): string => {
+    if (identityType === "venue") {
+        return PEERIFY_DEFAULT_VENUE_AVATAR_URL;
+    }
+
+    if (identityType === "band") {
+        return PEERIFY_DEFAULT_BAND_AVATAR_URL;
+    }
+
+    return PEERIFY_DEFAULT_ARTIST_AVATAR_URL;
+};
+
+export const getPeerifyIdentityAvatarUrl = (circle?: Partial<Circle> | null): string => {
+    const currentPictureUrl = asString(circle?.picture?.url);
+    if (currentPictureUrl && !PEERIFY_LEGACY_DEFAULT_AVATAR_URLS.has(currentPictureUrl)) {
+        return currentPictureUrl;
+    }
+
+    return getPeerifyDefaultAvatarUrl(getPeerifyIdentityType(circle));
 };
 
 export const getPeerifyArtistIdentityLabel = (circle?: Partial<Circle> | null): string => {

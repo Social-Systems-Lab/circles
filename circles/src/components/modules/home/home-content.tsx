@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import {
     getPeerifyArtistProfile,
     getPeerifyArtistTypeBadges,
+    getPeerifyIdentityAvatarUrl,
     isPeerifyArtistIdentity,
     isPeerifyManagedIdentity,
 } from "@/lib/peerify/artist-profile";
@@ -79,9 +80,9 @@ export default function HomeContent({
     const showManagedDraftBanner =
         authorizedToEdit && isPeerifyManagedArtistIdentity && (circle.publishStatus ?? "published") === "draft";
     const showPledgesDashboardButton = authorizedToEdit && isPeerifyManagedArtistIdentity && Boolean(circle.handle);
-    const circlePictureUrl =
-        circle?.picture?.url ??
-        (isPeerifyManagedArtistIdentity ? "/peerify/default-artist-avatar.svg" : "/images/default-picture.png");
+    const circlePictureUrl = isPeerifyManagedArtistIdentity
+        ? getPeerifyIdentityAvatarUrl(circle)
+        : circle?.picture?.url ?? "/images/default-picture.png";
     const isMember = useMemo(() => {
         if (!user) return false;
         const membership = user.memberships?.find((m) => m.circleId === circle._id);

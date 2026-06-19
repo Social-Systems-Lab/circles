@@ -7,10 +7,13 @@ import { PublishManagedProfileButton } from "@/components/profiles/publish-manag
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
-import { getPeerifyArtistIdentityLabel, isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
-import { Circle } from "@/models/models";
+import {
+    getPeerifyArtistIdentityLabel,
+    getPeerifyIdentityAvatarUrl,
+    PEERIFY_DEFAULT_PROFILE_AVATAR_URL,
+    isPeerifyManagedIdentity,
+} from "@/lib/peerify/artist-profile";
 
-const getAvatarUrl = (circle: Circle, fallback: string) => circle.picture?.url ?? fallback;
 const getStatusLabel = (status: string) => {
     if (status === "published") {
         return "Published";
@@ -41,7 +44,7 @@ export default async function ProfilesPage() {
             label: "Personal profile",
             status: user.publishStatus ?? "published",
             canPublish: false,
-            avatarFallback: "/images/default-user-picture.png",
+            avatarUrl: user.picture?.url ?? PEERIFY_DEFAULT_PROFILE_AVATAR_URL,
             editHref: `/circles/${user.handle}/settings/about`,
             pledgesHref: null,
         },
@@ -50,7 +53,7 @@ export default async function ProfilesPage() {
             label: getPeerifyArtistIdentityLabel(identity),
             status: identity.publishStatus ?? "published",
             canPublish: (identity.publishStatus ?? "published") === "draft",
-            avatarFallback: "/peerify/default-artist-avatar.svg",
+            avatarUrl: getPeerifyIdentityAvatarUrl(identity),
             editHref: `/circles/${identity.handle}/settings/about`,
             pledgesHref: `/circles/${identity.handle}/settings/pledges`,
         })),
@@ -76,7 +79,7 @@ export default async function ProfilesPage() {
                             className="flex min-w-0 flex-1 items-center gap-3"
                         >
                             <Image
-                                src={getAvatarUrl(row.circle, row.avatarFallback)}
+                                src={row.avatarUrl}
                                 alt={row.circle.name ?? "Profile"}
                                 width={48}
                                 height={48}
