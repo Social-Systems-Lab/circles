@@ -277,11 +277,13 @@ const ArtistTextareaField = ({
 
 const PeerifySelectField = ({
     label,
+    description,
     value,
     onChange,
     options,
 }: {
     label: string;
+    description?: string;
     value?: string;
     onChange: (value: string) => void;
     options: Array<{ value: string; label: string }>;
@@ -299,21 +301,27 @@ const PeerifySelectField = ({
                 </option>
             ))}
         </select>
+        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
     </div>
 );
 
 const PeerifyCheckboxField = ({
     label,
+    description,
     value,
     onChange,
 }: {
     label: string;
+    description?: string;
     value?: boolean;
     onChange: (value: boolean) => void;
 }) => (
     <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
         <Checkbox checked={value === true} onCheckedChange={(checked) => onChange(checked === true)} />
-        <span>{label}</span>
+        <span>
+            <span className="block">{label}</span>
+            {description ? <span className="mt-1 block text-muted-foreground">{description}</span> : null}
+        </span>
     </label>
 );
 
@@ -1195,21 +1203,36 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name="peerifyVenueProfile.capacityStanding"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextField label="Standing capacity" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextField
+                                                label="Standing capacity"
+                                                description="Maximum comfortable standing audience."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.capacitySeated"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextField label="Seated capacity" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextField
+                                                label="Seated capacity"
+                                                description="Maximum comfortable seated audience."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.typicalShowCapacity"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextField label="Typical show capacity" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextField
+                                                label="Typical show capacity"
+                                                description="The audience size that usually works best here."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                 </div>
@@ -1220,6 +1243,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <ArtistTextareaField
                                                 label="Accessibility notes"
+                                                description="Step-free access, toilets, seating, sensory considerations, or other access notes."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1229,7 +1253,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name="peerifyVenueProfile.agePolicy"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="Age policy" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="Age policy"
+                                                description="Any age restrictions, ID requirements, or family-friendly notes."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                 </div>
@@ -1244,6 +1273,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <PeerifyCheckboxField
                                                 label="PA available"
+                                                description="Check if the venue has a usable sound system."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1255,6 +1285,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <PeerifyCheckboxField
                                                 label="In-house engineer"
+                                                description="Check if someone can run sound during the event."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1266,28 +1297,48 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name="peerifyVenueProfile.backline"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="Backline / instruments" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="Backline / instruments"
+                                                description="List amps, drums, keys, stands, mics, DI boxes, or other gear artists can use."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.lighting"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="Lighting" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="Lighting"
+                                                description="Describe basic stage or room lighting."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.loadInNotes"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="Load-in notes" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="Load-in notes"
+                                                description="Entrance, stairs, lift access, loading times, or soundcheck notes."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.parkingNotes"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="Parking notes" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="Parking notes"
+                                                description="Parking, unloading, or public transport notes."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                 </div>
@@ -1313,14 +1364,24 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                 name="peerifyVenueProfile.minimumFee"
                                                 control={form.control}
                                                 render={({ field }) => (
-                                                    <ArtistTextField label="Minimum fee" value={field.value} onChange={field.onChange} />
+                                                    <ArtistTextField
+                                                        label="Minimum fee"
+                                                        description="The minimum amount the venue expects to guarantee or help raise for the artist."
+                                                        value={field.value}
+                                                        onChange={field.onChange}
+                                                    />
                                                 )}
                                             />
                                             <Controller
                                                 name="peerifyVenueProfile.doorSplit"
                                                 control={form.control}
                                                 render={({ field }) => (
-                                                    <ArtistTextField label="Door split" value={field.value} onChange={field.onChange} />
+                                                    <ArtistTextField
+                                                        label="Door split"
+                                                        description="How ticket income is split after agreed costs, e.g. 70/30 artist/venue."
+                                                        value={field.value}
+                                                        onChange={field.onChange}
+                                                    />
                                                 )}
                                             />
                                             <Controller
@@ -1329,6 +1390,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                 render={({ field }) => (
                                                     <ArtistTextField
                                                         label="House cut / production fee"
+                                                        description="Any fixed venue fee, production cost, or percentage taken before the door split."
                                                         value={field.value}
                                                         onChange={field.onChange}
                                                     />
@@ -1340,6 +1402,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                 render={({ field }) => (
                                                     <PeerifySelectField
                                                         label="Peerify ticket fee covered by"
+                                                        description="Who absorbs the Peerify/platform ticket fee if tickets are sold through Peerify."
                                                         options={PEERIFY_FEE_COVERED_BY_OPTIONS}
                                                         value={field.value}
                                                         onChange={field.onChange}
@@ -1350,7 +1413,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                 name="peerifyVenueProfile.availableDays"
                                                 control={form.control}
                                                 render={({ field }) => (
-                                                    <ArtistTextField label="Available days" value={field.value} onChange={field.onChange} />
+                                                    <ArtistTextField
+                                                        label="Available days"
+                                                        description="Typical days or times you host shows, e.g. Thursdays, weekends, monthly Sundays."
+                                                        value={field.value}
+                                                        onChange={field.onChange}
+                                                    />
                                                 )}
                                             />
                                             <Controller
@@ -1359,6 +1427,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                 render={({ field }) => (
                                                     <ArtistTextField
                                                         label="Typical response time"
+                                                        description="How quickly artists can expect a reply."
                                                         value={field.value}
                                                         onChange={field.onChange}
                                                     />
@@ -1369,7 +1438,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             name="peerifyVenueProfile.bookingNote"
                                             control={form.control}
                                             render={({ field }) => (
-                                                <ArtistTextareaField label="Booking note" value={field.value} onChange={field.onChange} />
+                                                <ArtistTextareaField
+                                                    label="Booking note"
+                                                    description="Anything artists should know before sending an enquiry."
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                />
                                             )}
                                         />
                                     </div>
@@ -1383,14 +1457,24 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name="peerifyVenueProfile.greenRoom"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <PeerifyCheckboxField label="Green room" value={field.value} onChange={field.onChange} />
+                                            <PeerifyCheckboxField
+                                                label="Green room"
+                                                description="Private artist room or quiet backstage space."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.merchTable"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <PeerifyCheckboxField label="Merch table" value={field.value} onChange={field.onChange} />
+                                            <PeerifyCheckboxField
+                                                label="Merch table"
+                                                description="Whether artists can sell merch."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                 </div>
@@ -1399,7 +1483,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name="peerifyVenueProfile.foodDrink"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="Food/drink" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="Food/drink"
+                                                description="What the venue can offer artists and crew."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
@@ -1408,6 +1497,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <ArtistTextareaField
                                                 label="Accommodation help"
+                                                description="Whether the venue can help arrange a bed, host, hotel discount, or local contact."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1419,6 +1509,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <ArtistTextareaField
                                                 label="Local transport help"
+                                                description="Whether the venue can help with pickup, local rides, or transport advice."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1430,6 +1521,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <ArtistTextareaField
                                                 label="Guest list policy"
+                                                description="How many guest spots are usually available, if any."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1445,14 +1537,24 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name="peerifyVenueProfile.houseRules"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextareaField label="House rules" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextareaField
+                                                label="House rules"
+                                                description="Important rules artists should know before confirming a show."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
                                         name="peerifyVenueProfile.soundCurfew"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <ArtistTextField label="Sound curfew" value={field.value} onChange={field.onChange} />
+                                            <ArtistTextField
+                                                label="Sound curfew"
+                                                description="When amplified music must stop."
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                            />
                                         )}
                                     />
                                     <Controller
@@ -1461,6 +1563,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <ArtistTextareaField
                                                 label="Cancellation policy"
+                                                description="How cancellations, postponements, or bad weather are handled."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1472,6 +1575,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         render={({ field }) => (
                                             <ArtistTextareaField
                                                 label="Safety / conduct policy"
+                                                description="Audience, artist, harassment, security, or safer-space expectations."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
