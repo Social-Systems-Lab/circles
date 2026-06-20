@@ -11,6 +11,7 @@ import { CircleVerificationThreadCard } from "./circle-verification-thread-card"
 import { CircleStructureCard } from "./circle-structure-card";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -53,6 +54,7 @@ export default async function AboutSettingsPage(props: PageProps) {
 
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";
+    const isPeerifyManagedCircle = isPeerifyManagedIdentity(circle);
     const isDraft = publishStatus === "draft";
     const resolvedCircleLevel = circle.circleLevel ?? (circle.parentCircleId ? "profile_child" : "top_level");
     const isProfileCircle = resolvedCircleLevel === "profile_child";
@@ -122,7 +124,7 @@ export default async function AboutSettingsPage(props: PageProps) {
             {showWorkflowCard && !isProfileCircle && publishStatus === "pending_verification" ? (
                 <CircleVerificationThreadCard circleId={String(circle._id)} />
             ) : null}
-            {showWorkflowCard && circle._id ? (
+            {showWorkflowCard && !isPeerifyManagedCircle && circle._id ? (
                 <CircleStructureCard
                     circleId={String(circle._id)}
                     adminCount={adminMembers.length}

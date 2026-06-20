@@ -743,6 +743,8 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                     </CardContent>
                 </Card>
 
+                {renderSaveButton()}
+
                 {canEditPeerifyArtistProfile ? (
                     <Card>
                         <CardHeader>
