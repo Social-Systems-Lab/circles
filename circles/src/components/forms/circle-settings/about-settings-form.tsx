@@ -344,9 +344,9 @@ const VENUE_TYPE_OPTIONS = [
 ];
 
 const ADDRESS_VISIBILITY_OPTIONS = [
-    { value: "private", label: "Private, show city/area only" },
-    { value: "city_area", label: "Approximate/city-area" },
-    { value: "public", label: "Public" },
+    { value: "private", label: "Private — show city/area only" },
+    { value: "city_area", label: "Approximate — show general area" },
+    { value: "public", label: "Public — show exact address/pin" },
 ];
 
 const PEERIFY_FEE_COVERED_BY_OPTIONS = [
@@ -410,6 +410,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
     const peerifyArtistIntent = form.watch("peerifyArtistIntent");
     const bookingEnabled = form.watch("peerifyArtistProfile.bookingEnabled");
     const venueBookingEnabled = form.watch("peerifyVenueProfile.bookingEnquiriesEnabled");
+    const venueAddressVisibility = form.watch("peerifyVenueProfile.addressVisibility");
 
     const onSubmit = async (data: AboutSettingsFormValues) => {
         setIsSubmitting(true);
@@ -1150,6 +1151,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             <ArtistTextField
                                                 label="Public city / area"
                                                 placeholder="Stockholm, Sodermalm"
+                                                description="Shown publicly when the full address is private or approximate. This text does not move the map marker."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1162,6 +1164,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             <ArtistTextField
                                                 label="Full address"
                                                 placeholder="Street address"
+                                                description="Saved as venue information. It is only shown publicly when public location display allows exact address/pin, and typing here does not move the map marker."
                                                 value={field.value}
                                                 onChange={field.onChange}
                                             />
@@ -1172,7 +1175,8 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         control={form.control}
                                         render={({ field }) => (
                                             <PeerifySelectField
-                                                label="Address visibility"
+                                                label="Public location display"
+                                                description="Controls how precisely this venue is shown publicly. The map location can still be saved privately for discovery."
                                                 options={ADDRESS_VISIBILITY_OPTIONS}
                                                 value={field.value}
                                                 onChange={field.onChange}
@@ -1180,6 +1184,11 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         )}
                                     />
                                     <div className="md:col-span-2">
+                                        <div className="mb-3 rounded-lg border bg-slate-50 p-3 text-sm text-muted-foreground">
+                                            {venueAddressVisibility === "public"
+                                                ? "Public location display is set to exact. The saved map location can be shown publicly as the venue pin."
+                                                : "Public location display is private or approximate. Use the map to save the venue location for discovery, but Peerify should not show the exact address publicly."}
+                                        </div>
                                         <Controller
                                             name="location"
                                             control={form.control as unknown as Control}
@@ -1190,7 +1199,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                         type: "location",
                                                         label: "Map location",
                                                         description:
-                                                            "Used to place the venue on the map. The exact address is only shown publicly if address visibility allows it.",
+                                                            "Use the map to place the venue. If the venue is private or approximate, Peerify should not show the exact address publicly.",
                                                     }}
                                                     formField={field}
                                                     control={form.control as unknown as Control}
@@ -1633,7 +1642,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Visibility</CardTitle>
+                        <CardTitle>Access & permissions</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <Controller

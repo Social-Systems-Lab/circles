@@ -628,7 +628,9 @@ const MapBox = ({
                         existingMarker.dataset.zIndex = `${getStableMarkerZIndex(lngLat, markerId)}`;
                     }
                 } else {
-                    // Create new marker
+                    // TODO: Peerify private/approximate venues currently use exact saved coordinates for point
+                    // placement. Add a later map UI pass for approximate circle/radius rendering before treating
+                    // private venue placement as visually approximate.
                     const markerElement = createMarkerElement(item, onMarkerClick, openMarkerPopup, closeMarkerPopup);
                     const lngLat = getLngLatParts(item.location.lngLat);
                     if (lngLat) {
