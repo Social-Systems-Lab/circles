@@ -7,7 +7,11 @@ import {
     createAttachCircleRequest,
     declineAttachCircleRequest,
 } from "@/lib/data/circle-attach";
-import { approveDetachCircleRequest, createDetachCircleRequest, declineDetachCircleRequest } from "@/lib/data/circle-detach";
+import {
+    approveDetachCircleRequest,
+    createDetachCircleRequest,
+    declineDetachCircleRequest,
+} from "@/lib/data/circle-detach";
 import { getUserPrivate } from "@/lib/data/user";
 import {
     addApplicantVerificationMessage,
@@ -23,7 +27,7 @@ import {
     sendVerificationRequestNotification,
 } from "@/lib/data/notifications";
 import { getMembers } from "@/lib/data/member";
-import { Circle, FileInfo, FormSubmitResponse, Media, UserPrivate } from "@/models/models"; // Added Media, FileInfo
+import { Circle, FileInfo, FormSubmitResponse, Location, Media, UserPrivate } from "@/models/models"; // Added Media, FileInfo
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
@@ -56,6 +60,46 @@ const normalizeWebsiteUrl = (url?: string) => {
 const normalizeOfficialEmail = (email?: string) => {
     const normalized = email?.trim().toLowerCase();
     return normalized ? normalized : undefined;
+};
+
+const isValidCoordinate = (value: unknown, min: number, max: number): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+
+const normalizePeerifyVenueLocation = (
+    value: unknown,
+    addressVisibility: PeerifyVenueProfile["addressVisibility"],
+): Location | undefined => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return undefined;
+    }
+
+    const input = value as Partial<Location>;
+    const precision =
+        typeof input.precision === "number" && Number.isFinite(input.precision)
+            ? Math.min(Math.max(Math.trunc(input.precision), 0), 4)
+            : undefined;
+    const lngLat =
+        isValidCoordinate(input.lngLat?.lng, -180, 180) && isValidCoordinate(input.lngLat?.lat, -90, 90)
+            ? { lng: input.lngLat.lng, lat: input.lngLat.lat }
+            : undefined;
+    const publicPrecision = addressVisibility === "public" ? (precision ?? 4) : Math.min(precision ?? 2, 2);
+    const location: Location = {
+        precision: publicPrecision,
+        country: typeof input.country === "string" ? input.country.trim() || undefined : undefined,
+        region: typeof input.region === "string" ? input.region.trim() || undefined : undefined,
+        city: typeof input.city === "string" ? input.city.trim() || undefined : undefined,
+        street:
+            addressVisibility === "public" && typeof input.street === "string"
+                ? input.street.trim() || undefined
+                : undefined,
+        lngLat,
+    };
+
+    if (!location.country && !location.region && !location.city && !location.street && !location.lngLat) {
+        return undefined;
+    }
+
+    return location;
 };
 
 const validateAboutImageUpload = (file: any): string | null => {
@@ -130,6 +174,7 @@ async function updateCirclePublishStatus(circleId: string, publishStatus: "publi
     revalidatePath(circlePath);
     revalidatePath(`${circlePath}settings/about`);
     revalidatePath("/circles");
+    revalidatePath("/explore");
 
     return { success: true, message: "Circle workflow updated successfully" };
 }
@@ -244,7 +289,10 @@ export async function createDetachCircleRequestAction(circleId: string): Promise
 
     try {
         const result = await createDetachCircleRequest({ circleId, requestedByDid: userDid });
-        await revalidateCircleDetachPaths(result.circle._id?.toString() ?? circleId, result.parentCircle?._id?.toString?.());
+        await revalidateCircleDetachPaths(
+            result.circle._id?.toString() ?? circleId,
+            result.parentCircle?._id?.toString?.(),
+        );
 
         if (result.status === "pending" && result.request) {
             const requester = await getUserPrivate(userDid);
@@ -336,9 +384,9 @@ export async function createAttachCircleRequestAction(
         const targetAdminDids = await getMembers(result.toParentCircle._id?.toString?.() ?? "")
             .then((members) => members.filter((member) => member.userGroups?.includes("admins")))
             .then((members) => members.map((member) => member.userDid));
-        const targetAdmins = (
-            await Promise.all(targetAdminDids.map((did) => getUserPrivate(did)))
-        ).filter((admin): admin is UserPrivate => Boolean(admin?.did));
+        const targetAdmins = (await Promise.all(targetAdminDids.map((did) => getUserPrivate(did)))).filter(
+            (admin): admin is UserPrivate => Boolean(admin?.did),
+        );
 
         if (requester && targetAdmins.length > 0) {
             const targetCirclePath = await getCirclePath(result.toParentCircle);
@@ -548,7 +596,9 @@ export async function saveAbout(values: {
     circleUpdateData.websiteUrl = normalizedWebsite;
     const representsOrganization = values.representsOrganization === true;
     circleUpdateData.representsOrganization = representsOrganization;
-    circleUpdateData.organizationName = representsOrganization ? values.organizationName?.trim() || undefined : undefined;
+    circleUpdateData.organizationName = representsOrganization
+        ? values.organizationName?.trim() || undefined
+        : undefined;
     circleUpdateData.officialEmail = representsOrganization ? normalizeOfficialEmail(values.officialEmail) : undefined;
 
     // check if user is authorized to edit circle settings
@@ -577,11 +627,15 @@ export async function saveAbout(values: {
 
         if (existingCircle.circleType === "user") {
             const existingMetadata =
-                existingCircle.metadata && typeof existingCircle.metadata === "object" && !Array.isArray(existingCircle.metadata)
+                existingCircle.metadata &&
+                typeof existingCircle.metadata === "object" &&
+                !Array.isArray(existingCircle.metadata)
                     ? { ...(existingCircle.metadata as Record<string, unknown>) }
                     : {};
             const existingPeerify =
-                existingMetadata.peerify && typeof existingMetadata.peerify === "object" && !Array.isArray(existingMetadata.peerify)
+                existingMetadata.peerify &&
+                typeof existingMetadata.peerify === "object" &&
+                !Array.isArray(existingMetadata.peerify)
                     ? { ...(existingMetadata.peerify as Record<string, unknown>) }
                     : {};
 
@@ -602,18 +656,27 @@ export async function saveAbout(values: {
             circleUpdateData.metadata = existingMetadata;
         } else if (isPeerifyManagedIdentity(existingCircle)) {
             const existingMetadata =
-                existingCircle.metadata && typeof existingCircle.metadata === "object" && !Array.isArray(existingCircle.metadata)
+                existingCircle.metadata &&
+                typeof existingCircle.metadata === "object" &&
+                !Array.isArray(existingCircle.metadata)
                     ? { ...(existingCircle.metadata as Record<string, unknown>) }
                     : {};
             const existingPeerify =
-                existingMetadata.peerify && typeof existingMetadata.peerify === "object" && !Array.isArray(existingMetadata.peerify)
+                existingMetadata.peerify &&
+                typeof existingMetadata.peerify === "object" &&
+                !Array.isArray(existingMetadata.peerify)
                     ? { ...(existingMetadata.peerify as Record<string, unknown>) }
                     : {};
 
             existingPeerify.managedIdentity = true;
             existingPeerify.identityType = getPeerifyIdentityType(existingCircle);
             if (isPeerifyVenueIdentity(existingCircle)) {
-                existingPeerify.venueProfile = normalizePeerifyVenueProfile(values.peerifyVenueProfile);
+                const venueProfile = normalizePeerifyVenueProfile(values.peerifyVenueProfile);
+                existingPeerify.venueProfile = venueProfile;
+                circleUpdateData.location = normalizePeerifyVenueLocation(
+                    values.location,
+                    venueProfile.addressVisibility,
+                );
             } else {
                 existingPeerify.artistProfile = normalizePeerifyArtistProfile(values.peerifyArtistProfile);
             }
@@ -719,6 +782,7 @@ export async function saveAbout(values: {
         revalidatePath(`${previousCirclePath}settings/about`);
         revalidatePath(circlePath);
         revalidatePath(`${circlePath}settings/about`);
+        revalidatePath("/explore");
 
         // Check if handle was updated and return it for potential redirect
         const handleChanged = values.handle && values.handle !== existingCircle.handle;

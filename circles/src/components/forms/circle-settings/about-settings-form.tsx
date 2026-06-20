@@ -243,7 +243,12 @@ const ArtistTextField = ({
 }) => (
     <div className="space-y-2">
         <Label>{label}</Label>
-        <Input type={type} placeholder={placeholder} value={value || ""} onChange={(event) => onChange(event.target.value)} />
+        <Input
+            type={type}
+            placeholder={placeholder}
+            value={value || ""}
+            onChange={(event) => onChange(event.target.value)}
+        />
         {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
     </div>
 );
@@ -739,7 +744,6 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                 />
                             )}
                         />
-
                     </CardContent>
                 </Card>
 
@@ -763,11 +767,17 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         <div className="space-y-2">
                                             <Label>Enable artist profile</Label>
                                             <div className="flex items-center gap-3 rounded-lg border p-4">
-                                                <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                />
                                                 <div>
-                                                    <p className="font-medium">This profile represents an artist or music project</p>
+                                                    <p className="font-medium">
+                                                        This profile represents an artist or music project
+                                                    </p>
                                                     <p className="text-sm text-muted-foreground">
-                                                        This turns on Peerify artist metadata and public artist sections.
+                                                        This turns on Peerify artist metadata and public artist
+                                                        sections.
                                                     </p>
                                                 </div>
                                             </div>
@@ -895,7 +905,10 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             <div className="space-y-2 rounded-lg border p-4">
                                                 <Label>Booking enquiries</Label>
                                                 <div className="flex items-center gap-3">
-                                                    <Checkbox checked={field.value} onCheckedChange={(checked) => field.onChange(checked === true)} />
+                                                    <Checkbox
+                                                        checked={field.value}
+                                                        onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                    />
                                                     <p className="text-sm text-muted-foreground">
                                                         Show a public booking enquiry flow on this artist profile.
                                                     </p>
@@ -916,7 +929,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                             <div className="flex items-center gap-3">
                                                                 <Checkbox
                                                                     checked={field.value}
-                                                                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                                    onCheckedChange={(checked) =>
+                                                                        field.onChange(checked === true)
+                                                                    }
                                                                 />
                                                                 <p className="text-sm text-muted-foreground">
                                                                     Limit public bookings to local events.
@@ -1014,7 +1029,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                         <label className="flex items-start gap-3 rounded-lg border bg-white p-3 text-sm">
                                                             <Checkbox
                                                                 checked={field.value}
-                                                                onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                                onCheckedChange={(checked) =>
+                                                                    field.onChange(checked === true)
+                                                                }
                                                             />
                                                             <span>Needs accommodation</span>
                                                         </label>
@@ -1027,7 +1044,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                         <label className="flex items-start gap-3 rounded-lg border bg-white p-3 text-sm">
                                                             <Checkbox
                                                                 checked={field.value}
-                                                                onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                                onCheckedChange={(checked) =>
+                                                                    field.onChange(checked === true)
+                                                                }
                                                             />
                                                             <span>Needs transport</span>
                                                         </label>
@@ -1040,7 +1059,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                                         <label className="flex items-start gap-3 rounded-lg border bg-white p-3 text-sm">
                                                             <Checkbox
                                                                 checked={field.value}
-                                                                onCheckedChange={(checked) => field.onChange(checked === true)}
+                                                                onCheckedChange={(checked) =>
+                                                                    field.onChange(checked === true)
+                                                                }
                                                             />
                                                             <span>Needs meal / hospitality</span>
                                                         </label>
@@ -1158,6 +1179,25 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             />
                                         )}
                                     />
+                                    <div className="md:col-span-2">
+                                        <Controller
+                                            name="location"
+                                            control={form.control as unknown as Control}
+                                            render={({ field }) => (
+                                                <DynamicLocationField
+                                                    field={{
+                                                        name: "location",
+                                                        type: "location",
+                                                        label: "Map location",
+                                                        description:
+                                                            "Used to place the venue on the map. The exact address is only shown publicly if address visibility allows it.",
+                                                    }}
+                                                    formField={field}
+                                                    control={form.control as unknown as Control}
+                                                />
+                                            )}
+                                        />
+                                    </div>
                                     <Controller
                                         name="peerifyVenueProfile.website"
                                         control={form.control}
@@ -1710,32 +1750,34 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
 
                 {renderSaveButton()}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Location</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Controller
-                            name="location"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicLocationField
-                                    field={{
-                                        name: "location",
-                                        type: "location",
-                                        label: "Location",
-                                        description: {
-                                            circle: "Specify the location of the circle.",
-                                            user: "Specify your location. Your location will be shared with other users.",
-                                        },
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                    </CardContent>
-                </Card>
+                {!canEditPeerifyVenueProfile ? (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Location</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Controller
+                                name="location"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicLocationField
+                                        field={{
+                                            name: "location",
+                                            type: "location",
+                                            label: "Location",
+                                            description: {
+                                                circle: "Specify the location of the circle.",
+                                                user: "Specify your location. Your location will be shared with other users.",
+                                            },
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )}
+                            />
+                        </CardContent>
+                    </Card>
+                ) : null}
 
                 <Card>
                     <CardHeader>
