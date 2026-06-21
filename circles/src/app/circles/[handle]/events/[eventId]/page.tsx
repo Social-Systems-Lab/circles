@@ -8,7 +8,7 @@ import EventDetail from "@/components/modules/events/event-detail";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
 
 type PageProps = {
     params: Promise<{ handle: string; eventId: string }>;
@@ -26,8 +26,8 @@ export default async function EventDetailPage(props: PageProps) {
     }
 
     const userDid = await getAuthenticatedUserDid();
-    const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
-    if (!isPublicPeerifyVenueEvents) {
+    const isPublicPeerifyManagedEvents = !userDid && isPeerifyManagedIdentity(circle);
+    if (!isPublicPeerifyManagedEvents) {
         if (!userDid) {
             notFound();
         }

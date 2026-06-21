@@ -6,7 +6,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import EventsTabs from "./events-tabs";
 import { Circle } from "@/models/models";
-import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
 
 type Props = {
     circle: Circle;
@@ -14,9 +14,9 @@ type Props = {
 
 export default async function EventsModule({ circle }: Props) {
     const userDid = await getAuthenticatedUserDid();
-    const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
+    const isPublicPeerifyManagedEvents = !userDid && isPeerifyManagedIdentity(circle);
 
-    if (!userDid && !isPublicPeerifyVenueEvents) {
+    if (!userDid && !isPublicPeerifyManagedEvents) {
         return (
             <div className="p-4">
                 <h2 className="mb-2 text-xl font-semibold">Events</h2>
@@ -25,7 +25,7 @@ export default async function EventsModule({ circle }: Props) {
         );
     }
 
-    if (!isPublicPeerifyVenueEvents) {
+    if (!isPublicPeerifyManagedEvents) {
         const canViewEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.view);
         if (!canViewEvents) {
             return (

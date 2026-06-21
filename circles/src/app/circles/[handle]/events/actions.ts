@@ -52,7 +52,7 @@ import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/di
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
 import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
-import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
+import { isPeerifyManagedIdentity } from "@/lib/peerify/artist-profile";
 
 // ----- Types -----
 
@@ -269,8 +269,8 @@ export async function getEventsAction(
                   }
                 : undefined;
 
-        const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
-        if (isPublicPeerifyVenueEvents) {
+        const isPublicPeerifyManagedEvents = !userDid && isPeerifyManagedIdentity(circle);
+        if (isPublicPeerifyManagedEvents) {
             const events = await getPublicEventsByCircleId(circle._id!.toString(), range);
             return { events };
         }
@@ -304,8 +304,8 @@ export async function getEventAction(circleHandle: string, eventId: string): Pro
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return null;
 
-        const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
-        if (isPublicPeerifyVenueEvents) {
+        const isPublicPeerifyManagedEvents = !userDid && isPeerifyManagedIdentity(circle);
+        if (isPublicPeerifyManagedEvents) {
             return getPublicEventByIdForCircle(circle._id!.toString(), eventId);
         }
 
