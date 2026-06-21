@@ -6,6 +6,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import EventsTabs from "./events-tabs";
 import { Circle } from "@/models/models";
+import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
 
 type Props = {
     circle: Circle;
@@ -13,8 +14,9 @@ type Props = {
 
 export default async function EventsModule({ circle }: Props) {
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        // Not authenticated - follow Tasks pattern: show nothing or a simple message
+    const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
+
+    if (!userDid && !isPublicPeerifyVenueEvents) {
         return (
             <div className="p-4">
                 <h2 className="mb-2 text-xl font-semibold">Events</h2>
@@ -23,17 +25,21 @@ export default async function EventsModule({ circle }: Props) {
         );
     }
 
-    const canViewEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.view);
-    if (!canViewEvents) {
-        return (
-            <div className="p-6 text-center">
-                <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
-                <p className="text-gray-600">You don&apos;t have permission to view events in this circle.</p>
-            </div>
-        );
+    if (!isPublicPeerifyVenueEvents) {
+        const canViewEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.view);
+        if (!canViewEvents) {
+            return (
+                <div className="p-6 text-center">
+                    <h2 className="mb-2 text-xl font-semibold">Access Denied</h2>
+                    <p className="text-gray-600">You don&apos;t have permission to view events in this circle.</p>
+                </div>
+            );
+        }
     }
 
-    const canCreateEvents = await isAuthorized(userDid, circle._id!.toString(), features.events.create);
+    const canCreateEvents = userDid
+        ? await isAuthorized(userDid, circle._id!.toString(), features.events.create)
+        : false;
 
     const now = new Date();
     const lastYear = new Date(now);
@@ -45,7 +51,7 @@ export default async function EventsModule({ circle }: Props) {
         circle.handle!,
         { from: lastYear.toISOString(), to: nextYear.toISOString() },
         true,
-        true
+        true,
     );
 
     return (

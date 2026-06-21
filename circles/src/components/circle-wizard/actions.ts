@@ -12,7 +12,7 @@ import { Circle, CircleLevel, CircleType, Media, FileInfo, UserPrivate } from "@
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUser, getUserPrivate } from "@/lib/data/user"; // Corrected import for getUserPrivate
-import { features } from "@/lib/data/constants";
+import { features, getDefaultModules } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
 import { revalidatePath } from "next/cache";
@@ -271,7 +271,13 @@ export async function createPeerifyManagedArtistIdentityAction(input: {
             return { success: false, message: "Could not resolve your profile circle" };
         }
 
-        const authorized = await authorizeCircleCreation(currentUser, userDid, "circle", "profile_child", parentCircleId);
+        const authorized = await authorizeCircleCreation(
+            currentUser,
+            userDid,
+            "circle",
+            "profile_child",
+            parentCircleId,
+        );
         if (!authorized) {
             return { success: false, message: "You are not authorized to create new circles" };
         }
@@ -384,7 +390,13 @@ export async function createPeerifyManagedVenueIdentityAction(input: {
             return { success: false, message: "Could not resolve your profile circle" };
         }
 
-        const authorized = await authorizeCircleCreation(currentUser, userDid, "circle", "profile_child", parentCircleId);
+        const authorized = await authorizeCircleCreation(
+            currentUser,
+            userDid,
+            "circle",
+            "profile_child",
+            parentCircleId,
+        );
         if (!authorized) {
             return { success: false, message: "You are not authorized to create new circles" };
         }
@@ -414,6 +426,7 @@ export async function createPeerifyManagedVenueIdentityAction(input: {
                 createdBy: userDid,
                 publishStatus: "draft",
                 parentCircleId,
+                enabledModules: Array.from(new Set([...getDefaultModules("circle"), "events"])),
                 picture: { url: getPeerifyDefaultAvatarUrl("venue") },
                 causes: [],
                 skills: [],

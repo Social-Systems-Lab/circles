@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useTransition } from "react";
@@ -119,8 +118,8 @@ export default function EventDetail({
     const locationLabel = event.isVirtual && !locationText ? "Virtual" : locationText;
     const hasMapLocation = Boolean(event.location?.lngLat);
     const resolvedDistance = hasMapLocation
-        ? (event as any).distance ??
-          (event.location?.lngLat && user ? haversineKm(event.location.lngLat, getUserLocation(user)) : undefined)
+        ? ((event as any).distance ??
+          (event.location?.lngLat && user ? haversineKm(event.location.lngLat, getUserLocation(user)) : undefined))
         : undefined;
 
     const handleAddressClick = () => {
@@ -341,19 +340,20 @@ export default function EventDetail({
                                                 title="Zoom to location"
                                             >
                                                 <MapPin className="mr-1 h-3 w-3 text-primary" />
-                                                <span className="truncate max-w-[200px]">
+                                                <span className="max-w-[200px] truncate">
                                                     {event.isVirtual && !locationText ? "Virtual" : locationText}
                                                     {event.isHybrid ? " · Hybrid" : ""}
                                                 </span>
                                             </button>
                                         </HoverCardTrigger>
-                                        {resolvedDistance !== undefined && resolvedDistance !== Number.POSITIVE_INFINITY && (
-                                            <HoverCardContent className="w-auto p-2" side="top" align="center">
-                                                <div className="text-xs font-medium">
-                                                    {getDistanceString(resolvedDistance)} from your location
-                                                </div>
-                                            </HoverCardContent>
-                                        )}
+                                        {resolvedDistance !== undefined &&
+                                            resolvedDistance !== Number.POSITIVE_INFINITY && (
+                                                <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                                    <div className="text-xs font-medium">
+                                                        {getDistanceString(resolvedDistance)} from your location
+                                                    </div>
+                                                </HoverCardContent>
+                                            )}
                                     </HoverCard>
                                 ) : (
                                     <span>
@@ -369,37 +369,46 @@ export default function EventDetail({
                 <div className="px-4">
                     <div className="rounded-md border bg-white/60 p-3">
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
-                        <div className="flex flex-wrap gap-2">
-                            {event.userRsvpStatus === "going" ? (
-                                <>
-                                    <Button size="sm" variant="destructive" disabled={isPending} onClick={onCancelRsvp}>
-                                        Cancel RSVP
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                        I&apos;m going
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            )}
-                        </div>
+                        {user ? (
+                            <div className="flex flex-wrap gap-2">
+                                {event.userRsvpStatus === "going" ? (
+                                    <>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={isPending}
+                                            onClick={onCancelRsvp}
+                                        >
+                                            Cancel RSVP
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
+                                            I&apos;m going
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-xs text-muted-foreground">Sign in to RSVP.</div>
+                        )}
                         <div className="mt-2 text-xs text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
                         </div>
@@ -425,7 +434,9 @@ export default function EventDetail({
                         variant="secondary"
                         onClick={() => {
                             if (onOpen) onOpen();
-                            router.push(`/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}#circle-tabs`);
+                            router.push(
+                                `/circles/${circleHandle}/events/${(event as any)._id?.toString?.() || ""}#circle-tabs`,
+                            );
                         }}
                     >
                         Open Event
@@ -481,8 +492,8 @@ export default function EventDetail({
                                 {endFmt ? `${startFmt} — ${endFmt}` : startFmt}
                             </span>
                         )}
-                        {(locationText || event.isVirtual || event.isHybrid) && (
-                            hasMapLocation ? (
+                        {(locationText || event.isVirtual || event.isHybrid) &&
+                            (hasMapLocation ? (
                                 <HoverCard openDelay={0} closeDelay={0}>
                                     <HoverCardTrigger asChild>
                                         <button
@@ -491,19 +502,20 @@ export default function EventDetail({
                                             onClick={handleAddressClick}
                                         >
                                             <MapPin className="h-4 w-4 text-primary" />
-                                            <span className="truncate max-w-[220px] text-left">
+                                            <span className="max-w-[220px] truncate text-left">
                                                 {locationLabel}
                                                 {event.isHybrid ? " · Hybrid" : ""}
                                             </span>
                                         </button>
                                     </HoverCardTrigger>
-                                    {resolvedDistance !== undefined && resolvedDistance !== Number.POSITIVE_INFINITY && (
-                                        <HoverCardContent className="w-auto p-2" side="top" align="center">
-                                            <div className="text-xs font-medium">
-                                                {getDistanceString(resolvedDistance)} from your location
-                                            </div>
-                                        </HoverCardContent>
-                                    )}
+                                    {resolvedDistance !== undefined &&
+                                        resolvedDistance !== Number.POSITIVE_INFINITY && (
+                                            <HoverCardContent className="w-auto p-2" side="top" align="center">
+                                                <div className="text-xs font-medium">
+                                                    {getDistanceString(resolvedDistance)} from your location
+                                                </div>
+                                            </HoverCardContent>
+                                        )}
                                 </HoverCard>
                             ) : (
                                 <span className="inline-flex items-center gap-1">
@@ -511,8 +523,7 @@ export default function EventDetail({
                                     {locationLabel}
                                     {event.isHybrid ? " · Hybrid" : ""}
                                 </span>
-                            )
-                        )}
+                            ))}
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -590,9 +601,9 @@ export default function EventDetail({
                                                     joinState.isEnabled && "bg-green-600 text-white hover:bg-green-700",
                                                     !joinState.isEnabled &&
                                                         !joinState.isMissingLink &&
-                                                        "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:opacity-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700",
+                                                        "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-700 disabled:opacity-100",
                                                     joinState.isMissingLink &&
-                                                        "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:opacity-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900",
+                                                        "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-100 disabled:border-amber-300 disabled:bg-amber-100 disabled:text-amber-900 disabled:opacity-100",
                                                 )}
                                                 onClick={() => {
                                                     if (joinState.isEnabled && joinState.href) {
@@ -646,37 +657,46 @@ export default function EventDetail({
                 <div className="space-y-4">
                     <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
-                        <div className="flex flex-wrap gap-2">
-                            {event.userRsvpStatus === "going" ? (
-                                <>
-                                    <Button size="sm" variant="destructive" disabled={isPending} onClick={onCancelRsvp}>
-                                        Cancel RSVP
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                        I&apos;m going
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            )}
-                        </div>
+                        {user ? (
+                            <div className="flex flex-wrap gap-2">
+                                {event.userRsvpStatus === "going" ? (
+                                    <>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={isPending}
+                                            onClick={onCancelRsvp}
+                                        >
+                                            Cancel RSVP
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
+                                            I&apos;m going
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">Sign in to RSVP.</div>
+                        )}
                         <div className="mt-3 text-sm text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
                         </div>

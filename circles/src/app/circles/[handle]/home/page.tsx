@@ -7,7 +7,7 @@ import type { VerifiedContributionItem } from "@/components/modules/home/Verifie
 import { getTasksByCircleId, getVerifiedTasksForUser } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
 import { getShiftEndAt, getShiftStartAt, isShiftTask } from "@/components/modules/tasks/shift-task-utils";
-import type { TaskDisplay, TaskPermissions } from "@/models/models";
+import type { EventDisplay, TaskDisplay, TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
 import { getMember, getMembers } from "@/lib/data/member";
@@ -18,7 +18,8 @@ import {
     getLinkedVibeIdDid,
     type CircleMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
-import { hasPeerifyArtistIntent } from "@/lib/peerify/artist-profile";
+import { hasPeerifyArtistIntent, isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
+import { getEventsByCircleId, getPublicEventsByCircleId } from "@/lib/data/event";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -42,8 +43,10 @@ export default async function CircleHomePage(props: PageProps) {
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let upcomingShiftTasks: TaskDisplay[] = [];
+    let venueUpcomingEvents: EventDisplay[] = [];
     let upcomingShiftsVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
+    let canCreateVenueEvent = false;
     let membershipCredential: CircleMembershipCredentialCardData | null = null;
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did && !isPeerifyArtistProfile
@@ -51,6 +54,7 @@ export default async function CircleHomePage(props: PageProps) {
             : null;
     const showFundingPanel = isFundingEnabledForCircle(circle);
     const showUpcomingShiftsPanel = circle.circleType !== "user" && (circle.enabledModules?.includes("tasks") ?? false);
+    const isPeerifyVenueProfile = isPeerifyVenueIdentity(circle);
     const showAdminsPublicly = circle.showAdminsPublicly !== false;
     const adminLeaders =
         showAdminsPublicly && circle.circleType !== "user" && circle._id
@@ -147,8 +151,33 @@ export default async function CircleHomePage(props: PageProps) {
         }
     }
 
+    if (isPeerifyVenueProfile && circle._id) {
+        canCreateVenueEvent = viewerDid
+            ? await isAuthorized(viewerDid, circle._id as string, features.events.create)
+            : false;
+
+        const now = new Date();
+        const nextYear = new Date(now);
+        nextYear.setFullYear(now.getFullYear() + 1);
+        const eventRange = { from: now, to: nextYear };
+
+        if (!viewerDid) {
+            venueUpcomingEvents = (await getPublicEventsByCircleId(circle._id as string, eventRange)).slice(0, 3);
+        } else {
+            const canViewEvents = await isAuthorized(viewerDid, circle._id as string, features.events.view);
+            if (canViewEvents) {
+                venueUpcomingEvents = (
+                    await getEventsByCircleId(circle._id as string, viewerDid, eventRange, true, true)
+                ).slice(0, 3);
+            }
+        }
+    }
+
     if (circle.circleType !== "user" && circle._id && viewerDid) {
-        const [viewer, member] = await Promise.all([getUserPrivate(viewerDid), getMember(viewerDid, String(circle._id))]);
+        const [viewer, member] = await Promise.all([
+            getUserPrivate(viewerDid),
+            getMember(viewerDid, String(circle._id)),
+        ]);
         const subjectVibeDid = getLinkedVibeIdDid(viewer);
         if (member && subjectVibeDid) {
             membershipCredential = createCircleMembershipCredentialCard({
@@ -167,8 +196,10 @@ export default async function CircleHomePage(props: PageProps) {
             fundingPreviewAsks={fundingPreviewAsks}
             fundingPanelVisibility={fundingPanelVisibility}
             upcomingShiftTasks={JSON.parse(JSON.stringify(upcomingShiftTasks))}
+            venueUpcomingEvents={JSON.parse(JSON.stringify(venueUpcomingEvents))}
             upcomingShiftsVisibility={upcomingShiftsVisibility}
             canCreateFundingAsk={canCreateFundingAsk}
+            canCreateVenueEvent={canCreateVenueEvent}
             showFundingPanel={showFundingPanel}
             showUpcomingShiftsPanel={showUpcomingShiftsPanel}
             adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}

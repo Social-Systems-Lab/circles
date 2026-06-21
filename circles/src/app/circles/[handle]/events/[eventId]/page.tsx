@@ -8,6 +8,7 @@ import EventDetail from "@/components/modules/events/event-detail";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
 
 type PageProps = {
     params: Promise<{ handle: string; eventId: string }>;
@@ -25,13 +26,12 @@ export default async function EventDetailPage(props: PageProps) {
     }
 
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        // Allow unauthenticated users only if events.view includes "everyone"
-        const canView = await isAuthorized(undefined as unknown as string, circle._id as string, features.events.view);
-        if (!canView) {
+    const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
+    if (!isPublicPeerifyVenueEvents) {
+        if (!userDid) {
             notFound();
         }
-    } else {
+
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) {
             notFound();

@@ -31,6 +31,8 @@ import { features } from "@/lib/data/constants";
 import {
     getEventsByCircleId,
     getEventById,
+    getPublicEventByIdForCircle,
+    getPublicEventsByCircleId,
     createEvent as createEventDb,
     updateEvent as updateEventDb,
     deleteEvent as deleteEventDb,
@@ -49,10 +51,8 @@ import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
-import {
-    listAcceptedConnectionsForUserDid,
-    searchAcceptedConnectionsForUserDid,
-} from "@/lib/data/relationships";
+import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
+import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
 
 // ----- Types -----
 
@@ -257,13 +257,9 @@ export async function getEventsAction(
 
     try {
         const userDid = await getAuthenticatedUserDid();
-        if (!userDid) return defaultResult;
 
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return defaultResult;
-
-        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
-        if (!canView) return defaultResult;
 
         const range =
             params && (params.from || params.to)
@@ -272,6 +268,17 @@ export async function getEventsAction(
                       to: params.to ? parseDate(params.to) : undefined,
                   }
                 : undefined;
+
+        const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
+        if (isPublicPeerifyVenueEvents) {
+            const events = await getPublicEventsByCircleId(circle._id!.toString(), range);
+            return { events };
+        }
+
+        if (!userDid) return defaultResult;
+
+        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        if (!canView) return defaultResult;
 
         const events = await getEventsByCircleId(
             circle._id!.toString(),
@@ -293,10 +300,16 @@ export async function getEventsAction(
 export async function getEventAction(circleHandle: string, eventId: string): Promise<EventDisplay | null> {
     try {
         const userDid = await getAuthenticatedUserDid();
-        if (!userDid) return null;
 
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return null;
+
+        const isPublicPeerifyVenueEvents = !userDid && isPeerifyVenueIdentity(circle);
+        if (isPublicPeerifyVenueEvents) {
+            return getPublicEventByIdForCircle(circle._id!.toString(), eventId);
+        }
+
+        if (!userDid) return null;
 
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return null;
@@ -557,7 +570,6 @@ export async function updateEventAction(
             }
         }
 
-
         let recurrenceData: EventModel["recurrence"] | null = event.recurrence ?? undefined;
         const rawRecurrence = formData.get("recurrence") as string | null;
         console.log(`[updateEventAction] Event ${eventId} - Raw Recurrence:`, rawRecurrence);
@@ -568,12 +580,12 @@ export async function updateEventAction(
                 if (recurrenceData?.endDate) {
                     recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
                 }
-            } catch (e) { 
+            } catch (e) {
                 console.error("[updateEventAction] Failed to parse recurrence:", e);
             }
         } else if (rawRecurrence === "") {
-             console.log("[updateEventAction] Clearing recurrence");
-             recurrenceData = null; // Explicitly clear
+            console.log("[updateEventAction] Clearing recurrence");
+            recurrenceData = null; // Explicitly clear
         }
 
         // Reconcile images
@@ -1239,10 +1251,7 @@ export async function hideCancelledEventAction(
             return { success: false, message: "Invalid event ID" };
         }
 
-        const [event, user] = await Promise.all([
-            getEventById(eventId, userDid),
-            getPrivateUserByDid(userDid),
-        ]);
+        const [event, user] = await Promise.all([getEventById(eventId, userDid), getPrivateUserByDid(userDid)]);
 
         if (!event) {
             return { success: false, message: "Event not found" };
@@ -1297,10 +1306,7 @@ export async function unhideCancelledEventAction(
             return { success: false, message: "Invalid event ID" };
         }
 
-        const [event, user] = await Promise.all([
-            getEventById(eventId, userDid),
-            getPrivateUserByDid(userDid),
-        ]);
+        const [event, user] = await Promise.all([getEventById(eventId, userDid), getPrivateUserByDid(userDid)]);
 
         if (!event) {
             return { success: false, message: "Event not found" };

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
+import { Circle, ContentPreviewData, EventDisplay, MemberDisplay } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, ExternalLink, CalendarRange, Music2, HandCoins, CheckCircle2 } from "lucide-react";
@@ -69,8 +69,10 @@ interface AboutPageProps {
     fundingPreviewAsks?: FundingAskDisplay[];
     fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
     upcomingShiftTasks?: TaskDisplay[];
+    venueUpcomingEvents?: EventDisplay[];
     upcomingShiftsVisibility?: "visible" | "sign_in" | "members_only";
     canCreateFundingAsk?: boolean;
+    canCreateVenueEvent?: boolean;
     showFundingPanel?: boolean;
     showUpcomingShiftsPanel?: boolean;
     adminLeaders?: MemberDisplay[];
@@ -127,8 +129,10 @@ export default function AboutPage({
     fundingPreviewAsks = [],
     fundingPanelVisibility = "sign_in",
     upcomingShiftTasks = [],
+    venueUpcomingEvents = [],
     upcomingShiftsVisibility = "sign_in",
     canCreateFundingAsk = false,
+    canCreateVenueEvent = false,
     showFundingPanel = false,
     showUpcomingShiftsPanel = false,
     adminLeaders = [],
@@ -208,18 +212,23 @@ export default function AboutPage({
         peerifyVenueProfile.website ? { label: "Website", url: peerifyVenueProfile.website } : null,
         peerifyVenueProfile.instagram ? { label: "Instagram", url: peerifyVenueProfile.instagram } : null,
     ].filter((item): item is { label: string; url: string } => Boolean(item?.url));
+    const upcomingVenueEvents = venueUpcomingEvents.slice(0, 3);
     const venueRoomDetails = [
         peerifyVenueProfile.capacityStanding
             ? { label: "Standing capacity", value: peerifyVenueProfile.capacityStanding }
             : null,
-        peerifyVenueProfile.capacitySeated ? { label: "Seated capacity", value: peerifyVenueProfile.capacitySeated } : null,
+        peerifyVenueProfile.capacitySeated
+            ? { label: "Seated capacity", value: peerifyVenueProfile.capacitySeated }
+            : null,
         peerifyVenueProfile.typicalShowCapacity
             ? { label: "Typical show capacity", value: peerifyVenueProfile.typicalShowCapacity }
             : null,
         peerifyVenueProfile.accessibilityNotes
             ? { label: "Accessibility notes", value: peerifyVenueProfile.accessibilityNotes, wide: true }
             : null,
-        peerifyVenueProfile.agePolicy ? { label: "Age policy", value: peerifyVenueProfile.agePolicy, wide: true } : null,
+        peerifyVenueProfile.agePolicy
+            ? { label: "Age policy", value: peerifyVenueProfile.agePolicy, wide: true }
+            : null,
     ].filter((item): item is { label: string; value: string; wide?: boolean } => Boolean(item?.value));
     const venueTechnicalDetails = [
         peerifyVenueProfile.paAvailable ? { label: "PA", value: "Available" } : null,
@@ -228,8 +237,12 @@ export default function AboutPage({
             ? { label: "Backline / instruments", value: peerifyVenueProfile.backline, wide: true }
             : null,
         peerifyVenueProfile.lighting ? { label: "Lighting", value: peerifyVenueProfile.lighting, wide: true } : null,
-        peerifyVenueProfile.loadInNotes ? { label: "Load-in notes", value: peerifyVenueProfile.loadInNotes, wide: true } : null,
-        peerifyVenueProfile.parkingNotes ? { label: "Parking notes", value: peerifyVenueProfile.parkingNotes, wide: true } : null,
+        peerifyVenueProfile.loadInNotes
+            ? { label: "Load-in notes", value: peerifyVenueProfile.loadInNotes, wide: true }
+            : null,
+        peerifyVenueProfile.parkingNotes
+            ? { label: "Parking notes", value: peerifyVenueProfile.parkingNotes, wide: true }
+            : null,
     ].filter((item): item is { label: string; value: string; wide?: boolean } => Boolean(item?.value));
     const venueFeeCoveredByLabels: Record<string, string> = {
         venue: "Venue",
@@ -241,20 +254,31 @@ export default function AboutPage({
         peerifyVenueProfile.bookingEnquiriesEnabled ? { label: "Booking enquiries", value: "Enabled" } : null,
         peerifyVenueProfile.minimumFee ? { label: "Minimum fee", value: peerifyVenueProfile.minimumFee } : null,
         peerifyVenueProfile.doorSplit ? { label: "Door split", value: peerifyVenueProfile.doorSplit } : null,
-        peerifyVenueProfile.houseCut ? { label: "House cut / production fee", value: peerifyVenueProfile.houseCut } : null,
-        peerifyVenueProfile.peerifyFeeCoveredBy && peerifyVenueProfile.peerifyFeeCoveredBy !== "not_specified"
-            ? { label: "Peerify ticket fee covered by", value: venueFeeCoveredByLabels[peerifyVenueProfile.peerifyFeeCoveredBy] }
+        peerifyVenueProfile.houseCut
+            ? { label: "House cut / production fee", value: peerifyVenueProfile.houseCut }
             : null,
-        peerifyVenueProfile.availableDays ? { label: "Available days", value: peerifyVenueProfile.availableDays } : null,
+        peerifyVenueProfile.peerifyFeeCoveredBy && peerifyVenueProfile.peerifyFeeCoveredBy !== "not_specified"
+            ? {
+                  label: "Peerify ticket fee covered by",
+                  value: venueFeeCoveredByLabels[peerifyVenueProfile.peerifyFeeCoveredBy],
+              }
+            : null,
+        peerifyVenueProfile.availableDays
+            ? { label: "Available days", value: peerifyVenueProfile.availableDays }
+            : null,
         peerifyVenueProfile.typicalResponseTime
             ? { label: "Typical response time", value: peerifyVenueProfile.typicalResponseTime }
             : null,
-        peerifyVenueProfile.bookingNote ? { label: "Booking note", value: peerifyVenueProfile.bookingNote, wide: true } : null,
+        peerifyVenueProfile.bookingNote
+            ? { label: "Booking note", value: peerifyVenueProfile.bookingNote, wide: true }
+            : null,
     ].filter((item): item is { label: string; value: string; wide?: boolean } => Boolean(item?.value));
     const venueHospitalityDetails = [
         peerifyVenueProfile.greenRoom ? { label: "Green room", value: "Available" } : null,
         peerifyVenueProfile.merchTable ? { label: "Merch table", value: "Available" } : null,
-        peerifyVenueProfile.foodDrink ? { label: "Food/drink", value: peerifyVenueProfile.foodDrink, wide: true } : null,
+        peerifyVenueProfile.foodDrink
+            ? { label: "Food/drink", value: peerifyVenueProfile.foodDrink, wide: true }
+            : null,
         peerifyVenueProfile.accommodationHelp
             ? { label: "Accommodation help", value: peerifyVenueProfile.accommodationHelp, wide: true }
             : null,
@@ -266,7 +290,9 @@ export default function AboutPage({
             : null,
     ].filter((item): item is { label: string; value: string; wide?: boolean } => Boolean(item?.value));
     const venuePolicyDetails = [
-        peerifyVenueProfile.houseRules ? { label: "House rules", value: peerifyVenueProfile.houseRules, wide: true } : null,
+        peerifyVenueProfile.houseRules
+            ? { label: "House rules", value: peerifyVenueProfile.houseRules, wide: true }
+            : null,
         peerifyVenueProfile.soundCurfew ? { label: "Sound curfew", value: peerifyVenueProfile.soundCurfew } : null,
         peerifyVenueProfile.cancellationPolicy
             ? { label: "Cancellation policy", value: peerifyVenueProfile.cancellationPolicy, wide: true }
@@ -372,8 +398,10 @@ export default function AboutPage({
             !!(!isUserProfile && circle.causes && circle.causes.length > 0) ||
             !!circle.websiteUrl ||
             !!(isUserProfile && (profileOfferSkills.length > 0 || profileInterests.length > 0)));
-    const hasNeedsMatchingDetails = !isUserProfile && !isPeerifyVenueProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
-    const hasAdminDetails = !isUserProfile && !isPeerifyArtistProfile && !isPeerifyVenueProfile && adminLeaders.length > 0;
+    const hasNeedsMatchingDetails =
+        !isUserProfile && !isPeerifyVenueProfile && (visibleNeeds.length > 0 || hasMatchingOfferNeeds);
+    const hasAdminDetails =
+        !isUserProfile && !isPeerifyArtistProfile && !isPeerifyVenueProfile && adminLeaders.length > 0;
     const shouldShowVerifiedContributions = isUserProfile && !isPeerifyArtistProfile;
     const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary && !isPeerifyArtistProfile;
     const shouldShowMembershipCredential =
@@ -483,9 +511,9 @@ export default function AboutPage({
         ? "This artist hasn't added a longer background or story yet."
         : isPeerifyVenueProfile
           ? "This venue hasn't added a longer description yet."
-        : isUserProfile
-          ? "This profile hasn't added an About section yet."
-          : "This circle hasn't added a description yet.";
+          : isUserProfile
+            ? "This profile hasn't added an About section yet."
+            : "This circle hasn't added a description yet.";
 
     const getLeaderRole = (leader: MemberDisplay) => {
         if (leader.userGroups?.includes("admins")) return "Admin";
@@ -976,7 +1004,10 @@ export default function AboutPage({
                                         {(venueOverviewDetails.length > 0 || venueLinks.length > 0) && (
                                             <div className="grid gap-3 sm:grid-cols-2">
                                                 {venueOverviewDetails.map((detail) => (
-                                                    <div key={detail.label} className="rounded-xl border bg-muted/30 p-4">
+                                                    <div
+                                                        key={detail.label}
+                                                        className="rounded-xl border bg-muted/30 p-4"
+                                                    >
                                                         <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                                             {detail.label}
                                                         </div>
@@ -1004,6 +1035,85 @@ export default function AboutPage({
                                                         </a>
                                                     </div>
                                                 ))}
+                                            </div>
+                                        )}
+                                    </section>
+
+                                    <section className="space-y-4">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                                    Events
+                                                </div>
+                                                <h3 className="m-0 text-xl font-semibold text-foreground">
+                                                    Upcoming events
+                                                </h3>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => router.push(`/circles/${circle.handle}/events`)}
+                                                >
+                                                    View events
+                                                </Button>
+                                                {canCreateVenueEvent ? (
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            router.push(`/circles/${circle.handle}/events/create`)
+                                                        }
+                                                    >
+                                                        Create event
+                                                    </Button>
+                                                ) : null}
+                                            </div>
+                                        </div>
+
+                                        {upcomingVenueEvents.length > 0 ? (
+                                            <div className="grid gap-3">
+                                                {upcomingVenueEvents.map((event) => {
+                                                    const eventId = String(event._id ?? "");
+                                                    const startAt = event.startAt ? new Date(event.startAt) : null;
+
+                                                    return (
+                                                        <button
+                                                            key={eventId || event.title}
+                                                            type="button"
+                                                            className="flex w-full items-start gap-3 rounded-xl border bg-muted/20 p-4 text-left transition hover:bg-muted/40"
+                                                            onClick={() =>
+                                                                eventId
+                                                                    ? router.push(
+                                                                          `/circles/${circle.handle}/events/${eventId}`,
+                                                                      )
+                                                                    : router.push(`/circles/${circle.handle}/events`)
+                                                            }
+                                                        >
+                                                            <CalendarRange className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" />
+                                                            <span className="min-w-0">
+                                                                <span className="block text-sm font-medium text-foreground">
+                                                                    {event.title}
+                                                                </span>
+                                                                {startAt ? (
+                                                                    <span className="mt-1 block text-xs text-muted-foreground">
+                                                                        {startAt.toLocaleDateString("en-US", {
+                                                                            month: "short",
+                                                                            day: "numeric",
+                                                                            year: "numeric",
+                                                                        })}
+                                                                    </span>
+                                                                ) : null}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+                                                <p>No upcoming events yet.</p>
+                                                {canCreateVenueEvent ? (
+                                                    <p className="mt-1">Create the first event for this venue.</p>
+                                                ) : null}
                                             </div>
                                         )}
                                     </section>
@@ -1441,15 +1551,15 @@ export default function AboutPage({
                             {isVenueBookingContact
                                 ? `Send booking enquiry to ${circle.name}`
                                 : contactType === "ask_question"
-                                ? "Ask the admins a question"
-                                : `Offer Help to ${circle.name}`}
+                                  ? "Ask the admins a question"
+                                  : `Offer Help to ${circle.name}`}
                         </DialogTitle>
                         <DialogDescription>
                             {isVenueBookingContact
                                 ? "Your enquiry will create a shared thread with this venue's admins."
                                 : contactType === "ask_question"
-                                ? "Your question will create a shared thread with this circle&apos;s admins."
-                                : "Your message will create a shared thread with this circle&apos;s admins."}
+                                  ? "Your question will create a shared thread with this circle&apos;s admins."
+                                  : "Your message will create a shared thread with this circle&apos;s admins."}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2">
@@ -1467,8 +1577,8 @@ export default function AboutPage({
                                 isVenueBookingContact
                                     ? "Share the artist, event idea, date range, audience size, and any production notes."
                                     : contactType === "ask_question"
-                                    ? "What would you like to know about helping with this circle?"
-                                    : "Write a short message about how you can help..."
+                                      ? "What would you like to know about helping with this circle?"
+                                      : "Write a short message about how you can help..."
                             }
                         />
                         {contactError && <p className="text-sm text-destructive">{contactError}</p>}
@@ -1492,8 +1602,8 @@ export default function AboutPage({
                                 : isVenueBookingContact
                                   ? "Send Enquiry"
                                   : contactType === "ask_question"
-                                  ? "Send Question"
-                                  : "Send Message"}
+                                    ? "Send Question"
+                                    : "Send Message"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

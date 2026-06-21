@@ -9,7 +9,14 @@ import { userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useMemo, useCallback, useEffect, useState, useRef } from "react";
 import type { Circle, Module } from "@/models/models";
-import { features, getFeature, hiddenPublicModuleHandles, LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
+import {
+    features,
+    getFeature,
+    hiddenPublicModuleHandles,
+    LOG_LEVEL_TRACE,
+    logLevel,
+    modules,
+} from "@/lib/data/constants";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -18,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
+import { isPeerifyVenueIdentity } from "@/lib/peerify/artist-profile";
 
 type CircleTabsProps = {
     circle: Circle;
@@ -54,18 +62,22 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     const enabledModules = useMemo(() => {
         // loop through all modules and check if they are enabled for the circle
         let moduleList: string[] = [];
-        if (!circle.enabledModules) {
+        if (!circle.enabledModules && !isPeerifyVenueIdentity(circle)) {
             return moduleList;
         }
 
+        const effectiveEnabledModules = isPeerifyVenueIdentity(circle)
+            ? Array.from(new Set([...(circle.enabledModules ?? []), "events"]))
+            : circle.enabledModules;
+
         for (let moduleHandle of modules.map((m) => m.handle)) {
-            let isModuleEnabled = circle.enabledModules.includes(moduleHandle);
+            let isModuleEnabled = effectiveEnabledModules?.includes(moduleHandle);
             if (isModuleEnabled && hasAccess(moduleHandle)) {
                 moduleList.push(moduleHandle);
             }
         }
         return moduleList;
-    }, [circle.enabledModules]);
+    }, [circle, hasAccess]);
 
     // Filter modules based on enabledModules and excludeFromMenu
     const visibleModules = useMemo(() => {

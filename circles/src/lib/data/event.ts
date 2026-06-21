@@ -41,6 +41,30 @@ export const SAFE_EVENT_PROJECTION = {
     recurrence: 1,
 } as const;
 
+const PUBLIC_EVENT_PROJECTION = {
+    _id: 1,
+    circleId: 1,
+    createdBy: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    title: 1,
+    description: 1,
+    stage: 1,
+    location: 1,
+    images: 1,
+    isVirtual: 1,
+    virtualUrl: 1,
+    isHybrid: 1,
+    startAt: 1,
+    endAt: 1,
+    allDay: 1,
+    categories: 1,
+    causes: 1,
+    capacity: 1,
+    visibility: 1,
+    recurrence: 1,
+} as const;
+
 type Range = { from?: Date; to?: Date };
 const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
 
@@ -89,6 +113,105 @@ function buildRangeMatch(range?: Range) {
         clauses.push({ startAt: { $lte: range.to } });
     }
     return clauses.length ? { $and: clauses } : {};
+}
+
+function buildPublicEventDisplayPipeline(match: Record<string, unknown>) {
+    return [
+        { $match: match },
+        {
+            $lookup: {
+                from: "circles",
+                let: { authorDid: "$createdBy" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$did", "$$authorDid"] },
+                                    { $eq: ["$circleType", "user"] },
+                                    { $ne: ["$$authorDid", null] },
+                                ],
+                            },
+                        },
+                    },
+                    {
+                        $project: {
+                            ...SAFE_CIRCLE_PROJECTION,
+                            _id: { $toString: "$_id" },
+                        },
+                    },
+                ],
+                as: "authorDetails",
+            },
+        },
+        { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+        {
+            $lookup: {
+                from: "circles",
+                let: { cId: { $toObjectId: "$circleId" } },
+                pipeline: [
+                    { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                    {
+                        $project: {
+                            _id: { $toString: "$_id" },
+                            name: 1,
+                            handle: 1,
+                            picture: 1,
+                            enabledModules: 1,
+                        },
+                    },
+                ],
+                as: "circleDetails",
+            },
+        },
+        { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+        {
+            $lookup: {
+                from: "eventRsvps",
+                let: { eId: { $toString: "$_id" } },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: { $eq: ["$eventId", "$$eId"] },
+                        },
+                    },
+                    {
+                        $group: {
+                            _id: "$status",
+                            count: { $sum: 1 },
+                        },
+                    },
+                ],
+                as: "rsvpCounts",
+            },
+        },
+        {
+            $project: {
+                ...PUBLIC_EVENT_PROJECTION,
+                _id: { $toString: "$_id" },
+                author: "$authorDetails",
+                circle: "$circleDetails",
+                attendees: {
+                    $let: {
+                        vars: {
+                            goingObj: {
+                                $first: {
+                                    $filter: {
+                                        input: "$rsvpCounts",
+                                        as: "rc",
+                                        cond: { $eq: ["$$rc._id", "going"] },
+                                    },
+                                },
+                            },
+                        },
+                        in: { $ifNull: ["$$goingObj.count", 0] },
+                    },
+                },
+                userRsvpStatus: "none",
+            },
+        },
+        { $sort: { startAt: 1 } },
+    ];
 }
 
 function normalizeRecurringUntil(endDate?: Date | string): Date | undefined {
@@ -154,36 +277,31 @@ export const getEventsByCircleId = async (
         const matchQuery: any = {
             circleId,
             $or: [
-                 dateMatch,
-                 { recurrence: { $exists: true } } // Always fetch recurring events to check for expansion
-            ]
+                dateMatch,
+                { recurrence: { $exists: true } }, // Always fetch recurring events to check for expansion
+            ],
         };
         // Clean up if dateMatch is empty (meaning no range)
         if (Object.keys(dateMatch).length === 0) {
             delete matchQuery.$or;
         } else {
-             // If we have a range, use the $or. But wait, $or requires array of expressions.
-             // If dateMatch is empty, $or is invalid if used blindly.
-             // A better way: match (circleId) AND ( (dateMatch) OR (recurrence exists) )
-             // If dateMatch is empty, this logic simplifies to just circleId.
-             // Code below handles this manually.
+            // If we have a range, use the $or. But wait, $or requires array of expressions.
+            // If dateMatch is empty, $or is invalid if used blindly.
+            // A better way: match (circleId) AND ( (dateMatch) OR (recurrence exists) )
+            // If dateMatch is empty, this logic simplifies to just circleId.
+            // Code below handles this manually.
         }
 
         const baseMatch: any = { circleId };
         if (Object.keys(dateMatch).length > 0) {
-            baseMatch.$or = [
-                dateMatch,
-                { "recurrence": { $exists: true, $ne: null } }
-            ];
+            baseMatch.$or = [dateMatch, { recurrence: { $exists: true, $ne: null } }];
         }
 
         let hiddenCancelledObjectIds: ObjectId[] = [];
         try {
             const viewer = await getUserPrivate(userDid);
             const hiddenIds = (viewer?.hiddenCancelledEventIds || []) as string[];
-            hiddenCancelledObjectIds = hiddenIds
-                .filter((id) => ObjectId.isValid(id))
-                .map((id) => new ObjectId(id));
+            hiddenCancelledObjectIds = hiddenIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         } catch (err) {
             hiddenCancelledObjectIds = [];
         }
@@ -201,9 +319,9 @@ export const getEventsByCircleId = async (
 
             if (userQueries.length > 0) {
                 // User profile circle:
-// show events the user CREATED or is PARTICIPATING in,
-// regardless of which circle the event belongs to
-matchQuery.$or = userQueries;
+                // show events the user CREATED or is PARTICIPATING in,
+                // regardless of which circle the event belongs to
+                matchQuery.$or = userQueries;
                 delete matchQuery.circleId;
             }
         }
@@ -406,6 +524,32 @@ matchQuery.$or = userQueries;
         return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting events by circle ID:", error);
+        throw error;
+    }
+};
+
+export const getPublicEventsByCircleId = async (circleId: string, range?: Range): Promise<EventDisplay[]> => {
+    try {
+        const dateMatch = buildRangeMatch(range);
+        const matchQuery: Record<string, unknown> = {
+            circleId,
+            stage: "open",
+            visibility: { $ne: "private" },
+        };
+
+        if (Object.keys(dateMatch).length > 0) {
+            matchQuery.$or = [dateMatch, { recurrence: { $exists: true, $ne: null } }];
+        }
+
+        const events = (await Events.aggregate(
+            buildPublicEventDisplayPipeline(matchQuery),
+        ).toArray()) as EventDisplay[];
+        const expandedEvents =
+            range?.from && range?.to ? events.flatMap((event) => expandRecurringEvent(event, range)) : events;
+
+        return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    } catch (error) {
+        console.error("Error getting public events by circle ID:", error);
         throw error;
     }
 };
@@ -615,6 +759,48 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
         } as EventDisplay;
     } catch (error) {
         console.error(`Error getting event by ID (${eventId}):`, error);
+        throw error;
+    }
+};
+
+export const getPublicEventByIdForCircle = async (circleId: string, eventId: string): Promise<EventDisplay | null> => {
+    try {
+        const recurringInstance = parseRecurringInstanceId(eventId);
+        const lookupEventId = recurringInstance?.baseEventId ?? eventId;
+
+        if (!ObjectId.isValid(lookupEventId)) {
+            return null;
+        }
+
+        const events = (await Events.aggregate(
+            buildPublicEventDisplayPipeline({
+                _id: new ObjectId(lookupEventId),
+                circleId,
+                stage: "open",
+                visibility: { $ne: "private" },
+            }),
+        ).toArray()) as EventDisplay[];
+
+        if (events.length === 0) {
+            return null;
+        }
+
+        const event = events[0];
+        if (!recurringInstance) {
+            return event;
+        }
+
+        if (!event.recurrence) {
+            return null;
+        }
+
+        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.occurrenceStart);
+        return {
+            ...occurrenceEvent,
+            _id: event._id,
+        } as EventDisplay;
+    } catch (error) {
+        console.error(`Error getting public event by ID (${eventId}):`, error);
         throw error;
     }
 };
