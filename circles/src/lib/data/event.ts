@@ -1,7 +1,21 @@
 import { Circles, Events, EventRsvps, Feeds, Posts, EventInvitations } from "./db";
 import { ObjectId } from "mongodb";
 import { RRule, RRuleSet, rrulestr } from "rrule";
-import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media, EventInvitation } from "@/models/models";
+import {
+    Event,
+    EventDisplay,
+    EventStage,
+    EventRsvp,
+    Circle,
+    Post,
+    Media,
+    EventInvitation,
+    Location,
+    PeerifyEventAccessMode,
+    PeerifyEventLocationDisclosure,
+    PeerifyEventMetadata,
+    PeerifyEventVenueDisclosure,
+} from "@/models/models";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
 import { upsertVbdEvents } from "./vdb";
@@ -24,6 +38,7 @@ export const SAFE_EVENT_PROJECTION = {
     stage: 1,
     userGroups: 1,
     location: 1,
+    metadata: 1,
     commentPostId: 1,
     noticeboardPostId: 1,
     images: 1,
@@ -51,6 +66,7 @@ const PUBLIC_EVENT_PROJECTION = {
     description: 1,
     stage: 1,
     location: 1,
+    metadata: 1,
     images: 1,
     isVirtual: 1,
     virtualUrl: 1,
@@ -67,6 +83,122 @@ const PUBLIC_EVENT_PROJECTION = {
 
 type Range = { from?: Date; to?: Date };
 const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
+const DEFAULT_PUBLIC_LOCATION_DISCLOSURE: PeerifyEventLocationDisclosure = "public";
+const DEFAULT_PUBLIC_VENUE_DISCLOSURE: PeerifyEventVenueDisclosure = "public";
+const DEFAULT_PUBLIC_ACCESS_MODE: PeerifyEventAccessMode = "open_rsvp";
+const SECRET_LOCATION_LABEL = "Location revealed after acceptance";
+const TBD_LOCATION_LABEL = "Location to be announced";
+
+function getPeerifyEventMetadata(event: Pick<EventDisplay, "metadata">): PeerifyEventMetadata {
+    const peerify = event.metadata?.peerify;
+    if (!peerify || typeof peerify !== "object" || Array.isArray(peerify)) {
+        return {};
+    }
+
+    return peerify;
+}
+
+function getPeerifyEventLocationDisclosure(event: EventDisplay): PeerifyEventLocationDisclosure {
+    const disclosure = getPeerifyEventMetadata(event).locationDisclosure;
+    return disclosure ?? DEFAULT_PUBLIC_LOCATION_DISCLOSURE;
+}
+
+function getPublicLocationLabel(event: EventDisplay, fallback: string): string {
+    const label = getPeerifyEventMetadata(event).publicLocationLabel?.trim();
+    return label || fallback;
+}
+
+function buildPublicLabelLocation(label: string): Location {
+    return {
+        precision: 2,
+        country: undefined,
+        region: undefined,
+        city: label,
+        street: undefined,
+        lngLat: undefined,
+    };
+}
+
+function sanitizeApproximatePublicLocation(event: EventDisplay): Location | undefined {
+    const label = getPeerifyEventMetadata(event).publicLocationLabel?.trim();
+    if (label) {
+        return buildPublicLabelLocation(label);
+    }
+
+    if (!event.location) {
+        return undefined;
+    }
+
+    return {
+        ...event.location,
+        precision: Math.min(event.location.precision ?? 2, 2),
+        street: undefined,
+        lngLat: undefined,
+    };
+}
+
+export function getNormalizedPeerifyEventMetadata(event: EventDisplay): Required<
+    Pick<PeerifyEventMetadata, "locationDisclosure" | "venueDisclosure" | "accessMode">
+> &
+    PeerifyEventMetadata {
+    const peerify = getPeerifyEventMetadata(event);
+    return {
+        ...peerify,
+        locationDisclosure: peerify.locationDisclosure ?? DEFAULT_PUBLIC_LOCATION_DISCLOSURE,
+        venueDisclosure: peerify.venueDisclosure ?? DEFAULT_PUBLIC_VENUE_DISCLOSURE,
+        accessMode: peerify.accessMode ?? DEFAULT_PUBLIC_ACCESS_MODE,
+    };
+}
+
+function sanitizePeerifyPublicEventMetadata(event: EventDisplay): EventDisplay["metadata"] {
+    const peerify = getNormalizedPeerifyEventMetadata(event);
+    const publicPeerify: PeerifyEventMetadata = {
+        locationDisclosure: peerify.locationDisclosure,
+        venueDisclosure: peerify.venueDisclosure,
+        accessMode: peerify.accessMode,
+    };
+
+    if (peerify.publicLocationLabel) {
+        publicPeerify.publicLocationLabel = peerify.publicLocationLabel;
+    }
+
+    if (peerify.venueDisclosure === "public" && peerify.venueCircleId) {
+        publicPeerify.venueCircleId = peerify.venueCircleId;
+    }
+
+    return { peerify: publicPeerify };
+}
+
+export function sanitizePeerifyPublicEventDisplay(event: EventDisplay): EventDisplay {
+    const locationDisclosure = getPeerifyEventLocationDisclosure(event);
+    const metadata = sanitizePeerifyPublicEventMetadata(event);
+
+    if (locationDisclosure === "public") {
+        return {
+            ...event,
+            metadata,
+        };
+    }
+
+    if (locationDisclosure === "approximate") {
+        return {
+            ...event,
+            metadata,
+            location: sanitizeApproximatePublicLocation(event),
+        };
+    }
+
+    const label =
+        locationDisclosure === "secret_after_acceptance"
+            ? getPublicLocationLabel(event, SECRET_LOCATION_LABEL)
+            : getPublicLocationLabel(event, TBD_LOCATION_LABEL);
+
+    return {
+        ...event,
+        metadata,
+        location: buildPublicLabelLocation(label),
+    };
+}
 
 function parseRecurringInstanceId(eventId: string): { baseEventId: string; occurrenceStart: Date } | null {
     const match = RECURRING_INSTANCE_ID_PATTERN.exec(eventId);
@@ -547,7 +679,9 @@ export const getPublicEventsByCircleId = async (circleId: string, range?: Range)
         const expandedEvents =
             range?.from && range?.to ? events.flatMap((event) => expandRecurringEvent(event, range)) : events;
 
-        return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+        return expandedEvents
+            .map(sanitizePeerifyPublicEventDisplay)
+            .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting public events by circle ID:", error);
         throw error;
@@ -787,7 +921,7 @@ export const getPublicEventByIdForCircle = async (circleId: string, eventId: str
 
         const event = events[0];
         if (!recurringInstance) {
-            return event;
+            return sanitizePeerifyPublicEventDisplay(event);
         }
 
         if (!event.recurrence) {
@@ -795,10 +929,10 @@ export const getPublicEventByIdForCircle = async (circleId: string, eventId: str
         }
 
         const occurrenceEvent = buildRecurringInstance(event, recurringInstance.occurrenceStart);
-        return {
+        return sanitizePeerifyPublicEventDisplay({
             ...occurrenceEvent,
             _id: event._id,
-        } as EventDisplay;
+        } as EventDisplay);
     } catch (error) {
         console.error(`Error getting public event by ID (${eventId}):`, error);
         throw error;

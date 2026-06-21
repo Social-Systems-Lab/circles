@@ -1691,6 +1691,40 @@ export type EventStage = z.infer<typeof eventStageSchema>;
 export const eventVisibilitySchema = z.enum(["public", "private"]);
 export type EventVisibility = z.infer<typeof eventVisibilitySchema>;
 
+export const peerifyEventLocationDisclosureSchema = z.enum([
+    "public",
+    "approximate",
+    "secret_after_acceptance",
+    "to_be_disclosed",
+]);
+export type PeerifyEventLocationDisclosure = z.infer<typeof peerifyEventLocationDisclosureSchema>;
+
+export const peerifyEventVenueDisclosureSchema = z.enum([
+    "public",
+    "venue_to_be_disclosed",
+    "secret_after_acceptance",
+    "one_off_location",
+]);
+export type PeerifyEventVenueDisclosure = z.infer<typeof peerifyEventVenueDisclosureSchema>;
+
+export const peerifyEventAccessModeSchema = z.enum([
+    "open_rsvp",
+    "approval_required",
+    "ticket_required",
+    "invite_only",
+]);
+export type PeerifyEventAccessMode = z.infer<typeof peerifyEventAccessModeSchema>;
+
+export const peerifyEventMetadataSchema = z.object({
+    venueDisclosure: peerifyEventVenueDisclosureSchema.optional(),
+    locationDisclosure: peerifyEventLocationDisclosureSchema.optional(),
+    accessMode: peerifyEventAccessModeSchema.optional(),
+    publicLocationLabel: z.string().optional(),
+    privateLocationNote: z.string().optional(),
+    venueCircleId: z.string().optional(),
+});
+export type PeerifyEventMetadata = z.infer<typeof peerifyEventMetadataSchema>;
+
 /**
  * Recurrence model
  */
@@ -1717,6 +1751,12 @@ export const eventSchema = z.object({
     visibility: eventVisibilitySchema.default("public"),
     userGroups: z.array(z.string()).default([]), // User groups that can see this event
     location: locationSchema.optional(),
+    metadata: z
+        .object({
+            peerify: peerifyEventMetadataSchema.optional(),
+        })
+        .passthrough()
+        .optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
