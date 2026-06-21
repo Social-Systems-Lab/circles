@@ -17,6 +17,7 @@ import {
     EventStage,
     CircleType,
     eventVisibilitySchema,
+    peerifyEventMetadataSchema,
     Post,
     TaskDisplay,
     postSchema,
@@ -113,6 +114,21 @@ const createEventSchema = z.object({
     causes: z.array(z.string()).optional(),
     capacity: z.string().optional(), // parse to number
     visibility: eventVisibilitySchema.optional(),
+    peerifyEventMetadata: z
+        .string()
+        .optional()
+        .refine(
+            (val) => {
+                if (!val) return true;
+                try {
+                    peerifyEventMetadataSchema.parse(JSON.parse(val));
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+            { message: "Invalid Peerify event metadata format" },
+        ),
     recurrence: z
         .string()
         .optional()
@@ -164,6 +180,64 @@ function normalizeRecurrenceEndDate(endDate?: Date): Date | undefined {
 }
 
 const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") === "true";
+
+type ParsedPeerifyEventMetadata = {
+    metadata: NonNullable<EventModel["metadata"]>;
+    clearPublicLocationLabel: boolean;
+    clearPrivateLocationNote: boolean;
+};
+
+const parsePeerifyEventMetadata = (value?: string): ParsedPeerifyEventMetadata | undefined => {
+    if (!value) {
+        return undefined;
+    }
+
+    const raw = JSON.parse(value);
+    const parsed = peerifyEventMetadataSchema.parse(raw);
+    const publicLocationLabel = parsed.publicLocationLabel?.trim();
+    const privateLocationNote = parsed.privateLocationNote?.trim();
+    const peerify = {
+        venueDisclosure: parsed.venueDisclosure ?? "public",
+        locationDisclosure: parsed.locationDisclosure ?? "public",
+        accessMode: parsed.accessMode ?? "open_rsvp",
+        ...(publicLocationLabel ? { publicLocationLabel } : {}),
+        ...(privateLocationNote ? { privateLocationNote } : {}),
+        ...(parsed.venueCircleId ? { venueCircleId: parsed.venueCircleId } : {}),
+    };
+
+    return {
+        metadata: {
+            peerify,
+        },
+        clearPublicLocationLabel: !publicLocationLabel,
+        clearPrivateLocationNote: !privateLocationNote,
+    };
+};
+
+const mergePeerifyEventMetadata = (
+    existingMetadata: EventModel["metadata"] | undefined,
+    peerifyMetadata: ParsedPeerifyEventMetadata | undefined,
+): EventModel["metadata"] | undefined => {
+    if (!peerifyMetadata?.metadata.peerify) {
+        return existingMetadata;
+    }
+
+    const nextPeerify = {
+        ...((existingMetadata?.peerify || {}) as Record<string, unknown>),
+        ...peerifyMetadata.metadata.peerify,
+    };
+    if (peerifyMetadata.clearPublicLocationLabel) {
+        delete nextPeerify.publicLocationLabel;
+    }
+    if (peerifyMetadata.clearPrivateLocationNote) {
+        delete nextPeerify.privateLocationNote;
+    }
+
+    return {
+        ...(existingMetadata || {}),
+        peerify: nextPeerify,
+    };
+};
 
 const getEventInternalPreviewUrl = (circleHandle: string, eventId: string) => {
     const baseUrl = (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
@@ -386,6 +460,7 @@ export async function createEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            peerifyEventMetadata: (formData.get("peerifyEventMetadata") as string) ?? undefined,
             recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
@@ -418,6 +493,8 @@ export async function createEventAction(
                 recurrenceData.endDate = normalizeRecurrenceEndDate(new Date(recurrenceData.endDate));
             }
         }
+
+        const metadata = parsePeerifyEventMetadata(data.peerifyEventMetadata)?.metadata;
 
         // Handle images
         const imageFiles = (data.images || []).filter(isFile);
@@ -463,6 +540,7 @@ export async function createEventAction(
             causes: (data.causes as string[])?.filter(Boolean),
             capacity,
             visibility: (data.visibility as any) ?? "public",
+            metadata,
             recurrence: recurrenceData,
         };
 
@@ -551,6 +629,7 @@ export async function updateEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            peerifyEventMetadata: (formData.get("peerifyEventMetadata") as string) ?? undefined,
             recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
@@ -631,6 +710,10 @@ export async function updateEventAction(
 
         const startAt = data.startAt ? parseDate(data.startAt) : event.startAt;
         const endAt = data.endAt ? parseDate(data.endAt) : event.endAt;
+        const metadata = mergePeerifyEventMetadata(
+            event.metadata,
+            parsePeerifyEventMetadata(data.peerifyEventMetadata),
+        );
 
         const updateData: Partial<EventModel> = {
             title: data.title,
@@ -651,6 +734,7 @@ export async function updateEventAction(
                     ? Number(data.capacity)
                     : undefined,
             visibility: (data.visibility as any) ?? event.visibility,
+            metadata,
             recurrence: recurrenceData as any,
             updatedAt: new Date(),
         };

@@ -3,7 +3,15 @@
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createEventAction, updateEventAction } from "@/app/circles/[handle]/events/actions";
-import { Circle, EventDisplay, Location, Media } from "@/models/models";
+import {
+    Circle,
+    EventDisplay,
+    Location,
+    Media,
+    PeerifyEventAccessMode,
+    PeerifyEventLocationDisclosure,
+    PeerifyEventVenueDisclosure,
+} from "@/models/models";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,13 +24,7 @@ import LocationPicker from "@/components/forms/location-picker";
 import TimePicker from "@/components/forms/time-picker";
 import { format, addHours, setHours, setMinutes } from "date-fns";
 import { Bold, Italic, List, Link as LinkIcon, Heading1, Heading2 } from "lucide-react";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Props = {
     circleHandle?: string; // optional, can come from context or picker
@@ -57,6 +59,91 @@ function toUtcEndOfDayIso(dateOnly: string) {
 import CircleSelector from "@/components/global-create/circle-selector";
 import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
 
+const VENUE_DISCLOSURE_OPTIONS: Array<{
+    value: PeerifyEventVenueDisclosure;
+    label: string;
+    helper: string;
+}> = [
+    {
+        value: "public",
+        label: "Show venue",
+        helper: "The venue or host can be shown publicly.",
+    },
+    {
+        value: "venue_to_be_disclosed",
+        label: "Venue to be announced",
+        helper: "Use this when the event is public, but the venue has not been chosen or confirmed yet.",
+    },
+    {
+        value: "secret_after_acceptance",
+        label: "Hide venue until accepted",
+        helper: "The venue exists, but is shown only after approval, ticket purchase, or invite acceptance later.",
+    },
+    {
+        value: "one_off_location",
+        label: "One-off location",
+        helper: "Use this for a pop-up or living-room event that does not need a reusable Venue profile.",
+    },
+];
+
+const LOCATION_DISCLOSURE_OPTIONS: Array<{
+    value: PeerifyEventLocationDisclosure;
+    label: string;
+    helper: string;
+}> = [
+    {
+        value: "public",
+        label: "Show exact location",
+        helper: "The public event page may show the saved address and exact map pin.",
+    },
+    {
+        value: "approximate",
+        label: "Show approximate area",
+        helper: "Show only city/area publicly. The exact address and pin are hidden from public views.",
+    },
+    {
+        value: "secret_after_acceptance",
+        label: "Reveal after acceptance",
+        helper: "Show a public label now; reveal the exact address later to approved, ticketed, or invited attendees.",
+    },
+    {
+        value: "to_be_disclosed",
+        label: "Location to be announced",
+        helper: "Use this when the location is not yet chosen or should not be shown yet.",
+    },
+];
+
+const ACCESS_MODE_OPTIONS: Array<{
+    value: PeerifyEventAccessMode;
+    label: string;
+    helper: string;
+}> = [
+    {
+        value: "open_rsvp",
+        label: "Open RSVP",
+        helper: "People can RSVP normally.",
+    },
+    {
+        value: "approval_required",
+        label: "Approval required",
+        helper: "People can request to attend. Approval workflow will be wired later.",
+    },
+    {
+        value: "ticket_required",
+        label: "Ticket required",
+        helper: "Use for ticketed events. Ticketing will be wired later.",
+    },
+    {
+        value: "invite_only",
+        label: "Invite only",
+        helper: "Attendance is restricted to invited people.",
+    },
+];
+
+function getSelectedHelper<T extends string>(options: Array<{ value: T; helper: string }>, value: T) {
+    return options.find((option) => option.value === value)?.helper;
+}
+
 export default function EventForm({ circleHandle, event, showCirclePicker, initialSelectedCircleId }: Props) {
     console.log("EventForm mounted/updated. Event recurrence:", event?.recurrence);
     const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
@@ -76,25 +163,35 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
     const [publishToNoticeboard, setPublishToNoticeboard] = useState<boolean>(Boolean(event?.noticeboardPostId));
+    const peerifyMetadata = event?.metadata?.peerify;
+    const [venueDisclosure, setVenueDisclosure] = useState<PeerifyEventVenueDisclosure>(
+        peerifyMetadata?.venueDisclosure || "public",
+    );
+    const [locationDisclosure, setLocationDisclosure] = useState<PeerifyEventLocationDisclosure>(
+        peerifyMetadata?.locationDisclosure || "public",
+    );
+    const [accessMode, setAccessMode] = useState<PeerifyEventAccessMode>(peerifyMetadata?.accessMode || "open_rsvp");
+    const [publicLocationLabel, setPublicLocationLabel] = useState<string>(peerifyMetadata?.publicLocationLabel || "");
+    const [privateLocationNote, setPrivateLocationNote] = useState<string>(peerifyMetadata?.privateLocationNote || "");
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
     const [recurrenceFreq, setRecurrenceFreq] = useState<"daily" | "weekly" | "monthly" | "yearly">(
-        event?.recurrence?.frequency || "daily"
+        event?.recurrence?.frequency || "daily",
     );
     const [recurrenceInterval, setRecurrenceInterval] = useState<string>(
-        event?.recurrence?.interval ? String(event?.recurrence.interval) : "1"
+        event?.recurrence?.interval ? String(event?.recurrence.interval) : "1",
     );
     const [recurrenceEndMode, setRecurrenceEndMode] = useState<"date" | "count">(
-        event?.recurrence?.count ? "count" : "date"
+        event?.recurrence?.count ? "count" : "date",
     );
     const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>(
         event?.recurrence?.endDate
             ? formatDate(new Date(event.recurrence.endDate))
-            : formatDate(addHours(new Date(), 24 * 7)) // Default to one week later
+            : formatDate(addHours(new Date(), 24 * 7)), // Default to one week later
     );
     const [recurrenceCount, setRecurrenceCount] = useState<string>(
-        event?.recurrence?.count ? String(event.recurrence.count) : "7"
+        event?.recurrence?.count ? String(event.recurrence.count) : "7",
     );
 
     const [startDate, setStartDate] = useState(() =>
@@ -130,7 +227,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
             const newCursorPos = start + prefix.length + selection.length + suffix.length;
             textarea.setSelectionRange(
                 start + prefix.length,
-                selection.length ? start + prefix.length + selection.length : start + prefix.length
+                selection.length ? start + prefix.length + selection.length : start + prefix.length,
             );
         }, 0);
     };
@@ -249,6 +346,16 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                 fd.set("allDay", allDay ? "on" : "");
                 if (capacity) fd.set("capacity", capacity);
                 fd.set("visibility", isPrivate ? "private" : "public");
+                fd.set(
+                    "peerifyEventMetadata",
+                    JSON.stringify({
+                        venueDisclosure,
+                        locationDisclosure,
+                        accessMode,
+                        publicLocationLabel: publicLocationLabel.trim(),
+                        privateLocationNote: privateLocationNote.trim(),
+                    }),
+                );
 
                 if (isRecurring) {
                     const recurrenceData = {
@@ -469,12 +576,12 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                                     setIsRecurring(checked);
                                     if (checked) {
                                         // Reset end date to start date to avoid multi-day recurrence confusion
-                                        setEndDate(startDate); 
+                                        setEndDate(startDate);
                                         if (!recurrenceFreq) {
                                             setRecurrenceFreq("daily");
                                             setRecurrenceInterval("1");
                                             setRecurrenceEndMode("date");
-                                            setRecurrenceEndDate(endDate); 
+                                            setRecurrenceEndDate(endDate);
                                         }
                                     }
                                 }}
@@ -618,10 +725,12 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
 
                     <div className="flex items-center gap-2">
                         <Switch id="isPrivate" checked={isPrivate} onCheckedChange={setIsPrivate} />
-                        <Label htmlFor="isPrivate">Private event</Label>
+                        <Label htmlFor="isPrivate">{isPrivate ? "Private event" : "Public event"}</Label>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Private events are visible only to the creator and invited participants.
+                        {isPrivate
+                            ? "Invite-only or unlisted. Not shown publicly."
+                            : "Listed publicly when the event is open."}
                     </p>
 
                     <div className="rounded-lg border p-4">
@@ -653,6 +762,119 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                         <p className="mt-1 text-xs text-muted-foreground">
                             Set the event location. For online events, toggle &quot;Virtual&quot; above.
                         </p>
+                    </div>
+
+                    <div className="space-y-4 rounded-lg border p-4">
+                        <div>
+                            <h3 className="text-sm font-medium">Peerify disclosure</h3>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Exact location can still be saved privately even when public display is approximate,
+                                secret, or to be announced.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="venueDisclosure">Venue display</Label>
+                            <Select
+                                value={venueDisclosure}
+                                onValueChange={(value) => setVenueDisclosure(value as PeerifyEventVenueDisclosure)}
+                            >
+                                <SelectTrigger id="venueDisclosure">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {VENUE_DISCLOSURE_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {getSelectedHelper(VENUE_DISCLOSURE_OPTIONS, venueDisclosure)}
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="locationDisclosure">Location display</Label>
+                            <Select
+                                value={locationDisclosure}
+                                onValueChange={(value) =>
+                                    setLocationDisclosure(value as PeerifyEventLocationDisclosure)
+                                }
+                            >
+                                <SelectTrigger id="locationDisclosure">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {LOCATION_DISCLOSURE_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {getSelectedHelper(LOCATION_DISCLOSURE_OPTIONS, locationDisclosure)}
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="accessMode">Access mode</Label>
+                            <Select
+                                value={accessMode}
+                                onValueChange={(value) => setAccessMode(value as PeerifyEventAccessMode)}
+                            >
+                                <SelectTrigger id="accessMode">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {ACCESS_MODE_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {getSelectedHelper(ACCESS_MODE_OPTIONS, accessMode)}
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="publicLocationLabel">Public location label</Label>
+                            <Input
+                                id="publicLocationLabel"
+                                value={publicLocationLabel}
+                                onChange={(e) => setPublicLocationLabel(e.target.value)}
+                                placeholder="Stockholm venue TBA"
+                            />
+                            <p
+                                className={`text-xs ${
+                                    locationDisclosure === "public"
+                                        ? "text-muted-foreground"
+                                        : "font-medium text-muted-foreground"
+                                }`}
+                            >
+                                Shown publicly when the exact location is approximate, secret, or to be announced.
+                                Example: Cape Town city bowl, Stockholm venue TBA, or Address shared after approval.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="privateLocationNote">Private location note</Label>
+                            <Textarea
+                                id="privateLocationNote"
+                                value={privateLocationNote}
+                                onChange={(e) => setPrivateLocationNote(e.target.value)}
+                                className="min-h-[90px]"
+                                placeholder="Internal organiser note"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Internal organiser note about the exact address, access instructions, or reveal
+                                conditions. Do not show this publicly yet.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
