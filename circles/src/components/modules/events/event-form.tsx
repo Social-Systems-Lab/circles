@@ -173,6 +173,9 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
     const [accessMode, setAccessMode] = useState<PeerifyEventAccessMode>(peerifyMetadata?.accessMode || "open_rsvp");
     const [publicLocationLabel, setPublicLocationLabel] = useState<string>(peerifyMetadata?.publicLocationLabel || "");
     const [privateLocationNote, setPrivateLocationNote] = useState<string>(peerifyMetadata?.privateLocationNote || "");
+    const [publicMapLocation, setPublicMapLocation] = useState<Location | undefined>(
+        peerifyMetadata?.publicMapLocation,
+    );
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
@@ -354,6 +357,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                         accessMode,
                         publicLocationLabel: publicLocationLabel.trim(),
                         privateLocationNote: privateLocationNote.trim(),
+                        publicMapLocation: publicMapLocation ?? null,
                     }),
                 );
 
@@ -859,6 +863,25 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                             >
                                 Shown publicly when the exact address is approximate, secret, or to be announced.
                                 Examples: Cape Town city bowl, Stockholm venue TBA, or Address shared after approval.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Public map area</Label>
+                            <LocationPicker
+                                value={publicMapLocation}
+                                onChange={(val) => setPublicMapLocation(val)}
+                                compact
+                            />
+                            <p
+                                className={`text-xs ${
+                                    locationDisclosure === "public" && venueDisclosure !== "venue_to_be_disclosed"
+                                        ? "text-muted-foreground"
+                                        : "font-medium text-muted-foreground"
+                                }`}
+                            >
+                                Optional safe map point for discovery when the exact venue or address is hidden,
+                                approximate, or to be announced. This should be a general area, not a private address.
                             </p>
                         </div>
 

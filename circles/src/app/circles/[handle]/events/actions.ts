@@ -84,6 +84,10 @@ type HideCancelledEventResult = {
 
 // ----- Zod Schemas -----
 
+const peerifyEventMetadataFormSchema = peerifyEventMetadataSchema.extend({
+    publicMapLocation: locationSchema.nullish(),
+});
+
 const createEventSchema = z.object({
     title: z.string().min(1, "Title is required"),
     description: z.string().min(1, "Description is required"),
@@ -121,7 +125,7 @@ const createEventSchema = z.object({
             (val) => {
                 if (!val) return true;
                 try {
-                    peerifyEventMetadataSchema.parse(JSON.parse(val));
+                    peerifyEventMetadataFormSchema.parse(JSON.parse(val));
                     return true;
                 } catch {
                     return false;
@@ -185,6 +189,7 @@ type ParsedPeerifyEventMetadata = {
     metadata: NonNullable<EventModel["metadata"]>;
     clearPublicLocationLabel: boolean;
     clearPrivateLocationNote: boolean;
+    clearPublicMapLocation: boolean;
 };
 
 const parsePeerifyEventMetadata = (value?: string): ParsedPeerifyEventMetadata | undefined => {
@@ -193,15 +198,17 @@ const parsePeerifyEventMetadata = (value?: string): ParsedPeerifyEventMetadata |
     }
 
     const raw = JSON.parse(value);
-    const parsed = peerifyEventMetadataSchema.parse(raw);
+    const parsed = peerifyEventMetadataFormSchema.parse(raw);
     const publicLocationLabel = parsed.publicLocationLabel?.trim();
     const privateLocationNote = parsed.privateLocationNote?.trim();
+    const publicMapLocation = parsed.publicMapLocation ?? undefined;
     const peerify = {
         venueDisclosure: parsed.venueDisclosure ?? "public",
         locationDisclosure: parsed.locationDisclosure ?? "public",
         accessMode: parsed.accessMode ?? "open_rsvp",
         ...(publicLocationLabel ? { publicLocationLabel } : {}),
         ...(privateLocationNote ? { privateLocationNote } : {}),
+        ...(publicMapLocation ? { publicMapLocation } : {}),
         ...(parsed.venueCircleId ? { venueCircleId: parsed.venueCircleId } : {}),
     };
 
@@ -211,6 +218,7 @@ const parsePeerifyEventMetadata = (value?: string): ParsedPeerifyEventMetadata |
         },
         clearPublicLocationLabel: !publicLocationLabel,
         clearPrivateLocationNote: !privateLocationNote,
+        clearPublicMapLocation: !publicMapLocation,
     };
 };
 
@@ -231,6 +239,9 @@ const mergePeerifyEventMetadata = (
     }
     if (peerifyMetadata.clearPrivateLocationNote) {
         delete nextPeerify.privateLocationNote;
+    }
+    if (peerifyMetadata.clearPublicMapLocation) {
+        delete nextPeerify.publicMapLocation;
     }
 
     return {

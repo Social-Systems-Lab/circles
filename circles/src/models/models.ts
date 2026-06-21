@@ -1721,6 +1721,7 @@ export const peerifyEventMetadataSchema = z.object({
     accessMode: peerifyEventAccessModeSchema.optional(),
     publicLocationLabel: z.string().optional(),
     privateLocationNote: z.string().optional(),
+    publicMapLocation: locationSchema.optional(),
     venueCircleId: z.string().optional(),
 });
 export type PeerifyEventMetadata = z.infer<typeof peerifyEventMetadataSchema>;

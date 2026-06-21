@@ -119,6 +119,21 @@ function buildPublicLabelLocation(label: string): Location {
     };
 }
 
+function sanitizePeerifyPublicMapLocation(location?: Location): Location | undefined {
+    if (!location?.lngLat) {
+        return undefined;
+    }
+
+    return {
+        precision: Math.min(location.precision ?? 2, 2),
+        country: location.country,
+        region: location.region,
+        city: location.city,
+        street: undefined,
+        lngLat: location.lngLat,
+    };
+}
+
 function sanitizeApproximatePublicLocation(event: EventDisplay): Location | undefined {
     const label = getPeerifyEventMetadata(event).publicLocationLabel?.trim();
     if (label) {
@@ -137,9 +152,9 @@ function sanitizeApproximatePublicLocation(event: EventDisplay): Location | unde
     };
 }
 
-export function getNormalizedPeerifyEventMetadata(event: EventDisplay): Required<
-    Pick<PeerifyEventMetadata, "locationDisclosure" | "venueDisclosure" | "accessMode">
-> &
+export function getNormalizedPeerifyEventMetadata(
+    event: EventDisplay,
+): Required<Pick<PeerifyEventMetadata, "locationDisclosure" | "venueDisclosure" | "accessMode">> &
     PeerifyEventMetadata {
     const peerify = getPeerifyEventMetadata(event);
     return {
@@ -158,6 +173,11 @@ function sanitizePeerifyPublicEventMetadata(event: EventDisplay): EventDisplay["
         accessMode: peerify.accessMode,
     };
 
+    const publicMapLocation = sanitizePeerifyPublicMapLocation(peerify.publicMapLocation);
+    if (publicMapLocation) {
+        publicPeerify.publicMapLocation = publicMapLocation;
+    }
+
     if (peerify.publicLocationLabel) {
         publicPeerify.publicLocationLabel = peerify.publicLocationLabel;
     }
@@ -172,11 +192,20 @@ function sanitizePeerifyPublicEventMetadata(event: EventDisplay): EventDisplay["
 export function sanitizePeerifyPublicEventDisplay(event: EventDisplay): EventDisplay {
     const locationDisclosure = getPeerifyEventLocationDisclosure(event);
     const metadata = sanitizePeerifyPublicEventMetadata(event);
+    const publicMapLocation = sanitizePeerifyPublicMapLocation(getPeerifyEventMetadata(event).publicMapLocation);
 
     if (locationDisclosure === "public") {
         return {
             ...event,
             metadata,
+        };
+    }
+
+    if (publicMapLocation) {
+        return {
+            ...event,
+            metadata,
+            location: publicMapLocation,
         };
     }
 
@@ -1185,17 +1214,20 @@ export const changeEventStage = async (eventId: string, newStage: EventStage): P
 /**
  * Get open events across all circles for map display.
  * Filters by optional date range overlap or, if no range provided, to upcoming (endAt >= now).
- * Ensures events have a location with lngLat.
+ * Ensures events have either an exact location or a Peerify public-safe map location with lngLat.
  */
 export const getOpenEventsForMap = async (userDid: string, range?: Range): Promise<EventDisplay[]> => {
     try {
         const dateMatch = buildRangeMatch(range);
         const now = new Date();
 
-        // Base match: must be open and have a geocoded point
+        // Base match: must be open and have a geocoded point for exact or public-safe map placement.
         const baseMatch: any = {
             stage: "open",
-            "location.lngLat": { $exists: true },
+            $or: [
+                { "location.lngLat": { $exists: true } },
+                { "metadata.peerify.publicMapLocation.lngLat": { $exists: true } },
+            ],
         };
 
         // Apply date overlap if provided, otherwise only upcoming
@@ -1381,7 +1413,8 @@ export const getOpenEventsForMap = async (userDid: string, range?: Range): Promi
             { $sort: { startAt: 1 } },
         ]).toArray()) as EventDisplay[];
 
-        return events;
+        // TODO: Visually differentiate approximate/secret/TBD Peerify event markers on the map.
+        return events.map(sanitizePeerifyPublicEventDisplay);
     } catch (error) {
         console.error("Error getting open events for map:", error);
         throw error;
