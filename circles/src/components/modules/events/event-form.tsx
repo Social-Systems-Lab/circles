@@ -66,8 +66,8 @@ const VENUE_DISCLOSURE_OPTIONS: Array<{
 }> = [
     {
         value: "public",
-        label: "Show venue",
-        helper: "The venue or host can be shown publicly.",
+        label: "Show venue / host",
+        helper: "Show the venue, host, or event place publicly.",
     },
     {
         value: "venue_to_be_disclosed",
@@ -76,12 +76,12 @@ const VENUE_DISCLOSURE_OPTIONS: Array<{
     },
     {
         value: "secret_after_acceptance",
-        label: "Hide venue until accepted",
-        helper: "The venue exists, but is shown only after approval, ticket purchase, or invite acceptance later.",
+        label: "Hide venue / host until accepted",
+        helper: "Hide the venue or host publicly until approval, ticket purchase, or invite acceptance later.",
     },
     {
         value: "one_off_location",
-        label: "One-off location",
+        label: "One-off location, no venue profile",
         helper: "Use this for a pop-up or living-room event that does not need a reusable Venue profile.",
     },
 ];
@@ -93,23 +93,23 @@ const LOCATION_DISCLOSURE_OPTIONS: Array<{
 }> = [
     {
         value: "public",
-        label: "Show exact location",
+        label: "Show exact address and map pin",
         helper: "The public event page may show the saved address and exact map pin.",
     },
     {
         value: "approximate",
-        label: "Show approximate area",
-        helper: "Show only city/area publicly. The exact address and pin are hidden from public views.",
+        label: "Show approximate area only",
+        helper: "Show only city or area publicly. The exact address and pin are hidden from public views.",
     },
     {
         value: "secret_after_acceptance",
-        label: "Reveal after acceptance",
+        label: "Reveal address after acceptance",
         helper: "Show a public label now; reveal the exact address later to approved, ticketed, or invited attendees.",
     },
     {
         value: "to_be_disclosed",
-        label: "Location to be announced",
-        helper: "Use this when the location is not yet chosen or should not be shown yet.",
+        label: "Address to be announced",
+        helper: "Use this when the address is not yet chosen or should not be shown yet.",
     },
 ];
 
@@ -766,15 +766,16 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
 
                     <div className="space-y-4 rounded-lg border p-4">
                         <div>
-                            <h3 className="text-sm font-medium">Peerify disclosure</h3>
+                            <h3 className="text-sm font-medium">Venue & location privacy</h3>
                             <p className="mt-1 text-xs text-muted-foreground">
-                                Exact location can still be saved privately even when public display is approximate,
-                                secret, or to be announced.
+                                Choose what people can see before they are accepted, ticketed, or invited. Venue / host
+                                display controls the name or identity of the place. Address & map display controls the
+                                exact address and map pin.
                             </p>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="venueDisclosure">Venue display</Label>
+                            <Label htmlFor="venueDisclosure">Venue / host display</Label>
                             <Select
                                 value={venueDisclosure}
                                 onValueChange={(value) => setVenueDisclosure(value as PeerifyEventVenueDisclosure)}
@@ -796,7 +797,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="locationDisclosure">Location display</Label>
+                            <Label htmlFor="locationDisclosure">Address & map display</Label>
                             <Select
                                 value={locationDisclosure}
                                 onValueChange={(value) =>
@@ -842,7 +843,7 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="publicLocationLabel">Public location label</Label>
+                            <Label htmlFor="publicLocationLabel">Public area / address label</Label>
                             <Input
                                 id="publicLocationLabel"
                                 value={publicLocationLabel}
@@ -856,13 +857,13 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                                         : "font-medium text-muted-foreground"
                                 }`}
                             >
-                                Shown publicly when the exact location is approximate, secret, or to be announced.
-                                Example: Cape Town city bowl, Stockholm venue TBA, or Address shared after approval.
+                                Shown publicly when the exact address is approximate, secret, or to be announced.
+                                Examples: Cape Town city bowl, Stockholm venue TBA, or Address shared after approval.
                             </p>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="privateLocationNote">Private location note</Label>
+                            <Label htmlFor="privateLocationNote">Private organiser note</Label>
                             <Textarea
                                 id="privateLocationNote"
                                 value={privateLocationNote}
@@ -871,8 +872,8 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                                 placeholder="Internal organiser note"
                             />
                             <p className="text-xs text-muted-foreground">
-                                Internal organiser note about the exact address, access instructions, or reveal
-                                conditions. Do not show this publicly yet.
+                                Internal note about the exact address, access instructions, or reveal conditions. This
+                                is not shown publicly.
                             </p>
                         </div>
                     </div>
