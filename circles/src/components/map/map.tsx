@@ -144,6 +144,107 @@ const getStableMarkerZIndex = (lngLat: { lng: number; lat: number }, id: string)
     return 1000 + Math.round((90 - lngLat.lat) * 100) + getStableMarkerTieBreak(id);
 };
 
+const PEERIFY_AREA_SOURCE_ID = "peerify-event-area-markers";
+const PEERIFY_AREA_FILL_LAYER_ID = "peerify-event-area-markers-fill";
+const PEERIFY_AREA_LINE_LAYER_ID = "peerify-event-area-markers-line";
+const DEFAULT_PEERIFY_AREA_RADIUS_KM = 3;
+const EARTH_RADIUS_KM = 6371;
+
+const isPeerifyAreaMapContent = (content: Content): boolean =>
+    isEventDisplay(content) && (content as EventDisplay).metadata?.peerify?.publicMapDisplay === "area";
+
+const getPeerifyAreaRadiusKm = (content: Content): number => {
+    const radius = isEventDisplay(content) ? content.metadata?.peerify?.publicMapRadiusKm : undefined;
+    return typeof radius === "number" && radius > 0 ? radius : DEFAULT_PEERIFY_AREA_RADIUS_KM;
+};
+
+const buildCirclePolygonCoordinates = (
+    center: { lng: number; lat: number },
+    radiusKm: number,
+    steps = 64,
+): [number, number][] => {
+    const lat = degreesToRadians(center.lat);
+    const lng = degreesToRadians(center.lng);
+    const angularDistance = radiusKm / EARTH_RADIUS_KM;
+    const coordinates: [number, number][] = [];
+
+    for (let index = 0; index <= steps; index += 1) {
+        const bearing = (2 * Math.PI * index) / steps;
+        const pointLat = Math.asin(
+            Math.sin(lat) * Math.cos(angularDistance) + Math.cos(lat) * Math.sin(angularDistance) * Math.cos(bearing),
+        );
+        const pointLng =
+            lng +
+            Math.atan2(
+                Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(lat),
+                Math.cos(angularDistance) - Math.sin(lat) * Math.sin(pointLat),
+            );
+
+        coordinates.push([(pointLng * 180) / Math.PI, (pointLat * 180) / Math.PI]);
+    }
+
+    return coordinates;
+};
+
+const buildPeerifyAreaFeatureCollection = (contents: Content[]) => ({
+    type: "FeatureCollection" as const,
+    features: contents.flatMap((content) => {
+        const lngLat = getLngLatParts(content.location?.lngLat);
+        if (!lngLat || !isPeerifyAreaMapContent(content)) {
+            return [];
+        }
+
+        return [
+            {
+                type: "Feature" as const,
+                properties: {
+                    id: content._id,
+                    title: getMarkerTitle(content),
+                    radiusKm: getPeerifyAreaRadiusKm(content),
+                },
+                geometry: {
+                    type: "Polygon" as const,
+                    coordinates: [buildCirclePolygonCoordinates(lngLat, getPeerifyAreaRadiusKm(content))],
+                },
+            },
+        ];
+    }),
+});
+
+const ensurePeerifyAreaLayers = (currentMap: mapboxgl.Map) => {
+    if (!currentMap.getSource(PEERIFY_AREA_SOURCE_ID)) {
+        currentMap.addSource(PEERIFY_AREA_SOURCE_ID, {
+            type: "geojson",
+            data: buildPeerifyAreaFeatureCollection([]),
+        });
+    }
+
+    if (!currentMap.getLayer(PEERIFY_AREA_FILL_LAYER_ID)) {
+        currentMap.addLayer({
+            id: PEERIFY_AREA_FILL_LAYER_ID,
+            type: "fill",
+            source: PEERIFY_AREA_SOURCE_ID,
+            paint: {
+                "fill-color": "#f8dd53",
+                "fill-opacity": 0.18,
+            },
+        });
+    }
+
+    if (!currentMap.getLayer(PEERIFY_AREA_LINE_LAYER_ID)) {
+        currentMap.addLayer({
+            id: PEERIFY_AREA_LINE_LAYER_ID,
+            type: "line",
+            source: PEERIFY_AREA_SOURCE_ID,
+            paint: {
+                "line-color": "#f8dd53",
+                "line-opacity": 0.58,
+                "line-width": 2,
+            },
+        });
+    }
+};
+
 const getMarkerDescription = (content: Content): string => {
     if (isEventDisplay(content)) {
         return (content as any)?.description ?? "";
@@ -237,6 +338,17 @@ const setMarkerSelected = (element: HTMLElement, selected: boolean) => {
     }
 };
 
+const applyMarkerDisclosureStyle = (element: HTMLElement, content: Content) => {
+    const isAreaMarker = isPeerifyAreaMapContent(content);
+    const title = isAreaMarker ? `${getMarkerTitle(content)} - Approximate area` : getMarkerTitle(content);
+    element.title = title;
+    element.setAttribute("aria-label", title);
+    const face = element.querySelector<HTMLElement>("[data-marker-face]");
+    if (face) {
+        face.style.borderStyle = isAreaMarker ? "dashed" : "solid";
+    }
+};
+
 const createMarkerElement = (
     content: Content,
     onClick: (content: Content) => void,
@@ -245,8 +357,9 @@ const createMarkerElement = (
 ): HTMLDivElement => {
     const theme = getMarkerTheme(content);
     const imageUrl = getOptimizedImageUrl(getMarkerImageUrl(content), 64, 60);
+    const isAreaMarker = isPeerifyAreaMapContent(content);
     const markerElement = document.createElement("div");
-    markerElement.title = getMarkerTitle(content);
+    markerElement.title = isAreaMarker ? `${getMarkerTitle(content)} - Approximate area` : getMarkerTitle(content);
     markerElement.setAttribute("aria-label", markerElement.title);
     markerElement.style.width = `${theme.size}px`;
     markerElement.style.height = `${theme.size + 8}px`;
@@ -274,6 +387,7 @@ const createMarkerElement = (
     face.style.height = `${theme.size}px`;
     face.style.borderRadius = "9999px";
     face.style.border = "2px solid #ffffff";
+    face.style.borderStyle = isAreaMarker ? "dashed" : "solid";
     face.style.backgroundColor = theme.background;
     if (imageUrl && !isEventDisplay(content)) {
         face.style.backgroundImage = `url("${imageUrl}")`;
@@ -320,6 +434,7 @@ const createMarkerElement = (
 
     markerElement.appendChild(face);
     markerElement.appendChild(pointer);
+    applyMarkerDisclosureStyle(markerElement, content);
     return markerElement;
 };
 
@@ -539,6 +654,21 @@ const MapBox = ({
         }
     }, []);
 
+    const updatePeerifyAreaLayers = useCallback(() => {
+        const currentMap = map.current;
+        if (!currentMap || !currentMap.isStyleLoaded()) {
+            return;
+        }
+
+        try {
+            ensurePeerifyAreaLayers(currentMap);
+            const source = currentMap.getSource(PEERIFY_AREA_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+            source?.setData(buildPeerifyAreaFeatureCollection(displayedContent || []));
+        } catch (error) {
+            console.warn("Failed to update Peerify area marker layer:", error);
+        }
+    }, [displayedContent]);
+
     useEffect(() => {
         if (!mapContainer.current) {
             return; // wait for map container to be available
@@ -575,10 +705,12 @@ const MapBox = ({
                     }
                 });
             }
+
+            updatePeerifyAreaLayers();
         });
 
         map.current.on("render", syncMarkerPositions);
-    }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent, syncMarkerPositions]);
+    }, [mapContainer, lat, lng, zoom, mapboxKey, displayedContent, syncMarkerPositions, updatePeerifyAreaLayers]);
 
     useEffect(() => {
         if (!map.current) {
@@ -613,6 +745,7 @@ const MapBox = ({
 
         const overlay = markerOverlay.current;
         const currentMarkerIds = new Set(markersRef.current.keys());
+        updatePeerifyAreaLayers();
 
         displayedContent.forEach((item) => {
             if (item?.location?.lngLat) {
@@ -623,14 +756,12 @@ const MapBox = ({
                     currentMarkerIds.delete(markerId);
                     focusedMarkerIdsRef.current.delete(markerId);
                     markerContentRef.current.set(markerId, item);
+                    applyMarkerDisclosureStyle(existingMarker, item);
                     const lngLat = getLngLatParts(item.location.lngLat);
                     if (lngLat) {
                         existingMarker.dataset.zIndex = `${getStableMarkerZIndex(lngLat, markerId)}`;
                     }
                 } else {
-                    // TODO: Peerify private/approximate venues currently use exact saved coordinates for point
-                    // placement. Add a later map UI pass for approximate circle/radius rendering before treating
-                    // private venue placement as visually approximate.
                     const markerElement = createMarkerElement(item, onMarkerClick, openMarkerPopup, closeMarkerPopup);
                     const lngLat = getLngLatParts(item.location.lngLat);
                     if (lngLat) {
@@ -656,7 +787,14 @@ const MapBox = ({
                 markerContentRef.current.delete(id);
             }
         });
-    }, [displayedContent, onMarkerClick, openMarkerPopup, closeMarkerPopup, syncMarkerPositions]);
+    }, [
+        displayedContent,
+        onMarkerClick,
+        openMarkerPopup,
+        closeMarkerPopup,
+        syncMarkerPositions,
+        updatePeerifyAreaLayers,
+    ]);
 
     useEffect(() => {
         // console.log("Zooming to content", zoomContent);
@@ -961,24 +1099,27 @@ export function MapDisplay({ mapboxKey }: { mapboxKey: string }) {
                                         isMobile ? "bottom-full mb-2 mt-0" : "left-0"
                                     }`}
                                 >
-                                    {(Object.entries(MAP_STYLES) as [MapStylePreference, (typeof MAP_STYLES)[MapStylePreference]][]).map(
-                                        ([value, config]) => (
-                                            <button
-                                                key={value}
-                                                type="button"
-                                                role="menuitemradio"
-                                                aria-checked={mapStylePreference === value}
-                                                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-white/10"
-                                                onClick={() => {
-                                                    setMapStylePreference(value);
-                                                    setIsMapStyleMenuOpen(false);
-                                                }}
-                                            >
-                                                <span>{config.label}</span>
-                                                {mapStylePreference === value ? <HiOutlineCheck size="16px" /> : null}
-                                            </button>
-                                        ),
-                                    )}
+                                    {(
+                                        Object.entries(MAP_STYLES) as [
+                                            MapStylePreference,
+                                            (typeof MAP_STYLES)[MapStylePreference],
+                                        ][]
+                                    ).map(([value, config]) => (
+                                        <button
+                                            key={value}
+                                            type="button"
+                                            role="menuitemradio"
+                                            aria-checked={mapStylePreference === value}
+                                            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-white/10"
+                                            onClick={() => {
+                                                setMapStylePreference(value);
+                                                setIsMapStyleMenuOpen(false);
+                                            }}
+                                        >
+                                            <span>{config.label}</span>
+                                            {mapStylePreference === value ? <HiOutlineCheck size="16px" /> : null}
+                                        </button>
+                                    ))}
                                 </div>
                             )}
                         </div>

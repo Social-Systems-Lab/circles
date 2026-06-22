@@ -86,6 +86,7 @@ const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
 const DEFAULT_PUBLIC_LOCATION_DISCLOSURE: PeerifyEventLocationDisclosure = "public";
 const DEFAULT_PUBLIC_VENUE_DISCLOSURE: PeerifyEventVenueDisclosure = "public";
 const DEFAULT_PUBLIC_ACCESS_MODE: PeerifyEventAccessMode = "open_rsvp";
+const DEFAULT_PUBLIC_MAP_AREA_RADIUS_KM = 3;
 const SECRET_LOCATION_LABEL = "Location revealed after acceptance";
 const TBD_LOCATION_LABEL = "Location to be announced";
 
@@ -167,15 +168,20 @@ export function getNormalizedPeerifyEventMetadata(
 
 function sanitizePeerifyPublicEventMetadata(event: EventDisplay): EventDisplay["metadata"] {
     const peerify = getNormalizedPeerifyEventMetadata(event);
+    const locationDisclosure = getPeerifyEventLocationDisclosure(event);
     const publicPeerify: PeerifyEventMetadata = {
         locationDisclosure: peerify.locationDisclosure,
         venueDisclosure: peerify.venueDisclosure,
         accessMode: peerify.accessMode,
+        publicMapDisplay: locationDisclosure === "public" ? "exact" : "area",
     };
 
     const publicMapLocation = sanitizePeerifyPublicMapLocation(peerify.publicMapLocation);
     if (publicMapLocation) {
         publicPeerify.publicMapLocation = publicMapLocation;
+        if (locationDisclosure !== "public") {
+            publicPeerify.publicMapRadiusKm = DEFAULT_PUBLIC_MAP_AREA_RADIUS_KM;
+        }
     }
 
     if (peerify.publicLocationLabel) {
