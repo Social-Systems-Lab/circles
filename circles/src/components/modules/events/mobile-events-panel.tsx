@@ -10,6 +10,7 @@ import { getOpenEventsForListAction } from "@/components/modules/circles/map-exp
 import type { EventDisplay, Cause as SDG } from "@/models/models";
 import { CalendarIcon, Clock, MapPin, Users } from "lucide-react";
 import { format } from "date-fns";
+import { getPeerifyEventDisclosureDisplay, getPeerifySafeEventLocationText } from "./peerify-event-disclosure-display";
 
 function fmtRange(startAt?: Date | string, endAt?: Date | string, allDay?: boolean): string {
     if (!startAt || !endAt) return "";
@@ -57,13 +58,10 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const [isExpanded, setIsExpanded] = useState(false);
     const attendees = e.attendees ?? 0;
-    const locationString = (() => {
-        if (e.isVirtual) return "Online";
-        const loc: any = e.location || {};
-        const parts = [loc.street, loc.city, loc.region, loc.country].filter(Boolean) as string[];
-        return parts.length ? parts.join(", ") : undefined;
-    })();
-    const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}#circle-tabs` : "#";
+    const locationString = getPeerifySafeEventLocationText(e);
+    const disclosureDisplay = getPeerifyEventDisclosureDisplay(e);
+    const href =
+        e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}#circle-tabs` : "#";
 
     const handleLocationClick = (event: React.MouseEvent) => {
         event.preventDefault();
@@ -86,8 +84,8 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     }
 
     return (
-        <div 
-            className="flex flex-col rounded border border-transparent px-3 py-2 transition-colors cursor-pointer hover:bg-gray-50"
+        <div
+            className="flex cursor-pointer flex-col rounded border border-transparent px-3 py-2 transition-colors hover:bg-gray-50"
             onClick={() => setIsExpanded(true)}
         >
             <div className="flex items-center gap-3">
@@ -104,6 +102,18 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
                 )}
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-[15px] font-semibold">{e.title || "Untitled"}</div>
+                    {disclosureDisplay.cardBadges.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                            {disclosureDisplay.cardBadges.map((badge) => (
+                                <span
+                                    key={badge.key}
+                                    className="inline-flex rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-[10px] font-medium text-stone-700"
+                                >
+                                    {badge.label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                     <div className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
                         <span className="inline-flex items-center">
                             <CalendarIcon className="mr-1 h-3 w-3" />
@@ -118,7 +128,7 @@ const MobileEventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
                                 title="Zoom to location"
                             >
                                 <MapPin className="mr-1 h-3 w-3 text-primary" />
-                                <span className="truncate max-w-[150px]">{locationString}</span>
+                                <span className="max-w-[150px] truncate">{locationString}</span>
                             </button>
                         )}
                         {attendees > 0 && (

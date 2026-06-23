@@ -16,6 +16,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { hideCancelledEventAction } from "@/app/circles/[handle]/events/actions";
 import { getEventJoinState } from "./event-join-state";
+import { getPeerifyEventDisclosureDisplay, getPeerifySafeEventLocationText } from "./peerify-event-disclosure-display";
 import { getShiftConfirmedSummary, getShiftDisplayStatus, getShiftPendingSummary } from "../tasks/shift-task-utils";
 
 type Props = {
@@ -81,11 +82,7 @@ function fmtRange(startAt?: Date | string, endAt?: Date | string, allDay?: boole
 }
 
 function locationToString(evt: EventDisplay): string | undefined {
-    if (evt.isVirtual) return "Online";
-    const loc = evt.location;
-    if (!loc) return undefined;
-    const parts = [loc.street, loc.city, loc.region, loc.country].filter(Boolean) as string[];
-    return parts.length ? parts.join(", ") : undefined;
+    return getPeerifySafeEventLocationText(evt);
 }
 
 function getCanonicalEventId(evt: EventDisplay): string {
@@ -142,6 +139,7 @@ const EventCard: React.FC<{
         canManageMissingLink: canManageJoinLink,
         missingLinkLabel: "Missing link",
     });
+    const disclosureDisplay = getPeerifyEventDisclosureDisplay(e);
 
     return (
         <Card
@@ -200,6 +198,15 @@ const EventCard: React.FC<{
                                         Cancelled
                                     </Badge>
                                 )}
+                                {disclosureDisplay.cardBadges.map((badge) => (
+                                    <Badge
+                                        key={badge.key}
+                                        variant="outline"
+                                        className="border-stone-200 bg-stone-50 text-xs text-stone-700"
+                                    >
+                                        {badge.label}
+                                    </Badge>
+                                ))}
                             </div>
                         </div>
                         {e.description && (
@@ -236,6 +243,11 @@ const EventCard: React.FC<{
                                     <MapPin className="mr-1 h-3 w-3 shrink-0" />
                                     <span className="truncate">{locationToString(e)}</span>
                                 </Button>
+                            )}
+                            {disclosureDisplay.publicLocationLabel && (
+                                <span className="inline-flex max-w-[180px] truncate rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 font-medium text-stone-700">
+                                    {disclosureDisplay.publicLocationLabel}
+                                </span>
                             )}
                             {attendees > 0 && (
                                 <span className="inline-flex items-center">

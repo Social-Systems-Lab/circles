@@ -38,6 +38,7 @@ import AttendeesList from "./attendees-list";
 import RsvpDialog from "./rsvp-dialog";
 import EventTasksPanel from "./event-tasks-panel";
 import { getEventJoinState } from "./event-join-state";
+import { getPeerifyEventDisclosureDisplay, getPeerifySafeEventLocationText } from "./peerify-event-disclosure-display";
 import { CommentSection } from "../feeds/CommentSection";
 import RichText from "../feeds/RichText";
 import { userAtom, mapboxKeyAtom, zoomContentAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
@@ -108,13 +109,12 @@ export default function EventDetail({
         canManageMissingLink: canManageJoinLink,
         missingLinkLabel: compact ? "Missing link" : "Join link missing",
     });
+    const disclosureDisplay = getPeerifyEventDisclosureDisplay(event);
+    const hasDisclosureDetails =
+        disclosureDisplay.detailBadges.length > 0 || Boolean(disclosureDisplay.publicLocationLabel);
+    const accessBadge = disclosureDisplay.cardBadges.find((badge) => badge.key === "access");
 
-    const locationText =
-        event.isVirtual && event.virtualUrl
-            ? ""
-            : event.location
-              ? [event.location.city, event.location.region, event.location.country].filter(Boolean).join(", ")
-              : "";
+    const locationText = event.isVirtual && event.virtualUrl ? "" : getPeerifySafeEventLocationText(event) || "";
     const locationLabel = event.isVirtual && !locationText ? "Virtual" : locationText;
     const hasMapLocation = Boolean(event.location?.lngLat);
     const resolvedDistance = hasMapLocation
@@ -364,11 +364,33 @@ export default function EventDetail({
                             </div>
                         )}
                     </div>
+                    {(disclosureDisplay.cardBadges.length > 0 || disclosureDisplay.publicLocationLabel) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            {disclosureDisplay.publicLocationLabel && (
+                                <span className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-700">
+                                    {disclosureDisplay.publicLocationLabel}
+                                </span>
+                            )}
+                            {disclosureDisplay.cardBadges.map((badge) => (
+                                <span
+                                    key={badge.key}
+                                    className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-700"
+                                >
+                                    {badge.label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="px-4">
                     <div className="rounded-md border bg-white/60 p-3">
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
+                        {accessBadge && (
+                            <div className="mb-2 w-fit rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-700">
+                                {accessBadge.label}
+                            </div>
+                        )}
                         {user ? (
                             <div className="flex flex-wrap gap-2">
                                 {event.userRsvpStatus === "going" ? (
@@ -643,6 +665,28 @@ export default function EventDetail({
                             )}
                             {event.isHybrid ? <div className="text-xs text-muted-foreground">Hybrid</div> : null}
                         </div>
+                        {hasDisclosureDetails && (
+                            <div className="mt-3 border-t pt-3">
+                                {disclosureDisplay.publicLocationLabel && (
+                                    <div className="mb-2 text-sm font-medium text-stone-800">
+                                        {disclosureDisplay.publicLocationLabel}
+                                    </div>
+                                )}
+                                <div className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+                                    Location privacy
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {disclosureDisplay.detailBadges.map((badge) => (
+                                        <span
+                                            key={badge.key}
+                                            className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-700"
+                                        >
+                                            {badge.label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {event.description && (
@@ -657,6 +701,11 @@ export default function EventDetail({
                 <div className="space-y-4">
                     <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
+                        {accessBadge && (
+                            <div className="mb-3 w-fit rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-medium text-stone-700">
+                                {accessBadge.label}
+                            </div>
+                        )}
                         {user ? (
                             <div className="flex flex-wrap gap-2">
                                 {event.userRsvpStatus === "going" ? (

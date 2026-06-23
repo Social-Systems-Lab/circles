@@ -13,6 +13,10 @@ import { format } from "date-fns";
 import { ListFilter } from "@/components/utils/list-filter";
 import { getOpenEventsForListAction } from "@/components/modules/circles/map-explorer-actions";
 import type { EventDisplay, Cause as SDG } from "@/models/models";
+import {
+    getPeerifyEventDisclosureDisplay,
+    getPeerifySafeEventLocationText,
+} from "@/components/modules/events/peerify-event-disclosure-display";
 
 function fmtRange(startAt?: Date | string, endAt?: Date | string, allDay?: boolean): string {
     if (!startAt || !endAt) return "";
@@ -59,13 +63,10 @@ const EventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     const [, setTriggerOpen] = useAtom(triggerMapOpenAtom);
     const [isExpanded, setIsExpanded] = useState(false);
     const attendees = e.attendees ?? 0;
-    const locationString = (() => {
-        if (e.isVirtual) return "Online";
-        const loc: any = e.location || {};
-        const parts = [loc.street, loc.city, loc.region, loc.country].filter(Boolean) as string[];
-        return parts.length ? parts.join(", ") : undefined;
-    })();
-    const href = e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}#circle-tabs` : "#";
+    const locationString = getPeerifySafeEventLocationText(e);
+    const disclosureDisplay = getPeerifyEventDisclosureDisplay(e);
+    const href =
+        e?.circle?.handle && (e as any)._id ? `/circles/${e.circle!.handle}/events/${(e as any)._id}#circle-tabs` : "#";
 
     const handleLocationClick = (event: React.MouseEvent) => {
         event.preventDefault();
@@ -88,10 +89,7 @@ const EventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
     }
 
     return (
-        <div 
-            className="group block cursor-pointer transition-all duration-200"
-            onClick={() => setIsExpanded(true)}
-        >
+        <div className="group block cursor-pointer transition-all duration-200" onClick={() => setIsExpanded(true)}>
             <Card className="relative transition-shadow hover:shadow-md hover:shadow-sm">
                 <CardContent className="p-3">
                     <div className="flex items-start gap-3">
@@ -126,6 +124,19 @@ const EventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
                                     </Badge>
                                 )}
                             </div>
+                            {disclosureDisplay.cardBadges.length > 0 && (
+                                <div className="mb-1 flex flex-wrap gap-1">
+                                    {disclosureDisplay.cardBadges.map((badge) => (
+                                        <Badge
+                                            key={badge.key}
+                                            variant="outline"
+                                            className="border-stone-200 bg-stone-50 text-[10px] text-stone-700"
+                                        >
+                                            {badge.label}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
                             <div className="mb-0.5 flex items-center text-xs text-muted-foreground">
                                 <CalendarIcon className="mr-1 h-3 w-3" />
                                 {fmtRange(e.startAt, e.endAt, e.allDay)}
@@ -138,7 +149,7 @@ const EventRow: React.FC<{ e: EventDisplay }> = ({ e }) => {
                                         title="Zoom to location"
                                     >
                                         <MapPin className="mr-1 h-3 w-3 text-primary" />
-                                        <span className="truncate max-w-[150px]">{locationString}</span>
+                                        <span className="max-w-[150px] truncate">{locationString}</span>
                                     </button>
                                 )}
                                 {attendees > 0 && (
