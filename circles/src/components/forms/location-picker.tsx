@@ -41,6 +41,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     const [isLoading, setIsLoading] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
     const [geolocationAvailable, setGeolocationAvailable] = useState<boolean | null>(null);
+    const [isSecureContext, setIsSecureContext] = useState<boolean | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [autoCompleteValue, setAutoCompleteValue] = useState<Option>({
         value: value?.lngLat ? `${value.lngLat.lat},${value.lngLat.lng}` : "",
@@ -56,6 +57,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
     useEffect(() => {
         setGeolocationAvailable(typeof navigator !== "undefined" && "geolocation" in navigator);
+        setIsSecureContext(typeof window !== "undefined" ? window.isSecureContext : null);
     }, []);
 
     useEffect(() => {
@@ -262,37 +264,80 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
         setIsLocationConfirmed(true);
     };
 
-    const handleUseCurrentLocation = () => {
+    const getGeolocationErrorMessage = (error: GeolocationPositionError): string => {
+        if (error.code === error.PERMISSION_DENIED) {
+            return "Location permission was denied. Allow location access in your browser, or search manually.";
+        }
+        if (error.code === error.POSITION_UNAVAILABLE) {
+            return "Your browser could not determine your current location. Try again, check system location services, or search manually.";
+        }
+        if (error.code === error.TIMEOUT) {
+            return "Could not find your current location in time. Try again, or search manually.";
+        }
+        return "Could not find your current location. Try again, or search manually.";
+    };
+
+    const getCurrentPosition = (options: PositionOptions): Promise<GeolocationPosition> =>
+        new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, options);
+        });
+
+    const shouldRetryGeolocation = (error: GeolocationPositionError): boolean =>
+        error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT;
+
+    const handleUseCurrentLocation = async () => {
+        if (typeof window !== "undefined" && !window.isSecureContext) {
+            setIsSecureContext(false);
+            setLocationError("Current location requires HTTPS or localhost.");
+            return;
+        }
+
         if (typeof navigator === "undefined" || !navigator.geolocation) {
             setGeolocationAvailable(false);
-            setLocationError("Current location is not available in this browser or connection.");
+            setLocationError("Current location is not available in this browser.");
             return;
         }
 
         setIsLocating(true);
         setLocationError(null);
 
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
-                const updated = await updateLocation({ lng: longitude, lat: latitude }, true);
-                if (updated) {
-                    setIsLocationConfirmed(true);
+        try {
+            let position: GeolocationPosition;
+            try {
+                position = await getCurrentPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+            } catch (firstError) {
+                const geolocationError = firstError as GeolocationPositionError;
+                console.warn("LocationPicker geolocation failed on high-accuracy attempt", {
+                    code: geolocationError.code,
+                    message: geolocationError.message,
+                });
+
+                if (!shouldRetryGeolocation(geolocationError)) {
+                    throw geolocationError;
                 }
-                setIsLocating(false);
-            },
-            (error) => {
-                const message =
-                    error.code === error.PERMISSION_DENIED
-                        ? "Location permission was denied. Allow location access in your browser, or search for a location manually."
-                        : error.code === error.POSITION_UNAVAILABLE
-                          ? "Current location is unavailable. Search for a location or tap the map instead."
-                          : "Current location timed out. Try again or search for a location manually.";
-                setLocationError(message);
-                setIsLocating(false);
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-        );
+
+                position = await getCurrentPosition({
+                    enableHighAccuracy: false,
+                    timeout: 15000,
+                    maximumAge: 300000,
+                });
+            }
+
+            const { latitude, longitude } = position.coords;
+            const updated = await updateLocation({ lng: longitude, lat: latitude }, true);
+            if (updated) {
+                setIsLocationConfirmed(true);
+            }
+        } catch (error) {
+            const geolocationError = error as GeolocationPositionError;
+            console.warn("LocationPicker geolocation failed", {
+                code: geolocationError.code,
+                message: geolocationError.message,
+            });
+            setLocationError(getGeolocationErrorMessage(geolocationError));
+        } finally {
+            setIsLocating(false);
+        }
     };
 
     const getDisplayLocation = useCallback((location: Location | undefined, precisionLevel: PrecisionLevel) => {
@@ -345,16 +390,18 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
             <Button
                 type="button"
                 onClick={handleUseCurrentLocation}
-                disabled={isLocating || geolocationAvailable === false}
+                disabled={isLocating || geolocationAvailable === false || isSecureContext === false}
             >
                 <MapPin className="mr-2 h-4 w-4" />
                 {isLocating ? "Finding Location..." : "Use Current Location"}
             </Button>
             {locationError && <p className="text-xs text-destructive">{locationError}</p>}
+            {isSecureContext === false && !locationError && (
+                <p className="text-xs text-muted-foreground">Current location requires HTTPS or localhost.</p>
+            )}
             {geolocationAvailable === false && !locationError && (
                 <p className="text-xs text-muted-foreground">
-                    Current location is unavailable in this browser or connection. Search for a location or tap the map
-                    instead.
+                    Current location is not available in this browser. Search for a location or tap the map instead.
                 </p>
             )}
             {/* Adjust map height based on compact mode */}
