@@ -764,7 +764,10 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                         <Label htmlFor="location">Location</Label>
                         <LocationPicker value={location} onChange={(val) => setLocation(val)} compact />
                         <p className="mt-1 text-xs text-muted-foreground">
-                            Set the event location. For online events, toggle &quot;Virtual&quot; above.
+                            {locationDisclosure === "public"
+                                ? "Shown publicly when the event is open."
+                                : "Saved privately. Public visitors will see the public map area instead."}{" "}
+                            For online events, toggle &quot;Virtual&quot; above.
                         </p>
                     </div>
 
@@ -824,6 +827,27 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                             </p>
                         </div>
 
+                        {locationDisclosure !== "public" && (
+                            <div className="space-y-2">
+                                <Label>Public map area</Label>
+                                <LocationPicker
+                                    value={publicMapLocation}
+                                    onChange={(val) => setPublicMapLocation(val)}
+                                    compact
+                                />
+                                <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                                    <p>
+                                        This is not the venue address. It is only the approximate area shown on Explore
+                                        while the exact address is hidden or not yet announced.
+                                    </p>
+                                    <p>
+                                        Use a neighbourhood, city area, or general meeting area, not a private home
+                                        address.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <Label htmlFor="accessMode">Access mode</Label>
                             <Select
@@ -863,25 +887,6 @@ export default function EventForm({ circleHandle, event, showCirclePicker, initi
                             >
                                 Shown publicly when the exact address is approximate, secret, or to be announced.
                                 Examples: Cape Town city bowl, Stockholm venue TBA, or Address shared after approval.
-                            </p>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Public map area</Label>
-                            <LocationPicker
-                                value={publicMapLocation}
-                                onChange={(val) => setPublicMapLocation(val)}
-                                compact
-                            />
-                            <p
-                                className={`text-xs ${
-                                    locationDisclosure === "public" && venueDisclosure !== "venue_to_be_disclosed"
-                                        ? "text-muted-foreground"
-                                        : "font-medium text-muted-foreground"
-                                }`}
-                            >
-                                Optional safe map point for discovery when the exact venue or address is hidden,
-                                approximate, or to be announced. This should be a general area, not a private address.
                             </p>
                         </div>
 
