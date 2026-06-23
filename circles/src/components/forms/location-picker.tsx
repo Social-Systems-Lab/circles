@@ -39,6 +39,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     const [precision, setPrecision] = useState<PrecisionLevel>((value?.precision as PrecisionLevel) ?? 4);
     const [mapboxKey] = useAtom(mapboxKeyAtom);
     const [isLoading, setIsLoading] = useState(false);
+    const [isLocating, setIsLocating] = useState(false);
+    const [geolocationAvailable, setGeolocationAvailable] = useState<boolean | null>(null);
+    const [locationError, setLocationError] = useState<string | null>(null);
     const [autoCompleteValue, setAutoCompleteValue] = useState<Option>({
         value: value?.lngLat ? `${value.lngLat.lat},${value.lngLat.lng}` : "",
         label: "",
@@ -49,6 +52,10 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.LocationPicker.1");
         }
+    }, []);
+
+    useEffect(() => {
+        setGeolocationAvailable(typeof navigator !== "undefined" && "geolocation" in navigator);
     }, []);
 
     useEffect(() => {
@@ -134,14 +141,22 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
         }
     }, [precision]);
 
-    const updateLocation = async (lngLat: LngLat, flyTo: boolean) => {
-        if (!map.current || !mapMarker.current) return;
+    const updateLocation = async (lngLat: LngLat, flyTo: boolean): Promise<boolean> => {
+        if (!mapboxKey) {
+            setLocationError("Map services are still loading. Try again in a moment.");
+            return false;
+        }
 
         try {
             const response = await fetch(
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.lng},${lngLat.lat}.json?access_token=${mapboxgl.accessToken}`,
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat.lng},${lngLat.lat}.json?access_token=${mapboxKey}`,
             );
             const data = await response.json();
+
+            let newLocation: Location = {
+                precision,
+                lngLat,
+            };
 
             if (data.features && data.features.length > 0) {
                 const feature = data.features[0];
@@ -155,7 +170,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                 }
                 street = feature.text;
 
-                const newLocation: Location = {
+                newLocation = {
                     precision,
                     country,
                     region,
@@ -163,7 +178,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                     street,
                     lngLat: lngLat,
                 };
+            }
 
+            if (map.current && mapMarker.current) {
                 // Update the map marker position
                 mapMarker.current.setLngLat(lngLat);
 
@@ -175,12 +192,16 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                 if (flyTo) {
                     map.current.flyTo({ center: lngLat, zoom: precisionLevels[precision].zoom });
                 }
-
-                // After map updates are done, update the location state
-                onChange(newLocation);
             }
+
+            setLocationError(null);
+            // After map updates are done, update the location state
+            onChange(newLocation);
+            return true;
         } catch (error) {
             console.error("Error updating location:", error);
+            setLocationError("Could not look up that location. Check your connection and try again.");
+            return false;
         }
     };
 
@@ -242,13 +263,36 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     };
 
     const handleUseCurrentLocation = () => {
-        if (!map) return;
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+            setGeolocationAvailable(false);
+            setLocationError("Current location is not available in this browser or connection.");
+            return;
+        }
 
-        navigator.geolocation.getCurrentPosition((position) => {
-            const { latitude, longitude } = position.coords;
-            updateLocation({ lng: longitude, lat: latitude }, true);
-            setIsLocationConfirmed(true);
-        });
+        setIsLocating(true);
+        setLocationError(null);
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                const updated = await updateLocation({ lng: longitude, lat: latitude }, true);
+                if (updated) {
+                    setIsLocationConfirmed(true);
+                }
+                setIsLocating(false);
+            },
+            (error) => {
+                const message =
+                    error.code === error.PERMISSION_DENIED
+                        ? "Location permission was denied. Allow location access in your browser, or search for a location manually."
+                        : error.code === error.POSITION_UNAVAILABLE
+                          ? "Current location is unavailable. Search for a location or tap the map instead."
+                          : "Current location timed out. Try again or search for a location manually.";
+                setLocationError(message);
+                setIsLocating(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+        );
     };
 
     const getDisplayLocation = useCallback((location: Location | undefined, precisionLevel: PrecisionLevel) => {
@@ -298,10 +342,21 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
                 isLocationConfirmed={isLocationConfirmed}
                 onClear={handleClearLocation}
             />
-            <Button type="button" onClick={handleUseCurrentLocation}>
+            <Button
+                type="button"
+                onClick={handleUseCurrentLocation}
+                disabled={isLocating || geolocationAvailable === false}
+            >
                 <MapPin className="mr-2 h-4 w-4" />
-                Use Current Location
+                {isLocating ? "Finding Location..." : "Use Current Location"}
             </Button>
+            {locationError && <p className="text-xs text-destructive">{locationError}</p>}
+            {geolocationAvailable === false && !locationError && (
+                <p className="text-xs text-muted-foreground">
+                    Current location is unavailable in this browser or connection. Search for a location or tap the map
+                    instead.
+                </p>
+            )}
             {/* Adjust map height based on compact mode */}
             <div className={`relative w-full ${compact ? "h-[200px]" : "h-[300px]"}`}>
                 <div ref={mapContainer} style={{ width: "100%", height: "100%" }}></div>
