@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Control, Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -36,6 +36,27 @@ export function SignupForm(): React.ReactElement {
     const [, setUser] = useAtom(userAtom);
     const [, setAuthInfo] = useAtom(authInfoAtom);
     const searchParams = useSearchParams();
+    const altchaRef = useRef<HTMLElement | null>(null);
+    const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
+
+    useEffect(() => {
+        import("altcha");
+    }, []);
+
+    useEffect(() => {
+        const el = altchaRef.current;
+        if (!el) return;
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.state === "verified" && typeof detail.payload === "string") {
+                setAltchaPayload(detail.payload);
+            } else {
+                setAltchaPayload(null);
+            }
+        };
+        el.addEventListener("statechange", handler as EventListener);
+        return () => el.removeEventListener("statechange", handler as EventListener);
+    }, []);
 
     const form = useForm<SignupFormData>({
         resolver: zodResolver(signupValidationSchema),
@@ -48,10 +69,17 @@ export function SignupForm(): React.ReactElement {
     });
 
     const onSubmit = async (data: SignupFormData) => {
+        if (!altchaPayload) {
+            toast({
+                title: "Verification required",
+                description: "Please complete the human-verification check.",
+                variant: "destructive",
+            });
+            return;
+        }
         setIsSubmitting(true);
         try {
-            // Call the onSubmit method from the imported action object
-            const result = await submitSignupFormAction(data);
+            const result = await submitSignupFormAction({ ...data, altcha: altchaPayload });
             if (result.success) {
                 toast({
                     title: "Signup Successful",
@@ -185,7 +213,9 @@ export function SignupForm(): React.ReactElement {
                     )}
                 />
 
-                <Button type="submit" disabled={isSubmitting} className="w-full">
+                <altcha-widget ref={altchaRef} challenge="/api/altcha/challenge" />
+
+                <Button type="submit" disabled={isSubmitting || !altchaPayload} className="w-full">
                     {isSubmitting ? "Signing up..." : "Sign up"}
                 </Button>
 

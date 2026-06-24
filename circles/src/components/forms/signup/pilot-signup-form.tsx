@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { submitSignupFormAction } from "@/components/forms/signup/actions";
@@ -103,6 +103,27 @@ export function PilotSignupForm() {
     const [errors, setErrors] = useState<PilotSignupErrors>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasEditedHandle, setHasEditedHandle] = useState(false);
+    const altchaRef = useRef<HTMLElement | null>(null);
+    const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
+
+    useEffect(() => {
+        import("altcha");
+    }, []);
+
+    useEffect(() => {
+        const el = altchaRef.current;
+        if (!el) return;
+        const handler = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.state === "verified" && typeof detail.payload === "string") {
+                setAltchaPayload(detail.payload);
+            } else {
+                setAltchaPayload(null);
+            }
+        };
+        el.addEventListener("statechange", handler as EventListener);
+        return () => el.removeEventListener("statechange", handler as EventListener);
+    }, []);
 
     const updateField = (field: keyof PilotSignupState, value: string) => {
         setState((prev) => ({ ...prev, [field]: value }));
@@ -127,6 +148,15 @@ export function PilotSignupForm() {
             return;
         }
 
+        if (!altchaPayload) {
+            toast({
+                title: "Verification required",
+                description: "Please complete the human-verification check.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -136,6 +166,7 @@ export function PilotSignupForm() {
                 handle: sanitizeHandle(state.handle),
                 _email: state.email.trim(),
                 _password: state.password,
+                altcha: altchaPayload,
                 metadata: {
                     onboardingFlow: "pilot-quick-signup",
                 },
@@ -288,7 +319,9 @@ export function PilotSignupForm() {
                             {errors.handle ? <p className="text-sm text-red-600">{errors.handle}</p> : null}
                         </div>
 
-                        <Button type="submit" disabled={isSubmitting} className="w-full bg-[#e8720c] text-[#181512] hover:bg-[#ff8c2a]">
+                        <altcha-widget ref={altchaRef} challenge="/api/altcha/challenge" />
+
+                        <Button type="submit" disabled={isSubmitting || !altchaPayload} className="w-full bg-[#e8720c] text-[#181512] hover:bg-[#ff8c2a]">
                             {isSubmitting ? "Creating account..." : "Create account"}
                         </Button>
 

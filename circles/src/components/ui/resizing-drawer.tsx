@@ -29,7 +29,7 @@ const ResizingDrawer = ({
     triggerSnapIndex, // New
     onTriggerConsumed, // New
 }: ResizingDrawerProps) => {
-    const AnimatedComponent = animated.div as React.ElementType;
+    const AnimatedComponent = animated("div") as React.ElementType;
     const drawerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const touchTargetRef = useRef<HTMLDivElement>(null);

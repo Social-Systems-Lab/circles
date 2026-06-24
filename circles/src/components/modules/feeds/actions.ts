@@ -66,7 +66,7 @@ import {
     notifyCommentMentions,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
-import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { canInteract, getInteractionRequiredMessage } from "@/lib/auth/verification";
 import { getMentionableUserIdsForUserDid, searchMentionableUsersForUserDid } from "@/lib/data/chat";
 
 // Global posts: posts from all public feeds
@@ -376,8 +376,8 @@ export async function createPostAction(
         return { success: false, message: "You need to be logged in to create a post" };
     }
     const currentUser = await getUserPrivate(userDid);
-    if (!canPerformRestrictedAction(currentUser)) {
-        return { success: false, message: getRestrictedActionMessage("create posts") };
+    if (!canInteract(currentUser)) {
+        return { success: false, message: getInteractionRequiredMessage("create posts") };
     }
 
     try {

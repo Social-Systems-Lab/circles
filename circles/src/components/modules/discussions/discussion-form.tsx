@@ -55,6 +55,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { getFullLocationName } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { canInteract } from "@/lib/auth/verification";
 import { Label } from "@/components/ui/label";
 import { userAtom } from "@/lib/data/atoms";
 import {
@@ -672,7 +673,7 @@ export function DiscussionForm({
                 {selectedCircleId && (
                     <>
                         <div className="min-h-0 flex-grow overflow-y-auto pr-2">
-                            {!user.isVerified && (
+                            {!canInteract(user) && (
                                 <div className="formatted mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
                                     <div className="flex items-center">
                                         <Info className="mr-2 h-5 w-5 flex-shrink-0" />

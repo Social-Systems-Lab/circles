@@ -548,6 +548,7 @@ export const circleSchema = z.object({
     emailVerificationTokenExpiry: z.date().nullable().optional(),
     // Platform-level verification
     isVerified: z.boolean().optional(),
+    isHuman: z.boolean().optional(),
     isMember: z.boolean().optional(),
     verificationStatus: verificationStatusSchema.optional(),
     verifiedAt: z.date().optional(),

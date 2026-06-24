@@ -13,7 +13,7 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getUserByDid } from "@/lib/data/user";
-import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { canInteract, getInteractionRequiredMessage } from "@/lib/auth/verification";
 import { extractMentions } from "@/lib/data/feed";
 import { getMentionableUserIdsForUserDid } from "@/lib/data/chat";
 
@@ -26,8 +26,8 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
 
     const user = await getUserByDid(userDid);
     if (!user) throw new Error("User not found");
-    if (!canPerformRestrictedAction(user)) {
-        throw new Error(getRestrictedActionMessage("create discussions"));
+    if (!canInteract(user)) {
+        throw new Error(getInteractionRequiredMessage("create discussions"));
     }
 
     const circle = await getCircleByHandle(handle);

@@ -30,7 +30,12 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
-import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import {
+    canInteract,
+    canPerformRestrictedAction,
+    getInteractionRequiredMessage,
+    getRestrictedActionMessage,
+} from "@/lib/auth/verification";
 import { getDmEligibility } from "@/lib/data/relationships";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
@@ -70,6 +75,24 @@ const ensureVerifiedMessagingUser = async (userDid: string, action: string): Pro
     );
     if (!canPerformRestrictedAction(user)) {
         return getRestrictedActionMessage(action);
+    }
+    return null;
+};
+
+const ensureInteractiveMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
+    const user = await Circles.findOne(
+        { did: userDid },
+        {
+            projection: {
+                isAdmin: 1,
+                isHuman: 1,
+                isVerified: 1,
+                verificationStatus: 1,
+            },
+        },
+    );
+    if (!canInteract(user)) {
+        return getInteractionRequiredMessage(action);
     }
     return null;
 };
@@ -638,7 +661,7 @@ export const sendMongoMessageAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send messages" };
     }
-    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "send messages");
+    const verificationMessage = await ensureInteractiveMessagingUser(userDid, "send messages");
     if (verificationMessage) {
         return { success: false, message: verificationMessage };
     }
@@ -851,7 +874,7 @@ export const findOrCreateDMConversationAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send PM" };
     }
-    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "start direct messages");
+    const verificationMessage = await ensureInteractiveMessagingUser(userDid, "start direct messages");
     if (verificationMessage) {
         return { success: false, message: verificationMessage };
     }
