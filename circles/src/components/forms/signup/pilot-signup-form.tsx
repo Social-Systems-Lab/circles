@@ -321,7 +321,7 @@ export function PilotSignupForm() {
 
                         <altcha-widget ref={altchaRef} challenge="/api/altcha/challenge" />
 
-                        <Button type="submit" disabled={isSubmitting || !altchaPayload} className="w-full bg-[#e8720c] text-[#181512] hover:bg-[#ff8c2a]">
+                        <Button type="submit" disabled={isSubmitting || !altchaPayload} className="w-full">
                             {isSubmitting ? "Creating account..." : "Create account"}
                         </Button>
 
