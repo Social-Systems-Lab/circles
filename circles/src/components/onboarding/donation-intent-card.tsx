@@ -65,11 +65,11 @@ export default function DonationIntentCard({
     <div className="space-y-8">
       <div className="rounded-[24px] border border-white/70 bg-white/70 p-6 shadow-[0_10px_35px_rgba(123,81,24,0.08)]">
         <h2 className="font-[family-name:var(--font-noto-serif)] text-2xl text-kam-gray-dark sm:text-3xl">
-          You&apos;re ready to start using Peerify.
+          You&apos;re ready to start using Kamooni.
         </h2>
 
         <p className="mt-4 text-sm leading-6 text-kam-gray-dark/75 sm:text-base">
-          Peerify is community-supported. Would you consider becoming a Founding
+          Kamooni is community-supported. Would you consider becoming a Founding
           Supporter from <span className="font-semibold">€1/month</span>?
         </p>
       </div>

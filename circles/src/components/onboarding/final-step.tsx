@@ -79,9 +79,9 @@ function FinalStep({ nextStep }: OnboardingStepProps) {
                     </div>
                 </div>
             </div>
-            <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Welcome to Peerify!</h2>
+            <h2 className="mb-0 mt-0 text-2xl  font-semibold text-gray-800">Welcome to Kamooni!</h2>
             <p className="text-gray-600">
-                Your Peerify journey begins now. Here&apos;s a glimpse of the music community you&apos;re about to enter:
+                Your Kamooni journey begins now. Here&apos;s a glimpse of the community you&apos;re about to enter:
             </p>
             {platformMetrics ? (
                 <div className="grid grid-cols-2 gap-4">

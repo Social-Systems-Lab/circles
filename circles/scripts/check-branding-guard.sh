@@ -2,6 +2,9 @@
 set -euo pipefail
 
 TARGET="${1:-}"
+files=()
+roots=()
+allowed_files=("__no_branding_guard_allowlist_entries__")
 
 if [[ -z "$TARGET" ]]; then
   echo "Usage: $0 <kamooni|peerify>" >&2
@@ -10,20 +13,12 @@ fi
 
 case "$TARGET" in
   kamooni)
-    files=(
-      "src/app/page.tsx"
-      "src/app/welcome/page.tsx"
-      "src/app/layout.tsx"
-      "src/app/not-found.tsx"
-      "src/components/layout/global-nav.tsx"
-      "src/components/layout/global-nav-items.tsx"
-      "src/components/forms/signup/onboarding-signup-flow.tsx"
-      "src/components/modules/feeds/feed.tsx"
-    )
+    roots=("src/app" "src/components" "src/lib")
     forbidden_strings=(
       "Peerify"
       "peerify"
-      "/peerify/"
+      "/peerify"
+      "peerify.net"
       "peerify-landing-page"
     )
     ;;
@@ -54,7 +49,27 @@ esac
 
 failures=0
 
+if [[ "${#roots[@]}" -gt 0 ]]; then
+  while IFS= read -r file; do
+    files+=("$file")
+  done < <(find "${roots[@]}" -type f | sort)
+fi
+
+is_allowed_file() {
+  local candidate="$1"
+  for allowed in "${allowed_files[@]}"; do
+    if [[ "$candidate" == "$allowed" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 for file in "${files[@]}"; do
+  if is_allowed_file "$file"; then
+    continue
+  fi
+
   if [[ ! -f "$file" ]]; then
     echo "BRANDING GUARD FAIL [$TARGET] missing file: $file" >&2
     failures=1

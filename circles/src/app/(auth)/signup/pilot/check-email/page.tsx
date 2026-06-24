@@ -7,19 +7,13 @@ type PageProps = {
         email?: string;
         handle?: string;
         redirectTo?: string;
-        intent?: string;
     }>;
 };
-
-function normalizePeerifyIntent(value?: string): "fan" | "artist" | "host" | null {
-    return value === "fan" || value === "artist" || value === "host" ? value : null;
-}
 
 export default async function PilotCheckEmailPage(props: PageProps) {
     const searchParams = await props.searchParams;
     const handle = searchParams.handle?.trim();
     const redirectTo = searchParams.redirectTo?.trim();
-    const peerifyIntent = normalizePeerifyIntent(searchParams.intent);
     const continueUrl = redirectTo
         ? redirectTo
         : handle
@@ -30,14 +24,14 @@ export default async function PilotCheckEmailPage(props: PageProps) {
         <div className="flex min-h-screen items-center justify-center bg-[#f7f2ea] px-4 py-10">
             <Card className="w-full max-w-xl border-[#e3d5c2] bg-[#faf6ef] shadow-sm">
                 <CardHeader className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Peerify Pilot Signup</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Kamooni Pilot Signup</p>
                     <CardTitle className="text-3xl text-[#181512]">Check your email</CardTitle>
                     <p className="text-sm text-[#6b5f52]">
                         We&apos;ve sent a verification link to your email address. Verify your email before continuing
                         with profile setup so we know we can reach you.
                     </p>
                     <p className="text-sm text-[#6b5f52]">
-                        This step only confirms your email address. After that, you can continue into Peerify and choose what
+                        This step only confirms your email address. After that, you can continue into Kamooni and choose what
                         you want to do first.
                     </p>
                     {searchParams.email ? <p className="text-sm font-medium text-[#181512]">{searchParams.email}</p> : null}

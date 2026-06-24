@@ -28,8 +28,8 @@ export default function OnboardingCompleteAnimation() {
           }}
         >
           <Image
-            src="/peerify/logo-mark.png"
-            alt="Peerify"
+            src="/images/kamooni_logo.png"
+            alt="Kamooni"
             width={140}
             height={140}
             priority
@@ -46,7 +46,7 @@ export default function OnboardingCompleteAnimation() {
         }}
         className="text-center"
       >
-        <h2 className="text-xl font-semibold">Welcome to Peerify</h2>
+        <h2 className="text-xl font-semibold">Welcome to Kamooni</h2>
         <p className="mt-2 text-muted-foreground">Your profile is ready.</p>
       </motion.div>
     </div>

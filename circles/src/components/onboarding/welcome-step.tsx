@@ -44,7 +44,7 @@ function WelcomeStep({ nextStep }: OnboardingStepProps) {
 
     return (
         <div className="flex h-[500px] flex-col justify-center space-y-4 text-center">
-            <h2 className="mb-0 mt-0 text-3xl font-bold text-gray-800">Welcome to Peerify</h2>
+            <h2 className="mb-0 mt-0 text-3xl font-bold text-gray-800">Welcome to Kamooni</h2>
             <p className="text-lg text-gray-600">
                 Join a community of artists, hosts, and listeners. Are you ready to help build a more human music culture?
             </p>

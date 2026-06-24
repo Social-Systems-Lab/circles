@@ -2,7 +2,7 @@ import "@/components/pages/public-supporter-page.css";
 import PublicSupporterPage from "@/components/pages/public-supporter-page";
 
 export const metadata = {
-    title: "Supporter | Peerify",
+    title: "Supporter | Kamooni",
 };
 
 export default function SupporterPage() {

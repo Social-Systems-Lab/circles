@@ -123,7 +123,7 @@ export default function HomeContent({
             <Dialog open={showWelcomeDialog} onOpenChange={handleWelcomeDialogChange}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Welcome to Peerify!</DialogTitle>
+                        <DialogTitle>Welcome to Kamooni!</DialogTitle>
                         <DialogDescription className="space-y-3">
                             <p>You are now a test pilot!</p>
                             <p>

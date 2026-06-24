@@ -92,12 +92,12 @@ function DonateContent() {
             <div className="container relative z-10 py-16 sm:py-20">
                 <div className="mx-auto max-w-3xl rounded-[32px] border border-white/40 bg-white p-8 shadow-[0_30px_90px_rgba(123,74,0,0.18)] sm:p-10">
                     <div className="max-w-2xl">
-                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-kam-orange">Support Peerify</p>
+                        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-kam-orange">Support Kamooni</p>
                         <h1 className="mt-4 text-4xl font-bold tracking-tight text-kam-gray-dark sm:text-5xl">
                             Make a one-off donation
                         </h1>
                         <p className="mt-5 text-lg leading-8 text-kam-gray-dark/80">
-                            This page is for public one-off donations to support Peerify&apos;s shared community
+                            This page is for public one-off donations to support Kamooni&apos;s shared community
                             infrastructure. It is separate from the monthly and yearly supporter membership flow.
                         </p>
                     </div>
@@ -165,7 +165,7 @@ function DonateContent() {
                                     : `Donate EUR ${donationAmount ?? DONATION_AMOUNTS[2]}`}
                             </Button>
                             <p className="text-sm text-kam-gray-dark/70">
-                                Secure checkout is handled by Stripe. No Peerify account is required.
+                                Secure checkout is handled by Stripe. No Kamooni account is required.
                             </p>
                         </div>
 
@@ -186,7 +186,7 @@ function DonateContent() {
                         <p>
                             Looking for the support overview instead? Visit{" "}
                             <Link href="/donations" className="font-semibold text-kam-orange underline-offset-4 hover:underline">
-                                the Peerify donations page
+                                the Kamooni donations page
                             </Link>
                             .
                         </p>
@@ -219,7 +219,7 @@ export default function DonatePage() {
                     <div className="container relative z-10 py-16 sm:py-20">
                         <div className="mx-auto max-w-3xl rounded-[32px] border border-white/40 bg-white p-8 shadow-[0_30px_90px_rgba(123,74,0,0.18)] sm:p-10">
                             <div className="max-w-2xl">
-                                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-kam-orange">Support Peerify</p>
+                                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-kam-orange">Support Kamooni</p>
                                 <h1 className="mt-4 text-4xl font-bold tracking-tight text-kam-gray-dark sm:text-5xl">
                                     Make a one-off donation
                                 </h1>

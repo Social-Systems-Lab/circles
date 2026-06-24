@@ -31,7 +31,7 @@ function VerifyEmailContent() {
                         setTitle("Email verified");
                         setMessage(response.message || "Email verified");
                         setDetail(
-                            "Your email address has been verified. Continue to your profile next to complete your setup. Peerify member verification happens later from your profile.",
+                            "Your email address has been verified. Continue to your profile next to complete your setup. Kamooni member verification happens later from your profile.",
                         );
                         setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(false);

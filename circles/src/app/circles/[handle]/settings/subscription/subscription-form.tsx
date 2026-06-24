@@ -89,11 +89,11 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle; onD
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
                                 <p>
-                                    Everything you need to discover artists, connect with hosts and listeners, and be part of the Peerify
-                                    music community.
+                                    Everything you need to discover communities, connect with members, and be part of
+                                    Kamooni.
                                 </p>
                                 <p>
-                                    Peerify stays open because it is community-supported. Becoming a supporter is
+                                    Kamooni stays open because it is community-supported. Becoming a supporter is
                                     optional.
                                 </p>
                                 <p>
@@ -120,10 +120,10 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle; onD
 
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
-                                <p>Founding Supporters help keep Peerify open, independent, and useful for artists, hosts, and listeners.</p>
+                                <p>Founding Supporters help keep Kamooni open, independent, and useful for members and communities.</p>
                                 <p>
                                     As a thank you, supporters receive a few extra benefits, can invite five friends if
-                                    there is a queue, and will be invited to help shape Peerify as the music community grows.
+                                    there is a queue, and will be invited to help shape Kamooni as the community grows.
                                 </p>
                             </div>
 
@@ -208,14 +208,14 @@ function FreeMembershipPanel() {
             <h3 className="text-2xl font-bold text-foreground">How Test Pilots can become supporters</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>
-                    Peerify needs funding to stay open, independent, and accessible to as many people as possible, and we also want to
-                    recognise the value volunteers bring to the wider music community.
+                    Kamooni needs funding to stay open, independent, and accessible to as many people as possible, and we also want to
+                    recognise the value volunteers bring to the wider community.
                 </p>
                 <p>
                     <strong className="font-semibold text-foreground">
                         Volunteer for at least five hours per month for three consecutive months,
                     </strong>{" "}
-                    and you will be invited to join Peerify as a supporter, with all the benefits that supporting
+                    and you will be invited to join Kamooni as a supporter, with all the benefits that supporting
                     includes.
                 </p>
                 <p>
@@ -225,7 +225,7 @@ function FreeMembershipPanel() {
                     supporting status.
                 </p>
                 <p>
-                    Peerify wants to recognise the contributions our volunteers make, and thank them in some small way.
+                    Kamooni wants to recognise the contributions our volunteers make, and thank them in some small way.
                 </p>
             </div>
         </div>
@@ -249,7 +249,7 @@ function MemberBenefitsPanel({
         <div className="space-y-5 pr-8">
             <h3 className="text-2xl font-bold text-foreground">Why become a Founding Supporter</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
-                <p>Supporting Peerify helps keep the platform open, healthy, and available to artists, hosts, and listeners.</p>
+                <p>Supporting Kamooni helps keep the platform open, healthy, and available to members and communities.</p>
                 <div>
                     <p className="mb-3">
                         As a thank you, supporters receive a few extra benefits. Founding Supporters can:
@@ -264,7 +264,7 @@ function MemberBenefitsPanel({
                             else and help shape how they develop
                         </li>
                         <li>
-                            <strong className="font-semibold text-foreground">help shape the Peerify roadmap</strong> and
+                            <strong className="font-semibold text-foreground">help shape the Kamooni roadmap</strong> and
                             suggest what to build or improve next
                         </li>
                         <li>
@@ -334,7 +334,7 @@ function MemberBenefitsPanel({
                     </p>
                 </div>
                 <p>
-                    Over time, we hope to make these functions available to everyone. But until Peerify can fully
+                    Over time, we hope to make these functions available to everyone. But until Kamooni can fully
                     sustain itself, we want to show our supporters a little extra appreciation.
                 </p>
                 <p>

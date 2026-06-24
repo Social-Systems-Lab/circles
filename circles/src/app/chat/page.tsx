@@ -95,7 +95,7 @@ export default function ChatPage() {
                     You haven&apos;t joined any message groups yet. Try exploring artists, hosts, and music communities to message.
                 </p>
                 <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
-                    Explore Peerify
+                    Explore Kamooni
                 </Button>
             </div>
         );

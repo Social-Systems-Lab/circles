@@ -54,7 +54,7 @@ export default async function BookmarksPage() {
           No saved profiles yet. Visit an artist, host, or community profile and click Bookmark to add it here.
           <div className="mt-3">
             <Link href="/explore" className="text-blue-600 hover:underline">
-              Explore Peerify
+              Explore Kamooni
             </Link>
           </div>
         </div>

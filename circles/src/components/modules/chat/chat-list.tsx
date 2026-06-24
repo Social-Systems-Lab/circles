@@ -164,7 +164,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                                 You haven&apos;t joined any message groups yet. Try exploring artists, hosts, and music communities to message.
                             </p>
                             <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
-                                Explore Peerify
+                                Explore Kamooni
                             </Button>
                         </div>
                     ) : searchTerm?.trim() && totalChatsCount > 0 ? (

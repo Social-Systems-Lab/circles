@@ -188,7 +188,7 @@ export function VibeIdSettingsCard({
                 <CardHeader className="space-y-2 pb-5">
                     <CardTitle className="text-2xl font-semibold tracking-tight">VibeID</CardTitle>
                     <CardDescription className="max-w-2xl text-sm leading-6">
-                        Connect VibeID to this Peerify account so you can sign in without your password.
+                        Connect VibeID to this Kamooni account so you can sign in without your password.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
@@ -228,9 +228,9 @@ export function VibeIdSettingsCard({
                                             <WalletCards className="h-4 w-4" />
                                             Credential
                                         </div>
-                                        <div className="text-base font-semibold text-foreground">Peerify membership</div>
+                                        <div className="text-base font-semibold text-foreground">Kamooni membership</div>
                                         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                            Claim this credential in VibeID to keep a signed proof of your active Peerify membership.
+                                            Claim this credential in VibeID to keep a signed proof of your active Kamooni membership.
                                         </p>
                                     </div>
                                     <Badge variant={membershipCredential ? "outline" : "secondary"} className="w-fit gap-1">
@@ -270,7 +270,7 @@ export function VibeIdSettingsCard({
                                     </div>
                                 ) : (
                                     <p className="mt-4 text-sm text-muted-foreground">
-                                        A membership credential becomes available here when your Peerify membership is active.
+                                        A membership credential becomes available here when your Kamooni membership is active.
                                     </p>
                                 )}
                             </div>

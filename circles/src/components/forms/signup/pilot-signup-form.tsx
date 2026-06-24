@@ -89,10 +89,6 @@ function getErrors(state: PilotSignupState): PilotSignupErrors {
     return errors;
 }
 
-function normalizePeerifyIntent(value: string | null): "fan" | "artist" | "host" | null {
-    return value === "fan" || value === "artist" || value === "host" ? value : null;
-}
-
 export function PilotSignupForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -193,7 +189,7 @@ export function PilotSignupForm() {
 
             toast({
                 title: "Account created",
-                description: "Now verify your email. You can continue into Peerify after that.",
+                description: "Now verify your email. You can continue into Kamooni after that.",
             });
 
             const nextParams = new URLSearchParams();
@@ -203,11 +199,6 @@ export function PilotSignupForm() {
             const redirectTo = searchParams?.get("redirectTo");
             if (redirectTo) {
                 nextParams.set("redirectTo", redirectTo);
-            }
-
-            const peerifyIntent = normalizePeerifyIntent(searchParams?.get("intent") ?? null);
-            if (peerifyIntent) {
-                nextParams.set("intent", peerifyIntent);
             }
 
             router.push(`/signup/pilot/check-email?${nextParams.toString()}`);
@@ -226,10 +217,10 @@ export function PilotSignupForm() {
         <div className="flex min-h-screen items-center justify-center bg-[#f7f2ea] px-4 py-10">
             <Card className="w-full max-w-md border-[#e3d5c2] bg-[#faf6ef] shadow-sm">
                 <CardHeader className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Peerify Pilot Signup</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Kamooni Pilot Signup</p>
                     <CardTitle className="text-2xl text-[#181512]">Create your personal account</CardTitle>
                     <p className="text-sm text-[#6b5f52]">
-                        Start with the essentials. You can choose what you want to do first on Peerify right after signup.
+                        Start with the essentials. You can choose what you want to do first on Kamooni right after signup.
                     </p>
                 </CardHeader>
                 <CardContent>

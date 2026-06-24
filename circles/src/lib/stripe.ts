@@ -1,6 +1,8 @@
 import Stripe from "stripe";
 
 let stripeClient: Stripe | null = null;
+type StripeConstructorConfig = NonNullable<ConstructorParameters<typeof Stripe>[1]>;
+const STRIPE_API_VERSION = "2026-03-25.dahlia" as StripeConstructorConfig["apiVersion"];
 
 const MONTHLY_TIER_AMOUNTS = [1, 2, 5, 10] as const;
 export type StripeMonthlyTierAmount = (typeof MONTHLY_TIER_AMOUNTS)[number];
@@ -13,7 +15,7 @@ export function getStripe(): Stripe {
 
     if (!stripeClient) {
         stripeClient = new Stripe(secretKey, {
-            apiVersion: "2026-03-25.dahlia",
+            apiVersion: STRIPE_API_VERSION,
         });
     }
 

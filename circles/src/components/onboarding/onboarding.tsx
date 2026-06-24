@@ -171,7 +171,7 @@ export default function Onboarding() {
     function getStepTitle(stepId: string) {
       switch (stepId) {
         case "welcome":
-          return "Welcome to Peerify";
+          return "Welcome to Kamooni";
         case "terms":
           return "Terms and Privacy";
         case "member":
