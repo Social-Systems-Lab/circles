@@ -6,9 +6,15 @@ import { updateCircle } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
+import { verifyAltchaPayload } from "@/lib/auth/altcha";
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
+        const altchaOk = await verifyAltchaPayload(values.altcha);
+        if (!altchaOk) {
+            return { success: false, message: "Please complete the human-verification check." };
+        }
+
         const normalizedHandle = String(values.handle || "")
             .trim()
             .toLowerCase()
@@ -48,24 +54,30 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
         );
         await createUserSession(user as UserPrivate, user.did!);
 
-        if (requestedSkills?.length || requestedInterests?.length || requestedMetadata) {
-            await updateCircle(
-                {
-                    _id: user._id!,
-                    skills: requestedSkills,
-                    interests: requestedInterests,
-                    offers: requestedSkills?.length
-                        ? {
-                              ...(user.offers ?? {}),
-                              skills: requestedSkills,
-                              visibility: user.offers?.visibility ?? "public",
-                          }
-                        : user.offers,
-                    metadata: requestedMetadata ? { ...(user.metadata ?? {}), ...requestedMetadata } : user.metadata,
-                },
-                user.did!,
-            );
-        }
+        await updateCircle(
+            {
+                _id: user._id!,
+                isHuman: true,
+                ...(requestedSkills?.length || requestedInterests?.length || requestedMetadata
+                    ? {
+                          skills: requestedSkills,
+                          interests: requestedInterests,
+                          offers: requestedSkills?.length
+                              ? {
+                                    ...(user.offers ?? {}),
+                                    skills: requestedSkills,
+                                    visibility: user.offers?.visibility ?? "public",
+                                }
+                              : user.offers,
+                          metadata: requestedMetadata
+                              ? { ...(user.metadata ?? {}), ...requestedMetadata }
+                              : user.metadata,
+                      }
+                    : {}),
+            },
+            user.did!,
+        );
+        user.isHuman = true;
 
         try {
             const resolvedWelcome = await getResolvedWelcomeTemplate();

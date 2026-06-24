@@ -1,9 +1,39 @@
+import type { DetailedHTMLProps, HTMLAttributes } from "react";
+
 // declare global {
 //     interface Window {
 //         CIRCLES_USER_DATA?: string; // Specify type as string or any appropriate type
 //         onUserDataReceived?: (data: string) => void;
 //     }
 // }
+
+type AltchaWidgetProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
+    auto?: string;
+    challenge?: string;
+    configuration?: string;
+    display?: string;
+    language?: string;
+    name?: string;
+    type?: string;
+};
+
+declare global {
+    namespace React {
+        namespace JSX {
+            interface IntrinsicElements {
+                "altcha-widget": AltchaWidgetProps;
+            }
+        }
+    }
+
+    namespace JSX {
+        interface IntrinsicElements {
+            "altcha-widget": AltchaWidgetProps;
+        }
+    }
+}
+
+export {};
 // import React from "react";
 
 // declare module "framer-motion" {

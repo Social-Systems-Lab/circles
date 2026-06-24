@@ -13,7 +13,7 @@ export function getStripe(): Stripe {
 
     if (!stripeClient) {
         stripeClient = new Stripe(secretKey, {
-            apiVersion: "2026-03-25.dahlia",
+            apiVersion: "2026-05-27.dahlia",
         });
     }
 

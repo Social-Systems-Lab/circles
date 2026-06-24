@@ -258,7 +258,7 @@ export const canUserViewPost = async (post: Post, userDid?: string): Promise<boo
         return false;
     }
 
-    if (!author.isVerified && !author.isMember && post.createdBy !== userDid) {
+    if (!author.isVerified && !author.isMember && !author.isHuman && post.createdBy !== userDid) {
         return false;
     }
 
@@ -542,6 +542,7 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
                     isVerified: "$authorDetails.isVerified",
+                    isHuman: "$authorDetails.isHuman",
                     isMember: "$authorDetails.isMember",
                 },
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
@@ -751,7 +752,12 @@ export async function getPostsFromMultipleFeeds(
         // Filter for verified or member authors, or if the post is by the current user
         {
             $match: {
-                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }, { createdBy: userDid }],
+                $or: [
+                    { "authorDetails.isVerified": true },
+                    { "authorDetails.isMember": true },
+                    { "authorDetails.isHuman": true },
+                    { createdBy: userDid },
+                ],
             },
         },
 
@@ -976,6 +982,7 @@ export async function getPostsFromMultipleFeeds(
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
                     isVerified: "$authorDetails.isVerified",
+                    isHuman: "$authorDetails.isHuman",
                     isMember: "$authorDetails.isMember",
                 },
 
@@ -1213,7 +1220,12 @@ export const getPosts = async (
         // Filter for verified or member authors, or if the post is by the current user
         {
             $match: {
-                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }, { createdBy: userDid }],
+                $or: [
+                    { "authorDetails.isVerified": true },
+                    { "authorDetails.isMember": true },
+                    { "authorDetails.isHuman": true },
+                    { createdBy: userDid },
+                ],
             },
         },
 
@@ -1403,6 +1415,7 @@ export const getPosts = async (
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
                     isVerified: "$authorDetails.isVerified",
+                    isHuman: "$authorDetails.isHuman",
                     isMember: "$authorDetails.isMember",
                 },
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },

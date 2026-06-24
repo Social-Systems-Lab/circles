@@ -22,7 +22,12 @@ import {
     ToolboxConnectionsSummary,
 } from "@/lib/data/relationships";
 import { UserRelationships } from "@/lib/data/db";
-import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import {
+    canInteract,
+    canPerformRestrictedAction,
+    getInteractionRequiredMessage,
+    getRestrictedActionMessage,
+} from "@/lib/auth/verification";
 
 type CircleActionResponse = {
     success: boolean;
@@ -421,8 +426,8 @@ export const sendConnectRequestAction = async (
     }
 
     const viewer = await getCircleByDid(viewerDid);
-    if (!canPerformRestrictedAction(viewer)) {
-        return { success: false, message: getRestrictedActionMessage("add contacts") };
+    if (!canInteract(viewer)) {
+        return { success: false, message: getInteractionRequiredMessage("add contacts") };
     }
 
     try {
