@@ -710,18 +710,25 @@ export async function deletePostAction(postId: string): Promise<{ success: boole
         }
 
         const feed = await getFeed(post.feedId);
-        let canModerate = false;
-        if (feed) {
-            canModerate = await isAuthorized(userDid, feed.circleId, features.feed.moderate);
+        if (!feed) {
+            return { success: false, message: "Noticeboard not found" };
         }
 
-        // check if user can moderate feed or is creator of the post
+        const canModerate =
+            post.createdBy === userDid ? false : await isAuthorized(userDid, feed.circleId, features.feed.moderate);
+
         if (post.createdBy !== userDid && !canModerate) {
             return { success: false, message: "You are not authorized to delete this post" };
         }
 
-        // delete post
         await deletePost(postId);
+
+        const circle = await getCircleById(feed.circleId);
+        if (circle) {
+            const circlePath = await getCirclePath(circle);
+            revalidatePath(`${circlePath}feed`);
+        }
+        revalidatePath("/explore");
 
         return { success: true, message: "Post deleted successfully" };
     } catch (error) {

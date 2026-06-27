@@ -221,6 +221,9 @@ export const createPost = async (post: Post): Promise<Post> => {
 };
 
 export const deletePost = async (postId: string): Promise<void> => {
+    const comments = await Comments.find({ postId }, { projection: { _id: 1 } }).toArray();
+    const commentIds = comments.map((comment) => comment._id.toString());
+
     await Posts.deleteOne({ _id: new ObjectId(postId) });
 
     // delete post
@@ -232,6 +235,19 @@ export const deletePost = async (postId: string): Promise<void> => {
 
     // delete comments
     await Comments.deleteMany({ postId });
+
+    if (Reactions) {
+        if (commentIds.length > 0) {
+            await Reactions.deleteMany({
+                $or: [
+                    { contentId: postId, contentType: "post" },
+                    { contentId: { $in: commentIds }, contentType: "comment" },
+                ],
+            });
+        } else {
+            await Reactions.deleteMany({ contentId: postId, contentType: "post" });
+        }
+    }
 };
 
 export const getPost = async (postId: string): Promise<Post | null> => {

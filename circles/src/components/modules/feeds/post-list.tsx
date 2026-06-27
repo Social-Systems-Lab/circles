@@ -556,6 +556,9 @@ export const PostItem = ({
                     variant: "success",
                 });
             }
+            setIsDeleting(false);
+            setOpenDropdown(false);
+            router.refresh();
         });
     };
 
