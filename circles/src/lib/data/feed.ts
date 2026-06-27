@@ -221,6 +221,9 @@ export const createPost = async (post: Post): Promise<Post> => {
 };
 
 export const deletePost = async (postId: string): Promise<void> => {
+    const comments = await Comments.find({ postId }, { projection: { _id: 1 } }).toArray();
+    const commentIds = comments.map((comment) => comment._id.toString());
+
     await Posts.deleteOne({ _id: new ObjectId(postId) });
 
     // delete post
@@ -232,6 +235,19 @@ export const deletePost = async (postId: string): Promise<void> => {
 
     // delete comments
     await Comments.deleteMany({ postId });
+
+    if (Reactions) {
+        if (commentIds.length > 0) {
+            await Reactions.deleteMany({
+                $or: [
+                    { contentId: postId, contentType: "post" },
+                    { contentId: { $in: commentIds }, contentType: "comment" },
+                ],
+            });
+        } else {
+            await Reactions.deleteMany({ contentId: postId, contentType: "post" });
+        }
+    }
 };
 
 export const getPost = async (postId: string): Promise<Post | null> => {
@@ -258,7 +274,7 @@ export const canUserViewPost = async (post: Post, userDid?: string): Promise<boo
         return false;
     }
 
-    if (!author.isVerified && !author.isMember && !author.isHuman && post.createdBy !== userDid) {
+    if (!author.isVerified && !author.isMember && post.createdBy !== userDid) {
         return false;
     }
 
@@ -542,7 +558,6 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
                     isVerified: "$authorDetails.isVerified",
-                    isHuman: "$authorDetails.isHuman",
                     isMember: "$authorDetails.isMember",
                 },
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
@@ -752,12 +767,7 @@ export async function getPostsFromMultipleFeeds(
         // Filter for verified or member authors, or if the post is by the current user
         {
             $match: {
-                $or: [
-                    { "authorDetails.isVerified": true },
-                    { "authorDetails.isMember": true },
-                    { "authorDetails.isHuman": true },
-                    { createdBy: userDid },
-                ],
+                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }, { createdBy: userDid }],
             },
         },
 
@@ -982,7 +992,6 @@ export async function getPostsFromMultipleFeeds(
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
                     isVerified: "$authorDetails.isVerified",
-                    isHuman: "$authorDetails.isHuman",
                     isMember: "$authorDetails.isMember",
                 },
 
@@ -1220,12 +1229,7 @@ export const getPosts = async (
         // Filter for verified or member authors, or if the post is by the current user
         {
             $match: {
-                $or: [
-                    { "authorDetails.isVerified": true },
-                    { "authorDetails.isMember": true },
-                    { "authorDetails.isHuman": true },
-                    { createdBy: userDid },
-                ],
+                $or: [{ "authorDetails.isVerified": true }, { "authorDetails.isMember": true }, { createdBy: userDid }],
             },
         },
 
@@ -1415,7 +1419,6 @@ export const getPosts = async (
                     images: "$authorDetails.images",
                     handle: "$authorDetails.handle",
                     isVerified: "$authorDetails.isVerified",
-                    isHuman: "$authorDetails.isHuman",
                     isMember: "$authorDetails.isMember",
                 },
                 userReaction: { $arrayElemAt: ["$userReaction.reactionType", 0] },
