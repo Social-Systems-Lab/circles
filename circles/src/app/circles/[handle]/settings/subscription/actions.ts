@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { getPrivateUserByDid, getUserPrivate, updateUser } from "@/lib/data/user";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
+import {
+    createTelegramConnectToken,
+    disconnectTelegramChannelForUser,
+    isTelegramPrivacyMode,
+    updateTelegramChannelPrivacyMode,
+} from "@/lib/data/external-notification-channels";
 
 const DONORBOX_API_KEY = process.env.DONORBOX_API_KEY;
 const DONORBOX_API_URL = "https://donorbox.org/api/v1";
@@ -15,6 +21,8 @@ const emailPreferenceLabels = {
 } as const;
 
 type EmailPreferenceKey = keyof typeof emailPreferenceLabels;
+
+const getTelegramSettingsPath = (handle?: string) => (handle ? `/circles/${handle}/settings/subscription` : undefined);
 
 export async function createSubscription(circleId: string, planId: string) {
     const userDid = await getAuthenticatedUserDid();
@@ -111,6 +119,82 @@ export async function updateEmailPreferenceSetting(preference: EmailPreferenceKe
         return {
             success: false,
             message: error instanceof Error ? error.message : "Failed to update email preference setting.",
+        };
+    }
+}
+
+export async function createTelegramConnectLink() {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to connect Telegram." };
+        }
+
+        const botUsername = process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, "");
+        if (!botUsername) {
+            return { success: false, message: "Telegram bot username is not configured." };
+        }
+
+        const token = await createTelegramConnectToken(userDid);
+        return {
+            success: true,
+            url: `https://t.me/${botUsername}?start=${encodeURIComponent(token)}`,
+        };
+    } catch (error) {
+        console.error("Error creating Telegram connect link:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to create Telegram connect link.",
+        };
+    }
+}
+
+export async function disconnectTelegramNotifications() {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to disconnect Telegram." };
+        }
+
+        const user = await getPrivateUserByDid(userDid);
+        await disconnectTelegramChannelForUser(userDid);
+
+        const path = getTelegramSettingsPath(user?.handle);
+        if (path) revalidatePath(path);
+
+        return { success: true, message: "Telegram notifications disconnected." };
+    } catch (error) {
+        console.error("Error disconnecting Telegram notifications:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to disconnect Telegram notifications.",
+        };
+    }
+}
+
+export async function updateTelegramPrivacyMode(mode: unknown) {
+    if (!isTelegramPrivacyMode(mode)) {
+        return { success: false, message: "Invalid Telegram privacy mode." };
+    }
+
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in to update Telegram settings." };
+        }
+
+        const user = await getPrivateUserByDid(userDid);
+        await updateTelegramChannelPrivacyMode(userDid, mode);
+
+        const path = getTelegramSettingsPath(user?.handle);
+        if (path) revalidatePath(path);
+
+        return { success: true, message: "Telegram privacy setting updated.", mode };
+    } catch (error) {
+        console.error("Error updating Telegram privacy mode:", error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Failed to update Telegram privacy setting.",
         };
     }
 }

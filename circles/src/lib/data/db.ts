@@ -27,6 +27,7 @@ import {
     EventRsvp,
     EventInvitation,
     Notification,
+    ExternalNotificationChannel,
     HumanityVerification,
     PlatformSettings,
 } from "@/models/models";
@@ -79,6 +80,7 @@ let ChatConversations: Collection<ChatConversation>;
 let ChatMessageDocs: Collection<ChatMessageDoc>;
 let ChatReadStates: Collection<ChatReadState>;
 let MessageEmailReminders: Collection<MessageEmailReminder>;
+let ExternalNotificationChannels: Collection<ExternalNotificationChannel>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 let StripeWebhookEvents: Collection<any>;
 let UserRelationships: Collection<any>;
@@ -126,6 +128,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
     MessageEmailReminders = db.collection<MessageEmailReminder>("messageEmailReminders");
+    ExternalNotificationChannels = db.collection<ExternalNotificationChannel>("externalNotificationChannels");
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
     StripeWebhookEvents = db.collection("stripeWebhookEvents");
     UserRelationships = db.collection("userRelationships");
@@ -174,6 +177,7 @@ export {
     ChatMessageDocs,
     ChatReadStates,
     MessageEmailReminders,
+    ExternalNotificationChannels,
     PlatformBroadcastMessages,
     StripeWebhookEvents,
     UserRelationships,

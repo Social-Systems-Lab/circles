@@ -2,6 +2,7 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import SubscriptionFormSettings from "./subscription-form-settings";
+import { getTelegramChannelViewForUser } from "@/lib/data/external-notification-channels";
 import {
     createPlatformMembershipCredentialCard,
     getLinkedVibeIdDid,
@@ -18,6 +19,7 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
     const userDid = await getAuthenticatedUserDid();
     const user = userDid ? await getUserPrivate(userDid) : null;
     let membershipCredential: PlatformMembershipCredentialCardData | null = null;
+    const telegramChannel = userDid ? await getTelegramChannelViewForUser(userDid) : null;
 
     if (!circle || !user || user.handle !== circle.handle) {
         return <div>Unauthorized</div>;
@@ -40,7 +42,11 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
                 </p>
             </div>
             <div className="mt-8 max-w-5xl">
-                <SubscriptionFormSettings user={user} membershipCredential={membershipCredential} />
+                <SubscriptionFormSettings
+                    user={user}
+                    membershipCredential={membershipCredential}
+                    telegramChannel={telegramChannel}
+                />
             </div>
         </div>
     );
