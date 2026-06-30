@@ -5,7 +5,7 @@ Status: Production-aligned snapshot after Platform Announcements deployment
 Primary repo: `~/circles/circles`
 Production server: `Circles-Genesis2`
 Production path: `/root/circles/circles`
-Primary deploy command: `deploykamooni`
+Primary deploy command: `cd /root/circles/circles && ./circles/deploy-genesis2.sh main`
 
 ---
 
@@ -307,13 +307,7 @@ Preferred production deployment:
 
 ```bash
 cd /root/circles/circles
-./deploy-genesis2.sh main
-```
-
-Shortcut:
-
-```bash
-deploykamooni
+./circles/deploy-genesis2.sh main
 ```
 
 ### What `deploy-genesis2.sh` does
@@ -487,4 +481,3 @@ As of v13:
 - version verification method is now clearer
 
 This is a meaningful stabilization point for the Mongo-native messaging system.
-

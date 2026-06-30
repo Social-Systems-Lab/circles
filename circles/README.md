@@ -9,11 +9,11 @@ For information on how to set up the local development environment on circles re
 From `/root/circles/circles` on Genesis2:
 
 ```bash
-./deploy-genesis2.sh
+./circles/deploy-genesis2.sh main
 ```
 
 Optional branch argument:
 
 ```bash
-./deploy-genesis2.sh codex/refactor/chat-sidebar-search
+./circles/deploy-genesis2.sh codex/refactor/chat-sidebar-search
 ```

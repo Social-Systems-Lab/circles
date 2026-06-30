@@ -2,10 +2,16 @@
 set -euo pipefail
 
 EXPECTED_DIR="/root/circles/circles"
+APP_DIR="${EXPECTED_DIR}/circles"
 CURRENT_DIR="$(pwd -P)"
 
 if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]; then
   echo "Error: run this script from $EXPECTED_DIR (current: $CURRENT_DIR)" >&2
+  exit 1
+fi
+
+if [[ ! -d "$APP_DIR" ]]; then
+  echo "Error: app directory not found: $APP_DIR" >&2
   exit 1
 fi
 
@@ -37,10 +43,10 @@ echo "Deploying SHA: $GIT_SHA"
 echo "Build time (UTC): $BUILD_TIME"
 
 echo "Running branding guard for Kamooni..."
-./scripts/check-branding-guard.sh kamooni
+(cd "$APP_DIR" && ./scripts/check-branding-guard.sh kamooni)
 
-docker compose build circles
-docker compose up -d --no-deps --force-recreate circles
+(cd "$APP_DIR" && docker compose build circles)
+(cd "$APP_DIR" && docker compose up -d --no-deps --force-recreate circles)
 
 VERSION_URL="https://kamooni.org/api/version"
 VERSION_OUTPUT=""
@@ -55,5 +61,5 @@ for attempt in $(seq 1 20); do
 done
 
 echo "Error: version check failed after 20 attempts: $VERSION_URL" >&2
-docker compose logs --tail=50 circles || true
+(cd "$APP_DIR" && docker compose logs --tail=50 circles || true)
 exit 1

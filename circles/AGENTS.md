@@ -143,18 +143,15 @@ Deployment Command
 
 Always use:
 
-deploykamooni
-
-Which runs:
-
 cd /root/circles/circles
-./deploy-genesis2.sh main
+./circles/deploy-genesis2.sh main
 Screen Session (REQUIRED)
 
 Long builds must run inside screen:
 
 screen -S rebuild
-deploykamooni
+cd /root/circles/circles
+./circles/deploy-genesis2.sh main
 Deployment Verification (MANDATORY)
 
 After deploy:
@@ -310,4 +307,3 @@ Choose the option that:
 requires the least manual work
 
 has the lowest risk to production
-

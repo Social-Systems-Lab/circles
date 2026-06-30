@@ -5,7 +5,7 @@
 1. Work in feature branch
 2. Test locally
 3. Merge to main
-4. Deploy using deploykamooni script
+4. Deploy from Genesis2 with `cd /root/circles/circles && ./circles/deploy-genesis2.sh main`
 
 ---
 

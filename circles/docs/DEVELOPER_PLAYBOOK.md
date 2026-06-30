@@ -152,13 +152,14 @@ Production path:
 
 Deployment command:
 
-deploykamooni
+cd /root/circles/circles
+./circles/deploy-genesis2.sh main
 
 Typical workflow:
 
 1. push changes to GitHub
 2. SSH to server
-3. run deploykamooni
+3. run `cd /root/circles/circles && ./circles/deploy-genesis2.sh main`
 4. verify version
 
 Example verification:
