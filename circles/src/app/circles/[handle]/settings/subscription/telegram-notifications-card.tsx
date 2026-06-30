@@ -94,6 +94,11 @@ export function TelegramNotificationsSettingsCard({
                                 ? `Connected${channel.telegramUsername ? ` as @${channel.telegramUsername}` : ""}.`
                                 : "Not connected."}
                         </p>
+                        {!channel.connected && (
+                            <p className="text-sm text-muted-foreground">
+                                Click Connect Telegram, then press Start in Telegram to finish linking your account.
+                            </p>
+                        )}
                     </div>
                     {channel.connected ? (
                         <Button type="button" variant="outline" onClick={handleDisconnect} disabled={isPending}>
