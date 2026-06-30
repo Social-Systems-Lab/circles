@@ -32,6 +32,7 @@ import { getGoalById } from "./goal"; // Import getGoalById
 import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
+import { dispatchExternalNotifications } from "./external-notifications";
 
 Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
 Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
@@ -260,6 +261,9 @@ export async function sendNotifications(type: string, recipients: any[], payload
     }
 
     await Notifications.insertMany(docs as any[]);
+    void dispatchExternalNotifications(docs as any[]).catch((error) => {
+        console.error("External notification dispatch failed:", error);
+    });
 }
 
 type NotificationQueryOptions = {

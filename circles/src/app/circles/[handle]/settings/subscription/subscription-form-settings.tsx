@@ -3,9 +3,11 @@
 import { useState, useTransition } from "react";
 import { Circle } from "@/models/models";
 import type { PlatformMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
+import type { TelegramChannelView } from "@/lib/data/external-notification-channels";
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
 import { VibeIdSettingsCard } from "./vibe-id-settings-card";
+import { TelegramNotificationsSettingsCard } from "./telegram-notifications-card";
 import { updateEmailPreferenceSetting } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -47,9 +49,11 @@ const getInitialEmailPreferences = (user: Circle): Record<EmailPreferenceKey, bo
 export default function SubscriptionFormSettings({
     user,
     membershipCredential,
+    telegramChannel,
 }: {
     user: Circle;
     membershipCredential?: PlatformMembershipCredentialCardData | null;
+    telegramChannel?: TelegramChannelView | null;
 }) {
     const [subscriptionAttempted, setSubscriptionAttempted] = useState(false);
     const initialEmailPreferences = getInitialEmailPreferences(user);
@@ -64,6 +68,7 @@ export default function SubscriptionFormSettings({
                 <VibeIdSettingsCard user={user} membershipCredential={membershipCredential} />
                 <VerificationSettingsCard user={user} />
                 <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
+                <TelegramNotificationsSettingsCard initialChannel={telegramChannel} />
                 <section className="space-y-4">
                     <div className="space-y-1 px-1">
                         <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>
@@ -87,6 +92,7 @@ export default function SubscriptionFormSettings({
             <VibeIdSettingsCard user={user} membershipCredential={membershipCredential} />
             <VerificationSettingsCard user={user} />
             <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
+            <TelegramNotificationsSettingsCard initialChannel={telegramChannel} />
             <section className="space-y-4">
                 <div className="space-y-1 px-1">
                     <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>

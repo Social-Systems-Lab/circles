@@ -1860,3 +1860,21 @@ export const notificationSchema = z.object({
 });
 
 export type Notification = z.infer<typeof notificationSchema>;
+
+export type ExternalNotificationPrivacyMode = "notify_only" | "snippet" | "full";
+
+export type ExternalNotificationChannel = {
+    _id?: any;
+    userDid: string;
+    provider: "telegram";
+    enabled: boolean;
+    privacyMode: ExternalNotificationPrivacyMode;
+    telegramChatId?: string;
+    telegramUsername?: string;
+    connectTokenHash?: string;
+    connectTokenExpiresAt?: Date;
+    connectedAt?: Date;
+    disabledAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+};
