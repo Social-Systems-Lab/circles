@@ -18,6 +18,6 @@ Server builds are no longer performed.
 Deployment flow:
 
 Local machine builds image → pushes to GHCR  
-Genesis2 pulls image → container restart
+Cleura production pulls/builds and restarts the container
 
 Typical deploy time: ~20–30 seconds.

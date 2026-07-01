@@ -31,7 +31,7 @@ Context:
 - Main repo is the source of truth
 - Mongo is the primary backend
 - Next.js App Router
-- Production runs on Genesis2
+- Production runs on Cleura
 
 ---
 
@@ -131,10 +131,10 @@ LOCAL VERIFICATION:
 
 OPTIONAL DEPLOY (ONLY AFTER VALIDATION):
 
-On Genesis2:
+On Cleura production:
 
 screen -S rebuild
-deploykamooni
+cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 
 Verify:
 
