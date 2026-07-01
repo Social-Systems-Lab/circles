@@ -10,11 +10,23 @@ import { redirect } from "next/navigation";
 import { Circle, TaskPermissions } from "@/models/models";
 import TasksList from "./tasks-list";
 
+export type TaskKindFilter = "all" | "tasks" | "shifts";
+
 type PageProps = {
     circle: Circle;
+    taskKind?: TaskKindFilter;
 };
 
-export default async function TasksModule({ circle }: PageProps) {
+const matchesTaskKind = (task: { taskType?: string }, taskKind: TaskKindFilter) => {
+    if (taskKind === "all") {
+        return true;
+    }
+
+    const isShift = (task.taskType ?? "outcome") === "shift";
+    return taskKind === "shifts" ? isShift : !isShift;
+};
+
+export default async function TasksModule({ circle, taskKind = "all" }: PageProps) {
     // Get the current user DID
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -52,6 +64,10 @@ export default async function TasksModule({ circle }: PageProps) {
     const filteredTasksData = {
         ...tasksData, // Keep other stats like hasUserRanked, totalRankers, unrankedCount
         tasks: tasksData.tasks.filter((task) => {
+            if (!matchesTaskKind(task, taskKind)) {
+                return false;
+            }
+
             // Allow user to always see their own tasks
             if (task.author.did === userDid) return true;
 

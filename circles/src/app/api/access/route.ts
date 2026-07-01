@@ -7,6 +7,7 @@ import { isModuleEnabled } from "@/lib/auth/client-auth";
 export async function POST(req: Request) {
     try {
         const { userDid, circleHandle, moduleHandle } = await req.json();
+        const accessModuleHandle = moduleHandle === "shifts" ? "tasks" : moduleHandle;
 
         // get circle
         let circle: Circle | null = null;
@@ -29,13 +30,13 @@ export async function POST(req: Request) {
             }
         }
 
-        const isFundingRoute = moduleHandle === "funding";
+        const isFundingRoute = accessModuleHandle === "funding";
         if (isFundingRoute && circle.circleType !== "circle") {
             return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
         }
 
         // Check if module is enabled using enabledModules.
-        const moduleEnabled = isModuleEnabled(circle, moduleHandle);
+        const moduleEnabled = isModuleEnabled(circle, accessModuleHandle);
         if (!moduleEnabled) {
             return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
         }
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
         const accessRules = circle.accessRules || {};
 
         // First try module-specific access rule
-        let allowedUserGroups = accessRules[moduleHandle]?.view;
+        let allowedUserGroups = accessRules[accessModuleHandle]?.view;
 
         // If still not found, funding defaults to members-only and all other routes preserve the older everyone fallback.
         if (!allowedUserGroups) {
