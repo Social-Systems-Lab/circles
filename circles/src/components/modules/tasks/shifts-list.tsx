@@ -139,9 +139,9 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ tasksData, circle, permissions 
         router.refresh();
 
         if (data.id && data.circleHandle) {
-            router.push(`/circles/${data.circleHandle}/tasks/${data.id}`);
+            router.push(`/circles/${data.circleHandle}/shifts/${data.id}`);
         } else if (data.id) {
-            router.push(`/circles/${circle.handle}/tasks/${data.id}`);
+            router.push(`/circles/${circle.handle}/shifts/${data.id}`);
         }
     };
 
@@ -185,7 +185,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ tasksData, circle, permissions 
                 <TableCell>
                     <div className="flex min-w-0 flex-col gap-1">
                         <Link
-                            href={`/circles/${shiftCircleHandle}/tasks/${shift._id}#circle-tabs`}
+                            href={`/circles/${shiftCircleHandle}/shifts/${shift._id}#circle-tabs`}
                             className={cn("truncate", taskTitleLinkClassName)}
                         >
                             {shift.title}
@@ -246,7 +246,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ tasksData, circle, permissions 
                                 {canEdit && (
                                     <DropdownMenuItem
                                         onClick={() =>
-                                            router.push(`/circles/${shiftCircleHandle}/tasks/${shift._id}/edit`)
+                                            router.push(`/circles/${shiftCircleHandle}/shifts/${shift._id}/edit`)
                                         }
                                         disabled={shift.stage === "resolved"}
                                     >

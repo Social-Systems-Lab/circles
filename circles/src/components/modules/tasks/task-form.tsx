@@ -175,6 +175,7 @@ interface TaskFormProps {
         noCircleSelected?: string;
     };
     circle?: Circle; // Added for editing context
+    successRedirectPath?: string;
     // goals and goalsModuleEnabled will be fetched/determined internally
     onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
@@ -192,6 +193,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     hideTaskTypeSelector = false,
     labels,
     circle: circleProp, // Added for editing
+    successRedirectPath,
     onFormSubmitSuccess,
     onCancel,
 }) => {
@@ -475,6 +477,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
                 if (onFormSubmitSuccess) {
                     onFormSubmitSuccess({ id: result.taskId, circleHandle: selectedCircle.handle }); // Pass circleHandle
+                } else if (successRedirectPath) {
+                    router.push(successRedirectPath);
+                    router.refresh();
                 } else {
                     const navigateToId = isEditing ? taskId : result.taskId;
                     if (navigateToId && selectedCircle.handle) {

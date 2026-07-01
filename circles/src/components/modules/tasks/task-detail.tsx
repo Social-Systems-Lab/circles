@@ -287,12 +287,18 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const isNonAdminCompletedShiftPreview = isPreview && isCompletedShift && !permissions.canModerate;
     const memberNameByDid = new Map(
         members
-            .filter((member): member is MemberDisplay & { userDid: string } => typeof member.userDid === "string" && member.userDid.length > 0)
+            .filter(
+                (member): member is MemberDisplay & { userDid: string } =>
+                    typeof member.userDid === "string" && member.userDid.length > 0,
+            )
             .map((member) => [member.userDid, member.name || member.userDid]),
     );
     const memberByDid = new Map(
         members
-            .filter((member): member is MemberDisplay & { userDid: string } => typeof member.userDid === "string" && member.userDid.length > 0)
+            .filter(
+                (member): member is MemberDisplay & { userDid: string } =>
+                    typeof member.userDid === "string" && member.userDid.length > 0,
+            )
             .map((member) => [member.userDid, member]),
     );
 
@@ -400,15 +406,20 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         }
     }, [assignDialogOpen, pendingClaims.length, circle._id, toast]);
 
+    const itemDetailPath = `/circles/${circle.handle}/${isShiftTask ? "shifts" : "tasks"}/${task._id}`;
+    const itemEditPath = `${itemDetailPath}/edit`;
+    const itemListPath = `/circles/${circle.handle}/${isShiftTask ? "shifts" : "tasks"}`;
+    const itemLabel = isShiftTask ? "Shift" : "Task";
+
     const handleEdit = () => {
-        router.push(`/circles/${circle.handle}/tasks/${task._id}/edit`); // Updated path
+        router.push(itemEditPath);
     };
 
     const handleOpenTaskPage = () => {
         if (isPreview) {
             setContentPreview(undefined);
         }
-        router.push(`/circles/${circle.handle}/tasks/${task._id}`);
+        router.push(itemDetailPath);
     };
 
     const handleDelete = async () => {
@@ -416,7 +427,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             const result = await deleteTaskAction(circle.handle!, task._id as string); // Renamed action, use task prop
             if (result.success) {
                 toast({ title: "Success", description: result.message });
-                router.push(`/circles/${circle.handle}/tasks`); // Updated path, Redirect after delete
+                router.push(itemListPath);
                 router.refresh();
             } else {
                 toast({
@@ -493,9 +504,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         }
 
         setContentPreview((currentPreview) => {
-            const isCurrentUserPreview =
-                currentPreview?.type === "user" &&
-                currentPreview.content._id === profile._id;
+            const isCurrentUserPreview = currentPreview?.type === "user" && currentPreview.content._id === profile._id;
 
             return isCurrentUserPreview
                 ? undefined
@@ -1010,14 +1019,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                     <DropdownMenuLabel>Options</DropdownMenuLabel>
                                     {isPreview && (
                                         <DropdownMenuItem onClick={handleOpenTaskPage}>
-                                            <Play className="mr-2 h-4 w-4" /> Open Task
+                                            <Play className="mr-2 h-4 w-4" /> Open {itemLabel}
                                         </DropdownMenuItem>
                                     )}
                                     {isPreview && (canEditTask || canDeleteTask) && <DropdownMenuSeparator />}
                                     {/* Edit Action */}
                                     {canEditTask && ( // Renamed variable
                                         <DropdownMenuItem onClick={handleEdit} disabled={currentStage === "resolved"}>
-                                            <Pencil className="mr-2 h-4 w-4" /> Edit Task {/* Updated text */}
+                                            <Pencil className="mr-2 h-4 w-4" /> Edit {itemLabel}
                                         </DropdownMenuItem>
                                     )}
                                     {/* Delete Action */}
@@ -1028,7 +1037,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                                 onClick={() => setDeleteDialogOpen(true)}
                                                 className="text-red-600"
                                             >
-                                                <Trash2 className="mr-2 h-4 w-4" /> Delete Task {/* Updated text */}
+                                                <Trash2 className="mr-2 h-4 w-4" /> Delete {itemLabel}
                                             </DropdownMenuItem>
                                         </>
                                     )}
@@ -1047,7 +1056,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                         <h1 className="min-w-0 break-words [overflow-wrap:anywhere]">{task.title}</h1>
                     ) : (
                         <Link
-                            href={`/circles/${circle.handle}/tasks/${task._id}`} // Updated path
+                            href={itemDetailPath}
                             className="min-w-0"
                             onClick={(e: React.MouseEvent) => e.stopPropagation()}
                         >
@@ -1135,9 +1144,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                     )}
                     {isShiftTask && task.verifiedAt && (
                         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                            <div>
-                                Verified {formatDistanceToNow(new Date(task.verifiedAt), { addSuffix: true })}
-                            </div>
+                            <div>Verified {formatDistanceToNow(new Date(task.verifiedAt), { addSuffix: true })}</div>
                         </div>
                     )}
                 </div>
