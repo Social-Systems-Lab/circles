@@ -96,6 +96,7 @@ export default async function TasksModule({ circle, taskKind = "all" }: PageProp
                 tasksData={filteredTasksData}
                 circle={circle}
                 permissions={permissions}
+                taskKind={taskKind}
                 persistViewState
             />
         </div>

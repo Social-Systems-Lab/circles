@@ -80,6 +80,8 @@ import {
     taskTitleLinkClassName,
     getTaskWorkflowStatusBadge,
 } from "./task-ui";
+type TaskKindFilter = "all" | "tasks" | "shifts";
+
 interface TasksListProps {
     tasksData: {
         tasks: TaskDisplay[];
@@ -94,6 +96,7 @@ interface TasksListProps {
     inToolbox?: boolean;
     onTaskNavigate?: () => void;
     persistViewState?: boolean;
+    taskKind?: TaskKindFilter;
 }
 
 const SortIcon = ({ sortDir }: { sortDir: string | boolean }) => {
@@ -114,6 +117,46 @@ const taskPrioritySortOrder: Record<TaskPriority, number> = {
 const getSortableCircleLabel = (circle?: Circle) =>
     circle?.name?.trim().toLocaleLowerCase() || circle?.handle?.trim().toLocaleLowerCase() || "";
 const sortableTaskColumnIds = new Set(["title", "priority", "stage", "assignee", "circle", "targetDate", "createdAt"]);
+
+const filterTasksByKind = (tasks: TaskDisplay[], taskKind: TaskKindFilter) => {
+    if (taskKind === "all") {
+        return tasks;
+    }
+
+    return tasks.filter((task) => {
+        const isShift = isShiftTaskItem(task);
+        return taskKind === "shifts" ? isShift : !isShift;
+    });
+};
+
+const taskKindCopy: Record<
+    TaskKindFilter,
+    {
+        singularTitle: string;
+        singularLower: string;
+        pluralLower: string;
+        completedPluralLower: string;
+    }
+> = {
+    all: {
+        singularTitle: "Task",
+        singularLower: "task",
+        pluralLower: "tasks",
+        completedPluralLower: "resolved tasks",
+    },
+    tasks: {
+        singularTitle: "Task",
+        singularLower: "task",
+        pluralLower: "tasks",
+        completedPluralLower: "resolved tasks",
+    },
+    shifts: {
+        singularTitle: "Shift",
+        singularLower: "shift",
+        pluralLower: "shifts",
+        completedPluralLower: "completed shifts",
+    },
+};
 
 const tableRowVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -259,13 +302,14 @@ const TasksList: React.FC<TasksListProps> = ({
     inToolbox,
     onTaskNavigate,
     persistViewState = false,
+    taskKind = "all",
 }) => {
     // Renamed component, props
     const { tasks } = tasksData;
     const [user] = useAtom(userAtom);
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeAssigned, setIncludeAssigned] = useState(true);
-    const [filteredTasks, setFilteredTasks] = useState(tasksData.tasks);
+    const [filteredTasks, setFilteredTasks] = useState(() => filterTasksByKind(tasksData.tasks, taskKind));
     const data = React.useMemo(() => {
         const baseTasks = circle.circleType === "user" && user?.did === circle.did ? filteredTasks : tasks;
 
@@ -303,6 +347,7 @@ const TasksList: React.FC<TasksListProps> = ({
     } | null>(null);
     const [hiddenVerificationTaskIds, setHiddenVerificationTaskIds] = useState<string[]>([]);
     const shouldPersistViewState = persistViewState && !inToolbox;
+    const copy = taskKindCopy[taskKind];
     const showProfileCircleColumn = circle.circleType === "user" && user?.did === circle.did && !inToolbox;
     const showProfileAuthorColumn = circle.circleType === "user" && user?.did === circle.did && !inToolbox;
     const showProfileCircleAvatarColumn = showProfileCircleColumn;
@@ -317,19 +362,19 @@ const TasksList: React.FC<TasksListProps> = ({
     }, [shouldPersistViewState, user?.did, circle.handle, circle._id]);
 
     useEffect(() => {
-        setFilteredTasks(tasksData.tasks);
-    }, [tasksData.tasks]);
+        setFilteredTasks(filterTasksByKind(tasksData.tasks, taskKind));
+    }, [tasksData.tasks, taskKind]);
 
     useEffect(() => {
         const fetchTasks = async () => {
             if (circle.circleType === "user" && user?.did === circle.did) {
                 const data = await getTasksAction(circle.handle!, includeCreated, includeAssigned);
-                setFilteredTasks(data.tasks);
+                setFilteredTasks(filterTasksByKind(data.tasks, taskKind));
             }
         };
 
         fetchTasks();
-    }, [includeCreated, includeAssigned, circle, user]);
+    }, [includeCreated, includeAssigned, circle, user, taskKind]);
 
     useEffect(() => {
         setHiddenVerificationTaskIds([]);
@@ -1038,19 +1083,20 @@ const TasksList: React.FC<TasksListProps> = ({
         : [];
     const shouldShowVerificationQueue =
         !inToolbox &&
+        taskKind !== "shifts" &&
         (verificationQueueTasks.length > 0 ||
             permissions.canAssign ||
             permissions.canResolve ||
             permissions.canModerate);
     const activeEmptyMessage =
         !inToolbox && resolvedRows.length > 0
-            ? "No active tasks match the current filters. Resolved matches are available below."
-            : "No tasks found.";
+            ? `No active ${copy.pluralLower} match the current filters. ${copy.completedPluralLower[0].toUpperCase()}${copy.completedPluralLower.slice(1)} are available below.`
+            : `No ${copy.pluralLower} found.`;
 
     const handleCreateTaskSuccess = (data: { id?: string; circleHandle?: string }) => {
         toast({
-            title: "Task Created",
-            description: "The new task has been successfully created.",
+            title: `${copy.singularTitle} Created`,
+            description: `The new ${copy.singularLower} has been successfully created.`,
         });
         setIsCreateTaskDialogOpen(false);
         router.refresh(); // Refresh the list
@@ -1187,14 +1233,14 @@ const TasksList: React.FC<TasksListProps> = ({
                         <div className="flex w-full flex-wrap items-center gap-2">
                             <div className="flex flex-1 flex-col">
                                 <Input
-                                    placeholder="Search tasks by title..." // Updated placeholder
+                                    placeholder={`Search ${copy.pluralLower} by title...`}
                                     value={searchText}
                                     onChange={(event) => setSearchText(event.target.value)}
                                 />
                             </div>
                             {canCreateTask && (
                                 <Button onClick={() => setIsCreateTaskDialogOpen(true)}>
-                                    <Plus className="mr-2 h-4 w-4" /> Create Task
+                                    <Plus className="mr-2 h-4 w-4" /> Create {copy.singularTitle}
                                 </Button>
                             )}
                             <DropdownMenu>
@@ -1364,7 +1410,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                 </div>
                             ) : (
                                 <div className="px-4 py-6 text-sm text-muted-foreground">
-                                    No tasks awaiting verification
+                                    No {copy.pluralLower} awaiting verification
                                 </div>
                             )}
                         </div>
@@ -1383,7 +1429,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                     variant="ghost"
                                     className="flex w-full items-center justify-between rounded-none px-4 py-6 text-left text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                                 >
-                                    <span>Review resolved tasks ({resolvedRows.length})</span>
+                                    <span>Review {copy.completedPluralLower} ({resolvedRows.length})</span>
                                     <ChevronDown
                                         className={`h-4 w-4 transition-transform ${
                                             resolvedSectionOpen ? "rotate-180" : ""
@@ -1392,7 +1438,7 @@ const TasksList: React.FC<TasksListProps> = ({
                                 </Button>
                             </CollapsibleTrigger>
                             <CollapsibleContent className="border-t border-gray-200 p-4 pt-0">
-                                <div className="pt-4">{renderTaskTable(resolvedRows, "No resolved tasks found.")}</div>
+                                <div className="pt-4">{renderTaskTable(resolvedRows, `No ${copy.completedPluralLower} found.`)}</div>
                             </CollapsibleContent>
                         </Collapsible>
                     )}
@@ -1405,9 +1451,9 @@ const TasksList: React.FC<TasksListProps> = ({
                             }}
                         >
                             <DialogHeader>
-                                <DialogTitle>Delete Task</DialogTitle> {/* Updated text */}
+                                <DialogTitle>Delete {copy.singularTitle}</DialogTitle> {/* Updated text */}
                                 <DialogDescription>
-                                    Are you sure you want to delete the task &quot;{selectedTask?.title}&quot;? This
+                                    Are you sure you want to delete the {copy.singularLower} &quot;{selectedTask?.title}&quot;? This
                                     action cannot be undone.
                                 </DialogDescription>
                             </DialogHeader>
@@ -1433,6 +1479,7 @@ const TasksList: React.FC<TasksListProps> = ({
                             onSuccess={handleCreateTaskSuccess}
                             itemKey="task"
                             initialSelectedCircleId={circle._id} // Pass current circle ID
+                            initialTaskType={taskKind === "shifts" ? "shift" : undefined}
                         />
                     )}
                 </div>

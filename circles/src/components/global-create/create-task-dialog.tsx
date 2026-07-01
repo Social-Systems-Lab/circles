@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { GoalDisplay, UserPrivate } from "@/models/models"; // Circle removed as it's handled in TaskForm
+import { GoalDisplay, UserPrivate, type TaskType } from "@/models/models"; // Circle removed as it's handled in TaskForm
 import { TaskForm } from "@/components/modules/tasks/task-form";
 import { CreatableItemDetail, CreatableItemKey } from "./global-create-dialog-content";
 // CircleSelector import removed, will be in TaskForm
@@ -17,6 +17,7 @@ interface CreateTaskDialogProps {
     onSuccess: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     itemKey: CreatableItemKey; // To know we are creating a task and for CircleSelector
     initialSelectedCircleId?: string; // Added to pre-select a circle
+    initialTaskType?: TaskType;
 }
 
 export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
@@ -25,6 +26,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     onSuccess,
     itemKey,
     initialSelectedCircleId,
+    initialTaskType,
 }) => {
     const [user] = useAtom(userAtom);
 
@@ -72,6 +74,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                             user={user as UserPrivate} // Pass user to TaskForm
                             itemDetail={itemDetail} // Pass itemDetail for CircleSelector
                             initialSelectedCircleId={initialSelectedCircleId} // Pass down
+                            initialTaskType={initialTaskType}
                             // goals and goalsModuleEnabled will be handled by TaskForm
                             onFormSubmitSuccess={handleFormSuccess}
                             onCancel={handleCancel}

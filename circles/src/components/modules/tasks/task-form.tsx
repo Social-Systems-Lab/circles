@@ -153,6 +153,7 @@ interface TaskFormProps {
     task?: Task;
     taskId?: string;
     initialSelectedCircleId?: string; // Added initialSelectedCircleId
+    initialTaskType?: TaskType;
     circle?: Circle; // Added for editing context
     // goals and goalsModuleEnabled will be fetched/determined internally
     onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
@@ -166,6 +167,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     task,
     taskId,
     initialSelectedCircleId, // Added initialSelectedCircleId
+    initialTaskType,
     circle: circleProp, // Added for editing
     onFormSubmitSuccess,
     onCancel,
@@ -205,7 +207,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
             eventId: (task as any)?.eventId || preselectedEventId || null,
-            taskType: task?.taskType ?? "outcome",
+            taskType: task?.taskType ?? initialTaskType ?? "outcome",
             slots: task?.slots,
             shiftStartTime: task?.shiftStartTime,
             shiftDurationMinutes: task?.shiftDurationMinutes,
