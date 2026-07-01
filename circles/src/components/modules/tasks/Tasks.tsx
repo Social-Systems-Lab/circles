@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 // TaskPermissions is still needed for passing down to TasksList
 import { Circle, TaskPermissions } from "@/models/models";
 import TasksList from "./tasks-list";
+import ShiftsList from "./shifts-list";
 
 export type TaskKindFilter = "all" | "tasks" | "shifts";
 
@@ -91,14 +92,17 @@ export default async function TasksModule({ circle, taskKind = "all" }: PageProp
 
     return (
         <div className="flex w-full flex-col">
-            {/* Pass the potentially filtered tasksData object and permissions */}
-            <TasksList
-                tasksData={filteredTasksData}
-                circle={circle}
-                permissions={permissions}
-                taskKind={taskKind}
-                persistViewState
-            />
+            {taskKind === "shifts" ? (
+                <ShiftsList tasksData={filteredTasksData} circle={circle} permissions={permissions} />
+            ) : (
+                <TasksList
+                    tasksData={filteredTasksData}
+                    circle={circle}
+                    permissions={permissions}
+                    taskKind={taskKind}
+                    persistViewState
+                />
+            )}
         </div>
     );
 }
