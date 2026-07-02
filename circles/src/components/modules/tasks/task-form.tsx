@@ -221,6 +221,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             prefilledDate = parsedDate;
         }
     }
+    const initialOutcomeTaskType = initialTaskType === "outcome" ? initialTaskType : "outcome";
 
     const form = useForm<TaskFormValues>({
         resolver: zodResolver(taskFormSchema),
@@ -232,7 +233,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             targetDate: prefilledDate ?? (task?.targetDate ? new Date(task.targetDate) : undefined),
             goalId: task?.goalId || preselectedGoalId || null,
             eventId: (task as any)?.eventId || preselectedEventId || null,
-            taskType: forcedTaskType ?? task?.taskType ?? initialTaskType ?? "outcome",
+            taskType: forcedTaskType ?? task?.taskType ?? initialOutcomeTaskType,
             slots: task?.slots,
             shiftStartTime: task?.shiftStartTime,
             shiftDurationMinutes: task?.shiftDurationMinutes,
@@ -244,6 +245,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
     const taskType = form.watch("taskType");
     const isForcedShift = forcedTaskType === "shift";
+    const shouldShowTaskTypeSelector = !hideTaskTypeSelector && Boolean(forcedTaskType);
 
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
@@ -552,7 +554,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             </FormItem>
                                         )}
                                     />
-                                    {!hideTaskTypeSelector && (
+                                    {shouldShowTaskTypeSelector && (
                                         <FormField
                                             control={form.control}
                                             name="taskType"
