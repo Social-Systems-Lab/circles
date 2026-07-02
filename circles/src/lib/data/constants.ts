@@ -648,6 +648,12 @@ export const modules: ModuleInfo[] = [
             "Manage and track tasks within the circle. Users can create tasks, assign them, and monitor progress through various stages.",
     },
     {
+        name: "Shifts",
+        handle: "shifts",
+        description:
+            "Schedule and manage shifts within the circle. Members can see upcoming shifts, request spots, and track shift participation.",
+    },
+    {
         name: "Events",
         handle: "events",
         description:

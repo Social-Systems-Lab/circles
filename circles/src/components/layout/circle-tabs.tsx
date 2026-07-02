@@ -42,8 +42,11 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     // Check if the user has access to a specific module
     const hasAccess = useCallback(
         (moduleHandle: string) => {
+            const accessModuleHandle = moduleHandle === "shifts" ? "tasks" : moduleHandle;
             let allowedUserGroups =
-                circle.accessRules?.[moduleHandle]?.view || getFeature(moduleHandle, "view")?.defaultUserGroups || [];
+                circle.accessRules?.[accessModuleHandle]?.view ||
+                getFeature(accessModuleHandle, "view")?.defaultUserGroups ||
+                [];
             return (
                 allowedUserGroups.includes("everyone") || userGroups.some((group) => allowedUserGroups.includes(group))
             );
