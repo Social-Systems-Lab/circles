@@ -59,6 +59,8 @@ CRITICAL RULES:
 3. Repository Rules
 - ALL changes must end in ~/circles/circles
 - Never leave changes in .codex worktrees
+- In zsh, quote App Router paths containing brackets, e.g. 'circles/src/app/circles/[handle]/tasks/actions.ts'
+- Some App Router files under circles/src/app/circles may be ignored by the repo pattern; use git add -f only when intentionally staging those files
 - Before finishing, verify:
 
   git status --short
