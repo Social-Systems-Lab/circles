@@ -1,6 +1,6 @@
 "use server";
 
-import { getCirclesWithMetrics } from "@/lib/data/circle";
+import { getCommunityCirclesWithRelationships } from "@/lib/data/circle";
 import CirclesList from "./circles-list";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
@@ -17,14 +17,11 @@ export default async function CirclesModule(props: PageProps) {
     let userDid = await getAuthenticatedUserDid();
 
     // get all circles or projects based on the page
-    let circles = await getCirclesWithMetrics(
+    let circles = await getCommunityCirclesWithRelationships(
         userDid,
-        circle?._id,
+        String(circle._id),
         searchParams?.sort as SortingOptions,
-        "circle",
         sdgHandles,
-        true,
-        true,
     );
 
     return (

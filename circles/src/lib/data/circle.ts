@@ -52,6 +52,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     members: 1,
     questionnaire: 1,
     parentCircleId: 1,
+    affiliatedCircleIds: 1,
     circleLevel: 1,
     createdBy: 1,
     createdAt: 1,
@@ -286,6 +287,71 @@ export const getCirclesWithMetrics = async (
         circleType,
     });
     return circles;
+};
+
+export type CircleRelationshipToCurrentCircle = "child" | "affiliate";
+export type CircleWithRelationship = WithMetric<Circle> & {
+    relationshipToCurrentCircle: CircleRelationshipToCurrentCircle;
+};
+
+export const getCommunityCirclesWithRelationships = async (
+    userDid: string | undefined,
+    circleId: string,
+    sort?: SortingOptions,
+    sdgHandles?: string[],
+): Promise<CircleWithRelationship[]> => {
+    const query: any = {
+        $and: [
+            { circleType: "circle" },
+            getPublishedCircleQuery(),
+            {
+                $or: [{ parentCircleId: circleId }, { affiliatedCircleIds: circleId }],
+            },
+        ],
+    };
+
+    if (sdgHandles && sdgHandles.length > 0) {
+        query.$and.push({ causes: { $in: sdgHandles } });
+    }
+
+    const circles = (await Circles.find(query, {
+        projection: SAFE_CIRCLE_PROJECTION,
+    }).toArray()) as CircleWithRelationship[];
+    const dedupedById = new Map<string, CircleWithRelationship>();
+
+    for (const circle of circles) {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+
+        const id = circle._id?.toString?.();
+        if (!id) {
+            continue;
+        }
+
+        const relationshipToCurrentCircle = circle.parentCircleId === circleId ? "child" : "affiliate";
+        const existing = dedupedById.get(id);
+
+        if (!existing || relationshipToCurrentCircle === "child") {
+            dedupedById.set(id, {
+                ...circle,
+                relationshipToCurrentCircle,
+            });
+        }
+    }
+
+    const relatedCircles = Array.from(dedupedById.values());
+    const currentDate = new Date();
+    const user = userDid
+        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
+        : undefined;
+
+    for (const circle of relatedCircles) {
+        circle.metrics = await getMetrics(user, circle, currentDate, sort);
+    }
+
+    relatedCircles.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
+    return relatedCircles;
 };
 
 export const getMetricsForCircles = async (

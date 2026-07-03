@@ -368,7 +368,6 @@ export interface ChatMessage {
     status?: "pending" | "sent" | "failed";
     errorMessage?: string;
     system?: SystemMessageMetadata;
-
 }
 
 export type ReactionAggregation = {
@@ -501,6 +500,7 @@ export const circleSchema = z.object({
     members: z.number().default(0).optional(),
     questionnaire: z.array(questionSchema).default([]).optional(),
     parentCircleId: z.string().optional(),
+    affiliatedCircleIds: z.array(z.string()).optional(),
     circleLevel: circleLevelSchema.optional(),
     createdBy: didSchema.optional(),
     createdAt: z.date().optional(),
@@ -1618,7 +1618,15 @@ export type FundingAskTrustBadgeType = z.infer<typeof fundingAskTrustBadgeTypeSc
 export const fundingAskCurrencySchema = z.enum(["ZAR", "USD", "EUR"]);
 export type FundingAskCurrency = z.infer<typeof fundingAskCurrencySchema>;
 
-export const fundingAskBeneficiaryTypeSchema = z.enum(["self", "person", "family", "community", "group", "project", "other"]);
+export const fundingAskBeneficiaryTypeSchema = z.enum([
+    "self",
+    "person",
+    "family",
+    "community",
+    "group",
+    "project",
+    "other",
+]);
 export type FundingAskBeneficiaryType = z.infer<typeof fundingAskBeneficiaryTypeSchema>;
 
 export const fundingAskItemStatusSchema = z.enum(["draft", "open", "completed", "closed"]);

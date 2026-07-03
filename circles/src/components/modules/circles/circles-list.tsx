@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Circle, ContentPreviewData, WithMetric, Cause as SDG } from "@/models/models"; // Removed Page import
+import type { CircleWithRelationship } from "@/lib/data/circle";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -40,12 +41,14 @@ export const twoLineEllipsisStyle = {
 };
 
 interface CirclesListProps {
-    circles: WithMetric<Circle>[];
+    circles: Array<WithMetric<Circle> | CircleWithRelationship>;
     circle: Circle;
     activeTab?: string;
     inUser?: boolean;
     isProjectsList?: boolean;
 }
+
+type RelationshipFilter = "all" | "child" | "affiliate";
 
 const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: CirclesListProps) => {
     const [user] = useAtom(userAtom);
@@ -61,6 +64,8 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const [sdgSearch, setSdgSearch] = useState("");
     const [includeCreated, setIncludeCreated] = useState(true);
     const [includeMember, setIncludeMember] = useState(true);
+    const [relationshipFilter, setRelationshipFilter] = useState<RelationshipFilter>("all");
+    const hasRelationshipLabels = circles.some((circle) => "relationshipToCurrentCircle" in circle);
 
     useEffect(() => {
         updateQueryParam(router, "includeCreated", includeCreated.toString());
@@ -95,6 +100,13 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
 
     const filteredCircles = useMemo(() => {
         let results = circles;
+        if (relationshipFilter !== "all") {
+            results = results.filter(
+                (circle) =>
+                    "relationshipToCurrentCircle" in circle &&
+                    circle.relationshipToCurrentCircle === relationshipFilter,
+            );
+        }
         if (searchQuery) {
             results = results.filter((circle) => circle?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
         }
@@ -103,7 +115,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
             results = results.filter((c) => c.causes?.some((cause) => sdgHandles.includes(cause)));
         }
         return results;
-    }, [circles, searchQuery, selectedSdgs]);
+    }, [circles, relationshipFilter, searchQuery, selectedSdgs]);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -178,6 +190,26 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                 </div>
 
                 <div className="flex flex-col gap-2">
+                    {hasRelationshipLabels && (
+                        <div className="flex flex-wrap gap-2 pt-3">
+                            {[
+                                { value: "all", label: "All" },
+                                { value: "child", label: "Children" },
+                                { value: "affiliate", label: "Affiliates" },
+                            ].map((option) => (
+                                <Button
+                                    key={option.value}
+                                    type="button"
+                                    variant={relationshipFilter === option.value ? "default" : "outline"}
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => setRelationshipFilter(option.value as RelationshipFilter)}
+                                >
+                                    {option.label}
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                     <div className="flex items-center justify-between">
                         <ListFilter
                             onFilterChange={handleFilterChange}
@@ -276,6 +308,15 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                                 </div>
                                 <div className="pt-[32px] text-center">
                                     <h4 className="mb-0 mt-2 cursor-pointer text-lg font-bold">{circle.name}</h4>
+                                    {"relationshipToCurrentCircle" in circle && (
+                                        <div className="mt-1 flex justify-center">
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                                {circle.relationshipToCurrentCircle === "child"
+                                                    ? "Child circle"
+                                                    : "Affiliated circle"}
+                                            </span>
+                                        </div>
+                                    )}
                                     {circle?.circleType !== "user" ? (
                                         <div className="flex flex-row items-center justify-center text-sm text-gray-500">
                                             {circle.members} {circle?.members !== 1 ? "followers" : "follower"}
