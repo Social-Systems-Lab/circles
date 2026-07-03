@@ -91,7 +91,7 @@ export default async function EditShiftPage(props: PageProps) {
                 taskId={shift._id}
                 forcedTaskType="shift"
                 hideTaskTypeSelector
-                successRedirectPath={shiftHref}
+                successRedirectCollection="shifts"
                 labels={{
                     editTitle: "Edit Shift",
                     updatedToastTitle: "Shift Updated",

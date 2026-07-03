@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react"; // Added useCallback
+import React, { useState, useEffect, useCallback, useRef } from "react"; // Added useCallback
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -178,6 +178,7 @@ interface TaskFormProps {
     };
     circle?: Circle; // Added for editing context
     successRedirectPath?: string;
+    successRedirectCollection?: "tasks" | "shifts";
     // goals and goalsModuleEnabled will be fetched/determined internally
     onFormSubmitSuccess?: (data: { id?: string; circleHandle?: string }) => void; // Updated to include circleHandle
     onCancel?: () => void;
@@ -196,6 +197,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     labels,
     circle: circleProp, // Added for editing
     successRedirectPath,
+    successRedirectCollection = "tasks",
     onFormSubmitSuccess,
     onCancel,
 }) => {
@@ -213,6 +215,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     const router = useRouter();
     const searchParams = useSearchParams();
     const isEditing = !!task;
+    const selectedCircleRef = useRef<Circle | null>(null);
     const preselectedGoalId = searchParams.get("goalId");
     const preselectedEventId = searchParams.get("eventId");
     const targetDateFromQuery = searchParams.get("targetDate");
@@ -253,7 +256,11 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
-            const isDifferentCircle = Boolean(selectedCircle?._id && circle?._id && selectedCircle._id !== circle._id);
+            const previousCircle = selectedCircleRef.current;
+            const isDifferentCircle = Boolean(
+                previousCircle?._id && circle?._id && previousCircle._id !== circle._id,
+            );
+            selectedCircleRef.current = circle;
             setSelectedCircle(circle);
             setGoals([]);
             setEvents([]);
@@ -265,7 +272,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                 });
             }
         },
-        [form, selectedCircle?._id],
+        [form],
     );
 
     useEffect(() => {
@@ -276,6 +283,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         // This assumes task object has circle information or we can derive it.
         // For now, if editing, CircleSelector will handle initial selection based on user's circles.
         if (isEditing && circleProp) {
+            selectedCircleRef.current = circleProp;
             setSelectedCircle(circleProp);
         }
     }, [task?.location, isEditing, circleProp, setSelectedCircle]);
@@ -389,6 +397,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         const formData = new FormData();
         formData.append("title", values.title);
         formData.append("description", values.description ?? "");
+        if (selectedCircle._id) {
+            formData.append("circleId", selectedCircle._id);
+        }
 
         if (location) {
             formData.append("location", JSON.stringify(location));
@@ -490,9 +501,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                 } else {
                     const navigateToId = isEditing ? taskId : result.taskId;
                     if (navigateToId && selectedCircle.handle) {
-                        router.push(`/circles/${selectedCircle.handle}/tasks/${navigateToId}`);
+                        router.push(`/circles/${selectedCircle.handle}/${successRedirectCollection}/${navigateToId}`);
                     } else if (selectedCircle.handle) {
-                        router.push(`/circles/${selectedCircle.handle}/tasks`);
+                        router.push(`/circles/${selectedCircle.handle}/${successRedirectCollection}`);
                     }
                     router.refresh();
                 }
@@ -521,13 +532,17 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                     <h3 className="mb-2 text-2xl font-semibold leading-none tracking-tight">
                         {isEditing ? (labels?.editTitle ?? "Edit Task") : (labels?.createTitle ?? "Create New Task")}
                     </h3>
-                    {!isEditing && (
+                    {(!isEditing || circleProp) && (
                         <div className="pb-4 pt-2">
-                            <p className="mb-2 text-sm font-medium text-foreground">Create in</p>
+                            <p className="mb-2 text-sm font-medium text-foreground">
+                                {isEditing ? "Circle" : "Create in"}
+                            </p>
                             <CircleSelector
                                 itemType={itemDetail}
                                 onCircleSelected={handleCircleSelected}
-                                initialSelectedCircleId={initialSelectedCircleId}
+                                initialSelectedCircleId={circleProp?._id ?? initialSelectedCircleId}
+                                showLabel={false}
+                                fallbackCircle={isEditing ? circleProp : undefined}
                             />
                         </div>
                     )}

@@ -25,7 +25,7 @@ import {
     taskTypeSchema,
     postSchema,
 } from "@/models/models";
-import { getCircleByHandle } from "@/lib/data/circle";
+import { getCircleByHandle, getCircleById } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
@@ -462,6 +462,7 @@ const reviewShiftAttendanceSchema = z.object({
 const updateTaskSchema = baseTaskSchema.extend({
     // Renamed schema
     // Updates use the same base fields
+    circleId: z.string().optional(),
     goalId: z.string().optional().nullable(),
     eventId: z.string().optional().nullable(),
     priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
@@ -764,6 +765,7 @@ export async function updateTaskAction(
             shiftStartTime: formData.get("shiftStartTime") ?? undefined,
             shiftDurationMinutes: formData.get("shiftDurationMinutes") ?? undefined,
             participantNotes: formData.get("participantNotes") ?? undefined,
+            circleId: formData.get("circleId") ?? undefined,
             priority: formData.get("priority") || "",
             taskGroup: formData.get("taskGroup") || "",
         });
@@ -778,27 +780,64 @@ export async function updateTaskAction(
         }
         const data = validatedData.data;
 
-        // ... (user/circle fetching, permission checks) ...
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
         }
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) {
-            return { success: false, message: "Circle not found" };
-        }
+
         const task = await getTaskById(taskId, userDid); // Fetch task
         if (!task) {
             return { success: false, message: "Task not found" };
         }
+
+        const sourceCircleId = task.circleId;
+        if (!sourceCircleId || !ObjectId.isValid(sourceCircleId)) {
+            return { success: false, message: "Task source circle is invalid" };
+        }
+
+        const sourceCircle = await getCircleById(sourceCircleId);
+        if (!sourceCircle?._id) {
+            return { success: false, message: "Task source circle not found" };
+        }
+
+        const requestedTargetCircleId = data.circleId?.trim();
+        if (requestedTargetCircleId && !ObjectId.isValid(requestedTargetCircleId)) {
+            return { success: false, message: "Target circle is invalid" };
+        }
+
+        const targetCircle = requestedTargetCircleId ? await getCircleById(requestedTargetCircleId) : sourceCircle;
+        if (!targetCircle?._id || !targetCircle.handle) {
+            return { success: false, message: "Target circle not found" };
+        }
+        if (requestedTargetCircleId && targetCircle.handle !== circleHandle) {
+            return { success: false, message: "Target circle does not match selected route" };
+        }
+
         const isAuthor = userDid === task.createdBy;
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks?.moderate);
+        const canModerate = await isAuthorized(userDid, sourceCircle._id as string, features.tasks?.moderate);
         const canEdit = (isAuthor && task.stage === "review") || (canModerate && task.stage !== "resolved");
         if (!canEdit) {
             return {
                 success: false,
                 message: "Not authorized to update this task at its current stage",
             };
+        }
+
+        const didTargetCircleChange = sourceCircle._id !== targetCircle._id;
+        if (didTargetCircleChange) {
+            const user = await getUserPrivate(userDid);
+            if (!canPerformRestrictedAction(user)) {
+                return { success: false, message: getRestrictedActionMessage("move tasks") };
+            }
+
+            const canCreateInTarget =
+                targetCircle.circleType === "user"
+                    ? targetCircle._id === user?._id
+                    : await isAuthorized(userDid, targetCircle._id as string, features.tasks?.create || "tasks_create");
+
+            if (!canCreateInTarget) {
+                return { success: false, message: "Not authorized to move this task to the selected circle" };
+            }
         }
 
         const existingTaskType = task.taskType ?? "outcome";
@@ -875,7 +914,7 @@ export async function updateTaskAction(
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
                 const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id as string, true);
+                return await saveFile(file, fileNamePrefix, targetCircle._id as string, true);
             });
             const uploadResults = await Promise.all(uploadPromises);
             newlyUploadedImages = uploadResults.map(
@@ -908,6 +947,7 @@ export async function updateTaskAction(
             images: finalImages,
             location: locationData,
             targetDate: targetDateForUpdate,
+            circleId: targetCircle._id as string,
             userGroups: data.userGroups || task.userGroups,
             updatedAt: new Date(),
             // Pass goalId directly (can be string or empty string for removal)
@@ -940,8 +980,8 @@ export async function updateTaskAction(
         if (data.taskType === "shift" && shouldPublishToNoticeboard(formData)) {
             try {
                 const noticeboardPostId = await upsertShiftNoticeboardPost({
-                    circle,
-                    circleHandle,
+                    circle: targetCircle,
+                    circleHandle: targetCircle.handle,
                     task: {
                         ...task,
                         ...updateData,
@@ -953,7 +993,7 @@ export async function updateTaskAction(
                 if (noticeboardPostId && noticeboardPostId !== task.noticeboardPostId) {
                     await Tasks.updateOne({ _id: new ObjectId(taskId) }, { $set: { noticeboardPostId } });
                 }
-                revalidatePath(`/circles/${circleHandle}/feed`);
+                revalidatePath(`/circles/${targetCircle.handle}/feed`);
             } catch (error) {
                 console.error("Failed to create linked noticeboard post for shift:", error);
                 return { success: true, message: "Task updated, but Noticeboard post could not be created." };
@@ -961,8 +1001,18 @@ export async function updateTaskAction(
         }
 
         // Revalidate relevant pages
-        revalidatePath(`/circles/${circleHandle}/tasks`);
-        revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
+        const revalidateTaskRoutes = (handle: string) => {
+            revalidatePath(`/circles/${handle}/tasks`);
+            revalidatePath(`/circles/${handle}/tasks/${taskId}`);
+            if (data.taskType === "shift") {
+                revalidatePath(`/circles/${handle}/shifts`);
+                revalidatePath(`/circles/${handle}/shifts/${taskId}`);
+            }
+        };
+        if (sourceCircle.handle) {
+            revalidateTaskRoutes(sourceCircle.handle);
+        }
+        revalidateTaskRoutes(targetCircle.handle);
 
         return { success: true, message: "Task updated successfully" };
     } catch (error) {
