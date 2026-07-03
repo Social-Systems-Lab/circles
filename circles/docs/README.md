@@ -17,3 +17,4 @@ Short index for developer-facing Kamooni / Circles docs.
 - [Dev onboarding](dev-onboarding.md)
 - [Creating a new module](create-module.md)
 - [Debug playbook](DEBUG_PLAYBOOK.md)
+- [Circle affiliations](CIRCLE_AFFILIATIONS.md)
