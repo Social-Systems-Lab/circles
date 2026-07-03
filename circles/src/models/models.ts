@@ -1579,6 +1579,7 @@ export const taskSchema = z.object({
     goalId: z.string().optional(), // Optional link to a goal
     eventId: z.string().optional(), // Optional link to an event
     priority: taskPrioritySchema.optional(),
+    taskGroup: z.string().optional(),
 });
 
 export type Task = z.infer<typeof taskSchema>;

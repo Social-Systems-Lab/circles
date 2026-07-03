@@ -219,6 +219,12 @@ const canViewerClaimTask = (task: TaskDisplay, currentUserDid?: string, isCircle
     Boolean(isCircleMember) &&
     !getPendingClaims(task).some((claim) => claim.claimantDid === currentUserDid);
 
+type TaskRowGroup = {
+    key: string;
+    label: string;
+    rows: Row<TaskDisplay>[];
+};
+
 type PersistedTasksListViewState = {
     version: number;
     searchText: string;
@@ -293,6 +299,49 @@ const formatTaskDate = (value?: Date | null) => {
     }
 
     return new Date(value).toLocaleDateString();
+};
+
+const getTaskGroupLabel = (task: TaskDisplay) => task.taskGroup?.trim() || "";
+
+const groupTaskRows = (rows: Row<TaskDisplay>[]): TaskRowGroup[] => {
+    const groupedRows = new Map<string, TaskRowGroup>();
+    const ungroupedRows: Row<TaskDisplay>[] = [];
+
+    for (const row of rows) {
+        const groupLabel = getTaskGroupLabel(row.original);
+
+        if (!groupLabel) {
+            ungroupedRows.push(row);
+            continue;
+        }
+
+        const groupKey = groupLabel.toLocaleLowerCase();
+        const existingGroup = groupedRows.get(groupKey);
+        if (existingGroup) {
+            existingGroup.rows.push(row);
+        } else {
+            groupedRows.set(groupKey, {
+                key: groupKey,
+                label: groupLabel,
+                rows: [row],
+            });
+        }
+    }
+
+    if (groupedRows.size === 0) {
+        return [{ key: "all", label: "", rows }];
+    }
+
+    const groups = Array.from(groupedRows.values());
+    if (ungroupedRows.length > 0) {
+        groups.push({
+            key: "ungrouped",
+            label: "Ungrouped",
+            rows: ungroupedRows,
+        });
+    }
+
+    return groups;
 };
 
 const TasksList: React.FC<TasksListProps> = ({
@@ -1190,40 +1239,68 @@ const TasksList: React.FC<TasksListProps> = ({
         );
     };
 
-    const renderTaskTable = (rows: Row<TaskDisplay>[], emptyMessage: string) => (
-        <div className="overflow-hidden rounded-[15px] shadow-lg">
-            <Table className="overflow-hidden">
-                <TableHeader className="bg-white">
-                    {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id} className="!border-b-0">
-                            {headerGroup.headers.map((header) => (
-                                <TableHead key={header.id}>
-                                    {header.isPlaceholder
-                                        ? null
-                                        : flexRender(header.column.columnDef.header, header.getContext())}
-                                </TableHead>
-                            ))}
-                            {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
-                        </TableRow>
-                    ))}
-                </TableHeader>
-                <TableBody className="bg-white">
-                    {rows.length ? (
-                        rows.map((row, index) => renderTaskRow(row, index))
-                    ) : (
-                        <TableRow>
-                            <TableCell
-                                colSpan={columns.length + 1}
-                                className={inToolbox ? "p-8 text-center text-muted-foreground" : "h-24 text-center"}
-                            >
-                                {emptyMessage}
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
-        </div>
-    );
+    const renderTaskTable = (rows: Row<TaskDisplay>[], emptyMessage: string) => {
+        const shouldGroupRows = taskKind === "tasks" && !inToolbox;
+        const rowGroups = shouldGroupRows ? groupTaskRows(rows) : [{ key: "all", label: "", rows }];
+        const hasVisibleGroups = shouldGroupRows && rowGroups.some((group) => group.label);
+        const tableColSpan = columns.length + (inToolbox ? 0 : 1);
+
+        let rowIndex = 0;
+
+        return (
+            <div className="overflow-hidden rounded-[15px] shadow-lg">
+                <Table className="overflow-hidden">
+                    <TableHeader className="bg-white">
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id} className="!border-b-0">
+                                {headerGroup.headers.map((header) => (
+                                    <TableHead key={header.id}>
+                                        {header.isPlaceholder
+                                            ? null
+                                            : flexRender(header.column.columnDef.header, header.getContext())}
+                                    </TableHead>
+                                ))}
+                                {!inToolbox && <TableHead className="w-[40px]"></TableHead>}
+                            </TableRow>
+                        ))}
+                    </TableHeader>
+                    <TableBody className="bg-white">
+                        {rows.length ? (
+                            rowGroups.map((group) => (
+                                <React.Fragment key={group.key}>
+                                    {hasVisibleGroups && group.label && (
+                                        <TableRow className="bg-slate-50 hover:bg-slate-50">
+                                            <TableCell colSpan={tableColSpan} className="px-4 py-2">
+                                                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                                    <span>{group.label}</span>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="h-5 rounded-full px-2 text-[11px]"
+                                                    >
+                                                        {group.rows.length}
+                                                    </Badge>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    {group.rows.map((row) => renderTaskRow(row, rowIndex++))}
+                                </React.Fragment>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={tableColSpan}
+                                    className={inToolbox ? "p-8 text-center text-muted-foreground" : "h-24 text-center"}
+                                >
+                                    {emptyMessage}
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        );
+    };
 
     return (
         <TooltipProvider>

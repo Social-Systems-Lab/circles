@@ -51,6 +51,7 @@ export const SAFE_TASK_PROJECTION = {
     goal: 1,
     event: 1,
     priority: 1,
+    taskGroup: 1,
 } as const;
 
 const buildParticipantProfilesLookupStage = () => ({
@@ -905,10 +906,11 @@ export const createTask = async (taskData: Omit<Task, "_id" | "commentPostId">):
  */
 export const updateTask = async (
     taskId: string,
-    updates: Omit<Partial<Task>, "goalId" | "eventId" | "priority"> & {
+    updates: Omit<Partial<Task>, "goalId" | "eventId" | "priority" | "taskGroup"> & {
         goalId?: string;
         eventId?: string;
         priority?: TaskPriority | "";
+        taskGroup?: string | "";
     },
     fieldsToUnset: (keyof Task)[] = [],
 ): Promise<boolean> => {
@@ -936,6 +938,10 @@ export const updateTask = async (
         if (updateData.hasOwnProperty("priority") && updateData.priority === "") {
             delete updateData.priority;
             unsetFields.priority = "";
+        }
+        if (updateData.hasOwnProperty("taskGroup") && updateData.taskGroup === "") {
+            delete updateData.taskGroup;
+            unsetFields.taskGroup = "";
         }
         Object.keys(updateData).forEach((key) => {
             if (typeof updateData[key] === "undefined") {

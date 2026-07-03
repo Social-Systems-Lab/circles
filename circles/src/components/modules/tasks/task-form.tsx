@@ -91,6 +91,7 @@ const taskFormSchema = z
         ),
         publishToNoticeboard: z.boolean().default(false),
         priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
+        taskGroup: z.string().max(80, "Group/category must be 80 characters or fewer").optional(),
     })
     .superRefine((data, context) => {
         if (data.priority === "critical" && !data.targetDate) {
@@ -145,6 +146,7 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
     shiftDurationMinutes?: number;
     participantNotes?: string;
     priority?: TaskPriority | null;
+    taskGroup?: string;
 };
 
 interface TaskFormProps {
@@ -240,6 +242,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             participantNotes: task?.participantNotes,
             publishToNoticeboard: Boolean(task?.noticeboardPostId),
             priority: task?.priority || null,
+            taskGroup: task?.taskGroup || "",
         },
     });
 
@@ -346,6 +349,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             return;
         }
 
+        form.setValue("taskGroup", "", { shouldValidate: false });
         if (!form.getValues("slots")) {
             form.setValue("slots", task?.slots ?? 1, { shouldValidate: false });
         }
@@ -441,6 +445,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
         } else {
             formData.append("priority", "");
         }
+        formData.append("taskGroup", values.taskType === "shift" ? "" : (values.taskGroup ?? "").trim());
 
         if (values.images) {
             values.images.forEach((imgOrFile) => {
@@ -823,6 +828,29 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             </FormItem>
                                         )}
                                     />
+                                    {taskType !== "shift" && (
+                                        <FormField
+                                            control={form.control}
+                                            name="taskGroup"
+                                            render={({ field }) => (
+                                                <FormItem className="py-3 md:py-4">
+                                                    <FormLabel>Group / category</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            placeholder="Design, Outreach, Setup"
+                                                            {...field}
+                                                            value={field.value ?? ""}
+                                                            disabled={isSubmitting}
+                                                        />
+                                                    </FormControl>
+                                                    <FormDescription>
+                                                        Optional label for grouping related tasks on the Tasks page.
+                                                    </FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
                                 </div>
                                 <FormField
                                     control={form.control}
