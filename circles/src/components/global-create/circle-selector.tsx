@@ -20,6 +20,7 @@ interface CircleSelectorProps {
     showModuleEnableMessage?: boolean;
     showLabel?: boolean;
     fallbackCircle?: Circle;
+    requiredEnabledModuleHandle?: string;
 }
 
 export const CircleSelector: React.FC<CircleSelectorProps> = ({
@@ -30,6 +31,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
     showModuleEnableMessage = true,
     showLabel = true,
     fallbackCircle,
+    requiredEnabledModuleHandle,
 }) => {
     const [user] = useAtom(userAtom);
     const [selectableCircles, setSelectableCircles] = useState<Circle[]>([]);
@@ -67,7 +69,11 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         const currentUserCircle = user as UserPrivate;
 
         const loadSelectableCircles = async () => {
-            const result = await getSelectableCirclesAction(itemType.moduleHandle, itemType.createFeatureHandle);
+            const result = await getSelectableCirclesAction(
+                itemType.moduleHandle,
+                itemType.createFeatureHandle,
+                requiredEnabledModuleHandle,
+            );
             if (cancelled) {
                 return;
             }
@@ -107,7 +113,15 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [user, itemType, onCircleSelected, initialSelectedCircleId, fallbackCircle, updateModuleEnableMessage]);
+    }, [
+        user,
+        itemType,
+        onCircleSelected,
+        initialSelectedCircleId,
+        fallbackCircle,
+        requiredEnabledModuleHandle,
+        updateModuleEnableMessage,
+    ]);
 
     const handleSelectionChange = (circleId: string) => {
         const circle = selectableCircles.find((c) => c._id === circleId);

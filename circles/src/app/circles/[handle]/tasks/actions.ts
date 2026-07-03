@@ -825,6 +825,17 @@ export async function updateTaskAction(
 
         const didTargetCircleChange = sourceCircle._id !== targetCircle._id;
         if (didTargetCircleChange) {
+            const requiredTargetModuleHandle = data.taskType === "shift" ? "shifts" : "tasks";
+            if (!targetCircle.enabledModules?.includes(requiredTargetModuleHandle)) {
+                return {
+                    success: false,
+                    message:
+                        data.taskType === "shift"
+                            ? "Shifts are not enabled in the selected circle"
+                            : "Tasks are not enabled in the selected circle",
+                };
+            }
+
             const user = await getUserPrivate(userDid);
             if (!canPerformRestrictedAction(user)) {
                 return { success: false, message: getRestrictedActionMessage("move tasks") };

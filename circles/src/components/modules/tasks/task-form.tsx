@@ -252,6 +252,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     const taskType = form.watch("taskType");
     const isForcedShift = forcedTaskType === "shift";
     const shouldShowTaskTypeSelector = !hideTaskTypeSelector && Boolean(forcedTaskType);
+    const moveTargetModuleHandle = taskType === "shift" ? "shifts" : "tasks";
 
     // Callback for CircleSelector
     const handleCircleSelected = useCallback(
@@ -543,6 +544,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                 initialSelectedCircleId={circleProp?._id ?? initialSelectedCircleId}
                                 showLabel={false}
                                 fallbackCircle={isEditing ? circleProp : undefined}
+                                requiredEnabledModuleHandle={isEditing ? moveTargetModuleHandle : undefined}
                             />
                         </div>
                     )}
