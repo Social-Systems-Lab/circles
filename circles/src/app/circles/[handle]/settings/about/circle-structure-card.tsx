@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import {
     approveAttachCircleRequestAction,
+    addCircleAffiliationAction,
     createAttachCircleRequestAction,
     declineAttachCircleRequestAction,
     approveDetachCircleRequestAction,
     createDetachCircleRequestAction,
     declineDetachCircleRequestAction,
+    removeCircleAffiliationAction,
 } from "./actions";
 
 type RequiredAdmin = {
@@ -38,13 +40,21 @@ type IncomingAttachRequest = {
     fromParentCircleName: string | null;
 };
 
+type AffiliatedCircle = {
+    id: string;
+    name: string;
+    handle: string;
+};
+
 type CircleStructureCardProps = {
     circleId: string;
     circleHandle: string;
     adminCount: number;
     isAdmin: boolean;
+    canManageAffiliations: boolean;
     isIndependent: boolean;
     parentCircleName: string;
+    affiliatedCircles: AffiliatedCircle[];
     pendingAttachRequest: PendingAttachRequest | null;
     pendingRequest: PendingRequest | null;
     incomingAttachRequests: IncomingAttachRequest[];
@@ -56,8 +66,10 @@ export function CircleStructureCard({
     circleHandle,
     adminCount,
     isAdmin,
+    canManageAffiliations,
     isIndependent,
     parentCircleName,
+    affiliatedCircles,
     pendingAttachRequest,
     pendingRequest,
     incomingAttachRequests,
@@ -66,9 +78,18 @@ export function CircleStructureCard({
     const router = useRouter();
     const { toast } = useToast();
     const [action, setAction] = useState<
-        "create" | "approve" | "decline" | "create-attach" | "approve-attach" | "decline-attach" | null
+        | "create"
+        | "approve"
+        | "decline"
+        | "create-attach"
+        | "approve-attach"
+        | "decline-attach"
+        | "add-affiliation"
+        | "remove-affiliation"
+        | null
     >(null);
     const [targetParentHandle, setTargetParentHandle] = useState("");
+    const [affiliatedCircleHandle, setAffiliatedCircleHandle] = useState("");
 
     const isPending = Boolean(pendingRequest);
     const isAttachPending = Boolean(pendingAttachRequest);
@@ -77,7 +98,15 @@ export function CircleStructureCard({
     const viewerHasApproved = Boolean(viewerDid && pendingRequest?.approvedByDids.includes(viewerDid));
 
     const runAction = async (
-        nextAction: "create" | "approve" | "decline" | "create-attach" | "approve-attach" | "decline-attach",
+        nextAction:
+            | "create"
+            | "approve"
+            | "decline"
+            | "create-attach"
+            | "approve-attach"
+            | "decline-attach"
+            | "add-affiliation"
+            | "remove-affiliation",
         actionPromise: Promise<{ success: boolean; message?: string }>,
     ) => {
         setAction(nextAction);
@@ -91,6 +120,9 @@ export function CircleStructureCard({
             if (result.success) {
                 if (nextAction === "create-attach") {
                     setTargetParentHandle("");
+                }
+                if (nextAction === "add-affiliation") {
+                    setAffiliatedCircleHandle("");
                 }
                 router.refresh();
             }
@@ -260,6 +292,70 @@ export function CircleStructureCard({
                         >
                             {action === "create-attach" ? "Submitting..." : "Request move"}
                         </Button>
+                    </div>
+                ) : null}
+
+                {canManageAffiliations ? (
+                    <div className="space-y-3 rounded-md border p-3">
+                        <div className="space-y-1">
+                            <div className="text-sm font-medium">Affiliations</div>
+                            <p className="text-sm text-muted-foreground">
+                                Affiliated circles appear under this circle for visibility and alignment. This does not change ownership or governance.
+                            </p>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                value={affiliatedCircleHandle}
+                                onChange={(event) => setAffiliatedCircleHandle(event.target.value)}
+                                placeholder="affiliated-circle-handle"
+                                disabled={action !== null}
+                            />
+                            <Button
+                                variant="outline"
+                                disabled={action !== null || !affiliatedCircleHandle.trim()}
+                                onClick={() =>
+                                    runAction(
+                                        "add-affiliation",
+                                        addCircleAffiliationAction(circleId, affiliatedCircleHandle),
+                                    )
+                                }
+                            >
+                                {action === "add-affiliation" ? "Adding..." : "Add affiliation"}
+                            </Button>
+                        </div>
+                        <div className="space-y-2">
+                            {affiliatedCircles.length > 0 ? (
+                                affiliatedCircles.map((affiliatedCircle) => (
+                                    <div
+                                        key={affiliatedCircle.id}
+                                        className="flex flex-col gap-2 rounded-md border bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div>
+                                            <div className="text-sm font-medium">{affiliatedCircle.name}</div>
+                                            {affiliatedCircle.handle ? (
+                                                <div className="text-sm text-muted-foreground">
+                                                    @{affiliatedCircle.handle}
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            disabled={action !== null}
+                                            onClick={() =>
+                                                runAction(
+                                                    "remove-affiliation",
+                                                    removeCircleAffiliationAction(circleId, affiliatedCircle.id),
+                                                )
+                                            }
+                                        >
+                                            {action === "remove-affiliation" ? "Removing..." : "Remove"}
+                                        </Button>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No affiliated circles yet.</p>
+                            )}
+                        </div>
                     </div>
                 ) : null}
 

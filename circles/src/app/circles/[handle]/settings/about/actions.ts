@@ -1,7 +1,7 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import { getCircleByHandle, getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
 import {
     approveAttachCircleRequest,
     createAttachCircleRequest,
@@ -30,6 +30,8 @@ import { features } from "@/lib/data/constants";
 import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
 import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
+import { Circles } from "@/lib/data/db";
+import { ObjectId } from "mongodb";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -69,6 +71,25 @@ async function revalidateCircleStructurePaths(circleId: string, relatedCircleIds
         revalidatePath(relatedCirclePath);
         revalidatePath(`${relatedCirclePath}communities`);
         revalidatePath(`${relatedCirclePath}settings/about`);
+    }
+
+    revalidatePath("/circles");
+}
+
+async function revalidateCircleAffiliationPaths(currentCircleId: string, affiliatedCircleId: string) {
+    const currentCircle = await getCircleById(currentCircleId);
+    if (currentCircle) {
+        const currentCirclePath = await getCirclePath(currentCircle);
+        revalidatePath(currentCirclePath);
+        revalidatePath(`${currentCirclePath}communities`);
+        revalidatePath(`${currentCirclePath}settings/about`);
+    }
+
+    const affiliatedCircle = await getCircleById(affiliatedCircleId);
+    if (affiliatedCircle) {
+        const affiliatedCirclePath = await getCirclePath(affiliatedCircle);
+        revalidatePath(affiliatedCirclePath);
+        revalidatePath(`${affiliatedCirclePath}settings/about`);
     }
 
     revalidatePath("/circles");
@@ -326,6 +347,113 @@ export async function createAttachCircleRequestAction(
         return {
             success: false,
             message: error instanceof Error ? error.message : "Could not start the move request.",
+        };
+    }
+}
+
+export async function addCircleAffiliationAction(
+    currentCircleId: string,
+    affiliatedCircleHandle: string,
+): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to manage affiliations" };
+    }
+
+    const authorized = await isAuthorized(userDid, currentCircleId, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to manage affiliations for this circle" };
+    }
+
+    const handle = affiliatedCircleHandle.trim().replace(/^@/, "");
+    if (!handle) {
+        return { success: false, message: "Enter the affiliated circle handle" };
+    }
+
+    try {
+        const currentCircle = await getCircleById(currentCircleId);
+        if (!currentCircle) {
+            return { success: false, message: "Current circle not found" };
+        }
+
+        const affiliatedCircle = await getCircleByHandle(handle);
+        if (!affiliatedCircle?._id) {
+            return { success: false, message: "Affiliated circle not found" };
+        }
+
+        if (affiliatedCircle.circleType !== "circle") {
+            return { success: false, message: "Only circles can be affiliated here" };
+        }
+
+        const affiliatedCircleId = affiliatedCircle._id.toString();
+        if (affiliatedCircleId === currentCircleId) {
+            return { success: false, message: "A circle cannot be affiliated with itself" };
+        }
+
+        if (affiliatedCircle.affiliatedCircleIds?.includes(currentCircleId)) {
+            return { success: false, message: "This circle is already affiliated here" };
+        }
+
+        await Circles.updateOne(
+            { _id: new ObjectId(affiliatedCircleId) },
+            { $addToSet: { affiliatedCircleIds: currentCircleId } },
+        );
+        await revalidateCircleAffiliationPaths(currentCircleId, affiliatedCircleId);
+
+        return {
+            success: true,
+            message: `${affiliatedCircle.name || "Circle"} is now affiliated with ${currentCircle.name || "this circle"}.`,
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not add the affiliation.",
+        };
+    }
+}
+
+export async function removeCircleAffiliationAction(
+    currentCircleId: string,
+    affiliatedCircleId: string,
+): Promise<FormSubmitResponse> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to manage affiliations" };
+    }
+
+    const authorized = await isAuthorized(userDid, currentCircleId, features.settings.edit_about);
+    if (!authorized) {
+        return { success: false, message: "You are not authorized to manage affiliations for this circle" };
+    }
+
+    if (!affiliatedCircleId) {
+        return { success: false, message: "Affiliated circle not found" };
+    }
+
+    try {
+        const affiliatedCircle = await getCircleById(affiliatedCircleId);
+        if (!affiliatedCircle) {
+            return { success: false, message: "Affiliated circle not found" };
+        }
+
+        if (!affiliatedCircle.affiliatedCircleIds?.includes(currentCircleId)) {
+            return { success: false, message: "This circle is not currently affiliated here" };
+        }
+
+        await Circles.updateOne(
+            { _id: new ObjectId(affiliatedCircleId) },
+            { $pull: { affiliatedCircleIds: currentCircleId } },
+        );
+        await revalidateCircleAffiliationPaths(currentCircleId, affiliatedCircleId);
+
+        return {
+            success: true,
+            message: "Affiliation removed.",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Could not remove the affiliation.",
         };
     }
 }

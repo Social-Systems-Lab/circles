@@ -1,8 +1,13 @@
 import { AboutSettingsForm } from "@/components/forms/circle-settings/about-settings-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getCircleByHandle, getCircleById, getCirclePublishStatus } from "@/lib/data/circle";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import {
+    getAffiliatedCirclesForCircle,
+    getCircleByHandle,
+    getCircleById,
+    getCirclePublishStatus,
+} from "@/lib/data/circle";
 import { getPendingAttachCircleRequest, getPendingIncomingAttachCircleRequests } from "@/lib/data/circle-attach";
 import { getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getMember, getMembers } from "@/lib/data/member";
@@ -11,6 +16,7 @@ import { CircleVerificationThreadCard } from "./circle-verification-thread-card"
 import { CircleStructureCard } from "./circle-structure-card";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
+import { features } from "@/lib/data/constants";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -50,6 +56,9 @@ export default async function AboutSettingsPage(props: PageProps) {
     const pendingAttachTargetParent = pendingAttachRequest
         ? await getCircleById(pendingAttachRequest.toParentCircleId)
         : null;
+    const affiliatedCircles = circle._id ? await getAffiliatedCirclesForCircle(String(circle._id)) : [];
+    const canManageAffiliations =
+        userDid && circle._id ? await isAuthorized(userDid, String(circle._id), features.settings.edit_about) : false;
 
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";
@@ -127,9 +136,15 @@ export default async function AboutSettingsPage(props: PageProps) {
                     circleId={String(circle._id)}
                     adminCount={adminMembers.length}
                     isAdmin={member?.userGroups?.includes("admins") === true}
+                    canManageAffiliations={canManageAffiliations}
                     isIndependent={resolvedCircleLevel !== "profile_child"}
                     circleHandle={circle.handle || ""}
                     parentCircleName={parentCircle?.name || "this parent circle"}
+                    affiliatedCircles={affiliatedCircles.map((affiliatedCircle) => ({
+                        id: affiliatedCircle._id?.toString?.() ?? "",
+                        name: affiliatedCircle.name || "Untitled circle",
+                        handle: affiliatedCircle.handle || "",
+                    }))}
                     pendingAttachRequest={
                         pendingAttachRequest
                             ? {

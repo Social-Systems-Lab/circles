@@ -354,6 +354,24 @@ export const getCommunityCirclesWithRelationships = async (
     return relatedCircles;
 };
 
+export const getAffiliatedCirclesForCircle = async (circleId: string): Promise<Circle[]> => {
+    const circles = await Circles.find(
+        {
+            circleType: "circle",
+            affiliatedCircleIds: circleId,
+        },
+        { projection: SAFE_CIRCLE_PROJECTION },
+    ).toArray();
+
+    circles.forEach((circle: Circle) => {
+        if (circle._id) {
+            circle._id = circle._id.toString();
+        }
+    });
+
+    return circles;
+};
+
 export const getMetricsForCircles = async (
     circles: WithMetric<Circle>[],
     userDid: string | undefined,
