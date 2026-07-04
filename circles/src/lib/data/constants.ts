@@ -514,9 +514,9 @@ export const features = {
             needsToBeVerified: true,
         } as Feature,
         edit_pages: {
-            name: "Edit Pages",
+            name: "Edit Modules",
             handle: "edit_pages",
-            description: "Edit pages settings",
+            description: "Edit modules settings",
             defaultUserGroups: ["admins"],
             module: "settings",
             needsToBeVerified: true,

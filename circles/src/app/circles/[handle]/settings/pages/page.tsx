@@ -17,9 +17,9 @@ export default async function PagesSettingsPage(props: PageProps) {
 
     return (
         <div className="container py-6">
-            <h1 className="mb-6 text-2xl font-bold">Pages Settings</h1>
+            <h1 className="mb-6 text-2xl font-bold">Modules Settings</h1>
             <p className="mb-6 text-muted-foreground">
-                Manage the pages that appear in the circle&apos;s navigation menu. Enable or disable pages to control
+                Manage the modules that appear in the circle&apos;s navigation menu. Enable or disable modules to control
                 what functionality is available in your circle.
             </p>
             <PagesSettingsForm circle={circle} />

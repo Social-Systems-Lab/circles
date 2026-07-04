@@ -94,6 +94,10 @@ Stage only relevant files:
 
 git add <files>
 
+When staging Next.js dynamic route files in zsh, quote bracketed paths because zsh treats segments like `[handle]` as glob patterns. Safe example:
+
+git add -- ':(literal)src/app/circles/[handle]/settings/pages/page.tsx'
+
 Avoid:
 git add .
 
