@@ -91,6 +91,11 @@ export default function EventForm({
             ),
         ),
     );
+    const [showAdditionalHosts, setShowAdditionalHosts] = useState<boolean>(() => {
+        const primaryCircleId = initialSelectedCircleId || event?.circleId;
+        const initialHostCircleIds = [event?.circleId, ...(event?.hostCircleIds || [])].filter(Boolean) as string[];
+        return Boolean(primaryCircleId && initialHostCircleIds.some((circleId) => circleId !== primaryCircleId));
+    });
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
@@ -370,26 +375,67 @@ export default function EventForm({
             )}
             {eligibleHostCircles.length > 0 && (
                 <div className="rounded-lg border p-4">
-                    <Label className="text-sm font-medium">Host circles</Label>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {eligibleHostCircles.map((circle) => {
-                            const circleId = circle._id?.toString() || "";
-                            if (!circleId) return null;
-                            const isPrimary = circleId === selectedCircleId;
-                            return (
-                                <label key={circleId} className="flex items-center gap-2 rounded-md border p-2 text-sm">
-                                    <Checkbox
-                                        checked={hostCircleIds.includes(circleId) || isPrimary}
-                                        disabled={isPrimary}
-                                        onCheckedChange={(checked) => toggleHostCircle(circleId, Boolean(checked))}
-                                    />
-                                    <CirclePicture circle={circle} size="20px" />
-                                    <span className="min-w-0 flex-1 truncate">{circle.name || circle.handle}</span>
-                                    {isPrimary && <span className="text-xs text-muted-foreground">Primary</span>}
-                                </label>
-                            );
-                        })}
-                    </div>
+                    <Label className="text-sm font-medium">Primary host circle</Label>
+                    {(() => {
+                        const eventCircle = event?.circle;
+                        const primaryCircle =
+                            eligibleHostCircles.find((circle) => circle._id?.toString() === selectedCircleId) ||
+                            (eventCircle?._id?.toString() === selectedCircleId ? eventCircle : undefined);
+                        const additionalHostCircles = eligibleHostCircles.filter(
+                            (circle) => circle._id?.toString() !== selectedCircleId,
+                        );
+
+                        return (
+                            <div className="mt-3 space-y-3">
+                                {primaryCircle && (
+                                    <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-2 text-sm">
+                                        <CirclePicture circle={primaryCircle} size="20px" />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {primaryCircle.name || primaryCircle.handle}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">Locked</span>
+                                    </div>
+                                )}
+                                {additionalHostCircles.length > 0 && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAdditionalHosts((value) => !value)}
+                                    >
+                                        {showAdditionalHosts
+                                            ? "Hide additional host circles"
+                                            : "Add additional host circles"}
+                                    </Button>
+                                )}
+                                {showAdditionalHosts && additionalHostCircles.length > 0 && (
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {additionalHostCircles.map((circle) => {
+                                            const circleId = circle._id?.toString() || "";
+                                            if (!circleId) return null;
+                                            return (
+                                                <label
+                                                    key={circleId}
+                                                    className="flex items-center gap-2 rounded-md border p-2 text-sm"
+                                                >
+                                                    <Checkbox
+                                                        checked={hostCircleIds.includes(circleId)}
+                                                        onCheckedChange={(checked) =>
+                                                            toggleHostCircle(circleId, Boolean(checked))
+                                                        }
+                                                    />
+                                                    <CirclePicture circle={circle} size="20px" />
+                                                    <span className="min-w-0 flex-1 truncate">
+                                                        {circle.name || circle.handle}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
             <div className="grid gap-6 md:grid-cols-2">
