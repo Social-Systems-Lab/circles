@@ -2,6 +2,7 @@ import { ObjectId } from "mongodb";
 import { Events } from "@/lib/data/db";
 import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import type { Event as EventModel, Location } from "@/models/models";
+import { normalizeEventHostCircleIds } from "@/lib/data/event";
 
 // Helpers for ICS formatting
 function pad(n: number): string {
@@ -93,8 +94,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ handle: string;
             return new Response("Event not found", { status: 404 });
         }
 
-        // Ensure event belongs to the circle and is open
-        if (event.circleId !== String(circle._id) || event.stage !== "open") {
+        // Ensure event is hosted by the circle and is open
+        if (!normalizeEventHostCircleIds(event).includes(String(circle._id)) || event.stage !== "open") {
             return new Response("Event not accessible", { status: 404 });
         }
 

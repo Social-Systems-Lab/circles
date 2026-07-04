@@ -1,5 +1,6 @@
 import { Events } from "@/lib/data/db";
 import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
+import { eventHostCircleMatch } from "@/lib/data/event";
 
 // Helpers for ICS formatting
 function pad(n: number): string {
@@ -81,7 +82,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ handle: string 
         const now = new Date();
         const circleIdStr = String(circle._id);
         const events = await Events.find({
-            circleId: circleIdStr,
+            ...eventHostCircleMatch(circleIdStr),
             stage: "open",
             endAt: { $gte: now },
         })

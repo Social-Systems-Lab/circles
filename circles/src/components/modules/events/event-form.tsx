@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createEventAction, updateEventAction } from "@/app/circles/[handle]/events/actions";
+import { createEventAction, getEventHostCirclesAction, updateEventAction } from "@/app/circles/[handle]/events/actions";
 import { Circle, EventDisplay, Location, Media } from "@/models/models";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ function toUtcEndOfDayIso(dateOnly: string) {
 
 import CircleSelector from "@/components/global-create/circle-selector";
 import { CreatableItemDetail, creatableItemsList } from "@/components/global-create/global-create-dialog-content";
+import { CirclePicture } from "@/components/modules/circles/circle-picture";
 
 export default function EventForm({
     circleHandle,
@@ -61,6 +62,9 @@ export default function EventForm({
 }: Props) {
     console.log("EventForm mounted/updated. Event recurrence:", event?.recurrence);
     const [selectedCircle, setSelectedCircle] = useState<string | undefined>(circleHandle);
+    const [selectedCircleId, setSelectedCircleId] = useState<string | undefined>(
+        initialSelectedCircleId || event?.circleId,
+    );
     const router = useRouter();
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -76,7 +80,17 @@ export default function EventForm({
     const [isPrivate, setIsPrivate] = useState<boolean>(event?.visibility === "private");
     const [location, setLocation] = useState<Location | undefined>(event?.location);
     const [images, setImages] = useState<ImageItem[]>([]);
-    const [publishToNoticeboard, setPublishToNoticeboard] = useState<boolean>(Boolean(event?.noticeboardPostId));
+    const [publishToNoticeboard, setPublishToNoticeboard] = useState<boolean>(
+        Boolean(event?.noticeboardPostId || Object.keys(event?.noticeboardPostIdsByCircleId || {}).length > 0),
+    );
+    const [eligibleHostCircles, setEligibleHostCircles] = useState<Circle[]>([]);
+    const [hostCircleIds, setHostCircleIds] = useState<string[]>(() =>
+        Array.from(
+            new Set(
+                [event?.circleId, ...(event?.hostCircleIds || []), initialSelectedCircleId].filter(Boolean) as string[],
+            ),
+        ),
+    );
 
     // Recurrence State
     const [isRecurring, setIsRecurring] = useState<boolean>(!!event?.recurrence);
@@ -179,13 +193,47 @@ export default function EventForm({
     }, [event?.images]);
 
     useEffect(() => {
-        setPublishToNoticeboard(Boolean(event?.noticeboardPostId));
-    }, [event?.noticeboardPostId]);
+        setPublishToNoticeboard(
+            Boolean(event?.noticeboardPostId || Object.keys(event?.noticeboardPostIdsByCircleId || {}).length > 0),
+        );
+    }, [event?.noticeboardPostId, event?.noticeboardPostIdsByCircleId]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadHostCircles = async () => {
+            const result = await getEventHostCirclesAction();
+            if (!cancelled) {
+                setEligibleHostCircles(result.circles || []);
+            }
+        };
+        void loadHostCircles();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!selectedCircleId) return;
+        setHostCircleIds((current) => Array.from(new Set([selectedCircleId, ...current])));
+    }, [selectedCircleId]);
 
     const handleImagesChange = (items: ImageItem[]) => setImages(items);
     const handleCircleSelected = useCallback((circle: Circle | null) => {
         setSelectedCircle(circle?.handle);
+        setSelectedCircleId(circle?._id?.toString());
     }, []);
+
+    const toggleHostCircle = (circleId: string, checked: boolean) => {
+        setHostCircleIds((current) => {
+            if (checked) {
+                return Array.from(new Set([...(selectedCircleId ? [selectedCircleId] : []), ...current, circleId]));
+            }
+            if (circleId === selectedCircleId) {
+                return current;
+            }
+            return current.filter((id) => id !== circleId);
+        });
+    };
 
     const submitEvent = (submitStage: "draft" | "open" | "preserve") => {
         if (submitStage === "open" && !canPublish) {
@@ -271,6 +319,10 @@ export default function EventForm({
                 }
                 fd.set("publishToNoticeboard", String(publishToNoticeboard));
                 fd.set("submitStage", submitStage);
+                fd.set(
+                    "hostCircleIds",
+                    JSON.stringify(Array.from(new Set([selectedCircleId, ...hostCircleIds].filter(Boolean)))),
+                );
 
                 let result: { success: boolean; message?: string; eventId?: string };
                 if (event?._id) {
@@ -314,6 +366,30 @@ export default function EventForm({
                         initialSelectedCircleId={initialSelectedCircleId}
                         showModuleEnableMessage={false}
                     />
+                </div>
+            )}
+            {eligibleHostCircles.length > 0 && (
+                <div className="rounded-lg border p-4">
+                    <Label className="text-sm font-medium">Host circles</Label>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {eligibleHostCircles.map((circle) => {
+                            const circleId = circle._id?.toString() || "";
+                            if (!circleId) return null;
+                            const isPrimary = circleId === selectedCircleId;
+                            return (
+                                <label key={circleId} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                                    <Checkbox
+                                        checked={hostCircleIds.includes(circleId) || isPrimary}
+                                        disabled={isPrimary}
+                                        onCheckedChange={(checked) => toggleHostCircle(circleId, Boolean(checked))}
+                                    />
+                                    <CirclePicture circle={circle} size="20px" />
+                                    <span className="min-w-0 flex-1 truncate">{circle.name || circle.handle}</span>
+                                    {isPrimary && <span className="text-xs text-muted-foreground">Primary</span>}
+                                </label>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
             <div className="grid gap-6 md:grid-cols-2">

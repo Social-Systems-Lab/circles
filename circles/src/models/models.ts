@@ -1718,6 +1718,7 @@ export type Recurrence = z.infer<typeof recurrenceSchema>;
 export const eventSchema = z.object({
     _id: z.any().optional(),
     circleId: z.string(),
+    hostCircleIds: z.array(z.string()).optional(),
     createdBy: didSchema,
     createdAt: z.date(),
     updatedAt: z.date().optional(), // Track updates
@@ -1729,6 +1730,7 @@ export const eventSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
+    noticeboardPostIdsByCircleId: z.record(z.string()).optional(), // Linked noticeboard posts by host circle
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
     // Format
     isVirtual: z.boolean().optional(),

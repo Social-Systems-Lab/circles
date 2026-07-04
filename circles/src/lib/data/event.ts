@@ -16,6 +16,7 @@ import { isAcceptedConnectionForUserDid } from "./relationships";
 export const SAFE_EVENT_PROJECTION = {
     _id: 1,
     circleId: 1,
+    hostCircleIds: 1,
     createdBy: 1,
     createdAt: 1,
     updatedAt: 1,
@@ -26,6 +27,7 @@ export const SAFE_EVENT_PROJECTION = {
     location: 1,
     commentPostId: 1,
     noticeboardPostId: 1,
+    noticeboardPostIdsByCircleId: 1,
     images: 1,
     isVirtual: 1,
     virtualUrl: 1,
@@ -43,6 +45,40 @@ export const SAFE_EVENT_PROJECTION = {
 
 type Range = { from?: Date; to?: Date };
 const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
+
+export function normalizeEventHostCircleIds(event: Pick<Event, "circleId" | "hostCircleIds">): string[] {
+    return Array.from(new Set([event.circleId, ...(event.hostCircleIds || [])].filter(Boolean)));
+}
+
+export function eventHostCircleMatch(circleId: string) {
+    return {
+        $or: [{ circleId }, { hostCircleIds: circleId }],
+    };
+}
+
+export async function canManageEvent(
+    userDid: string | undefined | null,
+    event: Pick<Event, "circleId" | "hostCircleIds" | "createdBy">,
+): Promise<boolean> {
+    if (!userDid) {
+        return false;
+    }
+    if (event.createdBy === userDid) {
+        return true;
+    }
+
+    const hostCircleIds = normalizeEventHostCircleIds(event);
+    const checks = await Promise.all(
+        hostCircleIds.map(async (hostCircleId) => {
+            const canReview = await isAuthorized(userDid, hostCircleId, features.events.review);
+            if (canReview) {
+                return true;
+            }
+            return isAuthorized(userDid, hostCircleId, features.events.moderate);
+        }),
+    );
+    return checks.some(Boolean);
+}
 
 function parseRecurringInstanceId(eventId: string): { baseEventId: string; occurrenceStart: Date } | null {
     const match = RECURRING_INSTANCE_ID_PATTERN.exec(eventId);
@@ -154,27 +190,12 @@ export const getEventsByCircleId = async (
         const canReview = await isAuthorized(userDid, circleId, features.events.review);
         const canModerate = await isAuthorized(userDid, circleId, features.events.moderate);
         const canManageUnpublished = canReview || canModerate;
-        const matchQuery: any = {
-            circleId,
-            $or: [
-                dateMatch,
-                { recurrence: { $exists: true } }, // Always fetch recurring events to check for expansion
-            ],
-        };
-        // Clean up if dateMatch is empty (meaning no range)
-        if (Object.keys(dateMatch).length === 0) {
-            delete matchQuery.$or;
-        } else {
-            // If we have a range, use the $or. But wait, $or requires array of expressions.
-            // If dateMatch is empty, $or is invalid if used blindly.
-            // A better way: match (circleId) AND ( (dateMatch) OR (recurrence exists) )
-            // If dateMatch is empty, this logic simplifies to just circleId.
-            // Code below handles this manually.
-        }
-
-        const baseMatch: any = { circleId };
+        const matchQuery: any = eventHostCircleMatch(circleId);
         if (Object.keys(dateMatch).length > 0) {
-            baseMatch.$or = [dateMatch, { recurrence: { $exists: true, $ne: null } }];
+            matchQuery.$and = [
+                ...(matchQuery.$and || []),
+                { $or: [dateMatch, { recurrence: { $exists: true, $ne: null } }] },
+            ];
         }
 
         let hiddenCancelledObjectIds: ObjectId[] = [];
@@ -202,11 +223,18 @@ export const getEventsByCircleId = async (
                 // show events the user CREATED or is PARTICIPATING in,
                 // regardless of which circle the event belongs to
                 matchQuery.$or = userQueries;
-                delete matchQuery.circleId;
+                delete matchQuery.$and;
             }
         }
 
-        if (matchQuery.circleId) {
+        if (
+            !(
+                circle &&
+                circle.circleType === "user" &&
+                circle.did === userDid &&
+                (includeCreated || includeParticipating)
+            )
+        ) {
             matchQuery.$and = [
                 ...(matchQuery.$and || []),
                 canManageUnpublished
@@ -215,7 +243,7 @@ export const getEventsByCircleId = async (
                           $or: [{ stage: { $nin: ["draft", "review"] } }, { createdBy: userDid }],
                       },
             ];
-        } else {
+        } else if (!canManageUnpublished) {
             matchQuery.$and = [
                 ...(matchQuery.$and || []),
                 {
@@ -616,9 +644,7 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
         }
 
         const event = events[0];
-        const canReview = await isAuthorized(userDid, event.circleId, features.events.review);
-        const canModerate = await isAuthorized(userDid, event.circleId, features.events.moderate);
-        const canManageUnpublished = canReview || canModerate;
+        const canManageUnpublished = await canManageEvent(userDid, event);
 
         if (
             (event.stage === "draft" || event.stage === "review") &&

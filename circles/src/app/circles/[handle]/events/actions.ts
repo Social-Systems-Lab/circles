@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
-import { Feeds, Events, EventInvitations, EventRsvps } from "@/lib/data/db";
+import { Feeds, Events, EventInvitations, EventRsvps, Members } from "@/lib/data/db";
 import { createDefaultFeed, createPost, deletePost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
     Circle,
@@ -35,8 +35,10 @@ import {
     updateEvent as updateEventDb,
     deleteEvent as deleteEventDb,
     changeEventStage as changeEventStageDb,
+    canManageEvent,
+    normalizeEventHostCircleIds,
 } from "@/lib/data/event";
-import { getCirclesByDids } from "@/lib/data/circle";
+import { getCirclesByDids, getCirclesByIds } from "@/lib/data/circle";
 import { upsertRsvp, cancelRsvp, listAttendees } from "@/lib/data/eventRsvp";
 import { listAttendeesWithDetails } from "@/lib/data/eventRsvp";
 import {
@@ -66,6 +68,10 @@ type GetCircleMembersActionResult = {
 };
 
 type GetCirclesBySearchQueryActionResult = {
+    circles: Circle[];
+};
+
+type GetEventHostCirclesActionResult = {
     circles: Circle[];
 };
 
@@ -110,6 +116,7 @@ const createEventSchema = z.object({
     causes: z.array(z.string()).optional(),
     capacity: z.string().optional(), // parse to number
     visibility: eventVisibilitySchema.optional(),
+    hostCircleIds: z.array(z.string()).optional(),
     recurrence: z
         .string()
         .optional()
@@ -162,6 +169,104 @@ function normalizeRecurrenceEndDate(endDate?: Date): Date | undefined {
 
 const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") === "true";
 
+const uniqueStrings = (values: unknown[]) =>
+    Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+
+const parseHostCircleIds = (formData: FormData, primaryCircleId: string): string[] => {
+    const rawValues = formData.getAll("hostCircleIds");
+    const parsedValues = rawValues.flatMap((value) => {
+        if (typeof value !== "string" || value.trim().length === 0) {
+            return [];
+        }
+        try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [value];
+        } catch {
+            return [value];
+        }
+    });
+    return uniqueStrings([primaryCircleId, ...parsedValues]);
+};
+
+const getHostCirclesByIds = async (hostCircleIds: string[]) => {
+    const hostCircles = await getCirclesByIds(hostCircleIds.filter((id) => ObjectId.isValid(id)));
+    const hostCircleById = new Map(hostCircles.map((hostCircle) => [hostCircle._id?.toString(), hostCircle]));
+    return hostCircleIds
+        .map((hostCircleId) => hostCircleById.get(hostCircleId))
+        .filter((hostCircle): hostCircle is Circle => Boolean(hostCircle?._id));
+};
+
+const validateHostCirclePermissions = async (
+    userDid: string,
+    hostCircleIds: string[],
+    requestedStage: "draft" | "open" | "preserve",
+    existingEvent?: EventDisplay,
+): Promise<{ success: true; hostCircles: Circle[] } | { success: false; message: string }> => {
+    const hostCircles = await getHostCirclesByIds(hostCircleIds);
+    if (hostCircles.length !== hostCircleIds.length) {
+        return { success: false, message: "One or more host circles could not be found" };
+    }
+
+    const isExistingAuthor = existingEvent?.createdBy === userDid;
+    const existingHostCircleIds = existingEvent ? normalizeEventHostCircleIds(existingEvent) : [];
+    const checks = await Promise.all(
+        hostCircles.map(async (hostCircle) => {
+            const hostCircleId = hostCircle._id!.toString();
+            const canCreate = await isAuthorized(userDid, hostCircleId, features.events.create);
+            const canReview = await isAuthorized(userDid, hostCircleId, features.events.review);
+            const canModerate = await isAuthorized(userDid, hostCircleId, features.events.moderate);
+            const canManage = canReview || canModerate;
+            return {
+                canHost:
+                    existingEvent && isExistingAuthor && existingHostCircleIds.includes(hostCircleId)
+                        ? true
+                        : canCreate || canManage,
+                canPublish: requestedStage !== "open" || canManage,
+            };
+        }),
+    );
+
+    if (checks.some((check) => !check.canHost)) {
+        return { success: false, message: "Not authorized to host events in one or more selected circles" };
+    }
+    if (checks.some((check) => !check.canPublish)) {
+        return { success: false, message: "Not authorized to publish events in one or more selected circles" };
+    }
+
+    return { success: true, hostCircles };
+};
+
+const isRouteCircleEventHost = (circleId: string, event: Pick<EventModel, "circleId" | "hostCircleIds">) =>
+    normalizeEventHostCircleIds(event).includes(circleId);
+
+const hasEventHostManagementPermission = async (
+    userDid: string,
+    event: Pick<EventModel, "circleId" | "hostCircleIds">,
+) => {
+    const checks = await Promise.all(
+        normalizeEventHostCircleIds(event).map(async (hostCircleId) => {
+            const canReview = await isAuthorized(userDid, hostCircleId, features.events.review);
+            if (canReview) {
+                return true;
+            }
+            return isAuthorized(userDid, hostCircleId, features.events.moderate);
+        }),
+    );
+    return checks.some(Boolean);
+};
+
+const revalidateEventHostPaths = (hostCircles: Circle[], eventId?: string) => {
+    for (const hostCircle of hostCircles) {
+        const handle = hostCircle.handle;
+        if (!handle) continue;
+        revalidatePath(`/circles/${handle}/events`);
+        revalidatePath(`/circles/${handle}/feed`);
+        if (eventId) {
+            revalidatePath(`/circles/${handle}/events/${eventId}`);
+        }
+    }
+};
+
 const parseRequestedStage = (formData: FormData): "draft" | "open" | "preserve" => {
     const value = formData.get("submitStage");
     if (value === "preserve") return "preserve";
@@ -182,10 +287,12 @@ const upsertEventNoticeboardPost = async ({
     circle,
     circleHandle,
     event,
+    noticeboardPostId,
 }: {
     circle: Circle;
     circleHandle: string;
-    event: Pick<EventModel, "_id" | "title" | "description" | "createdBy" | "noticeboardPostId">;
+    event: Pick<EventModel, "_id" | "title" | "description" | "createdBy">;
+    noticeboardPostId?: string;
 }): Promise<string | null> => {
     if (!circle._id || !event._id) {
         return null;
@@ -216,10 +323,10 @@ const upsertEventNoticeboardPost = async ({
         internalPreviewUrl: getEventInternalPreviewUrl(circleHandle, eventId),
     };
 
-    if (event.noticeboardPostId) {
+    if (noticeboardPostId) {
         try {
             await updatePost({
-                _id: event.noticeboardPostId,
+                _id: noticeboardPostId,
                 title: postData.title,
                 content: postData.content,
                 editedAt: new Date(),
@@ -229,7 +336,7 @@ const upsertEventNoticeboardPost = async ({
                 internalPreviewId: postData.internalPreviewId,
                 internalPreviewUrl: postData.internalPreviewUrl,
             });
-            return event.noticeboardPostId;
+            return noticeboardPostId;
         } catch (error) {
             console.error("Failed to update linked noticeboard post for event:", error);
         }
@@ -245,14 +352,60 @@ const upsertEventNoticeboardPost = async ({
     return createdPost._id?.toString?.() ?? createdPost._id ?? null;
 };
 
-const removeEventNoticeboardPost = async (noticeboardPostId?: string | null) => {
-    if (!noticeboardPostId) {
+const upsertEventNoticeboardPosts = async ({
+    hostCircles,
+    event,
+}: {
+    hostCircles: Circle[];
+    event: Pick<
+        EventModel,
+        "_id" | "title" | "description" | "createdBy" | "circleId" | "noticeboardPostId" | "noticeboardPostIdsByCircleId"
+    >;
+}) => {
+    const nextPostIdsByCircleId = { ...(event.noticeboardPostIdsByCircleId || {}) };
+
+    for (const hostCircle of hostCircles) {
+        if (!hostCircle._id || !hostCircle.handle) continue;
+        const hostCircleId = hostCircle._id.toString();
+        const existingPostId =
+            nextPostIdsByCircleId[hostCircleId] ||
+            (hostCircleId === event.circleId ? event.noticeboardPostId : undefined);
+        const noticeboardPostId = await upsertEventNoticeboardPost({
+            circle: hostCircle,
+            circleHandle: hostCircle.handle,
+            event,
+            noticeboardPostId: existingPostId,
+        });
+        if (noticeboardPostId) {
+            nextPostIdsByCircleId[hostCircleId] = noticeboardPostId;
+        }
+    }
+
+    return {
+        noticeboardPostIdsByCircleId: nextPostIdsByCircleId,
+        noticeboardPostId: nextPostIdsByCircleId[event.circleId],
+    };
+};
+
+const removeEventNoticeboardPosts = async (
+    eventOrNoticeboardPostId?: Pick<EventModel, "noticeboardPostId" | "noticeboardPostIdsByCircleId"> | string | null,
+) => {
+    if (!eventOrNoticeboardPostId) {
         return;
     }
+    const noticeboardPostIds =
+        typeof eventOrNoticeboardPostId === "string"
+            ? [eventOrNoticeboardPostId]
+            : [
+                  eventOrNoticeboardPostId.noticeboardPostId,
+                  ...Object.values(eventOrNoticeboardPostId.noticeboardPostIdsByCircleId || {}),
+              ];
+
+    const uniqueNoticeboardPostIds = uniqueStrings(noticeboardPostIds);
     try {
-        await deletePost(noticeboardPostId);
+        await Promise.allSettled(uniqueNoticeboardPostIds.map((noticeboardPostId) => deletePost(noticeboardPostId)));
     } catch (error) {
-        console.error("Failed to delete linked noticeboard post for event:", error);
+        console.error("Failed to delete linked noticeboard posts for event:", error);
     }
 };
 
@@ -316,10 +469,56 @@ export async function getEventAction(circleHandle: string, eventId: string): Pro
         if (!canView) return null;
 
         const event = await getEventById(eventId, userDid);
+        if (event && !isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return null;
+        }
         return event;
     } catch (error) {
         console.error("Error in getEventAction:", error);
         return null;
+    }
+}
+
+export async function getEventHostCirclesAction(): Promise<GetEventHostCirclesActionResult> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { circles: [] };
+
+        const user = await getUserPrivate(userDid);
+        if (!user) return { circles: [] };
+
+        const memberships = await Members.find({ userDid }, { projection: { circleId: 1 } }).toArray();
+        const memberCircles = await getCirclesByIds(
+            memberships
+                .map((membership) => membership.circleId)
+                .filter((circleId): circleId is string => Boolean(circleId && circleId !== String(user._id))),
+        );
+        const candidateCircles = [user as Circle, ...memberCircles].filter(
+            (circle, index, circles) =>
+                circles.findIndex((candidate) => String(candidate._id) === String(circle._id)) === index,
+        );
+
+        const checks = await Promise.all(
+            candidateCircles.map(async (candidateCircle) => {
+                if (!candidateCircle._id || !candidateCircle.handle) return false;
+                const circleId = candidateCircle._id.toString();
+                if (candidateCircle.circleType === "user" && String(candidateCircle._id) === String(user._id)) return true;
+                const canCreate = await isAuthorized(userDid, circleId, features.events.create);
+                if (canCreate) return true;
+                const canReview = await isAuthorized(userDid, circleId, features.events.review);
+                if (canReview) return true;
+                return isAuthorized(userDid, circleId, features.events.moderate);
+            }),
+        );
+
+        const circles = candidateCircles
+            .filter((_, index) => checks[index])
+            .sort((a, b) => (a.name || a.handle || "").localeCompare(b.name || b.handle || ""));
+
+        return { circles: JSON.parse(JSON.stringify(circles)) };
+    } catch (error) {
+        console.error("Error in getEventHostCirclesAction:", error);
+        return { circles: [] };
     }
 }
 
@@ -390,6 +589,7 @@ export async function createEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            hostCircleIds: parseHostCircleIds(formData, circle._id!.toString()),
             recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
@@ -400,6 +600,12 @@ export async function createEventAction(
         }
         const data = validated.data;
         const requestedStage = parseRequestedStage(formData);
+        const hostCircleIds = uniqueStrings([circle._id!.toString(), ...(data.hostCircleIds || [])]);
+        const hostValidation = await validateHostCirclePermissions(userDid, hostCircleIds, requestedStage);
+        if (!hostValidation.success) {
+            return { success: false, message: hostValidation.message };
+        }
+        const hostCircles = hostValidation.hostCircles;
 
         // Parse primitives
         const startAt = parseDate(data.startAt);
@@ -449,6 +655,7 @@ export async function createEventAction(
         // Build event payload
         const newEvent: Omit<EventModel, "_id" | "commentPostId"> = {
             circleId: circle._id!.toString(),
+            hostCircleIds,
             createdBy: userDid,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -474,9 +681,6 @@ export async function createEventAction(
         // Create in DB (will also create shadow post if feed exists)
         const created = await createEventDb(newEvent, user);
 
-        // Revalidate list
-        revalidatePath(`/circles/${circleHandle}/events`);
-
         // Ensure module enabled on user's own circle
         try {
             if (circle.circleType === "user" && circle.did === userDid) {
@@ -488,18 +692,11 @@ export async function createEventAction(
 
         if (shouldPublishToNoticeboard(formData) && created.stage === "open") {
             try {
-                const noticeboardPostId = await upsertEventNoticeboardPost({
-                    circle,
-                    circleHandle,
+                const noticeboardPostIds = await upsertEventNoticeboardPosts({
+                    hostCircles,
                     event: created,
                 });
-                if (noticeboardPostId && noticeboardPostId !== created.noticeboardPostId) {
-                    await Events.updateOne(
-                        { _id: new ObjectId(created._id!.toString()) },
-                        { $set: { noticeboardPostId } },
-                    );
-                    revalidatePath(`/circles/${circleHandle}/feed`);
-                }
+                await Events.updateOne({ _id: new ObjectId(created._id!.toString()) }, { $set: noticeboardPostIds });
             } catch (error) {
                 console.error("Failed to create linked noticeboard post for event:", error);
                 return {
@@ -509,6 +706,8 @@ export async function createEventAction(
                 };
             }
         }
+
+        revalidateEventHostPaths(hostCircles, created._id?.toString());
 
         return {
             success: true,
@@ -538,11 +737,11 @@ export async function updateEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "This event is not hosted by this circle" };
+        }
 
-        const isAuthor = userDid === event.createdBy;
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.events.moderate);
-        const canPublish = canModerate || (await isAuthorized(userDid, circle._id as string, features.events.review));
-        const canEdit = isAuthor || canModerate;
+        const canEdit = await canManageEvent(userDid, event);
         if (!canEdit) return { success: false, message: "Not authorized to update this event" };
 
         const validated = updateEventSchema.safeParse({
@@ -561,6 +760,10 @@ export async function updateEventAction(
             causes: formData.getAll("causes"),
             capacity: (formData.get("capacity") as string) ?? undefined,
             visibility: (formData.get("visibility") as string) ?? undefined,
+            hostCircleIds:
+                formData.getAll("hostCircleIds").length > 0
+                    ? parseHostCircleIds(formData, event.circleId)
+                    : normalizeEventHostCircleIds(event),
             recurrence: (formData.get("recurrence") as string) ?? undefined,
         });
         if (!validated.success) {
@@ -571,6 +774,12 @@ export async function updateEventAction(
         }
         const data = validated.data;
         const requestedStage = parseRequestedStage(formData);
+        const hostCircleIds = uniqueStrings([event.circleId, ...(data.hostCircleIds || normalizeEventHostCircleIds(event))]);
+        const hostValidation = await validateHostCirclePermissions(userDid, hostCircleIds, requestedStage, event);
+        if (!hostValidation.success) {
+            return { success: false, message: hostValidation.message };
+        }
+        const hostCircles = hostValidation.hostCircles;
 
         let locationData: EventModel["location"] = event.location;
         if (data.location) {
@@ -644,7 +853,7 @@ export async function updateEventAction(
         const endAt = data.endAt ? parseDate(data.endAt) : event.endAt;
 
         const nextStage =
-            requestedStage === "preserve" ? event.stage : requestedStage === "open" && canPublish ? "open" : "draft";
+            requestedStage === "preserve" ? event.stage : requestedStage === "open" ? "open" : "draft";
 
         const updateData: Partial<EventModel> = {
             title: data.title,
@@ -665,6 +874,7 @@ export async function updateEventAction(
                     ? Number(data.capacity)
                     : undefined,
             visibility: (data.visibility as any) ?? event.visibility,
+            hostCircleIds,
             recurrence: recurrenceData as any,
             stage: nextStage,
             updatedAt: new Date(),
@@ -677,35 +887,43 @@ export async function updateEventAction(
         if (!success) return { success: false, message: "Failed to update event" };
 
         if (updateData.stage === "draft") {
-            await removeEventNoticeboardPost(event.noticeboardPostId);
-            if (event.noticeboardPostId) {
-                await Events.updateOne({ _id: new ObjectId(eventId) }, { $unset: { noticeboardPostId: "" } });
+            await removeEventNoticeboardPosts(event);
+            if (event.noticeboardPostId || Object.keys(event.noticeboardPostIdsByCircleId || {}).length > 0) {
+                await Events.updateOne(
+                    { _id: new ObjectId(eventId) },
+                    { $unset: { noticeboardPostId: "", noticeboardPostIdsByCircleId: "" } },
+                );
             }
         } else if (shouldPublishToNoticeboard(formData)) {
             try {
-                const noticeboardPostId = await upsertEventNoticeboardPost({
-                    circle,
-                    circleHandle,
+                const removedHostPostIds = Object.entries(event.noticeboardPostIdsByCircleId || {})
+                    .filter(([hostCircleId]) => !hostCircleIds.includes(hostCircleId))
+                    .map(([, noticeboardPostId]) => noticeboardPostId);
+                await removeEventNoticeboardPosts({
+                    noticeboardPostIdsByCircleId: Object.fromEntries(
+                        removedHostPostIds.map((noticeboardPostId) => [noticeboardPostId, noticeboardPostId]),
+                    ),
+                });
+
+                const noticeboardPostIds = await upsertEventNoticeboardPosts({
+                    hostCircles,
                     event: {
                         ...event,
                         ...updateData,
                         _id: eventId,
                         createdBy: event.createdBy,
                         noticeboardPostId: event.noticeboardPostId,
+                        noticeboardPostIdsByCircleId: event.noticeboardPostIdsByCircleId,
                     },
                 });
-                if (noticeboardPostId && noticeboardPostId !== event.noticeboardPostId) {
-                    await Events.updateOne({ _id: new ObjectId(eventId) }, { $set: { noticeboardPostId } });
-                }
-                revalidatePath(`/circles/${circleHandle}/feed`);
+                await Events.updateOne({ _id: new ObjectId(eventId) }, { $set: noticeboardPostIds });
             } catch (error) {
                 console.error("Failed to create linked noticeboard post for event:", error);
                 return { success: true, message: "Event updated, but Noticeboard post could not be created." };
             }
         }
 
-        revalidatePath(`/circles/${circleHandle}/events`);
-        revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+        revalidateEventHostPaths(hostCircles, eventId);
         return {
             success: true,
             message: updateData.stage === "open" ? "Event published successfully" : "Event saved as draft",
@@ -732,22 +950,25 @@ export async function deleteEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "This event is not hosted by this circle" };
+        }
 
-        const isAuthor = userDid === event.createdBy;
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.events.moderate);
-        if (!isAuthor && !canModerate) return { success: false, message: "Not authorized to delete this event" };
+        if (!(await canManageEvent(userDid, event))) {
+            return { success: false, message: "Not authorized to delete this event" };
+        }
 
         // delete images
         if (event.images?.length) {
             await Promise.allSettled(event.images.map((img) => deleteFile(img.fileInfo.url)));
         }
 
-        await removeEventNoticeboardPost(event.noticeboardPostId);
+        await removeEventNoticeboardPosts(event);
 
         const success = await deleteEventDb(eventId);
         if (!success) return { success: false, message: "Failed to delete event" };
 
-        revalidatePath(`/circles/${circleHandle}/events`);
+        revalidateEventHostPaths(await getHostCirclesByIds(normalizeEventHostCircleIds(event)), eventId);
         return { success: true, message: "Event deleted successfully" };
     } catch (error) {
         console.error("Error deleting event:", error);
@@ -772,29 +993,34 @@ export async function changeEventStageAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "This event is not hosted by this circle" };
+        }
 
         const currentStage = event.stage;
         let allowed = false;
 
-        const canReview = await isAuthorized(userDid, circle._id as string, features.events.review);
-        const canModerate = await isAuthorized(userDid, circle._id as string, features.events.moderate);
+        const hostCircleIds = normalizeEventHostCircleIds(event);
+        const hostCircles = await getHostCirclesByIds(hostCircleIds);
+        const isAuthor = userDid === event.createdBy;
+        const canHostManage = await hasEventHostManagementPermission(userDid, event);
 
-        if (canModerate) {
+        if (canHostManage) {
             allowed = true;
         } else if (currentStage === "draft" && newStage === "review") {
             // Author can submit for review; reviewers can also move directly to review if needed
-            allowed = userDid === event.createdBy || canReview;
+            allowed = isAuthor;
         } else if (
             (currentStage === "review" || currentStage === "open" || currentStage === "cancelled") &&
             newStage === "draft"
         ) {
-            allowed = userDid === event.createdBy || canModerate;
+            allowed = isAuthor;
         } else if ((currentStage === "draft" || currentStage === "review") && newStage === "open") {
             // Reviewers can open directly from draft, or after review
-            allowed = canReview;
+            allowed = canHostManage;
         } else if (currentStage === "open" && newStage === "cancelled") {
             // allow review or moderate to cancel
-            allowed = canReview;
+            allowed = canHostManage;
         }
 
         if (!allowed) {
@@ -809,12 +1035,11 @@ export async function changeEventStageAction(
             });
 
             if (activeRsvpCount === 0) {
-                await removeEventNoticeboardPost(event.noticeboardPostId);
+                await removeEventNoticeboardPosts(event);
                 success = await deleteEventDb(eventId);
                 if (!success) return { success: false, message: "Failed to withdraw event" };
 
-                revalidatePath(`/circles/${circleHandle}/events`);
-                revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+                revalidateEventHostPaths(hostCircles, eventId);
                 return { success: true, message: "Event withdrawn" };
             }
         }
@@ -823,9 +1048,12 @@ export async function changeEventStageAction(
         if (!success) return { success: false, message: "Failed to change event stage" };
 
         if (newStage === "draft") {
-            await removeEventNoticeboardPost(event.noticeboardPostId);
-            if (event.noticeboardPostId) {
-                await Events.updateOne({ _id: new ObjectId(eventId) }, { $unset: { noticeboardPostId: "" } });
+            await removeEventNoticeboardPosts(event);
+            if (event.noticeboardPostId || Object.keys(event.noticeboardPostIdsByCircleId || {}).length > 0) {
+                await Events.updateOne(
+                    { _id: new ObjectId(eventId) },
+                    { $unset: { noticeboardPostId: "", noticeboardPostIdsByCircleId: "" } },
+                );
             }
         }
 
@@ -861,8 +1089,7 @@ export async function changeEventStageAction(
             console.error("Error sending event stage change notifications:", notifyErr);
         }
 
-        revalidatePath(`/circles/${circleHandle}/events`);
-        revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+        revalidateEventHostPaths(hostCircles, eventId);
 
         return {
             success: true,
@@ -900,6 +1127,11 @@ export async function rsvpEventAction(
         const canRsvp = await isAuthorized(userDid, circle._id as string, features.events.rsvp);
         if (!canRsvp) return { success: false, message: "Not authorized to RSVP" };
 
+        const event = await getEventById(eventId, userDid);
+        if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "Event not found" };
+        }
+
         const ok = await upsertRsvp(eventId, circle._id!.toString(), userDid, status);
         if (!ok) return { success: false, message: "Failed to RSVP" };
 
@@ -928,6 +1160,11 @@ export async function cancelRsvpAction(
 
         const canRsvp = await isAuthorized(userDid, circle._id as string, features.events.rsvp);
         if (!canRsvp) return { success: false, message: "Not authorized to RSVP" };
+
+        const event = await getEventById(eventId, userDid);
+        if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "Event not found" };
+        }
 
         const ok = await cancelRsvp(eventId, userDid);
         if (!ok) return { success: false, message: "Failed to cancel RSVP" };
@@ -1017,6 +1254,9 @@ export async function inviteUsersToEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "This event is not hosted by this circle" };
+        }
 
         await inviteUsersToEvent(eventId, circle._id!.toString(), userDids, user);
 
@@ -1134,6 +1374,11 @@ export async function rsvpEventWithOptionsAction(
 
         const canRsvp = await isAuthorized(userDid, circle._id as string, features.events.rsvp);
         if (!canRsvp) return { success: false, message: "Not authorized to RSVP" };
+
+        const event = await getEventById(eventId, userDid);
+        if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "Event not found" };
+        }
 
         const ok = await upsertRsvp(
             eventId,
@@ -1319,18 +1564,18 @@ export async function hideCancelledEventAction(
         if (!event) {
             return { success: false, message: "Event not found" };
         }
+        const routeCircle = await getCircleByHandle(circleHandle);
+        if (!routeCircle || !routeCircle._id || !isRouteCircleEventHost(routeCircle._id.toString(), event)) {
+            return { success: false, message: "Event does not belong to this circle" };
+        }
 
         if (!user || !user._id) {
             return { success: false, message: "User not found" };
         }
 
-        const canView = await isAuthorized(userDid, event.circleId, features.events.view);
+        const canView = await isAuthorized(userDid, routeCircle._id.toString(), features.events.view);
         if (!canView) {
             return { success: false, message: "Not authorized" };
-        }
-
-        if (event.circle?.handle && event.circle.handle !== circleHandle) {
-            return { success: false, message: "Event does not belong to this circle" };
         }
 
         if (event.stage !== "cancelled") {
@@ -1374,18 +1619,18 @@ export async function unhideCancelledEventAction(
         if (!event) {
             return { success: false, message: "Event not found" };
         }
+        const routeCircle = await getCircleByHandle(circleHandle);
+        if (!routeCircle || !routeCircle._id || !isRouteCircleEventHost(routeCircle._id.toString(), event)) {
+            return { success: false, message: "Event does not belong to this circle" };
+        }
 
         if (!user || !user._id) {
             return { success: false, message: "User not found" };
         }
 
-        const canView = await isAuthorized(userDid, event.circleId, features.events.view);
+        const canView = await isAuthorized(userDid, routeCircle._id.toString(), features.events.view);
         if (!canView) {
             return { success: false, message: "Not authorized" };
-        }
-
-        if (event.circle?.handle && event.circle.handle !== circleHandle) {
-            return { success: false, message: "Event does not belong to this circle" };
         }
 
         const hidden = user.hiddenCancelledEventIds || [];

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getEventAction } from "@/app/circles/[handle]/events/actions";
+import { canManageEvent, normalizeEventHostCircleIds } from "@/lib/data/event";
 import EventDetail from "@/components/modules/events/event-detail";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -44,10 +45,19 @@ export default async function EventDetailPage(props: PageProps) {
     }
 
     // Permissions
-    const canModerate = userDid ? await isAuthorized(userDid, circle._id as string, features.events.moderate) : false;
-    const canReview = userDid ? await isAuthorized(userDid, circle._id as string, features.events.review) : false;
+    const hostCircleIds = normalizeEventHostCircleIds(event);
+    const hostPermissionChecks = userDid
+        ? await Promise.all(
+              hostCircleIds.map(async (hostCircleId) => ({
+                  canReview: await isAuthorized(userDid, hostCircleId, features.events.review),
+                  canModerate: await isAuthorized(userDid, hostCircleId, features.events.moderate),
+              })),
+          )
+        : [];
+    const canModerate = hostPermissionChecks.some((check) => check.canModerate);
+    const canReview = hostPermissionChecks.some((check) => check.canReview);
     const isAuthor = !!userDid && userDid === event.createdBy;
-    const canEdit = canModerate || isAuthor;
+    const canEdit = userDid ? await canManageEvent(userDid, event) : false;
 
     return (
         <div className="formatted flex w-full flex-col">

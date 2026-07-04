@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getEventAction } from "@/app/circles/[handle]/events/actions";
+import { canManageEvent, normalizeEventHostCircleIds } from "@/lib/data/event";
 import EventForm from "@/components/modules/events/event-form";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -30,10 +31,15 @@ export default async function EditEventPage(props: PageProps) {
         notFound();
     }
 
-    const isAuthor = userDid === event.createdBy;
-    const canModerate = await isAuthorized(userDid, circle._id as string, features.events.moderate);
-    const canPublish = canModerate || (await isAuthorized(userDid, circle._id as string, features.events.review));
-    const canEdit = isAuthor || canModerate;
+    const canPublishChecks = await Promise.all(
+        normalizeEventHostCircleIds(event).map(async (hostCircleId) => {
+            const canReview = await isAuthorized(userDid, hostCircleId, features.events.review);
+            if (canReview) return true;
+            return isAuthorized(userDid, hostCircleId, features.events.moderate);
+        }),
+    );
+    const canPublish = canPublishChecks.some(Boolean);
+    const canEdit = await canManageEvent(userDid, event);
     if (!canEdit) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
