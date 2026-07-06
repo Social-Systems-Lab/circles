@@ -6,13 +6,25 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
-import { getCircleMembersAction, searchEligibleUsersAction } from "@/app/circles/[handle]/events/actions";
+import { getEventInviteCandidatesAction } from "@/app/circles/[handle]/events/actions";
+
+type InviteCandidate = Circle & {
+    inviteSources?: ("circle_member" | "contact")[];
+    inviteSourceLabel?: string;
+};
 
 type Props = {
-    onSelectionChange: (selected: Circle[]) => void;
-    initialSelection?: Circle[];
+    onSelectionChange: (selected: InviteCandidate[]) => void;
+    onCandidatesLoaded?: (data: {
+        candidates: InviteCandidate[];
+        canBulkInviteCircleMembers: boolean;
+        circleMemberCount: number;
+    }) => void;
+    initialSelection?: InviteCandidate[];
     circleHandle: string;
+    eventId: string;
     excludeDids?: string[];
 };
 
@@ -20,22 +32,33 @@ export default function UserPicker({
     onSelectionChange,
     initialSelection = [],
     circleHandle,
+    eventId,
     excludeDids = [],
+    onCandidatesLoaded,
 }: Props) {
     const [search, setSearch] = useState("");
-    const [results, setResults] = useState<Circle[]>([]);
-    const [selected, setSelected] = useState<Circle[]>(initialSelection);
-    const [defaultUsers, setDefaultUsers] = useState<Circle[]>([]);
+    const [results, setResults] = useState<InviteCandidate[]>([]);
+    const [selected, setSelected] = useState<InviteCandidate[]>(initialSelection);
+    const [defaultUsers, setDefaultUsers] = useState<InviteCandidate[]>([]);
+
+    useEffect(() => {
+        setSelected(initialSelection);
+    }, [initialSelection]);
 
     useEffect(() => {
         const fetchInitialUsers = async () => {
-            const { members } = await getCircleMembersAction(circleHandle);
-            const filtered = (members || []).filter((u) => !excludeDids?.includes(u.did!));
+            const data = await getEventInviteCandidatesAction(circleHandle, eventId);
+            const filtered = (data.candidates || []).filter((u) => !excludeDids?.includes(u.did!));
             setDefaultUsers(filtered);
             setResults(filtered);
+            onCandidatesLoaded?.({
+                candidates: filtered,
+                canBulkInviteCircleMembers: data.canBulkInviteCircleMembers,
+                circleMemberCount: data.circleMemberCount,
+            });
         };
         fetchInitialUsers();
-    }, [circleHandle, excludeDids]);
+    }, [circleHandle, eventId, excludeDids, onCandidatesLoaded]);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -44,8 +67,8 @@ export default function UserPicker({
                 return;
             }
             try {
-                const { circles } = await searchEligibleUsersAction(circleHandle, search, 20);
-                const filtered = (circles || []).filter((u) => !excludeDids?.includes(u.did!));
+                const { candidates } = await getEventInviteCandidatesAction(circleHandle, eventId, search, 50);
+                const filtered = (candidates || []).filter((u) => !excludeDids?.includes(u.did!));
                 setResults(filtered);
             } catch (e) {
                 console.error("Error searching eligible users:", e);
@@ -55,9 +78,9 @@ export default function UserPicker({
 
         const debounce = setTimeout(fetchUsers, 300);
         return () => clearTimeout(debounce);
-    }, [search, defaultUsers, excludeDids]);
+    }, [search, defaultUsers, excludeDids, circleHandle, eventId]);
 
-    const handleSelect = (user: Circle) => {
+    const handleSelect = (user: InviteCandidate) => {
         if (!selected.find((s) => s.did === user.did)) {
             const newSelection = [...selected, user];
             setSelected(newSelection);
@@ -67,11 +90,13 @@ export default function UserPicker({
         setResults([]);
     };
 
-    const handleRemove = (user: Circle) => {
+    const handleRemove = (user: InviteCandidate) => {
         const newSelection = selected.filter((s) => s.did !== user.did);
         setSelected(newSelection);
         onSelectionChange(newSelection);
     };
+
+    const visibleResults = results.filter((user) => !selected.some((selectedUser) => selectedUser.did === user.did));
 
     return (
         <div>
@@ -98,22 +123,29 @@ export default function UserPicker({
                     onChange={(e) => setSearch(e.target.value)}
                 />
             </div>
-            {results.length > 0 && (
-                <ScrollArea className="mt-2 h-40 rounded-md border">
-                    {results.map((user) => (
+            {visibleResults.length > 0 && (
+                <ScrollArea className="mt-2 h-72 rounded-md border">
+                    {visibleResults.map((user) => (
                         <div
                             key={user.did}
-                            className="flex cursor-pointer items-center gap-3 p-2 hover:bg-muted"
+                            className="flex cursor-pointer items-center justify-between gap-3 p-2 hover:bg-muted"
                             onClick={() => handleSelect(user)}
                         >
-                            <Avatar>
-                                <AvatarImage src={user.picture?.url} />
-                                <AvatarFallback>{user.name?.[0]}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <p className="font-semibold">{user.name}</p>
-                                <p className="text-sm text-muted-foreground">@{user.handle}</p>
+                            <div className="flex min-w-0 items-center gap-3">
+                                <Avatar>
+                                    <AvatarImage src={user.picture?.url} />
+                                    <AvatarFallback>{user.name?.[0]}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                    <p className="truncate font-semibold">{user.name}</p>
+                                    <p className="truncate text-sm text-muted-foreground">@{user.handle}</p>
+                                </div>
                             </div>
+                            {user.inviteSourceLabel && (
+                                <Badge variant="outline" className="shrink-0">
+                                    {user.inviteSourceLabel}
+                                </Badge>
+                            )}
                         </div>
                     ))}
                 </ScrollArea>

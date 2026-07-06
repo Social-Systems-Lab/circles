@@ -711,11 +711,16 @@ export const inviteUsersToEvent = async (
         );
         targetUserDids = newUserDids.filter((_, idx) => acceptedChecks[idx]);
     } else {
-        // Only invite users who are permitted to view events in this circle
-        const permissionChecks = await Promise.all(
-            newUserDids.map((did) => isAuthorized(did, circleId, features.events.view)),
-        );
-        targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx]);
+        // Only invite circle viewers or the inviter's accepted contacts.
+        const [permissionChecks, contactChecks] = await Promise.all([
+            Promise.all(newUserDids.map((did) => isAuthorized(did, circleId, features.events.view))),
+            Promise.all(
+                newUserDids.map((did) =>
+                    inviter.did ? isAcceptedConnectionForUserDid(inviter.did, did) : Promise.resolve(false),
+                ),
+            ),
+        ]);
+        targetUserDids = newUserDids.filter((_, idx) => permissionChecks[idx] || contactChecks[idx]);
     }
 
     if (targetUserDids.length === 0) {

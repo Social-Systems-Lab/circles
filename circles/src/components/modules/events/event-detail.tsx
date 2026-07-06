@@ -100,6 +100,7 @@ export default function EventDetail({
     const hiddenCancelledIds = user?.hiddenCancelledEventIds || [];
     const isEventHidden = eventId ? hiddenCancelledIds.includes(eventId) : false;
     const canManageJoinLink = Boolean(canEdit || canModerate || isAuthor || user?.did === event.createdBy);
+    const canInvite = Boolean(canReview || canModerate || isAuthor || user?.did === event.createdBy);
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
     const end = event.endAt ? new Date(event.endAt as any) : null;
@@ -549,7 +550,9 @@ export default function EventDetail({
                             Edit
                         </Button>
                     )}
-                    {event.stage === "open" && <Button onClick={() => setInviteModalOpen(true)}>Invite</Button>}
+                    {event.stage === "open" && canInvite && (
+                        <Button onClick={() => setInviteModalOpen(true)}>Invite</Button>
+                    )}
                 </div>
             </div>
 
