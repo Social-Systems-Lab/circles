@@ -42,7 +42,7 @@ import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import MembershipCredentialCard from "./MembershipCredentialCard";
 import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 import { isVerifiedUser } from "@/lib/auth/verification";
-import { useProfileRelationshipState } from "./message-button";
+import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
 
 interface AboutPageProps {
     circle: Circle;
@@ -205,6 +205,10 @@ export default function AboutPage({
             return "Requested";
         }
 
+        if (relationshipState?.connectStatus === "pending_received") {
+            return "Requested You";
+        }
+
         if (followMembership) {
             return "Following";
         }
@@ -232,7 +236,7 @@ export default function AboutPage({
                   key: "relationship",
                   label: relationshipStatusLabel,
                   className:
-                      relationshipStatusLabel === "Requested"
+                      relationshipStatusLabel === "Requested" || relationshipStatusLabel === "Requested You"
                           ? "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600"
                           : relationshipStatusLabel === "Connected"
                             ? "bg-[#f3f7f4] text-[#45604d] hover:bg-[#f3f7f4] hover:text-[#45604d]"
@@ -539,6 +543,11 @@ export default function AboutPage({
                                             </Badge>
                                         ))}
                                     </div>
+                                    {relationshipState?.connectLabelReason === "pending_received" && (
+                                        <div className="mt-4">
+                                            <ProfileRelationshipHeaderAction circle={circle} />
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
