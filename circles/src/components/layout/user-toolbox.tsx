@@ -653,6 +653,7 @@ export const UserToolbox = () => {
 
     const pinnedBookmarks = bookmarkedItems.filter((item) => item.pinned);
     const otherBookmarks = bookmarkedItems.filter((item) => !item.pinned);
+    const pendingConnectionRequestCount = connections.pendingIncoming.length;
 
     if (userToolboxState === undefined) return null;
 
@@ -740,7 +741,14 @@ export const UserToolbox = () => {
                             value="connections"
                             className={toolboxActiveTabClassName}
                         >
-                            <Users className="h-5 w-5" />
+                            <span className="relative inline-flex">
+                                <Users className="h-5 w-5" />
+                                {pendingConnectionRequestCount > 0 && (
+                                    <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium leading-none text-white">
+                                        {pendingConnectionRequestCount > 9 ? "9+" : pendingConnectionRequestCount}
+                                    </span>
+                                )}
+                            </span>
                         </TabsTrigger>
                         <TabsTrigger
                             value="bookmarks"
