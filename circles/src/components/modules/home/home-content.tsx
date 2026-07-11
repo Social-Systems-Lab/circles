@@ -32,6 +32,7 @@ import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { hasContributorPerks } from "@/lib/auth/perks";
+import { ProfileCompletionChecklist } from "@/components/profile-completion/profile-completion-checklist";
 import {
     Dialog,
     DialogContent,
@@ -386,6 +387,7 @@ export default function HomeContent({
                                     <SocialLinks circle={circle} />
                                 </div>
                             )}
+                            {isOwnUserProfile ? <ProfileCompletionChecklist profile={circle} /> : null}
                         </div>
                     </div>
                 </div>

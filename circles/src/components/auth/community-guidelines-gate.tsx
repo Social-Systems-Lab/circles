@@ -21,6 +21,44 @@ import { UserPrivate } from "@/models/models";
 const SCREEN_ORDER = ["welcome", "why", ...COMMUNITY_GUIDELINE_RULES.map((rule) => rule.id), "confirmation"] as const;
 const CONFIRMATION_SCREEN_INDEX = SCREEN_ORDER.indexOf("confirmation");
 
+const COMMUNITY_GUIDELINES_FLOW_COPY = {
+    verification: {
+        badge: "Account Verification",
+        title: "Kamooni's core community rules",
+        welcomeKicker: "Before verification",
+        welcomeTitle: "Verification starts with a shared standard.",
+        welcomeBody:
+            "To request account verification, you first need to actively agree to Kamooni's five core community rules.",
+        welcomeNote:
+            "This takes less than a minute. It is not legal fine print. It is a clear human commitment to how we work together.",
+        whyTitle: "Trust comes before verification.",
+        whyBody:
+            "Verification signals credibility on Kamooni. These rules set the baseline for honest participation, respect, privacy, and responsible behavior.",
+        confirmationTitle: "You're confirmed.",
+        confirmationBody:
+            "You have actively agreed to all five of Kamooni's core community rules. Your verification request is ready to continue.",
+        completingLabel: "Finishing the guidelines step...",
+        confirmationButton: "Continue to verification",
+    },
+    profileCompletion: {
+        badge: "Kamooni Rules",
+        title: "Kamooni's core community rules",
+        welcomeKicker: "Profile completion",
+        welcomeTitle: "A shared standard for taking part.",
+        welcomeBody:
+            "To take part in Kamooni, actively agree to the five core community rules that guide how we work together.",
+        welcomeNote:
+            "This takes less than a minute. It is not legal fine print. It is a clear human commitment to how we work together.",
+        whyTitle: "Trust makes participation possible.",
+        whyBody:
+            "These rules set the baseline for honest participation, respect, privacy, and responsible behavior.",
+        confirmationTitle: "You're all set.",
+        confirmationBody: "You have actively agreed to all five of Kamooni's core community rules.",
+        completingLabel: "Finishing the rules step...",
+        confirmationButton: "Done",
+    },
+} as const;
+
 const formatAcceptedAt = (value: Date | null) => {
     if (!value) {
         return null;
@@ -43,12 +81,14 @@ type CommunityGuidelinesAgreementFlowProps = {
     user: UserPrivate | null | undefined;
     onUserChange?: (user: UserPrivate) => void;
     onComplete?: (user: UserPrivate) => Promise<CommunityGuidelinesFlowResult | void>;
+    context?: "verification" | "profileCompletion";
 };
 
 export function CommunityGuidelinesAgreementFlow({
     user,
     onUserChange,
     onComplete,
+    context = "verification",
 }: CommunityGuidelinesAgreementFlowProps) {
     const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
     const [acceptanceState, setAcceptanceState] = useState(createEmptyCommunityGuidelineAgreementState);
@@ -58,6 +98,7 @@ export function CommunityGuidelinesAgreementFlow({
 
     const acceptedCount = useMemo(() => getAcceptedCommunityGuidelineCount(acceptanceState), [acceptanceState]);
     const allRulesAccepted = useMemo(() => hasAcceptedAllCommunityGuidelines(acceptanceState), [acceptanceState]);
+    const copy = COMMUNITY_GUIDELINES_FLOW_COPY[context];
 
     useEffect(() => {
         const normalizedState = normalizeCommunityGuidelineAgreementState(user?.communityGuidelinesAcceptance);
@@ -175,11 +216,11 @@ export function CommunityGuidelinesAgreementFlow({
                             <div className="flex items-center gap-2 text-[#8a5822]">
                                 <ShieldCheck className="h-5 w-5" />
                                 <span className="text-xs font-semibold uppercase tracking-[0.24em]">
-                                    Account Verification
+                                    {copy.badge}
                                 </span>
                             </div>
                             <h2 className="text-2xl font-semibold text-[#2d2116] sm:text-[2rem]">
-                                Kamooni&apos;s core community rules
+                                {copy.title}
                             </h2>
                         </div>
                         <div className="min-w-[160px] text-right">
@@ -201,18 +242,16 @@ export function CommunityGuidelinesAgreementFlow({
                         {currentScreen === "welcome" && (
                             <div className="space-y-4">
                                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9d6b2f]">
-                                    Before verification
+                                    {copy.welcomeKicker}
                                 </p>
                                 <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">
-                                    Verification starts with a shared standard.
+                                    {copy.welcomeTitle}
                                 </h3>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    To request account verification, you first need to actively agree to Kamooni&apos;s
-                                    five core community rules.
+                                    {copy.welcomeBody}
                                 </p>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    This takes less than a minute. It is not legal fine print. It is a clear human
-                                    commitment to how we work together.
+                                    {copy.welcomeNote}
                                 </p>
                             </div>
                         )}
@@ -223,11 +262,10 @@ export function CommunityGuidelinesAgreementFlow({
                                     Why this matters
                                 </p>
                                 <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">
-                                    Trust comes before verification.
+                                    {copy.whyTitle}
                                 </h3>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    Verification signals credibility on Kamooni. These rules set the baseline for
-                                    honest participation, respect, privacy, and responsible behavior.
+                                    {copy.whyBody}
                                 </p>
                                 <p className="text-base leading-7 text-[#4c3b29]">
                                     You will agree to each rule one by one. Each agreement is saved with its own
@@ -286,11 +324,10 @@ export function CommunityGuidelinesAgreementFlow({
                                     Final confirmation
                                 </p>
                                 <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">
-                                    You&apos;re confirmed.
+                                    {copy.confirmationTitle}
                                 </h3>
                                 <p className="text-base leading-7 text-[#4c3b29]">
-                                    You have actively agreed to all five of Kamooni&apos;s core community rules. Your
-                                    verification request is ready to continue.
+                                    {copy.confirmationBody}
                                 </p>
                                 <div className="grid gap-3 sm:grid-cols-2">
                                     {COMMUNITY_GUIDELINE_RULES.map((rule) => (
@@ -308,7 +345,7 @@ export function CommunityGuidelinesAgreementFlow({
                                 {isCompleting && (
                                     <div className="flex items-center gap-2 rounded-2xl border border-[#d8e6d4] bg-[#f3faf1] px-4 py-3 text-sm text-[#2c6b2f]">
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span>Finishing the guidelines step...</span>
+                                        <span>{copy.completingLabel}</span>
                                     </div>
                                 )}
                             </div>
@@ -394,7 +431,7 @@ export function CommunityGuidelinesAgreementFlow({
                                     onClick={handleConfirmationAction}
                                     disabled={!allRulesAccepted}
                                 >
-                                    Continue to verification
+                                    {copy.confirmationButton}
                                 </Button>
                             )}
                         </div>

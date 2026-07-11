@@ -7,6 +7,7 @@ import {
     hasRealProfileImageUrl,
     isProfileComplete,
 } from "@/lib/profile-completion";
+import { getProfileCompletionChecklistState } from "@/lib/profile-completion-checklist";
 import { isMapVisibleCircle, isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
 import { COMMUNITY_GUIDELINE_RULE_IDS, createEmptyCommunityGuidelineAgreementState } from "@/lib/community-guidelines";
 
@@ -48,6 +49,55 @@ assert.equal(hasRealProfileImageUrl("/storage/users/profile.png"), true, "custom
 assert.equal(hasProfileAboutText({ description: "About me" }), true, "description satisfies About");
 assert.equal(hasProfileAboutText({ content: "Long about me" }), true, "content satisfies About");
 assert.equal(hasProfileAboutText({ description: "  ", content: "\n" }), false, "blank About fields fail");
+
+const checklistState = (profile: Partial<Circle>) => getProfileCompletionChecklistState(profile);
+const checklistCompletionById = (profile: Partial<Circle>) =>
+    Object.fromEntries(checklistState(profile).items.map((item) => [item.id, item.complete]));
+
+assert.deepEqual(
+    checklistCompletionById(
+        baseUser({
+            picture: undefined,
+            description: "",
+            content: "",
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    { "profile-image": false, about: false, rules: false },
+    "checklist handles no requirements complete",
+);
+assert.deepEqual(
+    checklistCompletionById(
+        baseUser({
+            description: "",
+            content: "",
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    { "profile-image": true, about: false, rules: false },
+    "checklist handles image complete only",
+);
+assert.deepEqual(
+    checklistCompletionById(
+        baseUser({
+            picture: undefined,
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    { "profile-image": false, about: true, rules: false },
+    "checklist handles About complete only",
+);
+assert.deepEqual(
+    checklistCompletionById(baseUser({ picture: undefined, description: "", content: "" })),
+    { "profile-image": false, about: false, rules: true },
+    "checklist handles rules complete only",
+);
+assert.deepEqual(
+    checklistCompletionById(baseUser({ content: "", communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() })),
+    { "profile-image": true, about: true, rules: false },
+    "checklist handles mixed completion",
+);
+assert.equal(checklistState(baseUser()).complete, true, "checklist complete state follows profileComplete");
 
 assert.equal(
     isProfileComplete(baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() })),
