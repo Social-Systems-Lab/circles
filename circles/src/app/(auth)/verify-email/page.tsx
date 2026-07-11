@@ -29,10 +29,10 @@ function VerifyEmailContent() {
                 .then((response) => {
                     if (response.success) {
                         setTitle("Email verified");
-                        setMessage(response.message || "Email verified");
-                        setDetail(
-                            "Your email address has been verified. Continue to your profile next to complete your setup. Kamooni member verification happens later from your profile.",
+                        setMessage(
+                            "Your email has been verified. Next, complete your profile with an image and a few words to introduce yourself.",
                         );
+                        setDetail(null);
                         setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
                         setError(false);
                         setIsResolved(true);
@@ -83,7 +83,7 @@ function VerifyEmailContent() {
                     <div className="mt-6 text-center">
                         <Button asChild>
                             <Link href={continueHref}>
-                                {error ? "Continue for now" : "Continue to profile setup"}
+                                {error ? "Continue for now" : "Complete your profile"}
                             </Link>
                         </Button>
                     </div>

@@ -24,7 +24,6 @@ import { useRouter, usePathname } from "next/navigation";
 import { Circle, UserToolboxTab, EventDisplay, ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
-import { VerifyAccountButton } from "../modules/auth/verify-account-button";
 import { Notifications } from "./notifications";
 import Link from "next/link";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -676,8 +675,8 @@ export const UserToolbox = () => {
                                 <div className="truncate font-semibold">{user?.name}</div>
                                 <p className="truncate text-sm text-muted-foreground">@{user?.handle}</p>
                             </Link>
-                            <div className="mt-2">
-                                {user?.isMember ? (
+                            {user?.isMember ? (
+                                <div className="mt-2">
                                     <Link href={`/circles/${user?.handle}/settings/subscription`}>
                                         <span className="inline-flex items-center rounded-full bg-[hsl(var(--founding-member-bg))] px-2 py-1 text-xs font-medium text-[hsl(var(--founding-member-foreground))]">
                                             <img
@@ -688,10 +687,8 @@ export const UserToolbox = () => {
                                             Founding Member
                                         </span>
                                     </Link>
-                                ) : (
-                                    <VerifyAccountButton />
-                                )}
-                            </div>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                     <Button

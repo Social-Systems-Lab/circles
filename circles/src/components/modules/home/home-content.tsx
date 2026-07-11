@@ -26,7 +26,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Settings } from "lucide-react";
 import Link from "next/link";
-import { VerifyAccountButton } from "../auth/verify-account-button";
 import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
@@ -126,19 +125,15 @@ export default function HomeContent({
                     <DialogHeader>
                         <DialogTitle>Welcome to Kamooni!</DialogTitle>
                         <DialogDescription className="space-y-3">
-                            <p>You are now a test pilot!</p>
                             <p>
-                                Click <strong>Request Verification</strong> when you&apos;re ready to become a
-                                verified member.
+                                To interact with others, complete your profile and agree to the Kamooni rules.
                             </p>
-                            <p>
-                                You may later connect with others who can verify that you&apos;re human and not a bot.
-                            </p>
+                            <p>It only takes three quick steps.</p>
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button type="button" onClick={() => handleWelcomeDialogChange(false)}>
-                            Got it
+                            Complete profile
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -355,11 +350,6 @@ export default function HomeContent({
                                     )}
                                 </div>
                             )}
-                            {isOwnUserProfile ? (
-                                <div className="flex items-center gap-2 pt-1">
-                                    <VerifyAccountButton />
-                                </div>
-                            ) : null}
                             {(circle.description || circle.mission) && (
                                 <div className="line-clamp-1 pb-1 text-gray-600">
                                     {authorizedToEdit ? (

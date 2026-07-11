@@ -44,12 +44,15 @@ function WelcomeStep({ nextStep }: OnboardingStepProps) {
 
     return (
         <div className="flex h-[500px] flex-col justify-center space-y-4 text-center">
-            <h2 className="mb-0 mt-0 text-3xl font-bold text-gray-800">Welcome to Kamooni</h2>
+            <h2 className="mb-0 mt-0 text-3xl font-bold text-gray-800">Welcome to Kamooni!</h2>
             <p className="text-lg text-gray-600">
-                Join a community of artists, hosts, and listeners. Are you ready to help build a more human music culture?
+                To interact with others, complete your profile and agree to the Kamooni rules.
+            </p>
+            <p className="text-lg text-gray-600">
+                It only takes three quick steps.
             </p>
             <Button onClick={handleNext} className="mx-auto mt-4 rounded-full" disabled={isSubmitting}>
-                Get Started
+                Complete profile
             </Button>
         </div>
     );
