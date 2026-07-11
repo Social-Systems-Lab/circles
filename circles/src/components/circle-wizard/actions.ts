@@ -17,7 +17,7 @@ import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
 import { addMember } from "@/lib/data/member";
 import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
-import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { hasContributorPerks } from "@/lib/auth/perks";
 
 const canCreateIndependentCircle = (user: UserPrivate | undefined) => hasContributorPerks(user);
@@ -107,8 +107,8 @@ export async function saveBasicInfoAction(
         } else {
             // --- CREATE NEW CIRCLE ---
             const currentUser = await getUserPrivate(userDid);
-            if (!canPerformRestrictedAction(currentUser)) {
-                return { success: false, message: getRestrictedActionMessage("create circles") };
+            if (!canParticipate(currentUser)) {
+                return { success: false, message: getParticipationRequiredMessage("create circles") };
             }
             const resolvedCircleType = circleType || "circle";
             const resolvedCircleLevel = getCircleLevelForCreate(circleLevel, parentCircleId);
@@ -172,8 +172,8 @@ export async function saveBasicInfoAction(
 export async function createCircleAction(circleData: CircleData, userDid: string) {
     try {
         const currentUser = await getUserPrivate(userDid);
-        if (!canPerformRestrictedAction(currentUser)) {
-            return { success: false, message: getRestrictedActionMessage("create circles") };
+        if (!canParticipate(currentUser)) {
+            return { success: false, message: getParticipationRequiredMessage("create circles") };
         }
         const resolvedCircleType = circleData.circleType || "circle";
         const resolvedCircleLevel = getCircleLevelForCreate(circleData.circleLevel, circleData.parentCircleId);

@@ -14,7 +14,7 @@ import { createNewUser, getUserById, getUserPrivate } from "../data/user";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
-import { canInteract } from "./verification";
+import { canParticipate } from "@/lib/profile-completion";
 
 export const SALT_FILENAME = "salt.bin";
 export const IV_FILENAME = "iv.bin";
@@ -353,11 +353,13 @@ export const isAuthorized = async (
 
     if (userDid) {
         const user = await Circles.findOne({ did: userDid });
+        const canEditOwnSettings =
+            featureInput.module === "settings" && (user?._id.toString() === circleId || user?.did === circle.createdBy);
         if (
             featureInput.needsToBeVerified &&
-            !canInteract(user) &&
-            user?._id.toString() !== circleId &&
-            user?.did !== circle.createdBy
+            // Historical feature name: restricted participation now requires derived profile completion.
+            !canParticipate(user) &&
+            !canEditOwnSettings
         ) {
             return false;
         }

@@ -66,7 +66,7 @@ import {
     notifyTaskClaimDeclined,
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
-import { canPerformRestrictedAction, getRestrictedActionMessage } from "@/lib/auth/verification";
+import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 
 type GetTasksActionResult = {
     tasks: TaskDisplay[];
@@ -573,12 +573,12 @@ export async function createTaskAction( // Renamed function
         if (!userDid) {
             return { success: false, message: "User not authenticated" };
         }
-        const user = await getUserByDid(userDid);
+        const user = await getUserPrivate(userDid);
         if (!user) {
             return { success: false, message: "User data not found" };
         }
-        if (!canPerformRestrictedAction(user)) {
-            return { success: false, message: getRestrictedActionMessage("create tasks") };
+        if (!canParticipate(user)) {
+            return { success: false, message: getParticipationRequiredMessage("create tasks") };
         }
 
         // Get the circle
@@ -837,8 +837,8 @@ export async function updateTaskAction(
             }
 
             const user = await getUserPrivate(userDid);
-            if (!canPerformRestrictedAction(user)) {
-                return { success: false, message: getRestrictedActionMessage("move tasks") };
+            if (!canParticipate(user)) {
+                return { success: false, message: getParticipationRequiredMessage("move tasks") };
             }
 
             const canCreateInTarget =
@@ -1427,12 +1427,12 @@ export async function submitTaskClaimAction(
             return { success: false, message: "User not authenticated" };
         }
 
-        const claimant = await getUserByDid(userDid);
+        const claimant = await getUserPrivate(userDid);
         if (!claimant) {
             return { success: false, message: "User data not found" };
         }
-        if (!canPerformRestrictedAction(claimant)) {
-            return { success: false, message: getRestrictedActionMessage("claim tasks") };
+        if (!canParticipate(claimant)) {
+            return { success: false, message: getParticipationRequiredMessage("claim tasks") };
         }
 
         const circle = await getCircleByHandle(circleHandle);
@@ -1670,6 +1670,14 @@ export async function joinShiftTaskAction(
 
         if (!ObjectId.isValid(taskId)) {
             return { success: false, message: "Invalid task id" };
+        }
+
+        const user = await getUserPrivate(userDid);
+        if (!user) {
+            return { success: false, message: "User data not found" };
+        }
+        if (!canParticipate(user)) {
+            return { success: false, message: getParticipationRequiredMessage("join shifts") };
         }
 
         const circle = await getCircleByHandle(circleHandle);

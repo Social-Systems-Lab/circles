@@ -9,6 +9,7 @@ import {
 } from "@/lib/data/proof-of-humanity";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user";
 import { humanityVerificationLevelSchema, type HumanityVerificationLevel } from "@/models/models";
+import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 
 type ProofOfHumanityActionResult = {
     success: boolean;
@@ -48,13 +49,16 @@ export async function saveProofOfHumanityVerificationAction({
         }
 
         const [verifier, subject, subjectPrivate] = await Promise.all([
-            getUserByDid(verifierDid),
+            getUserPrivate(verifierDid),
             getUserByDid(subjectDid),
             getUserPrivate(subjectDid),
         ]);
 
         if (!verifier || !subject || !subjectPrivate || subject.circleType !== "user") {
             return { success: false, message: "Profile not found." };
+        }
+        if (!canParticipate(verifier)) {
+            return { success: false, message: getParticipationRequiredMessage("verify another person") };
         }
 
         const result = await createOrUpdateHumanityVerification({

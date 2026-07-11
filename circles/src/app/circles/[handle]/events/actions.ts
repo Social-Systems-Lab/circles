@@ -26,6 +26,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate, getPrivateUserByDid, updateUser } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
+import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 
 // Data layer
 import {
@@ -679,8 +680,11 @@ export async function createEventAction(
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
 
-        const user = await getUserByDid(userDid);
+        const user = await getUserPrivate(userDid);
         if (!user) return { success: false, message: "User not found" };
+        if (!canParticipate(user)) {
+            return { success: false, message: getParticipationRequiredMessage("create events") };
+        }
 
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return { success: false, message: "Circle not found" };
@@ -1236,8 +1240,11 @@ export async function rsvpEventAction(
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
 
-        const user = await getUserByDid(userDid);
+        const user = await getUserPrivate(userDid);
         if (!user) return { success: false, message: "User not found" };
+        if (!canParticipate(user)) {
+            return { success: false, message: getParticipationRequiredMessage("RSVP to events") };
+        }
 
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return { success: false, message: "Circle not found" };
@@ -1487,8 +1494,11 @@ export async function rsvpEventWithOptionsAction(
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
 
-        const user = await getUserByDid(userDid);
+        const user = await getUserPrivate(userDid);
         if (!user) return { success: false, message: "User not found" };
+        if (!canParticipate(user)) {
+            return { success: false, message: getParticipationRequiredMessage("RSVP to events") };
+        }
 
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return { success: false, message: "Circle not found" };

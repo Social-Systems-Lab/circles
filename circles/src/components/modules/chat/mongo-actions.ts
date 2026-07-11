@@ -30,12 +30,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
-import {
-    canInteract,
-    canPerformRestrictedAction,
-    getInteractionRequiredMessage,
-    getRestrictedActionMessage,
-} from "@/lib/auth/verification";
+import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { getDmEligibility } from "@/lib/data/relationships";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
@@ -62,39 +57,28 @@ const isUploadedFileLike = (value: FormDataEntryValue | null): value is File => 
     return !!value && typeof value !== "string" && typeof value.arrayBuffer === "function" && typeof value.size === "number";
 };
 
-const ensureVerifiedMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
+const ensureParticipatingMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
     const user = await Circles.findOne(
         { did: userDid },
         {
             projection: {
+                circleType: 1,
+                picture: 1,
+                description: 1,
+                content: 1,
+                communityGuidelinesAcceptance: 1,
                 isAdmin: 1,
-                isVerified: 1,
-                verificationStatus: 1,
             },
         },
     );
-    if (!canPerformRestrictedAction(user)) {
-        return getRestrictedActionMessage(action);
+    if (!canParticipate(user)) {
+        return getParticipationRequiredMessage(action);
     }
     return null;
 };
 
 const ensureInteractiveMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
-    const user = await Circles.findOne(
-        { did: userDid },
-        {
-            projection: {
-                isAdmin: 1,
-                isHuman: 1,
-                isVerified: 1,
-                verificationStatus: 1,
-            },
-        },
-    );
-    if (!canInteract(user)) {
-        return getInteractionRequiredMessage(action);
-    }
-    return null;
+    return ensureParticipatingMessagingUser(userDid, action);
 };
 
 const CIRCLE_CONTACT_SOURCE = "circle_contact";
@@ -709,7 +693,7 @@ export const sendMongoAttachmentAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to send attachments" };
     }
-    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "send attachments");
+    const verificationMessage = await ensureParticipatingMessagingUser(userDid, "send attachments");
     if (verificationMessage) {
         return { success: false, message: verificationMessage };
     }
@@ -933,7 +917,7 @@ export const createMongoGroupChatAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to create a group chat" };
     }
-    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "create group chats");
+    const verificationMessage = await ensureParticipatingMessagingUser(userDid, "create group chats");
     if (verificationMessage) {
         return { success: false, message: verificationMessage };
     }
@@ -1029,7 +1013,7 @@ export const contactCircleAdminsAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to contact this circle" };
     }
-    const verificationMessage = await ensureVerifiedMessagingUser(userDid, "contact circle admins");
+    const verificationMessage = await ensureParticipatingMessagingUser(userDid, "contact circle admins");
     if (verificationMessage) {
         return { success: false, message: verificationMessage };
     }

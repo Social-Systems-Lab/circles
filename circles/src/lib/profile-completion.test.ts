@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { Circle } from "@/models/models";
 import {
+    canParticipate,
     hasProfileAboutText,
     hasRealProfileImage,
     hasRealProfileImageUrl,
@@ -55,5 +56,22 @@ assert.equal(
 assert.equal(isProfileComplete(baseUser()), true, "completed guidelines succeed when all requirements are met");
 assert.equal(isProfileComplete(baseUser()), true, "all three requirements produce profileComplete");
 assert.equal(isProfileComplete(baseUser({ circleType: "circle" })), false, "non-user circles do not count");
+assert.equal(
+    canParticipate(
+        baseUser({
+            isHuman: true,
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    false,
+    "incomplete users fail participation readiness even when isHuman is true",
+);
+assert.equal(canParticipate(baseUser()), true, "complete users pass participation readiness");
+assert.equal(
+    canParticipate(baseUser({ isAdmin: true, communityGuidelinesAcceptance: undefined })),
+    true,
+    "admin bypass preserves existing restricted-action behavior",
+);
+assert.equal(canParticipate(undefined), false, "missing users do not pass participation readiness");
 
 console.log("profile-completion tests passed");

@@ -22,12 +22,7 @@ import {
     ToolboxConnectionsSummary,
 } from "@/lib/data/relationships";
 import { UserRelationships } from "@/lib/data/db";
-import {
-    canInteract,
-    canPerformRestrictedAction,
-    getInteractionRequiredMessage,
-    getRestrictedActionMessage,
-} from "@/lib/auth/verification";
+import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 
 type CircleActionResponse = {
     success: boolean;
@@ -426,8 +421,8 @@ export const sendConnectRequestAction = async (
     }
 
     const viewer = await getCircleByDid(viewerDid);
-    if (!canInteract(viewer)) {
-        return { success: false, message: getInteractionRequiredMessage("add contacts") };
+    if (!canParticipate(viewer)) {
+        return { success: false, message: getParticipationRequiredMessage("add contacts") };
     }
 
     try {

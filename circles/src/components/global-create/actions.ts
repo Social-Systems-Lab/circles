@@ -1,7 +1,7 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { canPerformRestrictedAction } from "@/lib/auth/verification";
+import { canParticipate } from "@/lib/profile-completion";
 import { features } from "@/lib/data/constants";
 import { getCirclesByIds } from "@/lib/data/circle";
 import { Members } from "@/lib/data/db";
@@ -24,7 +24,7 @@ export async function getSelectableCirclesAction(
     }
 
     const user = await getUserPrivate(userDid);
-    if (!canPerformRestrictedAction(user)) {
+    if (!canParticipate(user)) {
         return { success: true, circles: [] };
     }
 

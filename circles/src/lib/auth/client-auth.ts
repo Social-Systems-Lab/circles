@@ -1,6 +1,6 @@
 import { Circle, Feature, MemberDisplay, UserPrivate } from "@/models/models";
 import { features, maxAccessLevel } from "../data/constants";
-import { canInteract } from "./verification";
+import { canParticipate } from "@/lib/profile-completion";
 
 export const getMemberAccessLevel = (user: UserPrivate | MemberDisplay | undefined, circle: Circle): number => {
     if (!user) return maxAccessLevel;
@@ -45,7 +45,11 @@ export const hasHigherAccess = (
  * @returns True if the user is authorized, false otherwise
  */
 export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
-    if (feature.needsToBeVerified && !canInteract(user) && user?._id !== circle._id) {
+    const canEditOwnSettings =
+        feature.module === "settings" && (user?._id === circle._id || user?.did === circle.createdBy);
+
+    // Historical feature name: restricted participation now requires derived profile completion.
+    if (feature.needsToBeVerified && !canParticipate(user) && !canEditOwnSettings) {
         return false;
     }
 

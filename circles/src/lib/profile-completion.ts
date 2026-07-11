@@ -9,6 +9,8 @@ export type ProfileCompletionRequirements = {
     hasAcceptedCommunityGuidelines: boolean;
 };
 
+type ParticipationSubject = Partial<Circle> | null | undefined;
+
 const getImagePathname = (url: string): string | null => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
@@ -56,4 +58,16 @@ export const isProfileComplete = (circle?: Partial<Circle> | null): boolean => {
 
     const requirements = getProfileCompletionRequirements(circle);
     return requirements.hasRealProfileImage && requirements.hasAboutText && requirements.hasAcceptedCommunityGuidelines;
+};
+
+export const canBypassProfileCompletionRequirement = (user: ParticipationSubject): boolean => {
+    return user?.isAdmin === true;
+};
+
+export const canParticipate = (user: ParticipationSubject): boolean => {
+    return canBypassProfileCompletionRequirement(user) || isProfileComplete(user);
+};
+
+export const getParticipationRequiredMessage = (action: string): string => {
+    return `Complete your profile before you can ${action}.`;
 };
