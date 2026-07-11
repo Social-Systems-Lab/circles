@@ -56,6 +56,7 @@ import { EventDisplay } from "@/models/models";
 import ActivityPanel from "@/components/layout/activity-panel";
 import MobileEventsPanel from "@/components/modules/events/mobile-events-panel";
 import { sdgs } from "@/lib/data/sdgs";
+import { isMapVisibleCircle } from "@/lib/map-visibility";
 
 // mapItemToContent helper remains the same
 const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Content | null => {
@@ -77,6 +78,38 @@ const mapItemToContent = (item: WithMetric<Content> | Circle | undefined): Conte
     console.warn("Unmappable item type in mapItemToContent:", item);
     return null;
 };
+
+const getCircleIdentityKeys = (circle?: Partial<Circle> | null): string[] => {
+    const keys: string[] = [];
+    const id = typeof circle?._id === "string" ? circle._id : circle?._id?.toString?.();
+
+    if (id) {
+        keys.push(`id:${id}`);
+    }
+
+    if (circle?.did) {
+        keys.push(`did:${circle.did}`);
+    }
+
+    return keys;
+};
+
+const isMapMarkerEligible = (circle: WithMetric<Circle> | Circle, mapEligibleUserProfileKeys: Set<string>) => {
+    if (circle.circleType !== "user") {
+        return true;
+    }
+
+    return getCircleIdentityKeys(circle).some((key) => mapEligibleUserProfileKeys.has(key));
+};
+
+const mapCirclesToVisibleContent = (
+    circles: Array<WithMetric<Circle> | Circle>,
+    mapEligibleUserProfileKeys: Set<string>,
+): Content[] =>
+    circles
+        .filter((circle) => isMapMarkerEligible(circle, mapEligibleUserProfileKeys))
+        .map((circle) => mapItemToContent(circle))
+        .filter((content): content is Content => content !== null);
 
 const CategoryFilterCarousel: React.FC<CategoryFilterProps & { className?: string }> = ({ className, ...props }) => {
     const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -344,6 +377,20 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         return circles.filter((c) => c.circleType === typeToFilter);
     }, []);
 
+    const mapEligibleUserProfileKeys = useMemo(() => {
+        const keys = new Set<string>();
+
+        allDiscoverableCircles.forEach((circle) => {
+            if (circle.circleType !== "user" || !isMapVisibleCircle(circle)) {
+                return;
+            }
+
+            getCircleIdentityKeys(circle).forEach((key) => keys.add(key));
+        });
+
+        return keys;
+    }, [allDiscoverableCircles]);
+
     const displayedSwipeCircles = useMemo(() => {
         // ... (no changes) ...
         if (!user) return [];
@@ -545,9 +592,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             // If clearing search via empty query, reset state
             setAllSearchResults([]);
             setDisplayedContent(
-                filterCirclesByCategory(allDiscoverableCircles, selectedCategory)
-                    .map(mapItemToContent)
-                    .filter((c): c is Content => c !== null),
+                mapCirclesToVisibleContent(
+                    filterCirclesByCategory(allDiscoverableCircles, selectedCategory),
+                    mapEligibleUserProfileKeys,
+                ),
             );
             setHasSearched(false);
             setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
@@ -651,6 +699,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         allDiscoverableCircles,
         selectedCategory,
         filterCirclesByCategory,
+        mapEligibleUserProfileKeys,
         setContentPreview,
         hasDateFilter,
         dateLabel,
@@ -670,9 +719,10 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setDateRange(undefined);
         setShowAdvancedFilters(false);
         setOpenAdvancedSection("calendar");
-        const resetMapData = filterCirclesByCategory(allDiscoverableCircles, null)
-            .map((circle) => mapItemToContent(circle))
-            .filter((c): c is Content => c !== null);
+        const resetMapData = mapCirclesToVisibleContent(
+            filterCirclesByCategory(allDiscoverableCircles, null),
+            mapEligibleUserProfileKeys,
+        );
         setDisplayedContent(resetMapData);
         setTriggerSnapIndex(SNAP_INDEX_PEEK); // Reset drawer to peek
         setContentPreview(undefined); // Clear preview
@@ -695,6 +745,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         setDisplayedContent,
         allDiscoverableCircles,
         filterCirclesByCategory,
+        mapEligibleUserProfileKeys,
         setContentPreview, // Add dependency
         filteredEventsForMap.length,
         setSearchPanelState,
@@ -872,9 +923,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
             if (dateRange?.from || dateRange?.to) {
                 circles = circles.filter((c) => withinDateRange((c as any).createdAt));
             }
-            const mapData: Content[] = circles
-                .map((circle) => mapItemToContent(circle))
-                .filter((c): c is Content => c !== null);
+            const mapData: Content[] = mapCirclesToVisibleContent(circles, mapEligibleUserProfileKeys);
 
             // Default: combine circles with filtered events
             const combined: Content[] = [...mapData, ...(filteredEventsForMap as unknown as Content[])];
@@ -885,6 +934,7 @@ export const MapExplorer: React.FC<MapExplorerProps> = ({ allDiscoverableCircles
         baseCircles,
         dateRange,
         withinDateRange,
+        mapEligibleUserProfileKeys,
         setDisplayedContent,
         selectedCategory,
         filteredEventsForMap,

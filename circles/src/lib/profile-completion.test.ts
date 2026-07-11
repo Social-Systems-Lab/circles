@@ -7,6 +7,7 @@ import {
     hasRealProfileImageUrl,
     isProfileComplete,
 } from "@/lib/profile-completion";
+import { isMapVisibleCircle, isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
 import { COMMUNITY_GUIDELINE_RULE_IDS, createEmptyCommunityGuidelineAgreementState } from "@/lib/community-guidelines";
 
 const completedGuidelines = () => {
@@ -56,6 +57,29 @@ assert.equal(
 assert.equal(isProfileComplete(baseUser()), true, "completed guidelines succeed when all requirements are met");
 assert.equal(isProfileComplete(baseUser()), true, "all three requirements produce profileComplete");
 assert.equal(isProfileComplete(baseUser({ circleType: "circle" })), false, "non-user circles do not count");
+assert.equal(
+    isServerDerivedMapVisibleCircle(
+        baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
+    ),
+    false,
+    "incomplete user profiles are excluded from map visibility",
+);
+assert.equal(isServerDerivedMapVisibleCircle(baseUser()), true, "complete user profiles are included in map visibility");
+assert.equal(
+    isMapVisibleCircle(baseUser()),
+    false,
+    "client-facing user map visibility requires server eligibility",
+);
+assert.equal(
+    isMapVisibleCircle(markMapEligiblePersonalProfile(baseUser() as Circle)),
+    true,
+    "server-marked complete user profiles remain visible to the client",
+);
+assert.equal(
+    isMapVisibleCircle({ circleType: "circle", picture: { url: "/images/default-picture.png" } }),
+    true,
+    "non-user circles keep existing map visibility behavior",
+);
 assert.equal(
     canParticipate(
         baseUser({

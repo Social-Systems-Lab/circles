@@ -22,6 +22,7 @@ import path from "path";
 import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
+import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -87,6 +88,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     picture: 1,
     images: 1,
     description: 1,
+    content: 1,
     mission: 1,
     isPublic: 1,
     isVerified: 1,
@@ -105,7 +107,17 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     websiteUrl: 1,
     representsOrganization: 1,
     organizationName: 1,
+    communityGuidelinesAcceptance: 1,
 } as const;
+
+const toDiscoveryMapCircle = (circle: Circle): Circle => {
+    const {
+        content: _content,
+        communityGuidelinesAcceptance: _communityGuidelinesAcceptance,
+        ...discoveryCircle
+    } = circle;
+    return markMapEligiblePersonalProfile(discoveryCircle as Circle);
+};
 
 export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {
     let objectIds = ids.map((id) => new ObjectId(id));
@@ -177,6 +189,8 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
         },
         { projection: DISCOVERY_CIRCLE_PROJECTION },
     ).toArray();
+
+    circles = circles.filter(isServerDerivedMapVisibleCircle).map(toDiscoveryMapCircle);
 
     circles.forEach((circle: Circle) => {
         if (circle._id) {
