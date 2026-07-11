@@ -62,6 +62,7 @@ export default async function AboutSettingsPage(props: PageProps) {
 
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";
+    const isUserProfile = circle.circleType === "user";
     const isDraft = publishStatus === "draft";
     const resolvedCircleLevel = circle.circleLevel ?? (circle.parentCircleId ? "profile_child" : "top_level");
     const isProfileCircle = resolvedCircleLevel === "profile_child";
@@ -81,9 +82,11 @@ export default async function AboutSettingsPage(props: PageProps) {
 
     return (
         <div className="container py-6">
-            <h1 className="mb-6 text-2xl font-bold">About Settings</h1>
+            <h1 className="mb-6 text-2xl font-bold">{isUserProfile ? "Profile settings" : "About Settings"}</h1>
             <p className="mb-6 text-muted-foreground">
-                Manage your circle&apos;s profile information, including name, description, mission, and images.
+                {isUserProfile
+                    ? "Manage your profile image, introduction, About me, and location."
+                    : "Manage your circle's profile information, including name, description, mission, and images."}
             </p>
             {showWorkflowCard ? (
                 <div className="mb-6 rounded-lg border bg-white p-4 shadow-sm">

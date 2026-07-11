@@ -35,6 +35,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isUserProfile = circle.circleType === "user";
     const isIndependentCircle = circle.circleType !== "user" && circle.circleLevel !== "profile_child";
 
     const form = useForm({
@@ -95,7 +96,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
             if (result.success) {
                 toast({
                     title: "Success",
-                    description: "Circle profile updated successfully",
+                    description: isUserProfile ? "Profile updated successfully" : "Circle profile updated successfully",
                 });
                 // fetch new user data
                 let userData = await getUserPrivateAction();
@@ -112,7 +113,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
             } else {
                 toast({
                     title: "Error",
-                    description: result.message || "Failed to update circle profile",
+                    description: result.message || (isUserProfile ? "Failed to update profile" : "Failed to update circle profile"),
                     variant: "destructive",
                 });
             }
@@ -295,11 +296,11 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     field={{
                                         name: "description",
                                         type: "textarea",
-                                        label: "Description",
-                                        placeholder: "Description",
+                                        label: isUserProfile ? "Short introduction" : "Description",
+                                        placeholder: isUserProfile ? "A short introduction" : "Description",
                                         description: {
                                             circle: "Describe the circle in a few words.",
-                                            user: "Describe yourself in a few words.",
+                                            user: "A short introduction shown on your profile.",
                                         },
                                         maxLength: 200,
                                     }}
@@ -317,11 +318,11 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     field={{
                                         name: "mission",
                                         type: "textarea",
-                                        label: { user: "Your Mission", circle: "Mission" },
-                                        placeholder: "Description",
+                                        label: { user: "What brings me here?", circle: "Mission" },
+                                        placeholder: isUserProfile ? "What brings you here?" : "Description",
                                         description: {
                                             circle: "Define the circle's purpose and the change it wants to see in the world.",
-                                            user: "Define your purpose and the change you want to see in the world.",
+                                            user: "Share what you care about, are working on, or hope to connect around.",
                                         },
                                         maxLength: 500,
                                     }}
@@ -339,8 +340,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     field={{
                                         name: "content",
                                         type: "textarea",
-                                        label: "Content",
-                                        placeholder: "Detailed information about your circle",
+                                        label: isUserProfile ? "About me" : "Content",
+                                        placeholder: isUserProfile ? "Tell people a little about who you are" : "Detailed information about your circle",
+                                        description: isUserProfile ? "Tell people a little about who you are." : undefined,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
@@ -353,56 +355,58 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
 
                 {renderSaveButton()}
 
+                {!isUserProfile ? (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Visibility</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Controller
+                                name="isPublic"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicSwitchField
+                                        field={{
+                                            name: "isPublic",
+                                            type: "switch",
+                                            label: "Public",
+                                            description: {
+                                                circle: "When set to public, users can follow the circle without requiring approval from admins.",
+                                                user: "When set to public people can follow you without requiring your approval.",
+                                            },
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )}
+                            />
+
+                            <Controller
+                                name="showAdminsPublicly"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicSwitchField
+                                        field={{
+                                            name: "showAdminsPublicly",
+                                            type: "switch",
+                                            label: "Show admins publicly",
+                                            description: {
+                                                circle: "Show the Admins panel on your circle home page.",
+                                                user: "Show the Admins panel on your circle home page.",
+                                            },
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                    />
+                                )}
+                            />
+                        </CardContent>
+                    </Card>
+                ) : null}
+
                 <Card>
                     <CardHeader>
-                        <CardTitle>Visibility</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Controller
-                            name="isPublic"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSwitchField
-                                    field={{
-                                        name: "isPublic",
-                                        type: "switch",
-                                        label: "Public",
-                                        description: {
-                                            circle: "When set to public, users can follow the circle without requiring approval from admins.",
-                                            user: "When set to public people can follow you without requiring your approval.",
-                                        },
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-
-                        <Controller
-                            name="showAdminsPublicly"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicSwitchField
-                                    field={{
-                                        name: "showAdminsPublicly",
-                                        type: "switch",
-                                        label: "Show admins publicly",
-                                        description: {
-                                            circle: "Show the Admins panel on your circle home page.",
-                                            user: "Show the Admins panel on your circle home page.",
-                                        },
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                />
-                            )}
-                        />
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Images</CardTitle>
+                        <CardTitle>{isUserProfile ? "Profile images" : "Images"}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <Controller
@@ -413,7 +417,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     field={{
                                         name: "picture",
                                         type: "image",
-                                        label: "Picture",
+                                        label: isUserProfile ? "Profile image" : "Picture",
                                         description: {
                                             circle: "Add a picture to represent the circle.",
                                             user: "Add a profile picture.",
@@ -433,9 +437,11 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             control={form.control as unknown as Control<FieldValues>}
                             render={({ field }) => (
                                 <div>
-                                    <Label>Images</Label>
+                                    <Label>{isUserProfile ? "Additional profile images" : "Images"}</Label>
                                     <p className="pb-2 text-[0.8rem] text-muted-foreground">
-                                        Add images to showcase and represent your circle. Drag to reorder.
+                                        {isUserProfile
+                                            ? "Add images to show more of your profile. Drag to reorder."
+                                            : "Add images to showcase and represent your circle. Drag to reorder."}
                                     </p>
                                     <MultiImageUploader
                                         initialImages={circle.images || []} // Pass original images
@@ -455,7 +461,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Location</CardTitle>
+                        <CardTitle>{isUserProfile ? "Your location" : "Location"}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <Controller
@@ -466,10 +472,10 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     field={{
                                         name: "location",
                                         type: "location",
-                                        label: "Location",
+                                        label: isUserProfile ? "Your location" : "Location",
                                         description: {
                                             circle: "Specify the location of the circle.",
-                                            user: "Specify your location. Your location will be shared with other users.",
+                                            user: "Specify your location.",
                                         },
                                     }}
                                     formField={field}
