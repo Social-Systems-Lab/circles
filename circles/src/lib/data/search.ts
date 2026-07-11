@@ -1,6 +1,7 @@
 import { Circle, CircleType, WithMetric } from "@/models/models";
 import { Circles } from "./db";
 import { getPublishedCircleQuery, isCirclePublished, SAFE_CIRCLE_PROJECTION } from "./circle";
+import { buildSearchableTypeClauses, isSearchEligibleCircle } from "@/lib/data/search-visibility";
 
 const SEARCHABLE_TYPES: CircleType[] = ["circle", "project", "user"];
 const SEARCHABLE_FIELDS = [
@@ -45,9 +46,6 @@ const tokenizeQuery = (query: string) =>
     );
 
 const toStringArray = (values?: string[]) => (values || []).map((value) => normalizeValue(value)).filter(Boolean);
-
-const isDiscoverableCircle = (circle: Circle) =>
-    circle.circleType !== "user" || Boolean(circle.isVerified || circle.isMember);
 
 const matchesCircleTypes = (circle: Circle, circleTypes: CircleType[]) =>
     !!circle.circleType && circleTypes.includes(circle.circleType);
@@ -134,18 +132,7 @@ const scoreCircleSearchMatch = (circle: Circle, query: string, tokens: string[])
 };
 
 const buildCandidateQuery = (query: string, circleTypes: CircleType[], sdgHandles: string[]) => {
-    const discoverableTypeClauses: Record<string, unknown>[] = [];
-    const nonUserTypes = circleTypes.filter((type) => type !== "user");
-
-    if (nonUserTypes.length > 0) {
-        discoverableTypeClauses.push({ circleType: { $in: nonUserTypes } });
-    }
-
-    if (circleTypes.includes("user")) {
-        discoverableTypeClauses.push({
-            $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }],
-        });
-    }
+    const discoverableTypeClauses = buildSearchableTypeClauses(circleTypes);
 
     const clauses: Record<string, unknown>[] = [
         {
@@ -193,7 +180,7 @@ export const searchDiscoverableCircles = async ({
             return { circle, score };
         })
         .filter(({ circle, score }) => {
-            if (!circle._id || !isCirclePublished(circle) || !isDiscoverableCircle(circle) || !matchesCircleTypes(circle, normalizedTypes)) {
+            if (!circle._id || !isCirclePublished(circle) || !isSearchEligibleCircle(circle) || !matchesCircleTypes(circle, normalizedTypes)) {
                 return false;
             }
 
