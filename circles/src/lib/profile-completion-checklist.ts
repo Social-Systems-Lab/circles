@@ -27,14 +27,14 @@ export const getProfileCompletionChecklistState = (
             {
                 id: "profile-image",
                 label: "Add a profile image",
-                description: "Help people recognise you.",
+                description: "Click your current profile image to upload your own.",
                 complete: requirements.hasRealProfileImage,
                 actionLabel: "Add image",
             },
             {
                 id: "about",
                 label: "Introduce yourself",
-                description: "Tell people a little about who you are and what brings you here.",
+                description: "Open Settings → About and add a short introduction or About me text.",
                 complete: requirements.hasAboutText,
                 actionLabel: "Edit About",
             },

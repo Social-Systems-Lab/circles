@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAtom } from "jotai";
 import { CheckCircle2, Circle as CircleIcon } from "lucide-react";
-import { CommunityGuidelinesAgreementFlow } from "@/components/auth/community-guidelines-gate";
+import { CodeOfConductAgreement } from "@/components/auth/code-of-conduct-agreement";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { userAtom } from "@/lib/data/atoms";
@@ -21,7 +20,6 @@ export function ProfileCompletionChecklist({ profile }: ProfileCompletionCheckli
     const [user, setUser] = useAtom(userAtom);
     const [rulesOpen, setRulesOpen] = useState(false);
     const router = useRouter();
-    const profileSettingsHref = profile.handle ? `/circles/${profile.handle}/settings/about` : undefined;
     const currentProfile = useMemo(
         () => (user?.did && user.did === profile.did ? { ...profile, ...user } : profile),
         [profile, user],
@@ -55,7 +53,6 @@ export function ProfileCompletionChecklist({ profile }: ProfileCompletionCheckli
             <div className="mt-4 grid gap-3">
                 {checklist.items.map((item) => {
                     const isRulesStep = item.id === "rules";
-                    const canUseSettingsLink = !isRulesStep && Boolean(profileSettingsHref);
 
                     return (
                         <div
@@ -76,12 +73,6 @@ export function ProfileCompletionChecklist({ profile }: ProfileCompletionCheckli
                                     <div className="mt-0.5 text-sm text-gray-600">{item.description}</div>
                                 </div>
                             </div>
-
-                            {!item.complete && canUseSettingsLink ? (
-                                <Button asChild variant="outline" size="sm" className="shrink-0">
-                                    <Link href={profileSettingsHref!}>{item.actionLabel}</Link>
-                                </Button>
-                            ) : null}
 
                             {!item.complete && isRulesStep ? (
                                 <Button
@@ -105,7 +96,7 @@ export function ProfileCompletionChecklist({ profile }: ProfileCompletionCheckli
                     <DialogHeader className="sr-only">
                         <DialogTitle>Agree to the Kamooni rules</DialogTitle>
                     </DialogHeader>
-                    <CommunityGuidelinesAgreementFlow
+                    <CodeOfConductAgreement
                         user={user}
                         onUserChange={setUser}
                         onComplete={handleRulesComplete}
