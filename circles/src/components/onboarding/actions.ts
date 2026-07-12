@@ -624,6 +624,36 @@ export const completeFinalStep = async (circleId: string): Promise<SaveMissionAc
     }
 };
 
+// Mark the post-profile-completion welcome card as acknowledged.
+export const completeProfileCompletionWelcomeStep = async (): Promise<SaveMissionActionResponse> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in" };
+    }
+
+    try {
+        const user = await getUserByDid(userDid);
+        if (!user._id) {
+            return { success: false, message: "Could not find your profile" };
+        }
+
+        const circle: Partial<Circle> = {
+            _id: user._id,
+            completedOnboardingSteps: user.completedOnboardingSteps ?? [],
+        };
+
+        if (!circle.completedOnboardingSteps?.includes("profileCompletionWelcomeSeen")) {
+            circle.completedOnboardingSteps?.push("profileCompletionWelcomeSeen");
+        }
+
+        await updateCircle(circle, userDid);
+        return { success: true, message: "Profile completion welcome acknowledged" };
+    } catch (error) {
+        console.log("error", error);
+        return { success: false, message: "Failed to update step status" };
+    }
+};
+
 // Save terms agreement action
 export const saveTermsAgreementAction = async (
     agreedToTos: boolean,
