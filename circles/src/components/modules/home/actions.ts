@@ -364,13 +364,18 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
             throw new Error("User not authenticated");
         }
 
-        const user = await getCircleByDid(userDid);
+        const user = await getUserPrivate(userDid);
         if (!user) {
             throw new Error("User not found");
         }
 
         if (!recipient?.did) {
             throw new Error("Recipient not found");
+        }
+
+        if (!canParticipate(user)) {
+            console.warn(getParticipationRequiredMessage("start direct messages"));
+            return null;
         }
 
         const dmEligibility = await getDmEligibility(userDid, recipient.did);
