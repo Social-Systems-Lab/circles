@@ -2,6 +2,12 @@
 
 ## Current state
 
+For the current profile-completion/search visibility rules, see
+[`ONBOARDING_SYSTEM.md`](ONBOARDING_SYSTEM.md). In particular, user
+profiles no longer require `isVerified === true` or `isMember === true`
+merely to appear in normal search, and `profileComplete` is not a search
+eligibility requirement.
+
 ### Baseline before this branch
 
 - Main discovery search lived in [`src/components/modules/search/actions.ts`](../src/components/modules/search/actions.ts) and called `semanticSearchContent(...)` from [`src/lib/data/vdb.ts`](../src/lib/data/vdb.ts).
@@ -114,8 +120,8 @@ Already stored and potentially searchable soon after MVP:
 
 - Use deterministic Mongo-backed search for people, circles, and projects first.
 - Search only discoverable entities:
-  - all circles/projects
-  - users only when `isVerified === true` or `isMember === true`
+  - normal circles/projects according to their published/discoverable rules
+  - personal profile circles without requiring account verification, membership, or profile completion merely for search visibility
 - Search across explicit stored fields, not embeddings.
 - Keep semantic/vector search available in code, but do not make it the critical path for launch search.
 
