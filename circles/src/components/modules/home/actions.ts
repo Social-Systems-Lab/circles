@@ -374,7 +374,7 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
         }
 
         if (!canParticipate(user)) {
-            console.warn(getParticipationRequiredMessage("start direct messages"));
+            console.warn(getParticipationRequiredMessage("start direct messages", user));
             return null;
         }
 
@@ -425,9 +425,9 @@ export const sendConnectRequestAction = async (
         return { success: false, message: "Invalid contact request" };
     }
 
-    const viewer = await getCircleByDid(viewerDid);
+    const viewer = await getUserPrivate(viewerDid);
     if (!canParticipate(viewer)) {
-        return { success: false, message: getParticipationRequiredMessage("add contacts") };
+        return { success: false, message: getParticipationRequiredMessage("add contacts", viewer) };
     }
 
     try {

@@ -64,10 +64,22 @@ export const canBypassProfileCompletionRequirement = (user: ParticipationSubject
     return user?.isAdmin === true;
 };
 
-export const canParticipate = (user: ParticipationSubject): boolean => {
-    return canBypassProfileCompletionRequirement(user) || isProfileComplete(user);
+export const hasConfirmedAccountContactMethod = (user: ParticipationSubject): boolean => {
+    // Email verification is the current confirmed account-contact/recovery method for email/password users.
+    return user?.isEmailVerified === true;
 };
 
-export const getParticipationRequiredMessage = (action: string): string => {
+export const canParticipate = (user: ParticipationSubject): boolean => {
+    return (
+        canBypassProfileCompletionRequirement(user) ||
+        (hasConfirmedAccountContactMethod(user) && isProfileComplete(user))
+    );
+};
+
+export const getParticipationRequiredMessage = (action: string, user?: ParticipationSubject): string => {
+    if (user && !canBypassProfileCompletionRequirement(user) && !hasConfirmedAccountContactMethod(user)) {
+        return `Verify your email before you can ${action}.`;
+    }
+
     return `Complete your profile before you can ${action}.`;
 };

@@ -377,7 +377,7 @@ export async function createPostAction(
     }
     const currentUser = await getUserPrivate(userDid);
     if (!canParticipate(currentUser)) {
-        return { success: false, message: getParticipationRequiredMessage("create posts") };
+        return { success: false, message: getParticipationRequiredMessage("create posts", currentUser) };
     }
 
     try {

@@ -67,12 +67,13 @@ const ensureParticipatingMessagingUser = async (userDid: string, action: string)
                 description: 1,
                 content: 1,
                 communityGuidelinesAcceptance: 1,
+                isEmailVerified: 1,
                 isAdmin: 1,
             },
         },
     );
     if (!canParticipate(user)) {
-        return getParticipationRequiredMessage(action);
+        return getParticipationRequiredMessage(action, user);
     }
     return null;
 };

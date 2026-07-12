@@ -108,7 +108,7 @@ export async function saveBasicInfoAction(
             // --- CREATE NEW CIRCLE ---
             const currentUser = await getUserPrivate(userDid);
             if (!canParticipate(currentUser)) {
-                return { success: false, message: getParticipationRequiredMessage("create circles") };
+                return { success: false, message: getParticipationRequiredMessage("create circles", currentUser) };
             }
             const resolvedCircleType = circleType || "circle";
             const resolvedCircleLevel = getCircleLevelForCreate(circleLevel, parentCircleId);
@@ -173,7 +173,7 @@ export async function createCircleAction(circleData: CircleData, userDid: string
     try {
         const currentUser = await getUserPrivate(userDid);
         if (!canParticipate(currentUser)) {
-            return { success: false, message: getParticipationRequiredMessage("create circles") };
+            return { success: false, message: getParticipationRequiredMessage("create circles", currentUser) };
         }
         const resolvedCircleType = circleData.circleType || "circle";
         const resolvedCircleLevel = getCircleLevelForCreate(circleData.circleLevel, circleData.parentCircleId);

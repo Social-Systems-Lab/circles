@@ -58,7 +58,7 @@ export async function saveProofOfHumanityVerificationAction({
             return { success: false, message: "Profile not found." };
         }
         if (!canParticipate(verifier)) {
-            return { success: false, message: getParticipationRequiredMessage("verify another person") };
+            return { success: false, message: getParticipationRequiredMessage("verify another person", verifier) };
         }
 
         const result = await createOrUpdateHumanityVerification({

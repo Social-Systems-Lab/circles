@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { Circle } from "@/models/models";
 import {
     canParticipate,
+    getParticipationRequiredMessage,
     hasProfileAboutText,
     hasRealProfileImage,
     hasRealProfileImageUrl,
@@ -24,6 +25,7 @@ const completedGuidelines = () => {
 
 const baseUser = (overrides: Partial<Circle> = {}): Partial<Circle> => ({
     circleType: "user",
+    isEmailVerified: true,
     picture: { url: "/storage/users/profile.png" },
     description: "About me",
     communityGuidelinesAcceptance: completedGuidelines(),
@@ -106,6 +108,11 @@ assert.equal(
 );
 assert.equal(isProfileComplete(baseUser()), true, "completed guidelines succeed when all requirements are met");
 assert.equal(isProfileComplete(baseUser()), true, "all three requirements produce profileComplete");
+assert.equal(
+    isProfileComplete(baseUser({ isEmailVerified: false })),
+    true,
+    "profileComplete remains independent from email verification",
+);
 assert.equal(isProfileComplete(baseUser({ circleType: "circle" })), false, "non-user circles do not count");
 assert.equal(
     isServerDerivedMapVisibleCircle(
@@ -134,18 +141,51 @@ assert.equal(
     canParticipate(
         baseUser({
             isHuman: true,
+            isEmailVerified: true,
             communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
         }),
     ),
     false,
     "incomplete users fail participation readiness even when isHuman is true",
 );
-assert.equal(canParticipate(baseUser()), true, "complete users pass participation readiness");
 assert.equal(
-    canParticipate(baseUser({ isAdmin: true, communityGuidelinesAcceptance: undefined })),
+    canParticipate(baseUser({ isEmailVerified: false })),
+    false,
+    "complete profiles with unverified email fail participation readiness",
+);
+assert.equal(
+    canParticipate(
+        baseUser({
+            isEmailVerified: true,
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    false,
+    "verified email with incomplete profile fails participation readiness",
+);
+assert.equal(
+    canParticipate(baseUser({ isEmailVerified: true })),
+    true,
+    "verified email with complete profile passes participation readiness",
+);
+assert.equal(
+    canParticipate(baseUser({ isAdmin: true, isEmailVerified: false, communityGuidelinesAcceptance: undefined })),
     true,
     "admin bypass preserves existing restricted-action behavior",
 );
 assert.equal(canParticipate(undefined), false, "missing users do not pass participation readiness");
+assert.equal(
+    getParticipationRequiredMessage("create posts", baseUser({ isEmailVerified: false })),
+    "Verify your email before you can create posts.",
+    "participation message points unverified users to email verification",
+);
+assert.equal(
+    getParticipationRequiredMessage(
+        "create posts",
+        baseUser({ isEmailVerified: true, communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
+    ),
+    "Complete your profile before you can create posts.",
+    "participation message points verified incomplete users to profile completion",
+);
 
 console.log("profile-completion tests passed");
