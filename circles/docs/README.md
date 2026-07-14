@@ -10,7 +10,7 @@ Read these in order:
 2. [Architecture overview](../../docs/ARCHITECTURE.md)
 3. [Codex project map](CODEX_PROJECT_MAP.md)
 4. [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
-5. [Environment documentation](../../docs/ENVIRONMENT.md)
+5. [Canonical environment-variable reference](../../docs/ENVIRONMENT.md)
 6. [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
 7. [Production deployment](PRODUCTION_DEPLOYMENT.md)
 
