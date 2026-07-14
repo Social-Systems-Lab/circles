@@ -1,12 +1,12 @@
 # Kamooni Chat System Architecture
 
-Developer architecture overview for the Mongo-native chat and notification-adjacent messaging model.
+Canonical developer architecture overview for the Mongo-native chat and notification-adjacent messaging model.
 
 ---
 
 # 1. Purpose
 
-Kamooni uses a Mongo-native chat backend.
+Kamooni uses a Mongo-native chat backend. Matrix is not the authoritative chat backend for current chat, DM, unread, or conversation-ordering behavior.
 
 The chat system supports:
 
@@ -16,15 +16,17 @@ The chat system supports:
 
 The goal of this document is to explain how chat data is stored, normalized, authorized, rendered, and how unread messaging now relates to the Mail/Notifications split.
 
+Postgres and Synapse still appear in Docker Compose under Matrix-era configuration. In production Compose they are behind the `matrix` profile. Treat them as legacy compatibility components unless a task explicitly says otherwise.
+
 ---
 
 # 2. Core chat model
 
-Main collections:
+Authoritative MongoDB collections:
 
 - chatConversations
-- chatMessageDocs
 - chatRoomMembers
+- chatMessageDocs
 - chatReadStates
 
 Purpose of each:
@@ -36,14 +38,16 @@ chatMessageDocs
 Stores individual messages.
 
 chatRoomMembers  
-Stores group membership and membership status.
+Stores group membership and membership status. Current code keys these records by `chatRoomId`, which points at the Mongo conversation id.
 
 chatReadStates  
 Stores read state / last-read tracking.
 
-Important note:  
-DMs and announcement conversations rely on participants lists.  
-Groups additionally rely on membership records.
+Important notes:
+
+- DMs and announcement conversations rely on `participants`.
+- Groups rely on active records in `chatRoomMembers`.
+- Legacy `chatRooms`, `chatMessages`, Matrix ids, and Matrix-shaped message fields may still appear in models or compatibility wrappers, but the current runtime chat source of truth is the four collections above.
 
 ---
 
@@ -150,7 +154,7 @@ Relevant files:
 - src/lib/data/mongo-chat.ts
 
 Important note:  
-This distinction was critical for fixing announcement thread access.
+This distinction is intentional. Do not route DM or announcement access through group membership checks.
 
 ---
 
@@ -174,15 +178,15 @@ Important behavior:
 
 - conversation sync may run before list rendering
 - DMs are visible based on participants
-- announcements are visible like DMs
+- announcements are visible based on participants
 - groups are filtered by active membership
 - ordering depends on updatedAt
 
 Important invariant:
 
-`chatConversations.updatedAt` must be updated on message send so sidebar ordering remains correct.
+`chatConversations.updatedAt` must be updated whenever a message is sent so sidebar ordering remains correct.
 
-This is a critical system rule.
+This is a critical system rule. `createMessage`, `createThread`, and `createThreadReply` all update the parent conversation timestamp; new send paths must preserve the same behavior.
 
 ---
 
@@ -192,16 +196,32 @@ Relevant file:
 
 - src/components/modules/chat/mongo-actions.ts
 
-High-level send flow:
+High-level direct-message flow:
+
+- `findOrCreateDMConversationAction` resolves the recipient and calls `findOrCreateDmConversation`
+- `findOrCreateDmConversation` creates or reuses a `type: "dm"` conversation with sorted participant DIDs
+- `sendMongoMessageAction` authenticates the sender, checks participation requirements, resolves conversation access, validates replies, writes the message, and sends PM notifications where applicable
+
+High-level group-chat flow:
+
+- `createMongoGroupChatAction` creates a `type: "group"` conversation with participants
+- it upserts active `chatRoomMembers` rows for every participant
+- group access is checked through active membership records
+- membership changes in `actions.ts` emit Mongo-native system messages for join/leave/member changes
+
+Message send flow:
 
 - resolve access
 - validate reply target if present
 - reject disallowed conversation types (announcement replies)
 - create message
-- update conversation timestamps and related state
+- update `chatConversations.updatedAt`
+- send notification records where applicable
 
 Note:  
 announcement replies are blocked server-side even if a UI path regresses.
+
+There is no current Matrix force-join, room-restoration, or archived-room recovery flow in the Mongo send path.
 
 ---
 
@@ -225,13 +245,21 @@ This is defense-in-depth: UI guidance plus server enforcement.
 
 # 12. Read state and unread counts
 
-Unread state is tracked through read-state primitives and conversation/message timestamps.
+Unread state is tracked through `chatReadStates` and message ids.
 
 Relevant concepts:
 
 - unread counts
 - last-read timestamps
 - read state updates when opening or reading conversations
+
+Implementation:
+
+- `getUnreadCountsForUser` reads `chatReadStates`, then counts `chatMessageDocs` from other senders after the last read message id
+- `markConversationRead` upserts the `chatReadStates` record
+- `markConversationReadAction` verifies access, resolves the latest message when needed, and calls `markConversationRead`
+- `useMongoChat` marks the latest loaded or polled message read
+- `ChatRoomComponent` clears local unread state when messages are viewed
 
 Unread behavior is now split intentionally at the UI level:
 
@@ -299,13 +327,28 @@ System messages are not a separate transport system; they are built on top of Mo
 # 16. Key files
 
 src/lib/data/mongo-chat.ts  
-Mongo conversation and message data helpers, normalization, list rendering.
+Mongo conversation and message data helpers, collection indexes, normalization, list rendering, message creation, read state, unread counts, conversation ordering.
 
 src/components/modules/chat/mongo-actions.ts  
-Server-side conversation actions, send pipeline, unread updates, permissions.
+Server-side conversation actions, access checks, send pipeline, unread count and read-state actions, DM and group creation.
+
+src/components/modules/chat/actions.ts  
+Compatibility wrapper exporting the Mongo-native actions to existing callers; group membership join/leave actions also emit Mongo-native system messages.
 
 src/components/modules/chat/chat-room.tsx  
 Primary chat UI, reply handling, working chat mention implementation.
+
+src/components/modules/chat/useMongoChat.ts  
+Client hook for initial message load, polling, and read-state updates.
+
+src/components/modules/chat/chat-list.tsx  
+Sidebar list rendering and unread badges.
+
+src/lib/chat/mongo-types.ts  
+Type definitions for Mongo conversations, messages, read states, attachments, reactions, and thread metadata.
+
+src/lib/data/db.ts  
+Mongo collection initialization and exports for `chatConversations`, `chatRoomMembers`, `chatMessageDocs`, and `chatReadStates`.
 
 src/components/layout/profile-menu.tsx  
 Mail vs Bell unread UI split.
