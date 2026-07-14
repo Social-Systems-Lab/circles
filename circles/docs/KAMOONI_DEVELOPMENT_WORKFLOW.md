@@ -1,116 +1,178 @@
 # Kamooni Development Workflow
 
-This document defines the standard development process for Kamooni.
-All development should follow this sequence to ensure stability, avoid workspace confusion, and prevent accidental production issues.
+This is the canonical day-to-day development workflow for Kamooni / Circles.
 
----
+Use this process for normal local development, documentation patches, bug fixes, and small feature work. Keep changes small, inspect before modifying, and verify before pushing.
 
-## Enforcement Rule (Project Standard)
+## Current layout
 
-Always follow the Kamooni Codex Prompt Template for any implementation task.
+- Repository root: `~/circles`
+- Application root: `~/circles/circles`
+- Main application source: `~/circles/circles/src`
 
-Before writing or executing any code-related prompt:
-- enforce repo/worktree verification (pwd, git root, branch, status)
-- require explicit file path confirmation using rg/find
-- require git diff / status proof before declaring completion
-- never assume the correct repo; always verify
+Run Git commands from the repository root unless a command says otherwise. Run app, package-manager, environment, and Docker Compose commands from the application root.
 
-Do not proceed with implementation if the active repo/worktree is not confirmed.
+## Preferred tooling
 
-Treat docs/KAMOONI_DEVELOPMENT_WORKFLOW.md as the source of truth.
+Codex Desktop is the preferred patching tool for this project. Use it for investigation, file edits, diffs, and small surgical patches.
 
----
+Manual code editing by the user is a last resort. Prefer:
 
-# Development Workflow (Chronological)
+1. Codex investigation
+2. Codex patch
+3. Automated edit with a reviewed diff
+4. Manual edit only when the safer options are not practical
 
-## 1. Confirm the Active Repo / Worktree First
+## Start from a clean current main
 
-Before making any code changes, verify that you are working in the same repo and worktree that the running app uses.
+Use this before beginning a new task in an existing checkout:
 
-Run:
+```bash
+cd ~/circles
+git status --short
+git worktree prune
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+```
 
-pwd
-git rev-parse --show-toplevel
+Stop if `git status --short` shows changes you do not understand. Do not overwrite someone else's work.
+
+## Inspect before modifying
+
+Before editing, confirm the live files and current behavior:
+
+```bash
+cd ~/circles
 git branch --show-current
 git status --short
+git rev-parse --show-toplevel
+```
 
-If the app is run from a nested directory, explicitly note both:
-- current working directory
-- git repo root
+Use targeted searches from the application root:
 
-Do not proceed until these match the repo you intend to edit.
+```bash
+cd ~/circles/circles
+rg "unique text or function name" src
+rg --files src
+```
 
----
+Do not create duplicate files because a path looks plausible. Find the file that actually renders the UI or runs the server action/API route.
 
-## 2. Locate the Real Live Files Before Editing
+## Make small changes
 
-Before changing anything, confirm the exact active files used by the running app.
-
-Use searches such as:
-
-find src/components -name "<filename>"
-rg "<unique UI string or symbol>" src
+Use Codex Desktop to patch only the files needed for the task.
 
 Rules:
-- do not assume a file path based on earlier prompts
-- do not create duplicate files if an active file already exists elsewhere
-- identify the exact files that render the live UI or execute the live action
 
-Before editing, print the exact file paths you plan to modify.
+- keep diffs small and focused
+- avoid unrelated refactors
+- do not modify generated files unless the task requires it
+- do not change deployment scripts, Compose files, package files, or environment files unless the task explicitly asks for that
+- review the diff before testing or pushing
 
----
+## Run locally
 
-## 3. Make Code Changes Locally
+Kamooni uses Bun. The app root contains `bun.lock` and `package.json`.
 
-All development happens on the local machine.
+For first setup, follow the [local development guide](../../docs/LOCAL_DEVELOPMENT.md).
 
----
+Common commands from the application root:
 
-## 4. Verify Changes Before Testing
+```bash
+cd ~/circles/circles
+bun install
+docker compose -f docker-compose.local.yml up -d db minio qdrant
+bun run dev
+```
 
-Before testing in localhost, confirm:
+Useful verified package scripts:
 
-- git status shows your changes
-- git diff reflects intended modifications
-- new symbols/functions exist via rg
+```bash
+cd ~/circles/circles
+bun run build
+bun run check:chat-actions
+```
 
-Do not test if changes are not present in the working tree.
+Run the smallest relevant checks for the files changed. For UI work, also test the exact browser flow locally.
 
----
+## Review diffs
 
-## 5. Localhost Testing
+Before committing:
 
-Only after verification:
+```bash
+cd ~/circles
+git status --short
+git diff --stat
+git diff
+```
 
-- restart dev server if needed
-- hard refresh browser
-- test the exact user flow
+For long diffs, logs, or Codex output, write them to a temporary file and open them in TextEdit:
 
----
+```bash
+cd ~/circles
+git --no-pager diff > /tmp/kamooni-diff.txt
+open -a TextEdit /tmp/kamooni-diff.txt
+```
 
-## 6. Commit in Logical Units
+This keeps long output readable and avoids losing important context in a terminal scrollback.
 
-Stage only relevant files:
+## Commit
 
-git add <files>
+Stage only the files that belong to the task:
 
-When staging Next.js dynamic route files in zsh, quote bracketed paths because zsh treats segments like `[handle]` as glob patterns. Safe example:
+```bash
+cd ~/circles
+git add path/to/file
+git status --short
+git commit -m "Clear concise message"
+```
 
-git add -- ':(literal)src/app/circles/[handle]/settings/pages/page.tsx'
+Avoid `git add .` unless the diff has been reviewed and every changed file belongs to the task.
 
-Avoid:
-git add .
+When staging Next.js dynamic route files in zsh, quote bracketed paths:
 
----
+```bash
+git add -- ':(literal)circles/src/app/circles/[handle]/settings/pages/page.tsx'
+```
 
-## 7. Push Carefully
+## Push
 
-git commit -m "clear message"
+Push to `origin/main` only after local verification and diff review:
+
+```bash
+cd ~/circles
+git status --short
 git push origin main
+```
 
----
+If the push is rejected, stop and inspect. Do not force-push `main`.
 
-## Core Principle
+## Deploy when needed
 
-Never trust assumed state.
-Always verify the active repo, active files, and actual code on disk before proceeding.
+Development and deployment are separate steps. Do not run ad-hoc Docker deployment commands from this workflow.
+
+When a verified change needs production deployment, use the canonical guide:
+
+- [Production deployment](PRODUCTION_DEPLOYMENT.md)
+
+## Outdated assumptions
+
+Do not use these as the normal workflow:
+
+- TimDev-specific instructions
+- `dev` branch promotion
+- feature branch -> `dev` -> `main` promotion
+- terminal Codex CLI as the default patching workflow
+- old production paths outside `/root/circles/circles`
+- direct `docker compose build` or `docker compose up` deployment commands
+
+Historical documents may still mention these patterns. Treat them as legacy unless an active document explicitly says otherwise.
+
+## Related active docs
+
+- [Local development](../../docs/LOCAL_DEVELOPMENT.md)
+- [Architecture overview](../../docs/ARCHITECTURE.md)
+- [Codex project map](CODEX_PROJECT_MAP.md)
+- [Environment reference](../../docs/ENVIRONMENT.md)
+- [Production deployment](PRODUCTION_DEPLOYMENT.md)
