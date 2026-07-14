@@ -12,31 +12,11 @@ Read these in order:
 4. [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
 5. [Environment documentation](../../docs/ENVIRONMENT.md)
 6. [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
-7. [Production deployment](#production-deployment)
+7. [Production deployment](PRODUCTION_DEPLOYMENT.md)
 
 ## Production deployment
 
-`circles/deploy-genesis2.sh` is presently the source of truth for production deployments until the canonical deployment document is corrected.
-
-Normal production deployments run from:
-
-```bash
-/root/circles/circles
-```
-
-Deploy from `origin/main` with:
-
-```bash
-./circles/deploy-genesis2.sh main
-```
-
-Verify afterward with:
-
-```bash
-curl -sS https://kamooni.org/api/version && echo
-```
-
-The returned `gitSha` must match the deployed commit.
+Use [Production deployment](PRODUCTION_DEPLOYMENT.md) as the authoritative deployment guide. It is based on `circles/deploy-genesis2.sh`, which is the source of truth for normal Kamooni production deployments.
 
 ## Active architecture and operations
 
@@ -46,6 +26,7 @@ The returned `gitSha` must match the deployed commit.
 - [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
 - [Chat debug playbook](CHAT_DEBUG_PLAYBOOK.md)
 - [Production debug playbook](../../docs/DEBUG_PLAYBOOK.md)
+- [Production deployment](PRODUCTION_DEPLOYMENT.md)
 - [Image storage architecture](IMAGE_STORAGE.md)
 - [Telegram notification forwarding](TELEGRAM_NOTIFICATIONS.md)
 

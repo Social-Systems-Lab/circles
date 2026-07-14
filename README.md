@@ -15,7 +15,7 @@ Kamooni is an open-source community platform for connection, collaboration, coor
 - New developers start here: [circles/docs/README.md#new-developers--start-here](circles/docs/README.md#new-developers--start-here)
 - Local setup: [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)
 - Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Production deployment: see [circles/docs/README.md#production-deployment](circles/docs/README.md#production-deployment)
+- Production deployment: [circles/docs/PRODUCTION_DEPLOYMENT.md](circles/docs/PRODUCTION_DEPLOYMENT.md)
 
 ## Current status
 This repo no longer uses Matrix for the main chat/DM system. Any older Matrix references should be treated as legacy unless explicitly marked otherwise.
