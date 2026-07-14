@@ -1,21 +1,8 @@
 # Circles
 
-Documentation index: see [docs/README.md](docs/README.md).
+Canonical developer documentation index: [docs/README.md](docs/README.md).
 
-Architecture note: see [docs/MULTI_PRODUCT_ARCHITECTURE.md](docs/MULTI_PRODUCT_ARCHITECTURE.md) for the intended Circles/Kamooni/Peerify multi-product structure.
+New developers should start with [docs/README.md#new-developers--start-here](docs/README.md#new-developers--start-here).
 
-For information on how to set up the local development environment on circles read [Circles Dev Onboarding](../docs/dev-onboarding.md). More docs [here](../README.md).
-
-## Cleura production deploy
-
-From `/root/circles/circles` on Cleura production:
-
-```bash
-cd /root/circles/circles && ./circles/deploy-genesis2.sh main
-```
-
-Optional branch argument:
-
-```bash
-./circles/deploy-genesis2.sh codex/refactor/chat-sidebar-search
-```
+For local setup, use [../docs/LOCAL_DEVELOPMENT.md](../docs/LOCAL_DEVELOPMENT.md).
+For production deployment, use [docs/README.md#production-deployment](docs/README.md#production-deployment).

@@ -11,11 +11,11 @@ Kamooni is an open-source community platform for connection, collaboration, coor
 - Docker-based local and production workflows
 
 ## Quick links
-- Local setup: `docs/LOCAL_DEVELOPMENT.md`
-- Environment variables: `docs/ENVIRONMENT.md`
-- Architecture overview: `docs/ARCHITECTURE.md`
-- Deployment workflow: `docs/DEPLOYMENT.md`
-- Troubleshooting: `docs/TROUBLESHOOTING.md`
+- Canonical developer documentation index: [circles/docs/README.md](circles/docs/README.md)
+- New developers start here: [circles/docs/README.md#new-developers--start-here](circles/docs/README.md#new-developers--start-here)
+- Local setup: [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)
+- Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Production deployment: see [circles/docs/README.md#production-deployment](circles/docs/README.md#production-deployment)
 
 ## Current status
 This repo no longer uses Matrix for the main chat/DM system. Any older Matrix references should be treated as legacy unless explicitly marked otherwise.
@@ -27,4 +27,4 @@ This repo no longer uses Matrix for the main chat/DM system. Any older Matrix re
 4. Run the app locally
 5. Open the app in your browser
 
-See `docs/LOCAL_DEVELOPMENT.md` for the full setup.
+See the [canonical documentation index](circles/docs/README.md) for the current developer onboarding path.
