@@ -1,126 +1,130 @@
-# Codex Project Map — Kamooni / Circles
+# Codex Project Map - Kamooni / Circles
 
-This file exists to prevent Codex from working in the wrong directory or from reusing stale dirty worktrees.
+This is the practical codebase map for new developers and Codex Desktop. Use it to find the live files before editing.
 
 ## Repository layout
 
 There are two important local paths:
 
 ```text
-Git root: ~/circles
-App root: ~/circles/circles
+Repository root: ~/circles
+Application root: ~/circles/circles
 ```
 
-The Git repository root is one level above the app directory.
+Run Git commands from the repository root:
 
-Most source files live under:
-
-```text
-~/circles/circles/src
+```bash
+cd ~/circles
 ```
 
-When running app commands locally, usually run from:
+Run app, package-manager, Docker Compose, and environment-file commands from the application root:
 
 ```bash
 cd ~/circles/circles
 ```
 
-When staging or committing with Git, it is safest to run from:
+## Main directories
+
+- `circles/src/app` - Next.js App Router pages, layouts, route handlers, and colocated server actions.
+- `circles/src/components` - shared UI components and feature UI modules.
+- `circles/src/lib` - authentication, data helpers, integrations, utilities, storage, search, and shared server-side logic.
+- `circles/src/models` - shared TypeScript models and domain types.
+- `docs` - active repository-level onboarding docs such as local development, architecture, and environment reference.
+- `circles/docs` - active app-specific docs, playbooks, feature notes, and historical references.
+- `circles/public` - static public assets served by Next.js.
+- `circles/scripts` - maintenance, migration, seed, verification, and helper scripts.
+- `circles/docker-compose.yml`, `circles/docker-compose.local.yml`, `circles/Dockerfile`, `circles/Dockerfile.cron`, `circles/nginx/`, and `circles/deploy-genesis2.sh` - Docker, nginx, and deployment files.
+
+## Main source areas
+
+| Area | Current paths |
+| --- | --- |
+| Authentication | `circles/src/app/(auth)`, `circles/src/components/auth`, `circles/src/components/modules/auth`, `circles/src/lib/auth`, `circles/src/lib/actions/auth.ts` |
+| Profiles and circles | `circles/src/app/circles`, `circles/src/app/circles/[handle]`, `circles/src/components/circle`, `circles/src/components/modules/circles`, `circles/src/components/modules/members`, `circles/src/lib/data/circle.ts`, `circles/src/lib/data/member.ts`, `circles/src/lib/data/user.ts` |
+| Feeds and noticeboard | `circles/src/app/circles/[handle]/feed`, `circles/src/app/foryou`, `circles/src/app/explore`, `circles/src/components/modules/feeds`, `circles/src/lib/data/feed.ts` |
+| Tasks and shifts | `circles/src/app/circles/[handle]/tasks`, `circles/src/app/circles/[handle]/shifts`, `circles/src/components/modules/tasks`, `circles/src/lib/data/task.ts` |
+| Events | `circles/src/app/circles/[handle]/events`, `circles/src/components/modules/events`, `circles/src/lib/data/event.ts`, `circles/src/lib/data/eventRsvp.ts`, `circles/src/lib/data/eventNotifications.ts` |
+| Chat | `circles/src/app/chat`, `circles/src/components/modules/chat`, `circles/src/lib/data/mongo-chat.ts`, `circles/src/lib/chat/mongo-types.ts` |
+| Notifications | `circles/src/app/api/notifications`, `circles/src/components/notifications`, `circles/src/lib/data/notifications.ts`, `circles/src/lib/actions/notificationSettings.ts` |
+| Search and Qdrant | `circles/src/components/modules/search`, `circles/src/lib/data/search.ts`, `circles/src/lib/data/search-visibility.ts`, `circles/src/lib/data/vdb.ts`, `circles/src/app/api/circles/search/route.ts` |
+| Storage and MinIO | `circles/src/lib/data/storage.ts`, `circles/src/app/storage/[...path]/route.ts`, `circles/src/app/uploads/[...path]/route.ts` |
+| Admin | `circles/src/app/admin`, `circles/src/components/modules/admin`, `circles/src/lib/data/platform-settings.ts`, `circles/src/lib/data/platform-stats.ts` |
+| API routes | `circles/src/app/api/**/route.ts`, plus feature route handlers such as `circles/src/app/storage/[...path]/route.ts` |
+
+## Code location patterns
+
+- Pages and layouts usually live in `circles/src/app/**/page.tsx` and `circles/src/app/**/layout.tsx`.
+- Route handlers live in `circles/src/app/**/route.ts`.
+- Server actions are usually colocated as `actions.ts` under the relevant route directory, or placed in `circles/src/lib/actions`.
+- Shared data access and Mongo collection helpers live in `circles/src/lib/data`.
+- Shared UI components live in `circles/src/components`; feature-specific UI is usually under `circles/src/components/modules`.
+- Shared domain types live in `circles/src/models/models.ts`; Mongo-native chat types live in `circles/src/lib/chat/mongo-types.ts`; global declarations live in `circles/src/globals.d.ts`.
+
+## Mongo-native chat
+
+MongoDB is the authoritative chat backend. Matrix is not the current primary chat system.
+
+Authoritative chat files:
+
+- `circles/src/lib/data/mongo-chat.ts`
+- `circles/src/lib/chat/mongo-types.ts`
+- `circles/src/lib/data/db.ts`
+- `circles/src/components/modules/chat`
+- `circles/src/app/chat`
+
+Authoritative chat collections:
+
+- `chatConversations`
+- `chatRoomMembers`
+- `chatMessageDocs`
+- `chatReadStates`
+
+Critical invariant:
+
+`chatConversations.updatedAt` must be updated whenever a message is sent. Sidebar ordering depends on this timestamp.
+
+See [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md) for details.
+
+## Legacy compatibility paths
+
+Postgres, Synapse, and Matrix-related files are legacy or compatibility-only for normal development. Do not treat them as primary application infrastructure unless a task explicitly targets historical Matrix compatibility.
+
+Relevant compatibility references include:
+
+- `circles/docker-compose.yml` `postgres` and `synapse` services behind the `matrix` profile.
+- `circles/docker-compose.local.yml` `postgres` and `synapse` services.
+- Historical docs such as `circles/docs/chat.md`, `circles/docs/CHAT_SYSTEM_ARCHITECTURE_v2.md`, and old deployment/architecture notes.
+
+## How to locate the live file
+
+Use `rg` before editing:
 
 ```bash
-cd ~/circles
+cd ~/circles/circles
+rg "visible UI text or function name" src
+rg --files src | rg "chat|task|event|notification"
 ```
 
-## Production layout
-
-Production currently runs on Cleura.
-
-Production paths:
-
-```text
-Server repo root: /root/circles/circles
-Server app root:  /root/circles/circles/circles
-```
-
-Current production deploy command:
+For routes, list the App Router files:
 
 ```bash
-cd /root/circles/circles && ./circles/deploy-genesis2.sh main
+cd ~/circles/circles
+find src/app -name page.tsx -o -name route.ts -o -name actions.ts
 ```
 
-After deployment, verify:
+Do not create duplicate files from guessed paths. Find the file that actually renders the UI, handles the request, or owns the data helper.
 
-```bash
-cd /root/circles/circles/circles && git rev-parse --short HEAD && docker compose ps circles && curl -sS https://kamooni.org/api/version && echo
-```
+## Production and deployment
 
-The `/api/version` `gitSha` should match the deployed commit.
+Normal production deployment is documented separately. Do not duplicate deployment commands here.
 
-## Codex safety rules
+- [Production deployment](PRODUCTION_DEPLOYMENT.md)
 
-Before making code changes, Codex must verify:
+## Related active docs
 
-```bash
-git status --short
-git branch --show-current
-git rev-parse --show-toplevel
-```
-
-If the working tree is dirty, Codex must stop and ask before editing.
-
-Avoid reusing old Codex worktrees such as:
-
-```text
-~/.codex/worktrees/...
-```
-
-unless the worktree is confirmed clean and based on current `origin/main`.
-
-Preferred starting point before a patch:
-
-```bash
-cd ~/circles
-git checkout main
-git pull --ff-only origin main
-git status --short
-```
-
-## Diff handling
-
-For long diffs or logs, write output to `/tmp` and open it in TextEdit:
-
-```bash
-git --no-pager diff > /tmp/kamooni-diff.txt && open -a TextEdit /tmp/kamooni-diff.txt
-```
-
-Before applying any Codex-generated patch to the real repo, verify:
-
-```bash
-cd ~/circles
-git apply --check /tmp/the-patch.diff
-```
-
-Do not apply patches that fail this check.
-
-## Current Tasks/Shifts structure
-
-Tasks and Shifts currently share the same backend model and Mongo collection.
-
-They are distinguished by:
-
-```text
-taskType: "outcome" | "shift"
-```
-
-Current behavior:
-
-```text
-/circles/[handle]/tasks  -> non-shift outcome tasks
-/circles/[handle]/shifts -> shift tasks only
-```
-
-Shift detail/edit/create routes still live under `/tasks` for now.
-
-The `/shifts` route currently uses the existing `tasks` access rules in `src/app/api/access/route.ts`.
-
-Do not create a separate Shifts collection or schema unless explicitly requested.
+- [Architecture overview](../../docs/ARCHITECTURE.md)
+- [Local development](../../docs/LOCAL_DEVELOPMENT.md)
+- [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
+- [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
+- [Environment reference](../../docs/ENVIRONMENT.md)
+- [Production deployment](PRODUCTION_DEPLOYMENT.md)
