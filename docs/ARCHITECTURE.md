@@ -1,134 +1,113 @@
 # Architecture Overview
 
-This document gives a current high-level view of Kamooni's application architecture.
+Canonical first-day system overview for Kamooni / Circles.
 
-## Overview
+Kamooni is a Next.js application backed by MongoDB, MinIO, and Qdrant. Production is containerized with Docker Compose and served through nginx.
 
-Kamooni is a community platform built as a modern web application with supporting services for data, storage, messaging, notifications, and search.
+## Request Path
 
-The current core stack includes:
+Primary production request path:
 
-* Next.js
-* TypeScript
-* MongoDB
-* MinIO
-* Qdrant
-* Docker / Docker Compose
-* nginx in production
+```text
+Browser -> nginx -> Next.js app -> MongoDB / MinIO / Qdrant
+```
 
-## Main application layer
+The exact backend dependency depends on the feature:
 
-The main Kamooni application is built with Next.js and TypeScript.
+- MongoDB stores application data, chat, notifications, memberships, settings, and most domain records.
+- MinIO stores uploaded files and media.
+- Qdrant supports vector and semantic search features when those paths are enabled.
 
-This is the primary web app used by members, admins, and developers.
+## Core Services
 
-At a high level, it is responsible for:
+### Next.js
 
-* pages and routing
-* authentication flows
-* profile and circle views
-* feeds, tasks, events, and messaging UI
-* settings and admin flows
-* API routes and server actions
+The `circles` service is the main web application. It provides pages, API routes, server actions, authentication flows, admin tools, chat UI, uploads, and feature workflows.
 
-## Database layer
+In local development, the app normally runs on the host with `bun run dev`. Supporting services run through `circles/docker-compose.local.yml`.
 
-MongoDB is the main application datastore.
+In production, the app runs as the `circles` Docker Compose service from `circles/docker-compose.yml`.
 
-It stores most of the platform's primary data, including items such as:
+### MongoDB
 
-* users and circles
-* posts and discussions
-* tasks and events
-* chat conversations and messages
-* notifications and related state
-* onboarding and profile metadata
+MongoDB is the authoritative application datastore. The app initializes Mongo collections in `circles/src/lib/data/db.ts`.
 
-## Chat and messaging
+MongoDB stores users/circles, memberships, posts, tasks, goals, issues, events, notifications, chat, and related state.
 
-Kamooni's current main chat and direct messaging system is Mongo-native.
+### MinIO
 
-That means current DM and conversation flows do not depend on Matrix.
+MinIO is S3-compatible object storage for uploaded files and media.
 
-Older references to Matrix in legacy documents should be treated as historical unless a document explicitly says a legacy subsystem still depends on it.
+Files are stored in MinIO. The application may write absolute media URLs into MongoDB at upload time using `CIRCLES_URL`. If `CIRCLES_URL` is wrong when uploads happen, broken URLs can be persisted and may require MongoDB data repair.
 
-At a high level, the chat system includes concepts such as:
+See [Image storage architecture](../circles/docs/IMAGE_STORAGE.md) for the detailed media path.
 
-* conversations
-* messages
-* read states
-* message permissions
-* announcement-style conversations
+### Qdrant
 
-## Notifications
+Qdrant stores vectors for semantic/search features. `circles/src/lib/data/vdb.ts` creates the Qdrant client when vector paths run.
 
-Kamooni uses an in-app notification system backed by MongoDB.
+The app can start without Qdrant, but vector/search functions require a reachable Qdrant service unless vector features are disabled through environment configuration.
 
-At a high level, the notification layer includes:
+### nginx
 
-* general activity notifications
-* unread message indicators
-* routing users from notifications to the correct app surface
-* per-user or per-context notification preferences where supported
+Production nginx terminates public HTTP/HTTPS routing and proxies traffic to the app and storage paths. The production Compose file includes an `nginx` service with ports `80` and `443`.
 
-## Object storage and media
+Local development usually does not need nginx for the normal `bun run dev` loop.
 
-Kamooni uses MinIO for object and media storage.
+### Docker Compose
 
-This is important for uploaded images and other stored assets.
+Docker Compose defines the production and local service topology:
 
-Correct media handling depends on more than one layer working together:
+- `circles/docker-compose.yml` for production services.
+- `circles/docker-compose.local.yml` for local supporting services.
 
-* MinIO storage
-* application-side URL generation
-* public base URL configuration
-* proxy or nginx routing in production
+Normal local development starts only `db`, `minio`, and `qdrant`. The first-day production architecture includes the `circles` app, `db` (MongoDB), `minio`, `qdrant`, `nginx`, and `cron` for scheduled jobs.
 
-Because of this, storage and public URL mismatches can cause broken media links or upload issues.
+## Chat Architecture
 
-## Search and semantic features
+MongoDB is the authoritative chat backend. Matrix is not the current chat backend.
 
-Kamooni uses Qdrant for vector or semantic search features where enabled.
+Authoritative chat collections:
 
-Some discovery or search flows may also rely on direct MongoDB queries depending on the feature and current implementation stage.
+- `chatConversations`
+- `chatRoomMembers`
+- `chatMessageDocs`
+- `chatReadStates`
 
-## Production shape
+Critical invariant:
 
-A typical production deployment is composed of:
+`chatConversations.updatedAt` must be updated whenever a message is sent. Sidebar ordering depends on this timestamp.
 
-* nginx in front
-* the main app container
-* MongoDB
-* MinIO
-* Qdrant
+The current source updates this timestamp in the Mongo-native message paths, including message creation, thread creation, and thread replies. New chat write paths must preserve that behavior.
 
-This is usually managed through Docker and Docker Compose.
+See [Mongo-native chat architecture](../circles/docs/CHAT_SYSTEM_ARCHITECTURE.md) for details.
 
-## Local development shape
+## Legacy Matrix Components
 
-Local development generally mirrors the same core services at a smaller scale:
+Postgres and Synapse still appear in Compose for legacy Matrix compatibility:
 
-* Next.js app running locally
-* MongoDB
-* MinIO
-* Qdrant
-* Docker Compose for supporting services
+- In production Compose, `postgres` and `synapse` are behind the `matrix` profile.
+- In local Compose, `postgres` and `synapse` are present but are not part of normal local development.
 
-## Practical architecture notes
+Treat Matrix, Synapse, and Postgres as legacy/profile-only infrastructure unless a task explicitly targets historical Matrix compatibility.
 
-A few points are especially important for developers:
+## Production Deployment
 
-* chat is Mongo-native, not Matrix-based for current development
-* uploaded assets depend on correct storage and public URL configuration
-* version verification is available through `/api/version`
-* deployment and infrastructure details may evolve, but the app architecture should stay understandable at the service level
+Normal production deployments run on Genesis2 and are managed by `circles/deploy-genesis2.sh`. The script fetches and resets to `origin/main`, builds the `circles` service, recreates it, and verifies `/api/version`.
 
-## Legacy note
+Do not duplicate deployment commands here. Use the canonical deployment guide:
 
-Some older docs may still refer to Matrix-era architecture or older setup assumptions.
+- [Production deployment](../circles/docs/PRODUCTION_DEPLOYMENT.md)
 
-Those references should not be used for new local setup or current feature work unless they are explicitly marked as still relevant.
+## Deeper Docs
 
-## Status of this document
+- [Local development](LOCAL_DEVELOPMENT.md)
+- [Environment variables](ENVIRONMENT.md)
+- [Codex project map](../circles/docs/CODEX_PROJECT_MAP.md)
+- [Mongo-native chat architecture](../circles/docs/CHAT_SYSTEM_ARCHITECTURE.md)
+- [Image storage architecture](../circles/docs/IMAGE_STORAGE.md)
+- [Production deployment](../circles/docs/PRODUCTION_DEPLOYMENT.md)
 
-This file is intended to provide a clear current snapshot rather than an exhaustive technical specification. It should be updated as the architecture evolves.
+## Status
+
+This file is the concise canonical system overview for new developers. Use the linked active documents for implementation details.
