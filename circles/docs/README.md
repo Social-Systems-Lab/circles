@@ -2,7 +2,7 @@
 
 Canonical index for active developer-facing Kamooni / Circles documentation.
 
-## New developers -- start here
+## New developers
 
 Read these in order:
 
@@ -21,7 +21,6 @@ Use [Production deployment](PRODUCTION_DEPLOYMENT.md) as the authoritative deplo
 ## Active architecture and operations
 
 - [Codex project map](CODEX_PROJECT_MAP.md)
-- [Developer playbook](DEVELOPER_PLAYBOOK.md)
 - [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
 - [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
 - [Chat debug playbook](CHAT_DEBUG_PLAYBOOK.md)
@@ -56,6 +55,7 @@ These files are retained for context, incident history, or migration archaeology
 - [Docker Hub deployment notes](../../docs/circles-deployment.md)
 - [Circles registry deployment notes](../../docs/circles-registry-deployment.md)
 - [Server setup notes](../../docs/server-setup.md)
+- [Developer playbook](DEVELOPER_PLAYBOOK.md)
 - [AI developer context](AI_DEVELOPER_CONTEXT.md)
 - [AI developer context copy](AI_DEVELOPER_CONTEXT%20copy.md)
 - [Mongo-native architecture v11](ARCHITECTURE_MONGO_NATIVE_v11.md)

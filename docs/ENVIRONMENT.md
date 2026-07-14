@@ -66,6 +66,7 @@ These variables are present in `circles/.env.example` and are either active in c
 | `CIRCLES_NODE_ENV` | Value passed to `NODE_ENV` by production Compose. | Required by current production Compose; not required by `bun run dev`. |
 | `CIRCLES_REGISTRY_URL` | Legacy registry/server setting URL. | Legacy/profile-only unless registry features are used. |
 | `CIRCLES_DOMAIN` | Domain metadata retained in `.env.example`. | Legacy/profile-only; no current direct source read found. |
+| `NEXT_PUBLIC_APP_URL` | Public app URL fallback used by password reset, reminders, Stripe, and related URL-building flows. | Optional local fallback; set when those feature flows need a URL different from `CIRCLES_URL`. |
 
 ### MongoDB
 
@@ -156,7 +157,7 @@ These variables are read by current source or deployment code but are not in `ci
 | `DONORBOX_API_USER` | Donorbox API username for admin subscription sync/refresh. | Feature-specific. |
 | `VIBE_ID_CREDENTIAL_ISSUER_LOGO_URL` | VibeID issuer logo URL. | Optional. |
 | `KAMOONI_VIBE_ID_ISSUER_PRIVATE_JWK` | Backward-compatible VibeID issuer private key fallback. | Optional fallback. |
-| `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SITE_URL`, `APP_URL`, `SITE_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL` | URL fallbacks for specific auth, reminder, Stripe, and VibeID flows. | Optional fallbacks. |
+| `NEXT_PUBLIC_SITE_URL`, `APP_URL`, `SITE_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_URL` | URL fallbacks for specific auth, reminder, Stripe, and VibeID flows. | Optional fallbacks. |
 | `NEXT_PUBLIC_MAINTENANCE_MODE`, `NEXT_PUBLIC_MAINTENANCE_MESSAGE` | Maintenance-mode UI controls. | Optional feature flags. |
 | `GIT_SHA`, `BUILD_TIME` | Build metadata passed by `deploy-genesis2.sh` and exposed by `/api/version`. | Supplied by deployment. |
 | `APP_VERSION` | `/api/version` fallback if `VERSION` metadata is absent. | Optional fallback. |
