@@ -896,6 +896,7 @@ export const UserToolbox = () => {
                         ) : user ? (
                             <EventTimeline
                                 circleHandle={user.handle!}
+                                circleId={user._id?.toString()}
                                 events={events}
                                 milestones={milestones}
                                 condensed

@@ -10,11 +10,13 @@ import { EventClickArg } from "@fullcalendar/core";
 import { useRouter } from "next/navigation";
 import { CheckSquare } from "lucide-react";
 import { EventDisplay } from "@/models/models";
+import { getEventRouteCircleHandle } from "@/lib/event-route";
 
 // FullCalendar styles (plugin CSS)
 
 type CalendarViewProps = {
     circleHandle: string;
+    circleId?: string;
     events: EventDisplay[];
     milestones?: {
         id: string;
@@ -27,7 +29,7 @@ type CalendarViewProps = {
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
 
-const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, milestones }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, circleId, events, milestones }) => {
     const router = useRouter();
 
     const fcEvents = useMemo(() => {
@@ -48,6 +50,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
                     attendees: e.attendees ?? 0,
                     userRsvpStatus: e.userRsvpStatus ?? "none",
                     stage: e.stage,
+                    circleHandle: getEventRouteCircleHandle(e, { id: circleId, handle: circleHandle }),
                 },
             })) || [];
 
@@ -69,7 +72,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
             })) || [];
 
         return [...eventItems, ...milestoneItems];
-    }, [events, milestones]);
+    }, [circleHandle, circleId, events, milestones]);
 
     const handleDateClick = (arg: DateClickArg) => {
         // Prefill create form with clicked date (basic)
@@ -96,8 +99,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, events, miles
         } else if (type === "issue") {
             router.push(`/circles/${targetCircleHandle}/issues/${itemId}`);
         } else {
-            // default to event
-            router.push(`/circles/${circleHandle}/events/${itemId}`);
+            const eventCircleHandle = ext.circleHandle as string | undefined;
+            if (!eventCircleHandle) return;
+            router.push(`/circles/${eventCircleHandle}/events/${itemId}`);
         }
     };
 

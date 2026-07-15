@@ -17,9 +17,11 @@ import { userAtom } from "@/lib/data/atoms";
 import { hideCancelledEventAction } from "@/app/circles/[handle]/events/actions";
 import { getEventJoinState } from "./event-join-state";
 import { getShiftConfirmedSummary, getShiftDisplayStatus, getShiftPendingSummary } from "../tasks/shift-task-utils";
+import { getEventDetailHref } from "@/lib/event-route";
 
 type Props = {
     circleHandle: string;
+    circleId?: string;
     events: EventDisplay[];
     shifts?: ShiftTimelineItem[];
     milestones?: {
@@ -125,12 +127,13 @@ function getShiftStageLabel(task: TaskDisplay): { label: string; className: stri
 const EventCard: React.FC<{
     e: EventDisplay;
     circleHandle: string;
+    circleId?: string;
     condensed?: boolean;
     canManageJoinLink?: boolean;
     onHideCancelled?: (eventId: string) => Promise<void> | void;
     hidePending?: boolean;
     onNavigate?: () => void;
-}> = ({ e, circleHandle, condensed, canManageJoinLink, onHideCancelled, hidePending, onNavigate }) => {
+}> = ({ e, circleHandle, circleId, condensed, canManageJoinLink, onHideCancelled, hidePending, onNavigate }) => {
     const stage = e.stage;
     const isDraft = stage === "draft";
     const isReview = stage === "review";
@@ -138,11 +141,112 @@ const EventCard: React.FC<{
     const attendees = e.attendees ?? 0;
     const ongoing = isOngoing(e);
     const eventId = getCanonicalEventId(e);
+    const eventHref = getEventDetailHref(e, { id: circleId, handle: circleHandle });
     const router = useRouter();
     const joinState = getEventJoinState(e, {
         canManageMissingLink: canManageJoinLink,
         missingLinkLabel: "Missing link",
     });
+    const cardContent = (
+        <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
+            {e.images && e.images.length > 0 && (
+                <div
+                    className={cn(
+                        "relative flex-shrink-0 overflow-hidden rounded border",
+                        condensed ? "h-16 w-16" : "h-24 w-24",
+                    )}
+                >
+                    <Image
+                        src={e.images[0].fileInfo.url}
+                        alt={e.title}
+                        fill
+                        sizes="96px"
+                        className="object-cover transition-transform duration-200 ease-in-out group-hover:scale-105"
+                    />
+                </div>
+            )}
+            <div className="min-w-0 flex-grow">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                    <div
+                        className={cn(
+                            "header mb-1 truncate font-semibold group-hover:text-primary",
+                            condensed ? "text-[16px]" : "text-[20px]",
+                        )}
+                    >
+                        {e.title}
+                    </div>
+                    <div className="flex items-center gap-1">
+                        {isDraft && (
+                            <Badge
+                                variant="outline"
+                                className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
+                            >
+                                <Clock className="mr-1 h-3 w-3" />
+                                Draft
+                            </Badge>
+                        )}
+                        {isReview && (
+                            <Badge
+                                variant="outline"
+                                className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
+                            >
+                                <Clock className="mr-1 h-3 w-3" />
+                                Review
+                            </Badge>
+                        )}
+                        {isCancelled && (
+                            <Badge variant="outline" className="border-red-400 bg-red-100 text-xs text-red-800">
+                                <Clock className="mr-1 h-3 w-3" />
+                                Cancelled
+                            </Badge>
+                        )}
+                    </div>
+                </div>
+                {e.description && (
+                    <p
+                        className={cn(
+                            "mb-2 text-muted-foreground",
+                            condensed ? "line-clamp-2 text-xs" : "line-clamp-3 text-sm",
+                        )}
+                    >
+                        {e.description}
+                    </p>
+                )}
+
+                {/* Date/Time */}
+                <div className="mb-1 flex items-center text-xs text-muted-foreground">
+                    <CalendarIcon className="mr-1 h-3 w-3" />
+                    {fmtRange(e.startAt, e.endAt, e.allDay)}
+                </div>
+
+                {/* Location & attendees */}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {locationToString(e) && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            className="relative z-10 h-6 max-w-full px-2 text-xs hover:bg-gray-300"
+                            onClick={(ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                onNavigate?.();
+                                router.push(`/explore?focusEvent=${eventId}`);
+                            }}
+                        >
+                            <MapPin className="mr-1 h-3 w-3 shrink-0" />
+                            <span className="truncate">{locationToString(e)}</span>
+                        </Button>
+                    )}
+                    {attendees > 0 && (
+                        <span className="inline-flex items-center">
+                            <Users className="mr-1 h-3 w-3" />
+                            {attendees} going
+                        </span>
+                    )}
+                </div>
+            </div>
+        </CardContent>
+    );
 
     return (
         <Card
@@ -153,110 +257,13 @@ const EventCard: React.FC<{
                 ongoing && !isCancelled && "border-2 border-red-500",
             )}
         >
-            <Link
-                href={`/circles/${circleHandle}/events/${(e as any)._id}#circle-tabs`}
-                className="group block"
-                onClick={() => onNavigate?.()}
-            >
-                <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
-                    {e.images && e.images.length > 0 && (
-                        <div
-                            className={cn(
-                                "relative flex-shrink-0 overflow-hidden rounded border",
-                                condensed ? "h-16 w-16" : "h-24 w-24",
-                            )}
-                        >
-                            <Image
-                                src={e.images[0].fileInfo.url}
-                                alt={e.title}
-                                fill
-                                sizes="96px"
-                                className="object-cover transition-transform duration-200 ease-in-out group-hover:scale-105"
-                            />
-                        </div>
-                    )}
-                    <div className="min-w-0 flex-grow">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                            <div
-                                className={cn(
-                                    "header mb-1 truncate font-semibold group-hover:text-primary",
-                                    condensed ? "text-[16px]" : "text-[20px]",
-                                )}
-                            >
-                                {e.title}
-                            </div>
-                            <div className="flex items-center gap-1">
-                                {isDraft && (
-                                    <Badge
-                                        variant="outline"
-                                        className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
-                                    >
-                                        <Clock className="mr-1 h-3 w-3" />
-                                        Draft
-                                    </Badge>
-                                )}
-                                {isReview && (
-                                    <Badge
-                                        variant="outline"
-                                        className="border-yellow-400 bg-yellow-100 text-xs text-yellow-800"
-                                    >
-                                        <Clock className="mr-1 h-3 w-3" />
-                                        Review
-                                    </Badge>
-                                )}
-                                {isCancelled && (
-                                    <Badge variant="outline" className="border-red-400 bg-red-100 text-xs text-red-800">
-                                        <Clock className="mr-1 h-3 w-3" />
-                                        Cancelled
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                        {e.description && (
-                            <p
-                                className={cn(
-                                    "mb-2 text-muted-foreground",
-                                    condensed ? "line-clamp-2 text-xs" : "line-clamp-3 text-sm",
-                                )}
-                            >
-                                {e.description}
-                            </p>
-                        )}
-
-                        {/* Date/Time */}
-                        <div className="mb-1 flex items-center text-xs text-muted-foreground">
-                            <CalendarIcon className="mr-1 h-3 w-3" />
-                            {fmtRange(e.startAt, e.endAt, e.allDay)}
-                        </div>
-
-                        {/* Location & attendees */}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            {locationToString(e) && (
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="relative z-10 h-6 max-w-full px-2 text-xs hover:bg-gray-300"
-                                    onClick={(ev) => {
-                                        ev.preventDefault();
-                                        ev.stopPropagation();
-                                        onNavigate?.();
-                                        router.push(`/explore?focusEvent=${eventId}`);
-                                    }}
-                                >
-                                    <MapPin className="mr-1 h-3 w-3 shrink-0" />
-                                    <span className="truncate">{locationToString(e)}</span>
-                                </Button>
-                            )}
-                            {attendees > 0 && (
-                                <span className="inline-flex items-center">
-                                    <Users className="mr-1 h-3 w-3" />
-                                    {attendees} going
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </CardContent>
-            </Link>
+            {eventHref ? (
+                <Link href={eventHref} className="group block" onClick={() => onNavigate?.()}>
+                    {cardContent}
+                </Link>
+            ) : (
+                <div className="group block">{cardContent}</div>
+            )}
             {joinState && !isCancelled && (
                 <span className="absolute right-2 top-2 z-10" title={joinState.title}>
                     <Button
@@ -464,6 +471,7 @@ const MilestoneRow: React.FC<{
 
 export default function EventTimeline({
     circleHandle,
+    circleId,
     events,
     shifts,
     milestones,
@@ -735,6 +743,7 @@ export default function EventTimeline({
                                                             key={`${(it.event as any)._id}-${idx}`}
                                                             e={it.event}
                                                             circleHandle={circleHandle}
+                                                            circleId={circleId}
                                                             condensed={condensed}
                                                             canManageJoinLink={Boolean(
                                                                 user?.did && user.did === it.event.createdBy,
@@ -805,6 +814,7 @@ export default function EventTimeline({
                                                                 key={`past-${(it.event as any)._id}-${idx}`}
                                                                 e={it.event}
                                                                 circleHandle={circleHandle}
+                                                                circleId={circleId}
                                                                 condensed={condensed}
                                                                 canManageJoinLink={Boolean(
                                                                     user?.did && user.did === it.event.createdBy,

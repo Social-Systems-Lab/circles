@@ -235,6 +235,7 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
                     <TabsContent value="timeline" className="mt-0">
                         <EventTimeline
                             circleHandle={circle.handle!}
+                            circleId={circle._id?.toString()}
                             events={filteredEvents}
                             shifts={shifts}
                             milestones={milestones}
@@ -245,7 +246,12 @@ function EventsTabsContent({ circle, events, canCreate }: Props) {
             </div>
             <Tabs value={tab} onValueChange={onTabChange} className="w-full">
                 <TabsContent value="calendar" className="mt-0">
-                    <CalendarView circleHandle={circle.handle!} events={filteredEvents} milestones={milestones} />
+                    <CalendarView
+                        circleHandle={circle.handle!}
+                        circleId={circle._id?.toString()}
+                        events={filteredEvents}
+                        milestones={milestones}
+                    />
                 </TabsContent>
             </Tabs>
         </div>
