@@ -1,7 +1,7 @@
 # SESSION_LOG.md
 # Kamooni / Circles — Session Log
 
-#This is an old reference file, it can be ignored.
+## This is an old reference file, it can be ignored.
 
 Paste this file (along with CLAUDE_CONTEXT.md) at the start of each Claude session.
 Update this file at the end of every session before closing.
