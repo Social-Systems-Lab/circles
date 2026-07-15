@@ -10,8 +10,12 @@ import {
     inviteUsersToEventAction,
     getInvitedUsersAction,
     getEventCircleMemberInviteCandidatesAction,
+    resolveExternalEventInviteAction,
+    inviteExternalUserToEventAction,
 } from "@/app/circles/[handle]/events/actions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type InviteCandidate = Circle & {
     inviteSources?: ("circle_member" | "contact")[];
@@ -34,6 +38,11 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
     const [circleMemberCount, setCircleMemberCount] = useState(0);
     const [bulkConfirmed, setBulkConfirmed] = useState(false);
     const [isLoadingBulkMembers, setLoadingBulkMembers] = useState(false);
+    const [externalInviteInput, setExternalInviteInput] = useState("");
+    const [externalInviteError, setExternalInviteError] = useState<string | null>(null);
+    const [resolvedExternalUser, setResolvedExternalUser] = useState<InviteCandidate | null>(null);
+    const [isResolvingExternalUser, setIsResolvingExternalUser] = useState(false);
+    const [isAddingExternalInvite, setIsAddingExternalInvite] = useState(false);
 
     const invitedDids = useMemo(() => invitedUsers.map((u) => u.did!).filter(Boolean), [invitedUsers]);
 
@@ -51,11 +60,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
     }, [open, circleHandle, eventId]);
 
     const handleCandidatesLoaded = useCallback(
-        (data: {
-            candidates: InviteCandidate[];
-            canBulkInviteCircleMembers: boolean;
-            circleMemberCount: number;
-        }) => {
+        (data: { candidates: InviteCandidate[]; canBulkInviteCircleMembers: boolean; circleMemberCount: number }) => {
             setCanBulkInviteCircleMembers(data.canBulkInviteCircleMembers);
             setCircleMemberCount(data.circleMemberCount);
         },
@@ -106,6 +111,52 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
         });
     };
 
+    const handleResolveExternalUser = async () => {
+        setExternalInviteError(null);
+        setResolvedExternalUser(null);
+        setIsResolvingExternalUser(true);
+
+        const result = await resolveExternalEventInviteAction(circleHandle, eventId, externalInviteInput);
+        setIsResolvingExternalUser(false);
+
+        if (!result.success || !result.user) {
+            setExternalInviteError(result.message || "No Kamooni member was found for that profile link or handle.");
+            return;
+        }
+
+        if (invitedDids.includes(result.user.did!) || selectedUsers.some((user) => user.did === result.user!.did)) {
+            setExternalInviteError("This person has already been invited.");
+            return;
+        }
+
+        setResolvedExternalUser(result.user as InviteCandidate);
+    };
+
+    const handleAddExternalInvite = async () => {
+        if (!resolvedExternalUser) return;
+
+        setExternalInviteError(null);
+        setIsAddingExternalInvite(true);
+        const result = await inviteExternalUserToEventAction(circleHandle, eventId, externalInviteInput);
+        setIsAddingExternalInvite(false);
+
+        if (!result.success) {
+            setExternalInviteError(result.message || "Failed to send invitation");
+            return;
+        }
+
+        setInvitedUsers((users) => {
+            if (users.some((user) => user.did === resolvedExternalUser.did)) {
+                return users;
+            }
+            return [...users, resolvedExternalUser];
+        });
+        setSelectedUsers((users) => users.filter((user) => user.did !== resolvedExternalUser.did));
+        setExternalInviteInput("");
+        setResolvedExternalUser(null);
+        toast({ title: "Invitation sent" });
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
@@ -149,6 +200,64 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                     eventId={eventId}
                     excludeDids={invitedDids}
                 />
+                <div className="mt-4 space-y-3 rounded-md border p-3">
+                    <div>
+                        <p className="text-sm font-medium">Invite another Kamooni member</p>
+                        <p className="text-xs text-muted-foreground">
+                            Paste an exact Kamooni profile link or enter an exact @handle.
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Input
+                            value={externalInviteInput}
+                            onChange={(event) => {
+                                setExternalInviteInput(event.target.value);
+                                setExternalInviteError(null);
+                                setResolvedExternalUser(null);
+                            }}
+                            placeholder="https://kamooni.org/circles/example-handle or @example-handle"
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    handleResolveExternalUser();
+                                }
+                            }}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleResolveExternalUser}
+                            disabled={isResolvingExternalUser || externalInviteInput.trim().length === 0}
+                        >
+                            {isResolvingExternalUser ? "Finding..." : "Find"}
+                        </Button>
+                    </div>
+                    {externalInviteError && <p className="text-sm text-destructive">{externalInviteError}</p>}
+                    {resolvedExternalUser && (
+                        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <Avatar>
+                                    <AvatarImage src={resolvedExternalUser.picture?.url} />
+                                    <AvatarFallback>{resolvedExternalUser.name?.[0]}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium">{resolvedExternalUser.name}</p>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                        @{resolvedExternalUser.handle}
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleAddExternalInvite}
+                                disabled={isAddingExternalInvite}
+                            >
+                                {isAddingExternalInvite ? "Adding..." : "Add invitation"}
+                            </Button>
+                        </div>
+                    )}
+                </div>
                 {invitedUsers.length > 0 && (
                     <p
                         className="mt-2 text-xs text-muted-foreground"

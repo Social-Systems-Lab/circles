@@ -23,7 +23,7 @@ import {
 } from "@/models/models";
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { getUserByDid, getUserPrivate, getPrivateUserByDid, updateUser } from "@/lib/data/user";
+import { getUserByDid, getUserPrivate, getPrivateUserByDid, updateUser, getUserByHandle } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
@@ -56,6 +56,12 @@ import {
     listAcceptedConnectionsForUserDid,
     searchAcceptedConnectionsForUserDid,
 } from "@/lib/data/relationships";
+import {
+    EXTERNAL_EVENT_INVITE_ERRORS,
+    getExternalEventInviteProfileError,
+    resolveExternalEventInviteHandle,
+} from "@/lib/event-external-invite";
+import { notifyEventInvitation } from "@/lib/data/notifications";
 
 // ----- Types -----
 
@@ -89,6 +95,12 @@ type GetCircleMemberInviteCandidatesActionResult = {
     count: number;
     success: boolean;
     message?: string;
+};
+
+type ResolveExternalEventInviteActionResult = {
+    success: boolean;
+    message?: string;
+    user?: Pick<Circle, "_id" | "did" | "name" | "handle" | "picture" | "circleType">;
 };
 
 type GetCirclesBySearchQueryActionResult = {
@@ -1393,6 +1405,151 @@ export async function inviteUsersToEventAction(
     } catch (error) {
         console.error("Error inviting users to event:", error);
         return { success: false, message: "Failed to send invitations" };
+    }
+}
+
+async function resolveExternalInviteTarget(
+    circleHandle: string,
+    eventId: string,
+    input: string,
+): Promise<
+    | {
+          success: true;
+          userDid: string;
+          inviter: Circle;
+          target: Circle;
+          event: EventDisplay;
+          circle: Circle;
+      }
+    | { success: false; message: string }
+> {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "User not authenticated" };
+    }
+
+    const inviter = await getUserByDid(userDid);
+    if (!inviter) {
+        return { success: false, message: "User not found" };
+    }
+
+    const circle = await getCircleByHandle(circleHandle);
+    if (!circle) {
+        return { success: false, message: "Circle not found" };
+    }
+
+    const event = await getEventById(eventId, userDid);
+    if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
+        return { success: false, message: "Event not found" };
+    }
+
+    if (!(await canManageEvent(userDid, event))) {
+        return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.unauthorized };
+    }
+
+    const handle = resolveExternalEventInviteHandle(input);
+    if (!handle) {
+        return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.notFound };
+    }
+
+    const target = await getUserByHandle(handle);
+    if (!target) {
+        return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.notFound };
+    }
+
+    const targetDid = target.did;
+    if (!targetDid) {
+        return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.cannotInvite };
+    }
+
+    const [existingInvitation, existingRsvp] = await Promise.all([
+        EventInvitations.findOne({ eventId, userDid: targetDid }, { projection: { _id: 1 } }),
+        EventRsvps.findOne(
+            { eventId, userDid: targetDid, status: { $ne: "cancelled" } },
+            { projection: { _id: 1 } },
+        ),
+    ]);
+
+    const profileError = getExternalEventInviteProfileError({
+        target,
+        inviterDid: userDid,
+        alreadyInvited: Boolean(existingInvitation),
+        alreadyAttending: Boolean(existingRsvp),
+    });
+    if (profileError) {
+        return { success: false, message: profileError };
+    }
+
+    return { success: true, userDid, inviter, target, event, circle };
+}
+
+export async function resolveExternalEventInviteAction(
+    circleHandle: string,
+    eventId: string,
+    input: string,
+): Promise<ResolveExternalEventInviteActionResult> {
+    try {
+        const resolved = await resolveExternalInviteTarget(circleHandle, eventId, input);
+        if (!resolved.success) {
+            return resolved;
+        }
+
+        return {
+            success: true,
+            user: {
+                _id: resolved.target._id?.toString(),
+                did: resolved.target.did,
+                name: resolved.target.name,
+                handle: resolved.target.handle,
+                picture: resolved.target.picture,
+                circleType: resolved.target.circleType,
+            },
+        };
+    } catch (error) {
+        console.error("Error resolving external event invite:", error);
+        return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.notFound };
+    }
+}
+
+export async function inviteExternalUserToEventAction(
+    circleHandle: string,
+    eventId: string,
+    input: string,
+): Promise<{ success: boolean; message?: string; user?: Circle }> {
+    try {
+        const resolved = await resolveExternalInviteTarget(circleHandle, eventId, input);
+        if (!resolved.success) {
+            return resolved;
+        }
+
+        const now = new Date();
+        const insertResult = await EventInvitations.updateOne(
+            { eventId, userDid: resolved.target.did },
+            {
+                $setOnInsert: {
+                    eventId,
+                    circleId: resolved.circle._id!.toString(),
+                    userDid: resolved.target.did!,
+                    status: "pending",
+                    createdAt: now,
+                    updatedAt: now,
+                },
+            },
+            { upsert: true },
+        );
+
+        if (insertResult.upsertedCount === 0) {
+            return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.duplicate };
+        }
+
+        const invitedUser = await getUserPrivate(resolved.target.did!);
+        await notifyEventInvitation(resolved.event, resolved.inviter, invitedUser);
+
+        revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+        return { success: true, message: "Invitation sent", user: resolved.target };
+    } catch (error) {
+        console.error("Error inviting external user to event:", error);
+        return { success: false, message: "Failed to send invitation" };
     }
 }
 
