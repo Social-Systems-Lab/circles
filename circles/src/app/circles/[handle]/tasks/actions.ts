@@ -1617,10 +1617,6 @@ export async function verifyTaskCompletionAction(
             return { success: false, message: "Task must be submitted for review before it can be verified" };
         }
 
-        if (task.assignedTo === userDid) {
-            return { success: false, message: "Assignees cannot verify their own task contributions" };
-        }
-
         if (task.verifiedAt) {
             return { success: true, message: "Task already verified" };
         }
