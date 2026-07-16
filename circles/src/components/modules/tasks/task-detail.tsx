@@ -233,6 +233,11 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const canSubmitForReview = !isShiftTask && isAssignee;
     const canManageVerification =
         !isShiftTask && (isAuthor || permissions.canAssign || permissions.canResolve || permissions.canModerate);
+    const canCompleteUnassignedOutcomeTask =
+        !isShiftTask &&
+        !task.assignedTo &&
+        (task.stage === "open" || task.stage === "inProgress") &&
+        (permissions.canAssign || permissions.canResolve || permissions.canModerate);
     const isClaimApprovedAssignment = Boolean(task.claimApprovedAt) && task.assignedTo === currentUserDid;
     const workflowStatus = isShiftTask ? null : getWorkflowStatusInfo(task);
     const currentShiftParticipant = shiftParticipants.find((participant) => participant.userDid === currentUserDid);
@@ -546,6 +551,28 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
         });
     };
 
+    const markTaskComplete = () => {
+        startTransition(async () => {
+            const result = await verifyTaskCompletionAction(circle.handle!, task._id as string);
+
+            if (!result.success) {
+                toast({
+                    title: "Error",
+                    description: result.message || "Failed to mark task complete",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            await refreshOpenTaskPreview();
+            router.refresh();
+            toast({
+                title: "Success",
+                description: result.message || "Task marked complete",
+            });
+        });
+    };
+
     const openStageChangeDialog = (stage: TaskStage) => {
         // Updated type
         setTargetStage(stage);
@@ -795,6 +822,13 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             actions.push(
                 <Button key="start" onClick={() => openStageChangeDialog("inProgress")} disabled={isPending}>
                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Start Progress
+                </Button>,
+            );
+        }
+        if (canCompleteUnassignedOutcomeTask) {
+            actions.push(
+                <Button key="mark-complete" onClick={markTaskComplete} disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Mark as complete
                 </Button>,
             );
         }
@@ -1131,7 +1165,9 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                 picture={contributionVerifierPicture}
                                 size="18px"
                             />
-                            <span className="truncate">Verified by {contributionVerifierName}</span>
+                            <span className="truncate">
+                                {task.assignedTo ? "Verified by" : "Marked complete by"} {contributionVerifierName}
+                            </span>
                         </button>
                     )}
                     {workflowStatus && (

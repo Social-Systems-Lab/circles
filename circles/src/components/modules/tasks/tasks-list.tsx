@@ -1164,6 +1164,11 @@ const TasksList: React.FC<TasksListProps> = ({
         const canEdit = (isAuthor && task.stage === "review") || permissions.canModerate;
         const canDelete = isAuthor || permissions.canModerate;
         const isShiftTask = isShiftTaskItem(task);
+        const canCompleteUnassignedOutcomeTask =
+            !isShiftTask &&
+            !task.assignedTo &&
+            (task.stage === "open" || task.stage === "inProgress") &&
+            (permissions.canAssign || permissions.canResolve || permissions.canModerate);
         const isPreviewedTask =
             (contentPreview?.content as TaskDisplay)?._id === task._id && sidePanelContentVisible === "content";
 
@@ -1192,7 +1197,7 @@ const TasksList: React.FC<TasksListProps> = ({
                 ))}
                 {!inToolbox && (
                     <TableCell className="w-[40px]">
-                        {(canEdit || canDelete) && (
+                        {(canEdit || canDelete || canCompleteUnassignedOutcomeTask) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -1216,6 +1221,17 @@ const TasksList: React.FC<TasksListProps> = ({
                                             disabled={task.stage === "resolved"}
                                         >
                                             Edit
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canCompleteUnassignedOutcomeTask && (
+                                        <DropdownMenuItem
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                runVerificationQueueAction(task, "verify");
+                                            }}
+                                            disabled={pendingVerificationAction?.taskId === task._id}
+                                        >
+                                            Mark as complete
                                         </DropdownMenuItem>
                                     )}
                                     {canDelete && (

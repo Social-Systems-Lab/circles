@@ -67,6 +67,7 @@ import {
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
+import { buildOutcomeTaskCompletionUpdate, getOutcomeTaskCompletionPlan } from "@/lib/task-completion-policy";
 
 type GetTasksActionResult = {
     tasks: TaskDisplay[];
@@ -1607,30 +1608,31 @@ export async function verifyTaskCompletionAction(
         const canAssign = await isAuthorized(userDid, circle._id as string, features.tasks.assign);
         const canResolve = await isAuthorized(userDid, circle._id as string, features.tasks.resolve);
         const canModerate = await isAuthorized(userDid, circle._id as string, features.tasks.moderate);
-        const canManageReview = isAuthor || canAssign || canResolve || canModerate;
+        const completionPlan = getOutcomeTaskCompletionPlan(task, {
+            isAuthor,
+            canAssign,
+            canResolve,
+            canModerate,
+        });
 
-        if (!canManageReview) {
-            return { success: false, message: "Not authorized to verify this task" };
+        if (!completionPlan.allowed) {
+            return { success: false, message: completionPlan.reason };
         }
 
-        if (task.stage !== "inProgress" || !task.submittedForReviewAt) {
-            return { success: false, message: "Task must be submitted for review before it can be verified" };
-        }
-
-        if (task.verifiedAt) {
+        if (completionPlan.mode === "already-completed") {
             return { success: true, message: "Task already verified" };
         }
 
         const now = new Date();
+        const fieldsToUnset: (keyof Task)[] = ["reviewRequestedChangesAt", "reviewRequestedChangesBy", "reviewRequestedChangesNote"];
+        if (completionPlan.mode === "unassigned-operational-completion") {
+            fieldsToUnset.push("submittedForReviewAt", "submittedForReviewBy");
+        }
+
         const success = await updateTask(
             taskId,
-            {
-                stage: "resolved",
-                resolvedAt: now,
-                verifiedAt: now,
-                verifiedBy: userDid,
-            },
-            ["reviewRequestedChangesAt", "reviewRequestedChangesBy", "reviewRequestedChangesNote"],
+            buildOutcomeTaskCompletionUpdate(userDid, now),
+            fieldsToUnset,
         );
 
         if (!success) {
@@ -1647,7 +1649,13 @@ export async function verifyTaskCompletionAction(
         revalidatePath(`/circles/${circleHandle}/tasks`);
         revalidatePath(`/circles/${circleHandle}/tasks/${taskId}`);
 
-        return { success: true, message: "Task verified" };
+        return {
+            success: true,
+            message:
+                completionPlan.mode === "unassigned-operational-completion"
+                    ? "Task marked complete"
+                    : "Task verified",
+        };
     } catch (error) {
         console.error("Error verifying task completion:", error);
         return { success: false, message: "Failed to verify task completion" };
