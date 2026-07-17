@@ -59,6 +59,7 @@ import {
     sendConnectRequestAction,
 } from "@/components/modules/home/actions";
 import { useToast } from "@/components/ui/use-toast";
+import { getInitialTopicTitle, getTopicActivityTime, getTopicIndexMessages } from "./chat-topic-utils";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -89,6 +90,31 @@ const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
+
+const getTopicCreationDate = (message: Pick<ChatMessage, "createdAt">): Date | null => {
+    const date = message.createdAt instanceof Date ? message.createdAt : new Date(message.createdAt);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getTopicCreationDateKey = (message: Pick<ChatMessage, "createdAt">): string => {
+    const date = getTopicCreationDate(message);
+    if (!date) return "unknown";
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
+const formatTopicCreationDateLabel = (message: Pick<ChatMessage, "createdAt">): string => {
+    const date = getTopicCreationDate(message);
+    if (!date) return "Date unavailable";
+
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const dayDelta = Math.round((startOfToday - startOfDate) / 86400000);
+
+    if (dayDelta === 0) return "Today";
+    if (dayDelta === 1) return "Yesterday";
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+};
 
 type MentionSuggestion = {
     id: string;
@@ -553,6 +579,10 @@ type ChatMessagesProps = {
     onTopicOpen?: () => void;
     onTopicLoaded?: () => void;
     topicNavigationRequest?: TopicNavigationRequest | null;
+    openTopicIds?: Set<string>;
+    onToggleTopic?: (topicId: string) => void;
+    onCreateTopic?: () => void;
+    onTopicActivity?: () => Promise<void> | void;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -574,6 +604,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onTopicOpen,
     onTopicLoaded,
     topicNavigationRequest,
+    openTopicIds,
+    onToggleTopic,
+    onCreateTopic,
+    onTopicActivity,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -692,19 +726,67 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         return chatDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
     };
 
-    const orderedMessages = [...messages]
-        .filter(
-            (message) =>
-                (message.type === "m.room.message" ||
-                    message.type === "m.room.member" ||
-                    message.type === "m.room.notice") &&
-                !(message as any).threadId,
-        )
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const topicMessages = getTopicIndexMessages(messages);
+    const orderedMessages = topicMessages;
+
+    if (topicMessages.length === 0) {
+        return (
+            <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F6DF] text-amber-600">
+                    <HiLightBulb className="h-6 w-6" />
+                </div>
+                <h2 className="text-base font-semibold text-gray-900">Start the first topic</h2>
+                <p className="mt-1 max-w-sm text-sm text-gray-500">
+                    Conversations are organized by topic. Create one to open the discussion.
+                </p>
+                {canReply && (
+                    <Button
+                        className="mt-4 rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
+                        onClick={onCreateTopic}
+                    >
+                        Create the first topic
+                    </Button>
+                )}
+            </div>
+        );
+    }
 
     return (
-        <div>
+        <div className="space-y-3">
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
+                if ((message as any).thread) {
+                    const currentDateKey = getTopicCreationDateKey(message);
+                    const previousMessage = index > 0 ? orderedMessages[index - 1] : null;
+                    const previousDateKey = previousMessage ? getTopicCreationDateKey(previousMessage) : null;
+                    if (index === 0 || currentDateKey !== previousDateKey) {
+                        acc.push(
+                            <div
+                                key={`topic-date-${currentDateKey}-${message.id}`}
+                                className="my-2 mt-4 text-center text-sm text-gray-500"
+                            >
+                                <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
+                                    {formatTopicCreationDateLabel(message)}
+                                </span>
+                            </div>,
+                        );
+                    }
+                    acc.push(
+                        <TopicCard
+                            key={message.id}
+                            message={message}
+                            conversationId={conversationId || ""}
+                            user={currentUser}
+                            onTopicOpen={onTopicOpen}
+                            onTopicLoaded={onTopicLoaded}
+                            navigationRequest={topicNavigationRequest}
+                            isSelected={openTopicIds?.has(message.id)}
+                            onToggleTopic={onToggleTopic}
+                            onTopicActivity={onTopicActivity}
+                        />,
+                    );
+                    return acc;
+                }
+
                 const isSystemMessage = message.type !== "m.room.message";
                 const isNewDate =
                     index === 0 ||
@@ -773,19 +855,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                     <div className="w-7 flex-shrink-0" />
                                 ))}
 
-                            {/* Topic card — renders inline for topic-starter messages */}
-                            {(message as any).thread ? (
-                                <div className="w-full">
-                                    <TopicCard
-                                        message={message}
-                                        conversationId={conversationId || ""}
-                                        user={currentUser}
-                                        onTopicOpen={onTopicOpen}
-                                        onTopicLoaded={onTopicLoaded}
-                                        navigationRequest={topicNavigationRequest}
-                                    />
-                                </div>
-                            ) : null}
                             {!(message as any).thread && (
                                 <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
                                     <div
@@ -1558,12 +1627,26 @@ const TopicCard: React.FC<{
     onTopicOpen?: () => void;
     onTopicLoaded?: () => void;
     navigationRequest?: TopicNavigationRequest | null;
-}> = ({ message, conversationId, user, onTopicOpen, onTopicLoaded, navigationRequest }) => {
+    isSelected?: boolean;
+    onToggleTopic?: (topicId: string) => void;
+    onTopicActivity?: () => Promise<void> | void;
+}> = ({
+    message,
+    conversationId,
+    user,
+    onTopicOpen,
+    onTopicLoaded,
+    navigationRequest,
+    isSelected,
+    onToggleTopic,
+    onTopicActivity,
+}) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
     const cardRef = useRef<HTMLDivElement>(null);
 
     const [isOpen, setIsOpen] = useState<boolean>(() => {
+        if (isSelected) return true;
         const openIds = getOpenTopicIds(conversationId);
         return openIds.has(messageId);
     });
@@ -1587,6 +1670,7 @@ const TopicCard: React.FC<{
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
     const pendingScrollIntoViewRef = useRef(false);
     const isMobile = useIsMobile();
+    const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
 
     const autoGrowReplyTextarea = () => {
         const textarea = replyTextareaRef.current;
@@ -1597,7 +1681,7 @@ const TopicCard: React.FC<{
 
     // Load replies on mount if topic starts open
     useEffect(() => {
-        if (isOpen) {
+        if (isTopicOpen) {
             void loadReplies();
             onTopicOpen?.();
         } else {
@@ -1606,13 +1690,21 @@ const TopicCard: React.FC<{
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        if (!isTopicOpen) return;
+        setIsOpen(true);
+        void loadReplies();
+        onTopicOpen?.();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isTopicOpen, messageId]);
+
     // Re-check unread count whenever replyCount changes (picks up new replies without refresh)
     useEffect(() => {
-        if (!isOpen) {
+        if (!isTopicOpen) {
             void computeUnreadCount();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [thread?.replyCount]);
+    }, [thread?.replyCount, isTopicOpen]);
 
     useEffect(() => {
         autoGrowReplyTextarea();
@@ -1728,6 +1820,10 @@ const TopicCard: React.FC<{
     if (!thread) return null;
 
     const handleToggle = () => {
+        if (onToggleTopic) {
+            onToggleTopic(messageId);
+            return;
+        }
         const next = !isOpen;
         if (next) {
             void loadReplies();
@@ -1756,7 +1852,11 @@ const TopicCard: React.FC<{
             if (result.success) {
                 setReplyText("");
                 setReplyToMessage(null);
+                await onTopicActivity?.();
                 await loadReplies();
+                requestAnimationFrame(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
             }
         } catch (e) {
             console.error("Failed to send topic reply:", e);
@@ -1851,7 +1951,11 @@ const TopicCard: React.FC<{
             const result = await sendAttachmentAction(formData);
             if (result.success) {
                 setReplyToMessage(null);
+                await onTopicActivity?.();
                 await loadReplies();
+                requestAnimationFrame(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
             } else {
                 alert(`Failed to send attachment: ${result.message}`);
             }
@@ -1872,42 +1976,50 @@ const TopicCard: React.FC<{
             ref={cardRef}
             id={getMessageElementId(messageId)}
             data-message-id={messageId}
-            className={`my-2 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
+            className={`my-3 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
         >
             {/* Header row — always visible, click to toggle */}
-            <div className="flex cursor-pointer flex-col items-center gap-2 p-3 text-center" onClick={handleToggle}>
+            <div
+                className={`flex cursor-pointer flex-col items-center gap-2 px-3 text-center ${isTopicOpen ? "py-3" : "py-4"}`}
+                onClick={handleToggle}
+            >
                 <div className="min-w-0">
                     <p className="font-semibold text-gray-900">{thread.title}</p>
                     {thread.hashtags && thread.hashtags.length > 0 && (
                         <div className="mt-1 flex flex-wrap justify-center gap-1">
                             {thread.hashtags.map((tag: string) => (
-                                <span key={tag} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
+                                <span
+                                    key={tag}
+                                    className="rounded-full bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 text-xs font-medium text-[hsl(var(--founding-member-foreground))]"
+                                >
                                     #{tag}
                                 </span>
                             ))}
                         </div>
                     )}
-                    {!isOpen && effectiveStarterBody && (
+                    {!isTopicOpen && effectiveStarterBody && (
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
                     )}
                 </div>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
                     <div className="relative">
-                        <HiLightBulb className={`h-5 w-5 ${isOpen ? "text-amber-500" : "text-gray-400"}`} />
-                        {!isOpen && unreadCount > 0 && (
+                        <HiLightBulb className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`} />
+                        {!isTopicOpen && unreadCount > 0 && (
                             <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
                                 {unreadCount}
                             </span>
                         )}
                     </div>
                     <span>
-                        {isOpen ? "Collapse" : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
+                        {isTopicOpen
+                            ? `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`
+                            : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
                     </span>
                 </div>
             </div>
 
             {/* Expanded body */}
-            {isOpen && (
+            {isTopicOpen && (
                 <div className="border-t border-[#DDEBB8]">
                     {effectiveStarterBody && (
                         <div
@@ -1956,7 +2068,7 @@ const TopicCard: React.FC<{
                                         </button>
                                         <button
                                             onClick={() => void handleStarterEditSubmit()}
-                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                            className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
                                         >
                                             Save
                                         </button>
@@ -2115,7 +2227,7 @@ const TopicCard: React.FC<{
                                                         </button>
                                                         <button
                                                             onClick={() => void handleEditSubmit(reply.id)}
-                                                            className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                            className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
                                                         >
                                                             Save
                                                         </button>
@@ -2229,7 +2341,8 @@ const TopicCard: React.FC<{
                                         setReplyText(e.target.value);
                                         autoGrowReplyTextarea();
                                     }}
-                                    placeholder="Write a reply. Use return for a new line."
+                                    placeholder={`Reply to ${thread.title}. Use return for a new line.`}
+                                    aria-label={`Reply to ${thread.title}`}
                                     rows={1}
                                     className="max-h-56 min-h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
                                 />
@@ -2255,10 +2368,11 @@ const TopicCard: React.FC<{
 
 const NewThreadModal: React.FC<{
     conversationId: string;
+    initialTitle?: string;
     onClose: () => void;
-    onCreated: () => void;
-}> = ({ conversationId, onClose, onCreated }) => {
-    const [title, setTitle] = useState("");
+    onCreated: (threadId?: string) => void;
+}> = ({ conversationId, initialTitle = "", onClose, onCreated }) => {
+    const [title, setTitle] = useState(initialTitle);
     const [body, setBody] = useState("");
     const [hashtagInput, setHashtagInput] = useState("");
     const [hashtags, setHashtags] = useState<string[]>([]);
@@ -2279,7 +2393,7 @@ const NewThreadModal: React.FC<{
 
     const handleCreate = async () => {
         if (!title.trim()) {
-            setError("Title is required");
+            setError("Topic title is required");
             return;
         }
         setIsSaving(true);
@@ -2288,13 +2402,13 @@ const NewThreadModal: React.FC<{
             const { createThreadAction } = await import("./mongo-actions");
             const result = await createThreadAction(conversationId, title.trim(), body.trim(), hashtags);
             if (result.success) {
-                onCreated();
+                onCreated(result.threadId);
                 onClose();
             } else {
-                setError(result.message || "Failed to create thread");
+                setError(result.message || "Failed to create topic");
             }
         } catch (e) {
-            setError("Failed to create thread");
+            setError("Failed to create topic");
         } finally {
             setIsSaving(false);
         }
@@ -2304,7 +2418,7 @@ const NewThreadModal: React.FC<{
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-6 shadow-xl">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">New Topic</h2>
+                    <h2 className="text-lg font-semibold">New topic</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
                         <IoClose className="h-5 w-5" />
                     </button>
@@ -2313,24 +2427,27 @@ const NewThreadModal: React.FC<{
                 <div className="flex flex-col gap-3">
                     <input
                         type="text"
-                        placeholder="Topic title (required)"
+                        aria-label="Topic title"
+                        placeholder="Topic title"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--task-link))]"
                     />
                     <textarea
-                        placeholder="Topic description (optional)"
+                        aria-label="Opening message"
+                        placeholder="Opening message"
                         value={body}
                         onChange={(e) => setBody(e.target.value)}
                         rows={3}
-                        className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--task-link))]"
                     />
 
                     {/* Hashtags */}
                     <div className="flex gap-2">
                         <input
                             type="text"
-                            placeholder="Add hashtag (optional)"
+                            aria-label="Hashtags, optional"
+                            placeholder="Hashtags, optional"
                             value={hashtagInput}
                             onChange={(e) => setHashtagInput(e.target.value)}
                             onKeyDown={(e) => {
@@ -2339,7 +2456,7 @@ const NewThreadModal: React.FC<{
                                     addHashtag();
                                 }
                             }}
-                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--task-link))]"
                         />
                         <button
                             onClick={addHashtag}
@@ -2353,7 +2470,7 @@ const NewThreadModal: React.FC<{
                             {hashtags.map((tag) => (
                                 <span
                                     key={tag}
-                                    className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-600"
+                                    className="flex items-center gap-1 rounded-full bg-[hsl(var(--founding-member-bg))] px-2 py-1 text-xs font-medium text-[hsl(var(--founding-member-foreground))]"
                                 >
                                     #{tag}
                                     <button onClick={() => removeHashtag(tag)} className="hover:text-red-500">
@@ -2377,9 +2494,9 @@ const NewThreadModal: React.FC<{
                     <button
                         onClick={() => void handleCreate()}
                         disabled={isSaving}
-                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                        className="rounded-lg bg-[hsl(var(--task-link))] px-4 py-2 text-sm text-white hover:bg-[hsl(var(--task-link-hover))] disabled:opacity-50"
                     >
-                        {isSaving ? "Creating..." : "Create Topic"}
+                        {isSaving ? "Creating..." : "Create topic"}
                     </button>
                 </div>
             </div>
@@ -2423,6 +2540,8 @@ export const ChatRoomComponent: React.FC<{
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [hasOlderMessages, setHasOlderMessages] = useState(true);
     const [showNewThreadModal, setShowNewThreadModal] = useState(false);
+    const [newThreadInitialTitle, setNewThreadInitialTitle] = useState("");
+    const [openTopicIds, setOpenTopicIds] = useState<Set<string>>(() => new Set());
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -2534,6 +2653,28 @@ export const ChatRoomComponent: React.FC<{
     const hasLoadedTopicsRef = useRef(false);
     const [topicNavigationRequest, setTopicNavigationRequest] = useState<TopicNavigationRequest | null>(null);
 
+    const refreshTopicStarters = useCallback(async () => {
+        if (!roomId) return;
+
+        try {
+            const { fetchTopicStartersAction } = await import("./mongo-actions");
+            const result = await fetchTopicStartersAction(roomId);
+            if (!result.success || !result.messages) {
+                return;
+            }
+
+            setRoomMessages((prev) => {
+                const existingLooseMessages = (prev[roomId] || []).filter((message) => !(message as any).thread);
+                const merged = [...existingLooseMessages, ...result.messages!].sort(
+                    (a, b) => getTopicActivityTime(a as any) - getTopicActivityTime(b as any),
+                );
+                return { ...prev, [roomId]: merged };
+            });
+        } catch (error) {
+            console.error("Failed to refresh topic starters:", error);
+        }
+    }, [roomId, setRoomMessages]);
+
     useEffect(() => {
         const handleOpenTopic = (event: Event) => {
             const customEvent = event as CustomEvent<{ conversationId?: string; topicId?: string }>;
@@ -2543,6 +2684,11 @@ export const ChatRoomComponent: React.FC<{
                 return;
             }
 
+            setOpenTopicIds((prev) => {
+                const next = new Set(prev);
+                next.add(topicId);
+                return next;
+            });
             setTopicNavigationRequest({
                 topicId,
                 nonce: Date.now(),
@@ -2558,28 +2704,8 @@ export const ChatRoomComponent: React.FC<{
     useEffect(() => {
         if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
         hasLoadedTopicsRef.current = true;
-        const loadTopics = async () => {
-            try {
-                const { fetchTopicStartersAction } = await import("./mongo-actions");
-                const result = await fetchTopicStartersAction(roomId);
-                if (result.success && result.messages && result.messages.length > 0) {
-                    setRoomMessages((prev) => {
-                        const existing = prev[roomId] || [];
-                        const existingIds = new Set(existing.map((m) => m.id));
-                        const newTopics = result.messages!.filter((m) => !existingIds.has(m.id));
-                        if (newTopics.length === 0) return prev;
-                        const merged = [...existing, ...newTopics].sort(
-                            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-                        );
-                        return { ...prev, [roomId]: merged };
-                    });
-                }
-            } catch (error) {
-                console.error("Failed to load topic starters:", error);
-            }
-        };
-        void loadTopics();
-    }, [isLoadingMongo, roomId, setRoomMessages]);
+        void refreshTopicStarters();
+    }, [isLoadingMongo, roomId, refreshTopicStarters]);
 
     const loadOlderMessages = async () => {
         if (!roomId || isLoadingOlder || !hasOlderMessages) return;
@@ -2796,6 +2922,33 @@ export const ChatRoomComponent: React.FC<{
     }, [roomId, roomMessages]);
 
     useEffect(() => {
+        setOpenTopicIds(new Set());
+        setNewThreadInitialTitle("");
+    }, [roomId]);
+
+    const toggleOpenTopic = useCallback((topicId: string) => {
+        setOpenTopicIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(topicId)) {
+                next.delete(topicId);
+            } else {
+                next.add(topicId);
+            }
+            return next;
+        });
+    }, []);
+
+    const topicCount = useMemo(() => getTopicIndexMessages(messages).length, [messages]);
+
+    const openNewTopicModal = useCallback(
+        (useFirstTopicDefault = false) => {
+            setNewThreadInitialTitle(useFirstTopicDefault ? getInitialTopicTitle(topicCount) : "");
+            setShowNewThreadModal(true);
+        },
+        [topicCount],
+    );
+
+    useEffect(() => {
         requestAnimationFrame(() => {
             updateScrollPositionState();
         });
@@ -2854,6 +3007,7 @@ export const ChatRoomComponent: React.FC<{
     }, [messages]);
 
     const handleMessagesRendered = () => {};
+    const scrollBottomPadding = inputBarHeight + (isMobile ? 96 : 16);
 
     useEffect(() => {
         const el = inputBarRef.current;
@@ -2893,7 +3047,7 @@ export const ChatRoomComponent: React.FC<{
                             style={{
                                 overflowAnchor: "auto",
                                 height: "calc(100vh - 300px)",
-                                paddingBottom: inputBarHeight + (isMobile ? 72 : 16),
+                                paddingBottom: scrollBottomPadding,
                             }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
@@ -2926,6 +3080,10 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicOpen={() => {}}
                                     onTopicLoaded={() => {}}
                                     topicNavigationRequest={topicNavigationRequest}
+                                    openTopicIds={openTopicIds}
+                                    onToggleTopic={toggleOpenTopic}
+                                    onCreateTopic={() => openNewTopicModal(true)}
+                                    onTopicActivity={refreshTopicStarters}
                                 />
                             )}
                         </div>
@@ -2934,7 +3092,7 @@ export const ChatRoomComponent: React.FC<{
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
                             className="flex-grow overflow-y-auto p-4"
-                            style={{ overflowAnchor: "auto", paddingBottom: inputBarHeight + 16 }}
+                            style={{ overflowAnchor: "auto", paddingBottom: scrollBottomPadding }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {!isLoadingMongo && hasOlderMessages && (
@@ -2966,6 +3124,10 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicOpen={() => {}}
                                     onTopicLoaded={() => {}}
                                     topicNavigationRequest={topicNavigationRequest}
+                                    openTopicIds={openTopicIds}
+                                    onToggleTopic={toggleOpenTopic}
+                                    onCreateTopic={() => openNewTopicModal(true)}
+                                    onTopicActivity={refreshTopicStarters}
                                 />
                             )}
                         </div>
@@ -2994,50 +3156,36 @@ export const ChatRoomComponent: React.FC<{
 
                     <div
                         ref={inputBarRef}
-                        className="fixed z-10"
+                        className="fixed z-10 box-border"
                         style={{
-                            width: `${inputWidth}px`,
-                            bottom: isMobile ? "72px" : "0px",
+                            ...(isMobile
+                                ? {
+                                      left: "max(12px, env(safe-area-inset-left))",
+                                      right: "max(12px, env(safe-area-inset-right))",
+                                      bottom: "calc(72px + max(8px, env(safe-area-inset-bottom)))",
+                                  }
+                                : {
+                                      width: inputWidth ? `${inputWidth}px` : "100%",
+                                      bottom: "0px",
+                                  }),
                             opacity: hideInput ? 0 : 1,
                         }}
                     >
-                        <div className="flex items-end bg-[#fbfbfb] pb-1 pl-2 pr-2">
+                        <div className="flex items-end bg-[#fbfbfb] pb-1">
                             {isAnnouncementConversation ? (
                                 <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
                                     Replies are disabled for this system conversation.
                                 </div>
                             ) : (
-                                <div className="flex w-full items-end gap-1">
-                                    {!isAnnouncementConversation && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className={`h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${
-                                                isMobile && isMobileComposerExpanded ? "hidden" : "inline-flex"
-                                            }`}
-                                            onClick={() => setShowNewThreadModal(true)}
-                                            disabled={false}
-                                            title="New topic"
-                                        >
-                                            <HiLightBulb className="h-5 w-5" />
-                                        </Button>
-                                    )}
-                                    <div className="flex-1">
-                                        <ChatInput
-                                            roomId={roomId}
-                                            editingMessage={editingMessage}
-                                            setEditingMessage={setEditingMessage}
-                                            mentionCandidates={mentionCandidates}
-                                            chatProvider={provider}
-                                            onMobileComposerExpandedChange={setIsMobileComposerExpanded}
-                                            onMessageSent={() => {
-                                                userHasScrolledUpRef.current = false;
-                                                setShowJumpToLatest(false);
-                                                scrollToBottom("smooth");
-                                            }}
-                                        />
-                                    </div>
-                                </div>
+                                <Button
+                                    type="button"
+                                    className="h-11 w-full rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
+                                    onClick={() => openNewTopicModal(false)}
+                                    title="New topic"
+                                >
+                                    <HiLightBulb className="mr-2 h-5 w-5" />
+                                    New topic
+                                </Button>
                             )}
                         </div>
                     </div>
@@ -3049,6 +3197,7 @@ export const ChatRoomComponent: React.FC<{
                     size="icon"
                     className="fixed left-4 top-4 z-20 h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
                     onClick={() => router.push("/chat")}
+                    aria-label="Back to conversations"
                 >
                     <IoArrowBack className="h-5 w-5" />
                 </Button>
@@ -3056,8 +3205,20 @@ export const ChatRoomComponent: React.FC<{
             {showNewThreadModal && roomId && (
                 <NewThreadModal
                     conversationId={roomId}
+                    initialTitle={newThreadInitialTitle}
                     onClose={() => setShowNewThreadModal(false)}
-                    onCreated={() => {}}
+                    onCreated={(threadId) => {
+                        hasLoadedTopicsRef.current = false;
+                        setNewThreadInitialTitle("");
+                        void refreshTopicStarters();
+                        if (threadId) {
+                            setOpenTopicIds((prev) => {
+                                const next = new Set(prev);
+                                next.add(threadId);
+                                return next;
+                            });
+                        }
+                    }}
                 />
             )}
         </>
