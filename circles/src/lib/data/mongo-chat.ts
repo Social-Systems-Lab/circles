@@ -8,6 +8,7 @@ import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message"
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
+import { buildUnreadMessagesQuery } from "@/lib/chat/unread-counts";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 
 // High-value indexes for chat list/message paths.
@@ -742,11 +743,8 @@ export const getUnreadCountsForUser = async (
             continue;
         }
 
-        const query: any = { conversationId, senderDid: { $ne: userDid } };
         const lastReadObjectId = toObjectId(lastReadId);
-        if (lastReadObjectId) {
-            query._id = { $gt: lastReadObjectId };
-        }
+        const query = buildUnreadMessagesQuery(userDid, conversationId, lastReadObjectId || undefined);
         counts[conversationId] = await ChatMessageDocs.countDocuments(query);
     }
 

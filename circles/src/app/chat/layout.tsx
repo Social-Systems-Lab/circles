@@ -17,6 +17,7 @@ import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
 import { listChatRoomsAction } from "@/components/modules/chat/actions";
 import { addNotificationRefreshListener } from "@/lib/client/notification-events";
+import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -31,50 +32,63 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const openChatIdRef = useRef<string | null>(null);
     const [isChatRoomsLoading, setIsChatRoomsLoading] = useState(true);
     const [hasLoadedChatRooms, setHasLoadedChatRooms] = useState(false);
-    const isLoadingRoomsRef = useRef(false);
+    const roomRefreshRunner = useMemo(
+        () =>
+            createLatestAsyncRunner({
+                load: async () => {
+                    if (!user) {
+                        return { success: true, rooms: [] as ChatRoomDisplay[] };
+                    }
+                    return listChatRoomsAction();
+                },
+                apply: (result) => {
+                    if (!result.success || !result.rooms) {
+                        if (!user) {
+                            setChatRooms([]);
+                        }
+                        return;
+                    }
+
+                    setChatRooms(() => {
+                        return result.rooms!.map((room) => {
+                            if (room._id && room._id === openChatIdRef.current) {
+                                return { ...room, unreadCount: 0 };
+                            }
+                            return room;
+                        });
+                    });
+                    // Sync server unread counts into the atom so Messages icon stays accurate
+                    // This covers topic replies which are not in roomMessages client state
+                    const serverCounts: Record<string, number> = {};
+                    for (const room of result.rooms) {
+                        const roomId = String(room._id || room.handle || "");
+                        if (roomId) {
+                            serverCounts[roomId] =
+                                room._id === openChatIdRef.current ? 0 : (room as any).unreadCount || 0;
+                        }
+                    }
+                    setUnreadCounts((prev) => ({ ...prev, ...serverCounts }));
+                },
+                onError: (error) => {
+                    console.error("Failed to load chat rooms:", error);
+                },
+                onIdle: () => {
+                    setIsChatRoomsLoading(false);
+                    setHasLoadedChatRooms(true);
+                },
+            }),
+        [setUnreadCounts, user],
+    );
 
     const loadRooms = useCallback(async () => {
-        if (isLoadingRoomsRef.current) return;
-        isLoadingRoomsRef.current = true;
+        await roomRefreshRunner.run();
+    }, [roomRefreshRunner]);
 
-        if (!user) {
-            setChatRooms([]);
-            setIsChatRoomsLoading(false);
-            setHasLoadedChatRooms(true);
-            isLoadingRoomsRef.current = false;
-            return;
-        }
-
-        try {
-            const result = await listChatRoomsAction();
-            if (result.success && result.rooms) {
-                setChatRooms(() => {
-                    return result.rooms!.map((room) => {
-                        if (room._id && room._id === openChatIdRef.current) {
-                            return { ...room, unreadCount: 0 };
-                        }
-                        return room;
-                    });
-                });
-                // Sync server unread counts into the atom so Messages icon stays accurate
-                // This covers topic replies which are not in roomMessages client state
-                const serverCounts: Record<string, number> = {};
-                for (const room of result.rooms) {
-                    const roomId = String(room._id || room.handle || "");
-                    if (roomId) {
-                        serverCounts[roomId] = room._id === openChatIdRef.current ? 0 : (room as any).unreadCount || 0;
-                    }
-                }
-                setUnreadCounts((prev) => ({ ...prev, ...serverCounts }));
-            }
-        } catch (error) {
-            console.error("Failed to load chat rooms:", error);
-        } finally {
-            setIsChatRoomsLoading(false);
-            setHasLoadedChatRooms(true);
-            isLoadingRoomsRef.current = false;
-        }
-    }, [setUnreadCounts, user]);
+    useEffect(() => {
+        return () => {
+            roomRefreshRunner.cancel();
+        };
+    }, [roomRefreshRunner]);
 
     useEffect(() => {
         setIsChatRoomsLoading(true);

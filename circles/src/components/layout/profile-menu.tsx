@@ -21,6 +21,7 @@ import { listChatRoomsAction } from "../modules/chat/actions";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
+import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -33,7 +34,6 @@ const ProfileMenuBar = () => {
     const [messageUnreadCount, setMessageUnreadCount] = useState(0);
     const pathname = usePathname();
     const isMobile = useIsMobile();
-    const isRefreshingCountsRef = useRef(false);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -41,49 +41,58 @@ const ProfileMenuBar = () => {
         setIsMounted(true);
     }, []);
 
+    const badgeRefreshRunner = React.useMemo(
+        () =>
+            createLatestAsyncRunner({
+                load: async () => {
+                    if (!user?.did) {
+                        return { messageUnreadCount: 0, notificationUnreadCount: 0 };
+                    }
+
+                    const loadMessageUnreadCount = async () => {
+                        const result = await listChatRoomsAction();
+                        return result.success && result.rooms
+                            ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
+                            : 0;
+                    };
+
+                    const loadNotificationUnreadCount = async () => {
+                        const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
+                        if (!response.ok) {
+                            throw new Error(`Failed to load notification unread count (${response.status})`);
+                        }
+
+                        const data = await response.json();
+                        return typeof data.unreadCount === "number" ? data.unreadCount : 0;
+                    };
+
+                    const [messageUnreadCount, notificationUnreadCount] = await Promise.all([
+                        loadMessageUnreadCount(),
+                        loadNotificationUnreadCount(),
+                    ]);
+
+                    return { messageUnreadCount, notificationUnreadCount };
+                },
+                apply: (counts) => {
+                    setMessageUnreadCount(counts.messageUnreadCount);
+                    setNotificationUnreadCount(counts.notificationUnreadCount);
+                },
+                onError: (error) => {
+                    console.error("Failed to fetch badge counts:", error);
+                },
+            }),
+        [setNotificationUnreadCount, user?.did],
+    );
+
     const refreshBadgeCounts = useCallback(async () => {
-        if (!user?.did) {
-            setNotificationUnreadCount(0);
-            setMessageUnreadCount(0);
-            return;
-        }
+        await badgeRefreshRunner.run();
+    }, [badgeRefreshRunner]);
 
-        if (isRefreshingCountsRef.current) return;
-        isRefreshingCountsRef.current = true;
-
-        const loadMessageUnreadCount = async () => {
-            try {
-                const result = await listChatRoomsAction();
-                const unreadTotal =
-                    result.success && result.rooms
-                        ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
-                        : 0;
-                setMessageUnreadCount(unreadTotal);
-            } catch (error) {
-                console.error("Failed to fetch message unread count:", error);
-            }
+    useEffect(() => {
+        return () => {
+            badgeRefreshRunner.cancel();
         };
-
-        const loadNotificationUnreadCount = async () => {
-            try {
-                const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
-                if (!response.ok) {
-                    throw new Error(`Failed to load notification unread count (${response.status})`);
-                }
-
-                const data = await response.json();
-                setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
-            } catch (error) {
-                console.error("Failed to fetch notification unread count:", error);
-            }
-        };
-
-        try {
-            await Promise.all([loadMessageUnreadCount(), loadNotificationUnreadCount()]);
-        } finally {
-            isRefreshingCountsRef.current = false;
-        }
-    }, [setNotificationUnreadCount, user?.did]);
+    }, [badgeRefreshRunner]);
 
     useEffect(() => {
         void refreshBadgeCounts();

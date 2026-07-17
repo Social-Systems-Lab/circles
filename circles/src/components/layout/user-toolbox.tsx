@@ -1,7 +1,7 @@
 //user-toolbox.tsx - Displays the user toolbox that contains the user's chat rooms, notifications, circles, contacts, and account settings
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -44,6 +44,7 @@ import { LoadingSpinner } from "../ui/loading-spinner";
 import { useToast } from "../ui/use-toast";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
+import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
 
 type Milestone = {
     id: string;
@@ -225,33 +226,42 @@ export const UserToolbox = () => {
         fetchTimelineItems();
     }, [user?.handle]);
 
+    const chatRoomsRefreshRunner = useMemo(
+        () =>
+            createLatestAsyncRunner({
+                load: async () => {
+                    if (!user) {
+                        return { success: true, rooms: [] as ChatRoomDisplay[] };
+                    }
+                    return listChatRoomsAction();
+                },
+                apply: (result) => {
+                    if (result.success && result.rooms) {
+                        setChatRooms(result.rooms);
+                    }
+                },
+                onError: (error) => {
+                    console.error("Failed to load chat rooms:", error);
+                },
+            }),
+        [user],
+    );
+
     useEffect(() => {
-        let isMounted = true;
-        const loadRooms = async () => {
-            if (!user) {
-                if (isMounted) setChatRooms([]);
-                return;
-            }
-            try {
-                const result = await listChatRoomsAction();
-                if (isMounted && result.success && result.rooms) {
-                    setChatRooms(result.rooms);
-                }
-            } catch (error) {
-                console.error("Failed to load chat rooms:", error);
-            }
+        const loadRooms = () => {
+            void chatRoomsRefreshRunner.run();
         };
 
         loadRooms();
         const removeRefreshListener = addNotificationRefreshListener(() => {
-            void loadRooms();
+            loadRooms();
         });
         const handleFocus = () => {
-            void loadRooms();
+            loadRooms();
         };
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") {
-                void loadRooms();
+                loadRooms();
             }
         };
 
@@ -259,12 +269,12 @@ export const UserToolbox = () => {
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
-            isMounted = false;
+            chatRoomsRefreshRunner.cancel();
             removeRefreshListener();
             window.removeEventListener("focus", handleFocus);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [user]);
+    }, [chatRoomsRefreshRunner]);
 
     useEffect(() => {
         let isMounted = true;

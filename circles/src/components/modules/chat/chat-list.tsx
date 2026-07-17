@@ -13,6 +13,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { resolveConversationUnreadCount } from "@/lib/chat/unread-counts";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
@@ -22,7 +23,13 @@ interface ChatListProps {
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
 }
 
-export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, searchTerm, totalChatsCount = chats.length, onChatClick }) => {
+export const ChatList: React.FC<ChatListProps> = ({
+    chats,
+    isLoading = false,
+    searchTerm,
+    totalChatsCount = chats.length,
+    onChatClick,
+}) => {
     const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
@@ -81,10 +88,10 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                             : undefined;
                     const mongoUnread =
                         typeof (chat as any).unreadCount === "number" ? (chat as any).unreadCount : undefined;
-                    const unreadCount =
-                        mongoUnread ||
-                        Object.entries(unreadCounts).find(([key]) => key.startsWith(getConversationId(chat)))?.[1] ||
-                        0;
+                    const atomUnread = Object.entries(unreadCounts).find(([key]) =>
+                        key.startsWith(getConversationId(chat)),
+                    )?.[1];
+                    const unreadCount = resolveConversationUnreadCount(mongoUnread, atomUnread);
 
                     return (
                         <div
@@ -136,7 +143,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                                         isOpen: true,
                                     });
                                 }}
-                                className="flex-shrink-0 rounded-full p-2 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-200"
+                                className="flex-shrink-0 rounded-full p-2 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
                                 aria-label="Chat settings"
                             >
                                 <Settings className="h-4 w-4 text-gray-600" />
@@ -147,7 +154,7 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
             ) : (
                 <div className="flex h-full items-center justify-center pt-4 text-sm text-gray-500">
                     {isLoadingRooms ? (
-                        <p className="flex items-center animate-pulse" aria-live="polite">
+                        <p className="flex animate-pulse items-center" aria-live="polite">
                             <span>Messages loading</span>
                             <LoadingEllipsis />
                         </p>
@@ -161,7 +168,8 @@ export const ChatList: React.FC<ChatListProps> = ({ chats, isLoading = false, se
                             />
                             <h4 className="text-lg font-semibold">No Messages Yet</h4>
                             <p className="max-w-md text-center text-sm text-gray-500">
-                                You haven&apos;t joined any message groups yet. Try exploring artists, hosts, and music communities to message.
+                                You haven&apos;t joined any message groups yet. Try exploring artists, hosts, and music
+                                communities to message.
                             </p>
                             <Button variant="outline" onClick={() => router.push("/circles?tab=discover")}>
                                 Explore Kamooni
