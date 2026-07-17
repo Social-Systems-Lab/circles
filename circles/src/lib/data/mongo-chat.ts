@@ -8,6 +8,7 @@ import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message"
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
+import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -570,6 +571,23 @@ export const fetchTopicStarters = async (conversationId: string): Promise<ChatMe
     const docs = (await ChatMessageDocs.find({ conversationId, thread: { $exists: true } })
         .sort({ createdAt: 1 })
         .toArray()) as ChatMessageDoc[];
+    return docs.map((message) => {
+        if (message._id) {
+            message._id = message._id.toString();
+        }
+        return message;
+    });
+};
+
+export const countLegacyLooseMessages = async (conversationId: string): Promise<number> => {
+    return ChatMessageDocs.countDocuments(buildLegacyLooseMessageQuery(conversationId));
+};
+
+export const fetchLegacyLooseMessages = async (conversationId: string): Promise<ChatMessageDoc[]> => {
+    const docs = (await ChatMessageDocs.find(buildLegacyLooseMessageQuery(conversationId))
+        .sort({ createdAt: 1, _id: 1 })
+        .toArray()) as ChatMessageDoc[];
+
     return docs.map((message) => {
         if (message._id) {
             message._id = message._id.toString();

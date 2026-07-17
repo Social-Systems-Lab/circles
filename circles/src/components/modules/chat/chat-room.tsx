@@ -33,6 +33,8 @@ import {
     IoArrowBack,
     IoArrowDown,
     IoClose,
+    IoChevronDown,
+    IoChevronForward,
     IoSend,
     IoAddCircleOutline,
     IoAttach,
@@ -61,6 +63,11 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { getInitialTopicTitle, getTopicActivityTime, getTopicIndexMessages } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
+import {
+    getLegacyLooseMessages,
+    shouldFetchLegacyLooseMessagesOnExpand,
+    shouldShowLegacyLooseMessageSection,
+} from "@/lib/chat/legacy-messages";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -584,12 +591,271 @@ type ChatMessagesProps = {
     onToggleTopic?: (topicId: string) => void;
     onCreateTopic?: () => void;
     onTopicActivity?: () => Promise<void> | void;
+    bottomAction?: React.ReactNode;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
     if (!message1?.createdBy || !message2?.createdBy) return false;
     if (message1.type !== "m.room.message" || message2.type !== "m.room.message") return false;
     return message1.createdBy === message2.createdBy;
+};
+
+const formatLegacyMessageTime = (date: Date) =>
+    date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+
+const formatLegacyDateLabel = (date: Date) => date.toDateString();
+
+const LegacyReadOnlyMessageRow: React.FC<{
+    message: ChatMessage;
+    previousMessage?: ChatMessage | null;
+    nextMessage?: ChatMessage | null;
+    isDirect?: boolean;
+    currentUserDid?: string;
+}> = ({ message, previousMessage, nextMessage, isDirect = false, currentUserDid }) => {
+    const createdAt = new Date(message.createdAt);
+    const previousCreatedAt = previousMessage ? new Date(previousMessage.createdAt) : null;
+    const nextCreatedAt = nextMessage ? new Date(nextMessage.createdAt) : null;
+    const isSameDayAsPrevious =
+        !!previousCreatedAt &&
+        createdAt.getFullYear() === previousCreatedAt.getFullYear() &&
+        createdAt.getMonth() === previousCreatedAt.getMonth() &&
+        createdAt.getDate() === previousCreatedAt.getDate();
+    const isSameDayAsNext =
+        !!nextCreatedAt &&
+        createdAt.getFullYear() === nextCreatedAt.getFullYear() &&
+        createdAt.getMonth() === nextCreatedAt.getMonth() &&
+        createdAt.getDate() === nextCreatedAt.getDate();
+    const isOwnMessage = message.createdBy === currentUserDid;
+    const isFirstInChain = !previousMessage || !sameAuthor(previousMessage, message) || !isSameDayAsPrevious;
+    const isLastInChain = !nextMessage || !sameAuthor(nextMessage, message) || !isSameDayAsNext;
+    const isNonPreviewSender = isNonPreviewSystemSenderMessage(message);
+    const senderLabel = message.author?.name || message.createdBy;
+
+    return (
+        <>
+            {!isSameDayAsPrevious && (
+                <div className="my-2 text-center text-xs text-gray-500">
+                    <span className="rounded-full bg-gray-200 px-2 py-1 shadow-sm">
+                        {Number.isNaN(createdAt.getTime()) ? "Date unavailable" : formatLegacyDateLabel(createdAt)}
+                    </span>
+                </div>
+            )}
+            <div
+                className={`mb-1 flex gap-2 ${isFirstInChain ? "mt-3" : "mt-1"} ${isOwnMessage ? "justify-end" : "justify-start"}`}
+            >
+                {!isDirect &&
+                    !isOwnMessage &&
+                    (isLastInChain ? (
+                        <CirclePicture
+                            circle={message.author!}
+                            size="28px"
+                            className="mb-1 flex-shrink-0 self-end"
+                            openPreview={!isNonPreviewSender}
+                        />
+                    ) : (
+                        <div className="w-7 flex-shrink-0" />
+                    ))}
+                <div className="relative flex min-w-[100px] max-w-[75%] flex-col">
+                    <div
+                        className={`${CHAT_STANDARD_BUBBLE_CLASS} p-2 pr-4 shadow-sm`}
+                        style={{ borderRadius: "12px" }}
+                    >
+                        {isFirstInChain && !isOwnMessage && !isDirect && (
+                            <div
+                                className="text-xs font-semibold"
+                                style={{ color: generateColorFromString(senderLabel || "") }}
+                            >
+                                {senderLabel}
+                            </div>
+                        )}
+                        <MessageRenderer message={message} />
+                        {isLastInChain && (
+                            <div className="mt-0 flex items-center justify-end gap-1 text-[9px] text-gray-400">
+                                <span>
+                                    {Number.isNaN(createdAt.getTime()) ? "" : formatLegacyMessageTime(createdAt)}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    {message.reactions && Object.keys(message.reactions).length > 0 && (
+                        <div
+                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                        >
+                            {Object.entries(message.reactions).map(([reaction, reactions]) => (
+                                <div
+                                    key={reaction}
+                                    className="flex items-center rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs"
+                                >
+                                    <span>{reaction}</span>
+                                    {reactions.length > 1 && (
+                                        <span className="ml-1 text-gray-600">{reactions.length}</span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                {!isDirect &&
+                    isOwnMessage &&
+                    (isLastInChain ? (
+                        <CirclePicture
+                            circle={message.author!}
+                            size="28px"
+                            className="mb-1 flex-shrink-0 self-end"
+                            openPreview={false}
+                        />
+                    ) : (
+                        <div className="w-7 flex-shrink-0" />
+                    ))}
+            </div>
+        </>
+    );
+};
+
+const EarlierMessagesSection: React.FC<{
+    conversationId?: string;
+    isDirect?: boolean;
+    currentUserDid?: string;
+}> = ({ conversationId, isDirect = false, currentUserDid }) => {
+    const [count, setCount] = useState<number | null>(null);
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [messages, setMessages] = useState<ChatMessage[] | null>(null);
+    const [isCountLoading, setIsCountLoading] = useState(false);
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+    const [countError, setCountError] = useState<string | null>(null);
+    const [messagesError, setMessagesError] = useState<string | null>(null);
+
+    const loadCount = useCallback(async () => {
+        if (!conversationId) {
+            setCount(0);
+            return;
+        }
+
+        setIsCountLoading(true);
+        setCountError(null);
+        try {
+            const { getLegacyLooseMessageCountAction } = await import("./mongo-actions");
+            const result = await getLegacyLooseMessageCountAction(conversationId);
+            if (!result.success) {
+                setCountError(result.message || "Earlier messages could not be checked.");
+                return;
+            }
+            setCount(result.count || 0);
+        } catch (error) {
+            console.error("Failed to load earlier message count:", error);
+            setCountError("Earlier messages could not be checked.");
+        } finally {
+            setIsCountLoading(false);
+        }
+    }, [conversationId]);
+
+    const loadMessages = useCallback(async () => {
+        if (!conversationId || isLoadingMessages) return;
+        setIsLoadingMessages(true);
+        setMessagesError(null);
+        try {
+            const { fetchLegacyLooseMessagesAction } = await import("./mongo-actions");
+            const result = await fetchLegacyLooseMessagesAction(conversationId);
+            if (!result.success) {
+                setMessagesError(result.message || "Earlier messages could not be loaded.");
+                return;
+            }
+            setMessages(getLegacyLooseMessages(result.messages || []));
+        } catch (error) {
+            console.error("Failed to load earlier messages:", error);
+            setMessagesError("Earlier messages could not be loaded.");
+        } finally {
+            setIsLoadingMessages(false);
+        }
+    }, [conversationId, isLoadingMessages]);
+
+    useEffect(() => {
+        setCount(null);
+        setMessages(null);
+        setIsExpanded(false);
+        void loadCount();
+    }, [loadCount]);
+
+    const toggleExpanded = () => {
+        const nextExpanded = !isExpanded;
+        setIsExpanded(nextExpanded);
+        if (
+            shouldFetchLegacyLooseMessagesOnExpand({
+                isExpanded: nextExpanded,
+                hasLoadedMessages: messages !== null,
+                isLoadingMessages,
+            })
+        ) {
+            void loadMessages();
+        }
+    };
+
+    if (isCountLoading && count === null && !countError) return null;
+    if (!countError && !shouldShowLegacyLooseMessageSection(count)) return null;
+
+    const messageCountLabel = count === 1 ? "1 earlier message" : `${count ?? 0} earlier messages`;
+
+    return (
+        <section className={`${CHAT_TOPIC_BACKGROUND_CLASS} overflow-hidden rounded-lg shadow-sm`}>
+            <button
+                type="button"
+                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                onClick={toggleExpanded}
+                aria-expanded={isExpanded}
+            >
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900">Earlier messages</div>
+                    <div className="text-xs text-gray-600">
+                        Messages sent before topic-based discussions were introduced.
+                    </div>
+                    {countError ? (
+                        <div className="mt-1 text-xs text-red-600">{countError}</div>
+                    ) : (
+                        <div className="mt-1 text-xs font-medium text-gray-700">{messageCountLabel}</div>
+                    )}
+                </div>
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/70 text-gray-700">
+                    {isExpanded ? <IoChevronDown className="h-5 w-5" /> : <IoChevronForward className="h-5 w-5" />}
+                </span>
+            </button>
+            {countError && (
+                <div className="border-t border-[#DDEBB8] bg-white/60 px-4 py-3">
+                    <Button size="sm" variant="outline" onClick={() => void loadCount()}>
+                        Retry
+                    </Button>
+                </div>
+            )}
+            {isExpanded && !countError && (
+                <div className="border-t border-[#DDEBB8] bg-white/50 px-3 py-3">
+                    {isLoadingMessages && (
+                        <div className="px-1 py-3 text-sm text-gray-500">Loading earlier messages...</div>
+                    )}
+                    {messagesError && (
+                        <div className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            <div>{messagesError}</div>
+                            <Button size="sm" variant="outline" className="mt-2" onClick={() => void loadMessages()}>
+                                Retry
+                            </Button>
+                        </div>
+                    )}
+                    {!isLoadingMessages && !messagesError && messages?.length === 0 && (
+                        <div className="px-1 py-3 text-sm text-gray-500">No earlier messages found.</div>
+                    )}
+                    {!messagesError &&
+                        messages?.map((message, index) => (
+                            <LegacyReadOnlyMessageRow
+                                key={message.id}
+                                message={message}
+                                previousMessage={index > 0 ? messages[index - 1] : null}
+                                nextMessage={index < messages.length - 1 ? messages[index + 1] : null}
+                                isDirect={isDirect}
+                                currentUserDid={currentUserDid}
+                            />
+                        ))}
+                </div>
+            )}
+        </section>
+    );
 };
 
 const ChatMessages: React.FC<ChatMessagesProps> = ({
@@ -609,6 +875,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onToggleTopic,
     onCreateTopic,
     onTopicActivity,
+    bottomAction,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -730,8 +997,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const topicMessages = getTopicIndexMessages(messages);
     const orderedMessages = topicMessages;
 
-    if (topicMessages.length === 0) {
-        return (
+    const emptyTopicState =
+        topicMessages.length === 0 ? (
             <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F6DF] text-amber-600">
                     <HiLightBulb className="h-6 w-6" />
@@ -749,11 +1016,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                     </Button>
                 )}
             </div>
-        );
-    }
+        ) : null;
 
     return (
         <div className="space-y-3">
+            <EarlierMessagesSection
+                conversationId={conversationId}
+                isDirect={isDirect}
+                currentUserDid={user?.did || currentUser?.did}
+            />
+            {emptyTopicState}
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
                 if ((message as any).thread) {
                     const currentDateKey = getTopicCreationDateKey(message);
@@ -993,6 +1265,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
+            {bottomAction}
             <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
@@ -2955,6 +3228,25 @@ export const ChatRoomComponent: React.FC<{
         [topicCount],
     );
 
+    const openTopicComposerFromMobile = useCallback(() => {
+        openNewTopicModal(topicCount <= 0);
+    }, [openNewTopicModal, topicCount]);
+
+    const mobileBottomNewTopicAction =
+        isMobile && !isAnnouncementConversation ? (
+            <div className="pb-[calc(88px+env(safe-area-inset-bottom))] pt-3">
+                <Button
+                    type="button"
+                    className="h-11 w-full rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
+                    onClick={openTopicComposerFromMobile}
+                    title="New topic"
+                >
+                    <IoAddCircleOutline className="mr-2 h-5 w-5" />
+                    New topic
+                </Button>
+            </div>
+        ) : null;
+
     useEffect(() => {
         requestAnimationFrame(() => {
             updateScrollPositionState();
@@ -3091,6 +3383,7 @@ export const ChatRoomComponent: React.FC<{
                                     onToggleTopic={toggleOpenTopic}
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
+                                    bottomAction={mobileBottomNewTopicAction}
                                 />
                             )}
                         </div>
@@ -3135,6 +3428,7 @@ export const ChatRoomComponent: React.FC<{
                                     onToggleTopic={toggleOpenTopic}
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
+                                    bottomAction={mobileBottomNewTopicAction}
                                 />
                             )}
                         </div>
@@ -3161,53 +3455,60 @@ export const ChatRoomComponent: React.FC<{
                         </Button>
                     )}
 
-                    <div
-                        ref={inputBarRef}
-                        className="fixed z-10 box-border"
-                        style={{
-                            ...(isMobile
-                                ? {
-                                      left: "max(12px, env(safe-area-inset-left))",
-                                      right: "max(12px, env(safe-area-inset-right))",
-                                      bottom: "calc(72px + max(8px, env(safe-area-inset-bottom)))",
-                                  }
-                                : {
-                                      width: inputWidth ? `${inputWidth}px` : "100%",
-                                      bottom: "0px",
-                                  }),
-                            opacity: hideInput ? 0 : 1,
-                        }}
-                    >
-                        <div className="flex items-end bg-[#fbfbfb] pb-1">
-                            {isAnnouncementConversation ? (
-                                <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                                    Replies are disabled for this system conversation.
-                                </div>
-                            ) : (
-                                <Button
-                                    type="button"
-                                    className="h-11 w-full rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
-                                    onClick={() => openNewTopicModal(false)}
-                                    title="New topic"
-                                >
-                                    <HiLightBulb className="mr-2 h-5 w-5" />
-                                    New topic
-                                </Button>
-                            )}
+                    {!isMobile && (
+                        <div
+                            ref={inputBarRef}
+                            className="fixed z-10 box-border"
+                            style={{
+                                width: inputWidth ? `${inputWidth}px` : "100%",
+                                bottom: "0px",
+                                opacity: hideInput ? 0 : 1,
+                            }}
+                        >
+                            <div className="flex items-end bg-[#fbfbfb] pb-1">
+                                {isAnnouncementConversation ? (
+                                    <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                        Replies are disabled for this system conversation.
+                                    </div>
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        className="h-11 w-full rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
+                                        onClick={() => openNewTopicModal(false)}
+                                        title="New topic"
+                                    >
+                                        <HiLightBulb className="mr-2 h-5 w-5" />
+                                        New topic
+                                    </Button>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
             {isMobile && !inToolbox && (
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="fixed left-4 top-4 z-20 h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                    onClick={() => router.push("/chat")}
-                    aria-label="Back to conversations"
-                >
-                    <IoArrowBack className="h-5 w-5" />
-                </Button>
+                <div className="fixed left-4 top-4 z-20 flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                        onClick={() => router.push("/chat")}
+                        aria-label="Back to conversations"
+                    >
+                        <IoArrowBack className="h-5 w-5" />
+                    </Button>
+                    {!isAnnouncementConversation && (
+                        <Button
+                            type="button"
+                            className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
+                            onClick={openTopicComposerFromMobile}
+                            title="New topic"
+                        >
+                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+                            <span className="max-w-[6.5rem] truncate">New topic</span>
+                        </Button>
+                    )}
+                </div>
             )}
             {showNewThreadModal && roomId && (
                 <NewThreadModal
