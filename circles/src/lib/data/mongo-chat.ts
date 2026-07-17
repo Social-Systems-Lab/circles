@@ -7,6 +7,7 @@ import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-se
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
+import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -138,7 +139,7 @@ export const findConversationByHandleForUser = async (
     userDid: string,
     handle: string,
 ): Promise<ChatConversation | null> => {
-    console.log('DEBUG findConversationByHandleForUser', { userDid, handle });
+    console.log("DEBUG findConversationByHandleForUser", { userDid, handle });
     // 1) Group chats by circle handle
     const circle = await getCircleByHandle(handle);
     if (circle?._id) {
@@ -176,7 +177,6 @@ export const findConversationByHandleForUser = async (
 
     return conversation ? normalizeConversation(conversation) : null;
 };
- 
 
 export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): Promise<ChatConversation> => {
     const participants = [userA.did!, userB.did!].sort();
@@ -251,10 +251,13 @@ export const ensureWelcomeMessageForNewUser = async (
         );
     }
 
-    const existingWelcomeMessage = await ChatMessageDocs.findOne({
-        conversationId,
-        source: config.source,
-    }, { sort: { createdAt: 1 } });
+    const existingWelcomeMessage = await ChatMessageDocs.findOne(
+        {
+            conversationId,
+            source: config.source,
+        },
+        { sort: { createdAt: 1 } },
+    );
 
     if (existingWelcomeMessage) {
         const messageObjectId = toObjectId(String(existingWelcomeMessage._id));
@@ -350,7 +353,11 @@ const mapConversationsToChatRoomDisplays = async (
             matrixRoomId: conversation._id.toString(),
             name: circle?.name || otherCircle?.name || conversation.name || "Chat",
             description: conversation.description || circle?.description,
-            handle: circle?.handle || (isDirect ? conversation.handle : otherCircle?.handle) || conversation.handle || "chat",
+            handle:
+                circle?.handle ||
+                (isDirect ? conversation.handle : otherCircle?.handle) ||
+                conversation.handle ||
+                "chat",
             circleId: conversation.circleId,
             createdAt: conversation.createdAt,
             userGroups: [],
@@ -537,14 +544,11 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
         const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
         return bTime - aTime;
     });
-    
+
     return mapConversationsToChatRoomDisplays(userDid, visibleConversations);
 };
 
-export const fetchRecentMessages = async (
-    conversationId: string,
-    limit: number = 50,
-): Promise<ChatMessageDoc[]> => {
+export const fetchRecentMessages = async (conversationId: string, limit: number = 50): Promise<ChatMessageDoc[]> => {
     // Fetch the most recent messages by sorting descending, then reverse for display order
     const messages = (await ChatMessageDocs.find({ conversationId, threadId: { $exists: false } })
         .sort({ _id: -1 })
@@ -585,10 +589,7 @@ export const fetchMessagesSince = async (
         query._id = { $gt: sinceObjectId };
     }
 
-    const messages = (await ChatMessageDocs.find(query)
-        .sort({ _id: 1 })
-        .limit(limit)
-        .toArray()) as ChatMessageDoc[];
+    const messages = (await ChatMessageDocs.find(query).sort({ _id: 1 }).limit(limit).toArray()) as ChatMessageDoc[];
 
     return messages.map((message) => {
         if (message._id) {
@@ -596,6 +597,15 @@ export const fetchMessagesSince = async (
         }
         return message;
     });
+};
+
+export const getLatestMessageIdForConversation = async (conversationId: string): Promise<string | null> => {
+    if (!conversationId) return null;
+
+    const lookup = buildLatestConversationMessageLookup(conversationId);
+    const latest = (await ChatMessageDocs.findOne(lookup.filter, lookup.options)) as Pick<ChatMessageDoc, "_id"> | null;
+
+    return latest?._id ? latest._id.toString() : null;
 };
 
 export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessageDoc> => {
@@ -609,11 +619,7 @@ export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessag
     return { ...message, _id: result.insertedId.toString() };
 };
 
-export const updateMessage = async (
-    messageId: string,
-    userDid: string,
-    body: string,
-): Promise<boolean> => {
+export const updateMessage = async (messageId: string, userDid: string, body: string): Promise<boolean> => {
     const objectId = toObjectId(messageId);
     if (!objectId) return false;
     const result = await ChatMessageDocs.updateOne(
@@ -704,9 +710,7 @@ export const getUnreadCountsForUser = async (
         conversationId: { $in: conversationIds },
     }).toArray();
 
-    const lastReadByConversation = new Map(
-        readStates.map((state) => [state.conversationId, state.lastReadMessageId]),
-    );
+    const lastReadByConversation = new Map(readStates.map((state) => [state.conversationId, state.lastReadMessageId]));
 
     const counts: Record<string, number> = {};
     for (const conversationId of conversationIds) {
@@ -813,10 +817,7 @@ export const createThread = async (
     return { ...doc, _id: result.insertedId.toString() };
 };
 
-export const findThreadStarter = async (
-    threadId: string,
-    conversationId: string,
-): Promise<ChatMessageDoc | null> => {
+export const findThreadStarter = async (threadId: string, conversationId: string): Promise<ChatMessageDoc | null> => {
     const objectId = toObjectId(threadId);
     if (!objectId) return null;
 
@@ -862,10 +863,7 @@ export const createThreadReply = async (
                 $inc: { "thread.replyCount": 1 },
             },
         ),
-        ChatConversations.updateOne(
-            { _id: new ObjectId(conversationId) },
-            { $set: { updatedAt: now } },
-        ),
+        ChatConversations.updateOne({ _id: new ObjectId(conversationId) }, { $set: { updatedAt: now } }),
     ]);
     return { ...doc, _id: result.insertedId.toString() };
 };

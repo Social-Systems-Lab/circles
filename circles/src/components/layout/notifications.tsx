@@ -28,6 +28,7 @@ import { Hammer, AlertCircle } from "lucide-react"; // Gavel icon for proposals,
 import { AiFillHeart } from "react-icons/ai";
 import { Button } from "../ui/button";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { addNotificationRefreshListener, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
 
 type Notification = {
     id: string;
@@ -126,6 +127,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     const [isMarkingAllAsRead, setIsMarkingAllAsRead] = useState(false);
     const [isClearingRead, setIsClearingRead] = useState(false);
     const router = useRouter();
+    const isFetchingNotificationsRef = React.useRef(false);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -141,6 +143,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             return;
         }
 
+        if (isFetchingNotificationsRef.current) return;
+        isFetchingNotificationsRef.current = true;
         setIsLoading(true);
         try {
             const response = await fetch("/api/notifications?limit=50", { cache: "no-store" });
@@ -151,9 +155,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             const data = await response.json();
             setRecords(Array.isArray(data.notifications) ? data.notifications : []);
             setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
-            setIsLoading(false);
         } catch (error) {
             console.error("Failed to fetch notifications:", error);
+        } finally {
+            isFetchingNotificationsRef.current = false;
             setIsLoading(false);
         }
     }, [setNotificationUnreadCount, user?.did]);
@@ -168,8 +173,27 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         const intervalId = window.setInterval(() => {
             void fetchNotifications();
         }, 15000);
+        const removeRefreshListener = addNotificationRefreshListener(() => {
+            void fetchNotifications();
+        });
+        const handleFocus = () => {
+            void fetchNotifications();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                void fetchNotifications();
+            }
+        };
 
-        return () => window.clearInterval(intervalId);
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            window.clearInterval(intervalId);
+            removeRefreshListener();
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
     }, [fetchNotifications, user?.did]);
 
     const notifications = useMemo(() => {
@@ -359,7 +383,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             setNotificationUnreadCount((count) => Math.max(0, count - unreadIds.length));
 
             try {
-                await Promise.all(
+                const responses = await Promise.all(
                     unreadIds.map((notificationId) =>
                         fetch("/api/notifications/mark-as-read", {
                             method: "POST",
@@ -368,6 +392,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                         }),
                     ),
                 );
+                if (responses.some((response) => !response.ok)) {
+                    throw new Error("Failed to mark notification group as read");
+                }
+                dispatchNotificationRefreshIfOk({ ok: true }, { reason: "notification-read" });
             } catch (error) {
                 console.error("Failed to mark notification group as read:", error);
                 void fetchNotifications();
@@ -401,6 +429,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             if (!response.ok) {
                 throw new Error(`Failed to mark all notifications as read (${response.status})`);
             }
+            dispatchNotificationRefreshIfOk(response, { reason: "notifications-read" });
         } catch (error) {
             console.error("Failed to mark all notifications as read:", error);
             void fetchNotifications();
@@ -415,7 +444,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         setIsClearingRead(true);
 
         // Optimistic UI: remove read notifications
-        setRecords(prev => prev.filter(r => !r.isRead));
+        setRecords((prev) => prev.filter((r) => !r.isRead));
 
         try {
             const res = await fetch("/api/notifications/clear-read", {
@@ -423,6 +452,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             });
 
             if (!res.ok) throw new Error("Failed to clear read notifications");
+            dispatchNotificationRefreshIfOk(res, { reason: "notifications-cleared" });
         } catch (err) {
             console.error(err);
             void fetchNotifications();
@@ -477,15 +507,19 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "comment_like":
                 case "post_mention":
                 case "comment_mention":
-                    return getParentItemUrl(notification) ||
-                        (notification.postId ? `/circles/${circleHandle}/post/${notification.postId}` : null);
+                    return (
+                        getParentItemUrl(notification) ||
+                        (notification.postId ? `/circles/${circleHandle}/post/${notification.postId}` : null)
+                    );
                 case "proposal_submitted_for_review":
                 case "proposal_moved_to_voting":
                 case "proposal_approved_for_voting":
                 case "proposal_resolved":
                 case "proposal_resolved_voter":
                 case "proposal_vote":
-                    return notification.proposalId ? `/circles/${circleHandle}/proposals/${notification.proposalId}` : null;
+                    return notification.proposalId
+                        ? `/circles/${circleHandle}/proposals/${notification.proposalId}`
+                        : null;
                 case "issue_submitted_for_review":
                 case "issue_approved":
                 case "issue_assigned":
@@ -518,62 +552,65 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         [user?.handle],
     );
 
-    const getNotificationActionLabel = useCallback((groupedNotification: GroupedNotification) => {
-        const notification = groupedNotification.latestNotification;
-        const href = getNotificationHref(notification);
+    const getNotificationActionLabel = useCallback(
+        (groupedNotification: GroupedNotification) => {
+            const notification = groupedNotification.latestNotification;
+            const href = getNotificationHref(notification);
 
-        if (!href) {
-            return null;
-        }
-
-        switch (notification.notificationType) {
-            case "contact_request_received":
-                return "Respond";
-            case "pm_received":
-                return "Reply";
-            case "task_assigned":
-            case "task_shift_signup":
-                return "Review";
-            case "user_verification_request":
-            case "user_verification_reply_received":
-                return "Review";
-            case "user_verification_clarification_requested":
-                return "Respond";
-            case "task_shift_confirmed":
-                return "Open";
-            case "task_accepted":
-                return "View";
-            case "task_shift_attendance_verified":
-            case "task_changes_requested":
-            case "task_verified":
-            case "task_claim_approved":
-            case "task_claim_declined":
-            case "post_comment":
-            case "comment_reply":
-            case "post_mention":
-            case "comment_mention":
-            case "task_status_changed":
-            case "task_approved":
-            case "task_submitted_for_review":
-            case "task_claim_submitted":
-            case "task_changes_requested":
-            case "task_verified":
-            case "issue_assigned":
-            case "issue_status_changed":
-            case "issue_approved":
-            case "issue_submitted_for_review":
-            case "goal_status_changed":
-            case "goal_approved":
-            case "goal_submitted_for_review":
-            case "proposal_submitted_for_review":
-            case "proposal_moved_to_voting":
-            case "proposal_approved_for_voting":
-            case "proposal_resolved":
-                return "View";
-            default:
+            if (!href) {
                 return null;
-        }
-    }, [getNotificationHref]);
+            }
+
+            switch (notification.notificationType) {
+                case "contact_request_received":
+                    return "Respond";
+                case "pm_received":
+                    return "Reply";
+                case "task_assigned":
+                case "task_shift_signup":
+                    return "Review";
+                case "user_verification_request":
+                case "user_verification_reply_received":
+                    return "Review";
+                case "user_verification_clarification_requested":
+                    return "Respond";
+                case "task_shift_confirmed":
+                    return "Open";
+                case "task_accepted":
+                    return "View";
+                case "task_shift_attendance_verified":
+                case "task_changes_requested":
+                case "task_verified":
+                case "task_claim_approved":
+                case "task_claim_declined":
+                case "post_comment":
+                case "comment_reply":
+                case "post_mention":
+                case "comment_mention":
+                case "task_status_changed":
+                case "task_approved":
+                case "task_submitted_for_review":
+                case "task_claim_submitted":
+                case "task_changes_requested":
+                case "task_verified":
+                case "issue_assigned":
+                case "issue_status_changed":
+                case "issue_approved":
+                case "issue_submitted_for_review":
+                case "goal_status_changed":
+                case "goal_approved":
+                case "goal_submitted_for_review":
+                case "proposal_submitted_for_review":
+                case "proposal_moved_to_voting":
+                case "proposal_approved_for_voting":
+                case "proposal_resolved":
+                    return "View";
+                default:
+                    return null;
+            }
+        },
+        [getNotificationHref],
+    );
 
     const getNotificationActionClassName = useCallback((groupedNotification: GroupedNotification) => {
         if (groupedNotification.latestNotification.notificationType === "contact_request_received") {
@@ -583,20 +620,23 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
         return "ml-2 rounded-md border px-2 py-1 text-xs text-gray-600 hover:bg-gray-100";
     }, []);
 
-    const handleNotificationClick = useCallback(async (groupedNotification: GroupedNotification) => {
-        await markNotificationGroupAsRead(groupedNotification);
-        if (onNavigate) {
-            onNavigate();
-        }
+    const handleNotificationClick = useCallback(
+        async (groupedNotification: GroupedNotification) => {
+            await markNotificationGroupAsRead(groupedNotification);
+            if (onNavigate) {
+                onNavigate();
+            }
 
-        const href = getNotificationHref(groupedNotification.latestNotification);
-        if (href) {
-            router.push(href);
-            return;
-        }
+            const href = getNotificationHref(groupedNotification.latestNotification);
+            if (href) {
+                router.push(href);
+                return;
+            }
 
-        console.log("Unknown notification type:", groupedNotification.latestNotification.notificationType);
-    }, [getNotificationHref, markNotificationGroupAsRead, onNavigate, router]);
+            console.log("Unknown notification type:", groupedNotification.latestNotification.notificationType);
+        },
+        [getNotificationHref, markNotificationGroupAsRead, onNavigate, router],
+    );
 
     // Helper function to create a grouped notification message
     const createGroupedMessage = (groupedNotification: GroupedNotification) => {
@@ -806,9 +846,12 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
 
                                         {/* Post/Proposal icon in bottom-right position */}
                                         <div className="absolute bottom-0 right-0 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-gray-100">
-                                            {["post_comment", "comment_reply", "post_mention", "comment_mention"].includes(
-                                                groupedNotification.latestNotification.notificationType,
-                                            ) ? (
+                                            {[
+                                                "post_comment",
+                                                "comment_reply",
+                                                "post_mention",
+                                                "comment_mention",
+                                            ].includes(groupedNotification.latestNotification.notificationType) ? (
                                                 <MdOutlineArticle size="14px" />
                                             ) : ["proposal_vote", "proposal_submitted_for_review"].includes(
                                                   groupedNotification.latestNotification.notificationType,

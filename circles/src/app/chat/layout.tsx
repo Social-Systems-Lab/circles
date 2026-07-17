@@ -1,7 +1,7 @@
 // chat/layout.tsx - chat layout component, lists all chat rooms and shows selected chat room
 "use client";
 
-import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
+import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -15,7 +15,8 @@ import { SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
-import { listChatRoomsAction, markConversationReadAction } from "@/components/modules/chat/actions";
+import { listChatRoomsAction } from "@/components/modules/chat/actions";
+import { addNotificationRefreshListener } from "@/lib/client/notification-events";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -30,65 +31,81 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const openChatIdRef = useRef<string | null>(null);
     const [isChatRoomsLoading, setIsChatRoomsLoading] = useState(true);
     const [hasLoadedChatRooms, setHasLoadedChatRooms] = useState(false);
+    const isLoadingRoomsRef = useRef(false);
 
-    useEffect(() => {
-        let isMounted = true;
-        if (isMounted) {
-            setIsChatRoomsLoading(true);
-            setHasLoadedChatRooms(false);
+    const loadRooms = useCallback(async () => {
+        if (isLoadingRoomsRef.current) return;
+        isLoadingRoomsRef.current = true;
+
+        if (!user) {
+            setChatRooms([]);
+            setIsChatRoomsLoading(false);
+            setHasLoadedChatRooms(true);
+            isLoadingRoomsRef.current = false;
+            return;
         }
 
-        const loadRooms = async () => {
-            if (!user) {
-                if (isMounted) {
-                    setChatRooms([]);
-                }
-                return;
-            }
-            try {
-                const result = await listChatRoomsAction();
-                if (isMounted && result.success && result.rooms) {
-                    setChatRooms((prev) => {
-                        return result.rooms!.map((room) => {
-                            if (room._id && room._id === openChatIdRef.current) {
-                                return { ...room, unreadCount: 0 };
-                            }
-                            return room;
-                        });
-                    });
-                    // Sync server unread counts into the atom so Messages icon stays accurate
-                    // This covers topic replies which are not in roomMessages client state
-                    const serverCounts: Record<string, number> = {};
-                    for (const room of result.rooms) {
-                        const roomId = String(room._id || room.handle || "");
-                        if (roomId) {
-                            serverCounts[roomId] = room._id === openChatIdRef.current
-                                ? 0
-                                : (room as any).unreadCount || 0;
+        try {
+            const result = await listChatRoomsAction();
+            if (result.success && result.rooms) {
+                setChatRooms(() => {
+                    return result.rooms!.map((room) => {
+                        if (room._id && room._id === openChatIdRef.current) {
+                            return { ...room, unreadCount: 0 };
                         }
+                        return room;
+                    });
+                });
+                // Sync server unread counts into the atom so Messages icon stays accurate
+                // This covers topic replies which are not in roomMessages client state
+                const serverCounts: Record<string, number> = {};
+                for (const room of result.rooms) {
+                    const roomId = String(room._id || room.handle || "");
+                    if (roomId) {
+                        serverCounts[roomId] = room._id === openChatIdRef.current ? 0 : (room as any).unreadCount || 0;
                     }
-                    setUnreadCounts((prev) => ({ ...prev, ...serverCounts }));
                 }
-            } catch (error) {
-                console.error("Failed to load chat rooms:", error);
-            } finally {
-                if (isMounted) {
-                    setIsChatRoomsLoading(false);
-                    setHasLoadedChatRooms(true);
-                }
+                setUnreadCounts((prev) => ({ ...prev, ...serverCounts }));
             }
-        };
+        } catch (error) {
+            console.error("Failed to load chat rooms:", error);
+        } finally {
+            setIsChatRoomsLoading(false);
+            setHasLoadedChatRooms(true);
+            isLoadingRoomsRef.current = false;
+        }
+    }, [setUnreadCounts, user]);
 
-        loadRooms();
+    useEffect(() => {
+        setIsChatRoomsLoading(true);
+        setHasLoadedChatRooms(false);
+
+        void loadRooms();
 
         // poll so unreadCount updates (mongo chat)
         const interval = setInterval(loadRooms, 3000);
+        const removeRefreshListener = addNotificationRefreshListener(() => {
+            void loadRooms();
+        });
+        const handleFocus = () => {
+            void loadRooms();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                void loadRooms();
+            }
+        };
+
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
-            isMounted = false;
             clearInterval(interval);
+            removeRefreshListener();
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [user]);
+    }, [loadRooms]);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -158,7 +175,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             totalChatsCount={chatRooms.length}
                             onChatClick={(chat) => {
                                 // Track which chat is open so polling doesn't flash the badge
-                                openChatIdRef.current = chat._id as string || null;
+                                openChatIdRef.current = (chat._id as string) || null;
                                 // Optimistic UI: clear sidebar badge immediately
                                 setChatRooms((prev) =>
                                     prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)),

@@ -60,6 +60,7 @@ import {
 } from "@/components/modules/home/actions";
 import { useToast } from "@/components/ui/use-toast";
 import { getInitialTopicTitle, getTopicActivityTime, getTopicIndexMessages } from "./chat-topic-utils";
+import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -1255,6 +1256,7 @@ const ChatInput = ({
             const result = await sendMessageAction(roomId, trimmedMessage, replyTarget?.id);
 
             if (result.success) {
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId });
                 const eventId = (result as any).eventId || (result as any).messageId;
 
                 if (!eventId) {
@@ -1381,6 +1383,7 @@ const ChatInput = ({
             const result = await sendAttachmentAction(formData);
 
             if (result.success) {
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId });
                 setReplyToMessage(null);
                 onMessageSent?.();
             } else {
@@ -1850,6 +1853,7 @@ const TopicCard: React.FC<{
             const { sendThreadReplyAction } = await import("./mongo-actions");
             const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
             if (result.success) {
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
                 setReplyText("");
                 setReplyToMessage(null);
                 await onTopicActivity?.();
@@ -1950,6 +1954,7 @@ const TopicCard: React.FC<{
             }
             const result = await sendAttachmentAction(formData);
             if (result.success) {
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
                 setReplyToMessage(null);
                 await onTopicActivity?.();
                 await loadReplies();
@@ -2402,6 +2407,7 @@ const NewThreadModal: React.FC<{
             const { createThreadAction } = await import("./mongo-actions");
             const result = await createThreadAction(conversationId, title.trim(), body.trim(), hashtags);
             if (result.success) {
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
                 onCreated(result.threadId);
                 onClose();
             } else {
@@ -2836,11 +2842,12 @@ export const ChatRoomComponent: React.FC<{
         });
 
         try {
-            await fetch("/api/notifications/mark-pms-as-read", {
+            const response = await fetch("/api/notifications/mark-pms-as-read", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ roomId }),
             });
+            dispatchNotificationRefreshIfOk(response, { reason: "pm-notifications-read", roomId });
         } catch (error) {
             console.error("Failed to mark PM notifications as read:", error);
         }

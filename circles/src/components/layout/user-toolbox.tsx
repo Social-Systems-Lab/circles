@@ -14,11 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bell, Bookmark, ChevronDown, Circle as CircleIcon, Loader2, Pin, PinOff, Users } from "lucide-react";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
-import {
-    authInfoAtom,
-    userAtom,
-    userToolboxDataAtom,
-} from "@/lib/data/atoms";
+import { authInfoAtom, userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
 import { Circle, UserToolboxTab, EventDisplay, ChatRoomDisplay } from "@/models/models";
@@ -47,8 +43,15 @@ const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { useToast } from "../ui/use-toast";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
 
-type Milestone = { id: string; type: "goal" | "task" | "issue"; title: string; date: Date | string; circleHandle?: string };
+type Milestone = {
+    id: string;
+    type: "goal" | "task" | "issue";
+    title: string;
+    date: Date | string;
+    circleHandle?: string;
+};
 type ToolboxTab = UserToolboxTab | "connections";
 type ToolboxConnectionItem = {
     circle: Circle;
@@ -159,12 +162,7 @@ export const UserToolbox = () => {
                 nextYear.setFullYear(today.getFullYear() + 1);
 
                 const results = await Promise.allSettled([
-                    getEventsAction(
-                        user.handle,
-                        { from: today.toISOString(), to: nextYear.toISOString() },
-                        true,
-                        true,
-                    ),
+                    getEventsAction(user.handle, { from: today.toISOString(), to: nextYear.toISOString() }, true, true),
                     getGoalsAction(user.handle, true, true),
                     getTasksAction(user.handle, true, true),
                     getIssuesAction(user.handle, true, true),
@@ -245,8 +243,26 @@ export const UserToolbox = () => {
         };
 
         loadRooms();
+        const removeRefreshListener = addNotificationRefreshListener(() => {
+            void loadRooms();
+        });
+        const handleFocus = () => {
+            void loadRooms();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                void loadRooms();
+            }
+        };
+
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
         return () => {
             isMounted = false;
+            removeRefreshListener();
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, [user]);
 
@@ -287,7 +303,12 @@ export const UserToolbox = () => {
                         id: circle._id?.toString() ?? circle.handle ?? circle.did ?? getCircleDefaultPath(circle),
                         circleId: circle._id?.toString() ?? "",
                         name: circle.name || circle.handle || "Untitled bookmark",
-                        type: circle.circleType === "user" ? "Profile" : circle.circleType === "project" ? "Project" : "Circle",
+                        type:
+                            circle.circleType === "user"
+                                ? "Profile"
+                                : circle.circleType === "project"
+                                  ? "Project"
+                                  : "Circle",
                         href: getCircleDefaultPath(circle),
                         pinned: pinnedIds.includes(circle._id?.toString() ?? ""),
                         description: circle.description ?? circle.mission,
@@ -473,7 +494,10 @@ export const UserToolbox = () => {
             const previousUser = user;
             const nextPinned = item.pinned
                 ? (previousUser.pinnedCircles ?? []).filter((id) => id !== item.circleId)
-                : [item.circleId, ...(previousUser.pinnedCircles ?? []).filter((id) => id !== item.circleId)].slice(0, 5);
+                : [item.circleId, ...(previousUser.pinnedCircles ?? []).filter((id) => id !== item.circleId)].slice(
+                      0,
+                      5,
+                  );
 
             setBookmarkActionCircleId(item.circleId);
             setUser({
@@ -535,12 +559,12 @@ export const UserToolbox = () => {
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                             <p className="truncate text-sm font-medium">{connection.circle.name}</p>
-                            {label && !showRespondControl ? (
-                                <span className={labelClassName}>{label}</span>
-                            ) : null}
+                            {label && !showRespondControl ? <span className={labelClassName}>{label}</span> : null}
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
-                            {connection.circle.description ?? connection.circle.mission ?? `@${connection.circle.handle}`}
+                            {connection.circle.description ??
+                                connection.circle.mission ??
+                                `@${connection.circle.handle}`}
                         </p>
                     </div>
                     {showRespondControl ? (
@@ -591,12 +615,7 @@ export const UserToolbox = () => {
                 : "h-8 w-8 shrink-0 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700";
 
             return (
-                <Link
-                    key={item.id}
-                    href={item.href}
-                    className={rowClassName}
-                    onClick={closeToolbox}
-                >
+                <Link key={item.id} href={item.href} className={rowClassName} onClick={closeToolbox}>
                     <div className={iconWrapClassName}>
                         <Bookmark className="h-4 w-4" />
                     </div>
@@ -646,6 +665,11 @@ export const UserToolbox = () => {
     const handleTabChange = useCallback(
         (nextTab: string) => {
             setTab(nextTab as ToolboxTab);
+            if (nextTab === "notifications" || nextTab === "chat") {
+                dispatchNotificationRefresh({
+                    reason: nextTab === "notifications" ? "notifications-opened" : "app-visible",
+                });
+            }
         },
         [setTab],
     );
@@ -703,41 +727,22 @@ export const UserToolbox = () => {
                 </div>
             </CardHeader>
             <CardContent className="p-0">
-                <Tabs
-                    value={tab}
-                    onValueChange={handleTabChange}
-                    className="flex h-full flex-col"
-                >
+                <Tabs value={tab} onValueChange={handleTabChange} className="flex h-full flex-col">
                     <TabsList className="grid h-auto w-full grid-cols-6 rounded-none border-b border-t-0 border-b-slate-200 border-t-slate-200 bg-white p-0 pb-2 pt-0">
                         {/* Existing TabsTriggers */}
-                        <TabsTrigger
-                            value="chat"
-                            className={toolboxActiveTabClassName}
-                        >
+                        <TabsTrigger value="chat" className={toolboxActiveTabClassName}>
                             <LuMail className="h-5 w-5" />
                         </TabsTrigger>
-                        <TabsTrigger
-                            value="events"
-                            className={toolboxActiveTabClassName}
-                        >
+                        <TabsTrigger value="events" className={toolboxActiveTabClassName}>
                             <LuClipboardCheck className="h-5 w-5" />
                         </TabsTrigger>
-                        <TabsTrigger
-                            value="notifications"
-                            className={toolboxActiveTabClassName}
-                        >
+                        <TabsTrigger value="notifications" className={toolboxActiveTabClassName}>
                             <Bell className="h-5 w-5" />
                         </TabsTrigger>
-                        <TabsTrigger
-                            value="circles"
-                            className={toolboxActiveTabClassName}
-                        >
+                        <TabsTrigger value="circles" className={toolboxActiveTabClassName}>
                             <CircleIcon className="h-5 w-5" />
                         </TabsTrigger>
-                        <TabsTrigger
-                            value="connections"
-                            className={toolboxActiveTabClassName}
-                        >
+                        <TabsTrigger value="connections" className={toolboxActiveTabClassName}>
                             <span className="relative inline-flex">
                                 <Users className="h-5 w-5" />
                                 {pendingConnectionRequestCount > 0 && (
@@ -747,19 +752,13 @@ export const UserToolbox = () => {
                                 )}
                             </span>
                         </TabsTrigger>
-                        <TabsTrigger
-                            value="bookmarks"
-                            className={toolboxActiveTabClassName}
-                        >
+                        <TabsTrigger value="bookmarks" className={toolboxActiveTabClassName}>
                             <Bookmark className="h-5 w-5" />
                         </TabsTrigger>
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        <ChatList
-                            chats={chatRooms}
-                            onChatClick={closeToolbox}
-                        />
+                        <ChatList chats={chatRooms} onChatClick={closeToolbox} />
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         <Notifications onNavigate={closeToolbox} />
@@ -859,9 +858,7 @@ export const UserToolbox = () => {
                                         </p>
                                     </div>
                                 )}
-                                {connections.pendingIncoming.map((connection) =>
-                                    renderConnectionRow(connection),
-                                )}
+                                {connections.pendingIncoming.map((connection) => renderConnectionRow(connection))}
                                 {connections.pendingOutgoing.length > 0 && (
                                     <div className="px-3 pb-1 pt-3">
                                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -888,7 +885,7 @@ export const UserToolbox = () => {
                         )}
                     </TabsContent>
 
-                    <TabsContent value="events" className="m-0 flex-grow overflow-auto pt-1 flex flex-col">
+                    <TabsContent value="events" className="m-0 flex flex-grow flex-col overflow-auto pt-1">
                         {isLoading ? (
                             <div className="flex flex-1 items-center justify-center">
                                 <LoadingSpinner />

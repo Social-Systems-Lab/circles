@@ -13,6 +13,7 @@ import {
     fetchTopicStarters,
     findConversationById,
     findThreadStarter,
+    getLatestMessageIdForConversation,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
     listConversationsForUser,
@@ -54,7 +55,12 @@ const normalizeMediaUrl = (url?: string): string | undefined => {
 };
 
 const isUploadedFileLike = (value: FormDataEntryValue | null): value is File => {
-    return !!value && typeof value !== "string" && typeof value.arrayBuffer === "function" && typeof value.size === "number";
+    return (
+        !!value &&
+        typeof value !== "string" &&
+        typeof value.arrayBuffer === "function" &&
+        typeof value.size === "number"
+    );
 };
 
 const ensureParticipatingMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
@@ -141,7 +147,7 @@ const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>)
                 WELCOME_MESSAGE.avatarUrl,
         },
         circleType: "user",
-    } as Circle);
+    }) as Circle;
 
 const sendConversationMessageNotifications = async ({
     conversationId,
@@ -178,9 +184,9 @@ const sendConversationMessageNotifications = async ({
         return;
     }
 
-    const recipients = (
-        await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))
-    ).filter((recipient): recipient is any => !!recipient?.did);
+    const recipients = (await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))).filter(
+        (recipient): recipient is any => !!recipient?.did,
+    );
     if (!recipients.length) {
         return;
     }
@@ -199,7 +205,6 @@ const sendConversationMessageNotifications = async ({
     if (!isDirectMessage || !messageId) {
         return;
     }
-
 };
 
 export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
@@ -228,7 +233,10 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
     const membershipQuery: any = { userDid, chatRoomId };
     // Handle both string and ObjectId-stored chatRoomId values
     if (ObjectId.isValid(chatRoomId)) {
-        membershipQuery.$or = [{ userDid, chatRoomId }, { userDid, chatRoomId: new ObjectId(chatRoomId) }];
+        membershipQuery.$or = [
+            { userDid, chatRoomId },
+            { userDid, chatRoomId: new ObjectId(chatRoomId) },
+        ];
         delete membershipQuery.chatRoomId;
     }
 
@@ -279,7 +287,11 @@ const validateReplyTargetForConversation = async (
     return { ok: true };
 };
 
-export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?: ChatRoomDisplay[]; message?: string }> => {
+export const listChatRoomsAction = async (): Promise<{
+    success: boolean;
+    rooms?: ChatRoomDisplay[];
+    message?: string;
+}> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to view chats" };
@@ -314,7 +326,10 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
         const groupRoomObjectIds = groupRoomIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
 
         const groupRooms = groupRoomObjectIds.length
-            ? await ChatRooms.find({ _id: { $in: groupRoomObjectIds } }, { projection: { _id: 1, picture: 1 } }).toArray()
+            ? await ChatRooms.find(
+                  { _id: { $in: groupRoomObjectIds } },
+                  { projection: { _id: 1, picture: 1 } },
+              ).toArray()
             : [];
         const groupRoomById = new Map(groupRooms.map((room: any) => [room._id.toString(), room]));
 
@@ -344,7 +359,9 @@ export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?:
             ...room,
             picture:
                 room.picture ||
-                (!room.isDirect && typeof room._id === "string" ? (groupRoomById.get(room._id)?.picture as any) : undefined),
+                (!room.isDirect && typeof room._id === "string"
+                    ? (groupRoomById.get(room._id)?.picture as any)
+                    : undefined),
             memberCount:
                 !room.isDirect && typeof room._id === "string" ? groupMemberCounts.get(room._id) || 0 : undefined,
             unreadCount: room._id || room.handle ? unreadCounts[(room._id || room.handle) as string] || 0 : 0,
@@ -793,9 +810,7 @@ export const editMongoMessageAction = async (
     return updated ? { success: true } : { success: false, message: "Failed to edit message" };
 };
 
-export const deleteMongoMessageAction = async (
-    messageId: string,
-): Promise<{ success: boolean; message?: string }> => {
+export const deleteMongoMessageAction = async (messageId: string): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete messages" };
@@ -816,9 +831,10 @@ export const toggleMongoReactionAction = async (
 
     let messageDoc: { conversationId?: string } | null = null;
     try {
-        messageDoc = (await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } })) as
-            | { conversationId?: string }
-            | null;
+        messageDoc = (await ChatMessageDocs.findOne(
+            { _id: new ObjectId(messageId) },
+            { projection: { conversationId: 1 } },
+        )) as { conversationId?: string } | null;
     } catch {
         return { success: false, message: "Invalid message id" };
     }
@@ -1035,10 +1051,7 @@ export const contactCircleAdminsAction = async (
         return { success: false, message: "This contact flow is available for circles and projects only" };
     }
 
-    const adminRows = await Members.find(
-        { circleId, userGroups: "admins" },
-        { projection: { userDid: 1 } },
-    ).toArray();
+    const adminRows = await Members.find({ circleId, userGroups: "admins" }, { projection: { userDid: 1 } }).toArray();
     const adminDids = Array.from(
         new Set(
             adminRows
@@ -1224,15 +1237,10 @@ export const markConversationReadAction = async (
 
     let effectiveLastSeen = lastSeenMessageId;
 
-    // If caller passes null, mark up to the true latest message in the conversation.
+    // If caller passes null, mark up to the true latest message in the conversation,
+    // including topic replies. The client often loads only root/topic-starter rows.
     if (effectiveLastSeen === null) {
-        const latest = await ChatMessageDocs
-            .find({ conversationId })
-            .sort({ _id: -1 })
-            .limit(1)
-            .toArray();
-
-        effectiveLastSeen = latest?.[0]?._id ? latest[0]._id.toString() : null;
+        effectiveLastSeen = await getLatestMessageIdForConversation(conversationId);
     }
 
     await markConversationRead(userDid, conversationId, effectiveLastSeen);
@@ -1353,12 +1361,11 @@ export const fetchThreadRepliesAction = async (
                 replyTo: replyDoc
                     ? {
                           id: replyDoc._id,
-                          author:
-                              replyAuthorCircle || {
-                                  _id: replyDoc.senderDid,
-                                  name: replyDoc.senderDid,
-                                  picture: { url: "/placeholder.svg" },
-                              },
+                          author: replyAuthorCircle || {
+                              _id: replyDoc.senderDid,
+                              name: replyDoc.senderDid,
+                              picture: { url: "/placeholder.svg" },
+                          },
                           content: { msgtype: "m.text", body: replyDoc.body },
                           attachments: normalizedReplyAttachments,
                       }

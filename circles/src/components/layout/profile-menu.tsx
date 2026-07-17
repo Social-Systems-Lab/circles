@@ -1,7 +1,7 @@
 // profile-menu.tsx
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../ui/button";
 import {
@@ -20,6 +20,7 @@ import { LuClipboardCheck, LuMail } from "react-icons/lu";
 import { listChatRoomsAction } from "../modules/chat/actions";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -32,6 +33,7 @@ const ProfileMenuBar = () => {
     const [messageUnreadCount, setMessageUnreadCount] = useState(0);
     const pathname = usePathname();
     const isMobile = useIsMobile();
+    const isRefreshingCountsRef = useRef(false);
 
     // Fixes hydration errors
     const [isMounted, setIsMounted] = useState(false);
@@ -39,28 +41,26 @@ const ProfileMenuBar = () => {
         setIsMounted(true);
     }, []);
 
-    useEffect(() => {
+    const refreshBadgeCounts = useCallback(async () => {
         if (!user?.did) {
             setNotificationUnreadCount(0);
             setMessageUnreadCount(0);
             return;
         }
 
-        let cancelled = false;
+        if (isRefreshingCountsRef.current) return;
+        isRefreshingCountsRef.current = true;
+
         const loadMessageUnreadCount = async () => {
             try {
                 const result = await listChatRoomsAction();
-                if (!cancelled) {
-                    const unreadTotal =
-                        result.success && result.rooms
-                            ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
-                            : 0;
-                    setMessageUnreadCount(unreadTotal);
-                }
+                const unreadTotal =
+                    result.success && result.rooms
+                        ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
+                        : 0;
+                setMessageUnreadCount(unreadTotal);
             } catch (error) {
-                if (!cancelled) {
-                    console.error("Failed to fetch message unread count:", error);
-                }
+                console.error("Failed to fetch message unread count:", error);
             }
         };
 
@@ -72,28 +72,51 @@ const ProfileMenuBar = () => {
                 }
 
                 const data = await response.json();
-                if (!cancelled) {
-                    setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
-                }
+                setNotificationUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0);
             } catch (error) {
-                if (!cancelled) {
-                    console.error("Failed to fetch notification unread count:", error);
-                }
+                console.error("Failed to fetch notification unread count:", error);
             }
         };
 
-        void loadMessageUnreadCount();
-        void loadNotificationUnreadCount();
+        try {
+            await Promise.all([loadMessageUnreadCount(), loadNotificationUnreadCount()]);
+        } finally {
+            isRefreshingCountsRef.current = false;
+        }
+    }, [setNotificationUnreadCount, user?.did]);
+
+    useEffect(() => {
+        void refreshBadgeCounts();
+
+        if (!user?.did) {
+            return;
+        }
+
         const intervalId = window.setInterval(() => {
-            void loadMessageUnreadCount();
-            void loadNotificationUnreadCount();
+            void refreshBadgeCounts();
         }, 15000);
+        const removeRefreshListener = addNotificationRefreshListener(() => {
+            void refreshBadgeCounts();
+        });
+        const handleFocus = () => {
+            void refreshBadgeCounts();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                void refreshBadgeCounts();
+            }
+        };
+
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
-            cancelled = true;
             window.clearInterval(intervalId);
+            removeRefreshListener();
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [setNotificationUnreadCount, user?.did]);
+    }, [refreshBadgeCounts, user?.did]);
 
     const openUserToolbox = (tab: UserToolboxTab) => {
         if (
@@ -104,6 +127,9 @@ const ProfileMenuBar = () => {
             return;
         }
         setUserToolboxState({ tab: tab });
+        if (tab === "notifications") {
+            dispatchNotificationRefresh({ reason: "notifications-opened" });
+        }
     };
 
     const onLogInClick = () => {
