@@ -592,6 +592,7 @@ type ChatMessagesProps = {
     onCreateTopic?: () => void;
     onTopicActivity?: () => Promise<void> | void;
     bottomAction?: React.ReactNode;
+    topicsLoaded?: boolean;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -876,6 +877,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onCreateTopic,
     onTopicActivity,
     bottomAction,
+    topicsLoaded = true,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -998,7 +1000,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const orderedMessages = topicMessages;
 
     const emptyTopicState =
-        topicMessages.length === 0 ? (
+        topicsLoaded && topicMessages.length === 0 ? (
             <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#F1F6DF] text-amber-600">
                     <HiLightBulb className="h-6 w-6" />
@@ -2821,6 +2823,8 @@ export const ChatRoomComponent: React.FC<{
     const [showNewThreadModal, setShowNewThreadModal] = useState(false);
     const [newThreadInitialTitle, setNewThreadInitialTitle] = useState("");
     const [openTopicIds, setOpenTopicIds] = useState<Set<string>>(() => new Set());
+    const [hasLoadedTopics, setHasLoadedTopics] = useState(false);
+    const [isLoadingTopics, setIsLoadingTopics] = useState(false);
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -2831,6 +2835,8 @@ export const ChatRoomComponent: React.FC<{
     const provider: "mongo" = "mongo";
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
+    const activeRoomIdRef = useRef<string | null>(roomId);
+    const topicLoadRequestRef = useRef(0);
     const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
     const repliesDisabled =
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
@@ -2932,25 +2938,45 @@ export const ChatRoomComponent: React.FC<{
     const hasLoadedTopicsRef = useRef(false);
     const [topicNavigationRequest, setTopicNavigationRequest] = useState<TopicNavigationRequest | null>(null);
 
+    useEffect(() => {
+        activeRoomIdRef.current = roomId;
+        topicLoadRequestRef.current += 1;
+        hasLoadedTopicsRef.current = false;
+        setHasLoadedTopics(false);
+        setIsLoadingTopics(false);
+    }, [roomId]);
+
     const refreshTopicStarters = useCallback(async () => {
-        if (!roomId) return;
+        const targetRoomId = roomId;
+        if (!targetRoomId) return;
+
+        const requestId = ++topicLoadRequestRef.current;
+        setIsLoadingTopics(true);
 
         try {
             const { fetchTopicStartersAction } = await import("./mongo-actions");
-            const result = await fetchTopicStartersAction(roomId);
+            const result = await fetchTopicStartersAction(targetRoomId);
+            if (activeRoomIdRef.current !== targetRoomId || topicLoadRequestRef.current !== requestId) {
+                return;
+            }
             if (!result.success || !result.messages) {
                 return;
             }
 
             setRoomMessages((prev) => {
-                const existingLooseMessages = (prev[roomId] || []).filter((message) => !(message as any).thread);
+                const existingLooseMessages = (prev[targetRoomId] || []).filter((message) => !(message as any).thread);
                 const merged = [...existingLooseMessages, ...result.messages!].sort(
                     (a, b) => getTopicActivityTime(a as any) - getTopicActivityTime(b as any),
                 );
-                return { ...prev, [roomId]: merged };
+                return { ...prev, [targetRoomId]: merged };
             });
+            setHasLoadedTopics(true);
         } catch (error) {
             console.error("Failed to refresh topic starters:", error);
+        } finally {
+            if (activeRoomIdRef.current === targetRoomId && topicLoadRequestRef.current === requestId) {
+                setIsLoadingTopics(false);
+            }
         }
     }, [roomId, setRoomMessages]);
 
@@ -3361,7 +3387,7 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo) && (
+                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
                             {!isLoadingMessages && (
@@ -3384,6 +3410,7 @@ export const ChatRoomComponent: React.FC<{
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
                                     bottomAction={mobileBottomNewTopicAction}
+                                    topicsLoaded={hasLoadedTopics}
                                 />
                             )}
                         </div>
@@ -3406,7 +3433,7 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo) && (
+                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
                             {!isLoadingMessages && (
@@ -3429,6 +3456,7 @@ export const ChatRoomComponent: React.FC<{
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
                                     bottomAction={mobileBottomNewTopicAction}
+                                    topicsLoaded={hasLoadedTopics}
                                 />
                             )}
                         </div>
