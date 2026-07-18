@@ -143,6 +143,60 @@ type MentionSuggestion = {
     handle?: string;
 };
 
+const getChatMentionSuggestions = (mentionCandidates: Circle[]): MentionSuggestion[] => {
+    const seen = new Set<string>();
+    const suggestions: MentionSuggestion[] = [];
+
+    for (const candidate of mentionCandidates || []) {
+        const idValue = candidate?.handle || candidate?.did || candidate?._id;
+        const display = candidate?.name;
+        if (!idValue || !display) {
+            continue;
+        }
+
+        const dedupeKey = String(candidate?.did || candidate?._id || candidate?.handle || idValue);
+        if (seen.has(dedupeKey)) {
+            continue;
+        }
+        seen.add(dedupeKey);
+
+        suggestions.push({
+            id: String(idValue),
+            display: String(display),
+            ...(candidate?.picture?.url ? { picture: candidate.picture.url } : {}),
+            ...(candidate?.handle ? { handle: candidate.handle } : {}),
+        });
+    }
+
+    return suggestions;
+};
+
+const queryChatMentionSuggestions = (
+    mentionSuggestions: MentionSuggestion[],
+    query: string,
+    callback: (data: MentionSuggestion[]) => void,
+) => {
+    if (!mentionSuggestions.length) {
+        callback([]);
+        return;
+    }
+
+    const term = query.trim().toLowerCase();
+    if (!term) {
+        callback(mentionSuggestions);
+        return;
+    }
+
+    callback(
+        mentionSuggestions.filter((suggestion) => {
+            const displayMatch = suggestion.display.toLowerCase().includes(term);
+            const handleMatch = suggestion.handle?.toLowerCase().includes(term);
+            const idMatch = suggestion.id.toLowerCase().includes(term);
+            return displayMatch || !!handleMatch || idMatch;
+        }),
+    );
+};
+
 type DmConnectBannerState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
 
 const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
@@ -605,6 +659,7 @@ type ChatMessagesProps = {
     onTopicActivity?: () => Promise<void> | void;
     bottomAction?: React.ReactNode;
     topicsLoaded?: boolean;
+    mentionCandidates?: Circle[];
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -890,6 +945,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onTopicActivity,
     bottomAction,
     topicsLoaded = true,
+    mentionCandidates = [],
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -1054,6 +1110,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             isSelected={openTopicIds?.has(message.id)}
                             onToggleTopic={onToggleTopic}
                             onTopicActivity={onTopicActivity}
+                            mentionCandidates={mentionCandidates}
                         />,
                     );
                     return acc;
@@ -1354,55 +1411,11 @@ const ChatInput = ({
         };
     }, [isExpandedMobileComposer, isMobile]);
 
-    const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
-        const seen = new Set<string>();
-        const suggestions: MentionSuggestion[] = [];
-
-        for (const candidate of mentionCandidates || []) {
-            const idValue = candidate?.handle || candidate?.did || candidate?._id;
-            const display = candidate?.name;
-            if (!idValue || !display) {
-                continue;
-            }
-
-            const dedupeKey = String(candidate?.did || candidate?._id || candidate?.handle || idValue);
-            if (seen.has(dedupeKey)) {
-                continue;
-            }
-            seen.add(dedupeKey);
-
-            suggestions.push({
-                id: String(idValue),
-                display: String(display),
-                ...(candidate?.picture?.url ? { picture: candidate.picture.url } : {}),
-                ...(candidate?.handle ? { handle: candidate.handle } : {}),
-            });
-        }
-
-        return suggestions;
-    }, [mentionCandidates]);
+    const mentionSuggestions = useMemo(() => getChatMentionSuggestions(mentionCandidates), [mentionCandidates]);
 
     const handleChatMentionQuery = useCallback(
         (query: string, callback: (data: MentionSuggestion[]) => void) => {
-            if (!mentionSuggestions.length) {
-                callback([]);
-                return;
-            }
-
-            const term = query.trim().toLowerCase();
-            if (!term) {
-                callback(mentionSuggestions);
-                return;
-            }
-
-            callback(
-                mentionSuggestions.filter((suggestion) => {
-                    const displayMatch = suggestion.display.toLowerCase().includes(term);
-                    const handleMatch = suggestion.handle?.toLowerCase().includes(term);
-                    const idMatch = suggestion.id.toLowerCase().includes(term);
-                    return displayMatch || !!handleMatch || idMatch;
-                }),
-            );
+            queryChatMentionSuggestions(mentionSuggestions, query, callback);
         },
         [mentionSuggestions],
     );
@@ -1905,6 +1918,7 @@ const TopicCard: React.FC<{
     isSelected?: boolean;
     onToggleTopic?: (topicId: string) => void;
     onTopicActivity?: () => Promise<void> | void;
+    mentionCandidates?: Circle[];
 }> = ({
     message,
     conversationId,
@@ -1915,6 +1929,7 @@ const TopicCard: React.FC<{
     isSelected,
     onToggleTopic,
     onTopicActivity,
+    mentionCandidates = [],
 }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
@@ -1946,6 +1961,56 @@ const TopicCard: React.FC<{
     const pendingScrollIntoViewRef = useRef(false);
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
+    const mentionSuggestions = useMemo(() => getChatMentionSuggestions(mentionCandidates), [mentionCandidates]);
+    const topicReplyMentionsInputStyle = useMemo(() => {
+        const minHeight = isMobile ? "96px" : "44px";
+        const maxHeight = isMobile ? "260px" : "224px";
+        const padding = "0.5rem 0.75rem";
+
+        return {
+            ...defaultMentionsInputStyle,
+            control: {
+                ...defaultMentionsInputStyle.control,
+                minHeight,
+                maxHeight,
+                backgroundColor: "rgb(249 250 251)",
+                border: "1px solid rgb(229 231 235)",
+                borderRadius: "1rem",
+                overflowY: "auto" as const,
+            },
+            input: {
+                ...defaultMentionsInputStyle.input,
+                minHeight,
+                maxHeight,
+                padding,
+                fontSize: "1rem",
+                lineHeight: 1.625,
+                overflowY: "auto" as const,
+                border: "none",
+            },
+            highlighter: {
+                ...defaultMentionsInputStyle.highlighter,
+                minHeight,
+                maxHeight,
+                padding,
+                fontSize: "1rem",
+                lineHeight: 1.625,
+            },
+            suggestions: {
+                ...defaultMentionsInputStyle.suggestions,
+                list: {
+                    ...defaultMentionsInputStyle.suggestions.list,
+                    maxHeight: isMobile ? "180px" : defaultMentionsInputStyle.suggestions.list.maxHeight,
+                },
+            },
+        };
+    }, [isMobile]);
+    const handleTopicMentionQuery = useCallback(
+        (query: string, callback: (data: MentionSuggestion[]) => void) => {
+            queryChatMentionSuggestions(mentionSuggestions, query, callback);
+        },
+        [mentionSuggestions],
+    );
 
     const autoGrowReplyTextarea = useCallback(() => {
         const textarea = replyTextareaRef.current;
@@ -2299,7 +2364,7 @@ const TopicCard: React.FC<{
                 <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-gray-500 sm:max-w-[16rem] sm:justify-end sm:text-right">
                     <div className="min-w-0">
                         <div>{formatTopicHeaderDate(message)}</div>
-                        <div>Created by {topicCreatorName}</div>
+                        <div>{topicCreatorName}</div>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                         <div className="relative">
@@ -2668,8 +2733,8 @@ const TopicCard: React.FC<{
                                 </div>
                             )}
                             <div className="flex items-end gap-1">
-                                <textarea
-                                    ref={replyTextareaRef}
+                                <MentionsInput
+                                    inputRef={replyTextareaRef}
                                     value={replyText}
                                     onChange={(e) => {
                                         setReplyText(e.target.value);
@@ -2677,9 +2742,20 @@ const TopicCard: React.FC<{
                                     }}
                                     placeholder={`Reply to ${thread.title}. Use return for a new line.`}
                                     aria-label={`Reply to ${thread.title}`}
-                                    rows={1}
-                                    className="max-h-[260px] min-h-[96px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300 sm:max-h-56 sm:min-h-[44px]"
-                                />
+                                    className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
+                                    style={topicReplyMentionsInputStyle}
+                                    allowSuggestionsAboveCursor={true}
+                                    forceSuggestionsAboveCursor={true}
+                                >
+                                    <Mention
+                                        trigger="@"
+                                        data={handleTopicMentionQuery}
+                                        style={defaultMentionStyle}
+                                        displayTransform={(id, display) => `${display}`}
+                                        renderSuggestion={renderCircleSuggestion}
+                                        markup="[__display__](/circles/__id__)"
+                                    />
+                                </MentionsInput>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -3467,6 +3543,7 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicActivity={refreshTopicStarters}
                                     bottomAction={mobileBottomNewTopicAction}
                                     topicsLoaded={hasLoadedTopics}
+                                    mentionCandidates={mentionCandidates}
                                 />
                             )}
                         </div>
@@ -3513,6 +3590,7 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicActivity={refreshTopicStarters}
                                     bottomAction={mobileBottomNewTopicAction}
                                     topicsLoaded={hasLoadedTopics}
+                                    mentionCandidates={mentionCandidates}
                                 />
                             )}
                         </div>
