@@ -1947,12 +1947,12 @@ const TopicCard: React.FC<{
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
 
-    const autoGrowReplyTextarea = () => {
+    const autoGrowReplyTextarea = useCallback(() => {
         const textarea = replyTextareaRef.current;
         if (!textarea) return;
         textarea.style.height = "0px";
-        textarea.style.height = `${Math.min(textarea.scrollHeight, 224)}px`;
-    };
+        textarea.style.height = `${Math.min(textarea.scrollHeight, isMobile ? 260 : 224)}px`;
+    }, [isMobile]);
 
     // Load replies on mount if topic starts open
     useEffect(() => {
@@ -1983,7 +1983,7 @@ const TopicCard: React.FC<{
 
     useEffect(() => {
         autoGrowReplyTextarea();
-    }, [replyText]);
+    }, [autoGrowReplyTextarea, replyText]);
 
     useEffect(() => {
         if (!replyToMessage?.id) return;
@@ -2591,38 +2591,59 @@ const TopicCard: React.FC<{
                     </div>
 
                     {/* Reply input */}
-                    <div className="flex items-end gap-1 px-3 pb-3">
+                    <div className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading}
-                        >
-                            {isUploading ? (
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                            ) : (
-                                <IoAttach className="h-4 w-4" />
-                            )}
-                        </Button>
-                        <Popover>
-                            <PopoverTrigger asChild>
+                        <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
+                            <div className="flex items-center gap-1 sm:contents">
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                                    className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                    title="Attach file"
+                                    aria-label="Attach file"
                                 >
-                                    <BsEmojiSmile className="h-4 w-4" />
+                                    {isUploading ? (
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                                    ) : (
+                                        <IoAttach className="h-4 w-4" />
+                                    )}
                                 </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                <LazyEmojiPicker
-                                    onEmojiClick={(data: EmojiClickData) => setReplyText((prev) => prev + data.emoji)}
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        <div className="min-w-0 flex-1">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
+                                            title="Add emoji"
+                                            aria-label="Add emoji"
+                                        >
+                                            <BsEmojiSmile className="h-4 w-4" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                        <LazyEmojiPicker
+                                            onEmojiClick={(data: EmojiClickData) =>
+                                                setReplyText((prev) => prev + data.emoji)
+                                            }
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
+                                onClick={() => void handleSendReply()}
+                                disabled={!replyText.trim() || isSending}
+                                title="Send reply"
+                                aria-label="Send reply"
+                            >
+                                <IoSend className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="order-1 min-w-0 flex-1 sm:order-2">
                             {replyToMessage && (
                                 <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
                                     <div className="flex items-start justify-between gap-2">
@@ -2657,14 +2678,16 @@ const TopicCard: React.FC<{
                                     placeholder={`Reply to ${thread.title}. Use return for a new line.`}
                                     aria-label={`Reply to ${thread.title}`}
                                     rows={1}
-                                    className="max-h-56 min-h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300"
+                                    className="max-h-[260px] min-h-[96px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300 sm:max-h-56 sm:min-h-[44px]"
                                 />
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))]"
+                                    className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
                                     onClick={() => void handleSendReply()}
                                     disabled={!replyText.trim() || isSending}
+                                    title="Send reply"
+                                    aria-label="Send reply"
                                 >
                                     <IoSend className="h-4 w-4" />
                                 </Button>
