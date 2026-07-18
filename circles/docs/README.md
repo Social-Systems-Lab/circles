@@ -10,9 +10,10 @@ Read these in order:
 2. [Architecture overview](../../docs/ARCHITECTURE.md)
 3. [Codex project map](CODEX_PROJECT_MAP.md)
 4. [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
-5. [Canonical environment-variable reference](../../docs/ENVIRONMENT.md)
-6. [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
-7. [Production deployment](PRODUCTION_DEPLOYMENT.md)
+5. [Chat mentions](CHAT_MENTIONS.md)
+6. [Canonical environment-variable reference](../../docs/ENVIRONMENT.md)
+7. [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
+8. [Production deployment](PRODUCTION_DEPLOYMENT.md)
 
 ## Production deployment
 
@@ -23,6 +24,7 @@ Use [Production deployment](PRODUCTION_DEPLOYMENT.md) as the authoritative deplo
 - [Codex project map](CODEX_PROJECT_MAP.md)
 - [Development workflow](KAMOONI_DEVELOPMENT_WORKFLOW.md)
 - [Mongo-native chat architecture](CHAT_SYSTEM_ARCHITECTURE.md)
+- [Chat mentions](CHAT_MENTIONS.md)
 - [Chat debug playbook](CHAT_DEBUG_PLAYBOOK.md)
 - [Production debug playbook](../../docs/DEBUG_PLAYBOOK.md)
 - [Production deployment](PRODUCTION_DEPLOYMENT.md)

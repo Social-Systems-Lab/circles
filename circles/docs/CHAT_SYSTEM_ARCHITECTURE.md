@@ -441,6 +441,8 @@ Current launch behavior:
 
 - chat mentions are enabled and working
 - non-chat mentions in posts/comments/discussions are intentionally disabled for launch
+- chat mention storage, topic reply handling, rendering, and `chat_mention` notification behavior are documented in
+  [Chat mentions](CHAT_MENTIONS.md)
 
 Reason:
 
@@ -475,6 +477,8 @@ System messages are not a separate transport system; they are built on top of Mo
 - `src/components/modules/chat/chat-room.tsx` - Primary topic-first chat UI, earlier-message rendering, reply handling, topic controls, working chat mention implementation.
 
 - `src/components/modules/chat/useMongoChat.ts` - Client hook for initial message load, polling, and read-state updates.
+
+- `src/lib/chat/mention-markup.ts` - Chat mention markup parser used by notification recipient resolution.
 
 - `src/components/modules/chat/chat-list.tsx` - Sidebar list rendering, unread badges, and latest-only/coalesced refresh behavior.
 

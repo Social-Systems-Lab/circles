@@ -17,6 +17,38 @@ Last commit: c95b10e8 (prod)
 
 ---
 
+## Session 2026-07-18 — Chat/topic mentions stabilized
+
+### What changed
+- Topic mentions are enabled and work through the same canonical chat
+  mention markup as normal chat.
+- Raw mention markup is preserved through topic composer state,
+  `sendThreadReplyAction`, Mongo persistence, fetch, and rendering.
+- Topic replies store mention-bearing text in the top-level
+  `chatMessageDocs.body` field; fetch maps that value into
+  `message.content.body` for `MessageRenderer`.
+- The rendering fix preserves raw message body text until
+  `renderFormattedChatBody` can parse `/circles/` mention links.
+- `chat_mention` notification records were added for mentioned
+  conversation participants.
+- `chat_mention` is visible in the bell, groups by `roomId`, and
+  routes to `/chat/<roomId>`.
+- `pm_received` remains excluded from the bell; mentioned recipients
+  receive `chat_mention` rather than only hidden PM notifications.
+- Production commit `b9bff277` was deployed.
+- Production version verified as `0.8.15 / b9bff277`.
+
+### Documentation updated
+- `circles/docs/CHAT_MENTIONS.md`
+- `circles/docs/CHAT_SYSTEM_ARCHITECTURE.md`
+- `circles/docs/README.md`
+- `SESSION_LOG.md`
+
+### Deployed?
+Yes — production verified as `0.8.15 / b9bff277`.
+
+---
+
 ## Production Environment
 
 Production runs on Cleura, NOT Genesis2.
