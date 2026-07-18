@@ -904,7 +904,7 @@ export const listThreadsForConversation = async (conversationId: string): Promis
         conversationId,
         thread: { $exists: true },
     })
-        .sort({ "thread.updatedAt": -1 })
+        .sort({ "thread.createdAt": 1, createdAt: 1 })
         .toArray();
     return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
 };

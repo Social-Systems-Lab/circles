@@ -5,8 +5,8 @@ export const FIRST_TOPIC_DEFAULT_TITLE = "Hello";
 export const isTopicStarterMessage = (message: Pick<ChatMessage, "type"> & Record<string, any>): boolean =>
     message.type === "m.room.message" && !!message.thread && !message.threadId;
 
-export const getTopicActivityTime = (message: Record<string, any>): number => {
-    const rawTimestamp = message.thread?.updatedAt || message.createdAt;
+export const getTopicCreationTime = (message: Record<string, any>): number => {
+    const rawTimestamp = message.thread?.createdAt || message.createdAt;
     const timestamp = new Date(rawTimestamp).getTime();
     return Number.isNaN(timestamp) ? 0 : timestamp;
 };
@@ -16,9 +16,9 @@ export const getTopicIndexMessages = (messages: ChatMessage[]): ChatMessage[] =>
         .map((message, index) => ({ message, index }))
         .filter(({ message }) => isTopicStarterMessage(message as ChatMessage & Record<string, any>))
         .sort((left, right) => {
-            const activityDelta =
-                getTopicActivityTime(left.message as any) - getTopicActivityTime(right.message as any);
-            return activityDelta || left.index - right.index;
+            const creationDelta =
+                getTopicCreationTime(left.message as any) - getTopicCreationTime(right.message as any);
+            return creationDelta || left.index - right.index;
         })
         .map(({ message }) => message);
 

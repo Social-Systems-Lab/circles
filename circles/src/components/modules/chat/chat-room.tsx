@@ -61,7 +61,7 @@ import {
     sendConnectRequestAction,
 } from "@/components/modules/home/actions";
 import { useToast } from "@/components/ui/use-toast";
-import { getInitialTopicTitle, getTopicActivityTime, getTopicIndexMessages } from "./chat-topic-utils";
+import { getInitialTopicTitle, getTopicCreationTime, getTopicIndexMessages } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
 import {
     getLegacyLooseMessages,
@@ -99,29 +99,41 @@ const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
 
-const getTopicCreationDate = (message: Pick<ChatMessage, "createdAt">): Date | null => {
-    const date = message.createdAt instanceof Date ? message.createdAt : new Date(message.createdAt);
+const getTopicCreationDate = (message: Pick<ChatMessage, "createdAt"> & Record<string, any>): Date | null => {
+    const rawDate = message.thread?.createdAt || message.createdAt;
+    const date = rawDate instanceof Date ? rawDate : new Date(rawDate);
     return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const getTopicCreationDateKey = (message: Pick<ChatMessage, "createdAt">): string => {
-    const date = getTopicCreationDate(message);
-    if (!date) return "unknown";
-    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-};
-
-const formatTopicCreationDateLabel = (message: Pick<ChatMessage, "createdAt">): string => {
+const formatTopicHeaderDate = (message: Pick<ChatMessage, "createdAt"> & Record<string, any>): string => {
     const date = getTopicCreationDate(message);
     if (!date) return "Date unavailable";
-
-    const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    const dayDelta = Math.round((startOfToday - startOfDate) / 86400000);
-
-    if (dayDelta === 0) return "Today";
-    if (dayDelta === 1) return "Yesterday";
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+};
+
+const formatCompactDisplayName = (name?: string | null, fallback?: string | null): string => {
+    const rawName = (name || fallback || "Unknown").trim();
+    if (!rawName) return "Unknown";
+
+    const parts = rawName.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) return rawName;
+
+    const firstName = parts[0];
+    const lastInitial = parts[parts.length - 1]?.charAt(0);
+    return lastInitial ? `${firstName} ${lastInitial.toUpperCase()}.` : firstName;
+};
+
+const isSameCalendarDate = (left: Date, right: Date): boolean =>
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate();
+
+const formatTopicPostTimestamp = (date: Date, includeDate: boolean): string => {
+    if (Number.isNaN(date.getTime())) return "";
+    const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    if (!includeDate) return time;
+    const compactDate = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `${compactDate}, ${time}`;
 };
 
 type MentionSuggestion = {
@@ -1030,21 +1042,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             {emptyTopicState}
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
                 if ((message as any).thread) {
-                    const currentDateKey = getTopicCreationDateKey(message);
-                    const previousMessage = index > 0 ? orderedMessages[index - 1] : null;
-                    const previousDateKey = previousMessage ? getTopicCreationDateKey(previousMessage) : null;
-                    if (index === 0 || currentDateKey !== previousDateKey) {
-                        acc.push(
-                            <div
-                                key={`topic-date-${currentDateKey}-${message.id}`}
-                                className="my-2 mt-4 text-center text-sm text-gray-500"
-                            >
-                                <span className="rounded-full bg-gray-200 px-2 py-1 shadow-md">
-                                    {formatTopicCreationDateLabel(message)}
-                                </span>
-                            </div>,
-                        );
-                    }
                     acc.push(
                         <TopicCard
                             key={message.id}
@@ -1988,6 +1985,21 @@ const TopicCard: React.FC<{
         autoGrowReplyTextarea();
     }, [replyText]);
 
+    useEffect(() => {
+        if (!replyToMessage?.id) return;
+        const textarea = replyTextareaRef.current;
+        if (!textarea) return;
+
+        try {
+            textarea.focus({ preventScroll: true });
+        } catch {
+            textarea.focus();
+        }
+
+        const caretPosition = textarea.value.length;
+        textarea.setSelectionRange(caretPosition, caretPosition);
+    }, [replyToMessage?.id]);
+
     const computeUnreadCount = async () => {
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
@@ -2250,6 +2262,9 @@ const TopicCard: React.FC<{
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
     const effectiveStarterBody = editedStarterBody ?? topicDescription;
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
+    const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
+    const starterAuthorName = formatCompactDisplayName(message.author?.name, message.createdBy);
+    const starterCreatedAt = new Date(message.createdAt);
 
     return (
         <div
@@ -2260,13 +2275,13 @@ const TopicCard: React.FC<{
         >
             {/* Header row — always visible, click to toggle */}
             <div
-                className={`flex cursor-pointer flex-col items-center gap-2 px-3 text-center ${isTopicOpen ? "py-3" : "py-4"}`}
+                className={`flex cursor-pointer flex-col gap-2 px-3 text-left sm:flex-row sm:items-start sm:justify-between ${isTopicOpen ? "py-3" : "py-4"}`}
                 onClick={handleToggle}
             >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900">{thread.title}</p>
                     {thread.hashtags && thread.hashtags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap justify-center gap-1">
+                        <div className="mt-1 flex flex-wrap gap-1">
                             {thread.hashtags.map((tag: string) => (
                                 <span
                                     key={tag}
@@ -2281,20 +2296,24 @@ const TopicCard: React.FC<{
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
                     )}
                 </div>
-                <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
-                    <div className="relative">
-                        <HiLightBulb className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`} />
-                        {!isTopicOpen && unreadCount > 0 && (
-                            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
-                                {unreadCount}
-                            </span>
-                        )}
+                <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-gray-500 sm:max-w-[16rem] sm:justify-end sm:text-right">
+                    <div className="min-w-0">
+                        <div>{formatTopicHeaderDate(message)}</div>
+                        <div>Created by {topicCreatorName}</div>
                     </div>
-                    <span>
-                        {isTopicOpen
-                            ? `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`
-                            : `${thread.replyCount} ${thread.replyCount === 1 ? "reply" : "replies"}`}
-                    </span>
+                    <div className="flex items-center gap-2 text-gray-400">
+                        <div className="relative">
+                            <HiLightBulb className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`} />
+                            {!isTopicOpen && unreadCount > 0 && (
+                                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </div>
+                        <span>
+                            {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -2303,27 +2322,15 @@ const TopicCard: React.FC<{
                 <div className="border-t border-[#DDEBB8]">
                     {effectiveStarterBody && (
                         <div
-                            className="relative px-6 pb-2 pt-3 text-left"
+                            className={`flex px-3 py-2 text-left ${isOwnStarter ? "justify-end" : "justify-start"}`}
                             onMouseEnter={() => !isMobile && setIsHoveringStarter(true)}
                             onMouseLeave={() => !isMobile && setIsHoveringStarter(false)}
+                            onClick={() => isMobile && isOwnStarter && setIsHoveringStarter((value) => !value)}
                         >
-                            {isOwnStarter && isHoveringStarter && !isEditingStarter && (
-                                <div className="absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={() => {
-                                            setIsEditingStarter(true);
-                                            setEditingStarterText(effectiveStarterBody);
-                                        }}
-                                    >
-                                        <GrEdit className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
                             {isEditingStarter ? (
-                                <div className="flex flex-col gap-1">
+                                <div
+                                    className={`w-[96%] rounded-lg p-3 shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
+                                >
                                     <textarea
                                         value={editingStarterText}
                                         onChange={(e) => setEditingStarterText(e.target.value)}
@@ -2355,24 +2362,43 @@ const TopicCard: React.FC<{
                                     </div>
                                 </div>
                             ) : (
-                                <>
-                                    <div className="text-sm leading-relaxed text-gray-600">
+                                <div
+                                    className={`relative w-[96%] overflow-visible rounded-lg p-3 shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
+                                >
+                                    <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
+                                        {formatTopicPostTimestamp(starterCreatedAt, false)}
+                                    </div>
+                                    <div className="text-sm leading-relaxed text-gray-700">
                                         {renderFormattedChatBody(effectiveStarterBody, {
                                             format: (message as any)?.format,
                                             markdownClassName:
-                                                "formatted max-w-none text-sm leading-relaxed text-gray-600",
+                                                "formatted max-w-none text-sm leading-relaxed text-gray-700",
                                         })}
                                     </div>
-                                    <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
-                                        <span>
-                                            {new Date(message.createdAt).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                                hour12: false,
-                                            })}
-                                        </span>
+                                    {isOwnStarter && isHoveringStarter && (
+                                        <div
+                                            className="absolute -bottom-3 right-2 z-10"
+                                            onClick={(event) => event.stopPropagation()}
+                                        >
+                                            <div className="flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() => {
+                                                        setIsEditingStarter(true);
+                                                        setEditingStarterText(effectiveStarterBody);
+                                                    }}
+                                                >
+                                                    <GrEdit className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="mt-2 text-right text-xs font-medium text-gray-500">
+                                        {starterAuthorName}
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
                     )}
@@ -2386,12 +2412,13 @@ const TopicCard: React.FC<{
                         {replies.map((reply, replyIndex) => {
                             const isOwn = reply.createdBy === user?.did;
                             const isEditing = editingReplyId === reply.id;
-                            const nextReply = replies[replyIndex + 1];
-                            const isLastInChain =
-                                !nextReply ||
-                                nextReply.createdBy !== reply.createdBy ||
-                                new Date(nextReply.createdAt).getTime() - new Date(reply.createdAt).getTime() >
-                                    5 * 60 * 1000;
+                            const replyCreatedAt = new Date(reply.createdAt);
+                            const previousVisibleCreatedAt =
+                                replyIndex === 0 ? starterCreatedAt : new Date(replies[replyIndex - 1].createdAt);
+                            const includeReplyDate =
+                                !Number.isNaN(replyCreatedAt.getTime()) &&
+                                !Number.isNaN(previousVisibleCreatedAt.getTime()) &&
+                                !isSameCalendarDate(replyCreatedAt, previousVisibleCreatedAt);
                             const isFirstInChain =
                                 replyIndex === 0 ||
                                 replies[replyIndex - 1].createdBy !== reply.createdBy ||
@@ -2403,84 +2430,28 @@ const TopicCard: React.FC<{
                                     key={reply.id}
                                     id={getMessageElementId(reply.id)}
                                     data-message-id={reply.id}
-                                    className={`relative flex gap-2 ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
+                                    className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
                                     onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
                                     onMouseLeave={() => {
                                         if (!isMobile) {
                                             setHoveredReplyId(null);
                                         }
                                     }}
+                                    onClick={() => {
+                                        if (isMobile && !isEditing) {
+                                            setHoveredReplyId((current) => (current === reply.id ? null : reply.id));
+                                            setPickerOpenForReply((current) => (current === reply.id ? current : null));
+                                        }
+                                    }}
                                 >
-                                    {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) && !isEditing && (
-                                        <div
-                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwn ? "right-0" : "left-0"}`}
-                                        >
-                                            {isOwn && (
-                                                <>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => {
-                                                            setEditingReplyId(reply.id);
-                                                            setEditingReplyText((reply.content?.body as string) || "");
-                                                        }}
-                                                    >
-                                                        <GrEdit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => void handleDeleteReply(reply.id)}
-                                                    >
-                                                        <GrTrash className="h-4 w-4" />
-                                                    </Button>
-                                                </>
-                                            )}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6"
-                                                onClick={() => setReplyToMessage(reply)}
-                                            >
-                                                <MdReply className="h-4 w-4" />
-                                            </Button>
-                                            <Popover
-                                                open={pickerOpenForReply === reply.id}
-                                                onOpenChange={(open) => setPickerOpenForReply(open ? reply.id : null)}
-                                            >
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                        <BsEmojiSmile className="h-4 w-4" />
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                    <LazyEmojiPicker
-                                                        onEmojiClick={(data: EmojiClickData) => {
-                                                            void handleReaction(reply.id, data.emoji);
-                                                            setPickerOpenForReply(null);
-                                                        }}
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                    )}
-                                    {!isOwn &&
-                                        (isLastInChain ? (
-                                            <CirclePicture
-                                                circle={reply.author}
-                                                size="28px"
-                                                className="mb-1 flex-shrink-0 self-end"
-                                            />
-                                        ) : (
-                                            <div className="w-7 flex-shrink-0" />
-                                        ))}
                                     <div
-                                        className={`relative flex ${isEditing ? "max-w-[95%] flex-1" : "max-w-[75%]"} flex-col overflow-hidden shadow-md ${CHAT_STANDARD_BUBBLE_CLASS}`}
+                                        className={`relative flex w-[96%] flex-col overflow-visible shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
                                         style={{ borderRadius: "12px" }}
                                     >
                                         <div className="px-3 py-1.5">
+                                            <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
+                                                {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
+                                            </div>
                                             {isEditing ? (
                                                 <div className="flex flex-col gap-1">
                                                     <textarea
@@ -2516,28 +2487,90 @@ const TopicCard: React.FC<{
                                             ) : (
                                                 <MessageRenderer message={reply} />
                                             )}
-                                            {isLastInChain && (
-                                                <div className="mt-0.5 text-right text-[8px] leading-none text-gray-300">
-                                                    {new Date(reply.createdAt).toLocaleTimeString([], {
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                        hour12: false,
-                                                    })}
-                                                </div>
-                                            )}
+                                            {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
+                                                !isEditing && (
+                                                    <div
+                                                        className="absolute -bottom-3 right-2 z-10"
+                                                        onClick={(event) => event.stopPropagation()}
+                                                    >
+                                                        <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                                            {isOwn && (
+                                                                <>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                        onClick={() => {
+                                                                            setEditingReplyId(reply.id);
+                                                                            setEditingReplyText(
+                                                                                (reply.content?.body as string) || "",
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <GrEdit className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                        onClick={() => void handleDeleteReply(reply.id)}
+                                                                    >
+                                                                        <GrTrash className="h-4 w-4" />
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8"
+                                                                onClick={() => setReplyToMessage(reply)}
+                                                            >
+                                                                <MdReply className="h-4 w-4" />
+                                                            </Button>
+                                                            <Popover
+                                                                open={pickerOpenForReply === reply.id}
+                                                                onOpenChange={(open) =>
+                                                                    setPickerOpenForReply(open ? reply.id : null)
+                                                                }
+                                                            >
+                                                                <PopoverTrigger asChild>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                    >
+                                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                                    </Button>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                                    <LazyEmojiPicker
+                                                                        onEmojiClick={(data: EmojiClickData) => {
+                                                                            void handleReaction(reply.id, data.emoji);
+                                                                            setPickerOpenForReply(null);
+                                                                        }}
+                                                                    />
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            <div className="mt-2 text-right text-xs font-medium text-gray-500">
+                                                {formatCompactDisplayName(reply.author?.name, reply.createdBy)}
+                                            </div>
                                         </div>
                                         {reply.reactions && Object.keys(reply.reactions).length > 0 && (
-                                            <div
-                                                className={`-mb-1 flex flex-wrap gap-1 px-2 pb-1 ${isOwn ? "justify-end" : "justify-start"}`}
-                                            >
+                                            <div className="-mb-1 flex flex-wrap justify-end gap-1 px-2 pb-1">
                                                 {Object.entries(reply.reactions as Record<string, any>).map(
                                                     ([emoji, reactors]) => {
                                                         const reactorList = Array.isArray(reactors) ? reactors : [];
                                                         return (
                                                             <button
                                                                 key={emoji}
-                                                                onClick={() => void handleReaction(reply.id, emoji)}
-                                                                className="flex items-center rounded-full border border-gray-200 bg-white px-1 py-0 text-sm leading-none"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    void handleReaction(reply.id, emoji);
+                                                                }}
+                                                                className="flex min-h-6 items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none"
                                                             >
                                                                 {emoji}{" "}
                                                                 {reactorList.length > 1 && (
@@ -2966,7 +2999,7 @@ export const ChatRoomComponent: React.FC<{
             setRoomMessages((prev) => {
                 const existingLooseMessages = (prev[targetRoomId] || []).filter((message) => !(message as any).thread);
                 const merged = [...existingLooseMessages, ...result.messages!].sort(
-                    (a, b) => getTopicActivityTime(a as any) - getTopicActivityTime(b as any),
+                    (a, b) => getTopicCreationTime(a as any) - getTopicCreationTime(b as any),
                 );
                 return { ...prev, [targetRoomId]: merged };
             });

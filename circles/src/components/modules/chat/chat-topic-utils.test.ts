@@ -41,11 +41,12 @@ const topicReply = makeMessage("topic-reply", {
 
 assert.deepEqual(
     getTopicIndexMessages([looseMessage, olderTopic, activeTopic, topicReply]).map((message) => message.id),
-    ["older-topic", "active-topic"],
-    "topic index contains only topic starters ordered by latest topic activity ascending",
+    ["active-topic", "older-topic"],
+    "topic index contains only topic starters ordered by original topic creation ascending",
 );
 
-const equalActivityTopicA = makeMessage("equal-activity-a", {
+const equalCreationTopicA = makeMessage("equal-creation-a", {
+    createdAt: new Date("2026-07-17T12:00:00.000Z"),
     thread: {
         title: "Equal A",
         createdAt: new Date("2026-07-17T12:00:00.000Z"),
@@ -53,15 +54,16 @@ const equalActivityTopicA = makeMessage("equal-activity-a", {
         replyCount: 0,
     },
 });
-const equalActivityTopicB = makeMessage("equal-activity-b", {
+const equalCreationTopicB = makeMessage("equal-creation-b", {
+    createdAt: new Date("2026-07-17T12:00:00.000Z"),
     thread: {
         title: "Equal B",
-        createdAt: new Date("2026-07-17T12:10:00.000Z"),
+        createdAt: new Date("2026-07-17T12:00:00.000Z"),
         updatedAt: new Date("2026-07-17T12:30:00.000Z"),
         replyCount: 0,
     },
 });
-const missingActivityTopicA = makeMessage("missing-activity-a", {
+const missingCreationTopicA = makeMessage("missing-creation-a", {
     createdAt: undefined as any,
     thread: {
         title: "Missing A",
@@ -70,7 +72,7 @@ const missingActivityTopicA = makeMessage("missing-activity-a", {
         replyCount: 0,
     },
 });
-const missingActivityTopicB = makeMessage("missing-activity-b", {
+const missingCreationTopicB = makeMessage("missing-creation-b", {
     createdAt: undefined as any,
     thread: {
         title: "Missing B",
@@ -81,15 +83,15 @@ const missingActivityTopicB = makeMessage("missing-activity-b", {
 });
 
 assert.deepEqual(
-    getTopicIndexMessages([equalActivityTopicA, equalActivityTopicB]).map((message) => message.id),
-    ["equal-activity-a", "equal-activity-b"],
-    "topics with equal latest activity keep their input order",
+    getTopicIndexMessages([equalCreationTopicA, equalCreationTopicB]).map((message) => message.id),
+    ["equal-creation-a", "equal-creation-b"],
+    "topics with equal original creation time keep their input order",
 );
 
 assert.deepEqual(
-    getTopicIndexMessages([missingActivityTopicA, missingActivityTopicB]).map((message) => message.id),
-    ["missing-activity-a", "missing-activity-b"],
-    "topics with missing activity keep their input order",
+    getTopicIndexMessages([missingCreationTopicA, missingCreationTopicB]).map((message) => message.id),
+    ["missing-creation-a", "missing-creation-b"],
+    "topics with missing creation time keep their input order",
 );
 
 assert.equal(getInitialTopicTitle(0), FIRST_TOPIC_DEFAULT_TITLE, "first topic gets the neutral default title");
