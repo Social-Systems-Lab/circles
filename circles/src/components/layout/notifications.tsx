@@ -236,6 +236,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     case "pm_received":
                         groupKey = `pm_received_${content.roomId || record._id}`;
                         break;
+                    case "chat_mention":
+                        groupKey = `chat_mention_${content.roomId || record._id}`;
+                        break;
                     default:
                         groupKey = record._id;
                 }
@@ -498,6 +501,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "user_verification_reply_received":
                     return `/admin`;
                 case "pm_received":
+                case "chat_mention":
                     return notification.roomId ? `/chat/${notification.roomId}` : null;
                 case "contact_request_received":
                     return notification.user?.handle ? getCircleDefaultPath(notification.user) : null;
@@ -566,6 +570,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     return "Respond";
                 case "pm_received":
                     return "Reply";
+                case "chat_mention":
+                    return "View";
                 case "task_assigned":
                 case "task_shift_signup":
                     return "Review";
@@ -770,6 +776,10 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             case "pm_received":
                 return count > 1
                     ? `${userList} sent you ${count} messages`
+                    : groupedNotification.latestNotification.message;
+            case "chat_mention":
+                return count > 1
+                    ? `${userList} mentioned you ${count} times in chat`
                     : groupedNotification.latestNotification.message;
             default:
                 return groupedNotification.latestNotification.message;

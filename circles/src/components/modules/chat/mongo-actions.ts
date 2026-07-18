@@ -30,6 +30,7 @@ import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { extractChatMentionIds } from "@/lib/chat/mention-markup";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
@@ -151,6 +152,59 @@ const getSystemTemplateAuthor = (conversationMetadata?: Record<string, unknown>)
         circleType: "user",
     }) as Circle;
 
+const resolveChatMentionRecipients = async ({
+    conversation,
+    senderDid,
+    messageBody,
+}: {
+    conversation: any;
+    senderDid: string;
+    messageBody: string;
+}) => {
+    const mentionIds = extractChatMentionIds(messageBody);
+    if (!mentionIds.length) {
+        return [];
+    }
+
+    const participantDids = new Set(
+        ((conversation?.participants || []) as string[]).filter((did) => typeof did === "string" && did.length > 0),
+    );
+    if (!participantDids.size) {
+        return [];
+    }
+
+    const mentionedDids = new Set<string>();
+    await Promise.all(
+        mentionIds.map(async (mentionId) => {
+            const mentionLookupClauses: any[] = [{ handle: mentionId }, { did: mentionId }];
+            if (ObjectId.isValid(mentionId)) {
+                mentionLookupClauses.push({ _id: new ObjectId(mentionId) });
+            }
+
+            const mentionedCircle = (await Circles.findOne(
+                { $or: mentionLookupClauses },
+                { projection: { did: 1 } },
+            )) as Circle | null;
+            const mentionedDid = mentionedCircle?.did;
+            if (!mentionedDid || mentionedDid === senderDid) {
+                return;
+            }
+            if (!participantDids.has(mentionedDid)) {
+                return;
+            }
+            mentionedDids.add(mentionedDid);
+        }),
+    );
+
+    if (!mentionedDids.size) {
+        return [];
+    }
+
+    return (await Promise.all(Array.from(mentionedDids).map((recipientDid) => getUserPrivate(recipientDid)))).filter(
+        (recipient): recipient is any => !!recipient?.did,
+    );
+};
+
 const sendConversationMessageNotifications = async ({
     conversationId,
     conversation,
@@ -166,43 +220,56 @@ const sendConversationMessageNotifications = async ({
 }) => {
     const isDirectMessage = conversation?.type === "dm";
     const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
-    if (!isDirectMessage && !isCircleContact) {
-        return;
-    }
-
     const sender = await getCircleByDid(senderDid);
     if (!sender?.did) {
         return;
     }
-
-    const recipientDids: string[] = Array.from(
-        new Set(
-            (conversation?.participants || []).filter(
-                (participantDid: string) => typeof participantDid === "string" && participantDid !== senderDid,
-            ),
-        ),
-    );
-    if (!recipientDids.length) {
-        return;
-    }
-
-    const recipients = (await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))).filter(
-        (recipient): recipient is any => !!recipient?.did,
-    );
-    if (!recipients.length) {
-        return;
-    }
-
-    const circle = isCircleContact && conversation?.circleId ? await getCircleById(conversation.circleId) : undefined;
-
-    await sendNotifications("pm_received", recipients, {
-        roomId: conversationId,
-        user: sender,
-        circle,
-        contactType: conversation?.metadata?.contactType,
-        conversationName: conversation?.name,
-        messagePreview: messageBody,
+    const circle = conversation?.circleId ? await getCircleById(conversation.circleId) : undefined;
+    const mentionRecipients = await resolveChatMentionRecipients({
+        conversation,
+        senderDid,
+        messageBody,
     });
+    const mentionRecipientDids = new Set(mentionRecipients.map((recipient) => recipient.did));
+
+    if (isDirectMessage || isCircleContact) {
+        const recipientDids: string[] = Array.from(
+            new Set(
+                (conversation?.participants || []).filter(
+                    (participantDid: string) =>
+                        typeof participantDid === "string" &&
+                        participantDid !== senderDid &&
+                        !mentionRecipientDids.has(participantDid),
+                ),
+            ),
+        );
+
+        const recipients = (
+            await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))
+        ).filter((recipient): recipient is any => !!recipient?.did);
+
+        if (recipients.length) {
+            await sendNotifications("pm_received", recipients, {
+                roomId: conversationId,
+                user: sender,
+                circle: isCircleContact ? circle : undefined,
+                contactType: conversation?.metadata?.contactType,
+                conversationName: conversation?.name,
+                messagePreview: messageBody,
+            });
+        }
+    }
+
+    if (mentionRecipients.length) {
+        await sendNotifications("chat_mention", mentionRecipients, {
+            roomId: conversationId,
+            user: sender,
+            circle,
+            conversationName: conversation?.name,
+            messageBody: `${sender.name || "Someone"} mentioned you in ${conversation?.name || "chat"}`,
+            messagePreview: messageBody,
+        });
+    }
 
     if (!isDirectMessage || !messageId) {
         return;

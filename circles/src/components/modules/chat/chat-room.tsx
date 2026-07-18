@@ -236,7 +236,7 @@ const renderFormattedChatBody = (
                             href={href}
                             className={
                                 isChatMentionLinkHref(href)
-                                    ? `inline-flex items-center rounded-md bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 font-semibold text-[hsl(var(--task-link))] no-underline hover:underline ${className ?? ""}`.trim()
+                                    ? `inline font-semibold text-[hsl(var(--task-link))] no-underline hover:text-[hsl(var(--task-link-hover))] hover:underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--task-link))] ${className ?? ""}`.trim()
                                     : `${shouldEmphasizeLinks ? "text-[hsl(var(--task-link))] underline underline-offset-2 hover:text-[hsl(var(--task-link-hover))]" : ""} ${className ?? ""}`.trim()
                             }
                             {...props}
@@ -286,11 +286,12 @@ const getImageReplyPreviewText = (replyTo?: Partial<ChatMessage>) => {
 };
 
 const getImageMessageBodyText = (message: ChatMessage) => {
-    const body = renderMentionsAsDisplayText((message?.content?.body as string) || "").trim();
+    const rawBody = ((message?.content?.body as string) || "").trim();
+    const displayBody = renderMentionsAsDisplayText(rawBody).trim();
     const imageAttachment = getFirstImageAttachment(message);
-    if (!body || !imageAttachment?.name) return body;
+    if (!rawBody || !imageAttachment?.name) return rawBody;
 
-    return body === imageAttachment.name ? "" : body;
+    return displayBody === imageAttachment.name ? "" : rawBody;
 };
 
 const scrollToMessageElement = (messageId?: string) => {
@@ -608,7 +609,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                     href={href}
                                     className={
                                         isChatMentionLinkHref(href)
-                                            ? `inline-flex items-center rounded-md bg-[hsl(var(--founding-member-bg))] px-1.5 py-0.5 font-semibold text-[hsl(var(--task-link))] no-underline hover:underline ${className ?? ""}`.trim()
+                                            ? `inline font-semibold text-[hsl(var(--task-link))] no-underline hover:text-[hsl(var(--task-link-hover))] hover:underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--task-link))] ${className ?? ""}`.trim()
                                             : `${shouldEmphasizeLinks ? "text-[hsl(var(--task-link))] underline underline-offset-2 hover:text-[hsl(var(--task-link-hover))]" : ""} ${className ?? ""}`.trim()
                                     }
                                     {...props}
@@ -1958,6 +1959,7 @@ const TopicCard: React.FC<{
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const replyTextRef = useRef("");
     const pendingScrollIntoViewRef = useRef(false);
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
@@ -2011,6 +2013,11 @@ const TopicCard: React.FC<{
         },
         [mentionSuggestions],
     );
+    const setTopicReplyText = useCallback((value: string | ((currentValue: string) => string)) => {
+        const nextValue = typeof value === "function" ? value(replyTextRef.current) : value;
+        replyTextRef.current = nextValue;
+        setReplyText(nextValue);
+    }, []);
 
     const autoGrowReplyTextarea = useCallback(() => {
         const textarea = replyTextareaRef.current;
@@ -2198,7 +2205,7 @@ const TopicCard: React.FC<{
     };
 
     const handleSendReply = async () => {
-        const trimmed = replyText.trim();
+        const trimmed = replyTextRef.current.trim();
         if (!trimmed || isSending) return;
         setIsSending(true);
         try {
@@ -2206,7 +2213,7 @@ const TopicCard: React.FC<{
             const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
             if (result.success) {
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
-                setReplyText("");
+                setTopicReplyText("");
                 setReplyToMessage(null);
                 await onTopicActivity?.();
                 await loadReplies();
@@ -2690,7 +2697,7 @@ const TopicCard: React.FC<{
                                     <PopoverContent className="w-auto border-none bg-transparent p-0">
                                         <LazyEmojiPicker
                                             onEmojiClick={(data: EmojiClickData) =>
-                                                setReplyText((prev) => prev + data.emoji)
+                                                setTopicReplyText((prev) => prev + data.emoji)
                                             }
                                         />
                                     </PopoverContent>
@@ -2736,8 +2743,8 @@ const TopicCard: React.FC<{
                                 <MentionsInput
                                     inputRef={replyTextareaRef}
                                     value={replyText}
-                                    onChange={(e) => {
-                                        setReplyText(e.target.value);
+                                    onChange={(_event, newValue) => {
+                                        setTopicReplyText(newValue);
                                         autoGrowReplyTextarea();
                                     }}
                                     placeholder={`Reply to ${thread.title}. Use return for a new line.`}
