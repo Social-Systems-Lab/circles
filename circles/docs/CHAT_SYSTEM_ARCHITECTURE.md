@@ -243,7 +243,140 @@ This is defense-in-depth: UI guidance plus server enforcement.
 
 ---
 
-# 12. Read state and unread counts
+# 12. Topic-first messages
+
+As of 2026-07-17, messages use topics as the primary discussion model.
+
+Current behavior:
+
+- users create a topic or reply inside a topic
+- the general loose-message composer is no longer rendered
+- topic opening messages and topic replies remain stored in `chatMessageDocs`
+- `chatConversations.updatedAt` must update for every topic opening message and every reply
+- topics display inline in a vertically scrollable list
+- topics are ordered by latest activity ascending: oldest activity at the top, newest activity at the bottom
+- multiple topics can remain expanded at the same time
+- topic titles, opening messages, replies, attachments, reactions, editing, and deletion retain their existing behavior
+- the first topic title is prefilled with `Hello` but remains editable
+
+Relevant files:
+
+- src/components/modules/chat/chat-room.tsx
+- src/components/modules/chat/mongo-actions.ts
+- src/lib/data/mongo-chat.ts
+
+---
+
+# 13. Earlier messages
+
+Historical non-topic messages were not deleted or migrated.
+
+They are exposed above the topic list through a collapsed, read-only `Earlier messages` section.
+
+Current behavior:
+
+- the initial view fetches only whether legacy messages exist and their count
+- full legacy history loads lazily when the section is expanded
+- legacy messages are selected from the same conversation where `threadId` is absent, `thread` is absent, and system/broadcast records are excluded
+- legacy messages render chronologically
+- no composer, reply, edit, delete, or reaction controls are available in the section
+- expanding the section does not update `chatConversations.updatedAt`
+- expanding the section does not alter topic expansion state
+
+Relevant files:
+
+- src/components/modules/chat/chat-room.tsx
+- src/components/modules/chat/mongo-actions.ts
+- src/lib/chat/legacy-messages.ts
+
+---
+
+# 14. Responsive new-topic behavior
+
+Desktop behavior:
+
+- the fixed green `New topic` control remains available
+
+Mobile behavior:
+
+- there is no fixed bottom `New topic` control
+- a compact `New topic` action appears in the conversation header
+- a full-width `New topic` button appears after the topic list
+- the controls avoid overlapping `Earlier messages` and bottom navigation
+
+Relevant file:
+
+- src/components/modules/chat/chat-room.tsx
+
+---
+
+# 15. Topic loading state
+
+The first-topic empty state is gated by successful topic loading.
+
+Current behavior:
+
+- the empty state appears only after topic loading completes successfully and confirms zero topics
+- conversation switching resets topic loading state
+- stale requests from a previously selected room are ignored
+
+Relevant file:
+
+- src/components/modules/chat/chat-room.tsx
+
+---
+
+# 16. Notification responsiveness
+
+Notification and chat-count components still use polling as fallback.
+
+Additional responsiveness behavior:
+
+- the shared browser event `kamooni:notifications-changed` triggers immediate refresh after relevant local actions
+- counts refresh on window focus
+- counts refresh when the document becomes visible
+- the general notification bell intentionally excludes `pm_received` notifications
+- Telegram dispatch remains fire-and-forget after in-app notification insertion
+
+Relevant files:
+
+- src/app/chat/layout.tsx
+- src/components/layout/profile-menu.tsx
+- src/components/layout/notifications.tsx
+- src/components/layout/user-toolbox.tsx
+- src/lib/client/notification-events.ts
+- src/lib/notifications/bell-filter.ts
+- src/lib/data/notifications.ts
+
+---
+
+# 17. Unread badge race fix
+
+Confirmed race:
+
+- an older `listChatRoomsAction` request could return after a room was marked read
+- the newer refresh could be dropped while the older request was still in flight
+- the stale response could restore an old unread number
+- `ChatList` also used `mongoUnread || atomUnread || 0`, causing a valid server value of `0` to fall back to stale client state
+
+Fix:
+
+- server unread value `0` is treated as authoritative
+- sidebar, envelope, and toolbox chat refreshes use latest-only/coalesced async refresh handling
+- stale responses are discarded
+- a refresh requested during an in-flight request causes one final fresh request afterward
+
+Relevant files:
+
+- src/components/modules/chat/chat-list.tsx
+- src/app/chat/layout.tsx
+- src/components/layout/profile-menu.tsx
+- src/components/layout/user-toolbox.tsx
+- src/lib/client/latest-async-runner.ts
+
+---
+
+# 18. Read state and unread counts
 
 Unread state is tracked through `chatReadStates` and message ids.
 
@@ -257,9 +390,13 @@ Implementation:
 
 - `getUnreadCountsForUser` reads `chatReadStates`, then counts `chatMessageDocs` from other senders after the last read message id
 - `markConversationRead` upserts the `chatReadStates` record
-- `markConversationReadAction` verifies access, resolves the latest message when needed, and calls `markConversationRead`
+- `markConversationReadAction` verifies access, resolves the true latest `chatMessageDocs` message id across the conversation, including topic replies, and calls `markConversationRead`
 - `useMongoChat` marks the latest loaded or polled message read
 - `ChatRoomComponent` clears local unread state when messages are viewed
+
+Conversation read marking no longer relies only on the latest root message or topic starter.
+
+Topic-local seen state and conversation-level Mongo read state remain separate systems.
 
 Unread behavior is now split intentionally at the UI level:
 
@@ -277,7 +414,7 @@ This separation is intentional and should be preserved unless product direction 
 
 ---
 
-# 13. Chat and notifications relationship
+# 19. Chat and notifications relationship
 
 Chat and notifications are now related but distinct systems.
 
@@ -290,12 +427,15 @@ Important current behavior:
 - PM-style notifications can be generated by chat events
 - Bell excludes message notifications for launch
 - message unread belongs to Mail, not Bell
+- the conversation sidebar badge, top Messages/envelope badge, topic-local unread badge, and general notification bell are intentionally not yet unified
 
 This keeps Kamooni’s communication model high-signal and avoids duplicate alert surfaces.
 
+Remaining mismatches between those indicators may be semantic rather than stale-state bugs because they use different data sources or meanings.
+
 ---
 
-# 14. Mentions
+# 20. Mentions
 
 Current launch behavior:
 
@@ -310,7 +450,7 @@ This is a deliberate launch tradeoff, not an accidental omission.
 
 ---
 
-# 15. System messages inside chat
+# 21. System messages inside chat
 
 System messages are delivered through the same Mongo-native chat model.
 
@@ -324,53 +464,55 @@ System messages are not a separate transport system; they are built on top of Mo
 
 ---
 
-# 16. Key files
+# 22. Key files
 
-src/lib/data/mongo-chat.ts  
-Mongo conversation and message data helpers, collection indexes, normalization, list rendering, message creation, read state, unread counts, conversation ordering.
+- `src/lib/data/mongo-chat.ts` - Mongo conversation and message data helpers, collection indexes, normalization, list rendering, topic creation, topic replies, message creation, read state, unread counts, conversation ordering.
 
-src/components/modules/chat/mongo-actions.ts  
-Server-side conversation actions, access checks, send pipeline, unread count and read-state actions, DM and group creation.
+- `src/components/modules/chat/mongo-actions.ts` - Server-side conversation actions, access checks, send pipeline, topic and legacy-message actions, unread count and read-state actions, DM and group creation.
 
-src/components/modules/chat/actions.ts  
-Compatibility wrapper exporting the Mongo-native actions to existing callers; group membership join/leave actions also emit Mongo-native system messages.
+- `src/components/modules/chat/actions.ts` - Compatibility wrapper exporting the Mongo-native actions to existing callers; group membership join/leave actions also emit Mongo-native system messages.
 
-src/components/modules/chat/chat-room.tsx  
-Primary chat UI, reply handling, working chat mention implementation.
+- `src/components/modules/chat/chat-room.tsx` - Primary topic-first chat UI, earlier-message rendering, reply handling, topic controls, working chat mention implementation.
 
-src/components/modules/chat/useMongoChat.ts  
-Client hook for initial message load, polling, and read-state updates.
+- `src/components/modules/chat/useMongoChat.ts` - Client hook for initial message load, polling, and read-state updates.
 
-src/components/modules/chat/chat-list.tsx  
-Sidebar list rendering and unread badges.
+- `src/components/modules/chat/chat-list.tsx` - Sidebar list rendering, unread badges, and latest-only/coalesced refresh behavior.
 
-src/lib/chat/mongo-types.ts  
-Type definitions for Mongo conversations, messages, read states, attachments, reactions, and thread metadata.
+- `src/app/chat/layout.tsx` - Top chat layout and envelope count refresh behavior.
 
-src/lib/data/db.ts  
-Mongo collection initialization and exports for `chatConversations`, `chatRoomMembers`, `chatMessageDocs`, and `chatReadStates`.
+- `src/components/layout/profile-menu.tsx` - Mail/envelope unread UI split and count refresh behavior.
 
-src/components/layout/profile-menu.tsx  
-Mail vs Bell unread UI split.
+- `src/components/layout/notifications.tsx` - Bell notification UI backed by Mongo notification endpoints.
 
-src/components/layout/notifications.tsx  
-Bell notification UI backed by Mongo notification endpoints.
+- `src/components/layout/user-toolbox.tsx` - Toolbox chat count refresh behavior.
 
-src/lib/data/notifications.ts  
-Mongo-backed notification persistence and helpers.
+- `src/lib/chat/mongo-types.ts` - Type definitions for Mongo conversations, messages, read states, attachments, reactions, and thread metadata.
 
-src/app/api/notifications/route.ts  
-Notification feed endpoint.
+- `src/lib/chat/legacy-messages.ts` - Legacy non-topic message query helpers for the read-only `Earlier messages` section.
 
-src/app/api/notifications/unread-count/route.ts  
-Bell unread count endpoint.
+- `src/lib/chat/conversation-read-state.ts` - Conversation-level read-state helpers that resolve the latest message across root messages and topic replies.
 
-src/app/api/notifications/mark-all-read/route.ts  
-Bulk mark-read endpoint.
+- `src/lib/chat/unread-counts.ts` - Unread count helpers for conversation-level message indicators.
+
+- `src/lib/data/db.ts` - Mongo collection initialization and exports for `chatConversations`, `chatRoomMembers`, `chatMessageDocs`, and `chatReadStates`.
+
+- `src/lib/data/notifications.ts` - Mongo-backed notification persistence and helpers.
+
+- `src/lib/client/notification-events.ts` - Shared browser event helpers for `kamooni:notifications-changed`.
+
+- `src/lib/client/latest-async-runner.ts` - Latest-only/coalesced async refresh helper used to avoid stale unread badge responses.
+
+- `src/lib/notifications/bell-filter.ts` - Bell notification filtering, including intentional exclusion of `pm_received`.
+
+- `src/app/api/notifications/route.ts` - Notification feed endpoint.
+
+- `src/app/api/notifications/unread-count/route.ts` - Bell unread count endpoint.
+
+- `src/app/api/notifications/mark-all-read/route.ts` - Bulk mark-read endpoint.
 
 ---
 
-# 17. Launch notes
+# 23. Launch notes
 
 Communication behavior at launch:
 

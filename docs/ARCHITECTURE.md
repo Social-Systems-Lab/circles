@@ -78,7 +78,7 @@ Critical invariant:
 
 `chatConversations.updatedAt` must be updated whenever a message is sent. Sidebar ordering depends on this timestamp.
 
-The current source updates this timestamp in the Mongo-native message paths, including message creation, thread creation, and thread replies. New chat write paths must preserve that behavior.
+The current source updates this timestamp in the Mongo-native message paths, including topic opening messages and topic replies. New chat write paths must preserve that behavior.
 
 See [Mongo-native chat architecture](../circles/docs/CHAT_SYSTEM_ARCHITECTURE.md) for details.
 

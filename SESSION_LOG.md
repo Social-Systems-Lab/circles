@@ -679,3 +679,56 @@ visible on long inputs, edit textarea sizing and width.
 - Security cleanup: rotate MongoDB password, .env consolidation.
 - Session 008.5 / mention rendering fix (likely urgent if real
   users notice).
+
+## Session 2026-07-17 — Topic-first chat and notification responsiveness
+
+### What changed
+- Production currently runs commit `59511530`.
+- Chat is now topic-first: users create a topic or reply inside a topic, and the loose general-message composer is no longer rendered.
+- Topic opening messages and replies remain stored in Mongo `chatMessageDocs`.
+- `chatConversations.updatedAt` updates for every topic opening message and every reply.
+- Topics render inline in a vertically scrollable list, ordered by latest activity ascending: oldest activity at the top, newest activity at the bottom.
+- Multiple topics can remain expanded simultaneously.
+- Topic titles, opening messages, replies, attachments, reactions, editing, and deletion retain existing behavior.
+- The first topic title is prefilled with `Hello` but remains editable.
+- Historical non-topic messages were not deleted or migrated. They now appear in a collapsed, read-only `Earlier messages` section above the topic list.
+- `Earlier messages` initially loads only existence/count, lazily loads full history on expansion, selects same-conversation records with no `threadId` and no `thread`, excludes system/broadcast records, and renders chronologically without compose/reply/edit/delete/reaction controls.
+- Expanding `Earlier messages` does not update `chatConversations.updatedAt` and does not alter topic expansion state.
+- Desktop keeps the fixed green `New topic` control.
+- Mobile uses a compact header `New topic` action plus a full-width button after the topic list, with no fixed bottom control.
+- Topic empty state now appears only after successful topic loading confirms zero topics; room switches reset loading state and stale room requests are ignored.
+- Notification and chat-count components still poll as fallback, but `kamooni:notifications-changed`, window focus, and document visibility now trigger immediate refreshes.
+- The general notification bell intentionally excludes `pm_received`; Telegram dispatch remains fire-and-forget after in-app notification insertion.
+- Conversation read marking resolves the true latest `chatMessageDocs` id across the conversation, including topic replies, instead of relying only on the latest root message or topic starter.
+- Topic-local seen state and conversation-level Mongo read state remain separate.
+- Fixed unread badge race where older `listChatRoomsAction` responses could restore stale unread values after a room was marked read.
+- Server unread value `0` is now authoritative, and sidebar, envelope, and toolbox chat refreshes use latest-only/coalesced handling with stale responses discarded and one final fresh request after in-flight refreshes.
+
+### Architectural distinction
+- The conversation sidebar badge, top Messages/envelope badge, topic-local unread badge, and general notification bell are intentionally not yet unified.
+- They use different data sources or semantics, so remaining mismatches may be semantic rather than stale-state bugs.
+
+### Main implementation files
+- `circles/src/components/modules/chat/chat-room.tsx`
+- `circles/src/components/modules/chat/chat-list.tsx`
+- `circles/src/components/modules/chat/mongo-actions.ts`
+- `circles/src/components/modules/chat/useMongoChat.ts`
+- `circles/src/app/chat/layout.tsx`
+- `circles/src/components/layout/profile-menu.tsx`
+- `circles/src/components/layout/notifications.tsx`
+- `circles/src/components/layout/user-toolbox.tsx`
+- `circles/src/lib/data/mongo-chat.ts`
+- `circles/src/lib/chat/legacy-messages.ts`
+- `circles/src/lib/chat/conversation-read-state.ts`
+- `circles/src/lib/chat/unread-counts.ts`
+- `circles/src/lib/client/notification-events.ts`
+- `circles/src/lib/client/latest-async-runner.ts`
+- `circles/src/lib/notifications/bell-filter.ts`
+
+### Documentation updated
+- `circles/docs/CHAT_SYSTEM_ARCHITECTURE.md`
+- `docs/ARCHITECTURE.md`
+- `SESSION_LOG.md`
+
+### Deployed?
+No deploy in this documentation update. No application code changed.
