@@ -34,6 +34,7 @@ import {
 import { AggregateRank } from "./ranking";
 import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
+import { COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS } from "./feed-indexes";
 
 const MONGODB_URI =
     process.env.MONGODB_URI ||
@@ -101,6 +102,9 @@ if (process.env.IS_BUILD !== "true") {
     Members = db.collection<Member>("members");
     MembershipRequests = db.collection<MembershipRequest>("membershipRequests");
     Feeds = db.collection<Feed>("feeds");
+    Feeds.createIndex(COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS).catch((error) => {
+        console.error("Failed to create community feed unique index:", error);
+    });
     Posts = db.collection<Post>("posts");
     Comments = db.collection<Comment>("comments");
     Reactions = db.collection<Reaction>("reactions");

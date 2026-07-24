@@ -1,4 +1,4 @@
-import { UserGroup, Module, Feature, Cause, Skill, ModuleInfo, CircleType } from "@/models/models";
+import { UserGroup, Module, Feature, Cause, Skill, ModuleInfo, CircleType, Post } from "@/models/models";
 
 export const logLevel = 5; // 0: none, 1: error, 2: warn, 3: info, 4: debug, 5: trace
 export const LOG_LEVEL_TRACE = 5;
@@ -563,6 +563,31 @@ export const features = {
             module: "home",
         } as Feature,
     },
+    community: {
+        view: {
+            name: "View Community",
+            handle: "view",
+            description: "View community posts",
+            defaultUserGroups: ["admins", "moderators", "members", "everyone"],
+            module: "community",
+        } as Feature,
+        post: {
+            name: "Create Community Post",
+            handle: "post",
+            description: "Create posts and comments in the community",
+            defaultUserGroups: ["admins", "moderators", "members"],
+            module: "community",
+            needsToBeVerified: true,
+        } as Feature,
+        moderate: {
+            name: "Moderate Community",
+            handle: "moderate",
+            description: "Moderate community posts",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "community",
+            needsToBeVerified: true,
+        } as Feature,
+    },
     discussions: {
         view: {
             name: "View Forum Posts",
@@ -598,6 +623,88 @@ export const features = {
     },
 };
 
+type RuntimePostType = Post["postType"] | string | null | undefined;
+
+const isNoticeboardPostType = (postType: RuntimePostType): boolean => {
+    return (
+        postType === undefined ||
+        postType === "post" ||
+        postType === "goal" ||
+        postType === "task" ||
+        postType === "issue" ||
+        postType === "proposal" ||
+        postType === "event"
+    );
+};
+
+export const getPostViewFeature = (postType?: RuntimePostType): Feature | null => {
+    switch (postType) {
+        case "community":
+            return features.community.view;
+        case "discussion":
+            return features.discussions.view;
+        default:
+            if (!isNoticeboardPostType(postType)) {
+                return null;
+            }
+            return features.feed.view;
+    }
+};
+
+export const getPostCreateFeature = (postType?: RuntimePostType): Feature | null => {
+    switch (postType) {
+        case "community":
+            return features.community.post;
+        case "discussion":
+            return features.discussions.create;
+        default:
+            if (!isNoticeboardPostType(postType)) {
+                return null;
+            }
+            return features.feed.post;
+    }
+};
+
+export const getPostCommentFeature = (postType?: RuntimePostType): Feature | null => {
+    switch (postType) {
+        case "community":
+            return features.community.post;
+        case "discussion":
+            return features.discussions.comment;
+        default:
+            if (!isNoticeboardPostType(postType)) {
+                return null;
+            }
+            return features.feed.comment;
+    }
+};
+
+export const getPostModerateFeature = (postType?: RuntimePostType): Feature | null => {
+    switch (postType) {
+        case "community":
+            return features.community.moderate;
+        case "discussion":
+            return features.discussions.moderate;
+        default:
+            if (!isNoticeboardPostType(postType)) {
+                return null;
+            }
+            return features.feed.moderate;
+    }
+};
+
+export const getFeedViewFeature = (feedHandle?: string | null): Feature | null => {
+    switch (feedHandle) {
+        case "community":
+            return features.community.view;
+        case "default":
+        case undefined:
+            return features.feed.view;
+        default:
+            return null;
+    }
+};
+
 export const modules: ModuleInfo[] = [
     {
         name: "Home",
@@ -617,6 +724,12 @@ export const modules: ModuleInfo[] = [
         handle: "feed",
         description:
             "A shared space for circle members to publish posts, updates, and discussions. Serves as the central communication hub to foster transparent collaboration and community engagement.",
+    },
+    {
+        name: "Community",
+        handle: "community",
+        description:
+            "A conversational space for informal member updates, questions, sharing, and images, separate from official Noticeboard posts.",
     },
     {
         name: "Followers",

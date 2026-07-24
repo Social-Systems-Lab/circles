@@ -25,7 +25,9 @@ import { getIssueById } from "./issue";
 import { getFundingAskDocumentById } from "./funding";
 import { sdgs } from "./sdgs";
 import { isAuthorized } from "@/lib/auth/auth";
-import { features } from "./constants";
+import { features, getPostViewFeature } from "./constants";
+import { getPostTypePredicate } from "./feed-filters";
+import { isDuplicateKeyError } from "./feed-indexes";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -197,6 +199,42 @@ export const createDefaultFeed = async (circleId: string): Promise<Feed | null> 
     return defaultFeed;
 };
 
+export const createCommunityFeed = async (circleId: string): Promise<Feed | null> => {
+    const circle = await getCircleById(circleId);
+    if (!circle) {
+        return null;
+    }
+
+    // Lazy route creation only: Community is not backfilled or enabled here.
+    try {
+        const result = await Feeds.findOneAndUpdate(
+            { circleId, handle: "community" },
+            {
+                $setOnInsert: {
+                    name: "Community",
+                    handle: "community",
+                    circleId,
+                    userGroups: ["admins", "moderators", "members", "everyone"],
+                    createdAt: new Date(),
+                },
+            },
+            { upsert: true, returnDocument: "after" },
+        );
+
+        const feed = result as Feed | null;
+        if (feed?._id) {
+            feed._id = feed._id.toString();
+        }
+        return feed;
+    } catch (error) {
+        if (!isDuplicateKeyError(error)) {
+            throw error;
+        }
+
+        return getFeedByHandle(circleId, "community");
+    }
+};
+
 export const createPost = async (post: Post): Promise<Post> => {
     const result = await Posts.insertOne(post);
     let newPost = { ...post, _id: result.insertedId.toString() } as Post;
@@ -264,7 +302,25 @@ export const canUserViewPost = async (post: Post, userDid?: string): Promise<boo
         return false;
     }
 
-    const canViewFeed = await isAuthorized(userDid, feed.circleId, features.feed.view);
+    const circle = await getCircleById(feed.circleId);
+    if (!circle) {
+        return false;
+    }
+
+    if (post.postType === "community" && !circle.enabledModules?.includes("community")) {
+        return false;
+    }
+
+    if (post.postType === "discussion" && !circle.enabledModules?.includes("discussions")) {
+        return false;
+    }
+
+    const viewFeature = getPostViewFeature(post.postType);
+    if (!viewFeature) {
+        return false;
+    }
+
+    const canViewFeed = await isAuthorized(userDid, feed.circleId, viewFeature);
     if (!canViewFeed) {
         return false;
     }
@@ -725,13 +781,8 @@ export async function getPostsFromMultipleFeeds(
 ): Promise<PostDisplay[]> {
     const matchStage: any = {
         feedId: { $in: feedIds },
+        ...getPostTypePredicate(postType as Post["postType"] | undefined),
     };
-
-    if (postType) {
-        matchStage.postType = postType;
-    } else {
-        matchStage.$or = [{ postType: { $eq: "post" } }, { postType: { $exists: false } }];
-    }
 
     if (sdgHandles && sdgHandles.length > 0) {
         const sdgIds = sdgs.filter((s) => sdgHandles.includes(s.handle)).map((s) => s._id);
@@ -954,6 +1005,7 @@ export async function getPostsFromMultipleFeeds(
                 internalPreviewId: 1,
                 sharedPostId: 1,
                 sdgs: 1,
+                postType: 1,
                 circleType: { $literal: "post" },
 
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
@@ -1195,13 +1247,8 @@ export const getPosts = async (
 
     const matchStage: any = {
         feedId: feedId,
+        ...getPostTypePredicate(postType as Post["postType"] | undefined),
     };
-
-    if (postType) {
-        matchStage.postType = postType;
-    } else {
-        matchStage.$or = [{ postType: { $eq: "post" } }, { postType: { $exists: false } }];
-    }
 
     if (sdgHandles && sdgHandles.length > 0) {
         const sdgIds = sdgs.filter((s) => sdgHandles.includes(s.handle)).map((s) => s._id);
@@ -1383,6 +1430,7 @@ export const getPosts = async (
                 internalPreviewId: 1,
                 sharedPostId: 1,
                 sdgs: 1,
+                postType: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
                 mentions: 1,
@@ -1660,9 +1708,7 @@ async function fetchAndAttachInternalPreviewData(posts: PostDisplay[]): Promise<
                     });
                     break;
                 case "event":
-                    const events = await Events.find(
-                        { _id: { $in: ids.map((id) => new ObjectId(id)) } },
-                    ).toArray();
+                    const events = await Events.find({ _id: { $in: ids.map((id) => new ObjectId(id)) } }).toArray();
                     events.forEach((event) => {
                         const eventWithStringId = { ...event, _id: event._id.toString() };
                         previewDataMap.set(`event-${event._id.toString()}`, eventWithStringId as EventDisplay);
