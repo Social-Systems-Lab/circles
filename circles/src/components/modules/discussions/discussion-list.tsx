@@ -79,7 +79,7 @@ import { useToast } from "@/components/ui/use-toast";
 // Remove unused PostForm reference and keep only DiscussionForm
 import { DiscussionForm } from "./discussion-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { getPostCommentFeature, getPostModerateFeature, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { SuggestionDataItem } from "react-mentions";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
@@ -309,8 +309,10 @@ export const DiscussionItem = ({
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.createdBy === user?.did;
-    const canModerate = circle && isAuthorized(user, circle, features.feed.moderate);
-    const canComment = circle && isAuthorized(user, circle, features.feed.comment);
+    const moderateFeature = getPostModerateFeature(post.postType);
+    const commentFeature = getPostCommentFeature(post.postType);
+    const canModerate = circle && moderateFeature && isAuthorized(user, circle, moderateFeature);
+    const canComment = circle && commentFeature && isAuthorized(user, circle, commentFeature);
     const [isPending, startTransition] = useTransition();
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
@@ -1299,7 +1301,8 @@ const CommentItem = ({
     const router = useRouter();
 
     const isAuthor = user && comment.createdBy === user?.did;
-    const canModerate = isAuthorized(user, circle, features.feed.moderate);
+    const moderateFeature = getPostModerateFeature("discussion");
+    const canModerate = !!moderateFeature && isAuthorized(user, circle, moderateFeature);
     const formattedDate = getPublishTime(comment.createdAt);
 
     const replies = useMemo<CommentDisplay[]>(

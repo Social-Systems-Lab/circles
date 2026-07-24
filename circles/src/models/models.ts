@@ -228,7 +228,7 @@ export const postSchema = z.object({
     comments: z.number().default(0),
     mentions: z.array(mentionSchema).optional(),
     sharedPostId: z.string().optional(),
-    postType: z.enum(["post", "goal", "task", "issue", "proposal", "event", "discussion"]).optional(), // Added discussion
+    postType: z.enum(["post", "community", "goal", "task", "issue", "proposal", "event", "discussion"]).optional(),
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
     parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
     parentItemType: z.enum(["goal", "task", "issue", "proposal", "event"]).optional(), // Type of the parent item
@@ -782,6 +782,7 @@ export type PostItemProps = {
     hideContent?: boolean;
     embedded?: boolean;
     disableComments?: boolean;
+    readOnly?: boolean;
     isDetailView?: boolean;
 };
 

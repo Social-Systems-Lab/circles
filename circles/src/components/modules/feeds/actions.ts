@@ -31,7 +31,14 @@ import {
 } from "@/lib/data/feed";
 import { saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { features } from "@/lib/data/constants";
+import {
+    features,
+    getFeedViewFeature,
+    getPostCommentFeature,
+    getPostCreateFeature,
+    getPostModerateFeature,
+    getPostViewFeature,
+} from "@/lib/data/constants";
 import { sdgs } from "@/lib/data/sdgs";
 import { getProposalById } from "@/lib/data/proposal";
 import { getIssueById } from "@/lib/data/issue";
@@ -149,6 +156,57 @@ const validateMentionPermissions = async (userDid: string, mentions?: Array<{ id
     }
 };
 
+const isPostModuleEnabled = async (post: Post, feed: Feed): Promise<boolean> => {
+    if (post.postType === "community") {
+        const circle = await getCircleById(feed.circleId);
+        return !!circle?.enabledModules?.includes("community");
+    }
+    if (post.postType === "discussion") {
+        const circle = await getCircleById(feed.circleId);
+        return !!circle?.enabledModules?.includes("discussions");
+    }
+    if (!getPostViewFeature(post.postType)) {
+        return false;
+    }
+    return true;
+};
+
+const getPostAndFeedForContent = async (
+    contentId: string,
+    contentType: "post" | "comment",
+): Promise<{ post: Post; feed: Feed; comment: Comment | null } | null> => {
+    let postId = contentId;
+    let comment: Comment | null = null;
+    if (contentType === "comment") {
+        comment = await getComment(contentId);
+        if (!comment) {
+            return null;
+        }
+        postId = comment.postId;
+    }
+
+    const post = await getPost(postId);
+    if (!post) {
+        return null;
+    }
+
+    const feed = await getFeed(post.feedId);
+    if (!feed || !(await isPostModuleEnabled(post, feed))) {
+        return null;
+    }
+
+    return { post, feed, comment };
+};
+
+const canViewPostForAction = async (post: Post, feed: Feed, userDid?: string): Promise<boolean> => {
+    const viewFeature = getPostViewFeature(post.postType);
+    if (!viewFeature) {
+        return false;
+    }
+
+    return isAuthorized(userDid, feed.circleId, viewFeature);
+};
+
 export async function getLinkPreviewAction(url: string): Promise<{
     success: boolean;
     preview?: ExpectedPreview; // Use the refined type
@@ -263,15 +321,19 @@ export async function getInternalLinkPreviewData(url: string): Promise<InternalL
             const [, handle, postId] = postMatch;
             const circle = await getCircleByHandle(handle);
             if (!circle) return { error: "Circle not found" };
-            const authorized = await isAuthorized(userDid, circle._id.toString(), features.feed.view);
-            if (!authorized) return { error: "Unauthorized" };
             const post = await getPost(postId); // Assuming getPost fetches PostDisplay or similar
             if (!post) return { error: "Post not found" };
+            const feed = await getFeed(post.feedId);
+            if (!feed || feed.circleId !== circle._id.toString()) return { error: "Post not found" };
+            if (!(await isPostModuleEnabled(post, feed))) return { error: "Post not found" };
+            const postViewFeature = getPostViewFeature(post.postType);
+            if (!postViewFeature) return { error: "Post not found" };
+            const authorized = await isAuthorized(userDid, circle._id.toString(), postViewFeature);
+            if (!authorized) return { error: "Unauthorized" };
             // Ensure getPost returns PostDisplay or adapt as needed
             // This might require a new function like getPostDisplay(postId, userDid)
             // For now, assuming getPost is sufficient and we manually add author etc. if needed
             const author = await getUserByDid(post.createdBy);
-            const feed = await getFeed(post.feedId);
             const { sdgs: sdgIds, ...restOfPost } = post;
             const populatedSdgs = sdgIds ? sdgs.filter((sdg) => sdgIds.includes(sdg._id)) : [];
 
@@ -351,6 +413,7 @@ export async function getPostsAction(
     skip: number,
     sortingOptions?: SortingOptions,
     sdgHandles?: string[],
+    postType?: Post["postType"],
 ): Promise<PostDisplay[]> {
     let userDid = await getAuthenticatedUserDid();
     const feed = await getFeed(feedId);
@@ -358,13 +421,29 @@ export async function getPostsAction(
         redirect("/not-found");
     }
 
-    const authorized = await isAuthorized(userDid, circleId, features.feed.view);
+    if (feed.circleId !== circleId) {
+        redirect("/not-found");
+    }
+
+    if (feed.handle === "community") {
+        const circle = await getCircleById(circleId);
+        if (!circle?.enabledModules?.includes("community")) {
+            redirect("/not-found");
+        }
+    }
+
+    const feedViewFeature = getFeedViewFeature(feed.handle);
+    if (!feedViewFeature) {
+        redirect("/not-found");
+    }
+
+    const authorized = await isAuthorized(userDid, circleId, feedViewFeature);
     if (!authorized) {
         redirect("/unauthorized");
     }
 
     // get posts for feed
-    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip, sortingOptions, sdgHandles);
+    const posts = await getPostsWithMetrics(feedId, userDid, limit, skip, sortingOptions, sdgHandles, postType);
     return posts;
 }
 
@@ -422,6 +501,10 @@ export async function createPostAction(
             return { success: false, message: "Target circle not found" };
         }
 
+        if (postType === "community") {
+            return { success: false, message: "Community posting is not available in this phase" };
+        }
+
         const isOwnProfileFeed = targetCircle.circleType === "user" && targetCircle._id === currentUser._id;
         if (targetCircle.circleType === "user" && !isOwnProfileFeed) {
             return { success: false, message: "You are not authorized to create posts on this profile" };
@@ -442,7 +525,12 @@ export async function createPostAction(
         console.log("Creating post in feed", feed._id, "for circle", circleId, "by user", userDid);
 
         const feedId = feed._id.toString();
-        const authorized = isOwnProfileFeed ? true : await isAuthorized(userDid, circleId, features.feed.post);
+        const postCreateFeature = getPostCreateFeature(postType);
+        if (!postCreateFeature) {
+            return { success: false, message: "Unsupported post type" };
+        }
+
+        const authorized = isOwnProfileFeed ? true : await isAuthorized(userDid, circleId, postCreateFeature);
         if (!authorized) {
             return { success: false, message: "You are not authorized to create posts on the noticeboard" };
         }
@@ -603,6 +691,11 @@ export async function updatePostAction(
             return { success: false, message: "You are not authorized to edit this post" };
         }
 
+        const feed = await getFeed(post.feedId);
+        if (!feed || !(await isPostModuleEnabled(post, feed)) || !getPostCreateFeature(post.postType)) {
+            return { success: false, message: "Post not found" };
+        }
+
         if ((!post.title || post.title.trim() === "") && (!title || !title.toString().trim())) {
             return { success: false, message: "Title is required" };
         }
@@ -713,9 +806,17 @@ export async function deletePostAction(postId: string): Promise<{ success: boole
         if (!feed) {
             return { success: false, message: "Noticeboard not found" };
         }
+        if (!(await isPostModuleEnabled(post, feed))) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const moderateFeature = getPostModerateFeature(post.postType);
+        if (!moderateFeature) {
+            return { success: false, message: "Post not found" };
+        }
 
         const canModerate =
-            post.createdBy === userDid ? false : await isAuthorized(userDid, feed.circleId, features.feed.moderate);
+            post.createdBy === userDid ? false : await isAuthorized(userDid, feed.circleId, moderateFeature);
 
         if (post.createdBy !== userDid && !canModerate) {
             return { success: false, message: "You are not authorized to delete this post" };
@@ -765,8 +866,16 @@ export async function createCommentAction(
             console.log("🐞 [ACTION] Feed not found:", post.feedId);
             return { success: false, message: "Feed not found" };
         }
+        if (!(await isPostModuleEnabled(post, feed))) {
+            return { success: false, message: "Post not found" };
+        }
 
-        const authorized = await isAuthorized(userDid, feed.circleId, features.feed.comment);
+        const commentFeature = getPostCommentFeature(post.postType);
+        if (!commentFeature) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const authorized = await isAuthorized(userDid, feed.circleId, commentFeature);
         if (!authorized) {
             console.log("🐞 [ACTION] User not authorized:", { userDid });
             return { success: false, message: "You are not authorized to comment on the noticeboard" };
@@ -895,8 +1004,16 @@ export async function getAllCommentsAction(
         if (!feed) {
             return { success: false, message: "Noticeboard not found" };
         }
+        if (!(await isPostModuleEnabled(post, feed))) {
+            return { success: false, message: "Post not found" };
+        }
 
-        const authorized = await isAuthorized(userDid, feed.circleId, features.feed.view);
+        const viewFeature = getPostViewFeature(post.postType);
+        if (!viewFeature) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const authorized = await isAuthorized(userDid, feed.circleId, viewFeature);
         if (!authorized) {
             return { success: false, message: "You are not authorized to view comments on the noticeboard" };
         }
@@ -925,6 +1042,17 @@ export async function editCommentAction(
         }
 
         if (comment.createdBy !== userDid) {
+            return { success: false, message: "You are not authorized to edit this comment" };
+        }
+
+        const context = await getPostAndFeedForContent(commentId, "comment");
+        const commentFeature = context ? getPostCommentFeature(context.post.postType) : null;
+        if (!context || !commentFeature) {
+            return { success: false, message: "Comment not found" };
+        }
+
+        const authorized = await isAuthorized(userDid, context.feed.circleId, commentFeature);
+        if (!authorized) {
             return { success: false, message: "You are not authorized to edit this comment" };
         }
 
@@ -997,8 +1125,16 @@ export async function deleteCommentAction(commentId: string): Promise<{ success:
         if (!feed) {
             return { success: false, message: "Noticeboard not found" };
         }
+        if (!(await isPostModuleEnabled(post, feed))) {
+            return { success: false, message: "Post not found" };
+        }
 
-        const canModerate = await isAuthorized(userDid, feed.circleId, features.feed.moderate);
+        const moderateFeature = getPostModerateFeature(post.postType);
+        if (!moderateFeature) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const canModerate = await isAuthorized(userDid, feed.circleId, moderateFeature);
 
         if (comment.createdBy !== userDid && !canModerate) {
             return { success: false, message: "You are not authorized to delete this comment" };
@@ -1039,11 +1175,13 @@ export async function likeContentAction(
         }
 
         const feed = await getFeed(post.feedId);
-        if (feed) {
-            let canReact = await isAuthorized(userDid, feed.circleId, features.feed.view);
-            if (!canReact) {
-                return { success: false, message: "You are not authorized to like content on the noticeboard" };
-            }
+        if (!feed || !(await isPostModuleEnabled(post, feed))) {
+            return { success: false, message: "Post not found" };
+        }
+
+        const canReact = await canViewPostForAction(post, feed, userDid);
+        if (!canReact) {
+            return { success: false, message: "You are not authorized to like content on the noticeboard" };
         }
 
         await likeContent(contentId, contentType, userDid, reactionType);
@@ -1078,6 +1216,16 @@ export async function unlikeContentAction(
     }
 
     try {
+        const context = await getPostAndFeedForContent(contentId, contentType);
+        if (!context) {
+            return { success: false, message: "Content not found" };
+        }
+
+        const canReact = await canViewPostForAction(context.post, context.feed, userDid);
+        if (!canReact) {
+            return { success: false, message: "You are not authorized to unlike content on the noticeboard" };
+        }
+
         await unlikeContent(contentId, contentType, userDid, reactionType);
         return { success: true, message: "Content unliked successfully" };
     } catch (error) {
@@ -1090,6 +1238,17 @@ export async function getReactionsAction(
     contentType: "post" | "comment",
 ): Promise<{ success: boolean; reactions?: any[]; message?: string }> {
     try {
+        const userDid = await getAuthenticatedUserDid();
+        const context = await getPostAndFeedForContent(contentId, contentType);
+        if (!context) {
+            return { success: false, message: "Content not found" };
+        }
+
+        const authorized = await canViewPostForAction(context.post, context.feed, userDid);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to view reactions" };
+        }
+
         const reactions = await getReactions(contentId, contentType);
 
         return { success: true, reactions };
@@ -1108,6 +1267,16 @@ export async function checkIfLikedAction(
     }
 
     try {
+        const context = await getPostAndFeedForContent(contentId, contentType);
+        if (!context) {
+            return { success: false, message: "Content not found" };
+        }
+
+        const authorized = await canViewPostForAction(context.post, context.feed, userDid);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to view reactions" };
+        }
+
         const isLiked = await checkIfLiked(contentId, contentType, userDid);
 
         return { success: true, isLiked };
@@ -1145,9 +1314,13 @@ export async function getPostAction(postId: string): Promise<Post | null> {
 
         const feed = await getFeed(post.feedId);
         if (!feed) return null;
+        if (!(await isPostModuleEnabled(post, feed))) return null;
 
         // Check if user has permission to view the feed
-        const authorized = await isAuthorized(userDid, feed.circleId, features.feed.view);
+        const viewFeature = getPostViewFeature(post.postType);
+        if (!viewFeature) return null;
+
+        const authorized = await isAuthorized(userDid, feed.circleId, viewFeature);
         if (!authorized) return null;
 
         return post;
@@ -1168,8 +1341,16 @@ export async function getFeedByHandleAction(circleId: string, feedHandle: string
         const feed = await getFeedByHandle(circleId, feedHandle);
         if (!feed) return null;
 
+        if (feed.handle === "community") {
+            const circle = await getCircleById(circleId);
+            if (!circle?.enabledModules?.includes("community")) return null;
+        }
+
         // Check if user has permission to view the feed
-        const authorized = await isAuthorized(userDid, circleId, features.feed.view);
+        const feedViewFeature = getFeedViewFeature(feed.handle);
+        if (!feedViewFeature) return null;
+
+        const authorized = await isAuthorized(userDid, circleId, feedViewFeature);
         if (!authorized) return null;
 
         return feed;

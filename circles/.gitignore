@@ -58,4 +58,4 @@ tmp/
 .DS_Store
 
 # Local runtime data
-circles/
+/circles/

@@ -338,6 +338,7 @@ export const PostItem = ({
     hideContent,
     embedded,
     disableComments,
+    readOnly,
     isDetailView,
 }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
@@ -757,7 +758,7 @@ export const PostItem = ({
     //     console.log("re-rendering post-list");
     // }, []);
 
-    const showAdminActions = (isAuthor || canModerate) && (!inPreview || isDetailView);
+    const showAdminActions = !readOnly && (isAuthor || canModerate) && (!inPreview || isDetailView);
     const showInlineClose = inPreview && !isDetailView;
     const circleHandle = circle?.handle ?? (post as any)?.circle?.handle ?? (post as any)?.circleHandle;
     const postId = post?._id;
@@ -1315,7 +1316,7 @@ export const PostItem = ({
             )}
 
             {/* Actions (like and comment) */}
-            <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
+            {!readOnly && <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
                 <div className="flex flex-1 items-center gap-1.5">
                     {/* Likes Section */}
                     <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
@@ -1434,7 +1435,7 @@ export const PostItem = ({
                     <MessageCircle className="h-5 w-5" />
                     {post.comments > 0 && <div>{post.comments}</div>}
                 </div>
-            </div>
+            </div>}
 
             {/* Comments Section */}
             <div className={`flex flex-col gap-2 ${embedded ? "pb-2" : "pb-4"} pl-4 pr-4`}>
@@ -1518,6 +1519,7 @@ export const PostItem = ({
                                 hideContent={hideContent}
                                 embedded={embedded}
                                 disableComments={disableComments}
+                                readOnly={readOnly}
                                 isDetailView={true}
                             />
                         </DialogContent>
@@ -2014,9 +2016,10 @@ type PostListProps = {
     posts: PostDisplay[];
     isAggregateFeed?: boolean;
     compact?: boolean; // render in compact/mobile style (e.g., side panel)
+    readOnly?: boolean;
 };
 
-const PostList = ({ feed, circle, posts, isAggregateFeed, compact = false }: PostListProps) => {
+const PostList = ({ feed, circle, posts, isAggregateFeed, compact = false, readOnly = false }: PostListProps) => {
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.PostList.1");
@@ -2033,6 +2036,7 @@ const PostList = ({ feed, circle, posts, isAggregateFeed, compact = false }: Pos
                     feed={isAggregateFeed ? post.feed! : feed!}
                     isAggregateFeed={isAggregateFeed}
                     embedded={compact}
+                    readOnly={readOnly}
                 />
             ))}
         </div>
