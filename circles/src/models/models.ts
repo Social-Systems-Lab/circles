@@ -784,6 +784,7 @@ export type PostItemProps = {
     disableComments?: boolean;
     readOnly?: boolean;
     isDetailView?: boolean;
+    participationBlockReason?: import("@/lib/profile-completion").ParticipationBlockReason | null;
 };
 
 export type ContentPreviewData =

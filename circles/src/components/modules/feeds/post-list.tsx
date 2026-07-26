@@ -84,7 +84,14 @@ import { AiOutlineHeart, AiFillHeart } from "react-icons/ai";
 import { useToast } from "@/components/ui/use-toast";
 import { PostForm } from "./post-form";
 import { isAuthorized } from "@/lib/auth/client-auth";
-import { features, LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import {
+    getPostCommentFeature,
+    getPostCreateFeature,
+    getPostModerateFeature,
+    getPostReactionFeature,
+    LOG_LEVEL_TRACE,
+    logLevel,
+} from "@/lib/data/constants";
 import { SuggestionDataItem } from "react-mentions";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
@@ -100,6 +107,8 @@ import { Card, CardContent } from "@/components/ui/card"; // Import Card compone
 import Link from "next/link"; // Import Next Link
 import InternalLinkPreview from "./InternalLinkPreview"; // Import InternalLinkPreview
 import SharedPostPreview from "./SharedPostPreview";
+import { CommunityReadinessDialog } from "@/components/modules/community/community-readiness-dialog";
+import type { ParticipationBlockReason } from "@/lib/profile-completion";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -340,6 +349,7 @@ export const PostItem = ({
     disableComments,
     readOnly,
     isDetailView,
+    participationBlockReason,
 }: PostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
@@ -349,8 +359,21 @@ export const PostItem = ({
     const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [user] = useAtom(userAtom);
     const isAuthor = user && post.createdBy === user?.did;
-    const canModerate = circle && isAuthorized(user, circle, features.feed.moderate);
-    const canComment = circle && isAuthorized(user, circle, features.feed.comment);
+    const createFeature = getPostCreateFeature(post.postType);
+    const moderateFeature = getPostModerateFeature(post.postType);
+    const commentFeature = getPostCommentFeature(post.postType);
+    const reactionFeature = getPostReactionFeature(post.postType);
+    const canAuthorManage =
+        !readOnly &&
+        !!isAuthor &&
+        !!createFeature &&
+        (post.postType !== "community" || (!!circle && isAuthorized(user, circle, createFeature)));
+    const canModerate = !readOnly && !!circle && !!moderateFeature && isAuthorized(user, circle, moderateFeature);
+    const canComment = !readOnly && !!circle && !!commentFeature && isAuthorized(user, circle, commentFeature);
+    const canReact = !readOnly && !!circle && !!reactionFeature && isAuthorized(user, circle, reactionFeature);
+    const guardedCommunityReason =
+        post.postType === "community" && !readOnly && user && participationBlockReason ? participationBlockReason : null;
+    const profileHref = user?.handle ? `/circles/${user.handle}/home` : "/circles";
     const [isPending, startTransition] = useTransition();
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
@@ -564,7 +587,7 @@ export const PostItem = ({
     };
 
     const handleLikePost = () => {
-        if (!user) return;
+        if (!user || !canReact) return;
 
         if (isLiked) {
             setLikes((prev) => prev - 1);
@@ -662,6 +685,7 @@ export const PostItem = ({
                 } else {
                     console.error("Failed to add comment. Server response:", result);
                     setComments((prev) => prev.filter((comment) => comment._id !== "temp-comment"));
+                    setNewCommentContent(commentContent);
                     // Show error to user
                     toast({
                         title: "Comment Failed",
@@ -672,6 +696,7 @@ export const PostItem = ({
             } catch (error) {
                 console.error("Exception adding comment:", error);
                 setComments((prev) => prev.filter((comment) => comment._id !== "temp-comment"));
+                setNewCommentContent(commentContent);
                 // Show error to user
                 toast({
                     title: "Comment Failed",
@@ -758,7 +783,7 @@ export const PostItem = ({
     //     console.log("re-rendering post-list");
     // }, []);
 
-    const showAdminActions = !readOnly && (isAuthor || canModerate) && (!inPreview || isDetailView);
+    const showAdminActions = (canAuthorManage || canModerate) && (!inPreview || isDetailView);
     const showInlineClose = inPreview && !isDetailView;
     const circleHandle = circle?.handle ?? (post as any)?.circle?.handle ?? (post as any)?.circleHandle;
     const postId = post?._id;
@@ -1086,7 +1111,7 @@ export const PostItem = ({
                     )}
 
                     <div className="flex items-center space-x-2">
-                        {(isAuthor || canModerate) && !inPreview && (
+                        {showAdminActions && !inPreview && (
                     <DropdownMenu
                         modal={false}
                         open={openDropdown}
@@ -1111,7 +1136,7 @@ export const PostItem = ({
                                     <DropdownMenuContent className="z-[5000]" align="end" sideOffset={6}>
                                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                         <DropdownMenuSeparator />
-                                        {isAuthor && !inPreview && (
+                                        {canAuthorManage && !inPreview && (
                                             <Dialog open={isEditing} onOpenChange={setIsEditing}>
                                                 <DialogTrigger asChild>
                                                     <DropdownMenuItem
@@ -1319,8 +1344,19 @@ export const PostItem = ({
             {!readOnly && <div className="flex items-center justify-between pl-4 pr-4 text-gray-500">
                 <div className="flex flex-1 items-center gap-1.5">
                     {/* Likes Section */}
-                    <div className="flex h-[24px] cursor-pointer items-center gap-1.5 text-gray-500">
-                        <LikeButton isLiked={isLiked} onClick={handleLikePost} />
+                    <div className="flex h-[24px] items-center gap-1.5 text-gray-500">
+                        {canReact && <LikeButton isLiked={isLiked} onClick={handleLikePost} />}
+                        {!canReact && guardedCommunityReason && (
+                            <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                                <button
+                                    type="button"
+                                    aria-disabled="true"
+                                    className="relative flex h-5 w-5 items-center justify-center text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                >
+                                    <AiOutlineHeart className="h-5 w-5 stroke-gray-400" />
+                                </button>
+                            </CommunityReadinessDialog>
+                        )}
                         {likes > 0 && (
                             <HoverCard openDelay={200} onOpenChange={(open) => handleLikesPopoverHover(open)}>
                                 <HoverCardTrigger>
@@ -1425,6 +1461,9 @@ export const PostItem = ({
                 <div
                     className="flex flex-1 cursor-pointer items-center justify-end gap-1.5"
                     onClick={() => {
+                        if (guardedCommunityReason) {
+                            return;
+                        }
                         if (isDetailView) {
                             fetchComments();
                         } else {
@@ -1432,8 +1471,24 @@ export const PostItem = ({
                         }
                     }}
                 >
-                    <MessageCircle className="h-5 w-5" />
-                    {post.comments > 0 && <div>{post.comments}</div>}
+                    {guardedCommunityReason ? (
+                        <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                            <button
+                                type="button"
+                                aria-disabled="true"
+                                className="flex items-center gap-1.5 text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <MessageCircle className="h-5 w-5" />
+                                {post.comments > 0 && <span>{post.comments}</span>}
+                            </button>
+                        </CommunityReadinessDialog>
+                    ) : (
+                        <>
+                            <MessageCircle className="h-5 w-5" />
+                            {post.comments > 0 && <div>{post.comments}</div>}
+                        </>
+                    )}
                 </div>
             </div>}
 
@@ -1482,6 +1537,9 @@ export const PostItem = ({
                               circle={circle}
                               onDeleteComment={onDeleteComment}
                               onShowAllComments={fetchComments}
+                              postType={post.postType}
+                              readOnly={readOnly}
+                              participationBlockReason={guardedCommunityReason}
                           />
                       ))
                     : post.highlightedComment && (
@@ -1498,6 +1556,9 @@ export const PostItem = ({
                               onDeleteComment={onDeleteComment}
                               isHighlighted={true}
                               onShowAllComments={fetchComments}
+                              postType={post.postType}
+                              readOnly={readOnly}
+                              participationBlockReason={guardedCommunityReason}
                           />
                       )}
 
@@ -1521,6 +1582,7 @@ export const PostItem = ({
                                 disableComments={disableComments}
                                 readOnly={readOnly}
                                 isDetailView={true}
+                                participationBlockReason={participationBlockReason}
                             />
                         </DialogContent>
                     </Dialog>
@@ -1547,6 +1609,17 @@ export const PostItem = ({
                         )}
                     </div>
                 )}
+                {user && guardedCommunityReason && !disableComments && (
+                    <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                        <button
+                            type="button"
+                            aria-disabled="true"
+                            className="mt-2 w-full rounded-[20px] bg-amber-50 p-2 text-left text-sm font-medium text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                            Complete participation steps to comment
+                        </button>
+                    </CommunityReadinessDialog>
+                )}
             </div>
         </div>
     );
@@ -1566,6 +1639,9 @@ type CommentItemProps = {
     onDeleteComment: (commentId: string) => void;
     isHighlighted?: boolean;
     onShowAllComments: () => void;
+    postType?: PostDisplay["postType"];
+    readOnly?: boolean;
+    participationBlockReason?: ParticipationBlockReason | null;
 };
 
 const CommentItem = ({
@@ -1580,6 +1656,9 @@ const CommentItem = ({
     postId,
     onDeleteComment,
     isHighlighted,
+    postType,
+    readOnly = false,
+    participationBlockReason = null,
     depth = 0,
 }: CommentItemProps) => {
     const [showReplies, setShowReplies] = useState(false);
@@ -1598,8 +1677,13 @@ const CommentItem = ({
     const router = useRouter();
 
     const isAuthor = user && comment.createdBy === user?.did;
-    const canModerate = isAuthorized(user, circle, features.feed.moderate);
-    const canReply = isAuthorized(user, circle, features.feed.comment);
+    const moderateFeature = getPostModerateFeature(postType);
+    const commentFeature = getPostCommentFeature(postType);
+    const canModerate = !readOnly && !!moderateFeature && isAuthorized(user, circle, moderateFeature);
+    const canReply = !readOnly && !!commentFeature && isAuthorized(user, circle, commentFeature);
+    const guardedCommunityReason =
+        postType === "community" && !readOnly && user && participationBlockReason ? participationBlockReason : null;
+    const profileHref = user?.handle ? `/circles/${user.handle}/home` : "/circles";
     const formattedDate = getPublishTime(comment.createdAt);
 
     const replies = useMemo<CommentDisplay[]>(
@@ -1674,9 +1758,10 @@ const CommentItem = ({
     const handleAddReply = () => {
         if (!canReply || !user || !newReplyContent.trim() || isPending) return;
 
+        const replyContent = newReplyContent.trim();
         const tempComment: CommentDisplay = {
             _id: "temp-reply", // Temporary ID to distinguish it
-            content: newReplyContent,
+            content: replyContent,
             createdAt: new Date(),
             author: user as Circle,
             createdBy: user!.did!,
@@ -1690,7 +1775,7 @@ const CommentItem = ({
         setComments([...comments!, tempComment]);
         startTransition(async () => {
             try {
-                const result = await createCommentAction(postId, comment._id ?? null, newReplyContent);
+                const result = await createCommentAction(postId, comment._id ?? null, replyContent);
                 if (result.success && result.comment) {
                     const newReply = result.comment as CommentDisplay;
                     newReply.rootParentId = comment.rootParentId || comment._id;
@@ -1701,9 +1786,24 @@ const CommentItem = ({
                     setNewReplyContent("");
                     setShowReplyInput(false);
                     setShowReplies(true);
+                } else {
+                    setComments((prevComments) => prevComments.filter((c) => c._id !== "temp-reply"));
+                    setNewReplyContent(replyContent);
+                    toast({
+                        title: "Reply Failed",
+                        description: result.message || "Failed to create reply. Please try again.",
+                        variant: "destructive",
+                    });
                 }
             } catch (error) {
                 console.error("Failed to add reply", error);
+                setComments((prevComments) => prevComments.filter((c) => c._id !== "temp-reply"));
+                setNewReplyContent(replyContent);
+                toast({
+                    title: "Reply Failed",
+                    description: "An error occurred while creating your reply.",
+                    variant: "destructive",
+                });
             }
         });
     };
@@ -1867,17 +1967,40 @@ const CommentItem = ({
                             <div className="flex items-center gap-4 text-xs text-gray-500">
                                 <div>{formattedDate}</div>
                                 {comment.createdBy !== user?.did && (
-                                    <div
-                                        onClick={handleLikeComment}
-                                        className={isLiked ? `cursor-pointer text-[#ff4772]` : `cursor-pointer`}
-                                    >
-                                        Like
-                                    </div>
+                                    guardedCommunityReason ? (
+                                        <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                                            <button
+                                                type="button"
+                                                aria-disabled="true"
+                                                className="cursor-pointer text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                            >
+                                                Like
+                                            </button>
+                                        </CommunityReadinessDialog>
+                                    ) : (
+                                        <div
+                                            onClick={handleLikeComment}
+                                            className={isLiked ? `cursor-pointer text-[#ff4772]` : `cursor-pointer`}
+                                        >
+                                            Like
+                                        </div>
+                                    )
                                 )}
                                 {canReply && user && (
                                     <div onClick={handleReplyClick} className="cursor-pointer">
                                         Reply
                                     </div>
+                                )}
+                                {!canReply && user && guardedCommunityReason && (
+                                    <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                                        <button
+                                            type="button"
+                                            aria-disabled="true"
+                                            className="cursor-pointer text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        >
+                                            Reply
+                                        </button>
+                                    </CommunityReadinessDialog>
                                 )}
                             </div>
                         </div>
@@ -1994,6 +2117,9 @@ const CommentItem = ({
                                 circle={circle}
                                 onDeleteComment={onDeleteComment}
                                 onShowAllComments={onShowAllComments}
+                                postType={postType}
+                                readOnly={readOnly}
+                                participationBlockReason={guardedCommunityReason}
                             />
                         ))}
                     {(!showReplies || isHighlighted) && (
@@ -2017,9 +2143,18 @@ type PostListProps = {
     isAggregateFeed?: boolean;
     compact?: boolean; // render in compact/mobile style (e.g., side panel)
     readOnly?: boolean;
+    participationBlockReason?: ParticipationBlockReason | null;
 };
 
-const PostList = ({ feed, circle, posts, isAggregateFeed, compact = false, readOnly = false }: PostListProps) => {
+const PostList = ({
+    feed,
+    circle,
+    posts,
+    isAggregateFeed,
+    compact = false,
+    readOnly = false,
+    participationBlockReason = null,
+}: PostListProps) => {
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.PostList.1");
@@ -2037,6 +2172,7 @@ const PostList = ({ feed, circle, posts, isAggregateFeed, compact = false, readO
                     isAggregateFeed={isAggregateFeed}
                     embedded={compact}
                     readOnly={readOnly}
+                    participationBlockReason={participationBlockReason}
                 />
             ))}
         </div>

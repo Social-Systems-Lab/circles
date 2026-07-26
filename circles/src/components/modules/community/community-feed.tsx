@@ -3,15 +3,25 @@
 import Image from "next/image";
 import { Circle, Feed, PostDisplay } from "@/models/models";
 import PostList from "@/components/modules/feeds/post-list";
+import type { ParticipationBlockReason } from "@/lib/profile-completion";
 
 type CommunityFeedProps = {
     circle: Circle;
     feed: Feed;
     posts: PostDisplay[];
     isLoading?: boolean;
+    readOnly?: boolean;
+    participationBlockReason?: ParticipationBlockReason | null;
 };
 
-export function CommunityFeed({ circle, feed, posts, isLoading = false }: CommunityFeedProps) {
+export function CommunityFeed({
+    circle,
+    feed,
+    posts,
+    isLoading = false,
+    readOnly = false,
+    participationBlockReason = null,
+}: CommunityFeedProps) {
     if (isLoading) {
         return (
             <div className="flex h-full min-h-[320px] w-full flex-1 items-center justify-center">
@@ -39,7 +49,13 @@ export function CommunityFeed({ circle, feed, posts, isLoading = false }: Commun
     return (
         <div className="flex h-full min-h-screen w-full flex-1 items-start justify-center">
             <div className="flex w-full max-w-[700px] flex-col">
-                <PostList posts={posts} feed={feed} circle={circle} readOnly />
+                <PostList
+                    posts={posts}
+                    feed={feed}
+                    circle={circle}
+                    readOnly={readOnly}
+                    participationBlockReason={participationBlockReason}
+                />
             </div>
         </div>
     );
