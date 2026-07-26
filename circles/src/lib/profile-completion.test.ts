@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { Circle } from "@/models/models";
 import {
     canParticipate,
+    getParticipationBlockReason,
     getParticipationRequiredMessage,
     hasProfileAboutText,
     hasRealProfileImage,
@@ -175,6 +176,57 @@ assert.equal(
 );
 assert.equal(canParticipate(undefined), false, "missing users do not pass participation readiness");
 assert.equal(
+    getParticipationBlockReason(baseUser()),
+    null,
+    "fully ready users have no participation block reason",
+);
+assert.equal(
+    getParticipationBlockReason(baseUser({ isAdmin: true, isEmailVerified: false, communityGuidelinesAcceptance: undefined })),
+    null,
+    "admin bypass has no participation block reason",
+);
+assert.equal(
+    getParticipationBlockReason(baseUser({ isEmailVerified: false })),
+    "email_unverified",
+    "unverified email is identified specifically",
+);
+assert.equal(
+    getParticipationBlockReason(baseUser({ picture: undefined })),
+    "profile_incomplete",
+    "missing profile image maps to profile completion",
+);
+assert.equal(
+    getParticipationBlockReason(baseUser({ description: "", content: "" })),
+    "profile_incomplete",
+    "missing About text maps to profile completion",
+);
+assert.equal(
+    getParticipationBlockReason(baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() })),
+    "guidelines_incomplete",
+    "incomplete guidelines are identified specifically",
+);
+assert.equal(
+    getParticipationBlockReason(
+        baseUser({
+            isEmailVerified: false,
+            picture: undefined,
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    "email_unverified",
+    "email verification takes precedence when multiple participation checks fail",
+);
+assert.equal(
+    getParticipationBlockReason(
+        baseUser({
+            picture: undefined,
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    "profile_incomplete",
+    "profile completion takes precedence over guidelines when both fail",
+);
+assert.equal(
     getParticipationRequiredMessage("create posts", baseUser({ isEmailVerified: false })),
     "Verify your email before you can create posts.",
     "participation message points unverified users to email verification",
@@ -182,10 +234,18 @@ assert.equal(
 assert.equal(
     getParticipationRequiredMessage(
         "create posts",
-        baseUser({ isEmailVerified: true, communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
+        baseUser({ isEmailVerified: true, picture: undefined }),
     ),
     "Complete your profile before you can create posts.",
     "participation message points verified incomplete users to profile completion",
+);
+assert.equal(
+    getParticipationRequiredMessage(
+        "create posts",
+        baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
+    ),
+    "Accept the Community Guidelines before you can create posts.",
+    "participation message points guideline-incomplete users to Community Guidelines",
 );
 
 console.log("profile-completion tests passed");

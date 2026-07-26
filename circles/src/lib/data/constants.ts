@@ -679,6 +679,14 @@ export const getPostCommentFeature = (postType?: RuntimePostType): Feature | nul
     }
 };
 
+export const getPostReactionFeature = (postType?: RuntimePostType): Feature | null => {
+    if (postType === "community") {
+        return features.community.post;
+    }
+
+    return getPostViewFeature(postType);
+};
+
 export const getPostModerateFeature = (postType?: RuntimePostType): Feature | null => {
     switch (postType) {
         case "community":

@@ -8,6 +8,7 @@ import {
     getPostCommentFeature,
     getPostCreateFeature,
     getPostModerateFeature,
+    getPostReactionFeature,
     getPostViewFeature,
 } from "@/lib/data/constants";
 
@@ -17,6 +18,11 @@ assert.equal(
     getPostCommentFeature("community"),
     features.community.post,
     "Community comment resolves to community.post",
+);
+assert.equal(
+    getPostReactionFeature("community"),
+    features.community.post,
+    "Community reaction resolves to community.post",
 );
 assert.equal(
     getPostModerateFeature("community"),
@@ -40,11 +46,17 @@ assert.equal(
     features.discussions.moderate,
     "Forum moderate resolves to discussions.moderate",
 );
+assert.equal(
+    getPostReactionFeature("discussion"),
+    features.discussions.view,
+    "Forum reaction preserves view-based reaction behavior",
+);
 
 assert.equal(getPostViewFeature(undefined), features.feed.view, "Legacy Noticeboard view resolves to feed.view");
 assert.equal(getPostViewFeature("post"), features.feed.view, "Noticeboard view resolves to feed.view");
 assert.equal(getPostCreateFeature("post"), features.feed.post, "Noticeboard create resolves to feed.post");
 assert.equal(getPostCommentFeature("post"), features.feed.comment, "Noticeboard comment resolves to feed.comment");
+assert.equal(getPostReactionFeature("post"), features.feed.view, "Noticeboard reaction preserves feed.view");
 assert.equal(getPostModerateFeature("post"), features.feed.moderate, "Noticeboard moderate resolves to feed.moderate");
 assert.equal(getPostViewFeature("goal"), features.feed.view, "Goal noticeboard shadow posts resolve to feed.view");
 assert.equal(getPostCreateFeature("task"), features.feed.post, "Task noticeboard shadow posts resolve to feed.post");
@@ -60,6 +72,7 @@ assert.equal(getPostViewFeature("unknown"), null, "Unknown postType view fails c
 assert.equal(getPostViewFeature(null), null, "Malformed null postType view fails closed");
 assert.equal(getPostCreateFeature("unknown"), null, "Unknown postType create fails closed");
 assert.equal(getPostCommentFeature("unknown"), null, "Unknown postType comment fails closed");
+assert.equal(getPostReactionFeature("unknown"), null, "Unknown postType reaction fails closed");
 assert.equal(getPostModerateFeature("unknown"), null, "Unknown postType moderate fails closed");
 
 assert.equal(
@@ -85,6 +98,16 @@ assert.equal(
     canUseFeature(getPostCommentFeature("discussion"), features.feed.comment),
     false,
     "Forum comment controls do not follow feed.comment",
+);
+assert.equal(
+    canUseFeature(getPostReactionFeature("community"), features.community.post),
+    true,
+    "Community reaction controls follow community.post",
+);
+assert.equal(
+    canUseFeature(getPostReactionFeature("community"), features.feed.view),
+    false,
+    "Feed view does not authorize Community reactions",
 );
 assert.equal(
     canUseFeature(getPostModerateFeature("discussion"), features.discussions.moderate),
