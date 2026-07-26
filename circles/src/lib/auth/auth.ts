@@ -157,6 +157,7 @@ export const createUserAccount = async (
                 actionUrl: verificationLink,
             },
         });
+        await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
         console.log(`Verification email sent to ${email}`);
     } catch (error) {
         console.error(`Failed to send verification email to ${email}:`, error);
@@ -253,7 +254,9 @@ export const getUserPrivateKey = (did: string, password: string): string => {
     const accountPath = path.join(USERS_DIR, did);
     if (!fs.existsSync(accountPath)) {
         console.error("Login failed: auth credential directory missing", { did, accountPath });
-        throw new AuthenticationError("Your account credentials need to be rebuilt. Please use Forgot Password to reset your password and restore access.");
+        throw new AuthenticationError(
+            "Your account credentials need to be rebuilt. Please use Forgot Password to reset your password and restore access.",
+        );
     }
 
     const salt: Buffer = fs.readFileSync(path.join(accountPath, SALT_FILENAME));

@@ -8,6 +8,7 @@ import {
     getLinkedVibeIdDid,
     type PlatformMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
+import { EmailVerificationBanner } from "./email-verification-banner";
 
 type SubscriptionProps = {
     params: Promise<{ handle: string }>;
@@ -38,10 +39,12 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
             <div className="max-w-3xl space-y-3">
                 <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
                 <p className="text-muted-foreground">
-                    Manage your verification thread, message reminders, and subscription and supporter options in one place.
+                    Manage your verification thread, message reminders, and subscription and supporter options in one
+                    place.
                 </p>
             </div>
-            <div className="mt-8 max-w-5xl">
+            <div className="mt-8 max-w-5xl space-y-8">
+                <EmailVerificationBanner user={user} />
                 <SubscriptionFormSettings
                     user={user}
                     membershipCredential={membershipCredential}

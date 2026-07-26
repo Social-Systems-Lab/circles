@@ -33,13 +33,18 @@ function VerifyEmailContent() {
                             "Your email has been verified. Next, complete your profile with an image and a few words to introduce yourself.",
                         );
                         setDetail(null);
-                        setContinueHref(response.handle ? `/circles/${response.handle}` : "/");
+                        setContinueHref(
+                            response.handle
+                                ? `/circles/${response.handle}/settings/subscription#email-verification`
+                                : "/",
+                        );
                         setError(false);
                         setIsResolved(true);
                     } else {
                         setTitle("Email verification");
                         setMessage(
-                            response.message || "Failed to verify your email. The email verification link may be invalid or expired.",
+                            response.message ||
+                                "Failed to verify your email. The email verification link may be invalid or expired.",
                         );
                         setDetail(
                             "If you cannot use the original link right now, you can still continue to your profile, but some account steps may require email verification later.",
@@ -74,25 +79,19 @@ function VerifyEmailContent() {
             <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md dark:bg-gray-800">
                 <h1 className="mb-6 text-center text-2xl font-semibold text-gray-900 dark:text-white">{title}</h1>
                 <p className={`text-center ${error ? "text-red-500" : "text-green-500"}`}>{message}</p>
-                {detail && (
-                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                        {detail}
-                    </p>
-                )}
+                {detail && <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">{detail}</p>}
                 {isResolved && (
                     <div className="mt-6 text-center">
                         <Button asChild>
-                            <Link href={continueHref}>
-                                {error ? "Continue for now" : "Complete your profile"}
-                            </Link>
+                            <Link href={continueHref}>{error ? "Continue for now" : "Complete your profile"}</Link>
                         </Button>
                     </div>
                 )}
                 {error && message.includes("expired") && (
                     <div className="mt-4 text-center">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                            If your email verification link has expired, you can request a new verification email from
-                            your profile settings or by attempting to log in.
+                            If your email verification link has expired, log in and request a new verification email
+                            from Account Settings.
                         </p>
                     </div>
                 )}

@@ -1,4 +1,5 @@
 import type { ParticipationBlockReason } from "@/lib/profile-completion";
+import { getEmailVerificationSettingsHref } from "@/lib/auth/email-verification-recovery";
 
 export type CommunityComposerState = "hidden" | "guarded" | "enabled";
 
@@ -30,4 +31,12 @@ export const shouldGuardCommunityInteractions = ({
     participationBlockReason,
 }: CommunityParticipationStateInput): boolean => {
     return hasPostPermission && (!canParticipate || participationBlockReason !== null);
+};
+
+export const getCommunityReadinessHref = (reason: ParticipationBlockReason, userHandle?: string | null): string => {
+    if (reason === "email_unverified") {
+        return getEmailVerificationSettingsHref(userHandle);
+    }
+
+    return userHandle ? `/circles/${userHandle}/home` : "/circles";
 };

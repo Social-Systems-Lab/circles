@@ -2,6 +2,8 @@
 
 import { Circles } from "@/lib/data/db";
 import { hashToken } from "@/lib/data/email";
+import { verifyEmailToken } from "@/lib/auth/email-verification-completion";
+import type { ObjectId } from "mongodb";
 import { revalidatePath } from "next/cache";
 
 interface VerifyEmailResponse {
@@ -11,91 +13,53 @@ interface VerifyEmailResponse {
 }
 
 export async function verifyEmailAction(token: string): Promise<VerifyEmailResponse> {
-    if (!token) {
-        return { success: false, message: "Verification token is missing." };
-    }
-
     try {
-        const hashedToken = hashToken(token);
-
-        const user = await Circles.findOne({
-            emailVerificationToken: hashedToken,
+        const response = await verifyEmailToken(token, {
+            hashToken,
+            findUserByHashedToken: async (hashedToken) => Circles.findOne({ emailVerificationToken: hashedToken }),
+            clearToken: async (userId) => {
+                await Circles.updateOne(
+                    { _id: userId as ObjectId },
+                    {
+                        $set: {
+                            emailVerificationToken: null,
+                            emailVerificationTokenExpiry: null,
+                        },
+                    },
+                );
+            },
+            markEmailVerified: async ({ userId, hashedToken, now }) => {
+                const updateResult = await Circles.updateOne(
+                    {
+                        _id: userId as ObjectId,
+                        isEmailVerified: { $ne: true },
+                        emailVerificationToken: hashedToken,
+                        emailVerificationTokenExpiry: { $gt: now },
+                    },
+                    {
+                        $set: {
+                            isEmailVerified: true,
+                            emailVerificationToken: null,
+                            emailVerificationTokenExpiry: null,
+                        },
+                    },
+                );
+                return updateResult.modifiedCount > 0;
+            },
+            warn: (message) => console.warn(message),
         });
 
-        if (!user) {
-            return { success: false, message: "Invalid or expired verification token." };
-        }
-
-        if (user.isEmailVerified) {
-            await Circles.updateOne(
-                { _id: user._id },
-                {
-                    $set: {
-                        emailVerificationToken: null,
-                        emailVerificationTokenExpiry: null,
-                    },
-                },
-            );
-            return {
-                success: false,
-                message: "This email verification link has already been used. You can log in.",
-                handle: user.handle || undefined,
-            };
-        }
-
-        if (user.emailVerificationTokenExpiry && new Date() > user.emailVerificationTokenExpiry) {
-            // Optionally, you could offer to resend the verification email here
-            // For now, just inform the user the token is expired.
-            // Clear the expired token
-            await Circles.updateOne(
-                { _id: user._id },
-                {
-                    $set: {
-                        emailVerificationToken: null,
-                        emailVerificationTokenExpiry: null,
-                    },
-                },
-            );
-            return { success: false, message: "This email verification link has expired. Please request a new one." };
-        }
-        if (!user.did) {
-            return { success: false, message: "Could not verify this account. Please contact support." };
-        }
-
-        // Token is valid and not expired, verify the email
-        const updateResult = await Circles.updateOne(
-            { _id: user._id },
-            {
-                $set: {
-                    isEmailVerified: true,
-                    emailVerificationToken: null,
-                    emailVerificationTokenExpiry: null,
-                },
-            },
-        );
-
-        if (updateResult.modifiedCount === 0) {
-            // This might happen if the user was updated between findOne and updateOne
-            console.warn(
-                `Failed to update email verification status for user ${user._id?.toString()}, but token was valid.`,
-            );
-            return { success: false, message: "Could not update email verification status. Please try again." };
-        }
-
         // Revalidate user-specific paths if necessary, e.g., profile page
-        if (user.handle) {
+        if (response.handle) {
             try {
-                revalidatePath(`/circles/${user.handle}`);
+                revalidatePath(`/circles/${response.handle}`);
+                revalidatePath(`/circles/${response.handle}/settings/subscription`);
             } catch (revalidationError) {
                 console.warn("Failed to revalidate user path after email verification:", revalidationError);
             }
         }
 
-        return {
-            success: true,
-            message: "Email verified",
-            handle: user.handle || undefined,
-        };
+        return response;
     } catch (error) {
         console.error("Error during email verification:", error);
         return { success: false, message: "An unexpected error occurred during email verification." };

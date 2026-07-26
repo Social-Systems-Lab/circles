@@ -28,7 +28,7 @@ export const getCommunityReadinessCopy = (reason: ParticipationBlockReason): Com
             title: "Verify your email to participate",
             body: "You can view this Community, but you need to verify your email before posting, commenting, or reacting.",
             placeholder: "Verify your email to post in the Community",
-            actionLabel: "Open profile steps",
+            actionLabel: "Verify your email",
         };
     }
 
@@ -51,11 +51,11 @@ export const getCommunityReadinessCopy = (reason: ParticipationBlockReason): Com
 
 type CommunityReadinessDialogProps = {
     reason: ParticipationBlockReason;
-    profileHref: string;
+    readinessHref: string;
     children: ReactNode;
 };
 
-export function CommunityReadinessDialog({ reason, profileHref, children }: CommunityReadinessDialogProps) {
+export function CommunityReadinessDialog({ reason, readinessHref, children }: CommunityReadinessDialogProps) {
     const copy = getCommunityReadinessCopy(reason);
 
     return (
@@ -72,7 +72,7 @@ export function CommunityReadinessDialog({ reason, profileHref, children }: Comm
                 </div>
                 <DialogFooter>
                     <Button asChild>
-                        <Link href={profileHref}>{copy.actionLabel}</Link>
+                        <Link href={readinessHref}>{copy.actionLabel}</Link>
                     </Button>
                 </DialogFooter>
             </DialogContent>

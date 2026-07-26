@@ -108,6 +108,7 @@ import Link from "next/link"; // Import Next Link
 import InternalLinkPreview from "./InternalLinkPreview"; // Import InternalLinkPreview
 import SharedPostPreview from "./SharedPostPreview";
 import { CommunityReadinessDialog } from "@/components/modules/community/community-readiness-dialog";
+import { getCommunityReadinessHref } from "@/lib/community-participation";
 import type { ParticipationBlockReason } from "@/lib/profile-completion";
 
 export const defaultMentionsInputStyle = {
@@ -373,7 +374,9 @@ export const PostItem = ({
     const canReact = !readOnly && !!circle && !!reactionFeature && isAuthorized(user, circle, reactionFeature);
     const guardedCommunityReason =
         post.postType === "community" && !readOnly && user && participationBlockReason ? participationBlockReason : null;
-    const profileHref = user?.handle ? `/circles/${user.handle}/home` : "/circles";
+    const readinessHref = guardedCommunityReason
+        ? getCommunityReadinessHref(guardedCommunityReason, user?.handle)
+        : "/circles";
     const [isPending, startTransition] = useTransition();
     const [isFetchingComments, startCommentsTransition] = useTransition();
     const { toast } = useToast();
@@ -1347,7 +1350,7 @@ export const PostItem = ({
                     <div className="flex h-[24px] items-center gap-1.5 text-gray-500">
                         {canReact && <LikeButton isLiked={isLiked} onClick={handleLikePost} />}
                         {!canReact && guardedCommunityReason && (
-                            <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                            <CommunityReadinessDialog reason={guardedCommunityReason} readinessHref={readinessHref}>
                                 <button
                                     type="button"
                                     aria-disabled="true"
@@ -1472,7 +1475,7 @@ export const PostItem = ({
                     }}
                 >
                     {guardedCommunityReason ? (
-                        <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                        <CommunityReadinessDialog reason={guardedCommunityReason} readinessHref={readinessHref}>
                             <button
                                 type="button"
                                 aria-disabled="true"
@@ -1610,7 +1613,7 @@ export const PostItem = ({
                     </div>
                 )}
                 {user && guardedCommunityReason && !disableComments && (
-                    <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                    <CommunityReadinessDialog reason={guardedCommunityReason} readinessHref={readinessHref}>
                         <button
                             type="button"
                             aria-disabled="true"
@@ -1683,7 +1686,9 @@ const CommentItem = ({
     const canReply = !readOnly && !!commentFeature && isAuthorized(user, circle, commentFeature);
     const guardedCommunityReason =
         postType === "community" && !readOnly && user && participationBlockReason ? participationBlockReason : null;
-    const profileHref = user?.handle ? `/circles/${user.handle}/home` : "/circles";
+    const readinessHref = guardedCommunityReason
+        ? getCommunityReadinessHref(guardedCommunityReason, user?.handle)
+        : "/circles";
     const formattedDate = getPublishTime(comment.createdAt);
 
     const replies = useMemo<CommentDisplay[]>(
@@ -1968,7 +1973,7 @@ const CommentItem = ({
                                 <div>{formattedDate}</div>
                                 {comment.createdBy !== user?.did && (
                                     guardedCommunityReason ? (
-                                        <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                                        <CommunityReadinessDialog reason={guardedCommunityReason} readinessHref={readinessHref}>
                                             <button
                                                 type="button"
                                                 aria-disabled="true"
@@ -1992,7 +1997,7 @@ const CommentItem = ({
                                     </div>
                                 )}
                                 {!canReply && user && guardedCommunityReason && (
-                                    <CommunityReadinessDialog reason={guardedCommunityReason} profileHref={profileHref}>
+                                    <CommunityReadinessDialog reason={guardedCommunityReason} readinessHref={readinessHref}>
                                         <button
                                             type="button"
                                             aria-disabled="true"

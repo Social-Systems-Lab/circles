@@ -13,6 +13,7 @@ import { createPostAction } from "@/components/modules/feeds/actions";
 import { UserPicture } from "@/components/modules/members/user-picture";
 import type { ParticipationBlockReason } from "@/lib/profile-completion";
 import { CommunityReadinessDialog, getCommunityReadinessCopy } from "./community-readiness-dialog";
+import { getCommunityReadinessHref } from "@/lib/community-participation";
 
 type CommunityComposerProps = {
     circle: Circle;
@@ -21,7 +22,12 @@ type CommunityComposerProps = {
     participationBlockReason?: ParticipationBlockReason | null;
 };
 
-export function CommunityComposer({ circle, feed, onCreated, participationBlockReason = null }: CommunityComposerProps) {
+export function CommunityComposer({
+    circle,
+    feed,
+    onCreated,
+    participationBlockReason = null,
+}: CommunityComposerProps) {
     const [user] = useAtom(userAtom);
     const [isExpanded, setIsExpanded] = useState(false);
     const [content, setContent] = useState("");
@@ -77,11 +83,11 @@ export function CommunityComposer({ circle, feed, onCreated, participationBlockR
 
     if (participationBlockReason) {
         const copy = getCommunityReadinessCopy(participationBlockReason);
-        const profileHref = user.handle ? `/circles/${user.handle}/home` : "/circles";
+        const readinessHref = getCommunityReadinessHref(participationBlockReason, user.handle);
 
         return (
             <div className="mb-4 w-full rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                <CommunityReadinessDialog reason={participationBlockReason} profileHref={profileHref}>
+                <CommunityReadinessDialog reason={participationBlockReason} readinessHref={readinessHref}>
                     <button type="button" className="flex w-full items-center gap-3 text-left">
                         <UserPicture name={user.name} picture={user.picture?.url} size="40px" />
                         <span className="flex-1 rounded-full bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
@@ -127,7 +133,9 @@ export function CommunityComposer({ circle, feed, onCreated, participationBlockR
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                             <ImageIcon className="h-4 w-4" />
-                            <span>{images.length} image{images.length === 1 ? "" : "s"} selected</span>
+                            <span>
+                                {images.length} image{images.length === 1 ? "" : "s"} selected
+                            </span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={isPending}>

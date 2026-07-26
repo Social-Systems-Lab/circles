@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { getPrivateUserByDid, getUserPrivate, updateUser } from "@/lib/data/user";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
+import { Circles } from "@/lib/data/db";
+import { generateSecureToken, hashToken, sendEmail } from "@/lib/data/email";
+import { resendEmailVerificationForAuthenticatedUser } from "@/lib/auth/email-verification-recovery";
 import {
     createTelegramConnectToken,
     disconnectTelegramChannelForUser,
@@ -23,6 +26,7 @@ const emailPreferenceLabels = {
 type EmailPreferenceKey = keyof typeof emailPreferenceLabels;
 
 const getTelegramSettingsPath = (handle?: string) => (handle ? `/circles/${handle}/settings/subscription` : undefined);
+const getVerificationBaseUrl = () => process.env.CIRCLES_URL || "http://localhost:3000";
 
 export async function createSubscription(circleId: string, planId: string) {
     const userDid = await getAuthenticatedUserDid();
@@ -121,6 +125,42 @@ export async function updateEmailPreferenceSetting(preference: EmailPreferenceKe
             message: error instanceof Error ? error.message : "Failed to update email preference setting.",
         };
     }
+}
+
+export async function resendEmailVerificationAction() {
+    const userDid = await getAuthenticatedUserDid();
+
+    const result = await resendEmailVerificationForAuthenticatedUser(userDid, {
+        getUserByDid: async (did) => getPrivateUserByDid(did),
+        sendEmail,
+        persistToken: async ({ userDid: did, hashedToken, expiresAt, sentAt }) => {
+            await Circles.updateOne(
+                { did, circleType: "user", isEmailVerified: { $ne: true } },
+                {
+                    $set: {
+                        emailVerificationToken: hashedToken,
+                        emailVerificationTokenExpiry: expiresAt,
+                        emailVerificationLastSentAt: sentAt,
+                    },
+                },
+            );
+        },
+        generateToken: generateSecureToken,
+        hashToken,
+        getBaseUrl: getVerificationBaseUrl,
+        logError: (message, error) => {
+            console.error(message, error);
+        },
+    });
+
+    if (userDid) {
+        const user = await getPrivateUserByDid(userDid);
+        if (user?.handle) {
+            revalidatePath(`/circles/${user.handle}/settings/subscription`);
+        }
+    }
+
+    return result;
 }
 
 export async function createTelegramConnectLink() {

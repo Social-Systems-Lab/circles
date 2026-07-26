@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+    getCommunityReadinessHref,
     getCommunityComposerState,
     shouldGuardCommunityInteractions,
 } from "@/lib/community-participation";
@@ -52,6 +53,24 @@ assert.equal(
     }),
     false,
     "users without post permission do not see guarded interactions",
+);
+
+assert.equal(
+    getCommunityReadinessHref("email_unverified", "test-user"),
+    "/circles/test-user/settings/subscription#email-verification",
+    "email-unverified Community prompt links to Account Settings verification anchor",
+);
+
+assert.equal(
+    getCommunityReadinessHref("profile_incomplete", "test-user"),
+    "/circles/test-user/home",
+    "profile-incomplete Community prompt stays on profile home",
+);
+
+assert.equal(
+    getCommunityReadinessHref("guidelines_incomplete", "test-user"),
+    "/circles/test-user/home",
+    "guidelines-incomplete Community prompt stays on profile home",
 );
 
 console.log("community-participation tests passed");
