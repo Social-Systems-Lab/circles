@@ -72,6 +72,7 @@ import RichText from "./RichText";
 import { truncateText } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, CircleHelp, Info } from "lucide-react";
+import { requiresPostTitle, showsPostTitle } from "@/lib/data/post-content-policy";
 
 function debounce<F extends (...args: any[]) => any>(
     func: F,
@@ -224,6 +225,9 @@ export function PostForm({
     const { toast } = useToast();
     const sharePreviewPost = sharedPost ?? initialPost?.sharedPostData ?? null;
     const isShareMode = Boolean(sharedPost || initialPost?.sharedPostId);
+    const postType = initialPost?.postType;
+    const showTitle = !isShareMode && showsPostTitle(postType);
+    const titleRequired = !isShareMode && requiresPostTitle(postType);
     const showRestrictedShareWarning = Boolean(
         isShareMode &&
             sharePreviewPost &&
@@ -575,7 +579,7 @@ export function PostForm({
     const handleSubmit = async () => {
         startTransition(async () => {
             const formData = new FormData();
-            if (!isShareMode && !title.trim()) {
+            if (titleRequired && !title.trim()) {
                 toast({
                     title: "Error",
                     description: "Please enter a title for your post.",
@@ -633,7 +637,7 @@ export function PostForm({
     };
 
     const handlePreview = () => {
-        if (!isShareMode && !title.trim()) {
+        if (titleRequired && !title.trim()) {
             toast({
                 title: "Error",
                 description: "Please enter a title for your post.",
@@ -714,7 +718,7 @@ export function PostForm({
                                         </div>
                                     </div>
                                 )}
-                                {!isShareMode && (
+                                {showTitle && (
                                     <div className="mb-3">
                                         <Label className="mb-1 block text-sm font-medium text-gray-600">Title</Label>
                                         <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">

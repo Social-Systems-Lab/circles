@@ -290,7 +290,7 @@ const LinkPreviewCard = ({ url, title, description, imageUrl }: LinkPreviewCardP
 // --- End Link Preview Card Component ---
 
 export const DiscussionItem = ({
-    post,
+    post: initialPost,
     circle,
     feed,
     inPreview,
@@ -301,6 +301,7 @@ export const DiscussionItem = ({
     embedded,
     disableComments,
 }: PostItemProps) => {
+    const [post, setPost] = useState(initialPost);
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
     const isCompact = useIsCompact();
@@ -322,6 +323,17 @@ export const DiscussionItem = ({
     const router = useRouter();
 
     const [openDropdown, setOpenDropdown] = useState(false);
+    const [isEditingPost, setIsEditingPost] = useState(false);
+
+    useEffect(() => {
+        setPost(initialPost);
+    }, [initialPost]);
+
+    const handlePostUpdated = useCallback((updatedPost: PostDisplay) => {
+        setPost(updatedPost);
+        setIsEditingPost(false);
+        setOpenDropdown(false);
+    }, []);
 
     // Determine user group name if applicable
     const userGroupName = useMemo(() => {
@@ -700,12 +712,13 @@ export const DiscussionItem = ({
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             {isAuthor && (
-                                <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                <Dialog open={isEditingPost} onOpenChange={setIsEditingPost}>
                                     <DialogTrigger asChild>
                                         <DropdownMenuItem
                                             onSelect={(e) => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
+                                                setIsEditingPost(true);
                                             }}
                                         >
                                             <Edit className="mr-2 h-4 w-4" />
@@ -726,6 +739,7 @@ export const DiscussionItem = ({
                                             moduleHandle="feed"
                                             createFeatureHandle="post"
                                             itemKey="post"
+                                            onPostUpdated={handlePostUpdated}
                                         />
                                     </DialogContent>
                                 </Dialog>
@@ -895,12 +909,13 @@ export const DiscussionItem = ({
                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     {isAuthor && (
-                                        <Dialog onOpenChange={(open) => setOpenDropdown(open)}>
+                                        <Dialog open={isEditingPost} onOpenChange={setIsEditingPost}>
                                             <DialogTrigger asChild>
                                                 <DropdownMenuItem
                                                     onSelect={(e) => {
                                                         e.stopPropagation();
                                                         e.preventDefault();
+                                                        setIsEditingPost(true);
                                                     }}
                                                 >
                                                     <Edit className="mr-2 h-4 w-4" />
@@ -921,6 +936,7 @@ export const DiscussionItem = ({
                                                     moduleHandle="feed"
                                                     createFeatureHandle="post" // Or "edit" if a specific edit feature exists
                                                     itemKey="post"
+                                                    onPostUpdated={handlePostUpdated}
                                                 />
                                             </DialogContent>
                                         </Dialog>

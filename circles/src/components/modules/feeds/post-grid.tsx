@@ -17,6 +17,7 @@ import { PostItem } from "./post-list";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import InternalLinkPreview from "./InternalLinkPreview";
+import { replaceUpdatedPost } from "@/lib/data/post-list-state";
 
 interface PostGridProps {
     posts: PostDisplay[];
@@ -32,6 +33,16 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [expandedPost, setExpandedPost] = React.useState<PostDisplay | null>(null);
+    const [displayPosts, setDisplayPosts] = React.useState(posts);
+
+    React.useEffect(() => {
+        setDisplayPosts(posts);
+    }, [posts]);
+
+    const handlePostUpdated = React.useCallback((updatedPost: PostDisplay) => {
+        setDisplayPosts((currentPosts) => replaceUpdatedPost(currentPosts, updatedPost));
+        setExpandedPost((currentPost) => (currentPost?._id === updatedPost._id ? updatedPost : currentPost));
+    }, []);
 
     const getDistanceString = (distance: number) => {
         if (distance < 1) {
@@ -161,7 +172,7 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                 style={{ gridAutoRows: "1fr" }}
             >
                 <AnimatePresence mode="popLayout">
-                    {posts.map((post, index) => {
+                    {displayPosts.map((post, index) => {
                         const postImage = getPostImage(post);
                         const formattedDate = getPublishTime(post.createdAt);
                         const author = post.author as Circle;
@@ -309,6 +320,7 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
                             feed={feed}
                             isDetailView={true}
                             initialShowAllComments={true}
+                            onPostUpdated={handlePostUpdated}
                         />
                     )}
                 </DialogContent>

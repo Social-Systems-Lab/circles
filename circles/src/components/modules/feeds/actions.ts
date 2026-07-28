@@ -28,6 +28,7 @@ import {
     createFeed,
     createDefaultFeed,
     getShareablePostPreview,
+    getFullPost,
 } from "@/lib/data/feed";
 import { deleteFile, saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -79,6 +80,9 @@ import { getMentionableUserIdsForUserDid, searchMentionableUsersForUserDid } fro
 import { validateCreatePostTargetPolicy } from "@/lib/data/post-creation-policy";
 import { canDeletePost, canEditOwnPost, resolvePostRevalidationRoute } from "@/lib/data/post-action-policy";
 import { cleanupUploadedFiles } from "@/lib/data/post-upload-rollback";
+import { getPostTitleUpdate, validatePostUpdateContent } from "@/lib/data/post-content-policy";
+import type { PostUpdateResult } from "@/lib/data/post-list-state";
+import { normalizePostId } from "@/lib/data/post-update-identity";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -726,7 +730,7 @@ export async function createPostAction(
 
 export async function updatePostAction(
     formData: FormData,
-): Promise<{ success: boolean; message?: string; post?: Post }> {
+): Promise<PostUpdateResult> {
     const userDid = await getAuthenticatedUserDid();
 
     if (!userDid) {
@@ -734,7 +738,10 @@ export async function updatePostAction(
     }
 
     try {
-        const postId = formData.get("postId") as string;
+        const postId = normalizePostId(formData.get("postId"));
+        if (!postId) {
+            return { success: false, message: "Post not found" };
+        }
         const content = formData.get("content") as string;
         const title = formData.get("title") as string | null;
         const circleId = formData.get("circleId") as string;
@@ -786,13 +793,28 @@ export async function updatePostAction(
             return { success: false, message: editAccess.message };
         }
 
-        if (!isCommunityPost && (!post.title || post.title.trim() === "") && (!title || !title.toString().trim())) {
-            return { success: false, message: "Title is required" };
+        const existingMedia: Media[] = [];
+        const mediaStr = formData.getAll("existingMedia") as string[];
+        for (const media of mediaStr) {
+            existingMedia.push(JSON.parse(media));
         }
+        const images = formData.getAll("media") as File[];
+        const validImageCount = images.filter((image) => isFile(image)).length;
+        const contentPolicy = validatePostUpdateContent({
+            postType: post.postType,
+            title,
+            existingTitle: post.title,
+            content,
+            mediaCount: existingMedia.length + validImageCount,
+        });
+        if (!contentPolicy.ok) {
+            return { success: false, message: contentPolicy.message };
+        }
+
         let feedId = post.feedId;
         const updatedPost: Partial<Post> = {
             _id: postId,
-            title: title && title.toString().trim() ? title.toString().trim() : undefined,
+            ...getPostTitleUpdate(post.postType, title),
             content,
             editedAt: new Date(),
             location,
@@ -813,15 +835,7 @@ export async function updatePostAction(
         // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging
         updatedPost.mentions = extractMentions(content);
         await validateMentionPermissions(userDid, updatedPost.mentions);
-        let existingMedia: Media[] = [];
-        let mediaStr = formData.getAll("existingMedia") as string[];
-        if (mediaStr) {
-            for (const media of mediaStr) {
-                existingMedia.push(JSON.parse(media));
-            }
-        }
         const newMedia: Media[] = [];
-        const images = formData.getAll("media") as File[];
         let imageIndex = existingMedia.length;
         for (const image of images) {
             if (isFile(image)) {
@@ -880,7 +894,12 @@ export async function updatePostAction(
             }
         }
 
-        return { success: true, message: "Post updated successfully" };
+        const updatedPostDisplay = await getFullPost(postId, userDid);
+        if (!updatedPostDisplay) {
+            throw new Error("Failed to load updated post");
+        }
+
+        return { success: true, message: "Post updated successfully", post: updatedPostDisplay };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to update post." };
     }

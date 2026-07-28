@@ -73,6 +73,8 @@ import InternalLinkPreview from "../feeds/InternalLinkPreview";
 import { truncateText } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, CircleHelp, Info } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { getDiscussionFormCircleId, getPostDisplayId } from "@/lib/data/post-update-identity";
 
 function debounce<F extends (...args: any[]) => any>(
     func: F,
@@ -173,6 +175,7 @@ type ImageItem = {
 
 type PostFormProps = {
     initialPost?: PostDisplay;
+    onPostUpdated?: (post: PostDisplay) => void;
     moduleHandle: string;
     createFeatureHandle: string;
     itemKey: CreatableItemKey;
@@ -181,16 +184,20 @@ type PostFormProps = {
 
 export function DiscussionForm({
     initialPost,
+    onPostUpdated,
     moduleHandle,
     createFeatureHandle,
     itemKey,
     initialSelectedCircleId,
 }: PostFormProps) {
     const [user] = useAtom(userAtom);
+    const router = useRouter();
     const [postContent, setPostContent] = useState(initialPost?.content || "");
     const [title, setTitle] = useState(initialPost?.title || "");
     const [showPollCreator, setShowPollCreator] = useState(false);
-    const [selectedCircleId, setSelectedCircleId] = useState<string | null>(initialSelectedCircleId || null);
+    const [selectedCircleId, setSelectedCircleId] = useState<string | null>(
+        initialPost?.circle?._id || initialSelectedCircleId || null,
+    );
     const [selectedCircle, setSelectedCircle] = useState<Circle | null>(null);
     const [images, setImages] = useState<ImageItem[]>(
         initialPost?.media?.map((m) => ({
@@ -503,7 +510,12 @@ export function DiscussionForm({
                 return;
             }
             const isEditing = Boolean(initialPost);
-            const targetCircleId = selectedCircleId || initialPost?.circle?._id || initialSelectedCircleId || null;
+            const targetCircleId = getDiscussionFormCircleId({
+                isEditing,
+                postCircleId: initialPost?.circle?._id,
+                selectedCircleId,
+                initialSelectedCircleId,
+            });
             if (!isEditing && !targetCircleId) {
                 toast({
                     title: "Error",
@@ -525,7 +537,15 @@ export function DiscussionForm({
                 }
             });
             if (initialPost) {
-                formData.append("postId", initialPost._id);
+                const postId = getPostDisplayId(initialPost);
+                if (!postId) {
+                    toast({
+                        title: "Post not found",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+                formData.append("postId", postId);
             }
             if (location) {
                 formData.append("location", JSON.stringify(location));
@@ -556,8 +576,9 @@ export function DiscussionForm({
 
         const isEditing = Boolean(initialPost);
 
-        // Always include circleId for media handling when available
-        if (targetCircleId) {
+        // Creation targets a selected circle. Edits derive the authoritative
+        // circle from the stored post feed in updatePostAction.
+        if (!isEditing && targetCircleId) {
             formData.append("circleId", targetCircleId);
         }
 
@@ -572,15 +593,11 @@ export function DiscussionForm({
                     });
                     return;
                 }
-                const circleHandle =
-                    initialPost?.circle?.handle ||
-                    selectedCircle?.handle ||
-                    (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
-                if (circleHandle) {
-                    window.location.href = `/circles/${circleHandle}/discussions/${initialPost!._id}`;
-                } else {
-                    window.location.reload();
+                if (onPostUpdated) {
+                    onPostUpdated(response.post);
+                    return;
                 }
+                router.refresh();
             } else {
                 // Creating new forum post
                 formData.append("postType", "discussion");
@@ -640,7 +657,9 @@ export function DiscussionForm({
                                         <CircleSelector
                                             onCircleSelected={handleCircleSelected}
                                             itemType={itemDetail}
-                                            initialSelectedCircleId={initialSelectedCircleId}
+                                            initialSelectedCircleId={
+                                                initialPost?.circle?._id || initialSelectedCircleId
+                                            }
                                             variant="condensed" // Add variant prop
                                         />
                                     </div>

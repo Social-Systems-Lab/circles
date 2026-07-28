@@ -110,6 +110,7 @@ import SharedPostPreview from "./SharedPostPreview";
 import { CommunityReadinessDialog } from "@/components/modules/community/community-readiness-dialog";
 import { getCommunityReadinessHref } from "@/lib/community-participation";
 import type { ParticipationBlockReason } from "@/lib/profile-completion";
+import { applyPostUpdateResult } from "@/lib/data/post-list-state";
 
 export const defaultMentionsInputStyle = {
     control: {
@@ -337,6 +338,10 @@ const LinkPreviewCard = ({ url, title, description, imageUrl }: LinkPreviewCardP
 };
 // --- End Link Preview Card Component ---
 
+type EditablePostItemProps = PostItemProps & {
+    onPostUpdated?: (post: PostDisplay) => void;
+};
+
 export const PostItem = ({
     post,
     circle,
@@ -351,7 +356,8 @@ export const PostItem = ({
     readOnly,
     isDetailView,
     participationBlockReason,
-}: PostItemProps) => {
+    onPostUpdated,
+}: EditablePostItemProps) => {
     const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
     const formattedDate = getPublishTime(post?.createdAt);
     const isCompact = useIsCompact();
@@ -547,24 +553,24 @@ export const PostItem = ({
         );
     };
 
-    const handleEditSubmit = async (formData: FormData) => {
-        startTransition(async () => {
-            const response = await updatePostAction(formData);
+    const handleEditSubmit = async (formData: FormData): Promise<boolean> => {
+        const response = await updatePostAction(formData);
 
-            if (!response.success) {
-                toast({
-                    title: response.message,
-                    variant: "destructive",
-                });
-                return;
-            } else {
-                toast({
-                    title: "Post updated successfully",
-                    variant: "success",
-                });
-            }
-            setOpenDropdown(false);
+        if (!response.success) {
+            toast({
+                title: response.message,
+                variant: "destructive",
+            });
+            return false;
+        }
+
+        onPostUpdated?.(response.post);
+        toast({
+            title: "Post updated successfully",
+            variant: "success",
         });
+        setOpenDropdown(false);
+        return true;
     };
 
     const handleDeleteConfirm = async () => {
@@ -943,8 +949,9 @@ export const PostItem = ({
                     user={user!}
                     initialPost={post}
                     onSubmit={async (formData, targetCircleId) => {
-                        await handleEditSubmit(formData);
-                        setIsEditing(false);
+                        if (await handleEditSubmit(formData)) {
+                            setIsEditing(false);
+                        }
                     }}
                     onCancel={() => setIsEditing(false)}
                     moduleHandle="feed"
@@ -1166,8 +1173,9 @@ export const PostItem = ({
                                                         user={user!}
                                                         initialPost={post}
                                                         onSubmit={async (formData, targetCircleId) => {
-                                                            await handleEditSubmit(formData);
-                                                            setIsEditing(false);
+                                                            if (await handleEditSubmit(formData)) {
+                                                                setIsEditing(false);
+                                                            }
                                                         }}
                                                         onCancel={() => setIsEditing(false)}
                                                         moduleHandle="feed"
@@ -1586,6 +1594,7 @@ export const PostItem = ({
                                 readOnly={readOnly}
                                 isDetailView={true}
                                 participationBlockReason={participationBlockReason}
+                                onPostUpdated={onPostUpdated}
                             />
                         </DialogContent>
                     </Dialog>
@@ -2160,6 +2169,18 @@ const PostList = ({
     readOnly = false,
     participationBlockReason = null,
 }: PostListProps) => {
+    const [displayPosts, setDisplayPosts] = useState(posts);
+
+    useEffect(() => {
+        setDisplayPosts(posts);
+    }, [posts]);
+
+    const handlePostUpdated = useCallback((updatedPost: PostDisplay) => {
+        setDisplayPosts((currentPosts) =>
+            applyPostUpdateResult(currentPosts, { success: true, post: updatedPost }),
+        );
+    }, []);
+
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
             console.log("useEffect.PostList.1");
@@ -2168,7 +2189,7 @@ const PostList = ({
 
     return (
         <div className={"flex flex-col gap-6"}>
-            {posts.map((post) => (
+            {displayPosts.map((post) => (
                 <PostItem
                     key={post._id}
                     post={post}
@@ -2178,6 +2199,7 @@ const PostList = ({
                     embedded={compact}
                     readOnly={readOnly}
                     participationBlockReason={participationBlockReason}
+                    onPostUpdated={handlePostUpdated}
                 />
             ))}
         </div>
