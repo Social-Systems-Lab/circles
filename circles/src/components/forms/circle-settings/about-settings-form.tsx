@@ -166,12 +166,13 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         placeholder: "handle",
                                         description: {
                                             circle: "Choose a unique handle that will identify the circle on the platform.",
-                                            user: "Choose a unique handle that will identify you on the platform.",
+                                            user: "Choose a unique handle that will identify your profile on Kamooni.",
                                         },
                                         required: true,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
+                                    isUser={isUserProfile}
                                 />
                             )}
                         />
@@ -189,11 +190,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                             placeholder: "https://your-website.org",
                                             description: {
                                                 circle: "Your community or organization website.",
-                                                user: "Your personal website.",
+                                                user: "Your personal, professional, project, or organisation website.",
                                             },
                                         }}
                                         formField={field}
                                         control={form.control as unknown as Control}
+                                        isUser={isUserProfile}
                                     />
                                 )}
                             />
@@ -300,12 +302,13 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         placeholder: isUserProfile ? "A short introduction" : "Description",
                                         description: {
                                             circle: "Describe the circle in a few words.",
-                                            user: "A short introduction shown on your profile.",
+                                            user: "Introduce yourself in a few words.",
                                         },
                                         maxLength: 200,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
+                                    isUser={isUserProfile}
                                 />
                             )}
                         />
@@ -318,16 +321,17 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                     field={{
                                         name: "mission",
                                         type: "textarea",
-                                        label: { user: "What brings me here?", circle: "Mission" },
+                                        label: { user: "Mission, vision or interests", circle: "Mission" },
                                         placeholder: isUserProfile ? "What brings you here?" : "Description",
                                         description: {
                                             circle: "Define the circle's purpose and the change it wants to see in the world.",
-                                            user: "Share what you care about, are working on, or hope to connect around.",
+                                            user: "What would you like to change, contribute to, or work on? Your answer can help Kamooni connect you with relevant people, circles and opportunities.",
                                         },
                                         maxLength: 500,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
+                                    isUser={isUserProfile}
                                 />
                             )}
                         />
@@ -420,13 +424,14 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         label: isUserProfile ? "Profile image" : "Picture",
                                         description: {
                                             circle: "Add a picture to represent the circle.",
-                                            user: "Add a profile picture.",
+                                            user: "Add a picture to represent your profile.",
                                         },
                                         imagePreviewWidth: 120,
                                         imagePreviewHeight: 120,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
+                                    isUser={isUserProfile}
                                 />
                             )}
                         />
@@ -475,11 +480,12 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         label: isUserProfile ? "Your location" : "Location",
                                         description: {
                                             circle: "Specify the location of the circle.",
-                                            user: "Specify your location.",
+                                            user: "If you choose a location, this will help with location-based information. However, for your personal profile, a general location is recommended.",
                                         },
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
+                                    isUser={isUserProfile}
                                 />
                             )}
                         />
