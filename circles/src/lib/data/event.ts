@@ -1,6 +1,16 @@
-import { Circles, Events, EventRsvps, Feeds, Posts, EventInvitations } from "./db";
+import { Circles, Events, EventRsvps, Feeds, Posts, EventInvitations, EventOccurrences } from "./db";
 import { ObjectId } from "mongodb";
-import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media, EventInvitation } from "@/models/models";
+import {
+    Event,
+    EventDisplay,
+    EventStage,
+    EventRsvp,
+    Circle,
+    Post,
+    Media,
+    EventInvitation,
+    EventOccurrence,
+} from "@/models/models";
 import {
     buildRecurringOccurrenceDisplay,
     getRecurringOccurrenceStarts,
@@ -84,9 +94,17 @@ export async function canManageEvent(
     return checks.some(Boolean);
 }
 
-function buildRecurringInstance(event: EventDisplay, occurrenceStart: Date): EventDisplay {
+function occurrenceMapKey(seriesId: string, occurrenceKey: number): string {
+    return `${seriesId}:${occurrenceKey}`;
+}
+
+function buildRecurringInstance(
+    event: EventDisplay,
+    occurrenceStart: Date,
+    occurrence?: EventOccurrence | null,
+): EventDisplay {
     return {
-        ...buildRecurringOccurrenceDisplay(event, occurrenceStart),
+        ...buildRecurringOccurrenceDisplay(event, occurrenceStart, undefined, occurrence),
         originalEventId: event._id,
     };
 }
@@ -111,7 +129,11 @@ function buildRangeMatch(range?: Range) {
 /**
  * Expand a recurring event into multiple instances within a range.
  */
-function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[] {
+function expandRecurringEvent(
+    event: EventDisplay,
+    range: Range,
+    occurrenceBySeriesAndKey: ReadonlyMap<string, EventOccurrence>,
+): EventDisplay[] {
     if (!event.recurrence || !range.from || !range.to) return [event];
 
     const instances = getRecurringOccurrenceStarts(
@@ -122,7 +144,10 @@ function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[]
         },
     );
 
-    return instances.map((date: Date) => buildRecurringInstance(event, date));
+    const seriesId = String(event._id);
+    return instances.map((date: Date) =>
+        buildRecurringInstance(event, date, occurrenceBySeriesAndKey.get(occurrenceMapKey(seriesId, date.getTime()))),
+    );
 }
 
 /**
@@ -396,8 +421,27 @@ export const getEventsByCircleId = async (
             { $sort: { startAt: 1 } },
         ]).toArray()) as EventDisplay[];
 
+        let occurrenceBySeriesAndKey = new Map<string, EventOccurrence>();
+        if (range?.from && range?.to) {
+            const recurringSeriesIds = events.filter((event) => event.recurrence).map((event) => String(event._id));
+            if (recurringSeriesIds.length > 0) {
+                const occurrences = await EventOccurrences.find({
+                    seriesId: { $in: recurringSeriesIds },
+                    occurrenceKey: { $gte: range.from.getTime(), $lte: range.to.getTime() },
+                }).toArray();
+                occurrenceBySeriesAndKey = new Map(
+                    occurrences.map((occurrence) => [
+                        occurrenceMapKey(occurrence.seriesId, occurrence.occurrenceKey),
+                        occurrence,
+                    ]),
+                );
+            }
+        }
+
         const expandedEvents =
-            range?.from && range?.to ? events.flatMap((event) => expandRecurringEvent(event, range)) : events;
+            range?.from && range?.to
+                ? events.flatMap((event) => expandRecurringEvent(event, range, occurrenceBySeriesAndKey))
+                : events;
 
         return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
@@ -623,7 +667,11 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             return null;
         }
 
-        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.originalStartAt);
+        const occurrence = await EventOccurrences.findOne({
+            seriesId: String(event._id),
+            occurrenceKey: recurringInstance.occurrenceKey,
+        });
+        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.originalStartAt, occurrence);
         return {
             ...occurrenceEvent,
             _id: event._id,
@@ -851,6 +899,7 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
         // Delete RSVPs
         await EventRsvps.deleteMany({ eventId });
         await EventInvitations.deleteMany({ eventId });
+        await EventOccurrences.deleteMany({ seriesId: eventId });
 
         // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
         // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });

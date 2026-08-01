@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import type { Recurrence } from "@/models/models";
+import { eventOccurrenceSchema, type EventOccurrence, type Recurrence } from "@/models/models";
 import {
+    expandRecurringOccurrenceDisplays,
     formatEventOccurrenceId,
     getRecurringOccurrenceStarts,
     isEventOccurrenceId,
     isGeneratedEventOccurrence,
     parseEventOccurrenceId,
     resolveEventOccurrence,
+    resolveGeneratedEventOccurrence,
 } from "@/lib/event-occurrence";
 
 const seriesId = "507f1f77bcf86cd799439011";
@@ -155,6 +157,126 @@ assert.equal(
     moved.endAt.getTime() - moved.startAt.getTime(),
     endAt.getTime() - startAt.getTime(),
     "a moved occurrence preserves duration",
+);
+
+const cancelledStart = new Date("2026-01-06T10:15:00.000Z");
+const cancellation: EventOccurrence = {
+    seriesId,
+    occurrenceKey: cancelledStart.getTime(),
+    originalStartAt: cancelledStart,
+    status: "cancelled",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+};
+assert.equal(
+    eventOccurrenceSchema.safeParse(cancellation).success,
+    true,
+    "an occurrence model with a valid ObjectId seriesId is accepted",
+);
+assert.equal(
+    eventOccurrenceSchema.safeParse({ ...cancellation, seriesId: "not-an-object-id" }).success,
+    false,
+    "an occurrence model with a malformed seriesId is rejected",
+);
+assert.equal(
+    eventOccurrenceSchema.safeParse({ ...cancellation, originalStartAt: startAt }).success,
+    false,
+    "the occurrence model rejects disagreement between originalStartAt and occurrenceKey",
+);
+
+const untouched = resolveGeneratedEventOccurrence(seriesId, { startAt, endAt, recurrence: daily }, startAt);
+assert.ok(untouched, "an untouched generated occurrence resolves");
+assert.equal(untouched.occurrenceStatus, undefined, "an untouched occurrence has no persisted status");
+assert.equal(untouched.isOccurrenceCancelled, undefined, "an untouched occurrence is not marked cancelled");
+
+const cancelled = resolveGeneratedEventOccurrence(
+    seriesId,
+    { startAt, endAt, recurrence: daily },
+    cancelledStart,
+    cancellation,
+);
+assert.ok(cancelled, "a generated occurrence with matching persisted state resolves");
+assert.equal(cancelled.occurrenceStatus, "cancelled", "matching persisted cancellation is overlaid");
+assert.equal(cancelled.isOccurrenceCancelled, true, "matching persisted cancellation sets the typed flag");
+
+const mismatchedSeries = resolveGeneratedEventOccurrence(
+    seriesId,
+    { startAt, endAt, recurrence: daily },
+    cancelledStart,
+    { ...cancellation, seriesId: "507f1f77bcf86cd799439012" },
+);
+assert.equal(
+    mismatchedSeries?.occurrenceStatus,
+    undefined,
+    "an otherwise valid cancellation with the wrong valid ObjectId seriesId is ignored safely",
+);
+
+const mismatchedKey = resolveGeneratedEventOccurrence(seriesId, { startAt, endAt, recurrence: daily }, cancelledStart, {
+    ...cancellation,
+    occurrenceKey: startAt.getTime(),
+    originalStartAt: startAt,
+});
+assert.equal(mismatchedKey?.occurrenceStatus, undefined, "a mismatched occurrence key is ignored safely");
+
+const mismatchedOriginalStart = resolveGeneratedEventOccurrence(
+    seriesId,
+    { startAt, endAt, recurrence: daily },
+    cancelledStart,
+    { ...cancellation, originalStartAt: startAt },
+);
+assert.equal(
+    mismatchedOriginalStart?.occurrenceStatus,
+    undefined,
+    "an originalStartAt and occurrenceKey disagreement is ignored safely",
+);
+
+const outOfRuleStart = new Date("2026-01-06T22:15:00.000Z");
+assert.equal(
+    resolveGeneratedEventOccurrence(seriesId, { startAt, endAt, recurrence: daily }, outOfRuleStart, {
+        ...cancellation,
+        occurrenceKey: outOfRuleStart.getTime(),
+        originalStartAt: outOfRuleStart,
+    }),
+    null,
+    "persisted state cannot make an out-of-rule occurrence valid",
+);
+
+const seriesDisplay = {
+    _id: seriesId,
+    startAt,
+    endAt,
+    recurrence: daily,
+    stage: "open" as const,
+};
+const expanded = expandRecurringOccurrenceDisplays(
+    seriesDisplay,
+    { from: startAt, to: new Date("2026-01-07T10:15:00.000Z") },
+    [cancellation],
+);
+assert.equal(expanded.length, 3, "a sparse cancellation does not change expansion count");
+assert.deepEqual(
+    expanded.map((occurrence) => occurrence.occurrenceId),
+    [
+        formatEventOccurrenceId(seriesId, startAt),
+        formatEventOccurrenceId(seriesId, cancelledStart),
+        formatEventOccurrenceId(seriesId, new Date("2026-01-07T10:15:00.000Z")),
+    ],
+    "a sparse cancellation does not change generated occurrence IDs",
+);
+assert.deepEqual(
+    expanded.map((occurrence) => occurrence.isOccurrenceCancelled),
+    [undefined, true, undefined],
+    "exactly one generated occurrence carries cancellation state",
+);
+assert.deepEqual(
+    expanded.map((occurrence) => occurrence.stage),
+    ["open", "open", "open"],
+    "occurrence cancellation does not change the series event stage",
+);
+assert.equal(
+    expanded[1].occurrenceStatus,
+    cancelled?.occurrenceStatus,
+    "expanded and direct occurrence resolution carry the same cancellation state",
 );
 
 console.log("event occurrence tests passed");

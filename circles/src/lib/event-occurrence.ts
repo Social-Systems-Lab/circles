@@ -1,5 +1,5 @@
 import { RRule } from "rrule";
-import type { Recurrence } from "@/models/models";
+import type { EventOccurrence, Recurrence } from "@/models/models";
 
 const OCCURRENCE_ROUTE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
 const MONGODB_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
@@ -18,6 +18,8 @@ export type ResolvedEventOccurrence = EventOccurrenceIdentity & {
     startAt: Date;
     endAt: Date;
     isRecurringInstance: true;
+    occurrenceStatus?: EventOccurrence["status"];
+    isOccurrenceCancelled?: boolean;
 };
 
 type RecurringSchedule = {
@@ -25,6 +27,8 @@ type RecurringSchedule = {
     endAt: Date | string;
     recurrence: Recurrence;
 };
+
+type PersistedOccurrenceState = Pick<EventOccurrence, "seriesId" | "occurrenceKey" | "originalStartAt" | "status">;
 
 function isValidSeriesId(seriesId: string): boolean {
     return MONGODB_OBJECT_ID_PATTERN.test(seriesId);
@@ -119,6 +123,21 @@ export function isGeneratedEventOccurrence(
     return generated?.getTime() === originalStartAt.getTime();
 }
 
+export function isMatchingEventOccurrenceState(
+    identity: EventOccurrenceIdentity,
+    occurrence: PersistedOccurrenceState | null | undefined,
+): occurrence is PersistedOccurrenceState {
+    return Boolean(
+        occurrence &&
+            occurrence.seriesId === identity.seriesId &&
+            occurrence.occurrenceKey === identity.occurrenceKey &&
+            occurrence.originalStartAt instanceof Date &&
+            !Number.isNaN(occurrence.originalStartAt.getTime()) &&
+            occurrence.originalStartAt.getTime() === occurrence.occurrenceKey &&
+            occurrence.status === "cancelled",
+    );
+}
+
 export function resolveEventOccurrence(
     seriesId: string,
     schedule: Pick<RecurringSchedule, "startAt" | "endAt">,
@@ -153,16 +172,57 @@ export function resolveEventOccurrence(
     };
 }
 
+export function resolveGeneratedEventOccurrence(
+    seriesId: string,
+    schedule: RecurringSchedule,
+    originalStartAt: Date,
+    occurrence?: PersistedOccurrenceState | null,
+): ResolvedEventOccurrence | null {
+    if (!isGeneratedEventOccurrence(schedule, originalStartAt)) return null;
+
+    const resolved = resolveEventOccurrence(seriesId, schedule, originalStartAt);
+    if (!isMatchingEventOccurrenceState(resolved, occurrence)) return resolved;
+
+    return {
+        ...resolved,
+        occurrenceStatus: occurrence.status,
+        isOccurrenceCancelled: true,
+    };
+}
+
 export function buildRecurringOccurrenceDisplay<T extends { _id?: unknown; startAt: Date; endAt: Date }>(
     event: T,
     originalStartAt: Date,
     override?: { startAt?: Date; endAt?: Date },
+    persistedOccurrence?: PersistedOccurrenceState | null,
 ): T & ResolvedEventOccurrence {
     const seriesId = String(event._id ?? "");
-    const occurrence = resolveEventOccurrence(seriesId, event, originalStartAt, override);
+    const resolved = resolveEventOccurrence(seriesId, event, originalStartAt, override);
+    const occurrenceState = isMatchingEventOccurrenceState(resolved, persistedOccurrence)
+        ? { occurrenceStatus: persistedOccurrence.status, isOccurrenceCancelled: true as const }
+        : {};
     return {
         ...event,
-        ...occurrence,
-        _id: occurrence.occurrenceId,
+        ...resolved,
+        ...occurrenceState,
+        _id: resolved.occurrenceId,
     };
+}
+
+export function expandRecurringOccurrenceDisplays<
+    T extends { _id?: unknown; startAt: Date; endAt: Date; recurrence: Recurrence },
+>(
+    event: T,
+    range: { from: Date; to: Date },
+    occurrences: PersistedOccurrenceState[] = [],
+): Array<T & ResolvedEventOccurrence> {
+    const occurrenceByKey = new Map(occurrences.map((occurrence) => [occurrence.occurrenceKey, occurrence]));
+    return getRecurringOccurrenceStarts(event, range).map((originalStartAt) =>
+        buildRecurringOccurrenceDisplay(
+            event,
+            originalStartAt,
+            undefined,
+            occurrenceByKey.get(originalStartAt.getTime()),
+        ),
+    );
 }

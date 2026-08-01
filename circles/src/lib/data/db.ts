@@ -26,6 +26,7 @@ import {
     Event,
     EventRsvp,
     EventInvitation,
+    EventOccurrence,
     Notification,
     ExternalNotificationChannel,
     HumanityVerification,
@@ -35,6 +36,7 @@ import { AggregateRank } from "./ranking";
 import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import { COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS } from "./feed-indexes";
+import { EVENT_OCCURRENCE_UNIQUE_INDEX_KEYS, EVENT_OCCURRENCE_UNIQUE_INDEX_OPTIONS } from "./event-occurrence-indexes";
 
 const MONGODB_URI =
     process.env.MONGODB_URI ||
@@ -71,6 +73,7 @@ let Goals: Collection<Goal>;
 let Events: Collection<Event>;
 let EventRsvps: Collection<EventRsvp>;
 let EventInvitations: Collection<EventInvitation>;
+let EventOccurrences: Collection<EventOccurrence>;
 let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
@@ -122,6 +125,12 @@ if (process.env.IS_BUILD !== "true") {
     Events = db.collection<Event>("events");
     EventRsvps = db.collection<EventRsvp>("eventRsvps");
     EventInvitations = db.collection<EventInvitation>("eventInvitations");
+    EventOccurrences = db.collection<EventOccurrence>("eventOccurrences");
+    EventOccurrences.createIndex(EVENT_OCCURRENCE_UNIQUE_INDEX_KEYS, EVENT_OCCURRENCE_UNIQUE_INDEX_OPTIONS).catch(
+        (error) => {
+            console.error("Failed to create event occurrence unique index:", error);
+        },
+    );
     GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
@@ -171,6 +180,7 @@ export {
     Events,
     EventRsvps,
     EventInvitations,
+    EventOccurrences,
     GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,

@@ -1780,7 +1780,28 @@ export interface EventDisplay extends Event {
     originalStartAt?: Date;
     isRecurringInstance?: boolean;
     originalEventId?: Event["_id"];
+    occurrenceStatus?: EventOccurrenceStatus;
+    isOccurrenceCancelled?: boolean;
 }
+
+export const eventOccurrenceStatusSchema = z.enum(["cancelled"]);
+export type EventOccurrenceStatus = z.infer<typeof eventOccurrenceStatusSchema>;
+
+export const eventOccurrenceSchema = z
+    .object({
+        _id: z.any().optional(),
+        seriesId: z.string().regex(/^[a-f\d]{24}$/i, "seriesId must be a valid MongoDB ObjectId"),
+        occurrenceKey: z.number().int().nonnegative(),
+        originalStartAt: z.date(),
+        status: eventOccurrenceStatusSchema,
+        createdAt: z.date(),
+        updatedAt: z.date(),
+    })
+    .refine((occurrence) => occurrence.originalStartAt.getTime() === occurrence.occurrenceKey, {
+        message: "originalStartAt must match occurrenceKey",
+        path: ["originalStartAt"],
+    });
+export type EventOccurrence = z.infer<typeof eventOccurrenceSchema>;
 
 /**
  * Event RSVP model
