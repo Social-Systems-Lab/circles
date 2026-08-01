@@ -1,7 +1,12 @@
 import { Circles, Events, EventRsvps, Feeds, Posts, EventInvitations } from "./db";
 import { ObjectId } from "mongodb";
-import { RRule, RRuleSet, rrulestr } from "rrule";
 import { Event, EventDisplay, EventStage, EventRsvp, Circle, Post, Media, EventInvitation } from "@/models/models";
+import {
+    buildRecurringOccurrenceDisplay,
+    getRecurringOccurrenceStarts,
+    isGeneratedEventOccurrence,
+    parseEventOccurrenceId,
+} from "@/lib/event-occurrence";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
 import { upsertVbdEvents } from "./vdb";
@@ -44,7 +49,6 @@ export const SAFE_EVENT_PROJECTION = {
 } as const;
 
 type Range = { from?: Date; to?: Date };
-const RECURRING_INSTANCE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
 
 export function normalizeEventHostCircleIds(event: Pick<Event, "circleId" | "hostCircleIds">): string[] {
     return Array.from(new Set([event.circleId, ...(event.hostCircleIds || [])].filter(Boolean)));
@@ -80,34 +84,11 @@ export async function canManageEvent(
     return checks.some(Boolean);
 }
 
-function parseRecurringInstanceId(eventId: string): { baseEventId: string; occurrenceStart: Date } | null {
-    const match = RECURRING_INSTANCE_ID_PATTERN.exec(eventId);
-    if (!match) return null;
-
-    const occurrenceTimestamp = Number(match[2]);
-    if (!Number.isFinite(occurrenceTimestamp)) return null;
-
-    const occurrenceStart = new Date(occurrenceTimestamp);
-    if (Number.isNaN(occurrenceStart.getTime())) return null;
-
-    return {
-        baseEventId: match[1],
-        occurrenceStart,
-    };
-}
-
 function buildRecurringInstance(event: EventDisplay, occurrenceStart: Date): EventDisplay {
-    const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
-    const instanceEnd = new Date(occurrenceStart.getTime() + duration);
-
     return {
-        ...event,
-        _id: `${event._id}_${occurrenceStart.getTime()}`,
-        startAt: occurrenceStart,
-        endAt: instanceEnd,
-        isRecurringInstance: true,
+        ...buildRecurringOccurrenceDisplay(event, occurrenceStart),
         originalEventId: event._id,
-    } as unknown as EventDisplay;
+    };
 }
 
 /**
@@ -127,48 +108,19 @@ function buildRangeMatch(range?: Range) {
     return clauses.length ? { $and: clauses } : {};
 }
 
-function normalizeRecurringUntil(endDate?: Date | string): Date | undefined {
-    if (!endDate) return undefined;
-    const parsed = new Date(endDate);
-    if (Number.isNaN(parsed.getTime())) return undefined;
-    if (
-        parsed.getUTCHours() === 0 &&
-        parsed.getUTCMinutes() === 0 &&
-        parsed.getUTCSeconds() === 0 &&
-        parsed.getUTCMilliseconds() === 0
-    ) {
-        parsed.setUTCHours(23, 59, 59, 999);
-    }
-    return parsed;
-}
-
 /**
  * Expand a recurring event into multiple instances within a range.
  */
 function expandRecurringEvent(event: EventDisplay, range: Range): EventDisplay[] {
     if (!event.recurrence || !range.from || !range.to) return [event];
 
-    const { frequency, interval, endDate, count } = event.recurrence;
-    const rruleFreq =
-        frequency === "daily"
-            ? RRule.DAILY
-            : frequency === "weekly"
-              ? RRule.WEEKLY
-              : frequency === "monthly"
-                ? RRule.MONTHLY
-                : RRule.YEARLY;
-
-    const rule = new RRule({
-        freq: rruleFreq,
-        interval: interval,
-        dtstart: new Date(event.startAt),
-        until: normalizeRecurringUntil(endDate),
-        count: count,
-    });
-
-    // Get instances between range.from and range.to
-    // Note: rrule.between(after, before, inc)
-    const instances = rule.between(range.from, range.to, true);
+    const instances = getRecurringOccurrenceStarts(
+        { startAt: event.startAt, recurrence: event.recurrence },
+        {
+            from: range.from,
+            to: range.to,
+        },
+    );
 
     return instances.map((date: Date) => buildRecurringInstance(event, date));
 }
@@ -459,8 +411,8 @@ export const getEventsByCircleId = async (
  */
 export const getEventById = async (eventId: string, userDid: string): Promise<EventDisplay | null> => {
     try {
-        const recurringInstance = parseRecurringInstanceId(eventId);
-        const lookupEventId = recurringInstance?.baseEventId ?? eventId;
+        const recurringInstance = parseEventOccurrenceId(eventId);
+        const lookupEventId = recurringInstance?.seriesId ?? eventId;
 
         if (!ObjectId.isValid(lookupEventId)) {
             return null;
@@ -662,7 +614,16 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             return null;
         }
 
-        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.occurrenceStart);
+        if (
+            !isGeneratedEventOccurrence(
+                { startAt: event.startAt, recurrence: event.recurrence },
+                recurringInstance.originalStartAt,
+            )
+        ) {
+            return null;
+        }
+
+        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.originalStartAt);
         return {
             ...occurrenceEvent,
             _id: event._id,

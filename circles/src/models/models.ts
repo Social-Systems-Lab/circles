@@ -1773,6 +1773,13 @@ export interface EventDisplay extends Event {
     circle?: Circle; // Circle details
     attendees?: number; // Aggregated RSVP count (e.g., 'going')
     userRsvpStatus?: "going" | "interested" | "none"; // Current user RSVP status
+    seriesId?: string;
+    occurrenceId?: string;
+    occurrenceTimestamp?: number;
+    occurrenceKey?: number;
+    originalStartAt?: Date;
+    isRecurringInstance?: boolean;
+    originalEventId?: Event["_id"];
 }
 
 /**
