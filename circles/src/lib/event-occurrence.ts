@@ -1,5 +1,5 @@
 import { RRule } from "rrule";
-import type { EventOccurrence, Recurrence } from "@/models/models";
+import type { EventDisplay, EventOccurrence, Recurrence } from "@/models/models";
 
 const OCCURRENCE_ROUTE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
 const MONGODB_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
@@ -34,7 +34,7 @@ function isValidSeriesId(seriesId: string): boolean {
     return MONGODB_OBJECT_ID_PATTERN.test(seriesId);
 }
 
-function isValidOccurrenceTimestamp(timestamp: number): boolean {
+export function isValidEventOccurrenceKey(timestamp: number): boolean {
     return Number.isSafeInteger(timestamp) && timestamp >= 0 && !Number.isNaN(new Date(timestamp).getTime());
 }
 
@@ -79,7 +79,7 @@ export function parseEventOccurrenceId(value: string): EventOccurrenceIdentity |
     if (!match || !isValidSeriesId(match[1])) return null;
 
     const occurrenceTimestamp = Number(match[2]);
-    if (!isValidOccurrenceTimestamp(occurrenceTimestamp)) return null;
+    if (!isValidEventOccurrenceKey(occurrenceTimestamp)) return null;
 
     const originalStartAt = new Date(occurrenceTimestamp);
     return {
@@ -93,7 +93,7 @@ export function parseEventOccurrenceId(value: string): EventOccurrenceIdentity |
 
 export function formatEventOccurrenceId(seriesId: string, originalStartAt: Date): string {
     const occurrenceTimestamp = originalStartAt.getTime();
-    if (!isValidSeriesId(seriesId) || !isValidOccurrenceTimestamp(occurrenceTimestamp)) {
+    if (!isValidSeriesId(seriesId) || !isValidEventOccurrenceKey(occurrenceTimestamp)) {
         throw new Error("Invalid event occurrence identity");
     }
     return `${seriesId}_${occurrenceTimestamp}`;
@@ -116,7 +116,7 @@ export function isGeneratedEventOccurrence(
     schedule: Pick<RecurringSchedule, "startAt" | "recurrence">,
     originalStartAt: Date,
 ): boolean {
-    if (!isValidOccurrenceTimestamp(originalStartAt.getTime())) return false;
+    if (!isValidEventOccurrenceKey(originalStartAt.getTime())) return false;
     const rule = buildRecurrenceRule(schedule);
     if (!rule) return false;
     const generated = rule.before(originalStartAt, true);
@@ -225,4 +225,35 @@ export function expandRecurringOccurrenceDisplays<
             occurrenceByKey.get(originalStartAt.getTime()),
         ),
     );
+}
+
+export function shouldShowCancelEventOccurrence(
+    event: Pick<EventDisplay, "seriesId" | "occurrenceKey" | "isRecurringInstance" | "isOccurrenceCancelled" | "stage">,
+    canManageEvent: boolean,
+): boolean {
+    return Boolean(
+        canManageEvent &&
+            event.isRecurringInstance &&
+            event.seriesId &&
+            isValidEventOccurrenceKey(event.occurrenceKey ?? Number.NaN) &&
+            event.stage !== "cancelled" &&
+            !event.isOccurrenceCancelled,
+    );
+}
+
+export function buildEventOccurrenceCancellationUpsert(seriesId: string, occurrenceKey: number, now: Date) {
+    return {
+        filter: { seriesId, occurrenceKey },
+        update: {
+            $set: {
+                seriesId,
+                occurrenceKey,
+                originalStartAt: new Date(occurrenceKey),
+                status: "cancelled" as const,
+                updatedAt: now,
+            },
+            $setOnInsert: { createdAt: now },
+        },
+        options: { upsert: true as const },
+    };
 }

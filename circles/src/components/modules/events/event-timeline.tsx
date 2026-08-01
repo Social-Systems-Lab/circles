@@ -137,7 +137,7 @@ const EventCard: React.FC<{
     const stage = e.stage;
     const isDraft = stage === "draft";
     const isReview = stage === "review";
-    const isCancelled = stage === "cancelled";
+    const isCancelled = stage === "cancelled" || e.isOccurrenceCancelled === true;
     const attendees = e.attendees ?? 0;
     const ongoing = isOngoing(e);
     const eventId = getCanonicalEventId(e);

@@ -50,6 +50,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, circleId, eve
                     attendees: e.attendees ?? 0,
                     userRsvpStatus: e.userRsvpStatus ?? "none",
                     stage: e.stage,
+                    isOccurrenceCancelled: e.isOccurrenceCancelled === true,
                     circleHandle: getEventRouteCircleHandle(e, { id: circleId, handle: circleHandle }),
                 },
             })) || [];
@@ -131,8 +132,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, circleId, eve
         // Default rendering for events
         const stage = ext?.stage as string | undefined;
         const isDraft = stage === "draft";
-        const isCancelled = stage === "cancelled";
-        const title = arg.event.title + (isDraft ? " (draft)" : "");
+        const isCancelled = stage === "cancelled" || ext?.isOccurrenceCancelled === true;
+        const title = arg.event.title + (isDraft ? " (draft)" : isCancelled ? " (cancelled)" : "");
         const style: React.CSSProperties = {};
         if (isCancelled) style.textDecoration = "line-through";
         if (isDraft) style.color = "#6c757d"; // grey text similar to Bootstrap secondary
@@ -152,7 +153,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, circleId, eve
 
     const eventClassNames = (arg: any): string[] => {
         const stage = (arg.event.extendedProps as any)?.stage as string | undefined;
-        const isCancelled = stage === "cancelled";
+        const isCancelled = stage === "cancelled" || (arg.event.extendedProps as any)?.isOccurrenceCancelled === true;
         const ongoing = isOngoing(arg.event.start, arg.event.end);
         const classes: string[] = [];
         if (ongoing && !isCancelled) {

@@ -62,6 +62,8 @@ import {
     resolveExternalEventInviteHandle,
 } from "@/lib/event-external-invite";
 import { notifyEventInvitation } from "@/lib/data/notifications";
+import { cancelEventOccurrence } from "@/lib/data/eventOccurrence";
+import { formatEventOccurrenceId, isGeneratedEventOccurrence, isValidEventOccurrenceKey } from "@/lib/event-occurrence";
 
 // ----- Types -----
 
@@ -1107,6 +1109,59 @@ export async function deleteEventAction(
     } catch (error) {
         console.error("Error deleting event:", error);
         return { success: false, message: "Failed to delete event" };
+    }
+}
+
+/**
+ * Cancel one generated occurrence without changing the recurring series.
+ */
+export async function cancelEventOccurrenceAction(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { success: false, message: "User not authenticated" };
+
+        if (!ObjectId.isValid(seriesId)) {
+            return { success: false, message: "Invalid recurring event" };
+        }
+        if (!isValidEventOccurrenceKey(occurrenceKey)) {
+            return { success: false, message: "Invalid occurrence" };
+        }
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return { success: false, message: "Circle not found" };
+
+        const event = await getEventById(seriesId, userDid);
+        if (!event) return { success: false, message: "Event not found" };
+        if (!event.recurrence) {
+            return { success: false, message: "This event is not recurring" };
+        }
+        if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return { success: false, message: "This event is not hosted by this circle" };
+        }
+        if (!(await canManageEvent(userDid, event))) {
+            return { success: false, message: "Not authorized to cancel this occurrence" };
+        }
+
+        const originalStartAt = new Date(occurrenceKey);
+        if (!isGeneratedEventOccurrence({ startAt: event.startAt, recurrence: event.recurrence }, originalStartAt)) {
+            return { success: false, message: "This occurrence is not part of the recurring series" };
+        }
+
+        const success = await cancelEventOccurrence(seriesId, occurrenceKey);
+        if (!success) return { success: false, message: "Failed to cancel occurrence" };
+
+        const occurrenceId = formatEventOccurrenceId(seriesId, originalStartAt);
+        const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(event));
+        revalidateEventHostPaths(hostCircles, occurrenceId);
+
+        return { success: true, message: "Occurrence cancelled" };
+    } catch (error) {
+        console.error("Error cancelling event occurrence:", error);
+        return { success: false, message: "Failed to cancel occurrence" };
     }
 }
 

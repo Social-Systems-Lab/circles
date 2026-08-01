@@ -9,6 +9,7 @@ import {
     rsvpEventAction,
     cancelRsvpAction,
     changeEventStageAction,
+    cancelEventOccurrenceAction,
     hideCancelledEventAction,
     unhideCancelledEventAction,
 } from "@/app/circles/[handle]/events/actions";
@@ -42,6 +43,17 @@ import { CommentSection } from "../feeds/CommentSection";
 import RichText from "../feeds/RichText";
 import { userAtom, mapboxKeyAtom, zoomContentAtom, triggerMapOpenAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { shouldShowCancelEventOccurrence } from "@/lib/event-occurrence";
 
 type Props = {
     circle?: Circle;
@@ -94,6 +106,7 @@ export default function EventDetail({
     const [isPending, startTransition] = useTransition();
     const [isInviteModalOpen, setInviteModalOpen] = useState(false);
     const [isRsvpDialogOpen, setRsvpDialogOpen] = useState(false);
+    const [isCancelOccurrenceOpen, setCancelOccurrenceOpen] = useState(false);
     const compact = !!isPreview;
     const [hideUpdating, setHideUpdating] = useState(false);
     const eventId = ((event as any)._id?.toString?.() || (event as any)._id || "") as string;
@@ -104,7 +117,10 @@ export default function EventDetail({
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
     const end = event.endAt ? new Date(event.endAt as any) : null;
-    const isCancelled = event.stage === "cancelled";
+    const isSeriesCancelled = event.stage === "cancelled";
+    const isOccurrenceCancelled = event.isOccurrenceCancelled === true;
+    const isCancelled = isSeriesCancelled || isOccurrenceCancelled;
+    const showCancelOccurrence = shouldShowCancelEventOccurrence(event, Boolean(canEdit));
     const joinState = getEventJoinState(event, {
         canManageMissingLink: canManageJoinLink,
         missingLinkLabel: compact ? "Missing link" : "Join link missing",
@@ -139,6 +155,7 @@ export default function EventDetail({
     const fmt = sameYear ? "EEE, MMM d p" : "EEE, MMM d, yyyy p";
     const startFmt = start ? format(start, fmt) : "";
     const endFmt = end ? format(end, fmt) : "";
+    const occurrenceDateLabel = start ? format(start, "PPP") : "this date";
 
     const images: Media[] =
         event.images && event.images.length > 0
@@ -224,6 +241,24 @@ export default function EventDetail({
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to cancel", variant: "destructive" });
+            }
+        });
+    };
+
+    const onCancelOccurrence = () => {
+        if (!event.seriesId || event.occurrenceKey === undefined) return;
+        startTransition(async () => {
+            const res = await cancelEventOccurrenceAction(circleHandle, event.seriesId!, event.occurrenceKey!);
+            if (res.success) {
+                setCancelOccurrenceOpen(false);
+                toast({ title: res.message || "Occurrence cancelled" });
+                router.refresh();
+            } else {
+                toast({
+                    title: "Unable to cancel occurrence",
+                    description: res.message || "Please try again.",
+                    variant: "destructive",
+                });
             }
         });
     };
@@ -386,37 +421,46 @@ export default function EventDetail({
                 <div className="px-4">
                     <div className="rounded-md border bg-white/60 p-3">
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
-                        <div className="flex flex-wrap gap-2">
-                            {event.userRsvpStatus === "going" ? (
-                                <>
-                                    <Button size="sm" variant="destructive" disabled={isPending} onClick={onCancelRsvp}>
-                                        Cancel RSVP
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                        I&apos;m going
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            )}
-                        </div>
+                        {isOccurrenceCancelled ? (
+                            <div className="text-sm font-medium text-red-700">This occurrence is cancelled.</div>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {event.userRsvpStatus === "going" ? (
+                                    <>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={isPending}
+                                            onClick={onCancelRsvp}
+                                        >
+                                            Cancel RSVP
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
+                                            I&apos;m going
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        )}
                         <div className="mt-2 text-xs text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
                         </div>
@@ -488,10 +532,13 @@ export default function EventDetail({
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                     {/* Happening now / upcoming label */}
-                    {start && end && now >= start && now <= end && (
+                    {!isCancelled && start && end && now >= start && now <= end && (
                         <div className="mb-1 text-sm font-medium text-green-600">Happening now</div>
                     )}
-                    {start && now < start && <div className="mb-1 text-sm font-medium text-blue-600">Upcoming</div>}
+                    {!isCancelled && start && now < start && (
+                        <div className="mb-1 text-sm font-medium text-blue-600">Upcoming</div>
+                    )}
+                    {isCancelled && <div className="mb-1 text-sm font-semibold text-red-700">Cancelled</div>}
                     <h1 className="text-3xl font-bold tracking-tight">{event.title}</h1>
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         {startFmt && (
@@ -547,7 +594,16 @@ export default function EventDetail({
                                 )
                             }
                         >
-                            Edit
+                            {event.recurrence ? "Edit series" : "Edit"}
+                        </Button>
+                    )}
+                    {showCancelOccurrence && (
+                        <Button
+                            variant="destructive"
+                            disabled={isPending}
+                            onClick={() => setCancelOccurrenceOpen(true)}
+                        >
+                            Cancel this occurrence
                         </Button>
                     )}
                     {event.stage === "open" && canInvite && (
@@ -559,7 +615,10 @@ export default function EventDetail({
             {/* Stage controls */}
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white/70 p-4 shadow-sm">
                 <div className="text-sm text-muted-foreground">
-                    Status: <span className="font-medium capitalize">{event.stage}</span>
+                    Series status: <span className="font-medium capitalize">{event.stage}</span>
+                    {isOccurrenceCancelled && (
+                        <span className="ml-3 font-medium text-red-700">Occurrence: Cancelled</span>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {event.stage === "draft" && (isAuthor || canReview) && (
@@ -580,10 +639,10 @@ export default function EventDetail({
                         )}
                     {event.stage === "open" && (canReview || canModerate) && (
                         <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
-                            Cancel event
+                            {event.recurrence ? "Cancel series" : "Cancel event"}
                         </Button>
                     )}
-                    {(event.stage === "cancelled" || isEventHidden) && (
+                    {(isSeriesCancelled || isEventHidden) && (
                         <Button variant="outline" disabled={hideUpdating} onClick={onToggleHidden}>
                             {hideUpdating ? "Updating…" : isEventHidden ? "Show again" : "Hide"}
                         </Button>
@@ -673,37 +732,48 @@ export default function EventDetail({
                 <div className="space-y-4">
                     <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
-                        <div className="flex flex-wrap gap-2">
-                            {event.userRsvpStatus === "going" ? (
-                                <>
-                                    <Button size="sm" variant="destructive" disabled={isPending} onClick={onCancelRsvp}>
-                                        Cancel RSVP
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                        I&apos;m going
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isPending}
-                                        onClick={() => onRsvp("interested")}
-                                    >
-                                        Interested
-                                    </Button>
-                                </>
-                            )}
-                        </div>
+                        {isOccurrenceCancelled ? (
+                            <div className="text-sm font-medium text-red-700">
+                                RSVP changes are unavailable because this occurrence is cancelled.
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {event.userRsvpStatus === "going" ? (
+                                    <>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={isPending}
+                                            onClick={onCancelRsvp}
+                                        >
+                                            Cancel RSVP
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
+                                            I&apos;m going
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isPending}
+                                            onClick={() => onRsvp("interested")}
+                                        >
+                                            Interested
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        )}
                         <div className="mt-3 text-sm text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
                         </div>
@@ -735,6 +805,27 @@ export default function EventDetail({
                 open={isRsvpDialogOpen}
                 onOpenChange={setRsvpDialogOpen}
             />
+            <AlertDialog open={isCancelOccurrenceOpen} onOpenChange={setCancelOccurrenceOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel this occurrence?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will cancel only the meeting on {occurrenceDateLabel}. Other meetings in the series
+                            will not be affected.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isPending}>Keep meeting</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={isPending}
+                            onClick={onCancelOccurrence}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isPending ? "Cancelling…" : "Cancel occurrence"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {event.commentPostId ? (
                 <CommentSection postId={event.commentPostId} circle={circle!} user={user ?? null} />

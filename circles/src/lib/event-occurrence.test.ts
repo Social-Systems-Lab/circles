@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { eventOccurrenceSchema, type EventOccurrence, type Recurrence } from "@/models/models";
 import {
+    buildEventOccurrenceCancellationUpsert,
     expandRecurringOccurrenceDisplays,
     formatEventOccurrenceId,
     getRecurringOccurrenceStarts,
     isEventOccurrenceId,
     isGeneratedEventOccurrence,
+    isValidEventOccurrenceKey,
     parseEventOccurrenceId,
     resolveEventOccurrence,
     resolveGeneratedEventOccurrence,
+    shouldShowCancelEventOccurrence,
 } from "@/lib/event-occurrence";
 
 const seriesId = "507f1f77bcf86cd799439011";
@@ -39,6 +42,9 @@ assert.equal(parseEventOccurrenceId(`${seriesId}_Infinity`), null, "non-finite t
 assert.equal(parseEventOccurrenceId(`${seriesId}_999999999999999999999`), null, "nonsensical timestamps are rejected");
 assert.equal(isEventOccurrenceId(occurrenceId), true, "valid generated-route syntax is recognized");
 assert.equal(isEventOccurrenceId(seriesId), false, "a non-recurring event ID is not an occurrence ID");
+assert.equal(isValidEventOccurrenceKey(startAt.getTime()), true, "a generated occurrence key is valid");
+assert.equal(isValidEventOccurrenceKey(-1), false, "a negative occurrence key is invalid");
+assert.equal(isValidEventOccurrenceKey(Number.NaN), false, "a non-finite occurrence key is invalid");
 
 assert.equal(
     isGeneratedEventOccurrence({ startAt, recurrence: daily }, new Date("2026-01-06T10:15:00.000Z")),
@@ -277,6 +283,64 @@ assert.equal(
     expanded[1].occurrenceStatus,
     cancelled?.occurrenceStatus,
     "expanded and direct occurrence resolution carry the same cancellation state",
+);
+
+const manageableOccurrence = {
+    seriesId,
+    occurrenceKey: cancelledStart.getTime(),
+    isRecurringInstance: true,
+    isOccurrenceCancelled: false,
+    stage: "open" as const,
+};
+assert.equal(
+    shouldShowCancelEventOccurrence(manageableOccurrence, true),
+    true,
+    "an organiser can cancel an active generated occurrence",
+);
+assert.equal(
+    shouldShowCancelEventOccurrence({ ...manageableOccurrence, isRecurringInstance: false }, true),
+    false,
+    "the occurrence cancellation control is hidden for a base or non-recurring event",
+);
+assert.equal(
+    shouldShowCancelEventOccurrence(manageableOccurrence, false),
+    false,
+    "the occurrence cancellation control is hidden from unauthorised users",
+);
+assert.equal(
+    shouldShowCancelEventOccurrence({ ...manageableOccurrence, isOccurrenceCancelled: true }, true),
+    false,
+    "the occurrence cancellation control disappears after cancellation",
+);
+assert.equal(
+    shouldShowCancelEventOccurrence({ ...manageableOccurrence, stage: "cancelled" }, true),
+    false,
+    "the occurrence cancellation control is hidden when the whole series is cancelled",
+);
+
+const firstCancellationAt = new Date("2026-01-02T10:00:00.000Z");
+const repeatedCancellationAt = new Date("2026-01-03T10:00:00.000Z");
+const firstUpsert = buildEventOccurrenceCancellationUpsert(seriesId, cancelledStart.getTime(), firstCancellationAt);
+const repeatedUpsert = buildEventOccurrenceCancellationUpsert(
+    seriesId,
+    cancelledStart.getTime(),
+    repeatedCancellationAt,
+);
+const firstStoredRecord = { ...firstUpsert.update.$setOnInsert, ...firstUpsert.update.$set };
+const repeatedStoredRecord = { ...firstStoredRecord, ...repeatedUpsert.update.$set };
+assert.deepEqual(firstUpsert.filter, repeatedUpsert.filter, "repeated cancellation targets the same sparse record");
+assert.equal(firstUpsert.options.upsert, true, "cancellation uses an idempotent upsert");
+assert.equal(
+    repeatedStoredRecord.createdAt,
+    firstCancellationAt,
+    "repeated cancellation preserves the original createdAt",
+);
+assert.equal(repeatedStoredRecord.updatedAt, repeatedCancellationAt, "repeated cancellation advances updatedAt");
+assert.equal(repeatedStoredRecord.status, "cancelled", "the sparse record stores cancelled status");
+assert.equal(
+    repeatedStoredRecord.originalStartAt.getTime(),
+    cancelledStart.getTime(),
+    "the sparse record preserves the immutable original occurrence identity",
 );
 
 console.log("event occurrence tests passed");
