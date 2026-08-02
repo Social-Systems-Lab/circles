@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
-import { Feeds, Events, EventInvitations, EventRsvps, Members } from "@/lib/data/db";
+import { Feeds, Events, EventInvitations, EventRsvps, EventOccurrences, Members } from "@/lib/data/db";
 import { createDefaultFeed, createPost, deletePost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
     Circle,
@@ -63,6 +63,7 @@ import {
 } from "@/lib/event-external-invite";
 import { notifyEventInvitation } from "@/lib/data/notifications";
 import { cancelEventOccurrence } from "@/lib/data/eventOccurrence";
+import { upsertEventOccurrenceRsvp } from "@/lib/data/eventOccurrenceRsvp";
 import { formatEventOccurrenceId, isGeneratedEventOccurrence, isValidEventOccurrenceKey } from "@/lib/event-occurrence";
 
 // ----- Types -----
@@ -304,6 +305,45 @@ const revalidateEventHostPaths = (hostCircles: Circle[], eventId?: string) => {
         }
     }
 };
+
+async function resolveEventOccurrenceRsvpTarget(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+    userDid: string,
+) {
+    if (!ObjectId.isValid(seriesId)) return { success: false as const, message: "Invalid recurring event" };
+    if (!isValidEventOccurrenceKey(occurrenceKey)) return { success: false as const, message: "Invalid occurrence" };
+
+    const circle = await getCircleByHandle(circleHandle);
+    if (!circle) return { success: false as const, message: "Circle not found" };
+    if (!(await isAuthorized(userDid, circle._id as string, features.events.rsvp))) {
+        return { success: false as const, message: "Not authorized to RSVP" };
+    }
+
+    const event = await getEventById(seriesId, userDid);
+    if (!event) return { success: false as const, message: "Event not found" };
+    if (!event.recurrence) return { success: false as const, message: "This event is not recurring" };
+    if (event.stage === "cancelled") return { success: false as const, message: "This event is cancelled" };
+    if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+        return { success: false as const, message: "This event is not hosted by this circle" };
+    }
+
+    const originalStartAt = new Date(occurrenceKey);
+    if (!isGeneratedEventOccurrence({ startAt: event.startAt, recurrence: event.recurrence }, originalStartAt)) {
+        return { success: false as const, message: "This occurrence is not part of the recurring series" };
+    }
+    const occurrence = await EventOccurrences.findOne({ seriesId, occurrenceKey });
+    if (occurrence?.status === "cancelled") {
+        return { success: false as const, message: "This occurrence is cancelled" };
+    }
+
+    return {
+        success: true as const,
+        event,
+        occurrenceId: formatEventOccurrenceId(seriesId, originalStartAt),
+    };
+}
 
 const parseRequestedStage = (formData: FormData): "draft" | "open" | "preserve" => {
     const value = formData.get("submitStage");
@@ -1298,6 +1338,62 @@ export async function changeEventStageAction(
 /**
  * RSVP - going / interested / waitlist
  */
+export async function rsvpEventOccurrenceAction(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+    status: "going" | "interested",
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { success: false, message: "User not authenticated" };
+
+        const user = await getUserPrivate(userDid);
+        if (!user) return { success: false, message: "User not found" };
+        if (!canParticipate(user)) {
+            return { success: false, message: getParticipationRequiredMessage("RSVP to events") };
+        }
+
+        const target = await resolveEventOccurrenceRsvpTarget(circleHandle, seriesId, occurrenceKey, userDid);
+        if (!target.success) return target;
+
+        const ok = await upsertEventOccurrenceRsvp(seriesId, occurrenceKey, userDid, status);
+        if (!ok) return { success: false, message: "Failed to RSVP" };
+
+        const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(target.event));
+        revalidateEventHostPaths(hostCircles, target.occurrenceId);
+        return { success: true, message: "RSVP updated for this meeting" };
+    } catch (error) {
+        console.error("Error RSVPing to event occurrence:", error);
+        return { success: false, message: "Failed to RSVP" };
+    }
+}
+
+export async function cancelEventOccurrenceRsvpAction(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return { success: false, message: "User not authenticated" };
+
+        const target = await resolveEventOccurrenceRsvpTarget(circleHandle, seriesId, occurrenceKey, userDid);
+        if (!target.success) return target;
+
+        // "none" is an explicit tombstone so a legacy series RSVP does not reappear as a fallback.
+        const ok = await upsertEventOccurrenceRsvp(seriesId, occurrenceKey, userDid, "none");
+        if (!ok) return { success: false, message: "Failed to cancel RSVP" };
+
+        const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(target.event));
+        revalidateEventHostPaths(hostCircles, target.occurrenceId);
+        return { success: true, message: "RSVP removed from this meeting" };
+    } catch (error) {
+        console.error("Error cancelling event occurrence RSVP:", error);
+        return { success: false, message: "Failed to cancel RSVP" };
+    }
+}
+
 export async function rsvpEventAction(
     circleHandle: string,
     eventId: string,

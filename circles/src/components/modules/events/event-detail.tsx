@@ -4,12 +4,15 @@ import React, { useState, useTransition } from "react";
 import { EventDisplay } from "@/models/models";
 import { cn, haversineKm, getUserLocation } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import {
     rsvpEventAction,
     cancelRsvpAction,
     changeEventStageAction,
     cancelEventOccurrenceAction,
+    rsvpEventOccurrenceAction,
+    cancelEventOccurrenceRsvpAction,
     hideCancelledEventAction,
     unhideCancelledEventAction,
 } from "@/app/circles/[handle]/events/actions";
@@ -121,6 +124,9 @@ export default function EventDetail({
     const isOccurrenceCancelled = event.isOccurrenceCancelled === true;
     const isCancelled = isSeriesCancelled || isOccurrenceCancelled;
     const showCancelOccurrence = shouldShowCancelEventOccurrence(event, Boolean(canEdit));
+    const isRecurringOccurrence = Boolean(
+        event.isRecurringInstance && event.seriesId && event.occurrenceKey !== undefined,
+    );
     const joinState = getEventJoinState(event, {
         canManageMissingLink: canManageJoinLink,
         missingLinkLabel: compact ? "Missing link" : "Join link missing",
@@ -170,7 +176,14 @@ export default function EventDetail({
 
     const onRsvp = (status: "going" | "interested" | "waitlist") => {
         startTransition(async () => {
-            const res = await rsvpEventAction(circleHandle, (event as any)._id?.toString?.() || "", status);
+            const res = isRecurringOccurrence
+                ? await rsvpEventOccurrenceAction(
+                      circleHandle,
+                      event.seriesId!,
+                      event.occurrenceKey!,
+                      status === "going" ? "going" : "interested",
+                  )
+                : await rsvpEventAction(circleHandle, (event as any)._id?.toString?.() || "", status);
             if (res.success) {
                 toast({ title: "RSVP updated" });
                 router.refresh();
@@ -182,7 +195,9 @@ export default function EventDetail({
 
     const onCancelRsvp = () => {
         startTransition(async () => {
-            const res = await cancelRsvpAction(circleHandle, (event as any)._id?.toString?.() || "");
+            const res = isRecurringOccurrence
+                ? await cancelEventOccurrenceRsvpAction(circleHandle, event.seriesId!, event.occurrenceKey!)
+                : await cancelRsvpAction(circleHandle, (event as any)._id?.toString?.() || "");
             if (res.success) {
                 toast({ title: "RSVP cancelled" });
                 router.refresh();
@@ -190,6 +205,102 @@ export default function EventDetail({
                 toast({ title: "Error", description: res.message || "Failed to cancel RSVP", variant: "destructive" });
             }
         });
+    };
+
+    const onGoing = () => {
+        if (isRecurringOccurrence) {
+            onRsvp("going");
+        } else {
+            setRsvpDialogOpen(true);
+        }
+    };
+
+    const renderRsvpControls = () => {
+        if (!isRecurringOccurrence) {
+            if (event.userRsvpStatus === "going") {
+                return (
+                    <>
+                        <Badge className="border-green-300 bg-green-100 text-green-800 hover:bg-green-100">
+                            Attending
+                        </Badge>
+                        <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                            Interested
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                            Not attending
+                        </Button>
+                    </>
+                );
+            }
+
+            if (event.userRsvpStatus === "interested") {
+                return (
+                    <>
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                            Interested
+                        </Badge>
+                        <Button size="sm" variant="outline" disabled={isPending} onClick={onGoing}>
+                            Attend
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                            Not attending
+                        </Button>
+                    </>
+                );
+            }
+
+            return (
+                <>
+                    <Button size="sm" variant="outline" disabled={isPending} onClick={onGoing}>
+                        Attend
+                    </Button>
+                    <Button size="sm" variant="secondary" disabled={isPending} onClick={() => onRsvp("interested")}>
+                        Interested
+                    </Button>
+                </>
+            );
+        }
+
+        if (event.userRsvpStatus === "going") {
+            return (
+                <>
+                    <Badge className="border-green-300 bg-green-100 text-green-800 hover:bg-green-100">Attending</Badge>
+                    <Button size="sm" variant="outline" disabled={isPending} onClick={() => onRsvp("interested")}>
+                        Interested
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                        Not attending
+                    </Button>
+                </>
+            );
+        }
+
+        if (event.userRsvpStatus === "interested") {
+            return (
+                <>
+                    <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                        Interested
+                    </Badge>
+                    <Button size="sm" variant="outline" disabled={isPending} onClick={onGoing}>
+                        Attend
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={isPending} onClick={onCancelRsvp}>
+                        Not attending
+                    </Button>
+                </>
+            );
+        }
+
+        return (
+            <>
+                <Button size="sm" variant="outline" disabled={isPending} onClick={onGoing}>
+                    Attend
+                </Button>
+                <Button size="sm" variant="secondary" disabled={isPending} onClick={() => onRsvp("interested")}>
+                    Interested
+                </Button>
+            </>
+        );
     };
 
     // Stage control handlers
@@ -421,52 +532,19 @@ export default function EventDetail({
                 <div className="px-4">
                     <div className="rounded-md border bg-white/60 p-3">
                         <div className="mb-2 text-xs text-muted-foreground">RSVP</div>
+                        {isRecurringOccurrence && !isOccurrenceCancelled && (
+                            <Badge variant="outline" className="mb-2 border-sky-300 bg-sky-50 text-sky-800">
+                                For this meeting only
+                            </Badge>
+                        )}
                         {isOccurrenceCancelled ? (
                             <div className="text-sm font-medium text-red-700">This occurrence is cancelled.</div>
                         ) : (
-                            <div className="flex flex-wrap gap-2">
-                                {event.userRsvpStatus === "going" ? (
-                                    <>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            disabled={isPending}
-                                            onClick={onCancelRsvp}
-                                        >
-                                            Cancel RSVP
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={isPending}
-                                            onClick={() => onRsvp("interested")}
-                                        >
-                                            Interested
-                                        </Button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                            I&apos;m going
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={isPending}
-                                            onClick={() => onRsvp("interested")}
-                                        >
-                                            Interested
-                                        </Button>
-                                    </>
-                                )}
-                            </div>
+                            <div className="flex flex-wrap items-center gap-2">{renderRsvpControls()}</div>
                         )}
                         <div className="mt-2 text-xs text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
                         </div>
-                        {event.userRsvpStatus && event.userRsvpStatus !== "none" && (
-                            <div className="mt-1 text-xs">Your status: {event.userRsvpStatus}</div>
-                        )}
                     </div>
                 </div>
 
@@ -732,56 +810,25 @@ export default function EventDetail({
                 <div className="space-y-4">
                     <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
+                        {isRecurringOccurrence && !isOccurrenceCancelled && (
+                            <Badge variant="outline" className="mb-3 border-sky-300 bg-sky-50 text-sky-800">
+                                For this meeting only
+                            </Badge>
+                        )}
                         {isOccurrenceCancelled ? (
                             <div className="text-sm font-medium text-red-700">
                                 RSVP changes are unavailable because this occurrence is cancelled.
                             </div>
                         ) : (
-                            <div className="flex flex-wrap gap-2">
-                                {event.userRsvpStatus === "going" ? (
-                                    <>
-                                        <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            disabled={isPending}
-                                            onClick={onCancelRsvp}
-                                        >
-                                            Cancel RSVP
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={isPending}
-                                            onClick={() => onRsvp("interested")}
-                                        >
-                                            Interested
-                                        </Button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Button size="sm" disabled={isPending} onClick={() => setRsvpDialogOpen(true)}>
-                                            I&apos;m going
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={isPending}
-                                            onClick={() => onRsvp("interested")}
-                                        >
-                                            Interested
-                                        </Button>
-                                    </>
-                                )}
-                            </div>
+                            <div className="flex flex-wrap items-center gap-2">{renderRsvpControls()}</div>
                         )}
                         <div className="mt-3 text-sm text-muted-foreground">
                             Attendees (going): {event.attendees ?? 0}
                         </div>
-                        {event.userRsvpStatus && event.userRsvpStatus !== "none" && (
-                            <div className="mt-1 text-sm">Your status: {event.userRsvpStatus}</div>
-                        )}
                     </div>
-                    <AttendeesList circleHandle={circleHandle} eventId={event._id!.toString()} />
+                    {!isRecurringOccurrence && (
+                        <AttendeesList circleHandle={circleHandle} eventId={event._id!.toString()} />
+                    )}
                     {event.invitations && event.invitations.length > 0 && (
                         <InvitedUserList
                             userDids={event.invitations}

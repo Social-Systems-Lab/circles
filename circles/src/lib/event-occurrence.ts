@@ -1,5 +1,5 @@
 import { RRule } from "rrule";
-import type { EventDisplay, EventOccurrence, Recurrence } from "@/models/models";
+import type { EventDisplay, EventOccurrence, EventOccurrenceRsvp, Recurrence } from "@/models/models";
 
 const OCCURRENCE_ROUTE_ID_PATTERN = /^([a-f\d]{24})_(\d+)$/i;
 const MONGODB_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
@@ -252,6 +252,58 @@ export function buildEventOccurrenceCancellationUpsert(seriesId: string, occurre
                 status: "cancelled" as const,
                 updatedAt: now,
             },
+            $setOnInsert: { createdAt: now },
+        },
+        options: { upsert: true as const },
+    };
+}
+
+export function applyEventOccurrenceRsvpState(
+    event: EventDisplay,
+    occurrenceRsvps: Pick<EventOccurrenceRsvp, "userDid" | "status">[],
+    userDid: string,
+): EventDisplay {
+    if (occurrenceRsvps.length === 0) return event;
+
+    const userRsvp = occurrenceRsvps.find((rsvp) => rsvp.userDid === userDid);
+    return {
+        ...event,
+        attendees: occurrenceRsvps.filter((rsvp) => rsvp.status === "going").length,
+        userRsvpStatus: userRsvp?.status ?? "none",
+    };
+}
+
+export function filterEventsForOccurrenceParticipation(
+    events: EventDisplay[],
+    participatingSeriesIds: ReadonlySet<string>,
+    legacyGoingSeriesIds: ReadonlySet<string>,
+    occurrenceStatusByIdentity: ReadonlyMap<string, EventOccurrenceRsvp["status"]>,
+    independentlyIncludedSeriesIds: ReadonlySet<string> = new Set(),
+): EventDisplay[] {
+    return events.filter((event) => {
+        const seriesId = event.seriesId ?? String(event._id);
+        if (independentlyIncludedSeriesIds.has(seriesId)) return true;
+        if (!participatingSeriesIds.has(seriesId)) return false;
+        if (!event.isRecurringInstance || event.occurrenceKey === undefined) {
+            return legacyGoingSeriesIds.has(seriesId);
+        }
+        const occurrenceStatus = occurrenceStatusByIdentity.get(`${seriesId}:${event.occurrenceKey}`);
+        if (occurrenceStatus !== undefined) return occurrenceStatus === "going";
+        return legacyGoingSeriesIds.has(seriesId);
+    });
+}
+
+export function buildEventOccurrenceRsvpUpsert(
+    seriesId: string,
+    occurrenceKey: number,
+    userDid: string,
+    status: EventOccurrenceRsvp["status"],
+    now: Date,
+) {
+    return {
+        filter: { seriesId, occurrenceKey, userDid },
+        update: {
+            $set: { seriesId, occurrenceKey, userDid, status, updatedAt: now },
             $setOnInsert: { createdAt: now },
         },
         options: { upsert: true as const },

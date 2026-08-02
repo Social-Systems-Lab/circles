@@ -27,6 +27,7 @@ import {
     EventRsvp,
     EventInvitation,
     EventOccurrence,
+    EventOccurrenceRsvp,
     Notification,
     ExternalNotificationChannel,
     HumanityVerification,
@@ -37,6 +38,10 @@ import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder }
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import { COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS } from "./feed-indexes";
 import { EVENT_OCCURRENCE_UNIQUE_INDEX_KEYS, EVENT_OCCURRENCE_UNIQUE_INDEX_OPTIONS } from "./event-occurrence-indexes";
+import {
+    EVENT_OCCURRENCE_RSVP_UNIQUE_INDEX_KEYS,
+    EVENT_OCCURRENCE_RSVP_UNIQUE_INDEX_OPTIONS,
+} from "./event-occurrence-rsvp-indexes";
 
 const MONGODB_URI =
     process.env.MONGODB_URI ||
@@ -74,6 +79,7 @@ let Events: Collection<Event>;
 let EventRsvps: Collection<EventRsvp>;
 let EventInvitations: Collection<EventInvitation>;
 let EventOccurrences: Collection<EventOccurrence>;
+let EventOccurrenceRsvps: Collection<EventOccurrenceRsvp>;
 let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
@@ -131,6 +137,13 @@ if (process.env.IS_BUILD !== "true") {
             console.error("Failed to create event occurrence unique index:", error);
         },
     );
+    EventOccurrenceRsvps = db.collection<EventOccurrenceRsvp>("eventOccurrenceRsvps");
+    EventOccurrenceRsvps.createIndex(
+        EVENT_OCCURRENCE_RSVP_UNIQUE_INDEX_KEYS,
+        EVENT_OCCURRENCE_RSVP_UNIQUE_INDEX_OPTIONS,
+    ).catch((error) => {
+        console.error("Failed to create event occurrence RSVP unique index:", error);
+    });
     GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
@@ -181,6 +194,7 @@ export {
     EventRsvps,
     EventInvitations,
     EventOccurrences,
+    EventOccurrenceRsvps,
     GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,

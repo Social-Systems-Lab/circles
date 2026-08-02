@@ -1803,6 +1803,25 @@ export const eventOccurrenceSchema = z
     });
 export type EventOccurrence = z.infer<typeof eventOccurrenceSchema>;
 
+export const eventOccurrenceRsvpStatusSchema = z.enum(["going", "interested", "none"]);
+export type EventOccurrenceRsvpStatus = z.infer<typeof eventOccurrenceRsvpStatusSchema>;
+
+export const eventOccurrenceRsvpSchema = z.object({
+    _id: z.any().optional(),
+    seriesId: z.string().regex(/^[a-f\d]{24}$/i, "seriesId must be a valid MongoDB ObjectId"),
+    occurrenceKey: z
+        .number()
+        .int()
+        .nonnegative()
+        .refine(Number.isSafeInteger, "occurrenceKey must be a safe integer")
+        .refine((value) => !Number.isNaN(new Date(value).getTime()), "occurrenceKey must represent a valid Date"),
+    userDid: didSchema,
+    status: eventOccurrenceRsvpStatusSchema,
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
+export type EventOccurrenceRsvp = z.infer<typeof eventOccurrenceRsvpSchema>;
+
 /**
  * Event RSVP model
  */

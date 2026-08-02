@@ -1,4 +1,13 @@
-import { Circles, Events, EventRsvps, Feeds, Posts, EventInvitations, EventOccurrences } from "./db";
+import {
+    Circles,
+    Events,
+    EventRsvps,
+    Feeds,
+    Posts,
+    EventInvitations,
+    EventOccurrences,
+    EventOccurrenceRsvps,
+} from "./db";
 import { ObjectId } from "mongodb";
 import {
     Event,
@@ -10,12 +19,15 @@ import {
     Media,
     EventInvitation,
     EventOccurrence,
+    EventOccurrenceRsvp,
 } from "@/models/models";
 import {
     buildRecurringOccurrenceDisplay,
     getRecurringOccurrenceStarts,
     isGeneratedEventOccurrence,
     parseEventOccurrenceId,
+    applyEventOccurrenceRsvpState,
+    filterEventsForOccurrenceParticipation,
 } from "@/lib/event-occurrence";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
@@ -102,11 +114,14 @@ function buildRecurringInstance(
     event: EventDisplay,
     occurrenceStart: Date,
     occurrence?: EventOccurrence | null,
+    occurrenceRsvps: EventOccurrenceRsvp[] = [],
+    userDid = "",
 ): EventDisplay {
-    return {
+    const occurrenceEvent = {
         ...buildRecurringOccurrenceDisplay(event, occurrenceStart, undefined, occurrence),
         originalEventId: event._id,
     };
+    return applyEventOccurrenceRsvpState(occurrenceEvent, occurrenceRsvps, userDid);
 }
 
 /**
@@ -133,6 +148,8 @@ function expandRecurringEvent(
     event: EventDisplay,
     range: Range,
     occurrenceBySeriesAndKey: ReadonlyMap<string, EventOccurrence>,
+    rsvpsBySeriesAndKey: ReadonlyMap<string, EventOccurrenceRsvp[]>,
+    userDid: string,
 ): EventDisplay[] {
     if (!event.recurrence || !range.from || !range.to) return [event];
 
@@ -146,7 +163,13 @@ function expandRecurringEvent(
 
     const seriesId = String(event._id);
     return instances.map((date: Date) =>
-        buildRecurringInstance(event, date, occurrenceBySeriesAndKey.get(occurrenceMapKey(seriesId, date.getTime()))),
+        buildRecurringInstance(
+            event,
+            date,
+            occurrenceBySeriesAndKey.get(occurrenceMapKey(seriesId, date.getTime())),
+            rsvpsBySeriesAndKey.get(occurrenceMapKey(seriesId, date.getTime())),
+            userDid,
+        ),
     );
 }
 
@@ -168,6 +191,10 @@ export const getEventsByCircleId = async (
         const canModerate = await isAuthorized(userDid, circleId, features.events.moderate);
         const canManageUnpublished = canReview || canModerate;
         const matchQuery: any = eventHostCircleMatch(circleId);
+        let filterToParticipatingOccurrences = false;
+        const participatingSeriesIds = new Set<string>();
+        const occurrenceStatusByIdentity = new Map<string, EventOccurrenceRsvp["status"]>();
+        const legacyParticipatingSeriesIds = new Set<string>();
         if (Object.keys(dateMatch).length > 0) {
             matchQuery.$and = [
                 ...(matchQuery.$and || []),
@@ -190,8 +217,27 @@ export const getEventsByCircleId = async (
                 userQueries.push({ createdBy: userDid });
             }
             if (includeParticipating) {
-                const rsvps = await EventRsvps.find({ userDid, status: "going" }).toArray();
-                const eventIds = rsvps.map((rsvp) => new ObjectId(rsvp.eventId));
+                const [rsvps, occurrenceRsvps] = await Promise.all([
+                    EventRsvps.find({ userDid, status: "going" }).toArray(),
+                    EventOccurrenceRsvps.find({ userDid }).toArray(),
+                ]);
+                rsvps.forEach((rsvp) => {
+                    legacyParticipatingSeriesIds.add(rsvp.eventId);
+                    participatingSeriesIds.add(rsvp.eventId);
+                });
+                occurrenceRsvps.forEach((rsvp) => {
+                    occurrenceStatusByIdentity.set(occurrenceMapKey(rsvp.seriesId, rsvp.occurrenceKey), rsvp.status);
+                    if (rsvp.status === "going") participatingSeriesIds.add(rsvp.seriesId);
+                });
+                filterToParticipatingOccurrences = true;
+                const eventIds = Array.from(
+                    new Set([
+                        ...rsvps.map((rsvp) => rsvp.eventId),
+                        ...occurrenceRsvps.filter((rsvp) => rsvp.status === "going").map((rsvp) => rsvp.seriesId),
+                    ]),
+                )
+                    .filter((eventId) => ObjectId.isValid(eventId))
+                    .map((eventId) => new ObjectId(eventId));
                 userQueries.push({ _id: { $in: eventIds } });
             }
 
@@ -422,6 +468,7 @@ export const getEventsByCircleId = async (
         ]).toArray()) as EventDisplay[];
 
         let occurrenceBySeriesAndKey = new Map<string, EventOccurrence>();
+        let rsvpsBySeriesAndKey = new Map<string, EventOccurrenceRsvp[]>();
         if (range?.from && range?.to) {
             const recurringSeriesIds = events.filter((event) => event.recurrence).map((event) => String(event._id));
             if (recurringSeriesIds.length > 0) {
@@ -435,15 +482,42 @@ export const getEventsByCircleId = async (
                         occurrence,
                     ]),
                 );
+                const occurrenceRsvps = await EventOccurrenceRsvps.find({
+                    seriesId: { $in: recurringSeriesIds },
+                    occurrenceKey: { $gte: range.from.getTime(), $lte: range.to.getTime() },
+                }).toArray();
+                rsvpsBySeriesAndKey = occurrenceRsvps.reduce((map, rsvp) => {
+                    const key = occurrenceMapKey(rsvp.seriesId, rsvp.occurrenceKey);
+                    map.set(key, [...(map.get(key) || []), rsvp]);
+                    return map;
+                }, new Map<string, EventOccurrenceRsvp[]>());
             }
         }
 
         const expandedEvents =
             range?.from && range?.to
-                ? events.flatMap((event) => expandRecurringEvent(event, range, occurrenceBySeriesAndKey))
+                ? events.flatMap((event) =>
+                      expandRecurringEvent(event, range, occurrenceBySeriesAndKey, rsvpsBySeriesAndKey, userDid),
+                  )
                 : events;
 
-        return expandedEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+        const independentlyIncludedSeriesIds = new Set<string>();
+        if (includeCreated) {
+            events
+                .filter((event) => event.createdBy === userDid)
+                .forEach((event) => independentlyIncludedSeriesIds.add(String(event._id)));
+        }
+        const visibleEvents = filterToParticipatingOccurrences
+            ? filterEventsForOccurrenceParticipation(
+                  expandedEvents,
+                  participatingSeriesIds,
+                  legacyParticipatingSeriesIds,
+                  occurrenceStatusByIdentity,
+                  independentlyIncludedSeriesIds,
+              )
+            : expandedEvents;
+
+        return visibleEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting events by circle ID:", error);
         throw error;
@@ -671,7 +745,17 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             seriesId: String(event._id),
             occurrenceKey: recurringInstance.occurrenceKey,
         });
-        const occurrenceEvent = buildRecurringInstance(event, recurringInstance.originalStartAt, occurrence);
+        const occurrenceRsvps = await EventOccurrenceRsvps.find({
+            seriesId: String(event._id),
+            occurrenceKey: recurringInstance.occurrenceKey,
+        }).toArray();
+        const occurrenceEvent = buildRecurringInstance(
+            event,
+            recurringInstance.originalStartAt,
+            occurrence,
+            occurrenceRsvps,
+            userDid,
+        );
         return {
             ...occurrenceEvent,
             _id: event._id,
@@ -900,6 +984,7 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
         await EventRsvps.deleteMany({ eventId });
         await EventInvitations.deleteMany({ eventId });
         await EventOccurrences.deleteMany({ seriesId: eventId });
+        await EventOccurrenceRsvps.deleteMany({ seriesId: eventId });
 
         // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
         // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });

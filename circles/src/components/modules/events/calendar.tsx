@@ -51,6 +51,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, circleId, eve
                     userRsvpStatus: e.userRsvpStatus ?? "none",
                     stage: e.stage,
                     isOccurrenceCancelled: e.isOccurrenceCancelled === true,
+                    isRecurringInstance: e.isRecurringInstance === true,
                     circleHandle: getEventRouteCircleHandle(e, { id: circleId, handle: circleHandle }),
                 },
             })) || [];
@@ -133,13 +134,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({ circleHandle, circleId, eve
         const stage = ext?.stage as string | undefined;
         const isDraft = stage === "draft";
         const isCancelled = stage === "cancelled" || ext?.isOccurrenceCancelled === true;
+        const occurrenceRsvpStatus = ext?.isRecurringInstance ? ext?.userRsvpStatus : "none";
         const title = arg.event.title + (isDraft ? " (draft)" : isCancelled ? " (cancelled)" : "");
         const style: React.CSSProperties = {};
         if (isCancelled) style.textDecoration = "line-through";
         if (isDraft) style.color = "#6c757d"; // grey text similar to Bootstrap secondary
         return (
-            <div className="max-w-full truncate" style={style} title={arg.event.title}>
-                {title}
+            <div className="flex max-w-full items-center gap-1 truncate" style={style} title={arg.event.title}>
+                <span className="truncate">{title}</span>
+                {!isCancelled && occurrenceRsvpStatus === "going" && (
+                    <span className="rounded-full bg-green-100 px-1.5 text-[10px] font-semibold text-green-800">
+                        Attending
+                    </span>
+                )}
+                {!isCancelled && occurrenceRsvpStatus === "interested" && (
+                    <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800">
+                        Interested
+                    </span>
+                )}
             </div>
         );
     };

@@ -200,6 +200,16 @@ const EventCard: React.FC<{
                                 Cancelled
                             </Badge>
                         )}
+                        {!isCancelled && e.isRecurringInstance && e.userRsvpStatus === "going" && (
+                            <Badge className="border-green-300 bg-green-100 text-xs text-green-800 hover:bg-green-100">
+                                Attending
+                            </Badge>
+                        )}
+                        {!isCancelled && e.isRecurringInstance && e.userRsvpStatus === "interested" && (
+                            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-xs text-amber-800">
+                                Interested
+                            </Badge>
+                        )}
                     </div>
                 </div>
                 {e.description && (
