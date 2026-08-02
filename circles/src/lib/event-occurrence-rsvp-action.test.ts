@@ -83,8 +83,18 @@ assert.match(calendarSource, /occurrenceRsvpStatus === "going"[\s\S]*Attending/,
 const timelineSource = readFileSync("src/components/modules/events/event-timeline.tsx", "utf8");
 assert.match(
     timelineSource,
-    /e\.isRecurringInstance && e\.userRsvpStatus === "going"[\s\S]*Attending/,
-    "timeline shows Attending only for a generated occurrence with Going status",
+    /!isCancelled && e\.userRsvpStatus === "going"[\s\S]*Attending/,
+    "timeline shows Attending for any non-cancelled event with Going status",
+);
+assert.match(
+    timelineSource,
+    /!isCancelled && e\.userRsvpStatus === "interested"[\s\S]*Interested/,
+    "timeline shows Interested for any non-cancelled event with Interested status",
+);
+assert.doesNotMatch(
+    timelineSource,
+    /e\.isRecurringInstance && e\.userRsvpStatus === (?:"going"|"interested")/,
+    "timeline RSVP labels are not restricted to recurring instances",
 );
 assert.match(
     eventDataSource,
