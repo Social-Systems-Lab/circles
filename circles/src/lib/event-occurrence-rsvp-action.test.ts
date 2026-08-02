@@ -97,6 +97,21 @@ assert.doesNotMatch(
     "timeline RSVP labels are not restricted to recurring instances",
 );
 assert.match(
+    timelineSource,
+    /joinState && !isCancelled && \([\s\S]*?flex items-center gap-2[\s\S]*?userRsvpStatus === "going"[\s\S]*?Attending[\s\S]*?<Button/,
+    "timeline renders RSVP status and Join in one spaced layout container",
+);
+assert.match(
+    timelineSource,
+    /joinState && hasPersonalRsvpStatus && \(condensed \? "pt-14" : "pt-16"\)/,
+    "compact and normal cards reserve space when both RSVP status and Join are present",
+);
+assert.match(
+    timelineSource,
+    /if \(joinState\.isEnabled && joinState\.href\)[\s\S]*?window\.open\(joinState\.href, "_blank", "noopener,noreferrer"\)/,
+    "existing Join click behavior remains unchanged",
+);
+assert.match(
     eventDataSource,
     /EventOccurrenceRsvps\.find\(\{[\s\S]*seriesId: \{ \$in: recurringSeriesIds \}/,
     "list reads batch occurrence RSVPs",

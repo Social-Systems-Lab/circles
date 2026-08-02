@@ -147,8 +147,15 @@ const EventCard: React.FC<{
         canManageMissingLink: canManageJoinLink,
         missingLinkLabel: "Missing link",
     });
+    const hasPersonalRsvpStatus = !isCancelled && (e.userRsvpStatus === "going" || e.userRsvpStatus === "interested");
     const cardContent = (
-        <CardContent className={cn("flex items-start", condensed ? "space-x-3 p-3" : "space-x-4 p-4")}>
+        <CardContent
+            className={cn(
+                "flex items-start",
+                condensed ? "space-x-3 p-3" : "space-x-4 p-4",
+                joinState && hasPersonalRsvpStatus && (condensed ? "pt-14" : "pt-16"),
+            )}
+        >
             {e.images && e.images.length > 0 && (
                 <div
                     className={cn(
@@ -200,12 +207,12 @@ const EventCard: React.FC<{
                                 Cancelled
                             </Badge>
                         )}
-                        {!isCancelled && e.userRsvpStatus === "going" && (
+                        {!joinState && !isCancelled && e.userRsvpStatus === "going" && (
                             <Badge className="border-green-300 bg-green-100 text-xs text-green-800 hover:bg-green-100">
                                 Attending
                             </Badge>
                         )}
-                        {!isCancelled && e.userRsvpStatus === "interested" && (
+                        {!joinState && !isCancelled && e.userRsvpStatus === "interested" && (
                             <Badge variant="outline" className="border-amber-300 bg-amber-50 text-xs text-amber-800">
                                 Interested
                             </Badge>
@@ -275,8 +282,19 @@ const EventCard: React.FC<{
                 <div className="group block">{cardContent}</div>
             )}
             {joinState && !isCancelled && (
-                <span className="absolute right-2 top-2 z-10" title={joinState.title}>
+                <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
+                    {e.userRsvpStatus === "going" && (
+                        <Badge className="border-green-300 bg-green-100 text-xs text-green-800 hover:bg-green-100">
+                            Attending
+                        </Badge>
+                    )}
+                    {e.userRsvpStatus === "interested" && (
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-xs text-amber-800">
+                            Interested
+                        </Badge>
+                    )}
                     <Button
+                        title={joinState.title}
                         size="sm"
                         type="button"
                         variant={joinState.isEnabled ? "default" : "outline"}
@@ -299,7 +317,7 @@ const EventCard: React.FC<{
                     >
                         {joinState.label}
                     </Button>
-                </span>
+                </div>
             )}
             {isCancelled && onHideCancelled && eventId && (
                 <Button
