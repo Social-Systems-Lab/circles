@@ -2,6 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseEventSubmitStage, type EventHostCircleOption } from "@/lib/event-publish-capability";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
 import { Feeds, Events, EventInvitations, EventRsvps, EventOccurrences, Members } from "@/lib/data/db";
@@ -111,7 +112,7 @@ type GetCirclesBySearchQueryActionResult = {
 };
 
 type GetEventHostCirclesActionResult = {
-    circles: Circle[];
+    circles: EventHostCircleOption[];
 };
 
 type GetTasksByEventActionResult = {
@@ -238,7 +239,7 @@ const getHostCirclesByIds = async (hostCircleIds: string[]) => {
 const validateHostCirclePermissions = async (
     userDid: string,
     hostCircleIds: string[],
-    requestedStage: "draft" | "open" | "preserve",
+    requestedStage: "draft" | "review" | "open" | "preserve",
     existingEvent?: EventDisplay,
 ): Promise<{ success: true; hostCircles: Circle[] } | { success: false; message: string }> => {
     const hostCircles = await getHostCirclesByIds(hostCircleIds);
@@ -256,10 +257,11 @@ const validateHostCirclePermissions = async (
             const canModerate = await isAuthorized(userDid, hostCircleId, features.events.moderate);
             const canManage = canReview || canModerate;
             return {
-                canHost:
-                    existingEvent && isExistingAuthor && existingHostCircleIds.includes(hostCircleId)
+                canHost: existingEvent
+                    ? isExistingAuthor && existingHostCircleIds.includes(hostCircleId)
                         ? true
-                        : canCreate || canManage,
+                        : canCreate || canManage
+                    : canCreate,
                 canPublish: requestedStage !== "open" || canManage,
             };
         }),
@@ -345,10 +347,8 @@ async function resolveEventOccurrenceRsvpTarget(
     };
 }
 
-const parseRequestedStage = (formData: FormData): "draft" | "open" | "preserve" => {
-    const value = formData.get("submitStage");
-    if (value === "preserve") return "preserve";
-    return value === "open" ? "open" : "draft";
+const parseRequestedStage = (formData: FormData): "draft" | "review" | "open" | "preserve" => {
+    return parseEventSubmitStage(formData.get("submitStage"));
 };
 
 const getEventInternalPreviewUrl = (circleHandle: string, eventId: string) => {
@@ -671,21 +671,32 @@ export async function getEventHostCirclesAction(): Promise<GetEventHostCirclesAc
                 circles.findIndex((candidate) => String(candidate._id) === String(circle._id)) === index,
         );
 
-        const checks = await Promise.all(
+        const capabilities = await Promise.all(
             candidateCircles.map(async (candidateCircle) => {
-                if (!candidateCircle._id || !candidateCircle.handle) return false;
+                if (!candidateCircle._id || !candidateCircle.handle) {
+                    return { canCreateEvents: false, canPublishEvents: false };
+                }
                 const circleId = candidateCircle._id.toString();
-                if (candidateCircle.circleType === "user" && String(candidateCircle._id) === String(user._id)) return true;
-                const canCreate = await isAuthorized(userDid, circleId, features.events.create);
-                if (canCreate) return true;
-                const canReview = await isAuthorized(userDid, circleId, features.events.review);
-                if (canReview) return true;
-                return isAuthorized(userDid, circleId, features.events.moderate);
+                const [canCreate, canReview, canModerate] = await Promise.all([
+                    isAuthorized(userDid, circleId, features.events.create),
+                    isAuthorized(userDid, circleId, features.events.review),
+                    isAuthorized(userDid, circleId, features.events.moderate),
+                ]);
+                return {
+                    canCreateEvents: canCreate,
+                    canPublishEvents: canReview || canModerate,
+                };
             }),
         );
 
         const circles = candidateCircles
-            .filter((_, index) => checks[index])
+            .map((circle, index) => ({ circle, capability: capabilities[index] }))
+            .filter(({ capability }) => capability.canCreateEvents)
+            .map(({ circle, capability }) => ({
+                ...circle,
+                canCreateEvents: capability.canCreateEvents,
+                canPublishEvents: capability.canPublishEvents,
+            }))
             .sort((a, b) => (a.name || a.handle || "").localeCompare(b.name || b.handle || ""));
 
         return { circles: JSON.parse(JSON.stringify(circles)) };
@@ -839,7 +850,12 @@ export async function createEventAction(
             description: data.description,
             images: uploadedImages,
             location: locationData,
-            stage: requestedStage === "open" && canPublish ? "open" : "draft",
+            stage:
+                requestedStage === "open" && canPublish
+                    ? "open"
+                    : requestedStage === "review"
+                      ? "review"
+                      : "draft",
             userGroups: data.userGroups || [],
             isVirtual,
             virtualUrl,
@@ -866,6 +882,14 @@ export async function createEventAction(
             console.error("Failed to ensure events module is enabled on user circle:", err);
         }
 
+        if (created.stage === "review") {
+            // Preserve the existing review model: notify reviewers of the primary host circle only.
+            await notifyEventSubmittedForReview(
+                { _id: created._id!, title: created.title, circleId: created.circleId },
+                user,
+            );
+        }
+
         if (shouldPublishToNoticeboard(formData) && created.stage === "open") {
             try {
                 const noticeboardPostIds = await upsertEventNoticeboardPosts({
@@ -887,7 +911,12 @@ export async function createEventAction(
 
         return {
             success: true,
-            message: created.stage === "open" ? "Event published successfully" : "Event saved as draft",
+            message:
+                created.stage === "open"
+                    ? "Event published successfully"
+                    : created.stage === "review"
+                      ? "Event submitted for review"
+                      : "Event saved as draft",
             eventId: created._id?.toString(),
         };
     } catch (error) {

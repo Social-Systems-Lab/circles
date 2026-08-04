@@ -17,6 +17,7 @@ import TimePicker from "@/components/forms/time-picker";
 import { format, addHours, setHours, setMinutes } from "date-fns";
 import { Bold, Italic, List, Link as LinkIcon, Heading1, Heading2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { resolveEventCreationCapability, type EventHostCircleOption } from "@/lib/event-publish-capability";
 
 type Props = {
     circleHandle?: string; // optional, can come from context or picker
@@ -83,7 +84,7 @@ export default function EventForm({
     const [publishToNoticeboard, setPublishToNoticeboard] = useState<boolean>(
         Boolean(event?.noticeboardPostId || Object.keys(event?.noticeboardPostIdsByCircleId || {}).length > 0),
     );
-    const [eligibleHostCircles, setEligibleHostCircles] = useState<Circle[]>([]);
+    const [eligibleHostCircles, setEligibleHostCircles] = useState<EventHostCircleOption[]>([]);
     const [hostCircleIds, setHostCircleIds] = useState<string[]>(() =>
         Array.from(
             new Set(
@@ -91,6 +92,15 @@ export default function EventForm({
             ),
         ),
     );
+    const selectedHostCircleIds = Array.from(
+        new Set([selectedCircleId, ...hostCircleIds].filter((circleId): circleId is string => Boolean(circleId))),
+    );
+    const creationCapability = event
+        ? null
+        : resolveEventCreationCapability(selectedHostCircleIds, eligibleHostCircles);
+    const canDirectPublish = event ? Boolean(canPublish) : creationCapability === "draft-or-publish";
+    const canSubmitForReview = !event && creationCapability === "draft-or-review";
+    const canSubmitCreation = !event && creationCapability !== "unavailable";
     const [showAdditionalHosts, setShowAdditionalHosts] = useState<boolean>(() => {
         const primaryCircleId = initialSelectedCircleId || event?.circleId;
         const initialHostCircleIds = [event?.circleId, ...(event?.hostCircleIds || [])].filter(Boolean) as string[];
@@ -240,8 +250,8 @@ export default function EventForm({
         });
     };
 
-    const submitEvent = (submitStage: "draft" | "open" | "preserve") => {
-        if (submitStage === "open" && !canPublish) {
+    const submitEvent = (submitStage: "draft" | "review" | "open" | "preserve") => {
+        if (submitStage === "open" && !canDirectPublish) {
             toast({
                 title: "Not allowed",
                 description: "You do not have permission to publish this event.",
@@ -790,7 +800,11 @@ export default function EventForm({
 
             <div className="flex gap-3">
                 {event?.stage === "draft" || !event ? (
-                    <Button type="button" disabled={isPending} onClick={() => submitEvent("draft")}>
+                    <Button
+                        type="button"
+                        disabled={isPending || (!event && !canSubmitCreation)}
+                        onClick={() => submitEvent("draft")}
+                    >
                         {isPending ? "Saving..." : event ? "Save draft" : "Save as draft"}
                     </Button>
                 ) : (
@@ -798,9 +812,14 @@ export default function EventForm({
                         {isPending ? "Saving..." : "Save changes"}
                     </Button>
                 )}
-                {canPublish && (event?.stage === "draft" || !event) && (
+                {canDirectPublish && (event?.stage === "draft" || !event) && (
                     <Button type="button" disabled={isPending} onClick={() => submitEvent("open")}>
-                        {isPending ? "Saving..." : "Publish event"}
+                        {isPending ? "Saving..." : "Publish"}
+                    </Button>
+                )}
+                {canSubmitForReview && (
+                    <Button type="button" disabled={isPending} onClick={() => submitEvent("review")}>
+                        {isPending ? "Saving..." : "Submit for review"}
                     </Button>
                 )}
                 <Button type="button" variant="outline" onClick={() => router.back()}>
