@@ -27,6 +27,11 @@ assert.doesNotMatch(
     /EventInvitations\.(delete|update)/,
     "occurrence cancellation does not mutate invitations",
 );
+assert.doesNotMatch(
+    actionSource,
+    /EventOccurrenceInvitations\.(delete|update)/,
+    "occurrence cancellation leaves occurrence invitations untouched",
+);
 assert.doesNotMatch(actionSource, /changeEventStage/, "occurrence cancellation does not mutate the series stage");
 
 const detailSource = readFileSync("src/components/modules/events/event-detail.tsx", "utf8");

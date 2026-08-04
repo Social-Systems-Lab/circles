@@ -2412,3 +2412,42 @@ export async function notifyEventInvitation(event: Event, inviter: Circle, invit
         console.error("🔔 [NOTIFY] Error in notifyEventInvitation:", error);
     }
 }
+
+export async function notifyEventOccurrenceInvitation(
+    event: Event,
+    occurrenceId: string,
+    occurrenceStart: Date,
+    occurrenceEnd: Date,
+    inviter: Circle,
+    invitedUser: UserPrivate,
+    invitationMessage?: string,
+): Promise<void> {
+    try {
+        const circle = await getCircleById(event.circleId);
+        if (!circle) return;
+
+        const occurrenceLabel = new Intl.DateTimeFormat("en", {
+            dateStyle: "medium",
+            timeStyle: event.allDay ? undefined : "short",
+        }).format(occurrenceStart);
+
+        await sendNotifications(
+            "event_invitation",
+            [invitedUser],
+            sanitizeObjectForJSON({
+                circle,
+                user: inviter,
+                eventId: occurrenceId,
+                eventName: `${event.title} — ${occurrenceLabel}`,
+                eventSeriesId: event._id?.toString(),
+                eventSeriesTitle: event.title,
+                occurrenceKey: occurrenceStart.getTime(),
+                occurrenceStart,
+                occurrenceEnd,
+                invitationMessage,
+            }),
+        );
+    } catch (error) {
+        console.error("🔔 [NOTIFY] Error in notifyEventOccurrenceInvitation:", error);
+    }
+}

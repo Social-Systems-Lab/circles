@@ -1782,6 +1782,7 @@ export interface EventDisplay extends Event {
     originalEventId?: Event["_id"];
     occurrenceStatus?: EventOccurrenceStatus;
     isOccurrenceCancelled?: boolean;
+    occurrenceInvitationMessage?: string;
 }
 
 export const eventOccurrenceStatusSchema = z.enum(["cancelled"]);
@@ -1852,6 +1853,26 @@ export const eventInvitationSchema = z.object({
     updatedAt: z.date(),
 });
 export type EventInvitation = z.infer<typeof eventInvitationSchema>;
+
+/** A sparse invitation to one generated occurrence of a recurring event. */
+export const eventOccurrenceInvitationSchema = z.object({
+    _id: z.any().optional(),
+    seriesId: z.string().regex(/^[a-f\d]{24}$/i, "seriesId must be a valid MongoDB ObjectId"),
+    occurrenceKey: z
+        .number()
+        .int()
+        .nonnegative()
+        .refine(Number.isSafeInteger, "occurrenceKey must be a safe integer")
+        .refine((value) => !Number.isNaN(new Date(value).getTime()), "occurrenceKey must represent a valid Date"),
+    userDid: didSchema,
+    message: z.string().trim().max(500).optional(),
+    invitedBy: didSchema,
+    circleId: z.string(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    sentAt: z.date(),
+});
+export type EventOccurrenceInvitation = z.infer<typeof eventOccurrenceInvitationSchema>;
 
 // Goal stages
 export const goalStageSchema = z.enum(["review", "open", "completed"]); // Replaced "resolved" with "completed"

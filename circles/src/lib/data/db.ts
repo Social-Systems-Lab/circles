@@ -28,6 +28,7 @@ import {
     EventInvitation,
     EventOccurrence,
     EventOccurrenceRsvp,
+    EventOccurrenceInvitation,
     Notification,
     ExternalNotificationChannel,
     HumanityVerification,
@@ -42,6 +43,10 @@ import {
     EVENT_OCCURRENCE_RSVP_UNIQUE_INDEX_KEYS,
     EVENT_OCCURRENCE_RSVP_UNIQUE_INDEX_OPTIONS,
 } from "./event-occurrence-rsvp-indexes";
+import {
+    EVENT_OCCURRENCE_INVITATION_UNIQUE_INDEX_KEYS,
+    EVENT_OCCURRENCE_INVITATION_UNIQUE_INDEX_OPTIONS,
+} from "./event-occurrence-invitation-indexes";
 
 const MONGODB_URI =
     process.env.MONGODB_URI ||
@@ -80,6 +85,7 @@ let EventRsvps: Collection<EventRsvp>;
 let EventInvitations: Collection<EventInvitation>;
 let EventOccurrences: Collection<EventOccurrence>;
 let EventOccurrenceRsvps: Collection<EventOccurrenceRsvp>;
+let EventOccurrenceInvitations: Collection<EventOccurrenceInvitation>;
 let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
@@ -144,6 +150,13 @@ if (process.env.IS_BUILD !== "true") {
     ).catch((error) => {
         console.error("Failed to create event occurrence RSVP unique index:", error);
     });
+    EventOccurrenceInvitations = db.collection<EventOccurrenceInvitation>("eventOccurrenceInvitations");
+    EventOccurrenceInvitations.createIndex(
+        EVENT_OCCURRENCE_INVITATION_UNIQUE_INDEX_KEYS,
+        EVENT_OCCURRENCE_INVITATION_UNIQUE_INDEX_OPTIONS,
+    ).catch((error) => {
+        console.error("Failed to create event occurrence invitation unique index:", error);
+    });
     GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
@@ -195,6 +208,7 @@ export {
     EventInvitations,
     EventOccurrences,
     EventOccurrenceRsvps,
+    EventOccurrenceInvitations,
     GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,

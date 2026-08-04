@@ -7,6 +7,7 @@ import {
     EventInvitations,
     EventOccurrences,
     EventOccurrenceRsvps,
+    EventOccurrenceInvitations,
 } from "./db";
 import { ObjectId } from "mongodb";
 import {
@@ -536,6 +537,14 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             return null;
         }
 
+        const occurrenceInvitation = recurringInstance
+            ? await EventOccurrenceInvitations.findOne({
+                  seriesId: recurringInstance.seriesId,
+                  occurrenceKey: recurringInstance.occurrenceKey,
+                  userDid,
+              })
+            : null;
+
         const events = (await Events.aggregate([
             { $match: { _id: new ObjectId(lookupEventId) } },
 
@@ -669,6 +678,7 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
                             { $eq: ["$createdBy", userDid] },
                             { $gt: [{ $size: "$userRsvpDocs" }, 0] },
                             { $gt: [{ $size: "$userInvDocs" }, 0] },
+                            { $literal: Boolean(occurrenceInvitation) },
                         ],
                     },
                 },
@@ -759,6 +769,7 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
         return {
             ...occurrenceEvent,
             _id: event._id,
+            occurrenceInvitationMessage: occurrenceInvitation?.message,
         } as EventDisplay;
     } catch (error) {
         console.error(`Error getting event by ID (${eventId}):`, error);
@@ -985,6 +996,7 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
         await EventInvitations.deleteMany({ eventId });
         await EventOccurrences.deleteMany({ seriesId: eventId });
         await EventOccurrenceRsvps.deleteMany({ seriesId: eventId });
+        await EventOccurrenceInvitations.deleteMany({ seriesId: eventId });
 
         // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
         // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });

@@ -73,6 +73,7 @@ type Notification = {
     // Event fields
     eventId?: string;
     eventName?: string;
+    invitationMessage?: string;
     // For grouping purposes
     key?: string;
 };
@@ -281,6 +282,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     newGoalStage: content.newGoalStage,
                     eventId: content.eventId,
                     eventName: content.eventName,
+                    invitationMessage: content.invitationMessage,
                     key: groupKey,
                 };
 
@@ -772,7 +774,11 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
 
             // For non-grouped or single proposal/issue notifications, use the original message
             case "event_invitation":
-                return `${userList} invited you to the event "${groupedNotification.latestNotification.eventName || "an event"}"`;
+                return `${userList} invited you to the event "${groupedNotification.latestNotification.eventName || "an event"}"${
+                    groupedNotification.latestNotification.invitationMessage
+                        ? ` — ${groupedNotification.latestNotification.invitationMessage}`
+                        : ""
+                }`;
             case "pm_received":
                 return count > 1
                     ? `${userList} sent you ${count} messages`

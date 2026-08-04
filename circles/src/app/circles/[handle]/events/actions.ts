@@ -5,7 +5,16 @@ import { revalidatePath } from "next/cache";
 import { parseEventSubmitStage, type EventHostCircleOption } from "@/lib/event-publish-capability";
 import { z } from "zod";
 import { ObjectId } from "mongodb";
-import { Feeds, Events, EventInvitations, EventRsvps, EventOccurrences, Members } from "@/lib/data/db";
+import {
+    Feeds,
+    Events,
+    EventInvitations,
+    EventRsvps,
+    EventOccurrences,
+    EventOccurrenceInvitations,
+    EventOccurrenceRsvps,
+    Members,
+} from "@/lib/data/db";
 import { createDefaultFeed, createPost, deletePost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
     Circle,
@@ -62,10 +71,12 @@ import {
     getExternalEventInviteProfileError,
     resolveExternalEventInviteHandle,
 } from "@/lib/event-external-invite";
-import { notifyEventInvitation } from "@/lib/data/notifications";
+import { notifyEventInvitation, notifyEventOccurrenceInvitation } from "@/lib/data/notifications";
 import { cancelEventOccurrence } from "@/lib/data/eventOccurrence";
 import { upsertEventOccurrenceRsvp } from "@/lib/data/eventOccurrenceRsvp";
 import { formatEventOccurrenceId, isGeneratedEventOccurrence, isValidEventOccurrenceKey } from "@/lib/event-occurrence";
+import { insertEventOccurrenceInvitation } from "@/lib/data/eventOccurrenceInvitation";
+import { mergeEventOccurrenceInvitees } from "@/lib/event-occurrence-invitation";
 
 // ----- Types -----
 
@@ -75,6 +86,15 @@ type GetEventsActionResult = {
 
 type GetInvitedUsersActionResult = {
     users: Circle[];
+};
+
+export type EventOccurrenceInviteeRow = {
+    user: Circle;
+    scope: "series" | "occurrence";
+    response: "pending" | "going" | "interested" | "not_attending";
+    message?: string;
+    sentAt?: Date;
+    updatedAt?: Date;
 };
 
 type GetCircleMembersActionResult = {
@@ -1548,6 +1568,194 @@ export async function ensureShadowPostForEventAction(eventId: string, circleId: 
     } catch (error) {
         console.error(`Error in ensureShadowPostForEventAction for event ${eventId}:`, error);
         return null;
+    }
+}
+
+async function resolveManageableEventOccurrenceInvitationTarget(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+    actorDid: string,
+) {
+    if (!ObjectId.isValid(seriesId)) return { success: false as const, message: "Invalid recurring event" };
+    if (!isValidEventOccurrenceKey(occurrenceKey)) {
+        return { success: false as const, message: "Invalid occurrence" };
+    }
+
+    const circle = await getCircleByHandle(circleHandle);
+    if (!circle) return { success: false as const, message: "Circle not found" };
+
+    const event = await Events.findOne({ _id: new ObjectId(seriesId) });
+    if (!event) return { success: false as const, message: "Event not found" };
+    if (!event.recurrence) return { success: false as const, message: "This event is not recurring" };
+    if (event.stage === "cancelled") return { success: false as const, message: "This event is cancelled" };
+    if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
+        return { success: false as const, message: "This event is not hosted by this circle" };
+    }
+    if (!(await canManageEvent(actorDid, event))) {
+        return { success: false as const, message: "Not authorized to invite users to this event" };
+    }
+
+    const occurrenceStart = new Date(occurrenceKey);
+    if (!isGeneratedEventOccurrence({ startAt: event.startAt, recurrence: event.recurrence }, occurrenceStart)) {
+        return { success: false as const, message: "This occurrence is not part of the recurring series" };
+    }
+    const occurrence = await EventOccurrences.findOne({ seriesId, occurrenceKey });
+    if (occurrence?.status === "cancelled") {
+        return { success: false as const, message: "This occurrence is cancelled" };
+    }
+
+    const duration = new Date(event.endAt).getTime() - new Date(event.startAt).getTime();
+    return {
+        success: true as const,
+        circle,
+        event,
+        occurrenceStart,
+        occurrenceEnd: new Date(occurrenceKey + duration),
+        occurrenceId: formatEventOccurrenceId(seriesId, occurrenceStart),
+    };
+}
+
+export async function inviteUsersToEventOccurrenceAction(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+    userDids: string[],
+    message?: string,
+): Promise<{
+    success: boolean;
+    message?: string;
+    newlyInvited: number;
+    alreadyInvited: number;
+    skipped: number;
+}> {
+    const emptyResult = { newlyInvited: 0, alreadyInvited: 0, skipped: 0 };
+    try {
+        const actorDid = await getAuthenticatedUserDid();
+        if (!actorDid) return { success: false, message: "User not authenticated", ...emptyResult };
+
+        const actor = await getUserByDid(actorDid);
+        if (!actor) return { success: false, message: "User not found", ...emptyResult };
+
+        const target = await resolveManageableEventOccurrenceInvitationTarget(
+            circleHandle,
+            seriesId,
+            occurrenceKey,
+            actorDid,
+        );
+        if (!target.success) return { ...target, ...emptyResult };
+        if (target.event.stage !== "open") {
+            return { success: false, message: "Invitations can only be sent for open events", ...emptyResult };
+        }
+
+        const normalizedMessage = message?.trim() || undefined;
+        if (normalizedMessage && normalizedMessage.length > 500) {
+            return { success: false, message: "Invitation message must be 500 characters or fewer", ...emptyResult };
+        }
+
+        const requestedDids = Array.from(new Set(userDids.filter((did) => didSchema.safeParse(did).success)));
+        const candidates = await getEligibleInviteCandidatesForCircle(
+            target.circle,
+            actorDid,
+            undefined,
+            Number.MAX_SAFE_INTEGER,
+        );
+        const eligibleDids = new Set(candidates.map((candidate) => candidate.did).filter(Boolean));
+        const recipientDids = requestedDids.filter((did) => eligibleDids.has(did));
+        const resolvedRecipients = (
+            await Promise.all(
+                recipientDids.map(async (recipientDid) => ({
+                    recipientDid,
+                    invitedUser: await getUserPrivate(recipientDid),
+                })),
+            )
+        ).filter(
+            (
+                recipient,
+            ): recipient is { recipientDid: string; invitedUser: NonNullable<typeof recipient.invitedUser> } =>
+                Boolean(recipient.invitedUser),
+        );
+
+        let newlyInvited = 0;
+        let alreadyInvited = 0;
+        for (const { recipientDid, invitedUser } of resolvedRecipients) {
+            const result = await insertEventOccurrenceInvitation({
+                seriesId,
+                occurrenceKey,
+                userDid: recipientDid,
+                message: normalizedMessage,
+                invitedBy: actorDid,
+                circleId: target.circle._id!.toString(),
+            });
+            if (!result.inserted) {
+                alreadyInvited++;
+                continue;
+            }
+
+            newlyInvited++;
+            await notifyEventOccurrenceInvitation(
+                target.event,
+                target.occurrenceId,
+                target.occurrenceStart,
+                target.occurrenceEnd,
+                actor,
+                invitedUser,
+                normalizedMessage,
+            );
+        }
+
+        revalidatePath(`/circles/${circleHandle}/events/${target.occurrenceId}`);
+        return {
+            success: true,
+            message: newlyInvited > 0 ? "Invitations sent" : "No new invitations were sent",
+            newlyInvited,
+            alreadyInvited,
+            skipped: userDids.length - resolvedRecipients.length,
+        };
+    } catch (error) {
+        console.error("Error inviting users to event occurrence:", error);
+        return { success: false, message: "Failed to send invitations", ...emptyResult };
+    }
+}
+
+export async function getEventOccurrenceInviteesAction(
+    circleHandle: string,
+    seriesId: string,
+    occurrenceKey: number,
+): Promise<{ rows: EventOccurrenceInviteeRow[] }> {
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid || !ObjectId.isValid(seriesId) || !isValidEventOccurrenceKey(occurrenceKey)) return { rows: [] };
+
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle) return { rows: [] };
+        const occurrenceId = formatEventOccurrenceId(seriesId, new Date(occurrenceKey));
+        const event = await getEventById(occurrenceId, userDid);
+        if (!event || !isRouteCircleEventHost(circle._id!.toString(), event) || event.isOccurrenceCancelled) {
+            return { rows: [] };
+        }
+        if (!(await canManageEvent(userDid, event))) {
+            return { rows: [] };
+        }
+
+        const [seriesInvitations, occurrenceInvitations, rsvps] = await Promise.all([
+            EventInvitations.find({ eventId: seriesId }).toArray(),
+            EventOccurrenceInvitations.find({ seriesId, occurrenceKey }).toArray(),
+            EventOccurrenceRsvps.find({ seriesId, occurrenceKey }).toArray(),
+        ]);
+        const records = mergeEventOccurrenceInvitees(seriesInvitations, occurrenceInvitations, rsvps);
+        const users = await getCirclesByDids(records.map((record) => record.userDid));
+        const usersByDid = new Map(users.map((user) => [user.did, user]));
+
+        return {
+            rows: records.flatMap((record) => {
+                const user = usersByDid.get(record.userDid);
+                return user ? [{ ...record, user }] : [];
+            }),
+        };
+    } catch (error) {
+        console.error("Error loading event occurrence invitees:", error);
+        return { rows: [] };
     }
 }
 

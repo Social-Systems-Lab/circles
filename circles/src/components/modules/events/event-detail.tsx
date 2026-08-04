@@ -38,6 +38,8 @@ const getDistanceString = (distance: number) => {
 };
 import InvitedUserList from "./invited-user-list";
 import InviteModal from "./invite-modal";
+import OccurrenceInviteModal from "./occurrence-invite-modal";
+import OccurrenceInviteeList from "./occurrence-invitee-list";
 import AttendeesList from "./attendees-list";
 import RsvpDialog from "./rsvp-dialog";
 import EventTasksPanel from "./event-tasks-panel";
@@ -108,6 +110,7 @@ export default function EventDetail({
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isInviteModalOpen, setInviteModalOpen] = useState(false);
+    const [isOccurrenceInviteModalOpen, setOccurrenceInviteModalOpen] = useState(false);
     const [isRsvpDialogOpen, setRsvpDialogOpen] = useState(false);
     const [isCancelOccurrenceOpen, setCancelOccurrenceOpen] = useState(false);
     const compact = !!isPreview;
@@ -684,8 +687,11 @@ export default function EventDetail({
                             Cancel this occurrence
                         </Button>
                     )}
-                    {event.stage === "open" && canInvite && (
+                    {event.stage === "open" && canInvite && !isRecurringOccurrence && (
                         <Button onClick={() => setInviteModalOpen(true)}>Invite</Button>
+                    )}
+                    {event.stage === "open" && canInvite && isRecurringOccurrence && !isOccurrenceCancelled && (
+                        <Button onClick={() => setOccurrenceInviteModalOpen(true)}>Invite to this meeting</Button>
                     )}
                 </div>
             </div>
@@ -805,6 +811,12 @@ export default function EventDetail({
                             </div>
                         </div>
                     )}
+                    {isRecurringOccurrence && event.occurrenceInvitationMessage && (
+                        <div className="rounded-lg border border-sky-200 bg-sky-50 p-5 text-sm text-sky-950">
+                            <div className="mb-1 font-medium">Invitation message for this meeting</div>
+                            <p className="whitespace-pre-wrap">{event.occurrenceInvitationMessage}</p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-4">
@@ -829,13 +841,19 @@ export default function EventDetail({
                     {!isRecurringOccurrence && (
                         <AttendeesList circleHandle={circleHandle} eventId={event._id!.toString()} />
                     )}
-                    {event.invitations && event.invitations.length > 0 && (
+                    {isRecurringOccurrence && canInvite ? (
+                        <OccurrenceInviteeList
+                            circleHandle={circleHandle}
+                            seriesId={event.seriesId!}
+                            occurrenceKey={event.occurrenceKey!}
+                        />
+                    ) : event.invitations && event.invitations.length > 0 ? (
                         <InvitedUserList
                             userDids={event.invitations}
                             circleHandle={circleHandle}
                             eventId={event._id!.toString()}
                         />
-                    )}
+                    ) : null}
                     <EventTasksPanel circleHandle={circleHandle} eventId={event._id!.toString()} />
                 </div>
             </div>
@@ -846,6 +864,18 @@ export default function EventDetail({
                 open={isInviteModalOpen}
                 onOpenChange={setInviteModalOpen}
             />
+            {isRecurringOccurrence && event.occurrenceId && (
+                <OccurrenceInviteModal
+                    circleHandle={circleHandle}
+                    seriesId={event.seriesId!}
+                    occurrenceKey={event.occurrenceKey!}
+                    occurrenceId={event.occurrenceId}
+                    seriesTitle={event.title}
+                    occurrenceLabel={`${startFmt}${endFmt ? ` – ${endFmt}` : ""}`}
+                    open={isOccurrenceInviteModalOpen}
+                    onOpenChange={setOccurrenceInviteModalOpen}
+                />
+            )}
             <RsvpDialog
                 circleHandle={circleHandle}
                 eventId={event._id!.toString()}
