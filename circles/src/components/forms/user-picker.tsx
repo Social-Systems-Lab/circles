@@ -13,7 +13,11 @@ import { getEventInviteCandidatesAction } from "@/app/circles/[handle]/events/ac
 type InviteCandidate = Circle & {
     inviteSources?: ("circle_member" | "contact")[];
     inviteSourceLabel?: string;
+    effectiveOccurrenceRsvpStatus?: "going" | "interested";
 };
+
+const effectiveRsvpLabel = (status?: InviteCandidate["effectiveOccurrenceRsvpStatus"]) =>
+    status === "going" ? "Attending" : status === "interested" ? "Interested" : null;
 
 type Props = {
     onSelectionChange: (selected: InviteCandidate[]) => void;
@@ -26,6 +30,7 @@ type Props = {
     circleHandle: string;
     eventId: string;
     excludeDids?: string[];
+    effectiveOccurrenceRsvpStatusByDid?: Readonly<Record<string, "going" | "interested">>;
 };
 
 export default function UserPicker({
@@ -34,6 +39,7 @@ export default function UserPicker({
     circleHandle,
     eventId,
     excludeDids = [],
+    effectiveOccurrenceRsvpStatusByDid = {},
     onCandidatesLoaded,
 }: Props) {
     const [search, setSearch] = useState("");
@@ -96,18 +102,31 @@ export default function UserPicker({
         onSelectionChange(newSelection);
     };
 
-    const visibleResults = results.filter((user) => !selected.some((selectedUser) => selectedUser.did === user.did));
+    const withEffectiveStatus = (user: InviteCandidate): InviteCandidate => ({
+        ...user,
+        effectiveOccurrenceRsvpStatus:
+            (user.did ? effectiveOccurrenceRsvpStatusByDid[user.did] : undefined) ??
+            user.effectiveOccurrenceRsvpStatus,
+    });
+    const visibleResults = results
+        .filter((user) => !selected.some((selectedUser) => selectedUser.did === user.did))
+        .map(withEffectiveStatus);
 
     return (
         <div>
             <div className="flex flex-wrap gap-2 rounded-md border p-2">
-                {selected.map((user) => (
+                {selected.map(withEffectiveStatus).map((user) => (
                     <div key={user.did} className="flex items-center gap-2 rounded-full bg-secondary px-2 py-1 text-sm">
                         <Avatar className="h-6 w-6">
                             <AvatarImage src={user.picture?.url} />
                             <AvatarFallback>{user.name?.[0]}</AvatarFallback>
                         </Avatar>
                         <span>{user.name}</span>
+                        {effectiveRsvpLabel(user.effectiveOccurrenceRsvpStatus) && (
+                            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                                {effectiveRsvpLabel(user.effectiveOccurrenceRsvpStatus)}
+                            </Badge>
+                        )}
                         <button
                             onClick={() => handleRemove(user)}
                             className="text-muted-foreground hover:text-foreground"
@@ -141,11 +160,14 @@ export default function UserPicker({
                                     <p className="truncate text-sm text-muted-foreground">@{user.handle}</p>
                                 </div>
                             </div>
-                            {user.inviteSourceLabel && (
-                                <Badge variant="outline" className="shrink-0">
-                                    {user.inviteSourceLabel}
-                                </Badge>
-                            )}
+                            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                                {effectiveRsvpLabel(user.effectiveOccurrenceRsvpStatus) && (
+                                    <Badge variant="outline">
+                                        {effectiveRsvpLabel(user.effectiveOccurrenceRsvpStatus)}
+                                    </Badge>
+                                )}
+                                {user.inviteSourceLabel && <Badge variant="outline">{user.inviteSourceLabel}</Badge>}
+                            </div>
                         </div>
                     ))}
                 </ScrollArea>

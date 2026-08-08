@@ -1,6 +1,7 @@
-import type { EventInvitation, EventOccurrenceInvitation, EventOccurrenceRsvp } from "@/models/models";
+import type { Circle, EventInvitation, EventOccurrenceInvitation, EventOccurrenceRsvp } from "@/models/models";
 
 export type EventOccurrenceInviteeResponse = "pending" | "going" | "interested" | "not_attending";
+export type EffectiveEventOccurrenceRsvpStatus = "going" | "interested";
 
 export type EventOccurrenceInviteeRecord = {
     userDid: string;
@@ -47,4 +48,40 @@ export function mergeEventOccurrenceInvitees(
         });
     }
     return Array.from(rows.values());
+}
+
+export function mergeEventOccurrenceInviteCandidates(
+    current: Circle[],
+    additions: Circle[],
+): Circle[] {
+    const candidatesByDid = new Map(current.filter((candidate) => candidate.did).map((candidate) => [candidate.did!, candidate]));
+    for (const candidate of additions) {
+        if (candidate.did) candidatesByDid.set(candidate.did, candidate);
+    }
+    return Array.from(candidatesByDid.values());
+}
+
+export function getEffectiveEventOccurrenceParticipants(
+    exactRsvps: Pick<EventOccurrenceRsvp, "userDid" | "status">[],
+    legacyRsvps: { userDid: string; status: EffectiveEventOccurrenceRsvpStatus }[],
+    organiserDid: string,
+): {
+    statusByDid: Map<string, EffectiveEventOccurrenceRsvpStatus>;
+    notAttendingDids: Set<string>;
+} {
+    const exactByDid = new Map(exactRsvps.map((rsvp) => [rsvp.userDid, rsvp.status]));
+    const statusByDid = new Map<string, EffectiveEventOccurrenceRsvpStatus>();
+    const notAttendingDids = new Set<string>();
+
+    for (const rsvp of exactRsvps) {
+        if (rsvp.userDid === organiserDid) continue;
+        if (rsvp.status === "none") notAttendingDids.add(rsvp.userDid);
+        else statusByDid.set(rsvp.userDid, rsvp.status);
+    }
+    for (const rsvp of legacyRsvps) {
+        if (rsvp.userDid !== organiserDid && !exactByDid.has(rsvp.userDid)) {
+            statusByDid.set(rsvp.userDid, rsvp.status);
+        }
+    }
+    return { statusByDid, notAttendingDids };
 }
