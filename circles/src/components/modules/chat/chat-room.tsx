@@ -4,7 +4,6 @@
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
 import {
-    mapOpenAtom,
     replyToMessageAtom,
     roomMessagesAtom,
     userAtom,
@@ -46,12 +45,19 @@ import { HiLightBulb } from "react-icons/hi";
 import { MdReply } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { GrEdit, GrTrash } from "react-icons/gr";
+import { HiDotsVertical } from "react-icons/hi";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { generateColorFromString } from "@/lib/utils/color";
 import { EmojiClickData } from "emoji-picker-react";
 import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MemoizedReactMarkdown } from "@/components/utils/memoized-markdown";
 import { useMongoChat } from "./useMongoChat";
 import {
@@ -658,7 +664,6 @@ type ChatMessagesProps = {
     onToggleTopic?: (topicId: string) => void;
     onCreateTopic?: () => void;
     onTopicActivity?: () => Promise<void> | void;
-    bottomAction?: React.ReactNode;
     topicsLoaded?: boolean;
     mentionCandidates?: Circle[];
 };
@@ -944,7 +949,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onToggleTopic,
     onCreateTopic,
     onTopicActivity,
-    bottomAction,
     topicsLoaded = true,
     mentionCandidates = [],
 }) => {
@@ -1322,7 +1326,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
-            {bottomAction}
             <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
@@ -1951,10 +1954,11 @@ const TopicCard: React.FC<{
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
     const [hoveredReplyId, setHoveredReplyId] = useState<string | null>(null);
-    const [isEditingStarter, setIsEditingStarter] = useState(false);
-    const [editingStarterText, setEditingStarterText] = useState("");
-    const [editedStarterBody, setEditedStarterBody] = useState<string | null>(null);
-    const [isHoveringStarter, setIsHoveringStarter] = useState(false);
+    const [isEditingTopic, setIsEditingTopic] = useState(false);
+    const [editingTopicTitle, setEditingTopicTitle] = useState("");
+    const [editingTopicBody, setEditingTopicBody] = useState("");
+    const [topicMutationError, setTopicMutationError] = useState("");
+    const [isMutatingTopic, setIsMutatingTopic] = useState(false);
     const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2244,19 +2248,54 @@ const TopicCard: React.FC<{
         }
     };
 
-    const handleStarterEditSubmit = async () => {
-        const trimmed = editingStarterText.trim();
-        if (!trimmed) return;
+    const handleTopicEditSubmit = async () => {
+        const trimmedTitle = editingTopicTitle.trim();
+        if (!trimmedTitle || isMutatingTopic) return;
+        setIsMutatingTopic(true);
+        setTopicMutationError("");
         try {
-            const { editMessageAction } = await import("./actions");
-            const result = await editMessageAction(conversationId, messageId, trimmed);
+            const { updateTopicAction } = await import("./mongo-actions");
+            const result = await updateTopicAction(conversationId, messageId, trimmedTitle, editingTopicBody);
             if (result.success) {
-                setEditedStarterBody(trimmed);
-                setIsEditingStarter(false);
-                setEditingStarterText("");
+                setIsEditingTopic(false);
+                await onTopicActivity?.();
+            } else {
+                setTopicMutationError(result.message || "Failed to update topic");
             }
         } catch (e) {
-            console.error("Failed to edit topic starter:", e);
+            console.error("Failed to update topic:", e);
+            setTopicMutationError("Failed to update topic");
+        } finally {
+            setIsMutatingTopic(false);
+        }
+    };
+
+    const handleDeleteTopic = async () => {
+        const replyCount = Number(thread?.replyCount) || 0;
+        const confirmation =
+            replyCount > 0
+                ? `Delete this topic and all ${replyCount} ${replyCount === 1 ? "reply" : "replies"}? This cannot be undone.`
+                : "Delete this topic? This cannot be undone.";
+        if (!window.confirm(confirmation) || isMutatingTopic) return;
+
+        setIsMutatingTopic(true);
+        try {
+            const { deleteTopicAction } = await import("./mongo-actions");
+            const result = await deleteTopicAction(conversationId, messageId);
+            if (!result.success) {
+                alert(result.message || "Failed to delete topic");
+                return;
+            }
+
+            const openIds = getOpenTopicIds(conversationId);
+            openIds.delete(messageId);
+            setOpenTopicIds(conversationId, openIds);
+            await onTopicActivity?.();
+        } catch (e) {
+            console.error("Failed to delete topic:", e);
+            alert("Failed to delete topic. Please try again.");
+        } finally {
+            setIsMutatingTopic(false);
         }
     };
 
@@ -2332,10 +2371,9 @@ const TopicCard: React.FC<{
     };
 
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
-    const effectiveStarterBody = editedStarterBody ?? topicDescription;
+    const effectiveStarterBody = topicDescription;
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
     const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
-    const starterAuthorName = formatCompactDisplayName(message.author?.name, message.createdBy);
     const starterCreatedAt = new Date(message.createdAt);
 
     return (
@@ -2367,6 +2405,14 @@ const TopicCard: React.FC<{
                     {!isTopicOpen && effectiveStarterBody && (
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
                     )}
+                    {isTopicOpen && effectiveStarterBody && (
+                        <div className="mt-2 text-sm leading-relaxed text-gray-700">
+                            {renderFormattedChatBody(effectiveStarterBody, {
+                                format: (message as any)?.format,
+                                markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
+                            })}
+                        </div>
+                    )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-gray-500 sm:max-w-[16rem] sm:justify-end sm:text-right">
                     <div className="min-w-0">
@@ -2385,6 +2431,44 @@ const TopicCard: React.FC<{
                         <span>
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
+                        {isOwnStarter && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 rounded-full text-gray-500 hover:bg-white/70"
+                                        onClick={(event) => event.stopPropagation()}
+                                        aria-label="Topic actions"
+                                        title="Topic actions"
+                                    >
+                                        <HiDotsVertical className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                                    <DropdownMenuItem
+                                        onSelect={() => {
+                                            setEditingTopicTitle(thread.title || "");
+                                            setEditingTopicBody(effectiveStarterBody);
+                                            setTopicMutationError("");
+                                            setIsEditingTopic(true);
+                                        }}
+                                    >
+                                        <GrEdit className="mr-2 h-4 w-4" />
+                                        Edit topic
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="text-red-600 focus:text-red-600"
+                                        disabled={isMutatingTopic}
+                                        onSelect={() => void handleDeleteTopic()}
+                                    >
+                                        <GrTrash className="mr-2 h-4 w-4" />
+                                        Delete topic
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
                     </div>
                 </div>
             </div>
@@ -2392,89 +2476,6 @@ const TopicCard: React.FC<{
             {/* Expanded body */}
             {isTopicOpen && (
                 <div className="border-t border-[#DDEBB8]">
-                    {effectiveStarterBody && (
-                        <div
-                            className={`flex px-3 py-2 text-left ${isOwnStarter ? "justify-end" : "justify-start"}`}
-                            onMouseEnter={() => !isMobile && setIsHoveringStarter(true)}
-                            onMouseLeave={() => !isMobile && setIsHoveringStarter(false)}
-                            onClick={() => isMobile && isOwnStarter && setIsHoveringStarter((value) => !value)}
-                        >
-                            {isEditingStarter ? (
-                                <div
-                                    className={`w-[96%] rounded-lg p-3 shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
-                                >
-                                    <textarea
-                                        value={editingStarterText}
-                                        onChange={(e) => setEditingStarterText(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Escape") {
-                                                setIsEditingStarter(false);
-                                                setEditingStarterText("");
-                                            }
-                                        }}
-                                        rows={5}
-                                        className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
-                                    />
-                                    <div className="flex justify-end gap-1">
-                                        <button
-                                            onClick={() => {
-                                                setIsEditingStarter(false);
-                                                setEditingStarterText("");
-                                            }}
-                                            className="text-xs text-gray-500 hover:text-gray-700"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={() => void handleStarterEditSubmit()}
-                                            className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
-                                        >
-                                            Save
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div
-                                    className={`relative w-[96%] overflow-visible rounded-lg p-3 shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
-                                >
-                                    <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
-                                        {formatTopicPostTimestamp(starterCreatedAt, false)}
-                                    </div>
-                                    <div className="text-sm leading-relaxed text-gray-700">
-                                        {renderFormattedChatBody(effectiveStarterBody, {
-                                            format: (message as any)?.format,
-                                            markdownClassName:
-                                                "formatted max-w-none text-sm leading-relaxed text-gray-700",
-                                        })}
-                                    </div>
-                                    {isOwnStarter && isHoveringStarter && (
-                                        <div
-                                            className="absolute -bottom-3 right-2 z-10"
-                                            onClick={(event) => event.stopPropagation()}
-                                        >
-                                            <div className="flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8"
-                                                    onClick={() => {
-                                                        setIsEditingStarter(true);
-                                                        setEditingStarterText(effectiveStarterBody);
-                                                    }}
-                                                >
-                                                    <GrEdit className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="mt-2 text-right text-xs font-medium text-gray-500">
-                                        {starterAuthorName}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
                     {/* Replies */}
                     <div className="space-y-2 px-3 py-2">
                         {isLoading && <p className="py-2 text-center text-xs text-gray-400">Loading replies...</p>}
@@ -2779,6 +2780,53 @@ const TopicCard: React.FC<{
                     </div>
                 </div>
             )}
+            {isEditingTopic && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <div className="flex w-full max-w-md flex-col gap-4 rounded-2xl bg-white p-6 shadow-xl">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-semibold">Edit topic</h2>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditingTopic(false)}
+                                className="text-gray-400 hover:text-gray-700"
+                                aria-label="Close edit topic"
+                            >
+                                <IoClose className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <input
+                            type="text"
+                            aria-label="Topic title"
+                            value={editingTopicTitle}
+                            onChange={(event) => setEditingTopicTitle(event.target.value)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--task-link))]"
+                        />
+                        <textarea
+                            aria-label="Topic introductory text"
+                            value={editingTopicBody}
+                            onChange={(event) => setEditingTopicBody(event.target.value)}
+                            rows={5}
+                            className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--task-link))]"
+                        />
+                        {topicMutationError && <p className="text-sm text-red-600">{topicMutationError}</p>}
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="ghost" onClick={() => setIsEditingTopic(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => void handleTopicEditSubmit()}
+                                disabled={!editingTopicTitle.trim() || isMutatingTopic}
+                            >
+                                {isMutatingTopic ? "Saving..." : "Save"}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -2940,18 +2988,13 @@ export const ChatRoomComponent: React.FC<{
         count: 0,
         latestCreatedAt: null,
     });
-    const inputBarRef = useRef<HTMLDivElement>(null);
-    const [inputBarHeight, setInputBarHeight] = useState(56);
     const isCompact = useIsCompact();
-    const [hideInput, setHideInput] = useState(false);
-    const [inputWidth, setInputWidth] = useState<number | null>(null);
     const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
     const isMobile = useIsMobile();
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
-    const [mapOpen] = useAtom(mapOpenAtom);
     const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
     const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
@@ -3397,21 +3440,6 @@ export const ChatRoomComponent: React.FC<{
         openNewTopicModal(topicCount <= 0);
     }, [openNewTopicModal, topicCount]);
 
-    const mobileBottomNewTopicAction =
-        isMobile && !isAnnouncementConversation ? (
-            <div className="pb-[calc(88px+env(safe-area-inset-bottom))] pt-3">
-                <Button
-                    type="button"
-                    className="h-11 w-full rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
-                    onClick={openTopicComposerFromMobile}
-                    title="New topic"
-                >
-                    <IoAddCircleOutline className="mr-2 h-5 w-5" />
-                    New topic
-                </Button>
-            </div>
-        ) : null;
-
     useEffect(() => {
         requestAnimationFrame(() => {
             updateScrollPositionState();
@@ -3441,18 +3469,6 @@ export const ChatRoomComponent: React.FC<{
     }, [messages, markLatestMessageAsRead]);
 
     useEffect(() => {
-        const updateInputWidth = () => {
-            if (inputRef.current) {
-                setInputWidth(inputRef.current.clientWidth);
-            }
-        };
-        setHideInput(false);
-        updateInputWidth();
-        window.addEventListener("resize", updateInputWidth);
-        return () => window.removeEventListener("resize", updateInputWidth);
-    }, [mapOpen]);
-
-    useEffect(() => {
         const calculatePillPosition = () => {
             const container = inputRef.current;
             if (container) {
@@ -3471,17 +3487,7 @@ export const ChatRoomComponent: React.FC<{
     }, [messages]);
 
     const handleMessagesRendered = () => {};
-    const scrollBottomPadding = inputBarHeight + (isMobile ? 96 : 16);
-
-    useEffect(() => {
-        const el = inputBarRef.current;
-        if (!el) return;
-        const observer = new ResizeObserver(() => {
-            setInputBarHeight(el.offsetHeight);
-        });
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [replyToMessage]);
+    const scrollBottomPadding = isMobile ? 96 : 16;
 
     return (
         <>
@@ -3493,15 +3499,30 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && circle && (
-                        <Link href={`/circles/${circle.handle}`}>
-                            <div className="fixed top-4 z-[20] cursor-pointer" style={pillStyle}>
-                                <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
-                                    <CirclePicture circle={circle} size="24px" />
-                                    <span className="text-sm font-semibold">{circle.name}</span>
-                                </div>
-                            </div>
-                        </Link>
+                    {!inToolbox && (
+                        <div className="fixed top-4 z-[20] flex items-center gap-2" style={pillStyle}>
+                            {circle && (
+                                <Link href={`/circles/${circle.handle}`} className="cursor-pointer">
+                                    <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
+                                        <CirclePicture circle={circle} size="24px" />
+                                        <span className="text-sm font-semibold">{circle.name}</span>
+                                    </div>
+                                </Link>
+                            )}
+                            {!isMobile && !isAnnouncementConversation && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
+                                    onClick={() => openNewTopicModal(false)}
+                                    title="New topic"
+                                >
+                                    <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+                                    New topic
+                                </Button>
+                            )}
+                        </div>
                     )}
                     {inToolbox ? (
                         <div
@@ -3548,7 +3569,6 @@ export const ChatRoomComponent: React.FC<{
                                     onToggleTopic={toggleOpenTopic}
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
-                                    bottomAction={mobileBottomNewTopicAction}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
                                 />
@@ -3559,7 +3579,11 @@ export const ChatRoomComponent: React.FC<{
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
                             className="flex-grow overflow-y-auto p-4"
-                            style={{ overflowAnchor: "auto", paddingBottom: scrollBottomPadding }}
+                            style={{
+                                overflowAnchor: "auto",
+                                paddingTop: isMobile ? 16 : 64,
+                                paddingBottom: scrollBottomPadding,
+                            }}
                         >
                             <DmConnectBanner chatRoom={chatRoom} user={user} />
                             {!isLoadingMongo && hasOlderMessages && (
@@ -3595,7 +3619,6 @@ export const ChatRoomComponent: React.FC<{
                                     onToggleTopic={toggleOpenTopic}
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
-                                    bottomAction={mobileBottomNewTopicAction}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
                                 />
@@ -3615,43 +3638,13 @@ export const ChatRoomComponent: React.FC<{
                             className="fixed z-20 h-10 w-10 rounded-full border border-[hsl(var(--task-priority-low-bg))] bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--task-link))] shadow-lg hover:bg-[hsl(var(--task-priority-low-bg))]"
                             style={{
                                 right: `${jumpButtonRight}px`,
-                                bottom: `${inputBarHeight + (isMobile ? 84 : 20)}px`,
+                                bottom: `${isMobile ? 84 : 20}px`,
                             }}
                             title="Jump to latest"
                             aria-label="Jump to latest"
                         >
                             <IoArrowDown className="h-5 w-5" />
                         </Button>
-                    )}
-
-                    {!isMobile && (
-                        <div
-                            ref={inputBarRef}
-                            className="fixed z-10 box-border"
-                            style={{
-                                width: inputWidth ? `${inputWidth}px` : "100%",
-                                bottom: "0px",
-                                opacity: hideInput ? 0 : 1,
-                            }}
-                        >
-                            <div className="flex items-end bg-[#fbfbfb] pb-1">
-                                {isAnnouncementConversation ? (
-                                    <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                                        Replies are disabled for this system conversation.
-                                    </div>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        className="h-11 w-full rounded-full bg-[hsl(var(--task-link))] text-white hover:bg-[hsl(var(--task-link-hover))]"
-                                        onClick={() => openNewTopicModal(false)}
-                                        title="New topic"
-                                    >
-                                        <HiLightBulb className="mr-2 h-5 w-5" />
-                                        New topic
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
                     )}
                 </div>
             </div>

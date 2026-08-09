@@ -123,6 +123,22 @@ assert.equal(
     "incomplete user profiles are excluded from map visibility",
 );
 assert.equal(isServerDerivedMapVisibleCircle(baseUser()), true, "complete user profiles are included in map visibility");
+const completePendingProfile = baseUser({
+    isEmailVerified: true,
+    isVerified: false,
+    isMember: false,
+    accountStatus: "pending_verification",
+});
+assert.equal(
+    isServerDerivedMapVisibleCircle(completePendingProfile),
+    true,
+    "complete pending user profiles are eligible for Explore without verification or membership",
+);
+assert.equal(
+    isServerDerivedMapVisibleCircle({ ...completePendingProfile, accountStatus: "rejected" }),
+    false,
+    "rejected user profiles are excluded from Explore even when complete",
+);
 assert.equal(
     isMapVisibleCircle(baseUser()),
     false,

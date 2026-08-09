@@ -10,6 +10,7 @@ import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
 import { buildUnreadMessagesQuery } from "@/lib/chat/unread-counts";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
+import { buildConversationUpdatedAtCompareAndSetFilter } from "@/lib/chat/topic-mutations";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -648,6 +649,119 @@ export const updateMessage = async (messageId: string, userDid: string, body: st
     return result.matchedCount > 0;
 };
 
+export type TopicMutationResult = {
+    success: boolean;
+    reason?: "invalid_id" | "not_found" | "forbidden" | "delete_failed";
+    deletedReplyCount?: number;
+};
+
+export const updateTopic = async (
+    topicId: string,
+    conversationId: string,
+    userDid: string,
+    title: string,
+    body: string,
+): Promise<TopicMutationResult> => {
+    const objectId = toObjectId(topicId);
+    if (!objectId) return { success: false, reason: "invalid_id" };
+
+    const topic = (await ChatMessageDocs.findOne(
+        { _id: objectId, conversationId, thread: { $exists: true } },
+        { projection: { senderDid: 1 } },
+    )) as Pick<ChatMessageDoc, "senderDid"> | null;
+    if (!topic) return { success: false, reason: "not_found" };
+    if (topic.senderDid !== userDid) return { success: false, reason: "forbidden" };
+
+    const result = await ChatMessageDocs.updateOne(
+        {
+            _id: objectId,
+            conversationId,
+            senderDid: userDid,
+            thread: { $exists: true },
+            "thread.deletingAt": { $exists: false },
+        },
+        {
+            $set: {
+                body,
+                "thread.title": title,
+                editedAt: new Date(),
+            },
+        },
+    );
+
+    return result.matchedCount > 0 ? { success: true } : { success: false, reason: "not_found" };
+};
+
+const recalculateConversationUpdatedAt = async (conversationId: string): Promise<void> => {
+    const conversationObjectId = new ObjectId(conversationId);
+    const conversation = (await ChatConversations.findOne(
+        { _id: conversationObjectId },
+        { projection: { createdAt: 1, updatedAt: 1 } },
+    )) as Pick<ChatConversation, "createdAt" | "updatedAt"> | null;
+    if (!conversation) return;
+
+    const newestRemainingMessage = (await ChatMessageDocs.findOne(
+        { conversationId },
+        { sort: { createdAt: -1, _id: -1 }, projection: { createdAt: 1 } },
+    )) as Pick<ChatMessageDoc, "createdAt"> | null;
+
+    const updatedAt = newestRemainingMessage?.createdAt || conversation.createdAt;
+
+    if (updatedAt) {
+        // Only rewind the activity timestamp if no send updated the conversation
+        // after our snapshot. A later send either makes this filter miss or runs
+        // after this update and restores its own newer timestamp.
+        await ChatConversations.updateOne(
+            buildConversationUpdatedAtCompareAndSetFilter(conversationObjectId, conversation.updatedAt),
+            { $set: { updatedAt } },
+        );
+    }
+};
+
+export const deleteTopic = async (
+    topicId: string,
+    conversationId: string,
+    userDid: string,
+): Promise<TopicMutationResult> => {
+    const objectId = toObjectId(topicId);
+    if (!objectId) return { success: false, reason: "invalid_id" };
+
+    const topic = (await ChatMessageDocs.findOne(
+        { _id: objectId, conversationId, thread: { $exists: true } },
+        { projection: { senderDid: 1 } },
+    )) as Pick<ChatMessageDoc, "senderDid"> | null;
+    if (!topic) return { success: false, reason: "not_found" };
+    if (topic.senderDid !== userDid) return { success: false, reason: "forbidden" };
+
+    // Mark first so createThreadReply cannot accept new work while cleanup runs.
+    await ChatMessageDocs.updateOne(
+        { _id: objectId, conversationId, senderDid: userDid, thread: { $exists: true } },
+        { $set: { "thread.deletingAt": new Date() } },
+    );
+
+    const replyFilter = { conversationId, threadId: topicId };
+    const firstReplyDelete = await ChatMessageDocs.deleteMany(replyFilter);
+    const starterDelete = await ChatMessageDocs.deleteOne({
+        _id: objectId,
+        conversationId,
+        senderDid: userDid,
+        thread: { $exists: true },
+    });
+    if (starterDelete.deletedCount === 0) {
+        return { success: false, reason: "delete_failed" };
+    }
+
+    // A reply that passed its initial lookup immediately before the marker is
+    // rolled back by createThreadReply; this second pass also makes cleanup idempotent.
+    const secondReplyDelete = await ChatMessageDocs.deleteMany(replyFilter);
+    await recalculateConversationUpdatedAt(conversationId);
+
+    return {
+        success: true,
+        deletedReplyCount: firstReplyDelete.deletedCount + secondReplyDelete.deletedCount,
+    };
+};
+
 export const deleteMessage = async (messageId: string, userDid: string): Promise<boolean> => {
     const objectId = toObjectId(messageId);
     if (!objectId) return false;
@@ -841,6 +955,7 @@ export const findThreadStarter = async (threadId: string, conversationId: string
         _id: objectId,
         conversationId,
         thread: { $exists: true },
+        "thread.deletingAt": { $exists: false },
     })) as ChatMessageDoc | null;
 
     if (!doc) return null;
@@ -871,16 +986,23 @@ export const createThreadReply = async (
         ...(payload.replyToMessageId ? { replyToMessageId: payload.replyToMessageId } : {}),
     };
     const result = await ChatMessageDocs.insertOne(doc);
-    await Promise.all([
-        ChatMessageDocs.updateOne(
-            { _id: new ObjectId(threadId), conversationId, thread: { $exists: true } },
-            {
-                $set: { "thread.updatedAt": now },
-                $inc: { "thread.replyCount": 1 },
-            },
-        ),
-        ChatConversations.updateOne({ _id: new ObjectId(conversationId) }, { $set: { updatedAt: now } }),
-    ]);
+    const threadUpdate = await ChatMessageDocs.updateOne(
+        {
+            _id: new ObjectId(threadId),
+            conversationId,
+            thread: { $exists: true },
+            "thread.deletingAt": { $exists: false },
+        },
+        {
+            $set: { "thread.updatedAt": now },
+            $inc: { "thread.replyCount": 1 },
+        },
+    );
+    if (threadUpdate.matchedCount === 0) {
+        await ChatMessageDocs.deleteOne({ _id: result.insertedId, conversationId, threadId });
+        return null;
+    }
+    await ChatConversations.updateOne({ _id: new ObjectId(conversationId) }, { $set: { updatedAt: now } });
     return { ...doc, _id: result.insertedId.toString() };
 };
 

@@ -8,6 +8,7 @@ import {
     createMessage,
     createThreadReply,
     countLegacyLooseMessages,
+    deleteTopic,
     deleteMessage,
     fetchLegacyLooseMessages,
     fetchMessagesSince,
@@ -23,6 +24,7 @@ import {
     markConversationRead,
     toggleReaction,
     updateMessage,
+    updateTopic,
 } from "@/lib/data/mongo-chat";
 import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles, Members } from "@/lib/data/db";
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
@@ -1496,6 +1498,55 @@ export const createThreadAction = async (
     } catch (error) {
         console.error("createThreadAction error:", error);
         return { success: false, message: "Failed to create thread" };
+    }
+};
+
+const getTopicMutationError = (reason?: string): string => {
+    if (reason === "forbidden") return "Only the topic creator can change this topic.";
+    if (reason === "invalid_id" || reason === "not_found") return "Topic not found for this conversation.";
+    return "The topic could not be changed. Please try again.";
+};
+
+export const updateTopicAction = async (
+    conversationId: string,
+    topicId: string,
+    title: string,
+    body: string,
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (!title.trim()) return { success: false, message: "Topic title is required" };
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+
+    try {
+        const result = await updateTopic(topicId, conversationId, userDid, title.trim(), body.trim());
+        return result.success ? { success: true } : { success: false, message: getTopicMutationError(result.reason) };
+    } catch (error) {
+        console.error("updateTopicAction error:", error);
+        return { success: false, message: "Failed to update topic" };
+    }
+};
+
+export const deleteTopicAction = async (
+    conversationId: string,
+    topicId: string,
+): Promise<{ success: boolean; message?: string; deletedReplyCount?: number }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+
+    try {
+        const result = await deleteTopic(topicId, conversationId, userDid);
+        return result.success
+            ? { success: true, deletedReplyCount: result.deletedReplyCount }
+            : { success: false, message: getTopicMutationError(result.reason) };
+    } catch (error) {
+        console.error("deleteTopicAction error:", error);
+        return { success: false, message: "Failed to delete topic" };
     }
 };
 

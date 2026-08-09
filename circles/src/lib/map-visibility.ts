@@ -22,7 +22,7 @@ export const isServerDerivedMapVisibleCircle = (circle?: Partial<Circle> | null)
         return true;
     }
 
-    return isProfileComplete(circle);
+    return circle.accountStatus !== "rejected" && isProfileComplete(circle);
 };
 
 export const markMapEligiblePersonalProfile = (circle: Circle): MapVisibleCircle => {
