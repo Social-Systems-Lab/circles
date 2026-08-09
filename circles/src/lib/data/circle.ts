@@ -94,6 +94,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     isVerified: 1,
     verificationStatus: 1,
     isMember: 1,
+    accountStatus: 1,
     isFoundingMember: 1,
     foundingMemberNumber: 1,
     members: 1,
@@ -114,6 +115,7 @@ const toDiscoveryMapCircle = (circle: Circle): Circle => {
     const {
         content: _content,
         communityGuidelinesAcceptance: _communityGuidelinesAcceptance,
+        accountStatus: _accountStatus,
         ...discoveryCircle
     } = circle;
     return markMapEligiblePersonalProfile(discoveryCircle as Circle);
@@ -182,7 +184,7 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
                 {
                     $or: [
                         { circleType: { $ne: "user" } },
-                        { $and: [{ circleType: "user" }, { $or: [{ isVerified: true }, { isMember: true }] }] },
+                        { $and: [{ circleType: "user" }, { accountStatus: { $ne: "rejected" } }] },
                     ],
                 },
             ],
