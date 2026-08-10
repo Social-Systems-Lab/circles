@@ -2,17 +2,17 @@
 
 This is the canonical normal production deployment workflow for Kamooni / Circles.
 
-Source of truth: [`../deploy-genesis2.sh`](../deploy-genesis2.sh).
+Source of truth: [`../deploy-genesis2.sh`](../deploy-genesis2.sh). The filename is legacy and retained for compatibility; do not rename it as part of routine deployment work.
 
 ## Scope
 
-Use this workflow for normal Kamooni production deployments on Genesis2.
+Use this workflow for normal Kamooni production deployments on the Cleura host `kamooniorg`.
 
 Do not use ad-hoc `docker compose build` or `docker compose up` commands for normal deployments. The deployment script performs the required build, container recreation, and version check.
 
 ## Production layout
 
-- Server: Genesis2
+- Server: Cleura host `kamooniorg`
 - Repository root and deployment start directory: `/root/circles/circles`
 - Application and Docker Compose directory: `/root/circles/circles/circles`
 - Compose service rebuilt by the script: `circles`
@@ -21,7 +21,7 @@ The deployment script must be started from `/root/circles/circles`.
 
 ## Pre-deployment checks
 
-From Genesis2:
+From `kamooniorg`:
 
 ```bash
 cd /root/circles/circles
@@ -38,6 +38,8 @@ Confirm:
 - `pwd` is `/root/circles/circles`
 - the working tree is clean
 - the commit intended for deployment is on `origin/main`
+- production has not been hot-edited
+- required CI checks have not been bypassed
 
 The script also refuses to deploy if the working tree is dirty.
 
@@ -46,8 +48,10 @@ The script also refuses to deploy if the working tree is dirty.
 Deploy only from `origin/main`:
 
 ```bash
-./circles/deploy-genesis2.sh main
+cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 ```
+
+The `deploykamooni` shell command is not installed and must not be used or documented as the deployment method.
 
 The script:
 
@@ -71,7 +75,7 @@ curl -sS https://kamooni.org/api/version && echo
 
 The returned `gitSha` must match the deployed commit.
 
-You can confirm the deployed commit on Genesis2 with:
+You can confirm the deployed commit on `kamooniorg` with:
 
 ```bash
 cd /root/circles/circles

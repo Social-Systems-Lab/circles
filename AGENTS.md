@@ -61,7 +61,7 @@ Do not give multi‑step blocks unless explicitly requested.
 
 Server:
 
-Circles‑Genesis2
+Cleura host `kamooniorg`
 
 Application directory:
 
@@ -71,14 +71,11 @@ Application directory:
 
 # Deployment
 
-Preferred deployment command on Genesis2:
+Supported production deployment command:
 
-deploykamooni
+cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 
-Which expands to:
-
-cd /root/circles/circles
-./deploy-genesis2.sh main
+The `deploykamooni` shell command is not installed and must not be documented as the deployment method. `deploy-genesis2.sh` is a legacy filename retained for compatibility; do not rename it as part of deployment documentation work. Deploy only from `origin/main`.
 
 Avoid ad‑hoc docker build commands unless troubleshooting.
 
@@ -106,7 +103,7 @@ Preferred workflow:
 2. Implement change using Codex
 3. Test locally or in staging
 4. Merge to main
-5. Deploy on Genesis2
+5. Deploy on `kamooniorg`
 6. Verify deployment
 
 Follow the Dev → Main checklist when promoting changes.

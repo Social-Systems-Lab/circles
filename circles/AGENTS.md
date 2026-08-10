@@ -131,10 +131,10 @@ verify feature works
 
 verify nothing broke
 
-DEPLOYMENT RULES (GENESIS2)
+DEPLOYMENT RULES (CLEURA)
 
 Deployment server:
-Circles-Genesis2
+Cleura host `kamooniorg`
 
 Production path:
 /root/circles/circles
@@ -143,15 +143,15 @@ Deployment Command
 
 Always use:
 
-cd /root/circles/circles
-./circles/deploy-genesis2.sh main
+cd /root/circles/circles && ./circles/deploy-genesis2.sh main
+
+The `deploykamooni` shell command is not installed and must not be documented as the deployment method. `deploy-genesis2.sh` is a legacy filename retained for compatibility; do not rename it. Deploy only from `origin/main`.
 Screen Session (REQUIRED)
 
 Long builds must run inside screen:
 
 screen -S rebuild
-cd /root/circles/circles
-./circles/deploy-genesis2.sh main
+cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 Deployment Verification (MANDATORY)
 
 After deploy:

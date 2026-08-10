@@ -4,7 +4,7 @@ This playbook contains **copy‑paste diagnostics** for the Kamooni / Circles pr
 Use these commands when debugging production issues.
 
 Production server:
-Circles-Genesis2
+Cleura host `kamooniorg`
 
 Production path:
 /root/circles/circles
@@ -27,7 +27,7 @@ The gitSha should match the commit deployed.
 
 # 2 — Check version inside container
 
-Run on Genesis2:
+Run on `kamooniorg`:
 
 cd /root/circles/circles
 docker compose exec -T circles cat /app/VERSION || docker compose exec -T circles cat /VERSION
@@ -141,14 +141,11 @@ SHARP_OK
 
 # 11 — Redeploy application
 
-Preferred command:
+Supported command, deploying from `origin/main`:
 
-deploykamooni
+cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 
-Manual equivalent:
-
-cd /root/circles/circles
-./deploy-genesis2.sh main
+The `deploykamooni` shell command is not installed. `deploy-genesis2.sh` is a legacy filename retained for compatibility; do not rename it. Never hot-edit production or bypass CI.
 
 ---
 
