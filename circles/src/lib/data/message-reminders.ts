@@ -1,7 +1,9 @@
 import { ObjectId } from "mongodb";
 import type { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, ChatReadStates, Circles, MessageEmailReminders } from "./db";
+import { ChatConversations, ChatMessageDocs, ChatTopicReadStates, Circles, MessageEmailReminders } from "./db";
+import { resolveTopicMigrationFallback, resolveTopicReadBoundary } from "@/lib/chat/topic-read-state";
 import { sendEmail } from "./email";
+import { ensureChatReadStateV2 } from "./mongo-chat";
 
 export const MESSAGE_REMINDER_DELAY_MS = 60 * 60 * 1000;
 const DEFAULT_PROCESS_LIMIT = 100;
@@ -29,7 +31,8 @@ const truncatePreview = (value: string, maxLength: number = 160): string => {
 
 const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, "");
 
-const isLocalHostname = (hostname: string): boolean => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+const isLocalHostname = (hostname: string): boolean =>
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 
 const toHttpsUrl = (value?: string): string | undefined => (value ? `https://${value}` : undefined);
 
@@ -75,20 +78,46 @@ const hasReadConversationAfterMessage = async ({
     conversationId,
     recipientDid,
     messageId,
+    message,
     readState,
 }: {
     conversationId: string;
     recipientDid: string;
     messageId: string;
+    message: ChatMessageDoc;
     readState: ChatReadState | null;
 }): Promise<boolean> => {
-    if (!readState?.lastReadMessageId) {
+    const messageObjectId = toObjectId(messageId);
+    if (!messageObjectId) return false;
+    let lastReadMessageId =
+        readState?.readStateVersion === 2 ? readState.legacyLastReadMessageId : readState?.lastReadMessageId;
+    let messageScope: Record<string, unknown> = {
+        threadId: { $exists: false },
+        thread: { $exists: false },
+    };
+    const topicId = message.threadId || (message.thread ? messageId : null);
+    if (topicId) {
+        const topicReadState = await ChatTopicReadStates.findOne({
+            userDid: recipientDid,
+            conversationId,
+            topicId,
+        });
+        lastReadMessageId = resolveTopicReadBoundary({
+            topicId,
+            explicitLastReadMessageId: topicReadState ? topicReadState.lastReadMessageId : undefined,
+            conversationFallbackMessageId: resolveTopicMigrationFallback(readState),
+        });
+        messageScope = message.threadId
+            ? { threadId: topicId }
+            : { $or: [{ _id: messageObjectId, thread: { $exists: true } }, { threadId: topicId }] };
+    }
+
+    if (!lastReadMessageId) {
         return false;
     }
 
-    const lastReadObjectId = toObjectId(readState.lastReadMessageId);
-    const messageObjectId = toObjectId(messageId);
-    if (!lastReadObjectId || !messageObjectId) {
+    const lastReadObjectId = toObjectId(lastReadMessageId);
+    if (!lastReadObjectId) {
         return false;
     }
 
@@ -97,6 +126,7 @@ const hasReadConversationAfterMessage = async ({
     // then this message has already been read by the recipient.
     const unreadMessageAtOrBeforeTarget = await ChatMessageDocs.findOne({
         conversationId,
+        ...messageScope,
         senderDid: { $ne: recipientDid },
         _id: {
             $gt: lastReadObjectId,
@@ -148,7 +178,10 @@ const markReminderSent = async (reminderId: any) => {
     );
 };
 
-const isEligibleReminderConversation = (conversation: ChatConversation | null, reminder: MessageEmailReminder): boolean => {
+const isEligibleReminderConversation = (
+    conversation: ChatConversation | null,
+    reminder: MessageEmailReminder,
+): boolean => {
     if (!conversation || conversation.type !== "dm") {
         return false;
     }
@@ -190,10 +223,7 @@ const processClaimedMessageEmailReminder = async (
         const [conversation, message, readState, recipient, sender] = await Promise.all([
             ChatConversations.findOne({ _id: conversationObjectId }) as Promise<ChatConversation | null>,
             ChatMessageDocs.findOne({ _id: messageObjectId }) as Promise<ChatMessageDoc | null>,
-            ChatReadStates.findOne({
-                conversationId: claimed.conversationId,
-                userDid: claimed.recipientDid,
-            }) as Promise<ChatReadState | null>,
+            ensureChatReadStateV2(claimed.recipientDid, claimed.conversationId),
             Circles.findOne(
                 { did: claimed.recipientDid, circleType: "user" },
                 { projection: { did: 1, name: 1, handle: 1, email: 1, emailMissedMessages: 1 } },
@@ -249,6 +279,7 @@ const processClaimedMessageEmailReminder = async (
                 conversationId: claimed.conversationId,
                 recipientDid: claimed.recipientDid,
                 messageId: claimed.messageId,
+                message,
                 readState,
             })
         ) {
@@ -326,7 +357,8 @@ export const enqueueMessageEmailReminders = async ({
     const uniqueRecipientDids = Array.from(
         new Set(
             (recipientDids || []).filter(
-                (recipientDid) => typeof recipientDid === "string" && recipientDid.length > 0 && recipientDid !== senderDid,
+                (recipientDid) =>
+                    typeof recipientDid === "string" && recipientDid.length > 0 && recipientDid !== senderDid,
             ),
         ),
     );

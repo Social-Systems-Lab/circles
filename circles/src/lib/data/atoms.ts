@@ -61,7 +61,6 @@ export const notificationUnreadCountAtom = atom<number>(0);
 export const latestMessagesAtom = atom<Record<string, any>>({});
 export const roomDataAtom = atom<Record<string, any>>({});
 export const roomMessagesAtom = atom<Record<string, ChatMessage[]>>({});
-export const lastReadTimestampsAtom = atom<Record<string, number>>({});
 export const userSettingsAtom = atomWithStorage<UserSettings>("userSettings", {
     feedTab: "following",
     circlesTab: "following",

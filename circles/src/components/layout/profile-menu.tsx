@@ -10,6 +10,7 @@ import {
     sidePanelContentVisibleAtom,
     authInfoAtom,
     notificationUnreadCountAtom,
+    unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
@@ -17,7 +18,6 @@ import { Bell } from "lucide-react";
 import { UserToolboxTab } from "@/models/models";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { LuClipboardCheck, LuMail } from "react-icons/lu";
-import { listChatRoomsAction } from "../modules/chat/actions";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
@@ -31,7 +31,8 @@ const ProfileMenuBar = () => {
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [notificationUnreadCount, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
-    const [messageUnreadCount, setMessageUnreadCount] = useState(0);
+    const [unreadCounts] = useAtom(unreadCountsAtom);
+    const messageUnreadCount = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
     const pathname = usePathname();
     const isMobile = useIsMobile();
 
@@ -46,15 +47,8 @@ const ProfileMenuBar = () => {
             createLatestAsyncRunner({
                 load: async () => {
                     if (!user?.did) {
-                        return { messageUnreadCount: 0, notificationUnreadCount: 0 };
+                        return { notificationUnreadCount: 0 };
                     }
-
-                    const loadMessageUnreadCount = async () => {
-                        const result = await listChatRoomsAction();
-                        return result.success && result.rooms
-                            ? result.rooms.reduce((total, room) => total + (room.unreadCount || 0), 0)
-                            : 0;
-                    };
 
                     const loadNotificationUnreadCount = async () => {
                         const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
@@ -66,15 +60,9 @@ const ProfileMenuBar = () => {
                         return typeof data.unreadCount === "number" ? data.unreadCount : 0;
                     };
 
-                    const [messageUnreadCount, notificationUnreadCount] = await Promise.all([
-                        loadMessageUnreadCount(),
-                        loadNotificationUnreadCount(),
-                    ]);
-
-                    return { messageUnreadCount, notificationUnreadCount };
+                    return { notificationUnreadCount: await loadNotificationUnreadCount() };
                 },
                 apply: (counts) => {
-                    setMessageUnreadCount(counts.messageUnreadCount);
                     setNotificationUnreadCount(counts.notificationUnreadCount);
                 },
                 onError: (error) => {

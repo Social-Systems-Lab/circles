@@ -16,15 +16,19 @@ import {
     fetchTopicStarters,
     findConversationById,
     findThreadStarter,
-    getLatestMessageIdForConversation,
+    getLatestLegacyMessageIdForConversation,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
+    getTopicUnreadCountsForUser,
+    getLegacyUnreadCountForUser,
     listConversationsForUser,
     mapConversationToChatRoomDisplay,
     markConversationRead,
+    markTopicRead,
     toggleReaction,
     updateMessage,
     updateTopic,
+    validateTopicReadCursor,
 } from "@/lib/data/mongo-chat";
 import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles, Members } from "@/lib/data/db";
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
@@ -33,6 +37,7 @@ import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { extractChatMentionIds } from "@/lib/chat/mention-markup";
+import { normalizeObjectIdHex, sumConversationUnreadCounts } from "@/lib/chat/topic-read-state";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
@@ -1466,14 +1471,63 @@ export const markConversationReadAction = async (
 
     let effectiveLastSeen = lastSeenMessageId;
 
-    // If caller passes null, mark up to the true latest message in the conversation,
-    // including topic replies. The client often loads only root/topic-starter rows.
+    // The conversation cursor is now reserved for loose legacy messages.
+    // Topic starters and replies are advanced only by markTopicReadAction.
     if (effectiveLastSeen === null) {
-        effectiveLastSeen = await getLatestMessageIdForConversation(conversationId);
+        effectiveLastSeen = await getLatestLegacyMessageIdForConversation(conversationId);
     }
 
     await markConversationRead(userDid, conversationId, effectiveLastSeen);
     return { success: true };
+};
+
+export const getTopicUnreadCountsAction = async (
+    conversationId: string,
+    topicIds?: string[],
+): Promise<{
+    success: boolean;
+    counts?: Record<string, number>;
+    conversationUnreadCount?: number;
+    message?: string;
+}> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    try {
+        const [counts, legacyUnreadCount] = await Promise.all([
+            getTopicUnreadCountsForUser(userDid, conversationId, topicIds),
+            getLegacyUnreadCountForUser(userDid, conversationId),
+        ]);
+        return {
+            success: true,
+            counts,
+            conversationUnreadCount: sumConversationUnreadCounts(legacyUnreadCount, counts),
+        };
+    } catch (error) {
+        console.error("getTopicUnreadCountsAction error:", error);
+        return { success: false, message: "Failed to fetch topic unread counts" };
+    }
+};
+
+export const markTopicReadAction = async (
+    conversationId: string,
+    topicId: string,
+    lastSeenMessageId: string,
+): Promise<{ success: boolean; lastReadMessageId?: string | null; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    const normalizedTopicId = normalizeObjectIdHex(topicId);
+    if (!normalizedTopicId) return { success: false, message: "Invalid topic" };
+    const topic = await findThreadStarter(normalizedTopicId, conversationId);
+    if (!topic) return { success: false, message: "Topic not found for this conversation" };
+
+    const validatedCursor = await validateTopicReadCursor(conversationId, normalizedTopicId, lastSeenMessageId);
+    if (!validatedCursor) return { success: false, message: "Invalid topic read boundary" };
+    await markTopicRead(userDid, conversationId, normalizedTopicId, validatedCursor);
+    return { success: true, lastReadMessageId: validatedCursor };
 };
 
 export const createThreadAction = async (

@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
-import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers } from "./db";
+import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction, ChatReadState } from "@/lib/chat/mongo-types";
+import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers, ChatTopicReadStates } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-sender";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
@@ -9,8 +9,21 @@ import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
 import { buildUnreadMessagesQuery } from "@/lib/chat/unread-counts";
+import {
+    CHAT_READ_STATE_VERSION,
+    normalizeObjectIdHex,
+    resolveTopicMigrationFallback,
+    resolveTopicReadBoundary,
+    sumConversationUnreadCounts,
+    validateTopicCursorCandidate,
+} from "@/lib/chat/topic-read-state";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 import { buildConversationUpdatedAtCompareAndSetFilter } from "@/lib/chat/topic-mutations";
+import {
+    buildMonotonicLegacyCursorUpdate,
+    buildReadStateV2InitializationOperation,
+    resolveHistoricalReadBoundary,
+} from "@/lib/chat/chat-read-state-v2";
 
 // High-value indexes for chat list/message paths.
 ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
@@ -19,6 +32,7 @@ ChatRoomMembers?.createIndex({ userDid: 1, chatRoomId: 1 });
 ChatRoomMembers?.createIndex({ chatRoomId: 1 });
 ChatMessageDocs?.createIndex({ conversationId: 1, _id: 1 });
 ChatReadStates?.createIndex({ userDid: 1, conversationId: 1 });
+ChatMessageDocs?.createIndex({ conversationId: 1, threadId: 1, _id: 1 });
 
 const toObjectId = (value?: string | null) => {
     if (!value) return null;
@@ -820,16 +834,185 @@ export const markConversationRead = async (
     conversationId: string,
     lastReadMessageId: string | null,
 ): Promise<void> => {
-    await ChatReadStates.updateOne(
-        { conversationId, userDid },
-        {
-            $set: {
-                lastReadMessageId,
-                updatedAt: new Date(),
+    await ensureChatReadStateV2(userDid, conversationId);
+    const identity = { conversationId, userDid };
+    const now = new Date();
+    const cursorUpdate = buildMonotonicLegacyCursorUpdate(lastReadMessageId, now);
+    const update: Record<string, any> = {
+        ...cursorUpdate,
+        $setOnInsert: {
+            ...identity,
+            lastReadMessageId: null,
+            topicFallbackMessageId: null,
+            readStateVersion: CHAT_READ_STATE_VERSION,
+            readStateMigratedAt: now,
+        },
+    };
+    await ChatReadStates.updateOne(identity, update, { upsert: true });
+};
+
+const getHistoricalReadBoundary = async (conversationId: string, readState: ChatReadState): Promise<string | null> => {
+    return resolveHistoricalReadBoundary(readState, async (updatedAt) => {
+        const nextSecond = ObjectId.createFromTime(Math.floor(updatedAt.getTime() / 1000) + 1);
+        const latestAtHistoricalRead = await ChatMessageDocs.findOne(
+            {
+                conversationId,
+                _id: { $lt: nextSecond },
+                $or: [{ createdAt: { $lte: updatedAt } }, { createdAt: { $exists: false } }],
             },
+            { sort: { _id: -1 }, projection: { _id: 1 } },
+        );
+        return latestAtHistoricalRead?._id ? latestAtHistoricalRead._id.toString() : null;
+    });
+};
+
+export const ensureChatReadStateV2 = async (userDid: string, conversationId: string): Promise<ChatReadState | null> => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const existing = (await ChatReadStates.findOne({ userDid, conversationId })) as ChatReadState | null;
+        if (!existing || existing.readStateVersion === CHAT_READ_STATE_VERSION) return existing;
+        if (!existing._id) throw new Error(`Cannot safely migrate chat read state without _id (${conversationId})`);
+
+        const frozenBoundary = await getHistoricalReadBoundary(conversationId, existing);
+        const migratedAt = new Date();
+        const operation = buildReadStateV2InitializationOperation(existing, frozenBoundary, migratedAt);
+        const result = await ChatReadStates.updateOne(operation.filter, operation.update);
+        if (result.modifiedCount === 1) {
+            return {
+                ...existing,
+                topicFallbackMessageId: frozenBoundary,
+                legacyLastReadMessageId: frozenBoundary,
+                readStateVersion: CHAT_READ_STATE_VERSION,
+                readStateMigratedAt: migratedAt,
+            };
+        }
+    }
+    throw new Error(`Chat read state migration did not stabilize (${conversationId}, ${userDid})`);
+};
+
+export const getLatestLegacyMessageIdForConversation = async (conversationId: string): Promise<string | null> => {
+    const latest = await ChatMessageDocs.findOne(
+        { conversationId, threadId: { $exists: false }, thread: { $exists: false } },
+        { sort: { _id: -1 }, projection: { _id: 1 } },
+    );
+    return latest?._id ? latest._id.toString() : null;
+};
+
+export const validateTopicReadCursor = async (
+    conversationId: string,
+    topicId: string,
+    messageId: string,
+): Promise<string | null> =>
+    validateTopicCursorCandidate({
+        conversationId,
+        topicId,
+        messageId,
+        lookup: async ({
+            conversationId: scopedConversationId,
+            topicId: normalizedTopicId,
+            messageId: normalizedId,
+            kind,
+        }) => {
+            const messageObjectId = new ObjectId(normalizedId);
+            const topicObjectId = new ObjectId(normalizedTopicId);
+            const message = await ChatMessageDocs.findOne(
+                kind === "starter"
+                    ? {
+                          _id: topicObjectId,
+                          conversationId: scopedConversationId,
+                          thread: { $exists: true },
+                      }
+                    : {
+                          _id: messageObjectId,
+                          conversationId: scopedConversationId,
+                          threadId: normalizedTopicId,
+                      },
+                { projection: { _id: 1 } },
+            );
+            return !!message;
+        },
+    });
+
+export const markTopicRead = async (
+    userDid: string,
+    conversationId: string,
+    topicId: string,
+    lastReadMessageId: string | null,
+): Promise<void> => {
+    const normalizedTopicId = normalizeObjectIdHex(topicId);
+    if (!normalizedTopicId) throw new Error("Invalid topic read-state topic ID");
+    const normalizedCursor = normalizeObjectIdHex(lastReadMessageId);
+    if (lastReadMessageId && !normalizedCursor) throw new Error("Invalid topic read cursor");
+    const identity = { userDid, conversationId, topicId: normalizedTopicId };
+    if (!normalizedCursor) {
+        await ChatTopicReadStates.updateOne(
+            identity,
+            { $set: { lastReadMessageId: null, updatedAt: new Date() } },
+            { upsert: true },
+        );
+        return;
+    }
+    await ChatTopicReadStates.updateOne(
+        identity,
+        {
+            $max: { lastReadMessageId: normalizedCursor },
+            $set: { updatedAt: new Date() },
+            $setOnInsert: identity,
         },
         { upsert: true },
     );
+};
+
+export const getTopicUnreadCountsForUser = async (
+    userDid: string,
+    conversationId: string,
+    topicIds?: string[],
+    includeStarters: boolean = true,
+): Promise<Record<string, number>> => {
+    const topics = topicIds?.length
+        ? topicIds.map((topicId) => ({ _id: toObjectId(topicId) })).filter((topic) => topic._id)
+        : await ChatMessageDocs.find(
+              { conversationId, thread: { $exists: true } },
+              { projection: { _id: 1 } },
+          ).toArray();
+    if (!topics.length) return {};
+
+    const normalizedTopicIds = topics.map((topic) => topic._id!.toString());
+    const [conversationReadState, topicReadStates] = await Promise.all([
+        ensureChatReadStateV2(userDid, conversationId),
+        ChatTopicReadStates.find({ userDid, conversationId, topicId: { $in: normalizedTopicIds } }).toArray(),
+    ]);
+    const explicitByTopic = new Map(topicReadStates.map((state) => [state.topicId, state.lastReadMessageId]));
+
+    const migrationFallback = resolveTopicMigrationFallback(conversationReadState);
+    const topicClauses = normalizedTopicIds.map((topicId) => {
+        const boundary = resolveTopicReadBoundary({
+            topicId,
+            explicitLastReadMessageId: explicitByTopic.has(topicId) ? explicitByTopic.get(topicId) : undefined,
+            conversationFallbackMessageId: migrationFallback,
+        });
+        const scope = includeStarters
+            ? { $or: [{ _id: toObjectId(topicId), thread: { $exists: true } }, { threadId: topicId }] }
+            : { threadId: topicId };
+        const boundaryObjectId = toObjectId(boundary);
+        return boundaryObjectId ? { $and: [scope, { _id: { $gt: boundaryObjectId } }] } : scope;
+    });
+    const rows = await ChatMessageDocs.aggregate<{ _id: string; count: number }>([
+        { $match: { conversationId, senderDid: { $ne: userDid }, $or: topicClauses } },
+        { $project: { topicId: { $ifNull: ["$threadId", { $toString: "$_id" }] } } },
+        { $group: { _id: "$topicId", count: { $sum: 1 } } },
+    ]).toArray();
+    const counts: Record<string, number> = Object.fromEntries(normalizedTopicIds.map((topicId) => [topicId, 0]));
+    for (const row of rows) counts[row._id] = row.count;
+    return counts;
+};
+
+export const getLegacyUnreadCountForUser = async (userDid: string, conversationId: string): Promise<number> => {
+    const readState = await ensureChatReadStateV2(userDid, conversationId);
+    const lastReadObjectId = toObjectId(readState?.legacyLastReadMessageId);
+    const legacyQuery = buildUnreadMessagesQuery(userDid, conversationId, lastReadObjectId || undefined);
+    legacyQuery.threadId = { $exists: false };
+    legacyQuery.thread = { $exists: false };
+    return ChatMessageDocs.countDocuments(legacyQuery);
 };
 
 export const getUnreadCountsForUser = async (
@@ -838,28 +1021,13 @@ export const getUnreadCountsForUser = async (
 ): Promise<Record<string, number>> => {
     if (!conversationIds.length) return {};
 
-    const readStates = await ChatReadStates.find({
-        userDid,
-        conversationId: { $in: conversationIds },
-    }).toArray();
-
-    const lastReadByConversation = new Map(readStates.map((state) => [state.conversationId, state.lastReadMessageId]));
-
     const counts: Record<string, number> = {};
     for (const conversationId of conversationIds) {
-        const hasReadState = lastReadByConversation.has(conversationId);
-        const lastReadId = lastReadByConversation.get(conversationId);
-
-        // If a read state record exists with null lastReadMessageId, the user has
-        // explicitly marked this conversation as fully read — return 0.
-        if (hasReadState && !lastReadId) {
-            counts[conversationId] = 0;
-            continue;
-        }
-
-        const lastReadObjectId = toObjectId(lastReadId);
-        const query = buildUnreadMessagesQuery(userDid, conversationId, lastReadObjectId || undefined);
-        counts[conversationId] = await ChatMessageDocs.countDocuments(query);
+        const [legacyUnread, topicUnreadCounts] = await Promise.all([
+            getLegacyUnreadCountForUser(userDid, conversationId),
+            getTopicUnreadCountsForUser(userDid, conversationId, undefined, true),
+        ]);
+        counts[conversationId] = sumConversationUnreadCounts(legacyUnread, topicUnreadCounts);
     }
 
     return counts;

@@ -67,6 +67,21 @@ export type ChatReadState = {
     conversationId: string;
     userDid: string;
     lastReadMessageId: string | null;
+    /** Immutable lazy-migration boundary for topics without an explicit topic cursor. */
+    topicFallbackMessageId?: string | null;
+    /** V2-only cursor for loose legacy/non-topic messages. Old binaries never write this field. */
+    legacyLastReadMessageId?: string | null;
+    readStateVersion?: 2;
+    readStateMigratedAt?: Date;
+    updatedAt: Date;
+};
+
+export type ChatTopicReadState = {
+    _id?: any;
+    conversationId: string;
+    topicId: string;
+    userDid: string;
+    lastReadMessageId: string | null;
     updatedAt: Date;
 };
 

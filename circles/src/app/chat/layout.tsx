@@ -18,6 +18,7 @@ import { ChatRoomDisplay } from "@/models/models";
 import { listChatRoomsAction } from "@/components/modules/chat/actions";
 import { addNotificationRefreshListener } from "@/lib/client/notification-events";
 import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
+import { buildConversationUnreadSnapshot } from "@/lib/chat/unread-counts";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -29,7 +30,6 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const [, setUnreadCounts] = useAtom(unreadCountsAtom);
 
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
-    const openChatIdRef = useRef<string | null>(null);
     const [isChatRoomsLoading, setIsChatRoomsLoading] = useState(true);
     const [hasLoadedChatRooms, setHasLoadedChatRooms] = useState(false);
     const roomRefreshRunner = useMemo(
@@ -49,25 +49,10 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                         return;
                     }
 
-                    setChatRooms(() => {
-                        return result.rooms!.map((room) => {
-                            if (room._id && room._id === openChatIdRef.current) {
-                                return { ...room, unreadCount: 0 };
-                            }
-                            return room;
-                        });
-                    });
+                    setChatRooms(result.rooms);
                     // Sync server unread counts into the atom so Messages icon stays accurate
                     // This covers topic replies which are not in roomMessages client state
-                    const serverCounts: Record<string, number> = {};
-                    for (const room of result.rooms) {
-                        const roomId = String(room._id || room.handle || "");
-                        if (roomId) {
-                            serverCounts[roomId] =
-                                room._id === openChatIdRef.current ? 0 : (room as any).unreadCount || 0;
-                        }
-                    }
-                    setUnreadCounts((prev) => ({ ...prev, ...serverCounts }));
+                    setUnreadCounts(buildConversationUnreadSnapshot(result.rooms));
                 },
                 onError: (error) => {
                     console.error("Failed to load chat rooms:", error);
@@ -188,14 +173,8 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             searchTerm={chatSearchTerm}
                             totalChatsCount={chatRooms.length}
                             onChatClick={(chat) => {
-                                // Track which chat is open so polling doesn't flash the badge
-                                openChatIdRef.current = (chat._id as string) || null;
-                                // Optimistic UI: clear sidebar badge immediately
-                                setChatRooms((prev) =>
-                                    prev.map((r) => (r._id === chat._id ? ({ ...r, unreadCount: 0 } as any) : r)),
-                                );
-                                // Read state is persisted by useMongoChat after messages load
-                                // with the actual latest message ID — no need to mark here.
+                                // Topic replies remain unread until their topic is opened.
+                                // useMongoChat advances only the legacy loose-message cursor.
                             }}
                         />
                     </div>

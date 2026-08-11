@@ -31,6 +31,8 @@ import {
     createMongoGroupChatAction as createMongoGroupChatActionInternal,
     getUnreadCountsAction as getUnreadCountsActionInternal,
     markConversationReadAction as markConversationReadActionInternal,
+    getTopicUnreadCountsAction as getTopicUnreadCountsActionInternal,
+    markTopicReadAction as markTopicReadActionInternal,
     resolveMongoConversationAccess as resolveMongoConversationAccessInternal,
 } from "./mongo-actions";
 
@@ -73,8 +75,7 @@ const isRequesterAdmin = (userDid: string, members: any[]): boolean => {
     // Backward-compat fallback for legacy rooms without role data:
     // treat the earliest joined member as the effective admin.
     const earliestMember = members.reduce(
-        (earliest, current) =>
-            getMembershipJoinedAt(current) < getMembershipJoinedAt(earliest) ? current : earliest,
+        (earliest, current) => (getMembershipJoinedAt(current) < getMembershipJoinedAt(earliest) ? current : earliest),
         members[0],
     );
 
@@ -194,8 +195,6 @@ export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success
     }
 }
 
-
-
 export const findOrCreateDMRoomAction = async (
     inRecipient: Circle,
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoom; user?: UserPrivate }> => {
@@ -221,22 +220,19 @@ export const getChatContactsAction = async (): Promise<Circle[]> => {
     }
 };
 
-export const listChatRoomsAction = async (): Promise<{ success: boolean; rooms?: ChatRoomDisplay[]; message?: string }> => {
+export const listChatRoomsAction = async (): Promise<{
+    success: boolean;
+    rooms?: ChatRoomDisplay[];
+    message?: string;
+}> => {
     return await listMongoChatRoomsAction();
 };
 
-export const fetchMongoMessagesAction = async (
-    conversationId: string,
-    sinceId?: string,
-    limit: number = 50,
-) => {
+export const fetchMongoMessagesAction = async (conversationId: string, sinceId?: string, limit: number = 50) => {
     return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
 };
 
-export const fetchRecentMessagesAction = async (
-    conversationId: string,
-    limit?: number,
-) => {
+export const fetchRecentMessagesAction = async (conversationId: string, limit?: number) => {
     return await fetchRecentMessagesActionInternal(conversationId, limit);
 };
 
@@ -296,6 +292,14 @@ export const markConversationReadAction = async (conversationId: string, lastSee
     return await markConversationReadActionInternal(conversationId, lastSeenMessageId);
 };
 
+export const getTopicUnreadCountsAction = async (conversationId: string, topicIds?: string[]) => {
+    return await getTopicUnreadCountsActionInternal(conversationId, topicIds);
+};
+
+export const markTopicReadAction = async (conversationId: string, topicId: string, lastSeenMessageId: string) => {
+    return await markTopicReadActionInternal(conversationId, topicId, lastSeenMessageId);
+};
+
 export const listConversationMediaAction = async (
     conversationId: string,
     kind?: "image" | "video" | "file",
@@ -327,7 +331,7 @@ export const listConversationMediaAction = async (
 export const sendMessageAction = async (
     roomId: string,
     content: string,
-    replyToEventId?: string
+    replyToEventId?: string,
 ): Promise<{ success: boolean; message?: string; eventId?: string }> => {
     const result = await sendMongoMessageActionInternal(roomId, content, replyToEventId);
     return { success: result.success, message: result.message, eventId: result.messageId };
@@ -335,7 +339,7 @@ export const sendMessageAction = async (
 
 export const fetchRoomMessagesAction = async (
     roomId: string,
-    limit: number = 50
+    limit: number = 50,
 ): Promise<{ success: boolean; messages?: any[]; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -345,10 +349,8 @@ export const fetchRoomMessagesAction = async (
     return { success: result.success, messages: result.messages, message: result.message };
 };
 
-
-
 export const sendAttachmentAction = async (
-    formData: FormData
+    formData: FormData,
 ): Promise<{ success: boolean; message?: string; eventId?: string }> => {
     const result = await sendMongoAttachmentActionInternal(formData);
     return { success: result.success, message: result.message, eventId: result.messageId };
@@ -357,27 +359,27 @@ export const sendAttachmentAction = async (
 export const editMessageAction = async (
     roomId: string,
     eventId: string,
-    newContent: string
+    newContent: string,
 ): Promise<{ success: boolean; message?: string }> => {
     return await editMongoMessageActionInternal(eventId, newContent);
 };
 
 export const deleteMessageAction = async (
     roomId: string,
-    eventId: string
+    eventId: string,
 ): Promise<{ success: boolean; message?: string }> => {
     return await deleteMongoMessageActionInternal(eventId);
 };
 
 export const createGroupChatAction = async (
-    formData: FormData
+    formData: FormData,
 ): Promise<{ success: boolean; roomId?: string; message?: string }> => {
     return await createMongoGroupChatActionInternal(formData);
 };
 
 export const sendReadReceiptAction = async (
     roomId: string,
-    eventId: string
+    eventId: string,
 ): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -388,9 +390,7 @@ export const sendReadReceiptAction = async (
     return { success: true };
 };
 
-export const deleteGroupChatAction = async (
-    chatRoomId: string
-): Promise<{ success: boolean; message?: string }> => {
+export const deleteGroupChatAction = async (chatRoomId: string): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete a group" };
@@ -409,10 +409,9 @@ export const deleteGroupChatAction = async (
             return { success: false, message: "Only admins can delete groups" };
         }
 
-        await ChatRoomMembers.updateMany(
-            buildMongoMembershipQuery(chatRoomId),
-            { $set: { status: "removed", active: false, isActive: false } as any },
-        );
+        await ChatRoomMembers.updateMany(buildMongoMembershipQuery(chatRoomId), {
+            $set: { status: "removed", active: false, isActive: false } as any,
+        });
         await ChatConversations.updateOne(
             { _id: new ObjectId(chatRoomId) },
             { $set: { archived: true, updatedAt: new Date() } },
@@ -425,9 +424,7 @@ export const deleteGroupChatAction = async (
     }
 };
 
-export const leaveGroupChatAction = async (
-    chatRoomId: string
-): Promise<{ success: boolean; message?: string }> => {
+export const leaveGroupChatAction = async (chatRoomId: string): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to leave a group" };
@@ -442,17 +439,17 @@ export const leaveGroupChatAction = async (
             return { success: false, message: "Cannot leave a direct message" };
         }
 
-        const membershipBeforeLeave = await ChatRoomMembers.findOne({ userDid, ...buildMongoMembershipQuery(chatRoomId) });
+        const membershipBeforeLeave = await ChatRoomMembers.findOne({
+            userDid,
+            ...buildMongoMembershipQuery(chatRoomId),
+        });
         const wasActiveMember = isActiveChatRoomMembership(membershipBeforeLeave);
 
         await ChatRoomMembers.updateMany(
             { userDid, ...buildMongoMembershipQuery(chatRoomId) },
             { $set: { status: "left", active: false, isActive: false } as any },
         );
-        await ChatConversations.updateOne(
-            { _id: new ObjectId(chatRoomId) },
-            { $set: { updatedAt: new Date() } },
-        );
+        await ChatConversations.updateOne({ _id: new ObjectId(chatRoomId) }, { $set: { updatedAt: new Date() } });
         if (wasActiveMember) {
             await emitGroupChatMembershipSystemEvent({
                 conversationId: chatRoomId,
@@ -470,7 +467,7 @@ export const leaveGroupChatAction = async (
 
 export const updateGroupInfoAction = async (
     chatRoomId: string,
-    updates: { name?: string; description?: string }
+    updates: { name?: string; description?: string },
 ): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -582,7 +579,7 @@ export const canEditGroupInfoAction = async (
 };
 
 export const updateGroupAvatarAction = async (
-    formData: FormData
+    formData: FormData,
 ): Promise<{ success: boolean; message?: string; pictureUrl?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -618,7 +615,9 @@ export const updateGroupAvatarAction = async (
 
         const { saveFile } = await import("@/lib/data/storage");
         const { getCircleByDid, getCircleById } = await import("@/lib/data/circle");
-        const ownerCircle = conversation.circleId ? await getCircleById(conversation.circleId) : await getCircleByDid(userDid);
+        const ownerCircle = conversation.circleId
+            ? await getCircleById(conversation.circleId)
+            : await getCircleByDid(userDid);
         if (!ownerCircle?._id) {
             return { success: false, message: "Could not resolve storage owner" };
         }
@@ -664,7 +663,7 @@ export const getActiveChatRoomMemberCountAction = async (
 };
 
 export const getChatRoomMembersAction = async (
-    chatRoomId: string
+    chatRoomId: string,
 ): Promise<{ success: boolean; members?: any[]; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -726,12 +725,9 @@ export const getChatRoomMembersAction = async (
     }
 };
 
-
-
-
 export const addMembersAction = async (
     chatRoomId: string,
-    memberDids: string[]
+    memberDids: string[],
 ): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -796,7 +792,7 @@ export const addMembersAction = async (
 
 export const removeMemberAction = async (
     chatRoomId: string,
-    memberDid: string
+    memberDid: string,
 ): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -836,10 +832,7 @@ export const removeMemberAction = async (
                 { $set: { status: "removed", active: false, isActive: false } as any },
             );
         }
-        await ChatConversations.updateOne(
-            { _id: new ObjectId(chatRoomId) },
-            { $set: { updatedAt: new Date() } },
-        );
+        await ChatConversations.updateOne({ _id: new ObjectId(chatRoomId) }, { $set: { updatedAt: new Date() } });
         await emitGroupChatMembershipSystemEvent({
             conversationId: chatRoomId,
             eventType: "group_chat_member_removed",
@@ -856,7 +849,7 @@ export const removeMemberAction = async (
 
 export const promoteMemberAction = async (
     chatRoomId: string,
-    targetUserDid: string
+    targetUserDid: string,
 ): Promise<{ success: boolean; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -887,20 +880,14 @@ export const promoteMemberAction = async (
         const targetMembershipIds = targetMemberships.map((member) => member._id).filter(Boolean);
 
         if (targetMembershipIds.length > 0) {
-            await ChatRoomMembers.updateMany(
-                { _id: { $in: targetMembershipIds } },
-                { $set: { role: "admin" } },
-            );
+            await ChatRoomMembers.updateMany({ _id: { $in: targetMembershipIds } }, { $set: { role: "admin" } });
         } else {
             await ChatRoomMembers.updateOne(
                 { userDid: targetUserDid, ...buildMongoMembershipQuery(chatRoomId) },
                 { $set: { role: "admin" } },
             );
         }
-        await ChatConversations.updateOne(
-            { _id: new ObjectId(chatRoomId) },
-            { $set: { updatedAt: new Date() } },
-        );
+        await ChatConversations.updateOne({ _id: new ObjectId(chatRoomId) }, { $set: { updatedAt: new Date() } });
         await emitGroupChatMembershipSystemEvent({
             conversationId: chatRoomId,
             eventType: "group_chat_admin_promoted",

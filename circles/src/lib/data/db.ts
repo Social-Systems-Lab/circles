@@ -35,7 +35,13 @@ import {
     PlatformSettings,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
-import { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailReminder } from "@/lib/chat/mongo-types";
+import {
+    ChatConversation,
+    ChatMessageDoc,
+    ChatReadState,
+    ChatTopicReadState,
+    MessageEmailReminder,
+} from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import { COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS } from "./feed-indexes";
 import { EVENT_OCCURRENCE_UNIQUE_INDEX_KEYS, EVENT_OCCURRENCE_UNIQUE_INDEX_OPTIONS } from "./event-occurrence-indexes";
@@ -54,8 +60,15 @@ const MONGODB_URI =
 
 const options: MongoClientOptions = {};
 
-console.log("DEBUG DB: process.env.MONGODB_URI =", (process.env.MONGODB_URI || "").replace(/\/\/([^:]+):([^@]+)@/, "//$1:***@"));
-console.log("DEBUG DB: fallback parts =", { MONGO_ROOT_USERNAME: process.env.MONGO_ROOT_USERNAME, MONGO_HOST: process.env.MONGO_HOST, MONGO_PORT: process.env.MONGO_PORT });
+console.log(
+    "DEBUG DB: process.env.MONGODB_URI =",
+    (process.env.MONGODB_URI || "").replace(/\/\/([^:]+):([^@]+)@/, "//$1:***@"),
+);
+console.log("DEBUG DB: fallback parts =", {
+    MONGO_ROOT_USERNAME: process.env.MONGO_ROOT_USERNAME,
+    MONGO_HOST: process.env.MONGO_HOST,
+    MONGO_PORT: process.env.MONGO_PORT,
+});
 
 // Initialize client and collections conditionally
 let client: MongoClient;
@@ -95,6 +108,7 @@ let Notifications: Collection<Notification>;
 let ChatConversations: Collection<ChatConversation>;
 let ChatMessageDocs: Collection<ChatMessageDoc>;
 let ChatReadStates: Collection<ChatReadState>;
+let ChatTopicReadStates: Collection<ChatTopicReadState>;
 let MessageEmailReminders: Collection<MessageEmailReminder>;
 let ExternalNotificationChannels: Collection<ExternalNotificationChannel>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
@@ -166,6 +180,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatConversations = db.collection<ChatConversation>("chatConversations");
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
+    ChatTopicReadStates = db.collection<ChatTopicReadState>("chatTopicReadStates");
     MessageEmailReminders = db.collection<MessageEmailReminder>("messageEmailReminders");
     ExternalNotificationChannels = db.collection<ExternalNotificationChannel>("externalNotificationChannels");
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
@@ -175,10 +190,16 @@ if (process.env.IS_BUILD !== "true") {
     PlatformSettingsCollection = db.collection<PlatformSettings>("platformSettings");
 }
 export async function getDb() {
-  if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
-  // If not connected yet (or got reloaded), ensure connection is established
-  await client.connect();
-  return client.db("circles");
+    if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
+    // If not connected yet (or got reloaded), ensure connection is established
+    await client.connect();
+    return client.db("circles");
+}
+
+export async function ensureRequiredChatIndexes(): Promise<void> {
+    if (!client || !ChatTopicReadStates) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
+    await client.connect();
+    await ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true });
 }
 
 export {
@@ -218,6 +239,7 @@ export {
     ChatConversations,
     ChatMessageDocs,
     ChatReadStates,
+    ChatTopicReadStates,
     MessageEmailReminders,
     ExternalNotificationChannels,
     PlatformBroadcastMessages,

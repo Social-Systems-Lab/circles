@@ -4,6 +4,11 @@ This is the canonical normal production deployment workflow for Kamooni / Circle
 
 Source of truth: [`../deploy-genesis2.sh`](../deploy-genesis2.sh). The filename is legacy and retained for compatibility; do not rename it as part of routine deployment work.
 
+The persistent topic-unread rollout includes a one-time, idempotent chat read-state V2 migration. The new image is built
+while the current application remains available. The deployment then enters a short maintenance window: it stops every
+`circles` application container, confirms no old writer remains, migrates and verifies Mongo, and starts only the new V2
+image. Never run this migration while an old application process can still write `chatReadStates`.
+
 ## Scope
 
 Use this workflow for normal Kamooni production deployments on the Cleura host `kamooniorg`.
@@ -62,8 +67,40 @@ The script:
 - exports the deployed `GIT_SHA` and `BUILD_TIME`
 - runs the Kamooni branding guard
 - builds the `circles` Docker Compose service
-- recreates the `circles` service
-- checks `https://kamooni.org/api/version`
+- stops every Compose instance of the old `circles` service and confirms none is running
+- runs the idempotent chat read-state V2 migration while the application is offline
+- verifies there are no legacy/incomplete rows or duplicate logical `chatReadStates` keys
+- creates/verifies the required unique `chatTopicReadStates` identity index
+- starts only the newly built V2 `circles` image
+- confirms the service is running and checks that `https://kamooni.org/api/version` reports the expected Git SHA
+
+Successful verification writes the `schemaMigrations/chat-read-state-v2` completion marker. Later deployments skip the
+one-time offline migration window, run the safe idempotent verifier while the current V2 app remains live, and then follow
+the normal replacement flow. Duplicate or malformed state, and a missing required unique index, still prevent replacement.
+
+## V2 maintenance-window and failure rules
+
+Only the `circles` Next.js service imports the chat read-state write functions. The `cron` container calls an email-reminder
+HTTP endpoint and does not connect to Mongo; while `circles` is stopped it cannot cause a chat read-state write. Mongo,
+nginx, MinIO, Qdrant, Watchtower, and the optional Matrix services do not contain chat read-state write paths.
+
+The offline window covers migration, verification, new-container startup, and health/version confirmation. Migration is
+linear in the number of remaining non-V2 `chatReadStates` rows, including one historical-message lookup and one guarded
+update per row. Verification scans read states for legacy, malformed, and duplicate logical keys. Production duration
+therefore depends on row count and Mongo performance; do not promise a fixed duration.
+
+Failure behavior:
+
+- If the old container cannot be stopped, migration does not begin. Resolve the stop failure before retrying.
+- If migration or verification fails, `circles` remains offline. Inspect Mongo output and correct the cause before rerunning
+  the same deployment with the V2 image.
+- If the new container fails to start or its version/health check fails, inspect its logs and repair/start the new V2 image.
+- Do not automatically restart or roll back to the old image after migration begins. Its topic-inclusive
+  `lastReadMessageId` writes are incompatible with the frozen V2 boundary and can damage unread semantics.
+
+The verifier reports up to 20 duplicate `(userDid, conversationId)` keys from `chatReadStates`. It does not deduplicate
+them or create a unique index. If any are reported, keep the application offline and investigate which row is authoritative;
+do not guess or delete rows during deployment.
 
 ## Post-deployment verification
 

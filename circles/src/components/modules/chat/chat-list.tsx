@@ -91,7 +91,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                     const atomUnread = Object.entries(unreadCounts).find(([key]) =>
                         key.startsWith(getConversationId(chat)),
                     )?.[1];
-                    const unreadCount = resolveConversationUnreadCount(mongoUnread, atomUnread);
+                    const unreadCount = resolveConversationUnreadCount(atomUnread, mongoUnread);
 
                     return (
                         <div

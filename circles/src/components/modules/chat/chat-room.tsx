@@ -3,13 +3,7 @@
 
 import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
-import {
-    replyToMessageAtom,
-    roomMessagesAtom,
-    userAtom,
-    unreadCountsAtom,
-    lastReadTimestampsAtom,
-} from "@/lib/data/atoms";
+import { replyToMessageAtom, roomMessagesAtom, unreadCountsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -69,6 +63,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { getInitialTopicTitle, getTopicCreationTime, getTopicIndexMessages } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
+import { selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
 import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
@@ -664,6 +659,8 @@ type ChatMessagesProps = {
     onToggleTopic?: (topicId: string) => void;
     onCreateTopic?: () => void;
     onTopicActivity?: () => Promise<void> | void;
+    topicUnreadCounts?: Record<string, number>;
+    onTopicRead?: (topicId: string) => Promise<void> | void;
     topicsLoaded?: boolean;
     mentionCandidates?: Circle[];
 };
@@ -949,6 +946,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onToggleTopic,
     onCreateTopic,
     onTopicActivity,
+    topicUnreadCounts = {},
+    onTopicRead,
     topicsLoaded = true,
     mentionCandidates = [],
 }) => {
@@ -1115,6 +1114,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             isSelected={openTopicIds?.has(message.id)}
                             onToggleTopic={onToggleTopic}
                             onTopicActivity={onTopicActivity}
+                            serverUnreadCount={topicUnreadCounts[message.id] || 0}
+                            onTopicRead={onTopicRead}
                             mentionCandidates={mentionCandidates}
                         />,
                     );
@@ -1869,8 +1870,6 @@ const ChatInput = ({
 // ─── Topic inline card (self-contained, expands in place) ──────────────────
 
 const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
-const getTopicLastSeenKey = (conversationId: string, topicId: string) =>
-    `kamooni_topic_lastseen_${conversationId}_${topicId}`;
 const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 type TopicNavigationRequest = {
@@ -1895,23 +1894,6 @@ const setOpenTopicIds = (conversationId: string, ids: Set<string>) => {
     }
 };
 
-const getTopicLastSeen = (conversationId: string, topicId: string): number => {
-    try {
-        const raw = localStorage.getItem(getTopicLastSeenKey(conversationId, topicId));
-        return raw ? parseInt(raw, 10) : 0;
-    } catch {
-        return 0;
-    }
-};
-
-const setTopicLastSeen = (conversationId: string, topicId: string, timestamp: number) => {
-    try {
-        localStorage.setItem(getTopicLastSeenKey(conversationId, topicId), String(timestamp));
-    } catch {
-        // localStorage unavailable — fail silently
-    }
-};
-
 const TopicCard: React.FC<{
     message: any;
     conversationId: string;
@@ -1922,6 +1904,8 @@ const TopicCard: React.FC<{
     isSelected?: boolean;
     onToggleTopic?: (topicId: string) => void;
     onTopicActivity?: () => Promise<void> | void;
+    serverUnreadCount: number;
+    onTopicRead?: (topicId: string) => Promise<void> | void;
     mentionCandidates?: Circle[];
 }> = ({
     message,
@@ -1933,6 +1917,8 @@ const TopicCard: React.FC<{
     isSelected,
     onToggleTopic,
     onTopicActivity,
+    serverUnreadCount,
+    onTopicRead,
     mentionCandidates = [],
 }) => {
     const thread = message.thread;
@@ -1949,7 +1935,9 @@ const TopicCard: React.FC<{
     const [isLoading, setIsLoading] = useState(false);
     const [replyText, setReplyText] = useState("");
     const [isSending, setIsSending] = useState(false);
-    const [unreadCount, setUnreadCount] = useState<number>(0);
+    const [unreadCount, setUnreadCount] = useState<number>(serverUnreadCount);
+    const readRequestRef = useRef(0);
+    const suppressServerUnreadRef = useRef(false);
     const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
@@ -2035,8 +2023,6 @@ const TopicCard: React.FC<{
         if (isTopicOpen) {
             void loadReplies();
             onTopicOpen?.();
-        } else {
-            void computeUnreadCount();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -2049,13 +2035,9 @@ const TopicCard: React.FC<{
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isTopicOpen, messageId]);
 
-    // Re-check unread count whenever replyCount changes (picks up new replies without refresh)
     useEffect(() => {
-        if (!isTopicOpen) {
-            void computeUnreadCount();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [thread?.replyCount, isTopicOpen]);
+        if (!suppressServerUnreadRef.current) setUnreadCount(serverUnreadCount);
+    }, [serverUnreadCount]);
 
     useEffect(() => {
         autoGrowReplyTextarea();
@@ -2076,24 +2058,11 @@ const TopicCard: React.FC<{
         textarea.setSelectionRange(caretPosition, caretPosition);
     }, [replyToMessage?.id]);
 
-    const computeUnreadCount = async () => {
-        try {
-            const { fetchThreadRepliesAction } = await import("./mongo-actions");
-            const result = await fetchThreadRepliesAction(messageId, conversationId);
-            if (result.success && result.replies) {
-                const lastSeen = getTopicLastSeen(conversationId, messageId);
-                const unseen = result.replies.filter((r: any) => {
-                    const ts = new Date(r.createdAt).getTime();
-                    return ts > lastSeen;
-                }).length;
-                setUnreadCount(unseen);
-            }
-        } catch {
-            // fail silently
-        }
-    };
-
     const loadReplies = async () => {
+        const readRequestId = ++readRequestRef.current;
+        let persistedRead = false;
+        suppressServerUnreadRef.current = true;
+        setUnreadCount(0);
         setIsLoading(true);
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
@@ -2134,14 +2103,25 @@ const TopicCard: React.FC<{
                     };
                 });
                 setReplies(mapped);
-                // Mark all as seen
-                const now = Date.now();
-                setTopicLastSeen(conversationId, messageId, now);
-                setUnreadCount(0);
+                const greatestVisibleMessageId = selectGreatestObjectIdHex([
+                    messageId,
+                    ...result.replies.map((reply: any) => reply._id?.toString()),
+                ]);
+                if (!greatestVisibleMessageId) throw new Error("Topic returned no valid message boundary");
+                const { markTopicReadAction } = await import("./actions");
+                const markResult = await markTopicReadAction(conversationId, messageId, greatestVisibleMessageId);
+                if (markResult.success && readRequestRef.current === readRequestId) {
+                    persistedRead = true;
+                    await onTopicRead?.(messageId);
+                }
             }
         } catch (e) {
             console.error("Failed to load topic replies:", e);
         } finally {
+            if (readRequestRef.current === readRequestId) {
+                suppressServerUnreadRef.current = false;
+                if (!persistedRead) setUnreadCount(serverUnreadCount);
+            }
             setIsLoading(false);
             if (pendingScrollIntoViewRef.current) {
                 pendingScrollIntoViewRef.current = false;
@@ -2165,7 +2145,6 @@ const TopicCard: React.FC<{
             const openIds = getOpenTopicIds(conversationId);
             openIds.add(messageId);
             setOpenTopicIds(conversationId, openIds);
-            setTopicLastSeen(conversationId, messageId, Date.now());
             setUnreadCount(0);
             void loadReplies();
             onTopicOpen?.();
@@ -2199,8 +2178,6 @@ const TopicCard: React.FC<{
         const openIds = getOpenTopicIds(conversationId);
         if (next) {
             openIds.add(messageId);
-            // Mark as seen when opening
-            setTopicLastSeen(conversationId, messageId, Date.now());
             setUnreadCount(0);
         } else {
             openIds.delete(messageId);
@@ -2997,8 +2974,7 @@ export const ChatRoomComponent: React.FC<{
     const inputRef = useRef<HTMLDivElement>(null);
     const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
-    const [unreadCounts, setUnreadCounts] = useAtom(unreadCountsAtom);
-    const [lastReadTimestamps, setLastReadTimestamps] = useAtom(lastReadTimestampsAtom);
+    const [, setUnreadCounts] = useAtom(unreadCountsAtom);
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [hasOlderMessages, setHasOlderMessages] = useState(true);
@@ -3007,6 +2983,7 @@ export const ChatRoomComponent: React.FC<{
     const [openTopicIds, setOpenTopicIds] = useState<Set<string>>(() => new Set());
     const [hasLoadedTopics, setHasLoadedTopics] = useState(false);
     const [isLoadingTopics, setIsLoadingTopics] = useState(false);
+    const [topicUnreadCounts, setTopicUnreadCounts] = useState<Record<string, number>>({});
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -3019,6 +2996,7 @@ export const ChatRoomComponent: React.FC<{
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
     const activeRoomIdRef = useRef<string | null>(roomId);
     const topicLoadRequestRef = useRef(0);
+    const topicUnreadRequestRef = useRef(0);
     const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
     const repliesDisabled =
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
@@ -3126,7 +3104,38 @@ export const ChatRoomComponent: React.FC<{
         hasLoadedTopicsRef.current = false;
         setHasLoadedTopics(false);
         setIsLoadingTopics(false);
+        setTopicUnreadCounts({});
     }, [roomId]);
+
+    const refreshTopicUnreadCounts = useCallback(async () => {
+        const targetRoomId = roomId;
+        if (!targetRoomId) return;
+        const requestId = ++topicUnreadRequestRef.current;
+        try {
+            const { getTopicUnreadCountsAction } = await import("./actions");
+            const result = await getTopicUnreadCountsAction(targetRoomId);
+            if (activeRoomIdRef.current !== targetRoomId || topicUnreadRequestRef.current !== requestId) return;
+            if (result.success && result.counts) {
+                setTopicUnreadCounts(result.counts);
+                if (typeof result.conversationUnreadCount === "number") {
+                    setUnreadCounts((previous) => ({
+                        ...previous,
+                        [targetRoomId]: result.conversationUnreadCount!,
+                    }));
+                }
+            }
+        } catch (error) {
+            console.error("Failed to refresh topic unread counts:", error);
+        }
+    }, [roomId, setUnreadCounts]);
+
+    const handleTopicRead = useCallback(
+        async (_topicId: string) => {
+            await refreshTopicUnreadCounts();
+            dispatchNotificationRefresh({ reason: "chat-read", roomId: roomId || undefined });
+        },
+        [refreshTopicUnreadCounts, roomId],
+    );
 
     const refreshTopicStarters = useCallback(async () => {
         const targetRoomId = roomId;
@@ -3153,6 +3162,7 @@ export const ChatRoomComponent: React.FC<{
                 return { ...prev, [targetRoomId]: merged };
             });
             setHasLoadedTopics(true);
+            void refreshTopicUnreadCounts();
         } catch (error) {
             console.error("Failed to refresh topic starters:", error);
         } finally {
@@ -3160,7 +3170,13 @@ export const ChatRoomComponent: React.FC<{
                 setIsLoadingTopics(false);
             }
         }
-    }, [roomId, setRoomMessages]);
+    }, [refreshTopicUnreadCounts, roomId, setRoomMessages]);
+
+    const latestRoomMessageId = roomId ? roomMessages[roomId]?.[roomMessages[roomId].length - 1]?.id : undefined;
+    useEffect(() => {
+        if (!roomId || !hasLoadedTopics) return;
+        void refreshTopicUnreadCounts();
+    }, [hasLoadedTopics, latestRoomMessageId, refreshTopicUnreadCounts, roomId]);
 
     useEffect(() => {
         const handleOpenTopic = (event: Event) => {
@@ -3302,26 +3318,6 @@ export const ChatRoomComponent: React.FC<{
         }
 
         lastReadMessageIdRef.current = latestMessage.id;
-        const messageTimestamp =
-            latestMessage.createdAt instanceof Date
-                ? latestMessage.createdAt.getTime()
-                : new Date(latestMessage.createdAt).getTime();
-
-        setLastReadTimestamps((prev) => ({
-            ...prev,
-            [roomId]: messageTimestamp,
-        }));
-
-        setUnreadCounts((prev) => {
-            const newCounts = { ...prev };
-            Object.keys(newCounts).forEach((key) => {
-                if (key.startsWith(roomId)) {
-                    delete newCounts[key];
-                }
-            });
-            return newCounts;
-        });
-
         try {
             const response = await fetch("/api/notifications/mark-pms-as-read", {
                 method: "POST",
@@ -3332,7 +3328,7 @@ export const ChatRoomComponent: React.FC<{
         } catch (error) {
             console.error("Failed to mark PM notifications as read:", error);
         }
-    }, [messages, roomId, setUnreadCounts, setLastReadTimestamps]);
+    }, [messages, roomId]);
 
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
@@ -3569,6 +3565,8 @@ export const ChatRoomComponent: React.FC<{
                                     onToggleTopic={toggleOpenTopic}
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
+                                    topicUnreadCounts={topicUnreadCounts}
+                                    onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
                                 />
@@ -3619,6 +3617,8 @@ export const ChatRoomComponent: React.FC<{
                                     onToggleTopic={toggleOpenTopic}
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
+                                    topicUnreadCounts={topicUnreadCounts}
+                                    onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
                                 />
