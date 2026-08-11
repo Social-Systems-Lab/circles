@@ -384,6 +384,11 @@ Relevant files:
 
 # 18. Read state and unread counts
 
+The canonical unread-state specification is [Persistent Topic Unread State Architecture](TOPIC_UNREAD_STATE_ARCHITECTURE.md).
+It is authoritative for unread semantics, persistent topic cursors, migration rules, invariants, and first-rollout
+deployment requirements. Do not implement topic unread authority with browser `localStorage` or another device-local
+store.
+
 Unread state is tracked through `chatReadStates` and message ids.
 
 Relevant concepts:
