@@ -499,7 +499,10 @@ export const processRankingsPeriodically = async () => {
         // 1. Find all circles that might have rankings (e.g., based on enabled modules)
         //    For simplicity now, let's process all circles. A more optimized approach
         //    might filter circles based on whether they have ranking-enabled modules.
-        const circles = await Circles.find({ circleType: { $ne: "user" } }) // Exclude user circles
+        const circles = await Circles.find({
+            circleType: { $ne: "user" },
+            $or: [{ moderationStatus: "active" }, { moderationStatus: { $exists: false } }],
+        }) // Exclude user and non-writable circles
             .project<{ _id: ObjectId; name: string; handle: string; enabledModules?: string[] }>({
                 _id: 1,
                 name: 1,

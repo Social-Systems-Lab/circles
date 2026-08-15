@@ -1,6 +1,11 @@
 import { Circle, CircleType, WithMetric } from "@/models/models";
 import { Circles } from "./db";
-import { getPublishedCircleQuery, isCirclePublished, SAFE_CIRCLE_PROJECTION } from "./circle";
+import {
+    getDiscoverableLifecycleQuery,
+    getPublishedCircleQuery,
+    isCirclePublished,
+    SAFE_CIRCLE_PROJECTION,
+} from "./circle";
 import { buildSearchableTypeClauses, isSearchEligibleCircle } from "@/lib/data/search-visibility";
 
 const SEARCHABLE_TYPES: CircleType[] = ["circle", "project", "user"];
@@ -81,7 +86,12 @@ const getLongTextTerms = (circle: Circle) =>
         .map((value) => normalizeValue(value))
         .filter(Boolean);
 
-const scoreQueryAgainstValues = (query: string, tokens: string[], values: string[], weights: { exact: number; prefix: number; contains: number }) => {
+const scoreQueryAgainstValues = (
+    query: string,
+    tokens: string[],
+    values: string[],
+    weights: { exact: number; prefix: number; contains: number },
+) => {
     let score = 0;
 
     for (const value of values) {
@@ -136,7 +146,7 @@ const buildCandidateQuery = (query: string, circleTypes: CircleType[], sdgHandle
 
     const clauses: Record<string, unknown>[] = [
         {
-            $and: [{ $or: discoverableTypeClauses }, getPublishedCircleQuery()],
+            $and: [{ $or: discoverableTypeClauses }, getPublishedCircleQuery(), getDiscoverableLifecycleQuery()],
         },
     ];
 
@@ -167,7 +177,9 @@ export const searchDiscoverableCircles = async ({
     const candidateLimit = Math.max(limit * 6, 120);
     const candidateQuery = buildCandidateQuery(normalizedQuery, normalizedTypes, normalizedSdgs);
 
-    const circles = (await Circles.find(candidateQuery, { projection: SAFE_CIRCLE_PROJECTION }).limit(candidateLimit).toArray()) as Circle[];
+    const circles = (await Circles.find(candidateQuery, { projection: SAFE_CIRCLE_PROJECTION })
+        .limit(candidateLimit)
+        .toArray()) as Circle[];
     const tokens = tokenizeQuery(normalizedQuery);
 
     const scored = circles
@@ -180,11 +192,19 @@ export const searchDiscoverableCircles = async ({
             return { circle, score };
         })
         .filter(({ circle, score }) => {
-            if (!circle._id || !isCirclePublished(circle) || !isSearchEligibleCircle(circle) || !matchesCircleTypes(circle, normalizedTypes)) {
+            if (
+                !circle._id ||
+                !isCirclePublished(circle) ||
+                !isSearchEligibleCircle(circle) ||
+                !matchesCircleTypes(circle, normalizedTypes)
+            ) {
                 return false;
             }
 
-            if (normalizedSdgs.length > 0 && !circle.causes?.some((cause) => normalizedSdgs.includes(normalizeValue(cause)))) {
+            if (
+                normalizedSdgs.length > 0 &&
+                !circle.causes?.some((cause) => normalizedSdgs.includes(normalizeValue(cause)))
+            ) {
                 return false;
             }
 

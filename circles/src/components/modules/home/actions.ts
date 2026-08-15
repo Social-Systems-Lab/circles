@@ -12,7 +12,15 @@ import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/l
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import { revalidatePath } from "next/cache";
-import { getUser, getUserById, getUserPrivate, addBookmark, removeBookmark, pinCircle, unpinCircle } from "@/lib/data/user";
+import {
+    getUser,
+    getUserById,
+    getUserPrivate,
+    addBookmark,
+    removeBookmark,
+    pinCircle,
+    unpinCircle,
+} from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
 import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 import {
@@ -23,6 +31,7 @@ import {
 } from "@/lib/data/relationships";
 import { UserRelationships } from "@/lib/data/db";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 type CircleActionResponse = {
     success: boolean;
@@ -60,6 +69,7 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
         if (!updatedCircle) {
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
         }
+        await assertCircleWritesAllowed(updatedCircle._id ?? "");
 
         const existingMember = await getMember(userDid, updatedCircle._id ?? "");
         if (existingMember) {
@@ -123,6 +133,7 @@ export const leaveCircle = async (circle: Circle): Promise<CircleActionResponse>
         if (!userDid) {
             return { success: false, message: "Authentication failed" };
         }
+        await assertCircleWritesAllowed(circle._id ?? "");
 
         let member = await getMember(userDid, circle._id ?? "");
         if (!member) {
@@ -162,6 +173,7 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
         if (!userDid) {
             return { success: false, message: "Authentication failed" };
         }
+        await assertCircleWritesAllowed(circle._id ?? "");
 
         await deletePendingMembershipRequest(userDid, circle._id ?? "");
         return { success: true, message: "Your follow request has been canceled" };
@@ -413,9 +425,7 @@ export const listToolboxConnectionsAction = async (): Promise<ToolboxConnections
     return await listToolboxConnectionsForUserDid(userDid);
 };
 
-export const sendConnectRequestAction = async (
-    targetDid: string,
-): Promise<{ success: boolean; message: string }> => {
+export const sendConnectRequestAction = async (targetDid: string): Promise<{ success: boolean; message: string }> => {
     const viewerDid = await getAuthenticatedUserDid();
     if (!viewerDid) {
         return { success: false, message: "You need to be logged in to add a contact" };
@@ -507,9 +517,7 @@ export const sendConnectRequestAction = async (
     }
 };
 
-export const acceptConnectRequestAction = async (
-    targetDid: string,
-): Promise<{ success: boolean; message: string }> => {
+export const acceptConnectRequestAction = async (targetDid: string): Promise<{ success: boolean; message: string }> => {
     const viewerDid = await getAuthenticatedUserDid();
     if (!viewerDid) {
         return { success: false, message: "You need to be logged in to accept a contact request" };
@@ -548,7 +556,8 @@ export const acceptConnectRequestAction = async (
                 $set: {
                     connectStatus: "accepted",
                     dmPermission: "allowed",
-                    dmPermissionSource: viewerEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
+                    dmPermissionSource:
+                        viewerEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
                     updatedAt: now,
                 },
                 $setOnInsert: {
@@ -567,7 +576,8 @@ export const acceptConnectRequestAction = async (
                 $set: {
                     connectStatus: "accepted",
                     dmPermission: "allowed",
-                    dmPermissionSource: targetEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
+                    dmPermissionSource:
+                        targetEdge?.dmPermissionSource === "recipient_setting" ? "recipient_setting" : "contact",
                     updatedAt: now,
                 },
                 $setOnInsert: {

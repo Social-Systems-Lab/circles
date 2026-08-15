@@ -15,6 +15,7 @@ import {
 } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user"; // Added getUserPrivate
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Import isFile
 import { features } from "@/lib/data/constants"; // Assuming features.issues will be added here
@@ -408,6 +409,7 @@ export async function updateIssueAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the existing issue (Placeholder data function)
         const issue = await getIssueById(issueId, userDid);
@@ -563,6 +565,7 @@ export async function deleteIssueAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the issue (Placeholder data function)
         const issue = await getIssueById(issueId, userDid);
@@ -636,6 +639,7 @@ export async function changeIssueStageAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the issue (Placeholder data function)
         const issue = await getIssueById(issueId, userDid);
@@ -911,6 +915,7 @@ export const getMembersAction = async (circleId: string) => {
  */
 export async function ensureShadowPostForIssueAction(issueId: string, circleId: string): Promise<string | null> {
     try {
+        await assertCircleWritesAllowed(circleId);
         if (!ObjectId.isValid(issueId) || !ObjectId.isValid(circleId)) {
             console.error("Invalid issueId or circleId provided to ensureShadowPostForIssueAction");
             return null;

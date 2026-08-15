@@ -19,6 +19,7 @@ import {
 } from "@/lib/chat/topic-read-state";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 import { buildConversationUpdatedAtCompareAndSetFilter } from "@/lib/chat/topic-mutations";
+import { canWriteCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 import {
     buildMonotonicLegacyCursorUpdate,
     buildReadStateV2InitializationOperation,
@@ -410,8 +411,11 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
 
     const circleConversationIds: string[] = [];
     for (const circleId of circleIds) {
-        const conversation = await ensureConversationForCircle(circleId);
-        circleConversationIds.push(conversation._id as string);
+        const circle = await getCircleById(circleId);
+        const conversation = canWriteCircleByLifecycle(circle)
+            ? await ensureConversationForCircle(circleId)
+            : await ChatConversations.findOne({ circleId, archived: { $ne: true } });
+        if (conversation?._id) circleConversationIds.push(conversation._id.toString());
     }
 
     const circleConversationObjectIds = circleConversationIds

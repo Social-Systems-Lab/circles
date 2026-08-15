@@ -7,6 +7,7 @@ import { getMetrics } from "../utils/metrics";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
 import { upsertFollowState } from "./relationships";
+import { assertCircleWritesAllowed } from "./circle-lifecycle-policy";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -80,10 +81,8 @@ export const addMember = async (
     userGroups: string[],
     answers?: Record<string, string>,
 ): Promise<Member> => {
-    const circle = await Circles.findOne(
-        { _id: new ObjectId(circleId) },
-        { projection: { did: 1, circleType: 1 } },
-    );
+    await assertCircleWritesAllowed(circleId);
+    const circle = await Circles.findOne({ _id: new ObjectId(circleId) }, { projection: { did: 1, circleType: 1 } });
     if (!circle) {
         throw new Error("Circle not found");
     }
@@ -122,6 +121,7 @@ export const addMember = async (
 };
 
 export const removeMember = async (userDid: string, circleId: string): Promise<boolean> => {
+    await assertCircleWritesAllowed(circleId);
     // ensure user can't be removed from their own circle
     const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) {
@@ -157,6 +157,7 @@ export const updateMemberUserGroups = async (
     circleId: string,
     newGroups: string[],
 ): Promise<Member> => {
+    await assertCircleWritesAllowed(circleId);
     let existingMember = await Members.findOne({ userDid: userDid, circleId: circleId });
     if (!existingMember) {
         throw new Error("Member not found");

@@ -20,6 +20,7 @@ import {
 } from "@/models/models"; // Add Media, mediaSchema, RankedList, rankedListSchema
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added ensureModuleIsEnabledOnCircle
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias, import isFile
 import { features } from "@/lib/data/constants";
@@ -131,6 +132,7 @@ export async function getProposalsAction(circleHandle: string): Promise<Proposal
  */
 export async function ensureShadowPostForProposalAction(proposalId: string, circleId: string): Promise<string | null> {
     try {
+        await assertCircleWritesAllowed(circleId);
         if (!ObjectId.isValid(proposalId) || !ObjectId.isValid(circleId)) {
             console.error("Invalid proposalId or circleId provided to ensureShadowPostForProposalAction");
             return null;
@@ -510,6 +512,7 @@ export async function updateProposalAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the proposal
         const proposal = await getProposalById(proposalId, userDid);
@@ -677,6 +680,7 @@ export async function deleteProposalAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the proposal
         const proposal = await getProposalById(proposalId, userDid);
@@ -744,6 +748,7 @@ export async function changeProposalStageAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the proposal
         const proposal = await getProposalById(proposalId, userDid);
@@ -1107,6 +1112,7 @@ export async function saveUserRankedProposalsAction(
  */
 export async function invalidateUserProposalRankingsIfNeededAction(circleId: string): Promise<void> {
     try {
+        await assertCircleWritesAllowed(circleId);
         console.log(`[proposals/actions] InvalidateUserProposalRankingsIfNeededAction called for circle ${circleId}`);
 
         const activeProposals = await getActiveProposalsByStage(circleId, "accepted"); // Assuming userDid not needed for system check

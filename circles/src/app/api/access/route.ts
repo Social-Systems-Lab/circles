@@ -3,10 +3,13 @@ import { getMember } from "@/lib/data/member";
 import { Circle } from "@/models/models";
 import { NextResponse } from "next/server";
 import { isModuleEnabled } from "@/lib/auth/client-auth";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 
 export async function POST(req: Request) {
     try {
-        const { userDid, circleHandle, moduleHandle } = await req.json();
+        const { circleHandle, moduleHandle } = await req.json();
+        const userDid = await getAuthenticatedUserDid();
         const permissionModuleHandle = moduleHandle === "shifts" ? "tasks" : moduleHandle;
 
         // get circle
@@ -19,6 +22,10 @@ export async function POST(req: Request) {
         }
 
         if (!circle) {
+            return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
+        }
+
+        if (!canReadCircleByLifecycle(circle)) {
             return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
         }
 

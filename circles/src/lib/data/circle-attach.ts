@@ -3,6 +3,7 @@ import { getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { Circles, Members, db } from "@/lib/data/db";
 import { AttachCircleRequest, Circle } from "@/models/models";
 import { ObjectId } from "mongodb";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 export const ATTACH_REQUEST_PENDING_STATUS = "pending" as const;
 
@@ -51,9 +52,7 @@ const getChildCircleIds = async (parentCircleIds: string[]): Promise<string[]> =
         { projection: { _id: 1 } },
     ).toArray();
 
-    return children
-        .map((child) => child._id?.toString?.())
-        .filter((childId): childId is string => Boolean(childId));
+    return children.map((child) => child._id?.toString?.()).filter((childId): childId is string => Boolean(childId));
 };
 
 const assertNoHierarchyCycle = async (circleId: string, targetParentCircleId: string): Promise<void> => {
@@ -81,7 +80,11 @@ const assertNoHierarchyCycle = async (circleId: string, targetParentCircleId: st
     }
 };
 
-const performAttachCircle = async (circleId: string, fromParentCircleId: string | null | undefined, toParentCircleId: string) => {
+const performAttachCircle = async (
+    circleId: string,
+    fromParentCircleId: string | null | undefined,
+    toParentCircleId: string,
+) => {
     const currentParentCircleId = fromParentCircleId ?? null;
     const match: Record<string, unknown> = { _id: new ObjectId(circleId) };
 
@@ -114,7 +117,9 @@ export async function getPendingAttachCircleRequest(circleId: string): Promise<A
         .next();
 }
 
-export async function getPendingIncomingAttachCircleRequests(targetParentCircleId: string): Promise<AttachCircleRequest[]> {
+export async function getPendingIncomingAttachCircleRequests(
+    targetParentCircleId: string,
+): Promise<AttachCircleRequest[]> {
     return await attachCircleRequestsCollection()
         .find({
             toParentCircleId: targetParentCircleId,
@@ -160,6 +165,11 @@ export async function createAttachCircleRequest(params: {
     }
 
     const toParentCircleId = targetParentCircle._id.toString();
+    await Promise.all([
+        assertCircleWritesAllowed(params.circleId),
+        assertCircleWritesAllowed(toParentCircleId),
+        ...(circle.parentCircleId ? [assertCircleWritesAllowed(circle.parentCircleId)] : []),
+    ]);
     if (toParentCircleId === params.circleId) {
         throw new Error("A circle cannot be its own parent");
     }
@@ -210,6 +220,11 @@ export async function approveAttachCircleRequest(params: { requestId: string; ad
     request: AttachCircleRequest;
 }> {
     const request = await getRequiredPendingRequest(params.requestId);
+    await Promise.all([
+        assertCircleWritesAllowed(request.circleId),
+        assertCircleWritesAllowed(request.toParentCircleId),
+        ...(request.fromParentCircleId ? [assertCircleWritesAllowed(request.fromParentCircleId)] : []),
+    ]);
     const approverAdminDids = await getAdminDidsForCircle(request.toParentCircleId);
     if (!approverAdminDids.includes(params.adminDid)) {
         throw new Error("Only target parent circle admins can approve this request");
@@ -260,6 +275,11 @@ export async function declineAttachCircleRequest(params: { requestId: string; ad
     request: AttachCircleRequest;
 }> {
     const request = await getRequiredPendingRequest(params.requestId);
+    await Promise.all([
+        assertCircleWritesAllowed(request.circleId),
+        assertCircleWritesAllowed(request.toParentCircleId),
+        ...(request.fromParentCircleId ? [assertCircleWritesAllowed(request.fromParentCircleId)] : []),
+    ]);
     const approverAdminDids = await getAdminDidsForCircle(request.toParentCircleId);
     if (!approverAdminDids.includes(params.adminDid)) {
         throw new Error("Only target parent circle admins can decline this request");

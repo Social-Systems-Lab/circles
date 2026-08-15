@@ -17,6 +17,7 @@ export const accountTypeSchema = z.enum(["user", "organization"]);
 export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
 export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
+export const circleModerationStatusSchema = z.enum(["active", "paused", "suspended", "removed"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
 export const accountStatusSchema = z.enum(["pending_verification", "active", "rejected"]);
 export const humanityVerificationLevelSchema = z.enum(["real_person", "met_in_real_life"]);
@@ -77,6 +78,7 @@ export type AccountType = z.infer<typeof accountTypeSchema>;
 export type CircleType = z.infer<typeof circleTypeSchema>;
 export type CircleLevel = z.infer<typeof circleLevelSchema>;
 export type CirclePublishStatus = z.infer<typeof circlePublishStatusSchema>;
+export type CircleModerationStatus = z.infer<typeof circleModerationStatusSchema>;
 export type HumanityVerificationLevel = z.infer<typeof humanityVerificationLevelSchema>;
 
 export const memberSchema = z.object({
@@ -506,6 +508,9 @@ export const circleSchema = z.object({
     createdAt: z.date().optional(),
     circleType: circleTypeSchema.optional(),
     publishStatus: circlePublishStatusSchema.optional(),
+    moderationStatus: circleModerationStatusSchema.optional(),
+    moderationStatusChangedAt: z.date().optional(),
+    moderationStatusChangedBy: didSchema.optional(),
     interests: z.array(z.string()).optional(),
     offers_needs: z.array(z.string()).optional(),
     location: locationSchema.optional(),
@@ -602,6 +607,17 @@ export const circleSchema = z.object({
 });
 
 export type Circle = z.infer<typeof circleSchema>;
+
+export const platformAuditEventSchema = z.object({
+    _id: z.any().optional(),
+    eventType: z.string(),
+    actorDid: didSchema,
+    targetType: z.enum(["circle"]),
+    targetId: z.string(),
+    occurredAt: z.date(),
+    details: z.record(z.string(), z.unknown()).optional(),
+});
+export type PlatformAuditEvent = z.infer<typeof platformAuditEventSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 export type AccountStatus = z.infer<typeof accountStatusSchema>;
 

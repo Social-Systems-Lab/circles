@@ -2,6 +2,7 @@ import { getCircleById } from "@/lib/data/circle";
 import { db, Circles, Members } from "@/lib/data/db";
 import { Circle, DetachCircleRequest } from "@/models/models";
 import { ObjectId } from "mongodb";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 export const DETACH_REQUEST_PENDING_STATUS = "pending" as const;
 export const DETACH_ADMIN_CHANGE_BLOCK_MESSAGE =
@@ -96,6 +97,7 @@ export async function createDetachCircleRequest(params: { circleId: string; requ
     if (!parentCircleId) {
         throw new Error("Only child circles with a parent can be detached");
     }
+    await Promise.all([assertCircleWritesAllowed(params.circleId), assertCircleWritesAllowed(parentCircleId)]);
     const parentCircle = await getCircleById(parentCircleId);
 
     if (adminDids.length === 1) {
@@ -133,6 +135,7 @@ export async function approveDetachCircleRequest(params: { requestId: string; ad
     request: DetachCircleRequest;
 }> {
     const request = await getRequiredPendingRequest(params.requestId);
+    await Promise.all([assertCircleWritesAllowed(request.circleId), assertCircleWritesAllowed(request.parentCircleId)]);
     if (!request.requiredAdminDids.includes(params.adminDid)) {
         throw new Error("Only the required circle admins can approve this request");
     }
@@ -193,6 +196,7 @@ export async function declineDetachCircleRequest(params: { requestId: string; ad
     request: DetachCircleRequest;
 }> {
     const request = await getRequiredPendingRequest(params.requestId);
+    await Promise.all([assertCircleWritesAllowed(request.circleId), assertCircleWritesAllowed(request.parentCircleId)]);
     if (!request.requiredAdminDids.includes(params.adminDid)) {
         throw new Error("Only the required circle admins can decline this request");
     }

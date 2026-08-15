@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { Circles } from "./db";
-import { getPublishedCircleQuery } from "./circle";
+import { getDiscoverableLifecycleQuery, getPublishedCircleQuery } from "./circle";
 
 export type PublicPlatformStats = {
     people: number;
@@ -17,13 +17,14 @@ const getCachedPublicPlatformStats = unstable_cache(
                 $and: [
                     { circleType: "user" },
                     publishedQuery,
+                    getDiscoverableLifecycleQuery(),
                     {
                         $or: [{ isVerified: true }, { isMember: true }],
                     },
                 ],
             }),
             Circles.countDocuments({
-                $and: [{ circleType: { $in: ["circle", "project"] } }, publishedQuery],
+                $and: [{ circleType: { $in: ["circle", "project"] } }, publishedQuery, getDiscoverableLifecycleQuery()],
             }),
         ]);
 

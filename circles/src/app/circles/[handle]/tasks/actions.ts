@@ -31,6 +31,7 @@ import { getUserByDid, getUserPrivate } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
 import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 // Placeholder imports for task data functions (from src/lib/data/task.ts)
 import {
     filterTasksForViewer,
@@ -369,36 +370,33 @@ const baseTaskSchema = z.object({
     goalId: z.string().optional(), // Optional: Goal ID for task association
     eventId: z.string().optional(), // Optional: Event ID for task association
     taskType: z.preprocess((value) => (value === "" || value == null ? "outcome" : value), taskTypeSchema),
-    slots: z.preprocess(
-        (value) => {
-            if (value === "" || value == null) {
-                return undefined;
-            }
-            if (typeof value === "string") {
-                const parsedValue = Number(value);
-                return Number.isFinite(parsedValue) ? parsedValue : value;
-            }
-            return value;
-        },
-        z.number().int().positive("Slots must be at least 1").optional(),
-    ),
+    slots: z.preprocess((value) => {
+        if (value === "" || value == null) {
+            return undefined;
+        }
+        if (typeof value === "string") {
+            const parsedValue = Number(value);
+            return Number.isFinite(parsedValue) ? parsedValue : value;
+        }
+        return value;
+    }, z.number().int().positive("Slots must be at least 1").optional()),
     shiftStartTime: z.preprocess(
         (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-        z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format").optional(),
+        z
+            .string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format")
+            .optional(),
     ),
-    shiftDurationMinutes: z.preprocess(
-        (value) => {
-            if (value === "" || value == null) {
-                return undefined;
-            }
-            if (typeof value === "string") {
-                const parsedValue = Number(value);
-                return Number.isFinite(parsedValue) ? parsedValue : value;
-            }
-            return value;
-        },
-        z.number().int().positive("Duration must be at least 1 minute").optional(),
-    ),
+    shiftDurationMinutes: z.preprocess((value) => {
+        if (value === "" || value == null) {
+            return undefined;
+        }
+        if (typeof value === "string") {
+            const parsedValue = Number(value);
+            return Number.isFinite(parsedValue) ? parsedValue : value;
+        }
+        return value;
+    }, z.number().int().positive("Duration must be at least 1 minute").optional()),
     participantNotes: z.preprocess(
         (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
         z.string().max(1000, "Participant notes must be 1000 characters or fewer").optional(),
@@ -460,53 +458,55 @@ const reviewShiftAttendanceSchema = z.object({
     ),
 });
 
-const updateTaskSchema = baseTaskSchema.extend({
-    // Renamed schema
-    // Updates use the same base fields
-    circleId: z.string().optional(),
-    goalId: z.string().optional().nullable(),
-    eventId: z.string().optional().nullable(),
-    priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
-}).superRefine((data, context) => {
-    if (data.priority === "critical" && !data.targetDate) {
-        context.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["targetDate"],
-            message: "Due date is required for Critical tasks",
-        });
-    }
-
-    if (data.taskType === "shift") {
-        if (!data.targetDate) {
+const updateTaskSchema = baseTaskSchema
+    .extend({
+        // Renamed schema
+        // Updates use the same base fields
+        circleId: z.string().optional(),
+        goalId: z.string().optional().nullable(),
+        eventId: z.string().optional().nullable(),
+        priority: z.preprocess((value) => (value === "" ? undefined : value), taskPrioritySchema.optional()),
+    })
+    .superRefine((data, context) => {
+        if (data.priority === "critical" && !data.targetDate) {
             context.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ["targetDate"],
-                message: "Date is required for shift tasks",
+                message: "Due date is required for Critical tasks",
             });
         }
-        if (!data.shiftStartTime) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["shiftStartTime"],
-                message: "Start time is required for shift tasks",
-            });
+
+        if (data.taskType === "shift") {
+            if (!data.targetDate) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["targetDate"],
+                    message: "Date is required for shift tasks",
+                });
+            }
+            if (!data.shiftStartTime) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["shiftStartTime"],
+                    message: "Start time is required for shift tasks",
+                });
+            }
+            if (!data.shiftDurationMinutes) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["shiftDurationMinutes"],
+                    message: "Duration is required for shift tasks",
+                });
+            }
+            if (!data.slots) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["slots"],
+                    message: "Slots are required for shift tasks",
+                });
+            }
         }
-        if (!data.shiftDurationMinutes) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["shiftDurationMinutes"],
-                message: "Duration is required for shift tasks",
-            });
-        }
-        if (!data.slots) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["slots"],
-                message: "Slots are required for shift tasks",
-            });
-        }
-    }
-});
+    });
 
 const assignTaskSchema = z.object({
     // Renamed schema
@@ -814,6 +814,13 @@ export async function updateTaskAction(
             return { success: false, message: "Target circle does not match selected route" };
         }
 
+        await Promise.all([
+            assertCircleWritesAllowed(sourceCircle._id as string),
+            ...(targetCircle._id !== sourceCircle._id
+                ? [assertCircleWritesAllowed(targetCircle._id as string)]
+                : []),
+        ]);
+
         const isAuthor = userDid === task.createdBy;
         const canModerate = await isAuthorized(userDid, sourceCircle._id as string, features.tasks?.moderate);
         const canEdit = (isAuthor && task.stage === "review") || (canModerate && task.stage !== "resolved");
@@ -969,7 +976,7 @@ export async function updateTaskAction(
             slots: data.taskType === "shift" ? data.slots : undefined,
             shiftStartTime: data.taskType === "shift" ? data.shiftStartTime : undefined,
             shiftDurationMinutes: data.taskType === "shift" ? data.shiftDurationMinutes : undefined,
-            participants: data.taskType === "shift" ? task.participants ?? [] : undefined,
+            participants: data.taskType === "shift" ? (task.participants ?? []) : undefined,
             participantNotes: data.taskType === "shift" ? data.participantNotes : undefined,
             priority: data.priority ?? "",
             taskGroup: data.taskType === "shift" ? "" : (data.taskGroup ?? ""),
@@ -1070,6 +1077,8 @@ export async function updateTaskPriorityAction(
             return { success: false, message: "Circle not found" };
         }
 
+        await assertCircleWritesAllowed(circle._id as string);
+
         const task = await getTaskById(taskId, userDid);
         if (!task) {
             return { success: false, message: "Task not found" };
@@ -1130,6 +1139,7 @@ export async function deleteTaskAction( // Renamed function
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the task (Data function)
         const task = await getTaskById(taskId, userDid); // Renamed function call, param, variable
@@ -1195,13 +1205,18 @@ export async function acceptTaskAction(
             return { success: false, message: "Circle not found" };
         }
 
+        await assertCircleWritesAllowed(circle._id as string);
+
         const task = await getTaskById(taskId, userDid);
         if (!task) {
             return { success: false, message: "Task not found" };
         }
 
         if ((task.taskType ?? "outcome") === "shift") {
-            return { success: false, message: "Shift tasks are joined through participation, not assignment acceptance" };
+            return {
+                success: false,
+                message: "Shift tasks are joined through participation, not assignment acceptance",
+            };
         }
 
         if (task.assignedTo !== userDid) {
@@ -1281,6 +1296,8 @@ export async function submitTaskForReviewAction(
             return { success: false, message: "Circle not found" };
         }
 
+        await assertCircleWritesAllowed(circle._id as string);
+
         const task = await getTaskById(taskId, userDid);
         if (!task) {
             return { success: false, message: "Task not found" };
@@ -1291,7 +1308,8 @@ export async function submitTaskForReviewAction(
         }
 
         const canSubmitForReview =
-            task.assignedTo === userDid && (task.acceptedBy === userDid && Boolean(task.acceptedAt) || task.assignedTo === userDid);
+            task.assignedTo === userDid &&
+            ((task.acceptedBy === userDid && Boolean(task.acceptedAt)) || task.assignedTo === userDid);
         if (!canSubmitForReview) {
             return { success: false, message: "Only the assignee can submit this task for review" };
         }
@@ -1364,6 +1382,7 @@ export async function requestTaskChangesAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         const task = await getTaskById(taskId, userDid);
         if (!task) {
@@ -1440,6 +1459,8 @@ export async function submitTaskClaimAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+
+        await assertCircleWritesAllowed(circle._id as string);
 
         const membership = await getMember(userDid, circle._id as string);
         if (!membership) {
@@ -1594,6 +1615,7 @@ export async function verifyTaskCompletionAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         const task = await getTaskById(taskId, userDid);
         if (!task) {
@@ -1624,16 +1646,16 @@ export async function verifyTaskCompletionAction(
         }
 
         const now = new Date();
-        const fieldsToUnset: (keyof Task)[] = ["reviewRequestedChangesAt", "reviewRequestedChangesBy", "reviewRequestedChangesNote"];
+        const fieldsToUnset: (keyof Task)[] = [
+            "reviewRequestedChangesAt",
+            "reviewRequestedChangesBy",
+            "reviewRequestedChangesNote",
+        ];
         if (completionPlan.mode === "unassigned-operational-completion") {
             fieldsToUnset.push("submittedForReviewAt", "submittedForReviewBy");
         }
 
-        const success = await updateTask(
-            taskId,
-            buildOutcomeTaskCompletionUpdate(userDid, now),
-            fieldsToUnset,
-        );
+        const success = await updateTask(taskId, buildOutcomeTaskCompletionUpdate(userDid, now), fieldsToUnset);
 
         if (!success) {
             return { success: false, message: "Failed to verify task completion" };
@@ -1652,9 +1674,7 @@ export async function verifyTaskCompletionAction(
         return {
             success: true,
             message:
-                completionPlan.mode === "unassigned-operational-completion"
-                    ? "Task marked complete"
-                    : "Task verified",
+                completionPlan.mode === "unassigned-operational-completion" ? "Task marked complete" : "Task verified",
         };
     } catch (error) {
         console.error("Error verifying task completion:", error);
@@ -1688,6 +1708,8 @@ export async function joinShiftTaskAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+
+        await assertCircleWritesAllowed(circle._id as string);
 
         const task = await getTaskById(taskId, userDid);
         if (!task) {
@@ -1780,6 +1802,8 @@ export async function leaveShiftTaskAction(
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+
+        await assertCircleWritesAllowed(circle._id as string);
 
         const task = await getTaskById(taskId, userDid);
         if (!task) {
@@ -1994,9 +2018,7 @@ export async function reviewShiftAttendanceAction(
             return { success: false, message: "Attendance can only be reviewed after the shift has completed" };
         }
 
-        const participant = (task.participants ?? []).find(
-            (entry) => entry.userDid === validated.data.participantDid,
-        );
+        const participant = (task.participants ?? []).find((entry) => entry.userDid === validated.data.participantDid);
         if (!participant) {
             return { success: false, message: "Participant not found on this shift" };
         }
@@ -2095,6 +2117,7 @@ export async function changeTaskStageAction( // Renamed function
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the task (Data function)
         const task = await getTaskById(taskId, userDid); // Renamed function call, param, variable
@@ -2304,6 +2327,7 @@ export const getMembersAction = async (circleId: string) => {
  */
 export async function ensureShadowPostForTaskAction(taskId: string, circleId: string): Promise<string | null> {
     try {
+        await assertCircleWritesAllowed(circleId);
         if (!ObjectId.isValid(taskId) || !ObjectId.isValid(circleId)) {
             console.error("Invalid taskId or circleId provided to ensureShadowPostForTaskAction");
             return null;
@@ -2572,6 +2596,7 @@ export async function saveUserRankedListAction(
  */
 async function invalidateUserRankingsIfNeededAction(circleId: string): Promise<void> {
     try {
+        await assertCircleWritesAllowed(circleId);
         // Use imported db instance
         // Get current active task IDs
         const activeTasks = await getActiveTasksByCircleId(circleId); // Assuming this fetches only active

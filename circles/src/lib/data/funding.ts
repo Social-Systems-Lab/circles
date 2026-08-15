@@ -1,11 +1,7 @@
 import { ObjectId } from "mongodb";
 import { SAFE_CIRCLE_PROJECTION } from "@/lib/data/circle";
 import { Circles, FundingAsks, Members } from "@/lib/data/db";
-import {
-    fundingAskCategorySchema,
-    fundingAskCurrencySchema,
-    fundingAskItemStatusSchema,
-} from "@/models/models";
+import { fundingAskCategorySchema, fundingAskCurrencySchema, fundingAskItemStatusSchema } from "@/models/models";
 import type {
     Circle,
     FundingAsk,
@@ -14,6 +10,7 @@ import type {
     FundingAskItemStatus,
     FundingAskTrustBadgeType,
 } from "@/models/models";
+import { canReadCircleByLifecycle, canWriteCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 
 const FUNDING_LIST_STATUS_ORDER: Record<string, number> = {
     open: 0,
@@ -57,7 +54,10 @@ const getDefaultItemStatus = (requestStatus: FundingAsk["status"]): FundingAskIt
     return "open";
 };
 
-const normalizeFundingItem = (rawItem: Record<string, unknown> | undefined, ask: Record<string, unknown>): FundingAskItem => {
+const normalizeFundingItem = (
+    rawItem: Record<string, unknown> | undefined,
+    ask: Record<string, unknown>,
+): FundingAskItem => {
     const requestStatus = getNormalizedRequestStatus(typeof ask.status === "string" ? ask.status : undefined);
     const parsedCategory = fundingAskCategorySchema.safeParse(rawItem?.category);
     const parsedLegacyCategory = fundingAskCategorySchema.safeParse(ask.category);
@@ -72,14 +72,17 @@ const normalizeFundingItem = (rawItem: Record<string, unknown> | undefined, ask:
 
     return {
         title,
-        category: parsedCategory.success ? parsedCategory.data : parsedLegacyCategory.success ? parsedLegacyCategory.data : "other",
-        price:
-            typeof rawItem?.price === "number"
-                ? rawItem.price
-                : typeof ask.amount === "number"
-                  ? ask.amount
-                  : 0,
-        currency: parsedCurrency.success ? parsedCurrency.data : parsedLegacyCurrency.success ? parsedLegacyCurrency.data : "ZAR",
+        category: parsedCategory.success
+            ? parsedCategory.data
+            : parsedLegacyCategory.success
+              ? parsedLegacyCategory.data
+              : "other",
+        price: typeof rawItem?.price === "number" ? rawItem.price : typeof ask.amount === "number" ? ask.amount : 0,
+        currency: parsedCurrency.success
+            ? parsedCurrency.data
+            : parsedLegacyCurrency.success
+              ? parsedLegacyCurrency.data
+              : "ZAR",
         quantity: typeof rawItem?.quantity === "number" ? rawItem.quantity : undefined,
         unitLabel: typeof rawItem?.unitLabel === "string" ? rawItem.unitLabel : undefined,
         note: typeof rawItem?.note === "string" ? rawItem.note : undefined,
@@ -110,7 +113,8 @@ const normalizeFundingAsk = (ask: FundingAsk | null): FundingAsk | null => {
 
 const sortFundingAsks = <T extends { status: string; updatedAt?: Date; createdAt?: Date }>(asks: T[]) =>
     [...asks].sort((left, right) => {
-        const statusDelta = (FUNDING_LIST_STATUS_ORDER[left.status] ?? 99) - (FUNDING_LIST_STATUS_ORDER[right.status] ?? 99);
+        const statusDelta =
+            (FUNDING_LIST_STATUS_ORDER[left.status] ?? 99) - (FUNDING_LIST_STATUS_ORDER[right.status] ?? 99);
         if (statusDelta !== 0) {
             return statusDelta;
         }
@@ -120,11 +124,7 @@ const sortFundingAsks = <T extends { status: string; updatedAt?: Date; createdAt
         return rightTime - leftTime;
     });
 
-export const deriveFundingTrustBadgeType = ({
-    isProxy,
-}: {
-    isProxy: boolean;
-}): FundingAskTrustBadgeType => {
+export const deriveFundingTrustBadgeType = ({ isProxy }: { isProxy: boolean }): FundingAskTrustBadgeType => {
     if (isProxy) {
         return "proxy_ask";
     }
@@ -150,19 +150,17 @@ export async function getFundingCirclePermissions(
         };
     }
 
-    const [membership, viewerCircle] = await Promise.all([
-        Members.findOne({ userDid: viewerDid, circleId: circle._id.toString() }),
-        Circles.findOne({ did: viewerDid }, { projection: { isAdmin: 1 } }),
-    ]);
+    const membership = await Members.findOne({ userDid: viewerDid, circleId: circle._id.toString() });
 
     const isMember = Boolean(membership);
-    const isSuperAdmin = Boolean(viewerCircle?.isAdmin);
+    const canManage = Boolean(membership?.userGroups?.includes("admins"));
 
     return {
         isEnabled,
-        canView: isMember || isSuperAdmin,
-        canCreate: isSuperAdmin,
-        isSuperAdmin,
+        canView: isMember && canReadCircleByLifecycle(circle),
+        canCreate: canManage && canWriteCircleByLifecycle(circle),
+        // Historical field name retained for component compatibility; it now means ordinary circle management.
+        isSuperAdmin: canManage && canWriteCircleByLifecycle(circle),
         isMember,
     };
 }
@@ -194,8 +192,9 @@ const hydrateFundingAskProfiles = async (asks: FundingAsk[], circle?: Circle): P
 
     const dids = Array.from(
         new Set(
-            asks
-                .flatMap((ask) => [ask.createdByDid, ask.activeSupporterDid].filter((value): value is string => Boolean(value))),
+            asks.flatMap((ask) =>
+                [ask.createdByDid, ask.activeSupporterDid].filter((value): value is string => Boolean(value)),
+            ),
         ),
     );
 
@@ -204,7 +203,10 @@ const hydrateFundingAskProfiles = async (asks: FundingAsk[], circle?: Circle): P
         : [];
 
     const profilesByDid = new Map(
-        profiles.map((profile) => [profile.did, { ...profile, _id: profile._id?.toString?.() ?? profile._id } as Circle]),
+        profiles.map((profile) => [
+            profile.did,
+            { ...profile, _id: profile._id?.toString?.() ?? profile._id } as Circle,
+        ]),
     );
 
     return asks.map((ask) => ({
@@ -291,10 +293,7 @@ export async function insertFundingAsk(ask: FundingAsk): Promise<FundingAsk> {
     };
 }
 
-export async function updateFundingAskDocument(
-    askId: string,
-    updates: Partial<FundingAsk>,
-): Promise<boolean> {
+export async function updateFundingAskDocument(askId: string, updates: Partial<FundingAsk>): Promise<boolean> {
     if (!ObjectId.isValid(askId)) {
         return false;
     }

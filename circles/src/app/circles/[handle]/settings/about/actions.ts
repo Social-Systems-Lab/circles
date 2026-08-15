@@ -7,7 +7,11 @@ import {
     createAttachCircleRequest,
     declineAttachCircleRequest,
 } from "@/lib/data/circle-attach";
-import { approveDetachCircleRequest, createDetachCircleRequest, declineDetachCircleRequest } from "@/lib/data/circle-detach";
+import {
+    approveDetachCircleRequest,
+    createDetachCircleRequest,
+    declineDetachCircleRequest,
+} from "@/lib/data/circle-detach";
 import { getUserPrivate } from "@/lib/data/user";
 import {
     addApplicantVerificationMessage,
@@ -32,6 +36,7 @@ import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { Circles } from "@/lib/data/db";
 import { ObjectId } from "mongodb";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -235,7 +240,10 @@ export async function createDetachCircleRequestAction(circleId: string): Promise
 
     try {
         const result = await createDetachCircleRequest({ circleId, requestedByDid: userDid });
-        await revalidateCircleDetachPaths(result.circle._id?.toString() ?? circleId, result.parentCircle?._id?.toString?.());
+        await revalidateCircleDetachPaths(
+            result.circle._id?.toString() ?? circleId,
+            result.parentCircle?._id?.toString?.(),
+        );
 
         if (result.status === "pending" && result.request) {
             const requester = await getUserPrivate(userDid);
@@ -327,9 +335,9 @@ export async function createAttachCircleRequestAction(
         const targetAdminDids = await getMembers(result.toParentCircle._id?.toString?.() ?? "")
             .then((members) => members.filter((member) => member.userGroups?.includes("admins")))
             .then((members) => members.map((member) => member.userDid));
-        const targetAdmins = (
-            await Promise.all(targetAdminDids.map((did) => getUserPrivate(did)))
-        ).filter((admin): admin is UserPrivate => Boolean(admin?.did));
+        const targetAdmins = (await Promise.all(targetAdminDids.map((did) => getUserPrivate(did)))).filter(
+            (admin): admin is UserPrivate => Boolean(admin?.did),
+        );
 
         if (requester && targetAdmins.length > 0) {
             const targetCirclePath = await getCirclePath(result.toParentCircle);
@@ -386,6 +394,7 @@ export async function addCircleAffiliationAction(
         }
 
         const affiliatedCircleId = affiliatedCircle._id.toString();
+        await Promise.all([assertCircleWritesAllowed(currentCircleId), assertCircleWritesAllowed(affiliatedCircleId)]);
         if (affiliatedCircleId === currentCircleId) {
             return { success: false, message: "A circle cannot be affiliated with itself" };
         }
@@ -435,6 +444,8 @@ export async function removeCircleAffiliationAction(
         if (!affiliatedCircle) {
             return { success: false, message: "Affiliated circle not found" };
         }
+
+        await Promise.all([assertCircleWritesAllowed(currentCircleId), assertCircleWritesAllowed(affiliatedCircleId)]);
 
         if (!affiliatedCircle.affiliatedCircleIds?.includes(currentCircleId)) {
             return { success: false, message: "This circle is not currently affiliated here" };
@@ -643,7 +654,9 @@ export async function saveAbout(values: {
     circleUpdateData.websiteUrl = normalizedWebsite;
     const representsOrganization = values.representsOrganization === true;
     circleUpdateData.representsOrganization = representsOrganization;
-    circleUpdateData.organizationName = representsOrganization ? values.organizationName?.trim() || undefined : undefined;
+    circleUpdateData.organizationName = representsOrganization
+        ? values.organizationName?.trim() || undefined
+        : undefined;
     circleUpdateData.officialEmail = representsOrganization ? normalizeOfficialEmail(values.officialEmail) : undefined;
 
     // check if user is authorized to edit circle settings

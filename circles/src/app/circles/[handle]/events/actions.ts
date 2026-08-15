@@ -63,10 +63,7 @@ import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
-import {
-    listAcceptedConnectionsForUserDid,
-    searchAcceptedConnectionsForUserDid,
-} from "@/lib/data/relationships";
+import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
 import {
     EXTERNAL_EVENT_INVITE_ERRORS,
     getExternalEventInviteProfileError,
@@ -81,6 +78,7 @@ import {
     getEffectiveEventOccurrenceParticipants,
     mergeEventOccurrenceInvitees,
 } from "@/lib/event-occurrence-invitation";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 // ----- Types -----
 
@@ -234,7 +232,9 @@ function normalizeRecurrenceEndDate(endDate?: Date): Date | undefined {
 const shouldPublishToNoticeboard = (formData: FormData) => formData.get("publishToNoticeboard") === "true";
 
 const uniqueStrings = (values: unknown[]) =>
-    Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
+    Array.from(
+        new Set(values.filter((value): value is string => typeof value === "string" && value.trim().length > 0)),
+    );
 
 const parseHostCircleIds = (formData: FormData, primaryCircleId: string): string[] => {
     const rawValues = formData.getAll("hostCircleIds");
@@ -244,7 +244,9 @@ const parseHostCircleIds = (formData: FormData, primaryCircleId: string): string
         }
         try {
             const parsed = JSON.parse(value);
-            return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [value];
+            return Array.isArray(parsed)
+                ? parsed.filter((entry): entry is string => typeof entry === "string")
+                : [value];
         } catch {
             return [value];
         }
@@ -318,6 +320,10 @@ const hasEventHostManagementPermission = async (
         }),
     );
     return checks.some(Boolean);
+};
+
+const assertEventHostCirclesWritable = async (event: Pick<EventModel, "circleId" | "hostCircleIds">) => {
+    await Promise.all(normalizeEventHostCircleIds(event).map((circleId) => assertCircleWritesAllowed(circleId)));
 };
 
 const revalidateEventHostPaths = (hostCircles: Circle[], eventId?: string) => {
@@ -556,7 +562,13 @@ const upsertEventNoticeboardPosts = async ({
     hostCircles: Circle[];
     event: Pick<
         EventModel,
-        "_id" | "title" | "description" | "createdBy" | "circleId" | "noticeboardPostId" | "noticeboardPostIdsByCircleId"
+        | "_id"
+        | "title"
+        | "description"
+        | "createdBy"
+        | "circleId"
+        | "noticeboardPostId"
+        | "noticeboardPostIdsByCircleId"
     >;
 }) => {
     const nextPostIdsByCircleId = { ...(event.noticeboardPostIdsByCircleId || {}) };
@@ -874,12 +886,7 @@ export async function createEventAction(
             description: data.description,
             images: uploadedImages,
             location: locationData,
-            stage:
-                requestedStage === "open" && canPublish
-                    ? "open"
-                    : requestedStage === "review"
-                      ? "review"
-                      : "draft",
+            stage: requestedStage === "open" && canPublish ? "open" : requestedStage === "review" ? "review" : "draft",
             userGroups: data.userGroups || [],
             isVirtual,
             virtualUrl,
@@ -966,6 +973,7 @@ export async function updateEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        await assertEventHostCirclesWritable(event);
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
         }
@@ -1003,7 +1011,10 @@ export async function updateEventAction(
         }
         const data = validated.data;
         const requestedStage = parseRequestedStage(formData);
-        const hostCircleIds = uniqueStrings([event.circleId, ...(data.hostCircleIds || normalizeEventHostCircleIds(event))]);
+        const hostCircleIds = uniqueStrings([
+            event.circleId,
+            ...(data.hostCircleIds || normalizeEventHostCircleIds(event)),
+        ]);
         const hostValidation = await validateHostCirclePermissions(userDid, hostCircleIds, requestedStage, event);
         if (!hostValidation.success) {
             return { success: false, message: hostValidation.message };
@@ -1081,8 +1092,7 @@ export async function updateEventAction(
         const startAt = data.startAt ? parseDate(data.startAt) : event.startAt;
         const endAt = data.endAt ? parseDate(data.endAt) : event.endAt;
 
-        const nextStage =
-            requestedStage === "preserve" ? event.stage : requestedStage === "open" ? "open" : "draft";
+        const nextStage = requestedStage === "preserve" ? event.stage : requestedStage === "open" ? "open" : "draft";
 
         const updateData: Partial<EventModel> = {
             title: data.title,
@@ -1179,6 +1189,7 @@ export async function deleteEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        await assertEventHostCirclesWritable(event);
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
         }
@@ -1229,6 +1240,7 @@ export async function cancelEventOccurrenceAction(
 
         const event = await getEventById(seriesId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        await assertEventHostCirclesWritable(event);
         if (!event.recurrence) {
             return { success: false, message: "This event is not recurring" };
         }
@@ -1275,6 +1287,7 @@ export async function changeEventStageAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        await assertEventHostCirclesWritable(event);
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
         }
@@ -1525,6 +1538,7 @@ export async function cancelRsvpAction(
  */
 export async function ensureShadowPostForEventAction(eventId: string, circleId: string): Promise<string | null> {
     try {
+        await assertCircleWritesAllowed(circleId);
         if (!ObjectId.isValid(eventId) || !ObjectId.isValid(circleId)) {
             console.error("Invalid eventId or circleId provided to ensureShadowPostForEventAction");
             return null;
@@ -1773,6 +1787,7 @@ export async function inviteUsersToEventOccurrenceAction(
             actorDid,
         );
         if (!target.success) return { ...target, ...emptyResult };
+        await assertEventHostCirclesWritable(target.event);
         if (target.event.stage !== "open") {
             return { success: false, message: "Invitations can only be sent for open events", ...emptyResult };
         }
@@ -1841,8 +1856,7 @@ export async function inviteUsersToEventOccurrenceAction(
         revalidatePath(`/circles/${circleHandle}/events/${target.occurrenceId}`);
         return {
             success: true,
-            message:
-                newlyInvited + updatedAndResent > 0 ? "Invitations and updates sent" : "No invitations were sent",
+            message: newlyInvited + updatedAndResent > 0 ? "Invitations and updates sent" : "No invitations were sent",
             newlyInvited,
             updatedAndResent,
             alreadyInvitedNotResent,
@@ -1915,6 +1929,7 @@ export async function inviteUsersToEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        await assertEventHostCirclesWritable(event);
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
         }
@@ -1988,10 +2003,7 @@ async function resolveExternalInviteTarget(
 
     const [existingInvitation, existingRsvp] = await Promise.all([
         EventInvitations.findOne({ eventId, userDid: targetDid }, { projection: { _id: 1 } }),
-        EventRsvps.findOne(
-            { eventId, userDid: targetDid, status: { $ne: "cancelled" } },
-            { projection: { _id: 1 } },
-        ),
+        EventRsvps.findOne({ eventId, userDid: targetDid, status: { $ne: "cancelled" } }, { projection: { _id: 1 } }),
     ]);
 
     const profileError = getExternalEventInviteProfileError({
@@ -2045,6 +2057,7 @@ export async function inviteExternalUserToEventAction(
         if (!resolved.success) {
             return resolved;
         }
+        await assertEventHostCirclesWritable(resolved.event);
 
         const now = new Date();
         const insertResult = await EventInvitations.updateOne(

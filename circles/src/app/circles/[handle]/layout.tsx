@@ -7,6 +7,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import { canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -20,7 +21,7 @@ export default async function RootLayout(props: Props) {
     }
 
     let circle = await getCircleByHandle(params.handle);
-    if (!circle) {
+    if (!circle || !canReadCircleByLifecycle(circle)) {
         // redirect to not-found
         redirect("/not-found");
     }
@@ -34,12 +35,12 @@ export default async function RootLayout(props: Props) {
     }
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
     const proofOfHumanitySummary =
-        circle.circleType === "user" && circle.did
-            ? await getHumanityVerificationSummary(circle.did, userDid)
-            : null;
+        circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, userDid) : null;
     const plainCircle = JSON.parse(JSON.stringify(circle));
     const plainParentCircle = parentCircle ? JSON.parse(JSON.stringify(parentCircle)) : undefined;
-    const plainProofOfHumanitySummary = proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null;
+    const plainProofOfHumanitySummary = proofOfHumanitySummary
+        ? JSON.parse(JSON.stringify(proofOfHumanitySummary))
+        : null;
 
     return (
         <>
@@ -66,7 +67,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
     // get circle from database
     let circle = await getCircleByHandle(handle);
-    if (!circle) {
+    if (!circle || !canReadCircleByLifecycle(circle)) {
         circle = await getDefaultCircle();
     }
 

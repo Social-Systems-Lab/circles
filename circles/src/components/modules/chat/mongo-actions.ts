@@ -43,6 +43,7 @@ import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { getDmEligibility } from "@/lib/data/relationships";
+import { assertCircleWritesAllowed, canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -283,7 +284,11 @@ const sendConversationMessageNotifications = async ({
     }
 };
 
-export const resolveMongoConversationAccess = async (conversationId: string, userDid: string) => {
+export const resolveMongoConversationAccess = async (
+    conversationId: string,
+    userDid: string,
+    intent: "read" | "write" = "read",
+) => {
     let conversation = await findConversationById(conversationId);
 
     // If conversationId is actually a handle (e.g. "dm-..."), try resolving by handle.
@@ -298,7 +303,23 @@ export const resolveMongoConversationAccess = async (conversationId: string, use
 
     const unauthorized = { ok: false as const, message: "You are not authorized to access this chat" };
 
-    // DM + announcement: authorize strictly by participants list
+    if (conversation.circleId) {
+        const ownerCircle = await getCircleById(conversation.circleId);
+        if (!ownerCircle) return unauthorized;
+        if (ownerCircle.circleType !== "user") {
+            if (intent === "write") {
+                try {
+                    await assertCircleWritesAllowed(conversation.circleId);
+                } catch {
+                    return unauthorized;
+                }
+            } else if (!canReadCircleByLifecycle(ownerCircle)) {
+                return unauthorized;
+            }
+        }
+    }
+
+    // Non-circle DM + announcement behavior remains participant-based.
     if (conversation.type === "dm" || conversation.type === "announcement") {
         if (!conversation.participants?.includes(userDid)) return unauthorized;
         return { ok: true, conversation };
@@ -389,10 +410,14 @@ export const listChatRoomsAction = async (): Promise<{
             .filter(Boolean) as ObjectId[];
         const circles = await Circles.find(
             { _id: { $in: circleObjectIds } },
-            { projection: { _id: 1, did: 1, circleType: 1 } },
+            { projection: { _id: 1, did: 1, circleType: 1, moderationStatus: 1 } },
         ).toArray();
         const allowedCircleIds = circles
-            .filter((circle: any) => circle.circleType !== "user" || circle.did === userDid)
+            .filter(
+                (circle: any) =>
+                    (circle.circleType === "user" && circle.did === userDid) ||
+                    (circle.circleType !== "user" && canReadCircleByLifecycle(circle)),
+            )
             .map((circle: any) => circle._id.toString());
 
         const rooms = await listConversationsForUser(userDid, allowedCircleIds);
@@ -458,7 +483,7 @@ export const fetchRecentMessagesAction = async (
         return { success: false, message: "You need to be logged in to fetch messages" };
     }
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
     if (!access.ok) {
         return { success: false, message: access.message };
     }
@@ -590,7 +615,7 @@ export const getLegacyLooseMessageCountAction = async (
         return { success: false, message: "You need to be logged in to fetch messages" };
     }
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
     if (!access.ok) {
         return { success: false, message: access.message };
     }
@@ -902,7 +927,7 @@ export const sendMongoMessageAction = async (
         return { success: false, message: verificationMessage };
     }
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) {
         return { success: false, message: access.message };
     }
@@ -966,7 +991,7 @@ export const sendMongoAttachmentAction = async (
         return { success: false, message: "File size exceeds 5MB limit" };
     }
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) {
         return { success: false, message: access.message };
     }
@@ -1039,7 +1064,15 @@ export const editMongoMessageAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit messages" };
     }
+    if (!ObjectId.isValid(messageId)) return { success: false, message: "Message not found" };
 
+    const messageDoc = await ChatMessageDocs.findOne(
+        { _id: new ObjectId(messageId) },
+        { projection: { conversationId: 1 } },
+    );
+    if (!messageDoc?.conversationId) return { success: false, message: "Message not found" };
+    const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
+    if (!access.ok) return { success: false, message: access.message };
     const updated = await updateMessage(messageId, userDid, content);
     return updated ? { success: true } : { success: false, message: "Failed to edit message" };
 };
@@ -1049,7 +1082,15 @@ export const deleteMongoMessageAction = async (messageId: string): Promise<{ suc
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete messages" };
     }
+    if (!ObjectId.isValid(messageId)) return { success: false, message: "Message not found" };
 
+    const messageDoc = await ChatMessageDocs.findOne(
+        { _id: new ObjectId(messageId) },
+        { projection: { conversationId: 1 } },
+    );
+    if (!messageDoc?.conversationId) return { success: false, message: "Message not found" };
+    const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
+    if (!access.ok) return { success: false, message: access.message };
     const deleted = await deleteMessage(messageId, userDid);
     return deleted ? { success: true } : { success: false, message: "Failed to delete message" };
 };
@@ -1077,7 +1118,7 @@ export const toggleMongoReactionAction = async (
         return { success: false, message: "Message not found" };
     }
 
-    const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid);
+    const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) {
         return { success: false, message: access.message };
     }
@@ -1284,6 +1325,11 @@ export const contactCircleAdminsAction = async (
     if (circle.circleType === "user") {
         return { success: false, message: "This contact flow is available for circles and projects only" };
     }
+    try {
+        await assertCircleWritesAllowed(circleId);
+    } catch {
+        return { success: false, message: "This circle is not accepting messages right now" };
+    }
 
     const adminRows = await Members.find({ circleId, userGroups: "admins" }, { projection: { userDid: 1 } }).toArray();
     const adminDids = Array.from(
@@ -1451,7 +1497,16 @@ export const getUnreadCountsAction = async (
     }
 
     try {
-        const counts = await getUnreadCountsForUser(userDid, conversationIds);
+        const accessChecks = await Promise.all(
+            conversationIds.map(async (conversationId) => ({
+                conversationId,
+                access: await resolveMongoConversationAccess(conversationId, userDid, "read"),
+            })),
+        );
+        const allowedConversationIds = accessChecks
+            .filter(({ access }) => access.ok)
+            .map(({ conversationId }) => conversationId);
+        const counts = await getUnreadCountsForUser(userDid, allowedConversationIds);
         return { success: true, counts };
     } catch (error) {
         console.error("❌ Error fetching unread counts:", error);
@@ -1466,7 +1521,7 @@ export const markConversationReadAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "You need to be logged in." };
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
 
     let effectiveLastSeen = lastSeenMessageId;
@@ -1517,7 +1572,7 @@ export const markTopicReadAction = async (
 ): Promise<{ success: boolean; lastReadMessageId?: string | null; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
     const normalizedTopicId = normalizeObjectIdHex(topicId);
     if (!normalizedTopicId) return { success: false, message: "Invalid topic" };
@@ -1539,7 +1594,7 @@ export const createThreadAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!title.trim()) return { success: false, message: "Thread title is required" };
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
     if (access.conversation?.type === "announcement") {
         return { success: false, message: "Replies are disabled for this conversation." };
@@ -1571,7 +1626,7 @@ export const updateTopicAction = async (
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!title.trim()) return { success: false, message: "Topic title is required" };
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
 
     try {
@@ -1590,7 +1645,7 @@ export const deleteTopicAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
 
     try {
@@ -1613,7 +1668,7 @@ export const sendThreadReplyAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!body.trim()) return { success: false, message: "Reply cannot be empty" };
-    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
     if (access.conversation?.type === "announcement") {
         return { success: false, message: "Replies are disabled for this conversation." };

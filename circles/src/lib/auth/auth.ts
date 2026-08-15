@@ -15,6 +15,7 @@ import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
 import { canParticipate } from "@/lib/profile-completion";
+import { canReadCircleByLifecycle, canWriteCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 
 export const SALT_FILENAME = "salt.bin";
 export const IV_FILENAME = "iv.bin";
@@ -353,6 +354,11 @@ export const isAuthorized = async (
 ): Promise<boolean> => {
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
+    if (featureInput.handle === "view") {
+        if (!canReadCircleByLifecycle(circle)) return false;
+    } else if (!canWriteCircleByLifecycle(circle)) {
+        return false;
+    }
 
     if (userDid) {
         const user = await Circles.findOne({ did: userDid });

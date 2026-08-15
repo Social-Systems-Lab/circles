@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/membership-requests";
 import { Circle, MembershipRequest } from "@/models/models";
 import { revalidatePath } from "next/cache";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 type MembershipRequestsResponse = {
     success: boolean;
@@ -59,6 +60,7 @@ export const approveMembershipRequestAction = async (
     }
 
     try {
+        await assertCircleWritesAllowed(circle._id ?? "");
         // Check if the user is authorized to approve membership requests
         const authorized = await isAuthorized(userDid, circle._id ?? "", features.general.manage_membership_requests);
         if (!authorized) {
@@ -97,6 +99,7 @@ export const rejectMembershipRequestAction = async (
     }
 
     try {
+        await assertCircleWritesAllowed(circle._id ?? "");
         // Check if the user is authorized to reject membership requests
         const authorized = await isAuthorized(userDid, circle._id ?? "", features.general.manage_membership_requests);
         if (!authorized) {

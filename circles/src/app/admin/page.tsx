@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { getServerSettings } from "@/lib/data/server-settings";
 import AdminDashboard from "@/components/modules/admin/admin-dashboard";
-import { getOnboardingMcpStats, getUserPrivate } from "@/lib/data/user";
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { getOnboardingMcpStats } from "@/lib/data/user";
+import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { redirect } from "next/navigation";
 import { getCircles } from "@/lib/data/circle";
 
@@ -14,20 +14,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     let serverSettings = await getServerSettings();
 
     // check if user is admin
-    let userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        redirect("/unauthenticated");
-    }
-    let user = await getUserPrivate(userDid);
-    console.log("[ADMIN DEBUG]", { userDid, email: user.email, isAdmin: user.isAdmin, id: user._id });
-    if (!user.isAdmin) {
+    try {
+        await requireSuperAdmin();
+    } catch {
         redirect("/unauthorized");
     }
 
     const [circles, onboardingMcpStats] = await Promise.all([getCircles(), getOnboardingMcpStats()]);
     const resolvedSearchParams = searchParams ? await searchParams : {};
-    const initialTab =
-        typeof resolvedSearchParams.tab === "string" ? resolvedSearchParams.tab : undefined;
+    const initialTab = typeof resolvedSearchParams.tab === "string" ? resolvedSearchParams.tab : undefined;
     const initialVerificationCircleId =
         typeof resolvedSearchParams.circleId === "string" ? resolvedSearchParams.circleId : undefined;
 

@@ -23,6 +23,7 @@ import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -59,6 +60,9 @@ export const SAFE_CIRCLE_PROJECTION = {
     createdAt: 1,
     circleType: 1,
     publishStatus: 1,
+    moderationStatus: 1,
+    moderationStatusChangedAt: 1,
+    moderationStatusChangedBy: 1,
     interests: 1,
     offers_needs: 1,
     location: 1,
@@ -101,6 +105,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     createdAt: 1,
     circleType: 1,
     publishStatus: 1,
+    moderationStatus: 1,
     interests: 1,
     location: 1,
     causes: 1,
@@ -174,6 +179,14 @@ export const getPublishedCircleQuery = (): any => ({
     $or: [{ publishStatus: "published" as const }, { publishStatus: { $exists: false } }],
 });
 
+export const getDiscoverableLifecycleQuery = (): any => ({
+    $or: [
+        { circleType: "user" },
+        { moderationStatus: { $in: ["active", "paused"] } },
+        { moderationStatus: { $exists: false } },
+    ],
+});
+
 export const getSwipeCircles = async (): Promise<Circle[]> => {
     let circles: Circle[] = [];
 
@@ -181,6 +194,7 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
         {
             $and: [
                 getPublishedCircleQuery(),
+                getDiscoverableLifecycleQuery(),
                 {
                     $or: [
                         { circleType: { $ne: "user" } },
@@ -211,7 +225,9 @@ export const getCircles = async (
     includeCreated?: boolean,
     includeMember?: boolean,
 ): Promise<Circle[]> => {
-    let query: any = { $and: [{ circleType: circleType ?? "circle" }, getPublishedCircleQuery()] };
+    let query: any = {
+        $and: [{ circleType: circleType ?? "circle" }, getPublishedCircleQuery(), getDiscoverableLifecycleQuery()],
+    };
     if (parentCircleId) {
         query.$and.push({ parentCircleId });
     }
@@ -237,7 +253,16 @@ export const getCircles = async (
                     $and: [
                         { circleType: "circle" },
                         {
-                            $or: [{ $and: [{ parentCircleId }, getPublishedCircleQuery()] }, ...userQueries],
+                            $or: [
+                                {
+                                    $and: [
+                                        { parentCircleId },
+                                        getPublishedCircleQuery(),
+                                        getDiscoverableLifecycleQuery(),
+                                    ],
+                                },
+                                ...userQueries,
+                            ],
                         },
                     ],
                 };
@@ -320,6 +345,7 @@ export const getCommunityCirclesWithRelationships = async (
         $and: [
             { circleType: "circle" },
             getPublishedCircleQuery(),
+            getDiscoverableLifecycleQuery(),
             {
                 $or: [{ parentCircleId: circleId }, { affiliatedCircleIds: circleId }],
             },
@@ -536,6 +562,8 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
             );
             throw new Error("Unauthorized: Cannot update another user's circle profile.");
         }
+    } else {
+        await assertCircleWritesAllowed(_id.toString());
     }
     // Note: For non-user circles, authorization is assumed to be handled by the calling action using isAuthorized()
 
@@ -556,7 +584,11 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
     }
 
     // Proceed with the update
-    let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: circleWithoutId });
+    const updateFilter: Record<string, unknown> = { _id: new ObjectId(_id) };
+    if (existingCircle.circleType !== "user") {
+        updateFilter.$or = [{ moderationStatus: "active" }, { moderationStatus: { $exists: false } }];
+    }
+    let result = await Circles.updateOne(updateFilter, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
         // This should theoretically not happen due to the getCircleById check above, but keep for safety
         throw new Error("Circle not found during update operation");

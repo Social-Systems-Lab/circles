@@ -8,7 +8,9 @@ export async function middleware(request: NextRequest) {
 
     if (isMaintenanceMode) {
         const maintenanceBypassPrefixes = ["/holding"];
-        const isBypassed = maintenanceBypassPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+        const isBypassed = maintenanceBypassPrefixes.some(
+            (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+        );
 
         if (!isBypassed) {
             const redirectUrl = new URL("/holding", request.url);
@@ -16,8 +18,6 @@ export async function middleware(request: NextRequest) {
             return Response.redirect(redirectUrl);
         }
     }
-
-    let userDid: string | undefined = undefined;
 
     const host = process.env.CIRCLES_HOST;
     const port = process.env.CIRCLES_PORT || 3000;
@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
         const token = readAuthToken(request.cookies);
         if (token) {
             let payload = await verifyUserToken(token);
-            userDid = typeof payload.userDid === "string" ? payload.userDid : undefined;
+            if (typeof payload.userDid !== "string") throw new Error("Invalid authenticated session");
         }
     } catch (error) {
         console.error("Error verifying token", error);
@@ -85,7 +85,11 @@ export async function middleware(request: NextRequest) {
 
     // fetch access rules for specified circle and module
     try {
-        const response = await fetchFirstAccessApi(accessApiUrls, { userDid, circleHandle, moduleHandle });
+        const response = await fetchFirstAccessApi(
+            accessApiUrls,
+            { circleHandle, moduleHandle },
+            request.headers.get("cookie"),
+        );
         const { authenticated, authorized, notFound, notFoundType, error } = await response.json();
         if (error) {
             return redirectToErrorPage(request);
@@ -144,7 +148,8 @@ function getAccessApiUrls(request: NextRequest, host: string | undefined, port: 
 
 async function fetchFirstAccessApi(
     accessApiUrls: string[],
-    body: { userDid: string | undefined; circleHandle: string; moduleHandle: string },
+    body: { circleHandle: string; moduleHandle: string },
+    cookieHeader: string | null,
 ) {
     let lastError: unknown;
 
@@ -155,6 +160,7 @@ async function fetchFirstAccessApi(
                 body: JSON.stringify(body),
                 headers: {
                     "Content-Type": "application/json",
+                    ...(cookieHeader ? { Cookie: cookieHeader } : {}),
                 },
             });
 

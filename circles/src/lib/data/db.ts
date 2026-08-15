@@ -33,6 +33,7 @@ import {
     ExternalNotificationChannel,
     HumanityVerification,
     PlatformSettings,
+    PlatformAuditEvent,
 } from "@/models/models";
 import { AggregateRank } from "./ranking";
 import {
@@ -115,6 +116,7 @@ let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 let StripeWebhookEvents: Collection<any>;
 let UserRelationships: Collection<any>;
 let HumanityVerifications: Collection<HumanityVerification>;
+let PlatformAuditEvents: Collection<PlatformAuditEvent>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -188,6 +190,7 @@ if (process.env.IS_BUILD !== "true") {
     UserRelationships = db.collection("userRelationships");
     HumanityVerifications = db.collection<HumanityVerification>("humanityVerifications");
     PlatformSettingsCollection = db.collection<PlatformSettings>("platformSettings");
+    PlatformAuditEvents = db.collection<PlatformAuditEvent>("platformAuditEvents");
 }
 export async function getDb() {
     if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
@@ -247,4 +250,5 @@ export {
     UserRelationships,
     HumanityVerifications,
     PlatformSettingsCollection,
+    PlatformAuditEvents,
 };

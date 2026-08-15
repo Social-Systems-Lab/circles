@@ -33,6 +33,25 @@ import {
 } from "@/lib/data/platform-broadcasts";
 import { buildUnverifiedUserUpdate, buildVerifiedUserSet } from "@/lib/auth/verification";
 import { activateUserAccount } from "@/lib/data/account-lifecycle";
+import { requireSuperAdmin } from "@/lib/auth/superadmin";
+import { changeCircleModerationStatus } from "@/lib/data/circle-lifecycle";
+import type { CircleModerationStatus } from "@/models/models";
+
+export async function changeCircleModerationStatusAction(
+    circleId: string,
+    status: CircleModerationStatus,
+    reason: string,
+) {
+    try {
+        const actorDid = await requireSuperAdmin();
+        const result = await changeCircleModerationStatus({ circleId, actorDid, status, reason });
+        revalidatePath("/admin");
+        revalidatePath("/circles");
+        return { success: true, message: `Circle is now ${status}.`, result };
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "Moderation action failed." };
+    }
+}
 
 // Get all circles of a specific type
 export async function getEntitiesByType(type: "circle" | "user" | "project") {
@@ -68,6 +87,9 @@ export async function getEntitiesByType(type: "circle" | "user" | "project") {
                     parentCircleId: 1,
                     circleLevel: 1,
                     publishStatus: 1,
+                    moderationStatus: 1,
+                    moderationStatusChangedAt: 1,
+                    moderationStatusChangedBy: 1,
                     verificationStatus: 1,
                     accountStatus: 1,
                     signupOrder: 1,
@@ -195,9 +217,7 @@ export async function toggleUserVerification(userId: string, isVerified: boolean
     try {
         await Circles.updateOne(
             { _id: new ObjectId(userId) },
-            isVerified
-                ? { $set: buildVerifiedUserSet(adminUser.did!) }
-                : buildUnverifiedUserUpdate(),
+            isVerified ? { $set: buildVerifiedUserSet(adminUser.did!) } : buildUnverifiedUserUpdate(),
         );
 
         if (isVerified) {
@@ -463,10 +483,7 @@ export async function getPlatformBroadcastMessageAction() {
     }
 }
 
-export async function savePlatformBroadcastMessageAction(input: {
-    body: string;
-    active: boolean;
-}) {
+export async function savePlatformBroadcastMessageAction(input: { body: string; active: boolean }) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "Unauthorized: You must be logged in." };
@@ -527,10 +544,7 @@ export async function broadcastPlatformBroadcastMessageAction(body: string) {
             active: true,
         });
 
-        const allUsers = await Circles.find(
-            { circleType: "user" },
-            { projection: { did: 1 } },
-        ).toArray();
+        const allUsers = await Circles.find({ circleType: "user" }, { projection: { did: 1 } }).toArray();
 
         let syncedUsers = 0;
         let insertedMessages = 0;
@@ -957,7 +971,10 @@ export async function getUserByDidAction(did: string) {
 export async function toggleManualMembership(userId: string, manualMember: boolean) {
     try {
         const users = await db.collection("circles");
-        const result = await users.updateOne({ _id: new ObjectId(userId) }, { $set: { manualMember, isMember: manualMember } });
+        const result = await users.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { manualMember, isMember: manualMember } },
+        );
 
         if (result.modifiedCount === 0) {
             return { success: false, message: "User not found or membership status unchanged." };
@@ -1371,10 +1388,7 @@ export async function revokeFoundingMember(userId: string) {
     try {
         // Preserve foundingMemberNumber — permanent monotonic ID, never reused.
         // Re-grant restores isFoundingMember with the same original number.
-        await Circles.updateOne(
-            { _id: new ObjectId(userId) },
-            { $unset: { isFoundingMember: "" } },
-        );
+        await Circles.updateOne({ _id: new ObjectId(userId) }, { $unset: { isFoundingMember: "" } });
 
         revalidatePath("/admin");
         return { success: true, message: "Founding member status revoked" };

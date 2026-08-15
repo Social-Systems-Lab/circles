@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Media, Goal, GoalDisplay, GoalStage, locationSchema, GoalMember } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
@@ -448,6 +449,7 @@ export async function updateGoalAction(
         if (!userDid) return { success: false, message: "User not authenticated" };
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return { success: false, message: "Circle not found" };
+        await assertCircleWritesAllowed(circle._id as string);
         const goal = await getGoalById(goalId, userDid);
         if (!goal) return { success: false, message: "Goal not found" };
         const isAuthor = userDid === goal.createdBy;
@@ -587,6 +589,7 @@ export async function deleteGoalAction( // Renamed function
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the goal (Data function)
         const goal = await getGoalById(goalId, userDid); // Renamed function call, param, variable
@@ -664,6 +667,7 @@ export async function changeGoalStageAction( // Renamed function
         if (!circle) {
             return { success: false, message: "Circle not found" };
         }
+        await assertCircleWritesAllowed(circle._id as string);
 
         // Get the goal (Data function)
         const goal = await getGoalById(goalId, userDid); // Renamed function call, param, variable
@@ -765,6 +769,7 @@ export const getMembersAction = async (circleId: string) => {
  */
 export async function ensureShadowPostForGoalAction(goalId: string, circleId: string): Promise<string | null> {
     try {
+        await assertCircleWritesAllowed(circleId);
         if (!ObjectId.isValid(goalId) || !ObjectId.isValid(circleId)) {
             console.error("Invalid goalId or circleId provided to ensureShadowPostForGoalAction");
             return null;
@@ -927,6 +932,7 @@ export async function unfollowGoalAction(
             return { success: false, message: "Circle not found" };
         }
         const circleId = circle._id.toString();
+        await assertCircleWritesAllowed(circleId);
 
         // Goal existence check (optional for unfollow, but good for consistency)
         const goal = await getGoalById(goalId, userDid);

@@ -1,9 +1,10 @@
 "use server";
 
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { updateCircle } from "@/lib/data/circle";
 import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
+import { features } from "@/lib/data/constants";
 
 export async function savePresence(data: Circle): Promise<FormSubmitResponse> {
     try {
@@ -11,11 +12,12 @@ export async function savePresence(data: Circle): Promise<FormSubmitResponse> {
         if (!userDid) {
             throw new Error("User not authenticated");
         }
+        if (!(await isAuthorized(userDid, data._id ?? "", features.settings.edit_about))) {
+            throw new Error("Not authorized to edit circle settings");
+        }
 
         const engagementInterests = data.engagements?.interests;
-        const engagementSettings: Circle["engagements"] = data.engagements
-            ? { ...data.engagements }
-            : undefined;
+        const engagementSettings: Circle["engagements"] = data.engagements ? { ...data.engagements } : undefined;
 
         if (engagementSettings) {
             delete engagementSettings.interests;
