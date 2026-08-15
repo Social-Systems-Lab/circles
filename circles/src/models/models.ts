@@ -618,6 +618,24 @@ export const platformAuditEventSchema = z.object({
     details: z.record(z.string(), z.unknown()).optional(),
 });
 export type PlatformAuditEvent = z.infer<typeof platformAuditEventSchema>;
+
+export const privateMediaSchema = z.object({
+    _id: z.any().optional(),
+    storageClass: z.literal("private"),
+    bucket: z.string(),
+    objectKey: z.string(),
+    ownerType: z.enum(["circle", "conversation"]),
+    circleId: z.string().optional(),
+    conversationId: z.string().optional(),
+    resourceType: z.enum(["circle", "post", "task", "goal", "issue", "proposal", "event", "funding", "chat-message"]),
+    resourceId: z.string().optional(),
+    uploadedByDid: didSchema,
+    originalName: z.string().optional(),
+    contentType: z.string(),
+    size: z.number().nonnegative(),
+    createdAt: z.date(),
+});
+export type PrivateMedia = z.infer<typeof privateMediaSchema>;
 export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 export type AccountStatus = z.infer<typeof accountStatusSchema>;
 

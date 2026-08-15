@@ -19,6 +19,12 @@ export async function middleware(request: NextRequest) {
         }
     }
 
+    // Private media performs its own signed-session check and must return the same
+    // neutral 404 for missing, invalid, and unauthorized requests.
+    if (pathname === "/private-media" || pathname.startsWith("/private-media/")) {
+        return;
+    }
+
     const host = process.env.CIRCLES_HOST;
     const port = process.env.CIRCLES_PORT || 3000;
     const accessApiUrls = getAccessApiUrls(request, host, port);
