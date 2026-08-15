@@ -47,17 +47,42 @@ echo "Running branding guard for Kamooni..."
 
 (cd "$APP_DIR" && docker compose build circles)
 
+resolve_application_mongodb_uri() {
+  # Resolve the exact environment assigned to the application service. This works even when
+  # the existing circles container is stopped because the newly built image runs only `node -e`.
+  (cd "$APP_DIR" && docker compose run --rm --no-deps -T circles \
+    node -e 'const uri = process.env.MONGODB_URI || ""; if (!uri) process.exit(1); process.stdout.write(uri)')
+}
+
+if ! APP_MONGODB_URI="$(resolve_application_mongodb_uri)" || [[ -z "$APP_MONGODB_URI" ]]; then
+  echo "Error: could not resolve MONGODB_URI from the Compose circles service environment." >&2
+  echo "Migration authentication requires the same MONGODB_URI used by the application." >&2
+  exit 1
+fi
+
 run_mongo_script() {
   local script_path="$1"
-  (cd "$APP_DIR" && docker compose exec -T db sh -lc \
-    'mongosh "$MONGO_INITDB_DATABASE" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet' \
-    < "$script_path")
+  local absolute_script_path="$APP_DIR/$script_path"
+  if [[ ! -f "$absolute_script_path" ]]; then
+    echo "Error: Mongo script not found: $absolute_script_path" >&2
+    return 1
+  fi
+
+  # MONGO_INITDB_ROOT_PASSWORD initializes a new Mongo volume; it is not authoritative after
+  # initialization. Use the application's working URI and a file so mongosh cannot remain in REPL mode.
+  (cd "$APP_DIR" && docker compose exec -T -e MONGODB_URI="$APP_MONGODB_URI" db sh -lc \
+    'script_file="$(mktemp /tmp/circles-mongo-script.XXXXXX.js)" || exit 1
+     trap '\''rm -f "$script_file"'\'' EXIT
+     cat > "$script_file" || exit 1
+     mongosh "$MONGODB_URI" --quiet --file "$script_file"' \
+    < "$absolute_script_path")
 }
 
 chat_read_state_v2_is_complete() {
   local result
-  result="$(cd "$APP_DIR" && docker compose exec -T db sh -lc \
-    'mongosh "$MONGO_INITDB_DATABASE" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet --eval '\''db.schemaMigrations.countDocuments({_id:"chat-read-state-v2",status:"complete"})'\''')"
+  # Use the same authoritative application URI as migration and verification.
+  result="$(cd "$APP_DIR" && docker compose exec -T -e MONGODB_URI="$APP_MONGODB_URI" db sh -lc \
+    'mongosh "$MONGODB_URI" --quiet --eval '\''db.schemaMigrations.countDocuments({_id:"chat-read-state-v2",status:"complete"})'\''')"
   [[ "$result" == "1" ]]
 }
 

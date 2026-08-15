@@ -78,6 +78,11 @@ Successful verification writes the `schemaMigrations/chat-read-state-v2` complet
 one-time offline migration window, run the safe idempotent verifier while the current V2 app remains live, and then follow
 the normal replacement flow. Duplicate or malformed state, and a missing required unique index, still prevent replacement.
 
+Migration authentication uses the resolved `MONGODB_URI` from the Compose `circles` service, including while that service
+is stopped. Mongo's `MONGO_INITDB_ROOT_*` environment values are initialization settings and may no longer match the
+credentials of an existing database volume. Migration and verification JavaScript is executed by `mongosh --file` so the
+deployment cannot remain attached to an interactive shell after a script finishes.
+
 ## V2 maintenance-window and failure rules
 
 Only the `circles` Next.js service imports the chat read-state write functions. The `cron` container calls an email-reminder
