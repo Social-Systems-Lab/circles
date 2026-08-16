@@ -10,6 +10,7 @@ import {
     resolvePrivateMediaRequest,
     savePrivateFileWithDependencies,
 } from "./private-media";
+import { canReadCircle } from "./circle-visibility-policy";
 
 async function main() {
     const circleId = new ObjectId().toHexString();
@@ -30,6 +31,13 @@ async function main() {
         return canReadPrivateMediaRecord(userDid, record, {
             findCircle: async () => ({ _id: new ObjectId(circleId), circleType: "circle", moderationStatus: status }),
             isMember: async () => member,
+            canReadCircle: (viewerDid, circle) =>
+                canReadCircle(viewerDid, circle, {
+                    getMember: async () =>
+                        member && viewerDid
+                            ? { userDid: viewerDid, circleId, userGroups: ["members"], joinedAt: new Date() }
+                            : null,
+                }),
         });
     }
 
@@ -39,6 +47,21 @@ async function main() {
     assert.equal(await allowed("removed", true), false, "removed media is unavailable");
     assert.equal(await allowed("active", false), false, "non-member may not read");
     assert.equal(await allowed("active", false, "ordinary-superadmin"), false, "superadmin status gives no bypass");
+    assert.equal(
+        await canReadPrivateMediaRecord("outsider", record, {
+            findCircle: async () => ({
+                _id: new ObjectId(circleId),
+                circleType: "circle",
+                visibility: "secret",
+                moderationStatus: "active",
+            }),
+            isMember: async () => false,
+            canReadCircle: (viewerDid, circle) =>
+                canReadCircle(viewerDid, circle, { getMember: async () => null }),
+        }),
+        false,
+        "secret non-members are denied by the central circle read policy",
+    );
     assert.equal(
         await canReadPrivateMediaRecord(undefined, record, {
             findCircle: async () => null,

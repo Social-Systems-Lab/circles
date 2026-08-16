@@ -9,4 +9,4 @@ Circle `visibility` is separate from the existing policies:
 
 Secret visibility requires a canonical `Members` record. Circle member counts, creator status, chat membership, groups, and ordinary superadmin status do not grant read access. User/profile circles always behave as public.
 
-Initially, only an authenticated superadmin may create or transition a normal circle or project to secret visibility. Phase 1 adds the policy and entitlement foundation only. Secret circles must not be enabled in production until route, metadata, discovery, derived-content, chat, contribution, and private-upload integration is complete.
+Initially, only an authenticated superadmin may create or transition a normal circle or project to secret visibility. Phase 2 protects direct circle routes, circle metadata, and circle-owned private media through the central read policy. Discovery and derived-resource surfaces remain unprotected, so Secret Circles must not be enabled in production yet.

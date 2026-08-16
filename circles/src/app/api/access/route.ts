@@ -1,84 +1,15 @@
 import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import { getMember } from "@/lib/data/member";
-import { Circle } from "@/models/models";
-import { NextResponse } from "next/server";
-import { isModuleEnabled } from "@/lib/auth/client-auth";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { createAccessPostHandler } from "./handler";
+import { isModuleEnabled } from "@/lib/auth/client-auth";
 
-export async function POST(req: Request) {
-    try {
-        const { circleHandle, moduleHandle } = await req.json();
-        const userDid = await getAuthenticatedUserDid();
-        const permissionModuleHandle = moduleHandle === "shifts" ? "tasks" : moduleHandle;
-
-        // get circle
-        let circle: Circle | null = null;
-        if (circleHandle) {
-            circle = await getCircleByHandle(circleHandle);
-        } else {
-            // user is authorized
-            return NextResponse.json({ authenticated: true, authorized: true });
-        }
-
-        if (!circle) {
-            return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
-        }
-
-        if (!canReadCircleByLifecycle(circle)) {
-            return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
-        }
-
-        if (!isCirclePublished(circle)) {
-            const membership = userDid ? await getMember(userDid, circle._id) : null;
-            const canViewUnpublished = circle.createdBy === userDid || membership?.userGroups?.includes("admins");
-            if (!canViewUnpublished) {
-                return NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
-            }
-        }
-
-        const isFundingRoute = moduleHandle === "funding";
-        if (isFundingRoute && circle.circleType !== "circle") {
-            return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
-        }
-
-        // Check if module is enabled using enabledModules.
-        const moduleEnabled = isModuleEnabled(circle, moduleHandle);
-        if (!moduleEnabled) {
-            return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
-        }
-
-        // Check access rules
-        const accessRules = circle.accessRules || {};
-
-        // First try module-specific access rule
-        let allowedUserGroups = accessRules[permissionModuleHandle]?.view;
-
-        // If still not found, funding defaults to members-only and all other routes preserve the older everyone fallback.
-        if (!allowedUserGroups) {
-            allowedUserGroups = isFundingRoute ? ["admins", "moderators", "members"] : ["everyone"];
-        }
-
-        // if the module allows access to "everyone", consider it authorized
-        if (allowedUserGroups.includes("everyone")) {
-            return NextResponse.json({ authenticated: true, authorized: true });
-        }
-
-        // otherwise the user needs to be authenticated
-        if (!userDid) {
-            return NextResponse.json({ authenticated: false, authorized: false });
-        }
-
-        // check if user is in the user group that has access
-        const membership = await getMember(userDid, circle._id);
-        if (!membership) {
-            return NextResponse.json({ authenticated: true, authorized: false });
-        }
-
-        const isUserAuthorized = allowedUserGroups.some((group) => membership.userGroups?.includes(group));
-        return NextResponse.json({ authenticated: true, authorized: isUserAuthorized });
-    } catch (error) {
-        console.error("Error in /api/access:", error);
-        return NextResponse.json({ error: true }, { status: 500 });
-    }
-}
+export const POST = createAccessPostHandler({
+    authenticate: getAuthenticatedUserDid,
+    findCircle: getCircleByHandle,
+    canReadCircle,
+    getMember,
+    isCirclePublished,
+    isModuleEnabled,
+});

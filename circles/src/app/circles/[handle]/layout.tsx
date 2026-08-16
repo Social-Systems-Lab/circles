@@ -7,7 +7,8 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
-import { canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { resolveCircleRouteAccess, resolveCircleRouteMetadata } from "./circle-route-access";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -20,15 +21,15 @@ export default async function RootLayout(props: Props) {
         return null;
     }
 
-    let circle = await getCircleByHandle(params.handle);
-    if (!circle || !canReadCircleByLifecycle(circle)) {
-        // redirect to not-found
-        redirect("/not-found");
-    }
+    const access = await resolveCircleRouteAccess(params.handle, {
+        findCircle: getCircleByHandle,
+        authenticate: getAuthenticatedUserDid,
+        canReadCircle,
+    });
+    if (!access) redirect("/not-found");
 
-    let authorizedToEdit = false;
-    let userDid = await getAuthenticatedUserDid();
-    authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
+    const { circle, viewerDid: userDid } = access;
+    const authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
     const canViewCircle = isCirclePublished(circle) || authorizedToEdit || circle.createdBy === userDid;
     if (!canViewCircle) {
         redirect("/not-found");
@@ -63,18 +64,10 @@ export default async function RootLayout(props: Props) {
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
     const params = await props.params;
-    let handle = params.handle;
-
-    // get circle from database
-    let circle = await getCircleByHandle(handle);
-    if (!circle || !canReadCircleByLifecycle(circle)) {
-        circle = await getDefaultCircle();
-    }
-
-    let title = circle.name;
-    let description = circle.description ?? circle.mission;
-    let icon = "/images/default-picture.png";
-    //let icon = circle.picture?.url ?? "/images/default-picture.png"; // Use a default icon if none is set
-
-    return { title: title, description: description, icons: [icon] };
+    return resolveCircleRouteMetadata(params.handle, {
+        findCircle: getCircleByHandle,
+        authenticate: getAuthenticatedUserDid,
+        canReadCircle,
+        getGenericCircle: getDefaultCircle,
+    });
 }

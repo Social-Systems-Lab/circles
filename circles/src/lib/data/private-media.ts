@@ -4,7 +4,7 @@ import { Client as MinioClient } from "minio";
 import { ObjectId } from "mongodb";
 import type { Circle, PrivateMedia } from "@/models/models";
 import { Circles, Members, PrivateMediaCollection } from "@/lib/data/db";
-import { canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 
 export const PRIVATE_MEDIA_PATH_PREFIX = "/private-media/";
 export const getPrivateMediaBucketName = () => process.env.MINIO_PRIVATE_BUCKET || "circles-private";
@@ -234,6 +234,7 @@ export function getPrivateMediaResponseHeaders(record: PrivateMedia): Record<str
 type AccessDependencies = {
     findCircle: (circleId: string) => Promise<Circle | null>;
     isMember: (userDid: string, circleId: string) => Promise<boolean>;
+    canReadCircle?: (userDid: string | undefined, circle: Circle) => Promise<boolean>;
 };
 
 export async function canReadPrivateMediaRecord(
@@ -245,7 +246,8 @@ export async function canReadPrivateMediaRecord(
     if (record.ownerType !== "circle" || !record.circleId || !ObjectId.isValid(record.circleId)) return false;
 
     const circle = await dependencies.findCircle(record.circleId);
-    if (!circle || !canReadCircleByLifecycle(circle)) return false;
+    if (!circle || !(await (dependencies.canReadCircle ?? canReadCircle)(userDid, circle))) return false;
+    // Private-media records remain member-only even for public circles.
     return dependencies.isMember(userDid, record.circleId);
 }
 
