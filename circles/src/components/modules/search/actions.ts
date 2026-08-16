@@ -20,10 +20,12 @@ export async function searchContentAction(
     }
 
     try {
+        const userDid = await getAuthenticatedUserDid();
         const results = await searchDiscoverableCircles({
             query,
             limit: 24,
             sdgHandles,
+            viewerDid: userDid,
         });
 
         if (results.length === 0) {
@@ -42,7 +44,6 @@ export async function searchContentAction(
                 ]),
         );
 
-        const userDid = await getAuthenticatedUserDid();
         if (userDid) {
             await getMetricsForCircles(results, userDid);
         }

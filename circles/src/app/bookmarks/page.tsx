@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
-import { getCirclesByIds } from "@/lib/data/circle";
+import { getDiscoverableCirclesByIds } from "@/lib/data/circle";
 import { Circle, UserPrivate } from "@/models/models";
 import BookmarkCard from "./bookmark-card";
 
@@ -30,7 +30,7 @@ export default async function BookmarksPage() {
   // Resolve pinned circles preserving order
   let pinned: Circle[] = [];
   if (pinnedIds.length > 0) {
-    pinned = await getCirclesByIds(pinnedIds);
+    pinned = await getDiscoverableCirclesByIds(pinnedIds, userDid);
     const byId = new Map(pinned.map((c) => [c._id?.toString(), c]));
     pinned = pinnedIds.map((id) => byId.get(id)).filter((c): c is Circle => !!c);
   }
@@ -39,7 +39,7 @@ export default async function BookmarksPage() {
   const remainingIds = bookmarkedIds.filter((id) => !pinnedIds.includes(id));
   let remaining: Circle[] = [];
   if (remainingIds.length > 0) {
-    remaining = await getCirclesByIds(remainingIds);
+    remaining = await getDiscoverableCirclesByIds(remainingIds, userDid);
   }
 
   const hasAny = pinned.length > 0 || remaining.length > 0;
@@ -73,7 +73,9 @@ export default async function BookmarksPage() {
 
           {remaining.length > 0 && (
             <>
-              <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">All saved profiles</h2>
+              <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                All saved profiles
+              </h2>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                 {remaining.map((c) => (
                   <BookmarkCard key={`b-${c._id}`} circle={c} pinned={false} />

@@ -7,6 +7,8 @@ import {
     canReadCircle,
     canSetCircleVisibility,
     circleVisibilityMongoQuery,
+    getCanonicalMemberCircleIds,
+    getViewerCircleDiscoveryQuery,
     evaluateCircleVisibilityAccess,
     getCircleVisibility,
 } from "./circle-visibility-policy";
@@ -66,12 +68,53 @@ assert.deepEqual(
     "creator status is not membership",
 );
 assert.deepEqual(
-    evaluateCircleVisibilityAccess({ circle: circle({ visibility: "secret" }), viewerDid: "did:admin", isMember: false }),
+    evaluateCircleVisibilityAccess({
+        circle: circle({ visibility: "secret" }),
+        viewerDid: "did:admin",
+        isMember: false,
+    }),
     { canDiscover: false, canRead: false },
     "superadmin identity alone is not a visibility bypass",
 );
 
 const run = async () => {
+    let membershipQueries = 0;
+    const canonicalIds = await getCanonicalMemberCircleIds("did:member", {
+        findMemberCircleIds: async (viewerDid) => {
+            membershipQueries += 1;
+            assert.equal(viewerDid, "did:member");
+            return [
+                { circleId: circleId.toString() },
+                { circleId: circleId.toString() },
+                { circleId: otherCircleId.toString() },
+                { circleId: "malformed" },
+                { circleId: 42 },
+            ];
+        },
+    });
+    assert.equal(membershipQueries, 1, "canonical member circle IDs use one membership query");
+    assert.deepEqual(canonicalIds, [circleId.toString(), otherCircleId.toString()]);
+    assert.deepEqual(
+        await getCanonicalMemberCircleIds(undefined, {
+            findMemberCircleIds: async () => {
+                throw new Error("anonymous discovery must not query memberships");
+            },
+        }),
+        [],
+    );
+
+    const discoveryQuery = await getViewerCircleDiscoveryQuery("did:member", {
+        findMemberCircleIds: async () => [{ circleId: circleId.toString() }],
+    });
+    assert.equal(Array.isArray(discoveryQuery.$and), true);
+    assert.deepEqual(
+        (discoveryQuery.$and as Record<string, unknown>[])[0],
+        circleVisibilityMongoQuery({
+            viewerDid: "did:member",
+            memberCircleIds: [circleId.toString()],
+        }),
+    );
+
     const secretCircle = circle({ visibility: "secret" });
     assert.equal(await canReadCircle(undefined, secretCircle, membershipDependencies(null)), false);
     assert.equal(await canReadCircle("did:outsider", secretCircle, membershipDependencies(null)), false);
@@ -93,7 +136,11 @@ const run = async () => {
         "groups without a canonical Members row do not grant access",
     );
     assert.equal(
-        await canReadCircle("did:member", circle({ _id: "malformed", visibility: "secret" }), membershipDependencies(member)),
+        await canReadCircle(
+            "did:member",
+            circle({ _id: "malformed", visibility: "secret" }),
+            membershipDependencies(member),
+        ),
         false,
         "malformed circle IDs fail closed before membership lookup",
     );
@@ -115,10 +162,7 @@ const run = async () => {
     const allowAdmin = { isSuperAdminDid: async () => true };
     assert.equal(await canSetCircleVisibility({ actorDid: "did:user", circleType: "circle" }, denyAdmin), true);
     assert.equal(
-        await canSetCircleVisibility(
-            { actorDid: "did:user", circleType: "circle", visibility: "public" },
-            denyAdmin,
-        ),
+        await canSetCircleVisibility({ actorDid: "did:user", circleType: "circle", visibility: "public" }, denyAdmin),
         true,
     );
     assert.equal(
@@ -130,10 +174,7 @@ const run = async () => {
         "a supplied DID is not sufficient without authoritative superadmin lookup",
     );
     assert.equal(
-        await canSetCircleVisibility(
-            { actorDid: "did:admin", circleType: "circle", visibility: "secret" },
-            allowAdmin,
-        ),
+        await canSetCircleVisibility({ actorDid: "did:admin", circleType: "circle", visibility: "secret" }, allowAdmin),
         true,
     );
     assert.equal(
@@ -144,10 +185,7 @@ const run = async () => {
         true,
     );
     assert.equal(
-        await canSetCircleVisibility(
-            { actorDid: "did:admin", circleType: "user", visibility: "secret" },
-            allowAdmin,
-        ),
+        await canSetCircleVisibility({ actorDid: "did:admin", circleType: "user", visibility: "secret" }, allowAdmin),
         false,
     );
     for (const invalidVisibility of [null, "private", 1]) {
@@ -162,9 +200,7 @@ const run = async () => {
     }
 
     assert.doesNotThrow(() => assertGenericCircleUpdateDoesNotChangeVisibility(circle(), {}));
-    assert.doesNotThrow(() =>
-        assertGenericCircleUpdateDoesNotChangeVisibility(circle(), { visibility: "public" }),
-    );
+    assert.doesNotThrow(() => assertGenericCircleUpdateDoesNotChangeVisibility(circle(), { visibility: "public" }));
     assert.throws(
         () => assertGenericCircleUpdateDoesNotChangeVisibility(circle(), { visibility: "secret" }),
         /dedicated platform authorization path/,

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCircleByHandle, getDefaultCircle, getCircleById, isCirclePublished } from "@/lib/data/circle";
+import { getCircleByHandle, getDefaultCircle, getDiscoverableCirclesByIds, isCirclePublished } from "@/lib/data/circle";
 import { redirect } from "next/navigation";
 import HomeCover from "@/components/modules/home/home-cover";
 import HomeContent from "@/components/modules/home/home-content";
@@ -34,10 +34,16 @@ export default async function RootLayout(props: Props) {
     if (!canViewCircle) {
         redirect("/not-found");
     }
-    const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
+    const parentCircle = circle.parentCircleId
+        ? (await getDiscoverableCirclesByIds([circle.parentCircleId], userDid))[0]
+        : undefined;
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, userDid) : null;
-    const plainCircle = JSON.parse(JSON.stringify(circle));
+    const circleForRendering =
+        circle.parentCircleId && !parentCircle
+            ? { ...circle, parentCircleId: undefined, circleLevel: "top_level" as const }
+            : circle;
+    const plainCircle = JSON.parse(JSON.stringify(circleForRendering));
     const plainParentCircle = parentCircle ? JSON.parse(JSON.stringify(parentCircle)) : undefined;
     const plainProofOfHumanitySummary = proofOfHumanitySummary
         ? JSON.parse(JSON.stringify(proofOfHumanitySummary))

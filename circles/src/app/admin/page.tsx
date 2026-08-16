@@ -4,7 +4,6 @@ import AdminDashboard from "@/components/modules/admin/admin-dashboard";
 import { getOnboardingMcpStats } from "@/lib/data/user";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { redirect } from "next/navigation";
-import { getCircles } from "@/lib/data/circle";
 
 type AdminPageProps = {
     searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -20,7 +19,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         redirect("/unauthorized");
     }
 
-    const [circles, onboardingMcpStats] = await Promise.all([getCircles(), getOnboardingMcpStats()]);
+    const onboardingMcpStats = await getOnboardingMcpStats();
     const resolvedSearchParams = searchParams ? await searchParams : {};
     const initialTab = typeof resolvedSearchParams.tab === "string" ? resolvedSearchParams.tab : undefined;
     const initialVerificationCircleId =
@@ -33,7 +32,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <Suspense fallback={<div>Loading admin dashboard...</div>}>
                 <AdminDashboard
                     serverSettings={serverSettings}
-                    circles={circles}
                     onboardingMcpStats={onboardingMcpStats}
                     initialTab={initialTab}
                     initialVerificationCircleId={initialVerificationCircleId}

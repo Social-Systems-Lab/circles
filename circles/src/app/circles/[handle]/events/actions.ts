@@ -32,7 +32,11 @@ import {
     TaskDisplay,
     postSchema,
 } from "@/models/models";
-import { getCircleByHandle, ensureModuleIsEnabledOnCircle, getCirclesBySearchQuery } from "@/lib/data/circle";
+import {
+    getCircleByHandle,
+    ensureModuleIsEnabledOnCircle,
+    getDiscoverableCirclesBySearchQuery,
+} from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate, getPrivateUserByDid, updateUser, getUserByHandle } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
@@ -2299,7 +2303,8 @@ export async function getCirclesBySearchQueryAction(
     const defaultResult: GetCirclesBySearchQueryActionResult = { circles: [] };
 
     try {
-        const circles = await getCirclesBySearchQuery(query, limit, circleType);
+        const userDid = await getAuthenticatedUserDid();
+        const circles = await getDiscoverableCirclesBySearchQuery(query, limit, circleType, userDid);
         return { circles };
     } catch (error) {
         console.error("Error in getCirclesBySearchQueryAction:", error);

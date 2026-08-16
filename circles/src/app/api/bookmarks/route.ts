@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
-import { getCirclesByIds } from "@/lib/data/circle";
+import { getDiscoverableCirclesByIds } from "@/lib/data/circle";
 import { Circle } from "@/models/models";
 
 export async function GET(): Promise<NextResponse<Circle[]>> {
@@ -17,7 +17,7 @@ export async function GET(): Promise<NextResponse<Circle[]>> {
       return NextResponse.json([]);
     }
 
-    const circles = await getCirclesByIds(ids);
+    const circles = await getDiscoverableCirclesByIds(ids, userDid);
     return NextResponse.json(circles);
   } catch (error) {
     console.error("Failed to fetch bookmarked circles via API:", error);

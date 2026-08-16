@@ -6,7 +6,10 @@ import {
     isCirclePublished,
     SAFE_CIRCLE_PROJECTION,
 } from "./circle";
+import { sanitizeCircleDiscoveryResult } from "./circle-discovery-queries";
 import { buildSearchableTypeClauses, isSearchEligibleCircle } from "@/lib/data/search-visibility";
+import { getViewerCircleDiscoveryQuery } from "@/lib/data/circle-visibility-policy";
+import { composeSearchCandidateQuery } from "@/lib/data/circle-discovery-queries";
 
 const SEARCHABLE_TYPES: CircleType[] = ["circle", "project", "user"];
 const SEARCHABLE_FIELDS = [
@@ -34,6 +37,7 @@ type SearchCirclesOptions = {
     limit?: number;
     circleTypes?: CircleType[];
     sdgHandles?: string[];
+    viewerDid?: string;
 };
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -165,17 +169,17 @@ const buildCandidateQuery = (query: string, circleTypes: CircleType[], sdgHandle
     return clauses.length === 1 ? clauses[0] : { $and: clauses };
 };
 
-export const searchDiscoverableCircles = async ({
-    query = "",
-    limit = 20,
-    circleTypes = SEARCHABLE_TYPES,
-    sdgHandles = [],
-}: SearchCirclesOptions): Promise<WithMetric<Circle>[]> => {
+export const searchDiscoverableCircles = async (
+    { query = "", limit = 20, circleTypes = SEARCHABLE_TYPES, sdgHandles = [], viewerDid }: SearchCirclesOptions,
+): Promise<WithMetric<Circle>[]> => {
     const normalizedQuery = normalizeValue(query);
     const normalizedTypes = circleTypes.length > 0 ? circleTypes : SEARCHABLE_TYPES;
     const normalizedSdgs = sdgHandles.map((handle) => normalizeValue(handle)).filter(Boolean);
     const candidateLimit = Math.max(limit * 6, 120);
-    const candidateQuery = buildCandidateQuery(normalizedQuery, normalizedTypes, normalizedSdgs);
+    const candidateQuery = composeSearchCandidateQuery(
+        buildCandidateQuery(normalizedQuery, normalizedTypes, normalizedSdgs),
+        await getViewerCircleDiscoveryQuery(viewerDid),
+    );
 
     const circles = (await Circles.find(candidateQuery, { projection: SAFE_CIRCLE_PROJECTION })
         .limit(candidateLimit)
@@ -226,11 +230,13 @@ export const searchDiscoverableCircles = async ({
 
     const maxScore = scored[0]?.score || 1;
 
-    return scored.map(({ circle, score }) => ({
-        ...circle,
-        metrics: {
-            searchRank: score / maxScore,
-            similarity: score / maxScore,
-        },
-    }));
+    return scored.map(({ circle, score }) =>
+        sanitizeCircleDiscoveryResult({
+            ...circle,
+            metrics: {
+                searchRank: score / maxScore,
+                similarity: score / maxScore,
+            },
+        }),
+    );
 };

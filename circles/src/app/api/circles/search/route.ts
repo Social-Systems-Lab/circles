@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchDiscoverableCircles } from "@/lib/data/search";
 import { CircleType } from "@/models/models";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
 
 export async function GET(req: NextRequest) {
     try {
@@ -13,10 +15,12 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ circles: [] });
         }
 
+        const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
         const circles = await searchDiscoverableCircles({
             query: q.trim(),
             limit: Math.min(Math.max(limit, 1), 25),
             circleTypes: type ? [type] : undefined,
+            viewerDid,
         });
 
         return NextResponse.json({ circles });

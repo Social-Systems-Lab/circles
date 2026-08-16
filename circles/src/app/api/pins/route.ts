@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
-import { getCirclesByIds } from "@/lib/data/circle";
+import { getDiscoverableCirclesByIds } from "@/lib/data/circle";
 import { pinCircle, unpinCircle } from "@/lib/data/user";
 import { Circle, UserPrivate } from "@/models/models";
 
@@ -23,7 +23,7 @@ export async function GET(): Promise<NextResponse<Circle[]>> {
     }
 
     // Fetch circle docs and preserve order of pinned ids
-    const circles = await getCirclesByIds(ids);
+    const circles = await getDiscoverableCirclesByIds(ids, userDid);
     const byId = new Map(circles.map((c) => [c._id?.toString(), c]));
     const ordered = ids.map((id) => byId.get(id)).filter((c): c is Circle => !!c);
     return NextResponse.json(ordered);
@@ -49,6 +49,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<{ user?: User
     const { circleId } = (await req.json()) as { circleId?: string };
     if (!circleId) {
       return NextResponse.json({ error: "circleId required" }, { status: 400 });
+    }
+
+    const [discoverableCircle] = await getDiscoverableCirclesByIds([circleId], userDid);
+    if (!discoverableCircle) {
+      return NextResponse.json({ error: "circle not found" }, { status: 404 });
     }
 
     await pinCircle(userDid, circleId);

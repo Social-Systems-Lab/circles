@@ -22,7 +22,7 @@ export default async function Home(props: HomeProps) {
     const serverConfig = await getServerSettings();
 
     // Get circles with location data for the map and cards
-    const circles = await getSwipeCircles();
+    const circles = await getSwipeCircles(userDid);
     const circlesWithMetrics = await getMetricsForCircles(circles, userDid, sort as SortingOptions);
 
     return (

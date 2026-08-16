@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobalServerSettingsForm } from "./global-server-settings-form"; // Import the new form
-import { Circle, ServerSettings } from "@/models/models";
+import { ServerSettings } from "@/models/models";
 import { Button } from "@/components/ui/button"; // Import Button
 import { Input } from "@/components/ui/input";
 import {
@@ -29,7 +29,6 @@ const amountBucketOrder: OnboardingMcpAmountBucket[] = ["5", "10", "25", "50", "
 
 interface AdminDashboardProps {
     serverSettings: ServerSettings;
-    circles: Circle[];
     onboardingMcpStats: OnboardingMcpStats;
     initialTab?: string;
     initialVerificationCircleId?: string;
@@ -49,7 +48,6 @@ const normalizeAdminTab = (tab?: string) => (tab && ADMIN_TABS.has(tab) ? tab : 
 
 export default function AdminDashboard({
     serverSettings,
-    circles,
     onboardingMcpStats,
     initialTab,
     initialVerificationCircleId,

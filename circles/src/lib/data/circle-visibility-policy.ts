@@ -2,6 +2,7 @@ import { canDiscoverCircleByLifecycle, canReadCircleByLifecycle } from "@/lib/da
 import { circleVisibilitySchema } from "@/models/models";
 import type { Circle, CircleType, CircleVisibility, Member } from "@/models/models";
 import { ObjectId, type Filter } from "mongodb";
+import { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
 
 type VisibilityAccessInput = {
     circle?: Partial<Circle> | null;
@@ -21,6 +22,17 @@ type EntitlementDependencies = {
 
 type MembershipDependencies = {
     getMember: (userDid: string, circleId: string) => Promise<Member | null>;
+};
+
+type MemberCircleIdDependencies = {
+    findMemberCircleIds: (viewerDid: string) => Promise<Array<{ circleId?: unknown }>>;
+};
+
+const canonicalMemberCircleIdDependencies: MemberCircleIdDependencies = {
+    findMemberCircleIds: async (viewerDid) => {
+        const { Members } = await import("@/lib/data/db");
+        return Members.find({ userDid: viewerDid }, { projection: { circleId: 1 } }).toArray();
+    },
 };
 
 const canonicalMembershipDependencies: MembershipDependencies = {
@@ -103,15 +115,57 @@ export const circleVisibilityMongoQuery = ({
     ];
 
     if (viewerDid) {
-        const memberObjectIds = memberCircleIds
-            .filter((id) => ObjectId.isValid(id))
-            .map((id) => new ObjectId(id));
+        const memberObjectIds = memberCircleIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         if (memberObjectIds.length > 0) {
             visibleConditions.push({ visibility: "secret", _id: { $in: memberObjectIds } });
         }
     }
 
     return { $or: visibleConditions };
+};
+
+export const getCanonicalMemberCircleIds = async (
+    viewerDid?: string,
+    dependencies: MemberCircleIdDependencies = canonicalMemberCircleIdDependencies,
+): Promise<string[]> => {
+    if (!viewerDid) return [];
+    const rows = await dependencies.findMemberCircleIds(viewerDid);
+    return Array.from(
+        new Set(
+            rows
+                .map((row) => row.circleId)
+                .filter((circleId): circleId is string => typeof circleId === "string" && ObjectId.isValid(circleId))
+                .map((circleId) => new ObjectId(circleId).toHexString()),
+        ),
+    );
+};
+
+export const getViewerCircleDiscoveryQuery = async (
+    viewerDid?: string,
+    dependencies?: MemberCircleIdDependencies,
+): Promise<Filter<Circle>> => {
+    const memberCircleIds = await getCanonicalMemberCircleIds(viewerDid, dependencies);
+    return buildViewerCircleDiscoveryQuery(viewerDid, memberCircleIds);
+};
+
+export const buildViewerCircleDiscoveryQuery = (
+    viewerDid?: string,
+    memberCircleIds: readonly string[] = [],
+): Filter<Circle> => {
+    return {
+        $and: [
+            circleVisibilityMongoQuery({ viewerDid, memberCircleIds }),
+            getDiscoverableLifecycleQuery() as Filter<Circle>,
+        ],
+    };
+};
+
+export const getViewerCircleDiscoveryContext = async (
+    viewerDid?: string,
+    dependencies?: MemberCircleIdDependencies,
+): Promise<{ memberCircleIds: string[]; query: Filter<Circle> }> => {
+    const memberCircleIds = await getCanonicalMemberCircleIds(viewerDid, dependencies);
+    return { memberCircleIds, query: buildViewerCircleDiscoveryQuery(viewerDid, memberCircleIds) };
 };
 
 export const canSetCircleVisibility = async (

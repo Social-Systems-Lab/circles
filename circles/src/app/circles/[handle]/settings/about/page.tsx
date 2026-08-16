@@ -3,9 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import {
-    getAffiliatedCirclesForCircle,
+    getDiscoverableAffiliatedCirclesForCircle,
     getCircleByHandle,
-    getCircleById,
+    getDiscoverableCirclesByIds,
     getCirclePublishStatus,
 } from "@/lib/data/circle";
 import { getPendingAttachCircleRequest, getPendingIncomingAttachCircleRequests } from "@/lib/data/circle-attach";
@@ -33,7 +33,9 @@ export default async function AboutSettingsPage(props: PageProps) {
     }
 
     const userDid = await getAuthenticatedUserDid();
-    const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
+    const parentCircle = circle.parentCircleId
+        ? (await getDiscoverableCirclesByIds([circle.parentCircleId], userDid))[0]
+        : undefined;
     const member = userDid && circle._id ? await getMember(userDid, String(circle._id)) : null;
     const adminMembers =
         circle._id && circle.circleType !== "user"
@@ -47,16 +49,26 @@ export default async function AboutSettingsPage(props: PageProps) {
             : [];
     const incomingAttachRequestCircleIds = Array.from(
         new Set(
-            incomingAttachRequests.flatMap((request) => [request.circleId, request.fromParentCircleId || ""]).filter(Boolean),
+            incomingAttachRequests
+                .flatMap((request) => [request.circleId, request.fromParentCircleId || ""])
+                .filter(Boolean),
         ),
     );
-    const incomingAttachRequestCircles = await Promise.all(
-        incomingAttachRequestCircleIds.map((circleId) => getCircleById(circleId)),
+    const incomingAttachRequestCircles = await getDiscoverableCirclesByIds(incomingAttachRequestCircleIds, userDid);
+    const discoverableIncomingCircleIds = new Set(
+        incomingAttachRequestCircles.map((relatedCircle) => String(relatedCircle._id)),
+    );
+    const visibleIncomingAttachRequests = incomingAttachRequests.filter(
+        (request) =>
+            discoverableIncomingCircleIds.has(request.circleId) &&
+            (!request.fromParentCircleId || discoverableIncomingCircleIds.has(request.fromParentCircleId)),
     );
     const pendingAttachTargetParent = pendingAttachRequest
-        ? await getCircleById(pendingAttachRequest.toParentCircleId)
+        ? (await getDiscoverableCirclesByIds([pendingAttachRequest.toParentCircleId], userDid))[0]
         : null;
-    const affiliatedCircles = circle._id ? await getAffiliatedCirclesForCircle(String(circle._id)) : [];
+    const affiliatedCircles = circle._id
+        ? await getDiscoverableAffiliatedCirclesForCircle(String(circle._id), userDid)
+        : [];
     const canManageAffiliations =
         userDid && circle._id ? await isAuthorized(userDid, String(circle._id), features.settings.edit_about) : false;
 
@@ -172,7 +184,7 @@ export default async function AboutSettingsPage(props: PageProps) {
                               }
                             : null
                     }
-                    incomingAttachRequests={incomingAttachRequests.map((request) => {
+                    incomingAttachRequests={visibleIncomingAttachRequests.map((request) => {
                         const movingCircle = incomingAttachRequestCircles.find(
                             (requestCircle) => requestCircle?._id?.toString?.() === request.circleId,
                         );

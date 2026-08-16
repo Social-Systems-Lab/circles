@@ -24,10 +24,30 @@ import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
 import {
     assertCanSetCircleVisibility,
     assertGenericCircleUpdateDoesNotChangeVisibility,
+    getViewerCircleDiscoveryQuery,
+    getViewerCircleDiscoveryContext,
 } from "@/lib/data/circle-visibility-policy";
+import {
+    buildCircleListQuery,
+    buildCommunityRelatedCirclesQuery,
+    buildDiscoverableCircleIdsQuery,
+    buildSwipeCircleQuery,
+    getPublishedCircleQuery,
+    sanitizeCircleDiscoveryResult,
+} from "@/lib/data/circle-discovery-queries";
+
+export {
+    buildCircleListQuery,
+    buildCommunityRelatedCirclesQuery,
+    buildDiscoverableCircleIdsQuery,
+    buildSwipeCircleQuery,
+    getPublishedCircleQuery,
+    sanitizeCircleDiscoveryResult,
+} from "@/lib/data/circle-discovery-queries";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -143,6 +163,19 @@ export const getCirclesByIds = async (ids: string[]): Promise<Circle[]> => {
     return circles;
 };
 
+export const getDiscoverableCirclesByIds = async (ids: string[], viewerDid?: string): Promise<Circle[]> => {
+    const objectIds = ids.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+    if (objectIds.length === 0) return [];
+    const discoveryQuery = await getViewerCircleDiscoveryQuery(viewerDid);
+    const circles = await Circles.find(buildDiscoverableCircleIdsQuery(objectIds, discoveryQuery), {
+        projection: SAFE_CIRCLE_PROJECTION,
+    }).toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) circle._id = circle._id.toString();
+    });
+    return circles.map(sanitizeCircleDiscoveryResult);
+};
+
 export const getCirclesByDids = async (dids: string[]): Promise<Circle[]> => {
     let circles = await Circles.find({ did: { $in: dids } }, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
     circles.forEach((circle: Circle) => {
@@ -181,36 +214,16 @@ export const getCirclePublishStatus = (circle?: Partial<Circle> | null): CircleP
 export const isCirclePublished = (circle?: Partial<Circle> | null): boolean =>
     getCirclePublishStatus(circle) === "published";
 
-export const getPublishedCircleQuery = (): any => ({
-    $or: [{ publishStatus: "published" as const }, { publishStatus: { $exists: false } }],
-});
+export { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
 
-export const getDiscoverableLifecycleQuery = (): any => ({
-    $or: [
-        { circleType: "user" },
-        { moderationStatus: { $in: ["active", "paused"] } },
-        { moderationStatus: { $exists: false } },
-    ],
-});
-
-export const getSwipeCircles = async (): Promise<Circle[]> => {
+export const getSwipeCircles = async (viewerDid?: string): Promise<Circle[]> => {
     let circles: Circle[] = [];
 
-    circles = await Circles.find(
-        {
-            $and: [
-                getPublishedCircleQuery(),
-                getDiscoverableLifecycleQuery(),
-                {
-                    $or: [
-                        { circleType: { $ne: "user" } },
-                        { $and: [{ circleType: "user" }, { accountStatus: { $ne: "rejected" } }] },
-                    ],
-                },
-            ],
-        },
-        { projection: DISCOVERY_CIRCLE_PROJECTION },
-    ).toArray();
+    const discoveryQuery = await getViewerCircleDiscoveryQuery(viewerDid);
+
+    circles = await Circles.find(buildSwipeCircleQuery(discoveryQuery), {
+        projection: DISCOVERY_CIRCLE_PROJECTION,
+    }).toArray();
 
     circles = circles.filter(isServerDerivedMapVisibleCircle).map(toDiscoveryMapCircle);
 
@@ -220,7 +233,7 @@ export const getSwipeCircles = async (): Promise<Circle[]> => {
         }
     });
     //circles = filterLocations(circles) as any[];
-    return circles;
+    return circles.map(sanitizeCircleDiscoveryResult);
 };
 
 export const getCircles = async (
@@ -231,50 +244,31 @@ export const getCircles = async (
     includeCreated?: boolean,
     includeMember?: boolean,
 ): Promise<Circle[]> => {
-    let query: any = {
-        $and: [{ circleType: circleType ?? "circle" }, getPublishedCircleQuery(), getDiscoverableLifecycleQuery()],
-    };
-    if (parentCircleId) {
-        query.$and.push({ parentCircleId });
-    }
-    if (sdgHandles && sdgHandles.length > 0) {
-        query.$and.push({ causes: { $in: sdgHandles } });
-    }
+    const discoveryContext = await getViewerCircleDiscoveryContext(userDid);
+    const discoveryQuery = discoveryContext.query;
+    let includeCreatedBy: string | undefined;
+    let includeMemberCircleIds: ObjectId[] = [];
 
     if (userDid && circleType === "circle") {
         const userCircle = await Circles.findOne({ did: userDid, circleType: "user" });
         if (userCircle && userCircle._id.toString() === parentCircleId) {
-            const userQueries = [];
             if (includeCreated) {
-                userQueries.push({ createdBy: userDid });
+                includeCreatedBy = userDid;
             }
             if (includeMember) {
-                const memberships = await Members.find({ userDid }).toArray();
-                const circleIds = memberships.map((m) => new ObjectId(m.circleId));
-                userQueries.push({ _id: { $in: circleIds } });
-            }
-
-            if (userQueries.length > 0) {
-                query = {
-                    $and: [
-                        { circleType: "circle" },
-                        {
-                            $or: [
-                                {
-                                    $and: [
-                                        { parentCircleId },
-                                        getPublishedCircleQuery(),
-                                        getDiscoverableLifecycleQuery(),
-                                    ],
-                                },
-                                ...userQueries,
-                            ],
-                        },
-                    ],
-                };
+                includeMemberCircleIds = discoveryContext.memberCircleIds.map((circleId) => new ObjectId(circleId));
             }
         }
     }
+
+    const query = buildCircleListQuery({
+        parentCircleId,
+        circleType,
+        sdgHandles,
+        discoveryQuery,
+        includeCreatedBy,
+        includeMemberCircleIds,
+    });
 
     let circles = await Circles.find(query, { projection: SAFE_CIRCLE_PROJECTION }).toArray();
     circles.forEach((circle: Circle) => {
@@ -283,12 +277,17 @@ export const getCircles = async (
         }
     });
     //circles = filterLocations(circles) as any[];
-    return circles;
+    return circles.map(sanitizeCircleDiscoveryResult);
 };
 
 export const countCirclesAndUsers = async (): Promise<PlatformMetrics> => {
-    const circles = await Circles.countDocuments({ circleType: "circle" });
-    const users = await Circles.countDocuments({ circleType: "user" });
+    const discoveryQuery = await getViewerCircleDiscoveryQuery(undefined);
+    const circles = await Circles.countDocuments({
+        $and: [{ circleType: "circle" }, getPublishedCircleQuery(), discoveryQuery],
+    });
+    const users = await Circles.countDocuments({
+        $and: [{ circleType: "user" }, getPublishedCircleQuery(), discoveryQuery],
+    });
 
     return { circles, users };
 };
@@ -347,20 +346,8 @@ export const getCommunityCirclesWithRelationships = async (
     sort?: SortingOptions,
     sdgHandles?: string[],
 ): Promise<CircleWithRelationship[]> => {
-    const query: any = {
-        $and: [
-            { circleType: "circle" },
-            getPublishedCircleQuery(),
-            getDiscoverableLifecycleQuery(),
-            {
-                $or: [{ parentCircleId: circleId }, { affiliatedCircleIds: circleId }],
-            },
-        ],
-    };
-
-    if (sdgHandles && sdgHandles.length > 0) {
-        query.$and.push({ causes: { $in: sdgHandles } });
-    }
+    const discoveryQuery = await getViewerCircleDiscoveryQuery(userDid);
+    const query = buildCommunityRelatedCirclesQuery(circleId, discoveryQuery, sdgHandles);
 
     const circles = (await Circles.find(query, {
         projection: SAFE_CIRCLE_PROJECTION,
@@ -382,7 +369,7 @@ export const getCommunityCirclesWithRelationships = async (
 
         if (!existing || relationshipToCurrentCircle === "child") {
             dedupedById.set(id, {
-                ...circle,
+                ...sanitizeCircleDiscoveryResult(circle),
                 relationshipToCurrentCircle,
             });
         }
@@ -418,6 +405,21 @@ export const getAffiliatedCirclesForCircle = async (circleId: string): Promise<C
     });
 
     return circles;
+};
+
+export const getDiscoverableAffiliatedCirclesForCircle = async (
+    circleId: string,
+    viewerDid?: string,
+): Promise<Circle[]> => {
+    const discoveryQuery = await getViewerCircleDiscoveryQuery(viewerDid);
+    const circles = await Circles.find(
+        { $and: [{ circleType: "circle", affiliatedCircleIds: circleId }, discoveryQuery] },
+        { projection: SAFE_CIRCLE_PROJECTION },
+    ).toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) circle._id = circle._id.toString();
+    });
+    return circles.map(sanitizeCircleDiscoveryResult);
 };
 
 export const getMetricsForCircles = async (
@@ -647,6 +649,28 @@ export const getCirclesBySearchQuery = async (query: string, limit: number = 10,
         }
     });
     return circles as Circle[];
+};
+
+export const getDiscoverableCirclesBySearchQuery = async (
+    query: string,
+    limit: number = 10,
+    circleType?: CircleType,
+    viewerDid?: string,
+) => {
+    const regex = new RegExp(query, "i");
+    const searchFilter: Record<string, unknown> = { name: regex };
+    if (circleType) searchFilter.circleType = circleType;
+    const discoveryQuery = await getViewerCircleDiscoveryQuery(viewerDid);
+    const circles = await Circles.find(
+        { $and: [searchFilter, getPublishedCircleQuery(), discoveryQuery] },
+        { projection: SAFE_CIRCLE_PROJECTION },
+    )
+        .limit(limit)
+        .toArray();
+    circles.forEach((circle: Circle) => {
+        if (circle._id) circle._id = circle._id.toString();
+    });
+    return circles.map((circle) => sanitizeCircleDiscoveryResult(circle as Circle));
 };
 
 /**

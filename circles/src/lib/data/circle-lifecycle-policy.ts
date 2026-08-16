@@ -1,5 +1,13 @@
 import type { Circle, CircleModerationStatus } from "@/models/models";
-import { ObjectId } from "mongodb";
+import { ObjectId, type Filter } from "mongodb";
+
+export const getDiscoverableLifecycleQuery = (): Filter<Circle> => ({
+    $or: [
+        { circleType: "user" },
+        { moderationStatus: { $in: ["active", "paused"] } },
+        { moderationStatus: { $exists: false } },
+    ],
+});
 
 export const getCircleModerationStatus = (circle?: Partial<Circle> | null): CircleModerationStatus =>
     circle?.moderationStatus ?? "active";

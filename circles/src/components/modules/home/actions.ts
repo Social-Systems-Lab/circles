@@ -6,7 +6,13 @@ import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/memb
 import { ChatRoom, Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
-import { getCircleById, getCirclePath, updateCircle, getCircleByDid, getCirclesByIds } from "@/lib/data/circle";
+import {
+    getCircleById,
+    getCirclePath,
+    updateCircle,
+    getCircleByDid,
+    getDiscoverableCirclesByIds,
+} from "@/lib/data/circle";
 import { DETACH_ADMIN_CHANGE_BLOCK_MESSAGE, getPendingDetachCircleRequest } from "@/lib/data/circle-detach";
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
@@ -207,6 +213,7 @@ export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivat
         if (isBookmarked) {
             await removeBookmark(userDid, circleId);
         } else {
+            if (!(await getDiscoverableCirclesByIds([circleId], userDid))[0]) return undefined;
             await addBookmark(userDid, circleId);
         }
 
@@ -240,7 +247,7 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
         if (!ids || ids.length === 0) {
             return [];
         }
-        const circles = await getCirclesByIds(ids);
+        const circles = await getDiscoverableCirclesByIds(ids, userDid);
         return circles;
     } catch (error) {
         console.error("Failed to load bookmarked circles", error);
@@ -259,6 +266,7 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
         const userDid = payload.userDid as string;
         if (!userDid) return undefined;
 
+        if (!(await getDiscoverableCirclesByIds([circleId], userDid))[0]) return undefined;
         await pinCircle(userDid, circleId);
         const updated = (await getUserPrivate(userDid)) as UserPrivate;
         return updated;
