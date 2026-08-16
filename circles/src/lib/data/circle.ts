@@ -24,6 +24,10 @@ import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import {
+    assertCanSetCircleVisibility,
+    assertGenericCircleUpdateDoesNotChangeVisibility,
+} from "@/lib/data/circle-visibility-policy";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -61,6 +65,7 @@ export const SAFE_CIRCLE_PROJECTION = {
     circleType: 1,
     publishStatus: 1,
     moderationStatus: 1,
+    visibility: 1,
     moderationStatusChangedAt: 1,
     moderationStatusChangedBy: 1,
     interests: 1,
@@ -106,6 +111,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     circleType: 1,
     publishStatus: 1,
     moderationStatus: 1,
+    visibility: 1,
     interests: 1,
     location: 1,
     causes: 1,
@@ -462,6 +468,11 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
         // Ensure we have the creator's DID
         throw new Error("Authenticated user DID is required to create a circle.");
     }
+    await assertCanSetCircleVisibility({
+        actorDid: authenticatedUserDid,
+        circleType: circle.circleType ?? "circle",
+        visibility: circle.visibility,
+    });
 
     // check if handle is already in use
     let existingCircle = await Circles.findOne({ handle: circle.handle }, { projection: SAFE_CIRCLE_PROJECTION });
@@ -553,6 +564,8 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
     if (!existingCircle) {
         throw new Error("Circle not found");
     }
+    assertGenericCircleUpdateDoesNotChangeVisibility(existingCircle, circleWithoutId);
+    delete circleWithoutId.visibility;
 
     // Authorization check: If it's a user circle, ensure the authenticated user owns it
     if (existingCircle.circleType === "user") {

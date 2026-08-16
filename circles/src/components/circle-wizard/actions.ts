@@ -169,8 +169,12 @@ export async function saveBasicInfoAction(
     }
 }
 
-export async function createCircleAction(circleData: CircleData, userDid: string) {
+export async function createCircleAction(circleData: CircleData, _userDid: string) {
     try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) {
+            return { success: false, message: "You need to be logged in" };
+        }
         const currentUser = await getUserPrivate(userDid);
         if (!canParticipate(currentUser)) {
             return { success: false, message: getParticipationRequiredMessage("create circles", currentUser) };

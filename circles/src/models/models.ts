@@ -18,6 +18,7 @@ export const circleTypeSchema = z.enum(["user", "circle", "project"]);
 export const circleLevelSchema = z.enum(["profile_child", "top_level"]);
 export const circlePublishStatusSchema = z.enum(["draft", "pending_verification", "published"]);
 export const circleModerationStatusSchema = z.enum(["active", "paused", "suspended", "removed"]);
+export const circleVisibilitySchema = z.enum(["public", "secret"]);
 export const verificationStatusSchema = z.enum(["unverified", "pending", "verified"]);
 export const accountStatusSchema = z.enum(["pending_verification", "active", "rejected"]);
 export const humanityVerificationLevelSchema = z.enum(["real_person", "met_in_real_life"]);
@@ -79,6 +80,7 @@ export type CircleType = z.infer<typeof circleTypeSchema>;
 export type CircleLevel = z.infer<typeof circleLevelSchema>;
 export type CirclePublishStatus = z.infer<typeof circlePublishStatusSchema>;
 export type CircleModerationStatus = z.infer<typeof circleModerationStatusSchema>;
+export type CircleVisibility = z.infer<typeof circleVisibilitySchema>;
 export type HumanityVerificationLevel = z.infer<typeof humanityVerificationLevelSchema>;
 
 export const memberSchema = z.object({
@@ -509,6 +511,7 @@ export const circleSchema = z.object({
     circleType: circleTypeSchema.optional(),
     publishStatus: circlePublishStatusSchema.optional(),
     moderationStatus: circleModerationStatusSchema.optional(),
+    visibility: circleVisibilitySchema.optional(),
     moderationStatusChangedAt: z.date().optional(),
     moderationStatusChangedBy: didSchema.optional(),
     interests: z.array(z.string()).optional(),
