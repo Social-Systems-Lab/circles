@@ -52,6 +52,9 @@ const superAdminEntitlementDependencies: EntitlementDependencies = {
 export const getCircleVisibility = (circle?: Partial<Circle> | null): CircleVisibility =>
     circle?.circleType === "user" ? "public" : (circle?.visibility ?? "public");
 
+export const isCircleEligibleForPublicVectorIndex = (circle?: Partial<Circle> | null): boolean =>
+    Boolean(circle) && getCircleVisibility(circle) === "public";
+
 export const evaluateCircleVisibilityAccess = ({
     circle,
     viewerDid,

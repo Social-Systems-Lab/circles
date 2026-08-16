@@ -19,6 +19,14 @@ import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
 import { getPostsForEmbedding } from "./feed";
 import { v5 as uuidv5 } from "uuid";
+import { ObjectId } from "mongodb";
+import {
+    deletePublicCircleVectors,
+    getCircleVectorPointId,
+    normalizeCircleVectorMongoIds,
+    reconcilePublicCircleVectorBatch,
+    upsertEligiblePublicCircleVectors,
+} from "@/lib/data/circle-vector-publication";
 
 let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
@@ -47,7 +55,9 @@ class VdbDisabledError extends Error {
 
 const logVdbDisabled = (context: string) => {
     if (!hasLoggedVdbDisabled) {
-        console.info(`[VDB] Disabled locally – skipping ${context}. Set VDB_ENABLED=true to enable Qdrant/OpenAI features.`);
+        console.info(
+            `[VDB] Disabled locally – skipping ${context}. Set VDB_ENABLED=true to enable Qdrant/OpenAI features.`,
+        );
         hasLoggedVdbDisabled = true;
     }
 };
@@ -137,10 +147,15 @@ export const upsertVdbCollections = async () => {
     }
 
     // upsert data for each collection
-    console.log("Upserting circles to Qdrant...");
+    console.log("Reconciling public circles in Qdrant...");
     const circles = await Circles.find().toArray();
-    await upsertVbdCircles(circles);
-    console.log(`${circles.length} circles upserted.`);
+    const circleResult = await reconcilePublicCircleVectorBatch(circles, {
+        deleteCircles: deleteVbdCircles,
+        upsertCircles: upsertVbdCircles,
+    });
+    console.log(
+        `${circleResult.eligibleCount} public circles upserted; ${circleResult.purgedCount} secret vectors purged.`,
+    );
 
     console.log("Upserting posts to Qdrant...");
     const posts = await getPostsForEmbedding();
@@ -298,7 +313,6 @@ const getNamesFromHandles = (handles: string[], data: any[]) => {
     });
 };
 
-const circleNs = "374c3b2f-be54-5c82-b3a1-f16f7b205cdc";
 const postNs = "425f7857-1b1b-5ddc-b797-bd12ff00023c";
 const sdgNs = "2fb0c076-39d6-5c9b-b98d-24409f4ebfbc";
 const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
@@ -312,23 +326,27 @@ const goalNs = "c6bfe6f5-6a6a-5ef6-95e9-7c8ba57a8e21";
 
 // Upsert function for circles
 export const upsertVbdCircles = async (circles: Circle[]) => {
-    if (circles.length <= 0) {
-        console.log("No circles to upsert.");
-        return;
-    }
-
-    const client = await getQdrantClient();
-
-    console.log("Getting embeddings for circles. Count:", circles.length);
-
-    const embeddings = await getEmbeddings(circles.map((circle) => formatCircleForEmbedding(circle)));
-
-    console.log("Embeddings generated. Count:", embeddings.length);
-
-    const qdrantPoints = circles.map((circle, i) => {
-        return {
-            id: uuidv5(circle._id!.toString(), circleNs),
-            vector: embeddings[i],
+    let preparedClient: QdrantClient | undefined;
+    return upsertEligiblePublicCircleVectors<
+        number[],
+        { id: string; vector: number[]; payload: Record<string, unknown> }
+    >(circles, {
+        loadCanonicalCircles: async (circleIds, fullDocument) => {
+            const objectIds = circleIds.map((circleId) => new ObjectId(circleId));
+            if (fullDocument) return Circles.find({ _id: { $in: objectIds } }).toArray();
+            return Circles.find(
+                { _id: { $in: objectIds } },
+                { projection: { _id: 1, circleType: 1, visibility: 1 } },
+            ).toArray();
+        },
+        preparePublication: async () => {
+            preparedClient = await getQdrantClient();
+        },
+        formatCircle: formatCircleForEmbedding,
+        embedTexts: getEmbeddings,
+        buildPoint: (circle, embedding) => ({
+            id: getCircleVectorPointId(circle._id!.toString()),
+            vector: embedding,
             payload: {
                 mongoId: circle._id!.toString(), // Add MongoDB _id here
                 name: circle.name,
@@ -348,11 +366,17 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
                 causes: circle.causes,
                 skills: circle.skills,
             },
-        };
+        }),
+        upsertPoints: async (points) => {
+            if (!preparedClient) throw new Error("Public Circle vector client was not prepared.");
+            console.log("Upserting public Circle embeddings. Count:", points.length);
+            await preparedClient.upsert("circles", { points });
+        },
+        deleteCircles: async (circleIds) => {
+            await deleteVbdCircles(circleIds);
+        },
+        assertCirclesAbsent: assertVbdCirclesAbsent,
     });
-
-    console.log("Upserting embeddings...");
-    await client.upsert("circles", { points: qdrantPoints });
 };
 
 // Repeat similar logic for posts, sdgs, and skills
@@ -620,18 +644,33 @@ export const upsertVbdGoals = async (goals: Goal[]) => {
     await client.upsert("goals", { points });
 };
 
+export const deleteVbdCircles = async (circleIds: readonly unknown[]) => {
+    return deletePublicCircleVectors(circleIds, {
+        deletePoints: async (pointIds, options) => {
+            const client = await getQdrantClient();
+            await client.delete("circles", {
+                points: pointIds,
+                wait: options.wait,
+            });
+        },
+    });
+};
+
 // Method to delete circles from Qdrant by ID
 export const deleteVbdCircle = async (circleId: string) => {
+    await deleteVbdCircles([circleId]);
+};
+
+export const assertVbdCirclesAbsent = async (circleIds: readonly unknown[]): Promise<void> => {
+    const normalizedIds = normalizeCircleVectorMongoIds(circleIds);
+    if (normalizedIds.length === 0) return;
     const client = await getQdrantClient();
-
-    let uuid = uuidv5(circleId, circleNs);
-
-    // Delete the circle from the 'circles' collection in Qdrant
-    await client.delete("circles", {
-        points: [uuid],
+    const existing = await client.retrieve("circles", {
+        ids: normalizedIds.map(getCircleVectorPointId),
+        with_payload: false,
+        with_vector: false,
     });
-
-    console.log(`Circle with ID ${circleId} deleted from Qdrant.`);
+    if (existing.length > 0) throw new Error("Public Circle vector deletion could not be verified.");
 };
 
 // Method to delete posts from Qdrant by ID
@@ -651,7 +690,7 @@ export const deleteVbdPost = async (postId: string) => {
 export const getVbdCircleById = async (circleId: string) => {
     const client = await getQdrantClient();
 
-    let uuid = uuidv5(circleId, circleNs);
+    let uuid = getCircleVectorPointId(circleId);
 
     // Retrieve the circle by ID
     const response = await client.retrieve("circles", {
@@ -702,10 +741,8 @@ export const getVbdSimilarity = async (
     const collectionName = isCircle ? "circles" : "posts";
     const idName = (item as any)._id?.toString();
     const sourceIdName = (source as any)._id?.toString();
-    const targetNs = isCircle ? circleNs : postNs;
-
-    let sourceUuid = uuidv5(sourceIdName, circleNs);
-    let targetUuid = uuidv5(idName, targetNs);
+    let sourceUuid = getCircleVectorPointId(sourceIdName);
+    let targetUuid = isCircle ? getCircleVectorPointId(idName) : uuidv5(idName, postNs);
 
     // Force recompile check
     if (!idName) return undefined;
