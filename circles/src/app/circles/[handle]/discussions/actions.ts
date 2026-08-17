@@ -2,7 +2,6 @@
 
 import {
     createDiscussion,
-    listDiscussionsByCircle,
     getDiscussionWithComments,
     addCommentToDiscussion,
     pinDiscussion,
@@ -16,6 +15,14 @@ import { getUserByDid } from "@/lib/data/user";
 import { canInteract, getInteractionRequiredMessage } from "@/lib/auth/verification";
 import { extractMentions } from "@/lib/data/feed";
 import { getMentionableUserIdsForUserDid } from "@/lib/data/chat";
+import { createDefaultFeed, getFeedByHandle } from "@/lib/data/feed";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import {
+    canPerformCanonicalDiscussionAction,
+    listReadableDiscussions,
+    resolveReadablePostContext,
+} from "@/lib/data/post-access-policy";
+import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
 
 /**
  * Create a new discussion in a circle
@@ -32,6 +39,7 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
 
     const circle = await getCircleByHandle(handle);
     if (!circle) throw new Error("Circle not found");
+    if (!(await canReadCircle(userDid, circle))) throw new Error("Circle not found");
 
     // For now, allow creation if user is authorized for posts in feeds (reuse feed.post permission)
     const canCreate = await isAuthorized(userDid, circle._id as string, features.feed.post);
@@ -84,10 +92,14 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
         }
     }
 
+    let feed = await getFeedByHandle(circle._id.toString(), "default");
+    if (!feed) feed = await createDefaultFeed(circle._id.toString());
+    if (!feed?._id) throw new Error("Circle not found");
+
     return createDiscussion({
         ...payload,
         mentions,
-        feedId: circle._id.toString(), // reuse circleId as feedId for now
+        feedId: feed._id.toString(),
         createdBy: userDid,
         circleId: circle._id.toString(),
     });
@@ -97,17 +109,18 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
  * List discussions for a circle
  */
 export async function listDiscussionsAction(handle: string) {
-    const circle = await getCircleByHandle(handle);
-    if (!circle) throw new Error("Circle not found");
-
-    return listDiscussionsByCircle(circle._id.toString());
+    const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
+    return listReadableDiscussions(handle, viewerDid);
 }
 
 /**
  * Get a discussion with comments
  */
 export async function getDiscussionAction(id: string) {
-    return getDiscussionWithComments(id);
+    const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
+    const context = await resolveReadablePostContext(id, viewerDid);
+    if (!context || context.post.postType !== "discussion") return null;
+    return getDiscussionWithComments(id, context.post.feedId);
 }
 
 /**
@@ -122,8 +135,7 @@ export async function addCommentAction(discussionId: string, data: Partial<Comme
 
     const discussion = await getDiscussionWithComments(discussionId);
     if (!discussion) throw new Error("Forum post not found");
-
-    const canComment = await isAuthorized(userDid, discussion.feedId, features.feed.comment);
+    const canComment = await canPerformCanonicalDiscussionAction(discussion, userDid, features.feed.comment);
     if (!canComment) throw new Error("Not authorized to comment");
 
     return addCommentToDiscussion(discussionId, {
@@ -141,8 +153,7 @@ export async function pinDiscussionAction(id: string, pinned: boolean) {
 
     const discussion = await getDiscussionWithComments(id);
     if (!discussion) throw new Error("Forum post not found");
-
-    const canModerate = await isAuthorized(userDid, discussion.feedId, features.feed.moderate);
+    const canModerate = await canPerformCanonicalDiscussionAction(discussion, userDid, features.feed.moderate);
     if (!canModerate) throw new Error("Not authorized to pin forum posts");
 
     return pinDiscussion(id, pinned);
@@ -157,8 +168,7 @@ export async function closeDiscussionAction(id: string) {
 
     const discussion = await getDiscussionWithComments(id);
     if (!discussion) throw new Error("Forum post not found");
-
-    const canModerate = await isAuthorized(userDid, discussion.feedId, features.feed.moderate);
+    const canModerate = await canPerformCanonicalDiscussionAction(discussion, userDid, features.feed.moderate);
     if (!canModerate) throw new Error("Not authorized to close forum posts");
 
     return closeDiscussion(id);

@@ -1,7 +1,8 @@
 import { DiscussionItem } from "@/components/modules/discussions/discussion-list";
 import { notFound } from "next/navigation";
-import { getCircleByHandle } from "@/lib/data/circle";
 import { getFeed, getFullPost } from "@/lib/data/feed";
+import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 
 interface DiscussionDetailPageProps {
     params: Promise<{ handle: string; discussionId: string }>;
@@ -9,10 +10,11 @@ interface DiscussionDetailPageProps {
 
 export default async function DiscussionDetailPage(props: DiscussionDetailPageProps) {
     const { handle, discussionId } = await props.params;
-    const post = await getFullPost(discussionId);
-    const circle = await getCircleByHandle(handle);
+    const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
+    const post = await getFullPost(discussionId, viewerDid);
+    const circle = post?.circle;
 
-    if (!post || !circle) {
+    if (!post || !circle || circle.handle !== handle) {
         notFound();
     }
 

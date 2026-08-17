@@ -14,7 +14,6 @@ import {
     getPost,
     deletePost,
     getComment,
-    getAllComments,
     getPosts,
     updateComment,
     deleteComment,
@@ -24,7 +23,6 @@ import {
     getAccessibleFeedIdsForUser,
     getPostsFromMultipleFeedsWithMetrics,
     getPublicFeeds,
-    getPublicUserFeed, // Added getPublicUserFeed
     createFeed,
     createDefaultFeed,
     getShareablePostPreview,
@@ -83,17 +81,25 @@ import { cleanupUploadedFiles } from "@/lib/data/post-upload-rollback";
 import { getPostTitleUpdate, validatePostUpdateContent } from "@/lib/data/post-content-policy";
 import type { PostUpdateResult } from "@/lib/data/post-list-state";
 import { normalizePostId } from "@/lib/data/post-update-identity";
+import {
+    getReadablePostComments,
+    resolveFeedActionViewerDid,
+    resolvePublicUserFeed,
+    resolveReadablePostContext,
+} from "@/lib/data/post-access-policy";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
-    userDid: string | undefined,
+    claimedUserDid: string | undefined,
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
     sdgHandles?: string[],
 ): Promise<PostDisplay[]> {
+    const userDid = await resolveFeedActionViewerDid(claimedUserDid);
     // Get all public feeds
-    const publicFeeds = await getPublicFeeds();
+    const publicFeeds = await getPublicFeeds(userDid);
     if (publicFeeds.length === 0) return [];
 
     // Map the public feeds to their IDs
@@ -107,7 +113,7 @@ export async function getGlobalPostsAction(
 }
 
 export async function getAggregatePostsAction(
-    userDid: string | undefined,
+    claimedUserDid: string | undefined,
     limit: number,
     skip: number,
     sortingOptions?: SortingOptions,
@@ -115,6 +121,7 @@ export async function getAggregatePostsAction(
     circleHandle?: string,
     postType?: string,
 ): Promise<PostDisplay[]> {
+    const userDid = await resolveFeedActionViewerDid(claimedUserDid);
     if (!userDid) {
         return getGlobalPostsAction(userDid, limit, skip, sortingOptions, sdgHandles);
     }
@@ -445,7 +452,7 @@ export async function getPostsAction(
     sdgHandles?: string[],
     postType?: Post["postType"],
 ): Promise<PostDisplay[]> {
-    let userDid = await getAuthenticatedUserDid();
+    const userDid = await resolveFeedActionViewerDid();
     const feed = await getFeed(feedId);
     if (!feed) {
         redirect("/not-found");
@@ -455,8 +462,12 @@ export async function getPostsAction(
         redirect("/not-found");
     }
 
+    const circle = await getCircleById(circleId);
+    if (!circle || !(await canReadCircle(userDid, circle))) {
+        redirect("/not-found");
+    }
+
     if (feed.handle === "community") {
-        const circle = await getCircleById(circleId);
         if (!circle?.enabledModules?.includes("community")) {
             redirect("/not-found");
         }
@@ -1120,40 +1131,8 @@ export async function createCommentAction(
 export async function getAllCommentsAction(
     postId: string,
 ): Promise<{ success: boolean; comments?: CommentDisplay[]; message?: string }> {
-    let userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to view comments" };
-    }
-
-    try {
-        let post = await getPost(postId);
-        if (!post) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const feed = await getFeed(post.feedId);
-        if (!feed) {
-            return { success: false, message: "Noticeboard not found" };
-        }
-        if (!(await isPostModuleEnabled(post, feed))) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const viewFeature = getPostViewFeature(post.postType);
-        if (!viewFeature) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const authorized = await isAuthorized(userDid, feed.circleId, viewFeature);
-        if (!authorized) {
-            return { success: false, message: "You are not authorized to view comments on the noticeboard" };
-        }
-
-        const comments = await getAllComments(postId, userDid);
-        return { success: true, comments };
-    } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to get comments." };
-    }
+    const userDid = await resolveFeedActionViewerDid();
+    return getReadablePostComments(postId, userDid);
 }
 
 export async function editCommentAction(
@@ -1451,25 +1430,10 @@ export async function searchCirclesAction(
  * Get a post by ID
  */
 export async function getPostAction(postId: string): Promise<Post | null> {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) return null;
+    const userDid = await resolveFeedActionViewerDid();
 
     try {
-        const post = await getPost(postId);
-        if (!post) return null;
-
-        const feed = await getFeed(post.feedId);
-        if (!feed) return null;
-        if (!(await isPostModuleEnabled(post, feed))) return null;
-
-        // Check if user has permission to view the feed
-        const viewFeature = getPostViewFeature(post.postType);
-        if (!viewFeature) return null;
-
-        const authorized = await isAuthorized(userDid, feed.circleId, viewFeature);
-        if (!authorized) return null;
-
-        return post;
+        return (await resolveReadablePostContext(postId, userDid))?.post ?? null;
     } catch (error) {
         console.error("Error getting post:", error);
         return null;
@@ -1480,15 +1444,16 @@ export async function getPostAction(postId: string): Promise<Post | null> {
  * Get a feed by handle and circle ID
  */
 export async function getFeedByHandleAction(circleId: string, feedHandle: string): Promise<Feed | null> {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) return null;
+    const userDid = await resolveFeedActionViewerDid();
 
     try {
         const feed = await getFeedByHandle(circleId, feedHandle);
         if (!feed) return null;
 
+        const circle = await getCircleById(circleId);
+        if (!circle || !(await canReadCircle(userDid, circle))) return null;
+
         if (feed.handle === "community") {
-            const circle = await getCircleById(circleId);
             if (!circle?.enabledModules?.includes("community")) return null;
         }
 
@@ -1506,14 +1471,9 @@ export async function getFeedByHandleAction(circleId: string, feedHandle: string
     }
 }
 
-export async function getPublicUserFeedAction(userDid: string): Promise<Feed | null> {
-    try {
-        const feed = await getPublicUserFeed(userDid);
-        return feed;
-    } catch (error) {
-        console.error("Error in getPublicUserFeedAction:", error);
-        return null;
-    }
+export async function getPublicUserFeedAction(targetDid: string): Promise<Feed | null> {
+    const viewerDid = await resolveFeedActionViewerDid();
+    return resolvePublicUserFeed(targetDid, viewerDid);
 }
 
 export async function getVerificationStatusAction(): Promise<"verified" | "pending" | "unverified"> {

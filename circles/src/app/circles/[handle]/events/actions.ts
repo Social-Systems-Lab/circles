@@ -65,6 +65,7 @@ import {
 import { inviteUsersToEvent } from "@/lib/data/event";
 import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
+import { resolveFeedActionViewerDid, resolveReadablePostContext } from "@/lib/data/post-access-policy";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
 import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
@@ -2284,11 +2285,14 @@ export async function addEventCommentAction(eventId: string, data: Partial<Comme
  * Get event with comments (via its shadow post)
  */
 export async function getEventWithCommentsAction(eventId: string) {
-    const event = await getEventById(eventId, (await getAuthenticatedUserDid()) || "");
+    const viewerDid = await resolveFeedActionViewerDid();
+    const event = await getEventById(eventId, viewerDid || "");
     if (!event) throw new Error("Event not found");
     if (!event.commentPostId) return { ...event, comments: [] };
+    const context = await resolveReadablePostContext(event.commentPostId, viewerDid);
+    if (!context) throw new Error("Event not found");
 
-    const discussion = await getDiscussionWithComments(event.commentPostId);
+    const discussion = await getDiscussionWithComments(event.commentPostId, context.post.feedId);
     return { ...event, comments: discussion?.comments || [] };
 }
 

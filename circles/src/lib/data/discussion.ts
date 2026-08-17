@@ -7,6 +7,7 @@ import { ObjectId } from "mongodb";
  */
 import { getUserByDid } from "./user";
 import { upsertVbdPosts } from "./vdb";
+import { buildAuthorizedPostHydrationMatch } from "./post-access-policy";
 
 export async function createDiscussion(data: Partial<Post>) {
     const now = new Date();
@@ -73,8 +74,8 @@ export async function createDiscussion(data: Partial<Post>) {
 /**
  * List discussions for a circle, pinned first
  */
-export async function listDiscussionsByCircle(circleId: string) {
-    const discussions = await Posts.find({ circleId, postType: "discussion" })
+export async function listDiscussionsByCircle(circleId: string, feedId: string) {
+    const discussions = await Posts.find({ circleId, feedId, postType: "discussion" })
         .sort({ pinned: -1, createdAt: -1 })
         .toArray();
 
@@ -101,9 +102,23 @@ export async function listDiscussionsByCircle(circleId: string) {
 /**
  * Get a discussion with comments
  */
-export async function getDiscussionWithComments(id: string) {
+export async function getDiscussionWithComments(id: string, authorizedFeedId?: string) {
+    const authorizedMatch = authorizedFeedId
+        ? buildAuthorizedPostHydrationMatch(id, authorizedFeedId, "discussion")
+        : { _id: new ObjectId(id), postType: "discussion" as const };
+    if (!authorizedMatch) return null;
     const pipeline = [
-        { $match: { _id: new ObjectId(id), postType: "discussion" } },
+        { $match: authorizedMatch },
+        {
+            $addFields: {
+                feedIdObject: {
+                    $convert: { input: "$feedId", to: "objectId", onError: null, onNull: null },
+                },
+                circleIdObject: {
+                    $convert: { input: "$circleId", to: "objectId", onError: null, onNull: null },
+                },
+            },
+        },
         {
             $lookup: {
                 from: "circles",
@@ -116,21 +131,32 @@ export async function getDiscussionWithComments(id: string) {
         {
             $lookup: {
                 from: "feeds",
-                localField: "feedId",
+                localField: "feedIdObject",
                 foreignField: "_id",
                 as: "feed",
             },
         },
-        { $unwind: { path: "$feed", preserveNullAndEmptyArrays: true } },
         {
             $lookup: {
                 from: "circles",
-                localField: "circleId",
+                localField: "circleIdObject",
                 foreignField: "_id",
                 as: "circle",
             },
         },
-        { $unwind: { path: "$circle", preserveNullAndEmptyArrays: true } },
+        {
+            $match: {
+                $expr: {
+                    $and: [
+                        { $eq: [{ $size: "$feed" }, 1] },
+                        { $eq: [{ $size: "$circle" }, 1] },
+                        { $eq: [{ $arrayElemAt: ["$feed.circleId", 0] }, "$circleId"] },
+                    ],
+                },
+            },
+        },
+        { $unwind: "$feed" },
+        { $unwind: "$circle" },
     ];
 
     const results = await Posts.aggregate(pipeline).toArray();

@@ -29,6 +29,12 @@ import { isAuthorized } from "@/lib/auth/auth";
 import { features, getPostViewFeature } from "./constants";
 import { getPostTypePredicate } from "./feed-filters";
 import { isDuplicateKeyError } from "./feed-indexes";
+import {
+    buildAuthorizedPostHydrationMatch,
+    getViewerReadableFeedIds,
+    resolveReadablePostContext,
+} from "./post-access-policy";
+import { canReadCircle } from "./circle-visibility-policy";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -56,6 +62,7 @@ export const getAccessibleFeedIdsForUser = async (userDid: string, circleHandle?
         }
 
         const circleId = circle._id.toString();
+        if (!(await canReadCircle(userDid, circle))) return [];
         const membership = await Members.findOne({ userDid, circleId }, { projection: { _id: 0, userGroups: 1 } });
         if (!membership) {
             return [];
@@ -68,41 +75,13 @@ export const getAccessibleFeedIdsForUser = async (userDid: string, circleHandle?
             .filter((feedId): feedId is string => Boolean(feedId));
     }
 
-    const memberships = await Members.find(
-        { userDid },
-        { projection: { _id: 0, circleId: 1, userGroups: 1 } },
-    ).toArray();
-    if (memberships.length === 0) {
-        return [];
-    }
-
-    const circleIds = [...new Set(memberships.map((membership) => membership.circleId).filter(Boolean))];
-    const objectIds = circleIds
-        .filter((circleId) => ObjectId.isValid(circleId))
-        .map((circleId) => new ObjectId(circleId));
-    const circles = await Circles.find({ _id: { $in: objectIds } }, { projection: { _id: 1, handle: 1 } }).toArray();
-    const accessibleCircleIds = new Set(
-        circles.filter((circle) => circle.handle !== "default").map((circle) => circle._id.toString()),
-    );
-
-    const membershipsByCircleId = new Map<string, string[]>();
-    for (const membership of memberships) {
-        if (accessibleCircleIds.has(membership.circleId)) {
-            membershipsByCircleId.set(membership.circleId, membership.userGroups ?? []);
-        }
-    }
-
-    const feeds = await getFeedsByCircleIds([...membershipsByCircleId.keys()]);
-    return feeds
-        .filter((feed) => membershipsByCircleId.get(feed.circleId)?.some((group) => feed.userGroups.includes(group)))
-        .map((feed) => feed._id?.toString())
-        .filter((feedId): feedId is string => Boolean(feedId));
+    return getViewerReadableFeedIds(userDid, "member");
 };
 
-export async function getPublicFeeds(): Promise<Feed[]> {
-    // Keep this export
-    const feeds = await Feeds.find({ userGroups: "everyone" }).toArray();
-    return feeds;
+export async function getPublicFeeds(viewerDid?: string): Promise<Feed[]> {
+    const feedIds = await getViewerReadableFeedIds(viewerDid, "public");
+    if (feedIds.length === 0) return [];
+    return Feeds.find({ _id: { $in: feedIds.map((feedId) => new ObjectId(feedId)) } }).toArray();
 }
 
 // Make sure getPublicUserFeed is also exported
@@ -377,15 +356,9 @@ async function buildPostDisplayPreview(post: Post): Promise<PostDisplay | null> 
 }
 
 export const getShareablePostPreview = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
-    const post = await getPost(postId);
-    if (!post) {
-        return null;
-    }
-
-    const canView = await canUserViewPost(post, userDid);
-    if (!canView) {
-        return null;
-    }
+    const context = await resolveReadablePostContext(postId, userDid);
+    if (!context) return null;
+    const { post } = context;
 
     const postDisplay = await buildPostDisplayPreview(post);
     if (!postDisplay) {
@@ -397,9 +370,13 @@ export const getShareablePostPreview = async (postId: string, userDid?: string):
 };
 
 export const getFullPost = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
+    const context = await resolveReadablePostContext(postId, userDid);
+    if (!context) return null;
+    const authorizedMatch = buildAuthorizedPostHydrationMatch(postId, context.post.feedId);
+    if (!authorizedMatch) return null;
     const posts = (await Posts.aggregate([
         {
-            $match: { _id: new ObjectId(postId) },
+            $match: authorizedMatch,
         },
         {
             $addFields: {
