@@ -5,6 +5,7 @@ import { Issue, IssueDisplay, IssueStage, Circle, Member, Post } from "@/models/
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed"; // Import createPost from feed.ts
 import { upsertVbdIssues } from "./vdb";
+import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for issue queries, similar to proposals
@@ -470,7 +471,16 @@ export const updateIssue = async (issueId: string, updates: Partial<Issue>): Pro
         // Remove _id from updates if present, as it cannot be changed
         delete updateData._id;
 
-        const result = await Issues.updateOne({ _id: new ObjectId(issueId) }, { $set: updateData });
+        const ownershipChanges = Object.prototype.hasOwnProperty.call(updates, "circleId");
+        const mutate = () => Issues.updateOne({ _id: new ObjectId(issueId) }, { $set: updateData });
+        const result = ownershipChanges
+            ? await runDerivedResourceVectorSafeMutation({
+                  kind: "issues",
+                  resourceId: issueId,
+                  mutate,
+                  didMutate: (updateResult) => updateResult.matchedCount > 0,
+              })
+            : await mutate();
         return result.matchedCount > 0;
     } catch (error) {
         console.error(`Error updating issue (${issueId}):`, error);
@@ -495,7 +505,12 @@ export const deleteIssue = async (issueId: string): Promise<boolean> => {
         // Example: await Comments.deleteMany({ parentId: issueId, parentType: 'issue' });
         // Example: await Reactions.deleteMany({ contentId: issueId, contentType: 'issue' });
 
-        const result = await Issues.deleteOne({ _id: new ObjectId(issueId) });
+        const result = await runDerivedResourceVectorSafeMutation({
+            kind: "issues",
+            resourceId: issueId,
+            mutate: () => Issues.deleteOne({ _id: new ObjectId(issueId) }),
+            didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+        });
         return result.deletedCount > 0;
     } catch (error) {
         console.error(`Error deleting issue (${issueId}):`, error);

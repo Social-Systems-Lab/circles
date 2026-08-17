@@ -10,9 +10,9 @@ import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
 import { features } from "@/lib/data/constants";
-import { Feeds, Posts, Goals, GoalMembers } from "@/lib/data/db"; // Import DB collections
+import { Feeds, Goals, GoalMembers } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type (Removed duplicate Goal)
-import { createPost } from "@/lib/data/feed"; // Import createPost
+import { createPost, deletePost } from "@/lib/data/feed"; // Import createPost
 import { ObjectId } from "mongodb"; // Import ObjectId
 import {
     getGoalsByCircleId,
@@ -1137,7 +1137,7 @@ export async function completeGoalAction(
             }
             // Attempt to delete victory post if created?
             if (victoryPostId) {
-                await Posts.deleteOne({ _id: new ObjectId(victoryPostId) });
+                await deletePost(victoryPostId);
                 console.log(`Cleaned up victory post ${victoryPostId} after goal completion failure.`);
             }
             return { success: false, message: "Failed to update goal as completed." };

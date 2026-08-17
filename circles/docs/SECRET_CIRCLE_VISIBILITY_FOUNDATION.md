@@ -13,4 +13,6 @@ Initially, only an authenticated superadmin may create or transition a normal ci
 
 Phase 3A2 excludes secret ordinary circles and projects from the public Qdrant collection. Public-to-secret transitions delete and verify the public vector before committing visibility, then reconcile it again afterward; secret-to-public transitions commit public visibility before indexing. Full rebuilds purge stale secret Circle vectors before public upserts, and a manual server-side reconciliation helper is available without automatic startup deletion.
 
-Derived-resource, upload-selection, chat, notification, and admission surfaces remain incomplete release blockers, so Secret Circles must not be enabled in production yet.
+Phase 3B0 applies the same public-only storage rule to posts, tasks/shifts, events, goals, issues, and proposals. Canonical resource and owner records are checked before and after publication. Circle transitions purge affected derived vectors both before and after becoming secret, ownership changes and deletions reconcile synchronously, and full/manual reconciliation removes secret-owned and deleted-resource orphan points across all six public collections. No private vector collection is introduced.
+
+User-facing derived-resource authorization, upload selection, chat, notification, and admission surfaces remain incomplete release blockers, so Secret Circles must not be enabled in production yet.

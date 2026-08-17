@@ -17,7 +17,6 @@ import { getFullLocationName } from "../utils";
 import OpenAI from "openai";
 import { sdgs } from "@/lib/data/sdgs";
 import { skills } from "@/lib/data/skills";
-import { getPostsForEmbedding } from "./feed";
 import { v5 as uuidv5 } from "uuid";
 import { ObjectId } from "mongodb";
 import {
@@ -27,6 +26,22 @@ import {
     reconcilePublicCircleVectorBatch,
     upsertEligiblePublicCircleVectors,
 } from "@/lib/data/circle-vector-publication";
+import {
+    deleteDerivedResourceVectors,
+    deleteRawVectorPoints,
+    getDerivedVectorPointId,
+    normalizeDerivedVectorMongoIds,
+    publishEligibleDerivedResourceVectors,
+    reconcileDerivedResourceVectorBatch,
+    type DerivedVectorKind,
+    type RawVectorPointId,
+    type VectorResource,
+} from "@/lib/data/derived-vector-publication";
+import { loadEligibleCanonicalDerivedResources } from "@/lib/data/derived-vector-ownership";
+import {
+    reconcileSecretOwnedDerivedPublicVectors,
+    type DerivedVectorPointPage,
+} from "@/lib/data/derived-vector-reconciliation";
 
 let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
@@ -157,10 +172,34 @@ export const upsertVdbCollections = async () => {
         `${circleResult.eligibleCount} public circles upserted; ${circleResult.purgedCount} secret vectors purged.`,
     );
 
-    console.log("Upserting posts to Qdrant...");
-    const posts = await getPostsForEmbedding();
-    await upsertVbdPosts(posts);
-    console.log(`${posts.length} posts upserted.`);
+    console.log("Reconciling secret-owned and orphaned derived vectors in Qdrant...");
+    await reconcileSecretOwnedDerivedPublicVectors();
+
+    const reconcileDerivedCollection = async <TResource extends VectorResource>(
+        kind: DerivedVectorKind,
+        resources: TResource[],
+        upsertResources: (resources: TResource[]) => Promise<unknown>,
+    ) => {
+        const result = await reconcileDerivedResourceVectorBatch(resources, {
+            loadEligibleCanonicalResources: (ids, fullDocument) =>
+                loadEligibleCanonicalDerivedResources<TResource>(kind, ids, fullDocument),
+            deleteResources: async (ids) => {
+                await deleteVbdDerivedResources(kind, ids);
+            },
+            assertResourcesAbsent: (ids) => assertVbdDerivedResourcesAbsent(kind, ids),
+            upsertResources,
+        });
+        console.log(
+            `${result.eligibleCount} public ${kind} upserted; ${result.purgedCount} secret-owned vectors purged.`,
+        );
+    };
+
+    console.log("Reconciling public posts in Qdrant...");
+    await reconcileDerivedCollection(
+        "posts",
+        (await Posts.find().toArray()) as unknown as PostDisplay[],
+        upsertVbdPosts,
+    );
 
     console.log("Upserting sdgs to Qdrant...");
     await upsertVbdSdgs();
@@ -171,30 +210,20 @@ export const upsertVdbCollections = async () => {
     console.log(`${skills.length} skills upserted.`);
 
     // New entity upserts
-    console.log("Upserting events to Qdrant...");
-    const events = await Events.find().toArray();
-    await upsertVbdEvents(events);
-    console.log(`${events.length} events upserted.`);
+    console.log("Reconciling public events in Qdrant...");
+    await reconcileDerivedCollection("events", await Events.find().toArray(), upsertVbdEvents);
 
-    console.log("Upserting proposals to Qdrant...");
-    const proposals = await Proposals.find().toArray();
-    await upsertVbdProposals(proposals);
-    console.log(`${proposals.length} proposals upserted.`);
+    console.log("Reconciling public proposals in Qdrant...");
+    await reconcileDerivedCollection("proposals", await Proposals.find().toArray(), upsertVbdProposals);
 
-    console.log("Upserting tasks to Qdrant...");
-    const tasks = await Tasks.find().toArray();
-    await upsertVbdTasks(tasks);
-    console.log(`${tasks.length} tasks upserted.`);
+    console.log("Reconciling public tasks in Qdrant...");
+    await reconcileDerivedCollection("tasks", await Tasks.find().toArray(), upsertVbdTasks);
 
-    console.log("Upserting issues to Qdrant...");
-    const issues = await Issues.find().toArray();
-    await upsertVbdIssues(issues);
-    console.log(`${issues.length} issues upserted.`);
+    console.log("Reconciling public issues in Qdrant...");
+    await reconcileDerivedCollection("issues", await Issues.find().toArray(), upsertVbdIssues);
 
-    console.log("Upserting goals to Qdrant...");
-    const goals = await Goals.find().toArray();
-    await upsertVbdGoals(goals);
-    console.log(`${goals.length} goals upserted.`);
+    console.log("Reconciling public goals in Qdrant...");
+    await reconcileDerivedCollection("goals", await Goals.find().toArray(), upsertVbdGoals);
 };
 
 // Helper function to format a circle into readable text
@@ -313,16 +342,39 @@ const getNamesFromHandles = (handles: string[], data: any[]) => {
     });
 };
 
-const postNs = "425f7857-1b1b-5ddc-b797-bd12ff00023c";
 const sdgNs = "2fb0c076-39d6-5c9b-b98d-24409f4ebfbc";
 const skillNs = "e8b887ec-5e3d-5383-9565-7fc72bb0e251";
 
-// New namespaces for new entities
-const eventNs = "4f2a8b6b-8d93-5e8c-bc7e-6a0c2c87c1e0";
-const proposalNs = "8f991a54-2e03-5ffc-bf0f-5e7b2b92fcd1";
-const taskNs = "d3e15cc7-6df2-5102-9a3b-1b4b4b9af6e2";
-const issueNs = "b4b1f58e-9b0f-53b0-9f1a-928e4fc27d8e";
-const goalNs = "c6bfe6f5-6a6a-5ef6-95e9-7c8ba57a8e21";
+type DerivedPoint = { id: string; vector: number[]; payload: Record<string, unknown> };
+
+const upsertDerivedResources = async <TResource extends VectorResource>(
+    kind: DerivedVectorKind,
+    resources: TResource[],
+    formatResource: (resource: TResource) => string,
+    buildPayload: (resource: TResource) => Record<string, unknown>,
+) => {
+    let preparedClient: QdrantClient | undefined;
+    return publishEligibleDerivedResourceVectors<TResource, number[], DerivedPoint>(resources, {
+        loadEligibleCanonicalResources: (ids, fullDocument) =>
+            loadEligibleCanonicalDerivedResources<TResource>(kind, ids, fullDocument),
+        preparePublication: async () => {
+            preparedClient = await getQdrantClient();
+        },
+        formatResource,
+        embedTexts: getEmbeddings,
+        buildPoint: (resource, embedding) => ({
+            id: getDerivedVectorPointId(kind, resource._id!.toString()),
+            vector: embedding,
+            payload: buildPayload(resource),
+        }),
+        upsertPoints: async (points) => {
+            if (!preparedClient) throw new Error("Public derived-resource vector client was not prepared.");
+            await preparedClient.upsert(kind, { points });
+        },
+        deleteResources: (ids) => deleteVbdDerivedResources(kind, ids).then(() => undefined),
+        assertResourcesAbsent: (ids) => assertVbdDerivedResourcesAbsent(kind, ids),
+    });
+};
 
 // Upsert function for circles
 export const upsertVbdCircles = async (circles: Circle[]) => {
@@ -381,33 +433,13 @@ export const upsertVbdCircles = async (circles: Circle[]) => {
 
 // Repeat similar logic for posts, sdgs, and skills
 export const upsertVbdPosts = async (posts: PostDisplay[]) => {
-    const client = await getQdrantClient();
-
-    // Ensure all posts have valid `_id` fields
-    const validPosts = posts.filter((post) => post._id);
-    if (validPosts.length <= 0) {
-        console.log("No valid posts to upsert.");
-        return;
-    }
-
-    console.log("Getting embeddings for posts...");
-
-    const embeddings = await getEmbeddings(validPosts.map((post) => formatPostForEmbedding(post)));
-
-    const qdrantPoints = validPosts.map((post, i) => ({
-        id: uuidv5(post._id!.toString(), postNs), // Ensure `_id` is stringified
-        vector: embeddings[i], // Ensure embedding is a valid number[]
-        payload: {
-            mongoId: post._id!.toString(), // Add MongoDB _id here
-            content: post.content,
-            createdAt: post.createdAt.toISOString(),
-            createdBy: post.createdBy,
-            locationName: post.location ? getFullLocationName(post.location) : null,
-        },
+    return upsertDerivedResources("posts", posts, formatPostForEmbedding, (post) => ({
+        mongoId: post._id!.toString(), // Add MongoDB _id here
+        content: post.content,
+        createdAt: post.createdAt.toISOString(),
+        createdBy: post.createdBy,
+        locationName: post.location ? getFullLocationName(post.location) : null,
     }));
-
-    console.log("Upserting embeddings...");
-    await client.upsert("posts", { points: qdrantPoints });
 };
 
 // Upsert function for sdgs
@@ -472,176 +504,121 @@ export const upsertVbdSkills = async () => {
 
 // New: Upsert function for events
 export const upsertVbdEvents = async (events: Event[]) => {
-    const client = await getQdrantClient();
-
-    const valid = (events || []).filter((e) => e && (e as any)._id);
-    if (valid.length <= 0) {
-        console.log("No valid events to upsert.");
-        return;
-    }
-
-    console.log("Getting embeddings for events...");
-
-    const embeddings = await getEmbeddings(valid.map((e) => formatEventForEmbedding(e)));
-
-    const points = valid.map((e, i) => ({
-        id: uuidv5((e as any)._id.toString(), eventNs),
-        vector: embeddings[i],
-        payload: {
-            mongoId: (e as any)._id.toString(),
-            title: e.title,
-            description: e.description,
-            stage: e.stage,
-            createdAt: (e as any).createdAt?.toString?.(),
-            circleId: e.circleId,
-            locationName: e.location ? getFullLocationName(e.location) : null,
-            isVirtual: !!e.isVirtual,
-            isHybrid: !!e.isHybrid,
-            virtualUrl: e.virtualUrl ?? null,
-            startAt: e.startAt?.toString?.(),
-            endAt: e.endAt?.toString?.(),
-            allDay: !!e.allDay,
-            categories: e.categories ?? [],
-            causes: e.causes ?? [],
-        },
+    return upsertDerivedResources("events", events, formatEventForEmbedding, (e) => ({
+        mongoId: e._id!.toString(),
+        title: e.title,
+        description: e.description,
+        stage: e.stage,
+        createdAt: (e as any).createdAt?.toString?.(),
+        circleId: e.circleId,
+        locationName: e.location ? getFullLocationName(e.location) : null,
+        isVirtual: !!e.isVirtual,
+        isHybrid: !!e.isHybrid,
+        virtualUrl: e.virtualUrl ?? null,
+        startAt: e.startAt?.toString?.(),
+        endAt: e.endAt?.toString?.(),
+        allDay: !!e.allDay,
+        categories: e.categories ?? [],
+        causes: e.causes ?? [],
     }));
-
-    console.log("Upserting event embeddings...");
-    await client.upsert("events", { points });
 };
 
 // New: Upsert function for proposals
 export const upsertVbdProposals = async (proposals: Proposal[]) => {
-    const client = await getQdrantClient();
-
-    const valid = (proposals || []).filter((p) => p && (p as any)._id);
-    if (valid.length <= 0) {
-        console.log("No valid proposals to upsert.");
-        return;
-    }
-
-    console.log("Getting embeddings for proposals...");
-
-    const embeddings = await getEmbeddings(valid.map((p) => formatProposalForEmbedding(p)));
-
-    const points = valid.map((p, i) => ({
-        id: uuidv5((p as any)._id.toString(), proposalNs),
-        vector: embeddings[i],
-        payload: {
-            mongoId: (p as any)._id.toString(),
-            name: p.name,
-            background: p.background,
-            decisionText: p.decisionText,
-            stage: p.stage,
-            outcome: p.outcome ?? null,
-            createdAt: (p as any).createdAt?.toString?.(),
-            circleId: p.circleId,
-            locationName: p.location ? getFullLocationName(p.location) : null,
-        },
+    return upsertDerivedResources("proposals", proposals, formatProposalForEmbedding, (p) => ({
+        mongoId: p._id!.toString(),
+        name: p.name,
+        background: p.background,
+        decisionText: p.decisionText,
+        stage: p.stage,
+        outcome: p.outcome ?? null,
+        createdAt: (p as any).createdAt?.toString?.(),
+        circleId: p.circleId,
+        locationName: p.location ? getFullLocationName(p.location) : null,
     }));
-
-    console.log("Upserting proposal embeddings...");
-    await client.upsert("proposals", { points });
 };
 
 // New: Upsert function for tasks
 export const upsertVbdTasks = async (tasks: Task[]) => {
-    const client = await getQdrantClient();
-
-    const valid = (tasks || []).filter((t) => t && (t as any)._id);
-    if (valid.length <= 0) {
-        console.log("No valid tasks to upsert.");
-        return;
-    }
-
-    console.log("Getting embeddings for tasks...");
-
-    const embeddings = await getEmbeddings(valid.map((t) => formatTaskForEmbedding(t)));
-
-    const points = valid.map((t, i) => ({
-        id: uuidv5((t as any)._id.toString(), taskNs),
-        vector: embeddings[i],
-        payload: {
-            mongoId: (t as any)._id.toString(),
-            title: t.title,
-            description: t.description,
-            stage: t.stage,
-            assignedTo: t.assignedTo ?? null,
-            createdAt: (t as any).createdAt?.toString?.(),
-            circleId: t.circleId,
-            goalId: t.goalId ?? null,
-            locationName: t.location ? getFullLocationName(t.location) : null,
-        },
+    return upsertDerivedResources("tasks", tasks, formatTaskForEmbedding, (t) => ({
+        mongoId: t._id!.toString(),
+        title: t.title,
+        description: t.description,
+        stage: t.stage,
+        assignedTo: t.assignedTo ?? null,
+        createdAt: (t as any).createdAt?.toString?.(),
+        circleId: t.circleId,
+        goalId: t.goalId ?? null,
+        locationName: t.location ? getFullLocationName(t.location) : null,
     }));
-
-    console.log("Upserting task embeddings...");
-    await client.upsert("tasks", { points });
 };
 
 // New: Upsert function for issues
 export const upsertVbdIssues = async (issues: Issue[]) => {
-    const client = await getQdrantClient();
-
-    const valid = (issues || []).filter((x) => x && (x as any)._id);
-    if (valid.length <= 0) {
-        console.log("No valid issues to upsert.");
-        return;
-    }
-
-    console.log("Getting embeddings for issues...");
-
-    const embeddings = await getEmbeddings(valid.map((x) => formatIssueForEmbedding(x)));
-
-    const points = valid.map((x, i) => ({
-        id: uuidv5((x as any)._id.toString(), issueNs),
-        vector: embeddings[i],
-        payload: {
-            mongoId: (x as any)._id.toString(),
-            title: x.title,
-            description: x.description,
-            stage: x.stage,
-            assignedTo: x.assignedTo ?? null,
-            createdAt: (x as any).createdAt?.toString?.(),
-            circleId: x.circleId,
-            locationName: x.location ? getFullLocationName(x.location) : null,
-        },
+    return upsertDerivedResources("issues", issues, formatIssueForEmbedding, (x) => ({
+        mongoId: x._id!.toString(),
+        title: x.title,
+        description: x.description,
+        stage: x.stage,
+        assignedTo: x.assignedTo ?? null,
+        createdAt: (x as any).createdAt?.toString?.(),
+        circleId: x.circleId,
+        locationName: x.location ? getFullLocationName(x.location) : null,
     }));
-
-    console.log("Upserting issue embeddings...");
-    await client.upsert("issues", { points });
 };
 
 // New: Upsert function for goals
 export const upsertVbdGoals = async (goals: Goal[]) => {
-    const client = await getQdrantClient();
-
-    const valid = (goals || []).filter((g) => g && (g as any)._id);
-    if (valid.length <= 0) {
-        console.log("No valid goals to upsert.");
-        return;
-    }
-
-    console.log("Getting embeddings for goals...");
-
-    const embeddings = await getEmbeddings(valid.map((g) => formatGoalForEmbedding(g)));
-
-    const points = valid.map((g, i) => ({
-        id: uuidv5((g as any)._id.toString(), goalNs),
-        vector: embeddings[i],
-        payload: {
-            mongoId: (g as any)._id.toString(),
-            title: g.title,
-            description: g.description,
-            stage: g.stage,
-            createdAt: (g as any).createdAt?.toString?.(),
-            circleId: g.circleId,
-            targetDate: g.targetDate?.toString?.() ?? null,
-            locationName: g.location ? getFullLocationName(g.location) : null,
-        },
+    return upsertDerivedResources("goals", goals, formatGoalForEmbedding, (g) => ({
+        mongoId: g._id!.toString(),
+        title: g.title,
+        description: g.description,
+        stage: g.stage,
+        createdAt: (g as any).createdAt?.toString?.(),
+        circleId: g.circleId,
+        targetDate: g.targetDate?.toString?.() ?? null,
+        locationName: g.location ? getFullLocationName(g.location) : null,
     }));
+};
 
-    console.log("Upserting goal embeddings...");
-    await client.upsert("goals", { points });
+export const reconcileVbdDerivedResource = async (kind: DerivedVectorKind, resourceId: string) => {
+    const placeholder = { _id: new ObjectId(resourceId) };
+    let result;
+    switch (kind) {
+        case "posts":
+            return upsertVbdPosts([placeholder as PostDisplay]);
+        case "tasks":
+            result = await upsertVbdTasks([placeholder as Task]);
+            break;
+        case "events":
+            result = await upsertVbdEvents([placeholder as Event]);
+            break;
+        case "goals":
+            result = await upsertVbdGoals([placeholder as Goal]);
+            break;
+        case "issues":
+            result = await upsertVbdIssues([placeholder as Issue]);
+            break;
+        case "proposals":
+            result = await upsertVbdProposals([placeholder as Proposal]);
+            break;
+    }
+    const parentItemTypeByKind = {
+        tasks: "task",
+        events: "event",
+        goals: "goal",
+        issues: "issue",
+        proposals: "proposal",
+    } as const;
+    const parentItemType = parentItemTypeByKind[kind as keyof typeof parentItemTypeByKind];
+    const shadowPosts = await Posts.find(
+        { parentItemType, parentItemId: resourceId },
+        { projection: { _id: 1 } },
+    ).toArray();
+    if (shadowPosts.length > 0) {
+        await upsertVbdPosts(shadowPosts as unknown as PostDisplay[]);
+    }
+    return result;
 };
 
 export const deleteVbdCircles = async (circleIds: readonly unknown[]) => {
@@ -673,18 +650,79 @@ export const assertVbdCirclesAbsent = async (circleIds: readonly unknown[]): Pro
     if (existing.length > 0) throw new Error("Public Circle vector deletion could not be verified.");
 };
 
-// Method to delete posts from Qdrant by ID
-export const deleteVbdPost = async (postId: string) => {
-    const client = await getQdrantClient();
-
-    let uuid = uuidv5(postId, postNs);
-
-    // Delete the post from the 'posts' collection in Qdrant
-    await client.delete("posts", {
-        points: [uuid],
+export const deleteVbdDerivedResources = async (kind: DerivedVectorKind, resourceIds: readonly unknown[]) =>
+    deleteDerivedResourceVectors(kind, resourceIds, {
+        deletePoints: async (pointIds, options) => {
+            const client = await getQdrantClient();
+            await client.delete(kind, { points: pointIds, wait: options.wait });
+        },
     });
 
-    console.log(`Post with ID ${postId} deleted from Qdrant.`);
+export const assertVbdDerivedResourcesAbsent = async (
+    kind: DerivedVectorKind,
+    resourceIds: readonly unknown[],
+): Promise<void> => {
+    const normalizedIds = normalizeDerivedVectorMongoIds(resourceIds);
+    if (normalizedIds.length === 0) return;
+    const client = await getQdrantClient();
+    const existing = await client.retrieve(kind, {
+        ids: normalizedIds.map((resourceId) => getDerivedVectorPointId(kind, resourceId)),
+        with_payload: false,
+        with_vector: false,
+    });
+    if (existing.length > 0) throw new Error(`Public ${kind} vector deletion could not be verified.`);
+};
+
+export const deleteVbdDerivedResourcePoints = async (
+    kind: DerivedVectorKind,
+    pointIds: RawVectorPointId[],
+): Promise<void> => {
+    await deleteRawVectorPoints(pointIds, {
+        deletePoints: async (uniquePointIds, options) => {
+            const client = await getQdrantClient();
+            await client.delete(kind, { points: uniquePointIds, wait: options.wait });
+        },
+    });
+};
+
+export const assertVbdDerivedResourcePointsAbsent = async (
+    kind: DerivedVectorKind,
+    pointIds: RawVectorPointId[],
+): Promise<void> => {
+    const uniquePointIds = Array.from(new Set(pointIds));
+    if (uniquePointIds.length === 0) return;
+    const client = await getQdrantClient();
+    const existing = await client.retrieve(kind, {
+        ids: uniquePointIds,
+        with_payload: false,
+        with_vector: false,
+    });
+    if (existing.length > 0) throw new Error(`Public ${kind} raw-point deletion could not be verified.`);
+};
+
+export const scrollVbdDerivedResourcePoints = async (
+    kind: DerivedVectorKind,
+    offset?: string | number,
+): Promise<DerivedVectorPointPage> => {
+    const client = await getQdrantClient();
+    const page = await client.scroll(kind, {
+        limit: 250,
+        offset,
+        with_payload: ["mongoId"],
+        with_vector: false,
+    });
+    return {
+        points: page.points.map((point) => ({ pointId: point.id, mongoId: point.payload?.mongoId })),
+        nextOffset:
+            typeof page.next_page_offset === "string" || typeof page.next_page_offset === "number"
+                ? page.next_page_offset
+                : null,
+    };
+};
+
+// Method to delete posts from Qdrant by ID
+export const deleteVbdPost = async (postId: string) => {
+    await deleteVbdDerivedResources("posts", [postId]);
 };
 
 export const getVbdCircleById = async (circleId: string) => {
@@ -710,7 +748,7 @@ export const getVbdCircleById = async (circleId: string) => {
 export const getVbdPostById = async (postId: string) => {
     const client = await getQdrantClient();
 
-    let uuid = uuidv5(postId, postNs);
+    let uuid = getDerivedVectorPointId("posts", postId);
 
     // Retrieve the post by its ID
     const response = await client.retrieve("posts", {
@@ -742,7 +780,7 @@ export const getVbdSimilarity = async (
     const idName = (item as any)._id?.toString();
     const sourceIdName = (source as any)._id?.toString();
     let sourceUuid = getCircleVectorPointId(sourceIdName);
-    let targetUuid = isCircle ? getCircleVectorPointId(idName) : uuidv5(idName, postNs);
+    let targetUuid = isCircle ? getCircleVectorPointId(idName) : getDerivedVectorPointId("posts", idName);
 
     // Force recompile check
     if (!idName) return undefined;

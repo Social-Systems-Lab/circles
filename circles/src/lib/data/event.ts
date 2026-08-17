@@ -33,6 +33,7 @@ import {
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { createPost } from "./feed";
 import { upsertVbdEvents } from "./vdb";
+import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { notifyEventInvitation } from "./notifications";
 import { getUserPrivate } from "./user";
 import { isAuthorized } from "../auth/auth";
@@ -963,7 +964,18 @@ export const updateEvent = async (eventId: string, updates: Partial<Event>, invi
             return true;
         }
 
-        const result = await Events.updateOne({ _id: new ObjectId(eventId) }, updateOp);
+        const ownershipChanges =
+            Object.prototype.hasOwnProperty.call(updates, "circleId") ||
+            Object.prototype.hasOwnProperty.call(updates, "hostCircleIds");
+        const mutate = () => Events.updateOne({ _id: new ObjectId(eventId) }, updateOp);
+        const result = ownershipChanges
+            ? await runDerivedResourceVectorSafeMutation({
+                  kind: "events",
+                  resourceId: eventId,
+                  mutate,
+                  didMutate: (updateResult) => updateResult.matchedCount > 0,
+              })
+            : await mutate();
 
         // Handle new invitations
         if (updates.invitations) {
@@ -991,17 +1003,22 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
             return false;
         }
 
-        // Delete RSVPs
-        await EventRsvps.deleteMany({ eventId });
-        await EventInvitations.deleteMany({ eventId });
-        await EventOccurrences.deleteMany({ seriesId: eventId });
-        await EventOccurrenceRsvps.deleteMany({ seriesId: eventId });
-        await EventOccurrenceInvitations.deleteMany({ seriesId: eventId });
-
         // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
         // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });
 
-        const result = await Events.deleteOne({ _id: new ObjectId(eventId) });
+        const result = await runDerivedResourceVectorSafeMutation({
+            kind: "events",
+            resourceId: eventId,
+            beforeMutation: async () => {
+                await EventRsvps.deleteMany({ eventId });
+                await EventInvitations.deleteMany({ eventId });
+                await EventOccurrences.deleteMany({ seriesId: eventId });
+                await EventOccurrenceRsvps.deleteMany({ seriesId: eventId });
+                await EventOccurrenceInvitations.deleteMany({ seriesId: eventId });
+            },
+            mutate: () => Events.deleteOne({ _id: new ObjectId(eventId) }),
+            didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+        });
         return result.deletedCount > 0;
     } catch (error) {
         console.error(`Error deleting event (${eventId}):`, error);

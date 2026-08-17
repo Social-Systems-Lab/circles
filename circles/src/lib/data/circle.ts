@@ -15,7 +15,8 @@ import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from ".
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, getDefaultModules } from "./constants";
 import { getMetrics } from "../utils/metrics";
-import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
+import { upsertVbdCircles } from "./vdb";
+import { deleteCircleAfterPublicVectorPurge } from "./derived-vector-reconciliation";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
 import { createDefaultFeed } from "./feed";
 import path from "path";
@@ -711,8 +712,9 @@ export const deleteCircle = async (circleId: string): Promise<void> => {
         throw new Error("Circle not found");
     }
 
-    // Delete the circle from the database
-    const result = await Circles.deleteOne({ _id: new ObjectId(circleId) });
+    const result = await deleteCircleAfterPublicVectorPurge(circleId, () =>
+        Circles.deleteOne({ _id: new ObjectId(circleId) }),
+    );
 
     if (result.deletedCount === 0) {
         throw new Error("Failed to delete circle");
@@ -730,38 +732,12 @@ export const deleteCircle = async (circleId: string): Promise<void> => {
 
     await Feeds.deleteMany({ circleId: circleId });
 
-    // Get all posts in the feeds to delete them from vector database later
-    interface PostWithId {
-        _id: ObjectId | string;
-    }
-
-    let allPosts: PostWithId[] = [];
     for (const feedId of feedIds) {
-        const posts = await Posts.find({ feedId: feedId }).toArray();
-        allPosts = [...allPosts, ...posts.map((post) => ({ _id: post._id }))];
-        // Delete posts from MongoDB
         await Posts.deleteMany({ feedId: feedId });
     }
 
     // Delete all chat rooms associated with the circle
     await ChatRooms.deleteMany({ circleId: circleId });
-
-    // Delete circle from vector database
-    try {
-        await deleteVbdCircle(circleId);
-        console.log("🗑️ [VDB] Circle deleted from vector database:", circleId);
-    } catch (error) {
-        console.error("Error deleting circle from vector database:", error);
-    }
-
-    // Delete all posts from vector database
-    for (const post of allPosts) {
-        try {
-            await deleteVbdPost(post._id.toString());
-        } catch (error) {
-            console.error("Error deleting post from vector database:", error);
-        }
-    }
 
     // If the circle is a user, delete the user files
     if (circle.circleType === "user" && circle.did) {

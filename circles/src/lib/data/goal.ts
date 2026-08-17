@@ -7,6 +7,7 @@ import { getMemberIdsByUserGroup } from "./member";
 // RANKING_STALENESS_DAYS is now in ranking.ts
 import { createPost } from "./feed"; // Import createPost from feed.ts
 import { upsertVbdGoals } from "./vdb";
+import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
 // No longer need getUserByDid if we use $lookup consistently
 
@@ -524,8 +525,16 @@ export const updateGoal = async (goalId: string, updates: Partial<Goal>): Promis
             return true; // No changes needed, consider it success
         }
 
-        // Execute the update operation
-        const result = await Goals.updateOne({ _id: new ObjectId(goalId) }, updateOp);
+        const ownershipChanges = Object.prototype.hasOwnProperty.call(updates, "circleId");
+        const mutate = () => Goals.updateOne({ _id: new ObjectId(goalId) }, updateOp);
+        const result = ownershipChanges
+            ? await runDerivedResourceVectorSafeMutation({
+                  kind: "goals",
+                  resourceId: goalId,
+                  mutate,
+                  didMutate: (updateResult) => updateResult.matchedCount > 0,
+              })
+            : await mutate();
 
         // Success if matched or modified
         return result.matchedCount > 0 || result.modifiedCount > 0;
@@ -553,7 +562,12 @@ export const deleteGoal = async (goalId: string): Promise<boolean> => {
         // Example: await Comments.deleteMany({ parentId: goalId, parentType: 'goal' });
         // Example: await Reactions.deleteMany({ contentId: goalId, contentType: 'goal' });
 
-        const result = await Goals.deleteOne({ _id: new ObjectId(goalId) }); // Changed Issues to Goals, param issueId to goalId
+        const result = await runDerivedResourceVectorSafeMutation({
+            kind: "goals",
+            resourceId: goalId,
+            mutate: () => Goals.deleteOne({ _id: new ObjectId(goalId) }),
+            didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+        });
         return result.deletedCount > 0;
     } catch (error) {
         console.error(`Error deleting goal (${goalId}):`, error); // Updated error message and param

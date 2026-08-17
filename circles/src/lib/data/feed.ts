@@ -19,7 +19,8 @@ import {
 import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle";
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
-import { deleteVbdPost, upsertVbdPosts } from "./vdb";
+import { upsertVbdPosts } from "./vdb";
+import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { getProposalById } from "./proposal";
 import { getIssueById } from "./issue";
 import { getFundingAskDocumentById } from "./funding";
@@ -262,14 +263,12 @@ export const deletePost = async (postId: string): Promise<void> => {
     const comments = await Comments.find({ postId }, { projection: { _id: 1 } }).toArray();
     const commentIds = comments.map((comment) => comment._id.toString());
 
-    await Posts.deleteOne({ _id: new ObjectId(postId) });
-
-    // delete post
-    try {
-        await deleteVbdPost(postId);
-    } catch (e) {
-        console.error("Failed to delete post embedding", e);
-    }
+    await runDerivedResourceVectorSafeMutation({
+        kind: "posts",
+        resourceId: postId,
+        mutate: () => Posts.deleteOne({ _id: new ObjectId(postId) }),
+        didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+    });
 
     // delete comments
     await Comments.deleteMany({ postId });
@@ -1759,7 +1758,16 @@ async function fetchAndAttachSharedPostData(posts: PostDisplay[], userDid?: stri
 
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
     const { _id, ...postWithoutId } = post;
-    let result = await Posts.updateOne({ _id: new ObjectId(_id) }, { $set: postWithoutId });
+    const ownershipChanges = Object.prototype.hasOwnProperty.call(postWithoutId, "feedId");
+    const mutate = () => Posts.updateOne({ _id: new ObjectId(_id) }, { $set: postWithoutId });
+    let result = ownershipChanges
+        ? await runDerivedResourceVectorSafeMutation({
+              kind: "posts",
+              resourceId: _id,
+              mutate,
+              didMutate: (updateResult) => updateResult.matchedCount > 0,
+          })
+        : await mutate();
     if (result.matchedCount === 0) {
         throw new Error("Post not found");
     }
@@ -1772,8 +1780,9 @@ export const updatePost = async (post: Partial<Post>): Promise<void> => {
             const populatedSdgs = sdgIds ? sdgs.filter((s) => sdgIds.includes(s._id)) : [];
             const postForVdb = { ...restOfP, sdgs: populatedSdgs, author: author!, circleType: "post" as const };
             await upsertVbdPosts([postForVdb as PostDisplay]);
-        } catch (e) {
-            console.error("Failed to upsert post embedding", e);
+        } catch (error) {
+            if (ownershipChanges) throw error;
+            console.error("Failed to upsert post embedding", error);
         }
     }
 };

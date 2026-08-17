@@ -26,6 +26,7 @@ export type CircleVisibilityTransitionDependencies = {
     }) => Promise<void>;
     deletePublicVectors: (circleIds: readonly unknown[]) => Promise<unknown>;
     assertPublicVectorsAbsent: (circleIds: readonly unknown[]) => Promise<void>;
+    purgeDerivedVectors: (circleId: string) => Promise<unknown>;
     updateVisibility: (input: ConditionalVisibilityUpdate) => Promise<{ modifiedCount: number }>;
     upsertPublicCircles: (circles: Circle[]) => Promise<unknown>;
     appendAuditEvent: (event: {
@@ -60,6 +61,10 @@ const defaultDependencies: CircleVisibilityTransitionDependencies = {
     assertPublicVectorsAbsent: async (circleIds) => {
         const { assertVbdCirclesAbsent } = await import("@/lib/data/vdb");
         return assertVbdCirclesAbsent(circleIds);
+    },
+    purgeDerivedVectors: async (circleId) => {
+        const { purgeDerivedPublicVectorsForCircle } = await import("@/lib/data/derived-vector-reconciliation");
+        return purgeDerivedPublicVectorsForCircle(circleId);
     },
     updateVisibility: async ({ circleId, observedVisibility, visibilityWasPresent, targetVisibility }) => {
         const { Circles } = await import("@/lib/data/db");
@@ -125,6 +130,7 @@ export async function changeCircleVisibility(
         if (target.data === "secret") {
             await dependencies.deletePublicVectors([circleId]);
             await dependencies.assertPublicVectorsAbsent([circleId]);
+            await dependencies.purgeDerivedVectors(circleId);
         } else {
             const canonicalCircle = await dependencies.findCircle(circleId, true);
             if (!canonicalCircle || getPersistedVisibility(canonicalCircle) !== "public") {
@@ -138,6 +144,7 @@ export async function changeCircleVisibility(
     if (target.data === "secret") {
         await dependencies.deletePublicVectors([circleId]);
         await dependencies.assertPublicVectorsAbsent([circleId]);
+        await dependencies.purgeDerivedVectors(circleId);
     }
 
     const visibilityWasPresent = Object.prototype.hasOwnProperty.call(circle, "visibility");
@@ -160,6 +167,11 @@ export async function changeCircleVisibility(
         }
         try {
             await dependencies.assertPublicVectorsAbsent([circleId]);
+        } catch (error) {
+            reconciliationErrors.push(error);
+        }
+        try {
+            await dependencies.purgeDerivedVectors(circleId);
         } catch (error) {
             reconciliationErrors.push(error);
         }

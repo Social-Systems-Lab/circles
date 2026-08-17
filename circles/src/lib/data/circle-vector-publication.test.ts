@@ -289,6 +289,8 @@ const testVisibilityTransitions = async () => {
         let failUpsert = false;
         let failFinalVerify = false;
         let failFinalDelete = false;
+        let failDerivedPurgeAt = 0;
+        let derivedPurgeCount = 0;
         let fullReloadBehavior: "normal" | "throw" | "missing" = "normal";
         let verifyCount = 0;
         let deleteCount = 0;
@@ -315,6 +317,11 @@ const testVisibilityTransitions = async () => {
                 verifyCount += 1;
                 if (failFinalVerify && verifyCount === 2) throw new Error("final verification failed");
                 if (vectorExists) throw new Error("vector remains");
+            },
+            purgeDerivedVectors: async () => {
+                calls.push("purge-derived");
+                derivedPurgeCount += 1;
+                if (failDerivedPurgeAt === derivedPurgeCount) throw new Error("derived purge failed");
             },
             updateVisibility: async ({ observedVisibility, visibilityWasPresent, targetVisibility }) => {
                 calls.push(`mongo:${targetVisibility}`);
@@ -353,6 +360,7 @@ const testVisibilityTransitions = async () => {
             setFailUpsert: () => (failUpsert = true),
             setFailFinalVerify: () => (failFinalVerify = true),
             setFailFinalDelete: () => (failFinalDelete = true),
+            setFailDerivedPurgeAt: (count: number) => (failDerivedPurgeAt = count),
             setFullReloadBehavior: (behavior: "throw" | "missing") => (fullReloadBehavior = behavior),
         };
     };
@@ -369,14 +377,32 @@ const testVisibilityTransitions = async () => {
         "audit:circle.visibility_change_requested",
         "delete",
         "verify",
+        "purge-derived",
         "mongo:secret",
         "delete",
         "verify",
+        "purge-derived",
         "find-full",
         "audit:circle.visibility_changed",
     ]);
     assert.equal(toSecret.getStored().visibility, "secret");
     assert.equal(toSecret.hasVector(), false);
+
+    const preCommitDerivedFailure = makeDependencies("public");
+    preCommitDerivedFailure.setFailDerivedPurgeAt(1);
+    await assert.rejects(
+        changeCircleVisibility({ circleId, actorDid, visibility: "secret" }, preCommitDerivedFailure.dependencies),
+        /derived purge failed/,
+    );
+    assert.equal(preCommitDerivedFailure.getStored().visibility, "public");
+
+    const postCommitDerivedFailure = makeDependencies("public");
+    postCommitDerivedFailure.setFailDerivedPurgeAt(2);
+    await assert.rejects(
+        changeCircleVisibility({ circleId, actorDid, visibility: "secret" }, postCommitDerivedFailure.dependencies),
+        /derived purge failed/,
+    );
+    assert.equal(postCommitDerivedFailure.getStored().visibility, "secret");
 
     const finalVerificationFailure = makeDependencies("public");
     finalVerificationFailure.setFailFinalVerify();
@@ -455,7 +481,7 @@ const testVisibilityTransitions = async () => {
         alreadySecret.dependencies,
     );
     assert.equal(retrySecret.changed, false);
-    assert.deepEqual(alreadySecret.calls.slice(-2), ["delete", "verify"]);
+    assert.deepEqual(alreadySecret.calls.slice(-3), ["delete", "verify", "purge-derived"]);
 
     const toPublic = makeDependencies("secret");
     await changeCircleVisibility({ circleId, actorDid, visibility: "public" }, toPublic.dependencies);

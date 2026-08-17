@@ -8,6 +8,7 @@ import { isAuthorized } from "../auth/auth";
 import { features } from "./constants"; // RANKING_STALENESS_DAYS is now in ranking.ts
 import { createPost } from "./feed"; // Import createPost from feed.ts
 import { upsertVbdTasks } from "./vdb";
+import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
 // No longer need getUserByDid if we use $lookup consistently
 
@@ -967,7 +968,16 @@ export const updateTask = async (
             return true; // No changes needed, consider it success
         }
 
-        const result = await Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp);
+        const ownershipChanges = Object.prototype.hasOwnProperty.call(updates, "circleId");
+        const mutate = () => Tasks.updateOne({ _id: new ObjectId(taskId) }, updateOp);
+        const result = ownershipChanges
+            ? await runDerivedResourceVectorSafeMutation({
+                  kind: "tasks",
+                  resourceId: taskId,
+                  mutate,
+                  didMutate: (updateResult) => updateResult.matchedCount > 0,
+              })
+            : await mutate();
         return result.matchedCount > 0 || result.modifiedCount > 0; // Success if matched or modified
     } catch (error) {
         console.error(`Error updating task (${taskId}):`, error);
@@ -993,7 +1003,12 @@ export const deleteTask = async (taskId: string): Promise<boolean> => {
         // Example: await Comments.deleteMany({ parentId: taskId, parentType: 'task' });
         // Example: await Reactions.deleteMany({ contentId: taskId, contentType: 'task' });
 
-        const result = await Tasks.deleteOne({ _id: new ObjectId(taskId) }); // Changed Issues to Tasks, param issueId to taskId
+        const result = await runDerivedResourceVectorSafeMutation({
+            kind: "tasks",
+            resourceId: taskId,
+            mutate: () => Tasks.deleteOne({ _id: new ObjectId(taskId) }),
+            didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+        });
         return result.deletedCount > 0;
     } catch (error) {
         console.error(`Error deleting task (${taskId}):`, error); // Updated error message and param

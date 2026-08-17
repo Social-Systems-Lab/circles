@@ -15,6 +15,7 @@ import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getUserByDid } from "./user";
 import { createPost } from "./feed"; // Import createPost from feed.ts
 import { upsertVbdProposals } from "./vdb";
+import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 // import { getStalenessInfo } from "./ranking"; // getStalenessInfo is not exported from ranking
 
 // Safe projection for proposal queries
@@ -760,7 +761,17 @@ export const createProposal = async (
 export const updateProposal = async (proposalId: string, updates: Partial<Proposal>): Promise<boolean> => {
     try {
         const { _id, ...updatesWithoutId } = updates;
-        const result = await Proposals.updateOne({ _id: new ObjectId(proposalId) }, { $set: updatesWithoutId });
+        const ownershipChanges = Object.prototype.hasOwnProperty.call(updatesWithoutId, "circleId");
+        const mutate = () =>
+            Proposals.updateOne({ _id: new ObjectId(proposalId) }, { $set: updatesWithoutId });
+        const result = ownershipChanges
+            ? await runDerivedResourceVectorSafeMutation({
+                  kind: "proposals",
+                  resourceId: proposalId,
+                  mutate,
+                  didMutate: (updateResult) => updateResult.matchedCount > 0,
+              })
+            : await mutate();
         return result.matchedCount > 0;
     } catch (error) {
         console.error("Error updating proposal:", error);
@@ -775,7 +786,12 @@ export const updateProposal = async (proposalId: string, updates: Partial<Propos
  */
 export const deleteProposal = async (proposalId: string): Promise<boolean> => {
     try {
-        const result = await Proposals.deleteOne({ _id: new ObjectId(proposalId) });
+        const result = await runDerivedResourceVectorSafeMutation({
+            kind: "proposals",
+            resourceId: proposalId,
+            mutate: () => Proposals.deleteOne({ _id: new ObjectId(proposalId) }),
+            didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+        });
 
         // Also delete any reactions associated with this proposal
         await Reactions.deleteMany({ contentId: proposalId, contentType: "proposal" });
