@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { PostItem } from "@/components/modules/feeds/post-list";
 import { getUserByDid } from "@/lib/data/user";
+import { sanitizePostNestedContent } from "@/lib/data/post-nested-content-policy";
 
 type SinglePostPageProps = {
     params: Promise<{ handle: string; postId: string }>;
@@ -43,6 +44,7 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
         feed,
         sharedPostData,
     } as PostDisplay;
+    const [sanitizedPost] = await sanitizePostNestedContent([postWithComments], userDid);
 
     return (
         <div className="flex flex-1 flex-col">
@@ -57,7 +59,7 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
 
                     <div className="w-full">
                         <PostItem
-                            post={postWithComments}
+                            post={sanitizedPost}
                             circle={circle}
                             feed={feed}
                             initialComments={comments}

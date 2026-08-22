@@ -7,7 +7,7 @@ import {
     pinDiscussion,
     closeDiscussion,
 } from "@/lib/data/discussion";
-import { Post, Comment } from "@/models/models";
+import { Post, PostDisplay, Comment } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
@@ -23,6 +23,7 @@ import {
     resolveReadablePostContext,
 } from "@/lib/data/post-access-policy";
 import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
+import { sanitizePostNestedContent } from "@/lib/data/post-nested-content-policy";
 
 /**
  * Create a new discussion in a circle
@@ -96,13 +97,15 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
     if (!feed) feed = await createDefaultFeed(circle._id.toString());
     if (!feed?._id) throw new Error("Circle not found");
 
-    return createDiscussion({
+    const discussion = await createDiscussion({
         ...payload,
         mentions,
         feedId: feed._id.toString(),
         createdBy: userDid,
         circleId: circle._id.toString(),
     });
+    const [sanitizedDiscussion] = await sanitizePostNestedContent([discussion as PostDisplay], userDid);
+    return sanitizedDiscussion;
 }
 
 /**
@@ -110,7 +113,8 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
  */
 export async function listDiscussionsAction(handle: string) {
     const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
-    return listReadableDiscussions(handle, viewerDid);
+    const discussions = await listReadableDiscussions(handle, viewerDid);
+    return sanitizePostNestedContent(discussions as PostDisplay[], viewerDid);
 }
 
 /**
@@ -120,7 +124,10 @@ export async function getDiscussionAction(id: string) {
     const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
     const context = await resolveReadablePostContext(id, viewerDid);
     if (!context || context.post.postType !== "discussion") return null;
-    return getDiscussionWithComments(id, context.post.feedId);
+    const discussion = await getDiscussionWithComments(id, context.post.feedId);
+    if (!discussion) return null;
+    const [sanitizedDiscussion] = await sanitizePostNestedContent([discussion as PostDisplay], viewerDid);
+    return sanitizedDiscussion;
 }
 
 /**

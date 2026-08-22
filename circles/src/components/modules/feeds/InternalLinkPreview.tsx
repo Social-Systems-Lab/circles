@@ -13,20 +13,21 @@ import {
     ProposalDisplay,
     IssueDisplay,
     TaskDisplay,
+    InternalPreviewData,
 } from "@/models/models";
 import { truncateText } from "@/lib/utils";
-import {
-    Users,
-    AlertCircle,
-    CircleHelp,
-    CalendarDays,
-    ListTodo,
-} from "lucide-react";
+import { Users, AlertCircle, CircleHelp, CalendarDays, ListTodo } from "lucide-react";
 import Image from "next/image";
 import { FundingStatusPill, getFundingRequestSummaryLine } from "@/components/modules/funding/funding-shared";
 
+type InternalPreviewType = NonNullable<PostDisplay["internalPreviewType"]>;
+const SUPPORTED_PREVIEW_TYPES: readonly InternalPreviewType[] = [
+    "circle", "post", "task", "event", "goal", "issue", "proposal", "funding",
+];
+
 // Define the type for the data prop more explicitly
 type PreviewData =
+    | InternalPreviewData
     | Circle
     | PostDisplay
     | ProposalDisplay
@@ -63,45 +64,16 @@ const addSourceParam = (href: string, source: string) => {
 };
 
 const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialData, previewType }) => {
-    const href = React.useMemo(() => {
-        try {
-            const parsed = new URL(url, "http://dummybase");
-            return `${parsed.pathname}${parsed.search}${parsed.hash}` || url;
-        } catch {
-            return url;
-        }
-    }, [url]);
+    const isSupportedType = SUPPORTED_PREVIEW_TYPES.includes(previewType as InternalPreviewType);
+    if (!initialData || !previewType || !isSupportedType || !isValidPreviewData(previewType, initialData)) return null;
+
+    const href = getValidatedInternalPreviewHref(url, previewType);
+    if (!href) return null;
 
     // Removed useState and useEffect for fetching data
 
-    // If no initial data, render a simple link (or potentially a loading state/fetch later if needed)
-    if (!initialData) {
-        return (
-            <Link href={href} className="my-2 block text-blue-600 hover:underline">
-                {href}
-            </Link>
-        );
-    }
-
-    // Determine the type based on the structure of initialData
-    // This is a basic check; more robust type guards might be needed if structures overlap significantly
-    const getDataType = (
-        data: PreviewData,
-    ): "circle" | "post" | "proposal" | "issue" | "task" | "goal" | "event" | "funding" | null => {
-        if ("shortStory" in data && "trustBadgeType" in data) return "funding";
-        if ("circleType" in data && data.circleType === "post") return "post";
-        if ("stage" in data && "decisionText" in data) return "proposal";
-        if ("startAt" in data && "endAt" in data) return "event";
-        if ("resultPostId" in data || "resultSummary" in data || "completedAt" in data) return "goal";
-        if ("stage" in data && "title" in data && !("decisionText" in data) && !("taskSpecificField" in data))
-            return "issue";
-        if ("stage" in data && "title" in data && !("decisionText" in data) /* && "taskSpecificField" in data */)
-            return "task";
-        if ("handle" in data && "members" in data) return "circle";
-        return null;
-    };
-
-    const dataType = previewType ?? getDataType(initialData);
+    // Server hydration is authoritative. Incomplete preview props fail closed without rendering identity.
+    const dataType = previewType;
     const noticeboardHref = dataType === "task" || dataType === "event" ? addSourceParam(href, "noticeboard") : href;
 
     const getCircleTypeName = (circleType: string) => {
@@ -117,15 +89,6 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
     };
 
     const renderPreviewContent = () => {
-        if (!dataType) {
-            // Fallback if type couldn't be determined
-            return (
-                <Link href={url} className="text-blue-600 hover:underline">
-                    {url}
-                </Link>
-            );
-        }
-
         switch (dataType) {
             case "circle":
                 const circle = initialData as Circle;
@@ -336,7 +299,13 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                     <div className="overflow-hidden rounded-[15px] border border-slate-200 bg-white">
                         {ask.coverImage?.url ? (
                             <div className="relative h-40 w-full bg-slate-100">
-                                <Image src={ask.coverImage.url} alt={ask.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 480px" />
+                                <Image
+                                    src={ask.coverImage.url}
+                                    alt={ask.title}
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 768px) 100vw, 480px"
+                                />
                             </div>
                         ) : null}
                         <div className="space-y-3 p-4">
@@ -366,24 +335,65 @@ const InternalLinkPreview: React.FC<InternalLinkPreviewProps> = ({ url, initialD
                         </div>
                     </div>
                 );
-            default:
-                return (
-                    <Link href={href} className="text-blue-600 hover:underline">
-                        {href}
-                    </Link>
-                );
         }
     };
 
-    return (
-        dataType === "funding" || dataType === "event" || dataType === "task" || dataType === "goal" ? (
-            <div className="my-2">{renderPreviewContent()}</div>
-        ) : (
-            <Link href={href} className="my-2 block rounded-md border transition-colors hover:bg-gray-50">
-                <div className="flex items-center space-x-3 p-3">{renderPreviewContent()}</div>
-            </Link>
-        )
+    return dataType === "funding" || dataType === "event" || dataType === "task" || dataType === "goal" ? (
+        <div className="my-2">{renderPreviewContent()}</div>
+    ) : (
+        <Link href={href} className="my-2 block rounded-md border transition-colors hover:bg-gray-50">
+            <div className="flex items-center space-x-3 p-3">{renderPreviewContent()}</div>
+        </Link>
     );
 };
+
+function getValidatedInternalPreviewHref(url: string, type: InternalPreviewType): string | null {
+    try {
+        const parsed = new URL(url, "http://internal.invalid");
+        const routePatterns: Record<InternalPreviewType, RegExp> = {
+            circle: /^\/circles\/[^/]+\/?$/,
+            post: /^\/circles\/[^/]+\/post\/[^/]+\/?$/,
+            task: /^\/circles\/[^/]+\/(?:tasks|shifts)\/[^/]+\/?$/,
+            event: /^\/circles\/[^/]+\/events\/[^/]+\/?$/,
+            goal: /^\/circles\/[^/]+\/goals\/[^/]+\/?$/,
+            issue: /^\/circles\/[^/]+\/issues\/[^/]+\/?$/,
+            proposal: /^\/circles\/[^/]+\/proposals\/[^/]+\/?$/,
+            funding: /^\/circles\/[^/]+\/funding\/[^/]+\/?$/,
+        };
+        if (!routePatterns[type].test(parsed.pathname)) return null;
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+        return null;
+    }
+}
+
+function isValidPreviewData(type: InternalPreviewType, data: PreviewData): boolean {
+    const value = data as unknown as Record<string, unknown>;
+    switch (type) {
+        case "circle":
+            return typeof value.name === "string";
+        case "post":
+            return (
+                typeof value.content === "string" &&
+                typeof value.author === "object" &&
+                value.author !== null &&
+                typeof (value.author as Record<string, unknown>).name === "string"
+            );
+        case "task":
+        case "goal":
+        case "issue":
+            return typeof value.title === "string" && typeof value.stage === "string";
+        case "event":
+            return typeof value.title === "string";
+        case "proposal":
+            return typeof value.name === "string" && typeof value.stage === "string";
+        case "funding":
+            return (
+                typeof value.title === "string" &&
+                typeof value.shortStory === "string" &&
+                typeof value.status === "string"
+            );
+    }
+}
 
 export default InternalLinkPreview;

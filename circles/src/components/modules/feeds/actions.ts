@@ -88,6 +88,11 @@ import {
     resolveReadablePostContext,
 } from "@/lib/data/post-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import {
+    resolveInternalPreviewAction,
+    sanitizePostNestedContent,
+    type InternalPreviewActionResult,
+} from "@/lib/data/post-nested-content-policy";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -323,123 +328,10 @@ export async function getLinkPreviewAction(url: string): Promise<{
 
 // --- Internal Link Preview Action ---
 
-export type InternalLinkPreviewResult =
-    | { type: "circle"; data: Circle }
-    | { type: "post"; data: PostDisplay }
-    | { type: "proposal"; data: ProposalDisplay }
-    | { type: "issue"; data: IssueDisplay }
-    | { type: "funding"; data: FundingAskDisplay }
-    | { error: string }; // For not found, unauthorized, or other errors
+export type InternalLinkPreviewResult = InternalPreviewActionResult;
 
 export async function getInternalLinkPreviewData(url: string): Promise<InternalLinkPreviewResult> {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { error: "Unauthorized" };
-    }
-
-    try {
-        const parsedUrl = new URL(url, "http://dummybase"); // Use a dummy base for relative URLs
-        const pathname = parsedUrl.pathname;
-
-        // Regex patterns for internal links
-        const postRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/post\/([a-zA-Z0-9]+)$/;
-        const proposalRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/proposals\/([a-zA-Z0-9]+)$/;
-        const issueRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/issues\/([a-zA-Z0-9]+)$/;
-        const fundingRegex = /^\/circles\/([a-zA-Z0-9\-]+)\/funding\/([a-zA-Z0-9]+)$/;
-        const circleRegex = /^\/circles\/([a-zA-Z0-9\-]+)(?:\/.*)?$/; // Matches base circle URL and subpaths
-
-        const postMatch = pathname.match(postRegex);
-        const proposalMatch = pathname.match(proposalRegex);
-        const issueMatch = pathname.match(issueRegex);
-        const fundingMatch = pathname.match(fundingRegex);
-        const circleMatch = pathname.match(circleRegex);
-
-        if (postMatch) {
-            const [, handle, postId] = postMatch;
-            const circle = await getCircleByHandle(handle);
-            if (!circle) return { error: "Circle not found" };
-            const post = await getPost(postId); // Assuming getPost fetches PostDisplay or similar
-            if (!post) return { error: "Post not found" };
-            const feed = await getFeed(post.feedId);
-            if (!feed || feed.circleId !== circle._id.toString()) return { error: "Post not found" };
-            if (!(await isPostModuleEnabled(post, feed))) return { error: "Post not found" };
-            const postViewFeature = getPostViewFeature(post.postType);
-            if (!postViewFeature) return { error: "Post not found" };
-            const authorized = await isAuthorized(userDid, circle._id.toString(), postViewFeature);
-            if (!authorized) return { error: "Unauthorized" };
-            // Ensure getPost returns PostDisplay or adapt as needed
-            // This might require a new function like getPostDisplay(postId, userDid)
-            // For now, assuming getPost is sufficient and we manually add author etc. if needed
-            const author = await getUserByDid(post.createdBy);
-            const { sdgs: sdgIds, ...restOfPost } = post;
-            const populatedSdgs = sdgIds ? sdgs.filter((sdg) => sdgIds.includes(sdg._id)) : [];
-
-            const postDisplay: PostDisplay = {
-                ...restOfPost,
-                author: author!, // Assuming author is found
-                circleType: "post",
-                circle: circle,
-                feed: feed!, // Assuming feed is found
-                sdgs: populatedSdgs,
-            };
-            return { type: "post", data: postDisplay };
-        } else if (proposalMatch) {
-            const [, handle, proposalId] = proposalMatch;
-            const circle = await getCircleByHandle(handle);
-            if (!circle) return { error: "Circle not found" };
-            // Assuming proposals module has a 'view' feature
-            const authorized = await isAuthorized(
-                userDid,
-                circle._id.toString(),
-                features.proposals.view, // Use correct feature path
-            );
-            if (!authorized) return { error: "Unauthorized" };
-            const proposal = await getProposalById(proposalId); // Correct function call
-            if (!proposal) return { error: "Proposal not found" };
-            // Add author/circle if getProposalById doesn't return ProposalDisplay (it should based on the file content)
-            // if (!proposal.author) proposal.author = (await getUserByDid(proposal.createdBy))!; // Likely not needed anymore
-            if (!proposal.circle) proposal.circle = circle;
-            return { type: "proposal", data: proposal };
-        } else if (issueMatch) {
-            const [, handle, issueId] = issueMatch;
-            const circle = await getCircleByHandle(handle);
-            if (!circle) return { error: "Circle not found" };
-            // Assuming issues module has a 'view' feature
-            const authorized = await isAuthorized(
-                userDid,
-                circle._id.toString(),
-                features.issues.view, // Use correct feature path
-            );
-            if (!authorized) return { error: "Unauthorized" };
-            const issue = await getIssueById(issueId); // Correct function call
-            if (!issue) return { error: "Issue not found" };
-            // Add author/assignee/circle if getIssueById doesn't return IssueDisplay (it should based on the file content)
-            // if (!issue.author) issue.author = (await getUserByDid(issue.createdBy))!; // Likely not needed anymore
-            // if (issue.assignedTo && !issue.assignee) issue.assignee = await getUserByDid(issue.assignedTo); // Likely not needed anymore
-            if (!issue.circle) issue.circle = circle;
-            return { type: "issue", data: issue };
-        } else if (fundingMatch) {
-            const [, handle, askId] = fundingMatch;
-            const circle = await getCircleByHandle(handle);
-            if (!circle) return { error: "Circle not found" };
-            const ask = await getFundingAskById(circle, askId, userDid);
-            if (!ask) return { error: "Funding request not found" };
-            return { type: "funding", data: ask };
-        } else if (circleMatch) {
-            const [, handle] = circleMatch;
-            const circle = await getCircleByHandle(handle);
-            if (!circle) return { error: "Circle not found" };
-            // Basic authorization check for viewing a circle profile
-            const authorized = await isAuthorized(userDid, circle._id.toString(), features.communities.view); // Corrected feature path
-            if (!authorized && !circle.isPublic) return { error: "Unauthorized" }; // Allow public circles
-            return { type: "circle", data: circle };
-        } else {
-            return { error: "Invalid internal link" };
-        }
-    } catch (error: any) {
-        console.error("Error fetching internal link preview data:", url, error);
-        return { error: "Failed to fetch preview data" };
-    }
+    return resolveInternalPreviewAction(url, { getViewerDid: getAuthenticatedUserDid });
 }
 // --- End Internal Link Preview Action ---
 
@@ -733,7 +625,19 @@ export async function createPostAction(
             // Non-critical, so don't fail the post creation
         }
 
-        return { success: true, message: "Post created successfully", post: newPost };
+        const [sanitizedPost] = await sanitizePostNestedContent(
+            [
+                {
+                    ...newPost,
+                    author: currentUser,
+                    circle: targetCircle,
+                    feed,
+                    circleType: "post",
+                } as PostDisplay,
+            ],
+            userDid,
+        );
+        return { success: true, message: "Post created successfully", post: sanitizedPost as unknown as Post };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to create post." };
     }
@@ -1433,7 +1337,23 @@ export async function getPostAction(postId: string): Promise<Post | null> {
     const userDid = await resolveFeedActionViewerDid();
 
     try {
-        return (await resolveReadablePostContext(postId, userDid))?.post ?? null;
+        const context = await resolveReadablePostContext(postId, userDid);
+        if (!context) return null;
+        const author = await getUserByDid(context.post.createdBy);
+        if (!author) return null;
+        const [sanitizedPost] = await sanitizePostNestedContent(
+            [
+                {
+                    ...context.post,
+                    author,
+                    circle: context.circle,
+                    feed: context.feed,
+                    circleType: "post",
+                } as PostDisplay,
+            ],
+            userDid,
+        );
+        return sanitizedPost as unknown as Post;
     } catch (error) {
         console.error("Error getting post:", error);
         return null;

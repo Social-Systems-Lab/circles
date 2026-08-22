@@ -110,10 +110,10 @@ type LinkPreviewData = {
 };
 
 type InternalPreviewDisplayData = {
-    type: "circle" | "post" | "proposal" | "issue" | "task" | "funding";
+    type: NonNullable<PostDisplay["internalPreviewType"]>;
     id: string;
     url: string;
-    data: Circle | PostDisplay | ProposalDisplay | IssueDisplay | TaskDisplay | FundingAskDisplay;
+    data: NonNullable<PostDisplay["internalPreviewData"]>;
 };
 
 const postMentionsInputStyle = {
@@ -377,21 +377,19 @@ export function DiscussionForm({
             const result = await getInternalLinkPreviewData(url);
             if (controller.signal.aborted) return;
             if ("error" in result) {
-                console.warn("Failed to fetch internal link preview:", result.error);
                 setDetectedUrl(url);
                 setInternalPreview(null);
             } else {
                 setInternalPreview({
                     type: result.type,
-                    id: result.type === "circle" ? result.data.handle! : result.data._id.toString(),
-                    url: window.location.origin + url,
+                    id: result.id,
+                    url: result.url,
                     data: result.data,
                 });
                 setDetectedUrl(url);
             }
         } catch (error: any) {
             if (error.name !== "AbortError") {
-                console.error("Error calling getInternalLinkPreviewData:", error);
                 setDetectedUrl(url);
                 setInternalPreview(null);
             }

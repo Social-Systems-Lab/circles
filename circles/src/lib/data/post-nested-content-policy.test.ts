@@ -1,0 +1,491 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { ObjectId } from "mongodb";
+import type { Circle, Event, PostDisplay } from "@/models/models";
+import {
+    INTERNAL_PREVIEW_TYPES,
+    resolveInternalPreviewUrl,
+    resolveInternalPreviewAction,
+    sanitizePostNestedContent,
+    type InternalPreviewType,
+} from "./post-nested-content-policy";
+
+const id = () => new ObjectId();
+const viewerDid = "did:viewer";
+const publicCircleId = id();
+const secretCircleId = id();
+const pausedCircleId = id();
+const suspendedCircleId = id();
+const removedCircleId = id();
+const secondSecretCircleId = id();
+
+const circle = (circleId: ObjectId, overrides: Partial<Circle> = {}): Circle =>
+    ({
+        _id: circleId,
+        name: "Circle",
+        handle: `circle-${circleId}`,
+        circleType: "circle",
+        visibility: "public",
+        moderationStatus: "active",
+        ...overrides,
+    }) as Circle;
+
+const circleDocs = new Map<string, Circle>([
+    [publicCircleId.toString(), circle(publicCircleId)],
+    [secretCircleId.toString(), circle(secretCircleId, { visibility: "secret" })],
+    [secondSecretCircleId.toString(), circle(secondSecretCircleId, { visibility: "secret" })],
+    [pausedCircleId.toString(), circle(pausedCircleId, { moderationStatus: "paused" })],
+    [suspendedCircleId.toString(), circle(suspendedCircleId, { moderationStatus: "suspended" })],
+    [removedCircleId.toString(), circle(removedCircleId, { moderationStatus: "removed" })],
+]);
+
+const resourceIds = Object.fromEntries(
+    INTERNAL_PREVIEW_TYPES.filter((type) => type !== "circle").map((type) => [type, id()]),
+) as Record<Exclude<InternalPreviewType, "circle">, ObjectId>;
+
+const resources = new Map<string, any>();
+const resourceKey = (type: string, resourceId: ObjectId | string) => `${type}:${resourceId.toString()}`;
+
+const seedResource = (type: Exclude<InternalPreviewType, "circle" | "post">, ownerId: ObjectId) => {
+    const common = { _id: resourceIds[type], circleId: ownerId.toString() };
+    const resource =
+        type === "task"
+            ? { ...common, title: "Task", taskType: "task", stage: "open", images: [] }
+            : type === "event"
+              ? { ...common, title: "Event", startAt: new Date(), images: [], hostCircleIds: [] }
+              : type === "goal"
+                ? { ...common, title: "Goal", stage: "open", description: "Goal description", images: [] }
+                : type === "issue"
+                  ? { ...common, title: "Issue", stage: "open" }
+                  : type === "proposal"
+                    ? { ...common, name: "Proposal", stage: "open" }
+                    : {
+                          ...common,
+                          title: "Funding",
+                          shortStory: "Funding story",
+                          status: "open",
+                          items: [
+                              {
+                                  title: "Private item title",
+                                  category: "other",
+                                  price: 10,
+                                  currency: "USD",
+                                  quantity: 2,
+                                  status: "open",
+                                  note: "Private note",
+                              },
+                          ],
+                      };
+    resources.set(resourceKey(type, resourceIds[type]), resource);
+    return resource;
+};
+
+const author = circle(id(), { circleType: "user", did: "did:author", name: "Author", handle: "author" });
+
+const post = (type: InternalPreviewType, previewId: string, url?: string): PostDisplay =>
+    ({
+        _id: id().toString(),
+        feedId: id().toString(),
+        createdBy: author.did!,
+        createdAt: new Date(),
+        content: `Before ${url ?? `/circles/public/${type}/${previewId}`} after`,
+        reactions: {},
+        comments: 0,
+        userGroups: ["everyone"],
+        author,
+        circleType: "post",
+        internalPreviewType: type,
+        internalPreviewId: previewId,
+        internalPreviewUrl: url ?? `https://kamooni.test/circles/public/${type}/${previewId}`,
+    }) as PostDisplay;
+
+const queryCounts = new Map<string, number>();
+const dependencies = (memberIds: string[] = [], postReadable = true) => ({
+    findResources: async (type: string, ids: ObjectId[]) => {
+        queryCounts.set(type, (queryCounts.get(type) ?? 0) + 1);
+        return ids.map((resourceId) => resources.get(resourceKey(type, resourceId))).filter(Boolean);
+    },
+    findCirclesByHandles: async (handles: string[]) => {
+        queryCounts.set("circle", (queryCounts.get("circle") ?? 0) + 1);
+        return Array.from(circleDocs.values()).filter((value) => value.handle && handles.includes(value.handle));
+    },
+    findReadableCircles: async (ids: ObjectId[]) => {
+        queryCounts.set("owners", (queryCounts.get("owners") ?? 0) + 1);
+        return ids
+            .map((ownerId) => circleDocs.get(ownerId.toString()))
+            .filter((value): value is Circle => Boolean(value))
+            .filter(
+                (value) =>
+                    value.moderationStatus !== "suspended" &&
+                    value.moderationStatus !== "removed" &&
+                    (value.visibility !== "secret" || memberIds.includes(value._id!.toString())),
+            );
+    },
+    findAuthors: async () => [author],
+    resolvePost: async (postId: string) =>
+        postReadable && postId === resourceIds.post.toString()
+            ? {
+                  post: {
+                      _id: resourceIds.post.toString(),
+                      feedId: id().toString(),
+                      createdBy: author.did!,
+                      createdAt: new Date(),
+                      content: "Readable post content",
+                      reactions: {},
+                      comments: 0,
+                      userGroups: ["everyone"],
+                  },
+                  feed: {
+                      _id: id().toString(),
+                      circleId: publicCircleId.toString(),
+                      name: "Feed",
+                      handle: "default",
+                      createdAt: new Date(),
+                      userGroups: ["everyone"],
+                  },
+                  circle: circleDocs.get(publicCircleId.toString())!,
+              }
+            : null,
+});
+
+const assertStripped = (value: PostDisplay, secretParts: string[] = []) => {
+    assert.equal(value.internalPreviewType, undefined);
+    assert.equal(value.internalPreviewId, undefined);
+    assert.equal(value.internalPreviewUrl, undefined);
+    assert.equal(value.internalPreviewData, undefined);
+    assert.match(value.content, /Unavailable content/);
+    for (const part of secretParts) assert.equal(value.content.includes(part), false);
+};
+
+async function testEveryPreviewType() {
+    for (const type of INTERNAL_PREVIEW_TYPES) {
+        resources.clear();
+        const previewId =
+            type === "circle" ? circleDocs.get(publicCircleId.toString())!.handle! : resourceIds[type].toString();
+        if (type !== "circle" && type !== "post") seedResource(type, publicCircleId);
+        const url = `https://kamooni.test/circles/public/${type}/${previewId}`;
+        const [readable] = await sanitizePostNestedContent([post(type, previewId, url)], viewerDid, dependencies());
+        assert.equal(readable.internalPreviewType, type, `${type} readable type`);
+        assert.ok(readable.internalPreviewData, `${type} readable data`);
+        assert.ok(readable.internalPreviewUrl?.startsWith("/circles/"), `${type} canonical URL`);
+        assert.equal(readable.content.includes(url), false, `${type} untrusted URL removed from content`);
+        assert.ok(readable.content.includes(readable.internalPreviewUrl!), `${type} canonical content URL`);
+
+        if (type === "post") {
+            const [hidden] = await sanitizePostNestedContent(
+                [post(type, previewId, url)],
+                viewerDid,
+                dependencies([], false),
+            );
+            assertStripped(hidden, [previewId, url]);
+        } else if (type === "circle") {
+            const secret = circleDocs.get(secretCircleId.toString())!;
+            const hiddenUrl = `https://kamooni.test/circles/${secret.handle}`;
+            const [hidden] = await sanitizePostNestedContent(
+                [post(type, secret.handle!, hiddenUrl)],
+                viewerDid,
+                dependencies(),
+            );
+            assertStripped(hidden, [secret.handle!, hiddenUrl]);
+            const [member] = await sanitizePostNestedContent(
+                [post(type, secret.handle!, hiddenUrl)],
+                viewerDid,
+                dependencies([secretCircleId.toString()]),
+            );
+            assert.ok(member.internalPreviewData);
+        } else {
+            seedResource(type, secretCircleId);
+            const [hidden] = await sanitizePostNestedContent([post(type, previewId, url)], viewerDid, dependencies());
+            assertStripped(hidden, [previewId, url]);
+            const [member] = await sanitizePostNestedContent(
+                [post(type, previewId, url)],
+                viewerDid,
+                dependencies([secretCircleId.toString()]),
+            );
+            assert.ok(member.internalPreviewData);
+        }
+
+        const malformedUrl = `https://kamooni.test/circles/hidden/${type}/malformed`;
+        const [malformed] = await sanitizePostNestedContent(
+            [post(type, "malformed", malformedUrl)],
+            viewerDid,
+            dependencies(),
+        );
+        assertStripped(malformed, ["malformed", malformedUrl]);
+        const missingId = type === "circle" ? "deleted-circle" : id().toString();
+        const missingUrl = `https://kamooni.test/circles/hidden/${type}/${missingId}`;
+        const [missing] = await sanitizePostNestedContent(
+            [post(type, missingId, missingUrl)],
+            viewerDid,
+            dependencies([], type === "post" ? false : true),
+        );
+        assertStripped(missing, [missingId, missingUrl]);
+    }
+}
+
+async function testLifecycleAndSuperadmin() {
+    for (const [ownerId, expected] of [
+        [publicCircleId, true],
+        [pausedCircleId, true],
+        [suspendedCircleId, false],
+        [removedCircleId, false],
+    ] as const) {
+        resources.clear();
+        seedResource("goal", ownerId);
+        const [result] = await sanitizePostNestedContent(
+            [post("goal", resourceIds.goal.toString())],
+            viewerDid,
+            dependencies(),
+        );
+        assert.equal(Boolean(result.internalPreviewData), expected);
+    }
+    resources.clear();
+    seedResource("goal", secretCircleId);
+    const [superadmin] = await sanitizePostNestedContent(
+        [post("goal", resourceIds.goal.toString())],
+        "did:superadmin",
+        dependencies(),
+    );
+    assertStripped(superadmin);
+}
+
+async function testEventAllHosts() {
+    resources.clear();
+    const event = seedResource("event", publicCircleId) as Event & { hostCircleIds?: any };
+    const input = () => post("event", resourceIds.event.toString());
+
+    delete event.hostCircleIds;
+    assert.ok((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0].internalPreviewData);
+    event.hostCircleIds = null;
+    assert.ok((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0].internalPreviewData);
+    event.hostCircleIds = [publicCircleId.toString(), publicCircleId.toString()];
+    assert.ok((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0].internalPreviewData);
+    event.hostCircleIds = [secretCircleId.toString(), secondSecretCircleId.toString()];
+    assertStripped((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0]);
+    assert.ok(
+        (
+            await sanitizePostNestedContent(
+                [input()],
+                viewerDid,
+                dependencies([secretCircleId.toString(), secondSecretCircleId.toString()]),
+            )
+        )[0].internalPreviewData,
+    );
+    event.hostCircleIds = "malformed";
+    assertStripped((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0]);
+    event.hostCircleIds = ["malformed"];
+    assertStripped((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0]);
+    event.hostCircleIds = [id().toString()];
+    assertStripped((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0]);
+    event.hostCircleIds = [suspendedCircleId.toString()];
+    assertStripped((await sanitizePostNestedContent([input()], viewerDid, dependencies()))[0]);
+}
+
+async function testContentAndBatching() {
+    resources.clear();
+    seedResource("goal", secretCircleId);
+    const previewUrl = `/circles/secret/goals/${resourceIds.goal}`;
+    const mentionId = id().toString();
+    const input = post("goal", resourceIds.goal.toString(), previewUrl);
+    input.content = `Keep [Secret goal](${previewUrl}) and [User](/circles/${mentionId}) text`;
+    input.mentions = [{ type: "circle", id: mentionId }];
+    const [result] = await sanitizePostNestedContent([input], viewerDid, dependencies());
+    assert.equal(result.content, `Keep Unavailable content and [User](/circles/${mentionId}) text`);
+
+    queryCounts.clear();
+    resources.clear();
+    seedResource("goal", publicCircleId);
+    await sanitizePostNestedContent(
+        [post("goal", resourceIds.goal.toString()), post("goal", resourceIds.goal.toString())],
+        viewerDid,
+        dependencies(),
+    );
+    assert.equal(queryCounts.get("goal"), 1);
+    assert.equal(queryCounts.get("owners"), 1);
+}
+
+async function testPreviewTokenBoundariesAndMentionCollision() {
+    resources.clear();
+    seedResource("goal", secretCircleId);
+    const url = `/circles/secret/goals/${resourceIds.goal}`;
+    const distinctMention = "/circles/legitimate-mention";
+    const cases = [
+        { previewUrl: url, content: url },
+        { previewUrl: url, content: `before ${url} after` },
+        { previewUrl: url, content: `"${url}" '${url}' [${url}] (${url})` },
+        { previewUrl: url, content: `${url}, ${url}. ${url}! ${url}? ${url}; ${url}: ${url}] ${url})` },
+        { previewUrl: `${url}/`, content: `${url}/` },
+        { previewUrl: `${url}?view=compact`, content: `${url}?view=compact` },
+        { previewUrl: `${url}#details`, content: `${url}#details` },
+        {
+            previewUrl: `/circles/secret/goals/${resourceIds.goal.toString().replace("a", "%61")}`,
+            content: `/circles/secret/goals/${resourceIds.goal.toString().replace("a", "%61")}`,
+        },
+        { previewUrl: url, content: `${url} ${url}` },
+        { previewUrl: url, content: `[Goal](${url})` },
+    ];
+    for (const { previewUrl, content } of cases) {
+        const input = post("goal", resourceIds.goal.toString(), previewUrl);
+        input.content = `${content} [Mention](${distinctMention}) [Other](https://example.test/${resourceIds.goal})`;
+        input.mentions = [
+            { type: "circle", id: "secret" },
+            { type: "circle", id: "legitimate-mention" },
+        ];
+        const [result] = await sanitizePostNestedContent([input], viewerDid, dependencies());
+        assert.equal(result.content.includes(url), false, content);
+        assert.ok(result.content.includes("Unavailable content"), content);
+        assert.ok(result.content.includes(`[Mention](${distinctMention})`), content);
+        assert.ok(result.content.includes(`https://example.test/${resourceIds.goal}`), content);
+    }
+}
+
+async function testLongerPreviewPrefixIsNotRewritten() {
+    resources.clear();
+    seedResource("task", secretCircleId);
+    const exactUrl = "/tasks/abc";
+    const longerUrl = "/tasks/abcdef";
+    const input = post("task", resourceIds.task.toString(), exactUrl);
+    input.content = `${exactUrl} ${longerUrl}`;
+    const [result] = await sanitizePostNestedContent([input], viewerDid, dependencies());
+    assert.equal(result.content, `Unavailable content ${longerUrl}`);
+}
+
+async function testInternalPreviewActionNeutralBoundary() {
+    const unavailable = { error: "Preview unavailable" };
+    assert.deepEqual(
+        await resolveInternalPreviewAction("/circles/public", {
+            getViewerDid: async () => {
+                throw new Error("authentication detail");
+            },
+        }),
+        unavailable,
+    );
+    assert.deepEqual(
+        await resolveInternalPreviewAction("/circles/public", { getViewerDid: async () => undefined }),
+        unavailable,
+    );
+    assert.deepEqual(
+        await resolveInternalPreviewAction("/circles/public", {
+            getViewerDid: async () => viewerDid,
+            resolvePreview: async () => null,
+        }),
+        unavailable,
+    );
+    const success = {
+        type: "circle" as const,
+        id: "public",
+        url: "/circles/public",
+        data: { name: "Public" },
+    };
+    assert.deepEqual(
+        await resolveInternalPreviewAction("/circles/browser-supplied", {
+            getViewerDid: async () => viewerDid,
+            resolvePreview: async () => success,
+        }),
+        success,
+    );
+}
+
+async function testCanonicalSinglePreviewResolverAndDtoMinimization() {
+    const publicCircle = circleDocs.get(publicCircleId.toString())!;
+    for (const type of INTERNAL_PREVIEW_TYPES) {
+        resources.clear();
+        if (type !== "circle" && type !== "post") seedResource(type, publicCircleId);
+        const idValue = type === "circle" ? publicCircle.handle! : resourceIds[type].toString();
+        const segment = type === "circle" ? "" : `/${type === "post" ? "post" : `${type}s`.replace("fundings", "funding")}/${idValue}`;
+        const result = await resolveInternalPreviewUrl(
+            `/circles/browser-supplied${type === "circle" ? "" : segment}`.replace("/circles/browser-supplied", type === "circle" ? `/circles/${idValue}` : "/circles/browser-supplied"),
+            viewerDid,
+            dependencies(),
+        );
+        assert.ok(result, `${type} resolves`);
+        assert.equal(result!.type, type);
+        const value = result!.data as Record<string, unknown>;
+        for (const removed of ["_id", "did", "handle", "circleId", "createdBy", "createdAt", "feedId", "reactions", "comments", "userGroups"])
+            assert.equal(removed in value, false, `${type} omits ${removed}`);
+        if (type === "funding") {
+            assert.deepEqual(Object.keys((value.items as Record<string, unknown>[])[0]).sort(), [
+                "currency",
+                "price",
+                "quantity",
+                "status",
+            ]);
+        }
+    }
+
+    resources.clear();
+    seedResource("proposal", secretCircleId);
+    seedResource("issue", secretCircleId);
+    for (const type of ["proposal", "issue"] as const) {
+        const result = await resolveInternalPreviewUrl(
+            `/circles/${publicCircle.handle}/${type}s/${resourceIds[type]}`,
+            viewerDid,
+            dependencies(),
+        );
+        assert.equal(result, null, `${type} trusts canonical owner, not URL handle`);
+    }
+    resources.clear();
+    const event = seedResource("event", publicCircleId) as Event;
+    event.hostCircleIds = [secretCircleId.toString()];
+    assert.equal(
+        await resolveInternalPreviewUrl(`/circles/public/events/${resourceIds.event}`, viewerDid, dependencies()),
+        null,
+    );
+    for (const bad of ["not a url", "/circles/public/goals/malformed", `/circles/public/goals/${id()}`]) {
+        assert.equal(await resolveInternalPreviewUrl(bad, viewerDid, dependencies()), null);
+    }
+}
+
+async function testPostPreviewUsesCentralResolverAndStripsNestedIdentity() {
+    let resolverCalls = 0;
+    const deps = dependencies();
+    const nestedUrl = `https://kamooni.test/circles/secret/goals/${id()}`;
+    deps.resolvePost = async (postId: string) => {
+        resolverCalls += 1;
+        const context = await dependencies().resolvePost(postId);
+        if (!context) return null;
+        return {
+            ...context,
+            post: {
+                ...context.post,
+                content: `Original ${nestedUrl}`,
+                internalPreviewType: "goal",
+                internalPreviewId: id().toString(),
+                internalPreviewUrl: nestedUrl,
+            },
+        };
+    };
+    const [result] = await sanitizePostNestedContent([post("post", resourceIds.post.toString())], viewerDid, deps);
+    assert.equal(resolverCalls, 1);
+    assert.ok(result.internalPreviewData);
+    assert.equal((result.internalPreviewData as PostDisplay).content.includes(nestedUrl), false);
+}
+
+function testProductionReadSeamsUseCommonSanitizer() {
+    const feedSource = readFileSync("src/lib/data/feed.ts", "utf8");
+    const actionSource = readFileSync("src/components/modules/feeds/actions.ts", "utf8");
+    const directPageSource = readFileSync("src/app/circles/[handle]/post/[postId]/page.tsx", "utf8");
+    const discussionSource = readFileSync("src/app/circles/[handle]/discussions/actions.ts", "utf8");
+    assert.equal(feedSource.includes("fetchAndAttachInternalPreviewData"), false);
+    assert.ok((feedSource.match(/sanitizePostNestedContent\(/g) ?? []).length >= 6);
+    assert.match(actionSource, /getPostAction[\s\S]*sanitizePostNestedContent/);
+    assert.match(directPageSource, /sanitizePostNestedContent/);
+    assert.match(discussionSource, /listDiscussionsAction[\s\S]*sanitizePostNestedContent/);
+    assert.match(discussionSource, /getDiscussionAction[\s\S]*sanitizePostNestedContent/);
+}
+
+async function main() {
+    await testEveryPreviewType();
+    await testLifecycleAndSuperadmin();
+    await testEventAllHosts();
+    await testContentAndBatching();
+    await testPreviewTokenBoundariesAndMentionCollision();
+    await testLongerPreviewPrefixIsNotRewritten();
+    await testInternalPreviewActionNeutralBoundary();
+    await testCanonicalSinglePreviewResolverAndDtoMinimization();
+    await testPostPreviewUsesCentralResolverAndStripsNestedIdentity();
+    testProductionReadSeamsUseCommonSanitizer();
+    console.log("post nested content policy tests passed");
+}
+
+void main();

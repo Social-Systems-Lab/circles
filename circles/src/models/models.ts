@@ -256,6 +256,22 @@ export const postSchema = z.object({
 
 export type Post = z.infer<typeof postSchema>;
 
+export type InternalPreviewData =
+    | { name: string; picture?: Circle["picture"]; description?: string; mission?: string; circleType?: Circle["circleType"] }
+    | { content: string; author: { name: string; picture?: Circle["picture"] } }
+    | { title: string; taskType?: Task["taskType"]; stage: Task["stage"]; images?: Task["images"] }
+    | { title: string; startAt: Event["startAt"]; images?: Event["images"] }
+    | { title: string; stage: Goal["stage"]; description: string; images?: Goal["images"] }
+    | { title: string; stage: Issue["stage"] }
+    | { name: string; stage: Proposal["stage"]; outcome?: Proposal["outcome"] }
+    | {
+          title: string;
+          shortStory: string;
+          status: FundingAsk["status"];
+          coverImage?: FundingAsk["coverImage"];
+          items?: Array<Pick<NonNullable<FundingAsk["items"]>[number], "status" | "price" | "currency" | "quantity">>;
+      };
+
 export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     author: Circle;
     highlightedComment?: CommentDisplay;
@@ -267,6 +283,7 @@ export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     feed?: Feed;
     // Populated internal preview data
     internalPreviewData?:
+        | InternalPreviewData
         | Circle
         | PostDisplay
         | TaskDisplay
