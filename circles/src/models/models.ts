@@ -236,6 +236,8 @@ export const postSchema = z.object({
     userGroups: z.array(z.string()).default([]), // User groups that can see this post
     parentItemId: z.string().optional(), // ID of the parent Goal, Task, Issue, or Proposal for shadow posts
     parentItemType: z.enum(["goal", "task", "issue", "proposal", "event"]).optional(), // Type of the parent item
+    sourceResourceType: z.enum(["funding"]).optional(), // Server-controlled source marker for copied Funding noticeboard content
+    sourceResourceId: z.string().optional(),
     // Link Preview Fields
     linkPreviewUrl: z.string().url().optional(),
     linkPreviewTitle: z.string().optional(),

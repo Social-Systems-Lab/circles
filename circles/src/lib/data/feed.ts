@@ -35,6 +35,7 @@ import {
     resolveReadablePostContext,
 } from "./post-access-policy";
 import { canReadCircle } from "./circle-visibility-policy";
+import { buildSourceFilteredPostMatchStages } from "./post-source-access-policy";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -768,10 +769,9 @@ export async function getPostsFromMultipleFeeds(
     }
 
     // Get all posts from the specified feeds without user group filtering
+    const sourceFilteredMatchStages = await buildSourceFilteredPostMatchStages(matchStage, userDid);
     const posts = (await Posts.aggregate([
-        {
-            $match: matchStage,
-        },
+        ...sourceFilteredMatchStages,
 
         // Convert `feedId` to ObjectId for lookup
         {
@@ -1234,10 +1234,9 @@ export const getPosts = async (
     }
 
     // Get posts without user group filtering initially
+    const sourceFilteredMatchStages = await buildSourceFilteredPostMatchStages(matchStage, userDid);
     const posts = (await Posts.aggregate([
-        {
-            $match: matchStage,
-        },
+        ...sourceFilteredMatchStages,
         // Lookup for author details
         {
             $lookup: {

@@ -201,6 +201,8 @@ const maybeCreateFundingNoticeboardPost = async ({
         internalPreviewType: "funding",
         internalPreviewId: ask._id.toString(),
         internalPreviewUrl: getFundingInternalPreviewUrl(circleHandle, ask._id.toString()),
+        sourceResourceType: "funding",
+        sourceResourceId: ask._id.toString(),
     });
 
     const createdPost = await createPost(post);

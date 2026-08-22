@@ -2,6 +2,7 @@ import { ObjectId } from "mongodb";
 import type { Circle, CommentDisplay, Feature, Feed, Member, Post } from "@/models/models";
 import { canReadCircle } from "./circle-visibility-policy";
 import { getPostViewFeature } from "./constants";
+import { canReadPostSource } from "./post-source-access-policy";
 
 export type ReadablePostContext = { post: Post; feed: Feed; circle: Circle };
 export const POST_UNAVAILABLE_MESSAGE = "Post unavailable";
@@ -13,6 +14,7 @@ type PostAccessDependencies = {
     findMember: (viewerDid: string, circleId: string) => Promise<Member | null>;
     findAuthor: (createdBy: string) => Promise<Circle | null>;
     authorizeFeature: (viewerDid: string | undefined, circleId: string, post: Post) => Promise<boolean>;
+    canReadSource?: (post: Post, viewerDid?: string) => Promise<boolean>;
 };
 
 const defaultPostAccessDependencies: PostAccessDependencies = {
@@ -42,6 +44,7 @@ const defaultPostAccessDependencies: PostAccessDependencies = {
         const { isAuthorized } = await import("@/lib/auth/auth");
         return isAuthorized(viewerDid, circleId, feature);
     },
+    canReadSource: canReadPostSource,
 };
 
 const normalizeObjectId = (value: unknown): ObjectId | null => {
@@ -87,6 +90,8 @@ export async function resolveReadablePostContext(
         const groups = membership?.userGroups ?? [];
         if (!post.userGroups.some((group) => groups.includes(group))) return null;
     }
+
+    if (!(await (dependencies.canReadSource ?? canReadPostSource)(post, viewerDid))) return null;
 
     return {
         post: { ...post, _id: post._id?.toString() },

@@ -66,6 +66,7 @@ import { inviteUsersToEvent } from "@/lib/data/event";
 import { getMembers } from "@/lib/data/member";
 import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
 import { resolveFeedActionViewerDid, resolveReadablePostContext } from "@/lib/data/post-access-policy";
+import { buildEventNoticeboardPostData } from "@/lib/event-noticeboard-post-policy";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
 import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
@@ -486,11 +487,6 @@ const getEligibleCircleMemberInviteCandidates = async (
         .sort((a, b) => (a.name || a.handle || "").localeCompare(b.name || b.handle || ""));
 };
 
-const buildEventNoticeboardPostContent = (event: Pick<EventModel, "description">) => {
-    const description = event.description.trim();
-    return description ? `Attend this event. ${description}` : "Attend this event.";
-};
-
 const upsertEventNoticeboardPost = async ({
     circle,
     circleHandle,
@@ -515,21 +511,12 @@ const upsertEventNoticeboardPost = async ({
     }
 
     const eventId = event._id.toString();
-    const postData: Partial<Post> = {
-        title: event.title,
-        content: buildEventNoticeboardPostContent(event),
+    const postData = buildEventNoticeboardPostData({
+        event,
         feedId: feed._id.toString(),
-        createdBy: event.createdBy,
-        createdAt: new Date(),
-        editedAt: new Date(),
-        reactions: {},
-        comments: 0,
-        userGroups: ["admins", "moderators", "members"],
-        postType: "post",
-        internalPreviewType: "event",
-        internalPreviewId: eventId,
         internalPreviewUrl: getEventInternalPreviewUrl(circleHandle, eventId),
-    };
+    });
+    if (!postData) return null;
 
     if (noticeboardPostId) {
         try {
@@ -543,6 +530,8 @@ const upsertEventNoticeboardPost = async ({
                 internalPreviewType: postData.internalPreviewType,
                 internalPreviewId: postData.internalPreviewId,
                 internalPreviewUrl: postData.internalPreviewUrl,
+                parentItemType: postData.parentItemType,
+                parentItemId: postData.parentItemId,
             });
             return noticeboardPostId;
         } catch (error) {

@@ -9,6 +9,9 @@ export const getDiscoverableLifecycleQuery = (): Filter<Circle> => ({
     ],
 });
 
+// Read and discovery currently share lifecycle availability, but remain separately named policy seams.
+export const getReadableLifecycleQuery = getDiscoverableLifecycleQuery;
+
 export const getCircleModerationStatus = (circle?: Partial<Circle> | null): CircleModerationStatus =>
     circle?.moderationStatus ?? "active";
 

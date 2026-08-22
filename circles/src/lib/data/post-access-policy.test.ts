@@ -71,6 +71,14 @@ async function testDirectPostAccess() {
     assert.equal(
         await resolveReadablePostContext(postId.toString(), viewerDid, {
             ...dependencies(circle()),
+            canReadSource: async () => false,
+        }),
+        null,
+        "an unreadable canonical source is materially identical to a missing Post",
+    );
+    assert.equal(
+        await resolveReadablePostContext(postId.toString(), viewerDid, {
+            ...dependencies(circle()),
             findPost: async () => null,
         }),
         null,

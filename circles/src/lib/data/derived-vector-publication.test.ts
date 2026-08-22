@@ -604,6 +604,12 @@ async function testProductionOwnershipResolver() {
         parentItemId: sourceTask._id.toString(),
     } as any;
     const ordinary = { _id: id(), feedId: feed._id.toString() } as any;
+    const fundingNoticeboard = {
+        _id: id(),
+        feedId: feed._id.toString(),
+        sourceResourceType: "funding",
+        sourceResourceId: id().toString(),
+    } as any;
     const dependencies = {
         findFeeds: async () => [feed],
         findSourceResources: async () => [sourceTask],
@@ -612,6 +618,11 @@ async function testProductionOwnershipResolver() {
     assert.deepEqual(
         await resolveEligibleDerivedResourcesWithCanonicalOwners("posts", [shadow, ordinary], dependencies),
         [ordinary],
+    );
+    assert.deepEqual(
+        await resolveEligibleDerivedResourcesWithCanonicalOwners("posts", [fundingNoticeboard], dependencies),
+        [fundingNoticeboard],
+        "the dedicated Funding read marker does not enter generic parent/vector ownership",
     );
     assert.deepEqual(
         await resolveEligibleDerivedResourcesWithCanonicalOwners("posts", [shadow], {
