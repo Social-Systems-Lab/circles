@@ -3,6 +3,11 @@ import type { Circle, Event, FundingAsk, Goal, InternalPreviewData, Issue, PostD
 import { getReadableLifecycleQuery } from "./circle-lifecycle-policy";
 import { circleVisibilityMongoQuery, getCanonicalMemberCircleIds } from "./circle-visibility-policy";
 import { resolveReadablePostContext, type ReadablePostContext } from "./post-access-policy";
+import {
+    findCompleteMarkdownLinkOccurrences,
+    sanitizeCircleMentionsInTextItems,
+    type MentionContentPolicyDependencies,
+} from "./mention-content-policy";
 
 export const INTERNAL_PREVIEW_TYPES = [
     "circle",
@@ -41,6 +46,7 @@ type NestedContentDependencies = {
     findReadableCircles: (ids: ObjectId[], viewerDid?: string) => Promise<Circle[]>;
     findAuthors: (dids: string[]) => Promise<Circle[]>;
     resolvePost: (postId: string, viewerDid?: string) => Promise<ReadablePostContext | null>;
+    findReadableMentionCircles?: MentionContentPolicyDependencies["findReadableCircles"];
 };
 
 export const MAX_SHARED_POST_DEPTH = 1;
@@ -219,9 +225,9 @@ function getSafeResource(type: Exclude<InternalPreviewType, "circle" | "post">, 
     }
 }
 
-function rewritePreviewToken(post: PostDisplay, replacement?: { url: string }): string {
-    const url = post.internalPreviewUrl;
-    if (!url) return post.content;
+type PreviewOccurrence = { start: number; end: number; kind: "bare" | "markdown" };
+
+function previewCandidates(url: string): ReadonlySet<string> {
     const candidates = new Set([url]);
     try {
         const parsed = new URL(url, "http://internal.invalid");
@@ -229,20 +235,55 @@ function rewritePreviewToken(post: PostDisplay, replacement?: { url: string }): 
     } catch {
         // The persisted value is still removed from structured output below.
     }
-    const markdownPattern = /\[([^\]]*)\]\(([^)\s]+)\)/g;
-    let content = post.content.replace(markdownPattern, (token, label: string, target: string) => {
-        if (!candidates.has(target)) return token;
-        return replacement ? `[${label}](${replacement.url})` : "Unavailable content";
-    });
+    return candidates;
+}
+
+function findBarePreviewOccurrences(content: string, url: string): PreviewOccurrence[] {
+    const candidates = previewCandidates(url);
+    const markdownLinks = findCompleteMarkdownLinkOccurrences(content);
+    const isInsideMarkdown = (index: number) => markdownLinks.some(({ start, end }) => index >= start && index < end);
+    const bareOccurrences: PreviewOccurrence[] = [];
     for (const candidate of candidates) {
         if (!candidate) continue;
         const bareTokenPattern = new RegExp(
-            `(^|[\\s\\(\\[\\{\"'])${escapeRegExp(candidate)}(?=$|[\\s,\\.!?;:\\)\\]\\}\"'])`,
+            `(^|[\\s\\(\\[\\{\"'])(${escapeRegExp(candidate)})(?=$|[\\s,\\.!?;:\\)\\]\\}\"'])`,
             "g",
         );
-        content = content.replace(bareTokenPattern, `$1${replacement ? replacement.url : "Unavailable content"}`);
+        for (const match of content.matchAll(bareTokenPattern)) {
+            if (match.index === undefined) continue;
+            const start = match.index + match[1].length;
+            if (!isInsideMarkdown(start)) bareOccurrences.push({ start, end: start + match[2].length, kind: "bare" });
+        }
     }
-    return content;
+    return bareOccurrences.sort((a, b) => a.start - b.start);
+}
+
+function findStructuredPreviewOccurrence(content: string, url: string): PreviewOccurrence | undefined {
+    const candidates = previewCandidates(url);
+    const bareOccurrences = findBarePreviewOccurrences(content, url);
+    if (bareOccurrences.length) return bareOccurrences[0];
+
+    const link = findCompleteMarkdownLinkOccurrences(content).find(({ target }) => candidates.has(target));
+    return link ? { start: link.start, end: link.end, kind: "markdown" } : undefined;
+}
+
+function rewritePreviewToken(post: PostDisplay, replacement?: { url: string }): string {
+    const url = post.internalPreviewUrl;
+    if (!url) return post.content;
+    const occurrence = findStructuredPreviewOccurrence(post.content, url);
+    if (!occurrence) return post.content;
+    if (occurrence.kind === "bare") {
+        let content = post.content;
+        for (const bare of findBarePreviewOccurrences(post.content, url).slice().reverse()) {
+            content = `${content.slice(0, bare.start)}${replacement?.url ?? "Unavailable content"}${content.slice(bare.end)}`;
+        }
+        return content;
+    }
+    const token = post.content.slice(occurrence.start, occurrence.end);
+    const rewritten = replacement
+        ? token.replace(/\((?:<)?[^)]*(?:>)?\)$/, `(${replacement.url})`)
+        : "Unavailable content";
+    return `${post.content.slice(0, occurrence.start)}${rewritten}${post.content.slice(occurrence.end)}`;
 }
 
 function stripPreview(post: PostDisplay): PostDisplay {
@@ -467,7 +508,8 @@ async function sanitizeSharedOriginals(
             ? [[id, { ...context.post, author, circle: context.circle, feed: context.feed, circleType: "post" } as PostDisplay] as const]
             : [];
     });
-    const previewSafeOriginals = await sanitizeInternalPreviews(originalDisplays.map(([, post]) => post), viewerDid, dependencies);
+    const mentionSafeOriginals = await sanitizePostMentions(originalDisplays.map(([, post]) => post), viewerDid, dependencies);
+    const previewSafeOriginals = await sanitizeInternalPreviews(mentionSafeOriginals, viewerDid, dependencies);
     const originalsById = new Map(previewSafeOriginals.map((post, index) => [originalDisplays[index][0], post]));
 
     return posts.map((post) => {
@@ -493,10 +535,29 @@ async function sanitizeSharedOriginals(
     });
 }
 
+function previewExemptRanges(post: PostDisplay): ReadonlySet<string> {
+    if (!post.internalPreviewUrl) return new Set();
+    const occurrence = findStructuredPreviewOccurrence(post.content, post.internalPreviewUrl);
+    return occurrence?.kind === "markdown" ? new Set([`${occurrence.start}:${occurrence.end}`]) : new Set();
+}
+
+async function sanitizePostMentions(
+    posts: PostDisplay[],
+    viewerDid: string | undefined,
+    dependencies: NestedContentDependencies,
+): Promise<PostDisplay[]> {
+    const exemptRangesByItem = new Map(posts.map((post) => [post, previewExemptRanges(post)]));
+    const mentionDependencies = dependencies.findReadableMentionCircles
+        ? { findReadableCircles: dependencies.findReadableMentionCircles }
+        : undefined;
+    return sanitizeCircleMentionsInTextItems(posts, viewerDid, mentionDependencies, { exemptRangesByItem });
+}
+
 export async function sanitizePostNestedContent(
     posts: PostDisplay[], viewerDid?: string, dependencies: NestedContentDependencies = defaultDependencies,
 ): Promise<PostDisplay[]> {
-    const previewSafePosts = await sanitizeInternalPreviews(posts, viewerDid, dependencies);
+    const mentionSafePosts = await sanitizePostMentions(posts, viewerDid, dependencies);
+    const previewSafePosts = await sanitizeInternalPreviews(mentionSafePosts, viewerDid, dependencies);
     return sanitizeSharedOriginals(previewSafePosts, viewerDid, dependencies, 0, MAX_SHARED_POST_DEPTH);
 }
 

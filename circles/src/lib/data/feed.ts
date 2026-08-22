@@ -394,36 +394,6 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
         },
         {
             $lookup: {
-                from: "circles",
-                let: {
-                    mentionIds: {
-                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                    },
-                },
-                pipeline: [
-                    {
-                        $match: {
-                            $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
-                        },
-                    },
-                    {
-                        $project: {
-                            _id: { $toString: "$_id" },
-                            did: 1,
-                            name: 1,
-                            picture: 1,
-                            location: 1,
-                            description: 1,
-                            cover: 1,
-                            handle: 1,
-                        },
-                    },
-                ],
-                as: "mentionsDetails",
-            },
-        },
-        {
-            $lookup: {
                 from: "comments",
                 let: { highlightedCommentId: { $toObjectId: "$highlightedCommentId" } },
                 pipeline: [
@@ -516,29 +486,6 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                 postType: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
-                mentions: 1,
-                mentionsDisplay: {
-                    $map: {
-                        input: { $ifNull: ["$mentions", []] },
-                        as: "mention",
-                        in: {
-                            type: "$$mention.type",
-                            id: "$$mention.id",
-                            circle: {
-                                $arrayElemAt: [
-                                    {
-                                        $filter: {
-                                            input: { $ifNull: ["$mentionsDetails", []] },
-                                            as: "circle",
-                                            cond: { $eq: ["$$circle._id", "$$mention.id"] },
-                                        },
-                                    },
-                                    0,
-                                ],
-                            },
-                        },
-                    },
-                },
                 author: {
                     _id: { $toString: "$authorDetails._id" },
                     did: "$authorDetails.did",
@@ -802,38 +749,6 @@ export async function getPostsFromMultipleFeeds(
 
         //**********************************************************
 
-        // **Adjusted Lookup for mentions in the post**
-        {
-            $lookup: {
-                from: "circles",
-                let: {
-                    mentionIds: {
-                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                    },
-                },
-                pipeline: [
-                    {
-                        $match: {
-                            $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
-                        },
-                    },
-                    {
-                        $project: {
-                            _id: { $toString: "$_id" },
-                            did: 1,
-                            name: 1,
-                            picture: 1,
-                            location: 1,
-                            description: 1,
-                            cover: 1,
-                            handle: 1,
-                        },
-                    },
-                ],
-                as: "mentionsDetails",
-            },
-        },
-
         // Lookup for highlighted comment
         {
             $lookup: {
@@ -942,30 +857,6 @@ export async function getPostsFromMultipleFeeds(
                 circleType: { $literal: "post" },
 
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
-                mentions: 1,
-                // **Adjusted mapping of mentionsDisplay**
-                mentionsDisplay: {
-                    $map: {
-                        input: { $ifNull: ["$mentions", []] },
-                        as: "mention",
-                        in: {
-                            type: "$$mention.type",
-                            id: "$$mention.id",
-                            circle: {
-                                $arrayElemAt: [
-                                    {
-                                        $filter: {
-                                            input: { $ifNull: ["$mentionsDetails", []] },
-                                            as: "circle",
-                                            cond: { $eq: ["$$circle._id", "$$mention.id"] },
-                                        },
-                                    },
-                                    0,
-                                ],
-                            },
-                        },
-                    },
-                },
 
                 author: {
                     _id: { $toString: "$authorDetails._id" },
@@ -1226,38 +1117,6 @@ export const getPosts = async (
             },
         },
 
-        // **Adjusted Lookup for mentions in the post**
-        {
-            $lookup: {
-                from: "circles",
-                let: {
-                    mentionIds: {
-                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                    },
-                },
-                pipeline: [
-                    {
-                        $match: {
-                            $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
-                        },
-                    },
-                    {
-                        $project: {
-                            _id: { $toString: "$_id" },
-                            did: 1,
-                            name: 1,
-                            picture: 1,
-                            location: 1,
-                            description: 1,
-                            cover: 1,
-                            handle: 1,
-                        },
-                    },
-                ],
-                as: "mentionsDetails",
-            },
-        },
-
         // Lookup for highlighted comment
         {
             $lookup: {
@@ -1363,30 +1222,6 @@ export const getPosts = async (
                 postType: 1,
                 circleType: { $literal: "post" },
                 highlightedCommentId: { $toString: "$highlightedCommentId" },
-                mentions: 1,
-                // **Adjusted mapping of mentionsDisplay**
-                mentionsDisplay: {
-                    $map: {
-                        input: { $ifNull: ["$mentions", []] },
-                        as: "mention",
-                        in: {
-                            type: "$$mention.type",
-                            id: "$$mention.id",
-                            circle: {
-                                $arrayElemAt: [
-                                    {
-                                        $filter: {
-                                            input: { $ifNull: ["$mentionsDetails", []] },
-                                            as: "circle",
-                                            cond: { $eq: ["$$circle._id", "$$mention.id"] },
-                                        },
-                                    },
-                                    0,
-                                ],
-                            },
-                        },
-                    },
-                },
                 author: {
                     _id: { $toString: "$authorDetails._id" },
                     did: "$authorDetails.did",

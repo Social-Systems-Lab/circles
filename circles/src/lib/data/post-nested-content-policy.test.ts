@@ -101,6 +101,13 @@ const post = (type: InternalPreviewType, previewId: string, url?: string): PostD
 
 const queryCounts = new Map<string, number>();
 const dependencies = (memberIds: string[] = [], postReadable = true) => ({
+    findReadableMentionCircles: async ({ objectIds, handles }: { objectIds: ObjectId[]; handles: string[] }) =>
+        Array.from(circleDocs.values()).filter((value) =>
+            (objectIds.some((objectId) => objectId.equals(value._id as ObjectId)) || handles.includes(value.handle!)) &&
+            value.moderationStatus !== "suspended" &&
+            value.moderationStatus !== "removed" &&
+            (value.circleType === "user" || value.visibility !== "secret" || memberIds.includes(value._id!.toString())),
+        ),
     findResources: async (type: string, ids: ObjectId[]) => {
         queryCounts.set(type, (queryCounts.get(type) ?? 0) + 1);
         return ids.map((resourceId) => resources.get(resourceKey(type, resourceId))).filter(Boolean);
@@ -290,7 +297,7 @@ async function testContentAndBatching() {
     input.content = `Keep [Secret goal](${previewUrl}) and [User](/circles/${mentionId}) text`;
     input.mentions = [{ type: "circle", id: mentionId }];
     const [result] = await sanitizePostNestedContent([input], viewerDid, dependencies());
-    assert.equal(result.content, `Keep Unavailable content and [User](/circles/${mentionId}) text`);
+    assert.equal(result.content, "Keep Unavailable content and Unavailable Circle text");
 
     queryCounts.clear();
     resources.clear();
@@ -334,8 +341,46 @@ async function testPreviewTokenBoundariesAndMentionCollision() {
         const [result] = await sanitizePostNestedContent([input], viewerDid, dependencies());
         assert.equal(result.content.includes(url), false, content);
         assert.ok(result.content.includes("Unavailable content"), content);
-        assert.ok(result.content.includes(`[Mention](${distinctMention})`), content);
+        assert.ok(result.content.includes("Unavailable Circle"), content);
+        assert.equal(result.content.includes(distinctMention), false, content);
         assert.ok(result.content.includes(`https://example.test/${resourceIds.goal}`), content);
+    }
+}
+
+async function testDuplicateCirclePreviewAndMentionOwnership() {
+    const secret = circleDocs.get(secretCircleId.toString())!;
+    const target = `/circles/${secret.handle}`;
+    const input = (content: string) => {
+        const value = post("circle", secret.handle!, target);
+        value.content = content;
+        return value;
+    };
+
+    const labeled = `[Preview](${target})\n[Mention](${target})`;
+    const [outsider] = await sanitizePostNestedContent([input(labeled)], viewerDid, dependencies());
+    assert.equal(outsider.content, "Unavailable content\nUnavailable Circle");
+
+    // With no bare preview URL, the first matching active labeled link deterministically owns the preview.
+    const reversed = `[Mention](${target})\n[Preview](${target})`;
+    const [reversedOutsider] = await sanitizePostNestedContent([input(reversed)], viewerDid, dependencies());
+    assert.equal(reversedOutsider.content, "Unavailable content\nUnavailable Circle");
+
+    // Composer persistence prefers the first bare occurrence; labeled links with the same target remain mentions.
+    const bareAndLabeled = `${target}\n[Mention](${target})`;
+    const [bareOutsider] = await sanitizePostNestedContent([input(bareAndLabeled)], viewerDid, dependencies());
+    assert.equal(bareOutsider.content, "Unavailable content\nUnavailable Circle");
+
+    const [member] = await sanitizePostNestedContent(
+        [input(labeled)],
+        viewerDid,
+        dependencies([secretCircleId.toString()]),
+    );
+    assert.equal(member.content, `[Preview](${target})\n[Circle](${target})`);
+
+    for (const result of [outsider, reversedOutsider, bareOutsider]) {
+        assert.equal(result.content.includes(secret.handle!), false);
+        assert.equal(result.content.includes("Preview"), false);
+        assert.equal(result.content.includes("Mention"), false);
     }
 }
 
@@ -543,6 +588,40 @@ async function testSharedOriginalNeutralAndCycleShapes() {
     assert.equal(plain.sharedPostId, undefined);
 }
 
+async function testSharedOriginalMentionSanitization() {
+    const originalId = id().toString();
+    const oldLabel = "Do Not Leak This Label";
+    const secretHandle = circleDocs.get(secretCircleId.toString())!.handle!;
+    const makeDependencies = (memberIds: string[]) => {
+        const deps = dependencies(memberIds) as ReturnType<typeof dependencies>;
+        deps.resolvePost = async () => ({
+            post: {
+                _id: originalId,
+                feedId: id().toString(),
+                createdBy: author.did!,
+                createdAt: new Date(),
+                content: `[${oldLabel}](/circles/${secretCircleId})`,
+                reactions: {}, comments: 0, userGroups: [],
+                mentions: [{ type: "circle", id: secretCircleId.toString() }],
+                mentionsDisplay: [{ id: secretCircleId.toString(), circle: circleDocs.get(secretCircleId.toString()) }],
+            },
+            feed: { _id: id(), circleId: publicCircleId.toString(), name: "Feed", handle: "default", userGroups: [] },
+            circle: circleDocs.get(publicCircleId.toString())!,
+        } as any);
+        return deps;
+    };
+    const input = { ...post("post", resourceIds.post.toString()), internalPreviewType: undefined, internalPreviewId: undefined, internalPreviewUrl: undefined, sharedPostId: originalId } as PostDisplay;
+    const [outsider] = await sanitizePostNestedContent([input], viewerDid, makeDependencies([]));
+    assert.equal(outsider.sharedPostData?.content, "Unavailable Circle");
+    const outsiderJson = JSON.stringify(outsider.sharedPostData);
+    for (const forbidden of [secretCircleId.toString(), secretHandle, oldLabel, "mentions", "mentionsDisplay"]) assert.equal(outsiderJson.includes(forbidden), false);
+
+    const [member] = await sanitizePostNestedContent([input], viewerDid, makeDependencies([secretCircleId.toString()]));
+    assert.equal(member.sharedPostData?.content, `[Circle](/circles/${secretHandle})`);
+    assert.equal(Object.prototype.hasOwnProperty.call(member.sharedPostData!, "mentions"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(member.sharedPostData!, "mentionsDisplay"), false);
+}
+
 function testProductionReadSeamsUseCommonSanitizer() {
     const feedSource = readFileSync("src/lib/data/feed.ts", "utf8");
     const actionSource = readFileSync("src/components/modules/feeds/actions.ts", "utf8");
@@ -569,12 +648,14 @@ async function main() {
     await testEventAllHosts();
     await testContentAndBatching();
     await testPreviewTokenBoundariesAndMentionCollision();
+    await testDuplicateCirclePreviewAndMentionOwnership();
     await testLongerPreviewPrefixIsNotRewritten();
     await testInternalPreviewActionNeutralBoundary();
     await testCanonicalSinglePreviewResolverAndDtoMinimization();
     await testPostPreviewUsesCentralResolverAndStripsNestedIdentity();
     await testSharedOriginalDepthShapeAndDeduplication();
     await testSharedOriginalNeutralAndCycleShapes();
+    await testSharedOriginalMentionSanitization();
     testProductionReadSeamsUseCommonSanitizer();
     console.log("post nested content policy tests passed");
 }
