@@ -1,16 +1,14 @@
 // /src/app/circles/[handle]/post/[postId]/page.tsx
-import { getShareablePostPreview } from "@/lib/data/feed";
+import { getFullPost } from "@/lib/data/feed";
 import { getReadablePostComments, resolveReadablePostContext } from "@/lib/data/post-access-policy";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
 import { notFound } from "next/navigation";
-import { CommentDisplay, PostDisplay } from "@/models/models";
+import { CommentDisplay } from "@/models/models";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { PostItem } from "@/components/modules/feeds/post-list";
-import { getUserByDid } from "@/lib/data/user";
-import { sanitizePostNestedContent } from "@/lib/data/post-nested-content-policy";
 
 type SinglePostPageProps = {
     params: Promise<{ handle: string; postId: string }>;
@@ -24,7 +22,7 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
 
     const context = await resolveReadablePostContext(postId, userDid);
     if (!context) notFound();
-    const { post, feed, circle } = context;
+    const { feed, circle } = context;
 
     if (circle.handle !== handle) {
         notFound();
@@ -34,17 +32,8 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
     const commentResult = await getReadablePostComments(postId, userDid);
     if (!commentResult.success) notFound();
     const comments = (commentResult.comments ?? []) as CommentDisplay[];
-    const author = await getUserByDid(post.createdBy);
-    const sharedPostData = post.sharedPostId ? await getShareablePostPreview(post.sharedPostId, userDid) : null;
-
-    const postWithComments: PostDisplay = {
-        ...post,
-        author: author || circle,
-        circle,
-        feed,
-        sharedPostData,
-    } as PostDisplay;
-    const [sanitizedPost] = await sanitizePostNestedContent([postWithComments], userDid);
+    const sanitizedPost = await getFullPost(postId, userDid);
+    if (!sanitizedPost) notFound();
 
     return (
         <div className="flex flex-1 flex-col">

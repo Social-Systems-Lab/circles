@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import type { Circle, Event, Feed, FundingAsk, Goal, InternalPreviewData, Issue, Post, PostDisplay, Proposal, Task } from "@/models/models";
+import type { Circle, Event, FundingAsk, Goal, InternalPreviewData, Issue, PostDisplay, Proposal, SharedOriginalPreview, Task } from "@/models/models";
 import { getReadableLifecycleQuery } from "./circle-lifecycle-policy";
 import { circleVisibilityMongoQuery, getCanonicalMemberCircleIds } from "./circle-visibility-policy";
 import { resolveReadablePostContext, type ReadablePostContext } from "./post-access-policy";
@@ -42,6 +42,8 @@ type NestedContentDependencies = {
     findAuthors: (dids: string[]) => Promise<Circle[]>;
     resolvePost: (postId: string, viewerDid?: string) => Promise<ReadablePostContext | null>;
 };
+
+export const MAX_SHARED_POST_DEPTH = 1;
 
 const minimalCircleProjection = {
     _id: 1,
@@ -252,7 +254,7 @@ function stripPreview(post: PostDisplay): PostDisplay {
     return sanitized;
 }
 
-export async function sanitizePostNestedContent(
+async function sanitizeInternalPreviews(
     posts: PostDisplay[],
     viewerDid?: string,
     dependencies: NestedContentDependencies = defaultDependencies,
@@ -424,6 +426,78 @@ export async function sanitizePostNestedContent(
             internalPreviewData: preview.data,
         };
     });
+}
+
+function sharedOriginalImage(post: PostDisplay): SharedOriginalPreview["image"] {
+    const media = post.media?.[0];
+    if (media?.fileInfo?.url) return { url: media.fileInfo.url, alt: media.name || post.title };
+    if (
+        post.internalPreviewType === "funding" &&
+        post.internalPreviewData &&
+        "coverImage" in post.internalPreviewData &&
+        post.internalPreviewData.coverImage?.url
+    ) {
+        return { url: post.internalPreviewData.coverImage.url, alt: post.title };
+    }
+    return undefined;
+}
+
+async function sanitizeSharedOriginals(
+    posts: PostDisplay[], viewerDid: string | undefined, dependencies: NestedContentDependencies,
+    depth: number, maxDepth: number,
+): Promise<PostDisplay[]> {
+    const ids = unique(posts.map((post) => normalizeObjectId(post.sharedPostId)).filter((id): id is string => Boolean(id)));
+    const resolved = depth < maxDepth && ids.length
+        ? await loadPreviewBatch("shared-post", ids.length, () => Promise.all(ids.map((id) => dependencies.resolvePost(id, viewerDid))))
+        : [];
+    const contexts = new Map(
+        resolved.flatMap((context) => {
+            const id = context ? normalizeObjectId(context.post._id?.toString()) : null;
+            return id && context ? [[id, context] as const] : [];
+        }),
+    );
+    const authorDids = unique(Array.from(contexts.values()).map(({ post }) => post.createdBy));
+    const authors = authorDids.length
+        ? await loadPreviewBatch("shared-post-author", authorDids.length, () => dependencies.findAuthors(authorDids))
+        : [];
+    const authorsByDid = new Map(authors.map((author) => [author.did, author]));
+    const originalDisplays = Array.from(contexts.entries()).flatMap(([id, context]) => {
+        const author = authorsByDid.get(context.post.createdBy);
+        return author
+            ? [[id, { ...context.post, author, circle: context.circle, feed: context.feed, circleType: "post" } as PostDisplay] as const]
+            : [];
+    });
+    const previewSafeOriginals = await sanitizeInternalPreviews(originalDisplays.map(([, post]) => post), viewerDid, dependencies);
+    const originalsById = new Map(previewSafeOriginals.map((post, index) => [originalDisplays[index][0], post]));
+
+    return posts.map((post) => {
+        const hadShare = post.sharedPostId !== undefined;
+        const id = normalizeObjectId(post.sharedPostId);
+        const ownId = normalizeObjectId(post._id?.toString());
+        const original = id && id !== ownId && depth < maxDepth ? originalsById.get(id) : undefined;
+        const sanitized = { ...post };
+        delete sanitized.sharedPostId;
+        delete sanitized.sharedPostData;
+        if (!hadShare) return sanitized;
+        if (!original) return { ...sanitized, sharedPostData: null };
+
+        const preview: SharedOriginalPreview = {
+            content: original.content,
+            title: original.title,
+            author: { name: original.author.name ?? "", pictureUrl: original.author.picture?.url },
+            circleName: original.circle?.name,
+            image: sharedOriginalImage(original),
+            href: original.circle?.handle ? `/circles/${original.circle.handle}/post/${id}` : undefined,
+        };
+        return { ...sanitized, sharedPostData: preview };
+    });
+}
+
+export async function sanitizePostNestedContent(
+    posts: PostDisplay[], viewerDid?: string, dependencies: NestedContentDependencies = defaultDependencies,
+): Promise<PostDisplay[]> {
+    const previewSafePosts = await sanitizeInternalPreviews(posts, viewerDid, dependencies);
+    return sanitizeSharedOriginals(previewSafePosts, viewerDid, dependencies, 0, MAX_SHARED_POST_DEPTH);
 }
 
 export function parseInternalPreviewUrl(url: string): { type: InternalPreviewType; id: string } | null {

@@ -461,17 +461,106 @@ async function testPostPreviewUsesCentralResolverAndStripsNestedIdentity() {
     assert.equal((result.internalPreviewData as PostDisplay).content.includes(nestedUrl), false);
 }
 
+async function testSharedOriginalDepthShapeAndDeduplication() {
+    const originalId = id().toString();
+    const nestedId = id().toString();
+    let resolverCalls = 0;
+    const deps = dependencies() as ReturnType<typeof dependencies>;
+    deps.resolvePost = async (postId: string) => {
+        resolverCalls += 1;
+        if (postId !== originalId) return null;
+        return {
+            post: {
+                _id: originalId,
+                feedId: id().toString(),
+                createdBy: author.did!,
+                createdAt: new Date(),
+                content: "Original content",
+                title: "Original title",
+                reactions: { like: 99 },
+                comments: 12,
+                userGroups: ["private-group"],
+                sharedPostId: nestedId,
+                media: [{ name: "Cover", type: "image/png", fileInfo: { url: "/safe.png" } }],
+            },
+            feed: { _id: id(), circleId: publicCircleId.toString(), name: "Feed", handle: "default", userGroups: [] },
+            circle: circleDocs.get(publicCircleId.toString())!,
+        } as any;
+    };
+    const sharingPost = (postId: string) => ({
+        ...post("post", resourceIds.post.toString()),
+        _id: postId,
+        internalPreviewType: undefined,
+        internalPreviewId: undefined,
+        internalPreviewUrl: undefined,
+        sharedPostId: originalId,
+        content: "Commentary remains",
+    }) as PostDisplay;
+    const results = await sanitizePostNestedContent([sharingPost(id().toString()), sharingPost(id().toString())], viewerDid, deps);
+    assert.equal(resolverCalls, 1);
+    for (const result of results) {
+        assert.equal(result.content, "Commentary remains");
+        assert.equal(result.sharedPostId, undefined);
+        assert.deepEqual(Object.keys(result.sharedPostData!).sort(), ["author", "circleName", "content", "href", "image", "title"]);
+        assert.deepEqual(result.sharedPostData, {
+            content: "Original content",
+            title: "Original title",
+            author: { name: "Author", pictureUrl: author.picture?.url },
+            circleName: "Circle",
+            image: { url: "/safe.png", alt: "Cover" },
+            href: `/circles/${circleDocs.get(publicCircleId.toString())!.handle}/post/${originalId}`,
+        });
+        const serialized = JSON.stringify(result.sharedPostData);
+        assert.equal(serialized.includes(originalId), true); // canonical href only
+        assert.equal(serialized.includes(nestedId), false);
+        for (const forbidden of ["_id", "feedId", "sharedPostId", "sharedPostData", "reactions", "comments", "userGroups"])
+            assert.equal(Object.prototype.hasOwnProperty.call(result.sharedPostData, forbidden), false);
+    }
+}
+
+async function testSharedOriginalNeutralAndCycleShapes() {
+    let resolverCalls = 0;
+    const deps = dependencies() as ReturnType<typeof dependencies>;
+    deps.resolvePost = async () => { resolverCalls += 1; return null; };
+    const malformed = { ...post("post", resourceIds.post.toString()), sharedPostId: "malformed", content: "Commentary" } as PostDisplay;
+    delete malformed.internalPreviewType;
+    delete malformed.internalPreviewId;
+    delete malformed.internalPreviewUrl;
+    const missingId = id().toString();
+    const missing = { ...malformed, _id: id().toString(), sharedPostId: missingId };
+    const selfId = id().toString();
+    const self = { ...malformed, _id: selfId, sharedPostId: selfId };
+    const ordinary = { ...malformed, _id: id().toString() };
+    delete ordinary.sharedPostId;
+    const [bad, unavailable, cycle, plain] = await sanitizePostNestedContent([malformed, missing, self, ordinary], viewerDid, deps);
+    assert.equal(resolverCalls, 2); // one missing ID and one deduplicated self ID; malformed never resolves
+    for (const result of [bad, unavailable, cycle]) {
+        assert.equal(result.content, "Commentary");
+        assert.equal(result.sharedPostData, null);
+        assert.equal(result.sharedPostId, undefined);
+    }
+    assert.equal(plain.sharedPostData, undefined);
+    assert.equal(plain.sharedPostId, undefined);
+}
+
 function testProductionReadSeamsUseCommonSanitizer() {
     const feedSource = readFileSync("src/lib/data/feed.ts", "utf8");
     const actionSource = readFileSync("src/components/modules/feeds/actions.ts", "utf8");
     const directPageSource = readFileSync("src/app/circles/[handle]/post/[postId]/page.tsx", "utf8");
     const discussionSource = readFileSync("src/app/circles/[handle]/discussions/actions.ts", "utf8");
+    const postListSource = readFileSync("src/components/modules/feeds/post-list.tsx", "utf8");
+    const sharedPreviewSource = readFileSync("src/components/modules/feeds/SharedPostPreview.tsx", "utf8");
     assert.equal(feedSource.includes("fetchAndAttachInternalPreviewData"), false);
     assert.ok((feedSource.match(/sanitizePostNestedContent\(/g) ?? []).length >= 6);
     assert.match(actionSource, /getPostAction[\s\S]*sanitizePostNestedContent/);
-    assert.match(directPageSource, /sanitizePostNestedContent/);
+    assert.match(directPageSource, /getFullPost/);
+    assert.equal(feedSource.includes("fetchAndAttachSharedPostData"), false);
     assert.match(discussionSource, /listDiscussionsAction[\s\S]*sanitizePostNestedContent/);
     assert.match(discussionSource, /getDiscussionAction[\s\S]*sanitizePostNestedContent/);
+    assert.match(postListSource, /post\.sharedPostData !== undefined/);
+    assert.equal(sharedPreviewSource.includes("post._id"), false);
+    assert.equal(sharedPreviewSource.includes("sharedPostId"), false);
+    assert.match(sharedPreviewSource, /const href = post\.href/);
 }
 
 async function main() {
@@ -484,6 +573,8 @@ async function main() {
     await testInternalPreviewActionNeutralBoundary();
     await testCanonicalSinglePreviewResolverAndDtoMinimization();
     await testPostPreviewUsesCentralResolverAndStripsNestedIdentity();
+    await testSharedOriginalDepthShapeAndDeduplication();
+    await testSharedOriginalNeutralAndCycleShapes();
     testProductionReadSeamsUseCommonSanitizer();
     console.log("post nested content policy tests passed");
 }

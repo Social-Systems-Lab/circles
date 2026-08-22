@@ -323,44 +323,9 @@ export const canUserViewPost = async (post: Post, userDid?: string): Promise<boo
     return post.userGroups.some((group) => memberGroups.includes(group));
 };
 
-async function buildPostDisplayPreview(post: Post): Promise<PostDisplay | null> {
-    const author = await getUserByDid(post.createdBy);
-    const feed = await getFeed(post.feedId);
-    if (!author || !feed) {
-        return null;
-    }
-
-    const circle = await getCircleById(feed.circleId);
-    if (!circle) {
-        return null;
-    }
-
-    const { sdgs: sdgIds, ...restOfPost } = post;
-    const populatedSdgs = sdgIds ? sdgs.filter((sdg) => sdgIds.includes(sdg._id)) : [];
-
-    return {
-        ...restOfPost,
-        author,
-        circle,
-        feed,
-        circleType: "post",
-        sdgs: populatedSdgs,
-        sharedPostData: null,
-    };
-}
-
-export const getShareablePostPreview = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
-    const context = await resolveReadablePostContext(postId, userDid);
-    if (!context) return null;
-    const { post } = context;
-
-    const postDisplay = await buildPostDisplayPreview(post);
-    if (!postDisplay) {
-        return null;
-    }
-
-    const [sanitizedPost] = await sanitizePostNestedContent([postDisplay], userDid);
-    return sanitizedPost;
+export const getShareablePostPreview = async (postId: string, userDid?: string) => {
+    const [probe] = await sanitizePostNestedContent([{ content: "", sharedPostId: postId } as PostDisplay], userDid);
+    return probe.sharedPostData ?? null;
 };
 
 export const getFullPost = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
@@ -659,7 +624,6 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
     }
 
     const sanitizedPosts = await sanitizePostNestedContent(posts, userDid);
-    await fetchAndAttachSharedPostData(sanitizedPosts, userDid);
 
     return sanitizedPosts[0];
 };
@@ -1131,7 +1095,6 @@ export async function getPostsFromMultipleFeeds(
 
         // --- Fetch Internal Preview Data (Post-Processing for logged-in user) ---
         const sanitizedPosts = await sanitizePostNestedContent(filteredPosts, userDid);
-        await fetchAndAttachSharedPostData(sanitizedPosts, userDid);
         // --- End Fetch Internal Preview Data ---
 
         return sanitizedPosts;
@@ -1144,7 +1107,6 @@ export async function getPostsFromMultipleFeeds(
 
     // --- Fetch Internal Preview Data (Post-Processing) ---
     const sanitizedPosts = await sanitizePostNestedContent(publicPosts, userDid);
-    await fetchAndAttachSharedPostData(sanitizedPosts, userDid);
     // --- End Fetch Internal Preview Data ---
 
     return sanitizedPosts;
@@ -1540,7 +1502,6 @@ export const getPosts = async (
 
         // --- Fetch Internal Preview Data (Post-Processing for logged-in user) ---
         const sanitizedPosts = await sanitizePostNestedContent(filteredPosts, userDid);
-        await fetchAndAttachSharedPostData(sanitizedPosts, userDid);
         // --- End Fetch Internal Preview Data ---
 
         return sanitizedPosts;
@@ -1553,30 +1514,10 @@ export const getPosts = async (
 
     // --- Fetch Internal Preview Data (Post-Processing) ---
     const sanitizedPosts = await sanitizePostNestedContent(publicPostsForFeed, userDid);
-    await fetchAndAttachSharedPostData(sanitizedPosts, userDid);
     // --- End Fetch Internal Preview Data ---
 
     return sanitizedPosts;
 };
-
-async function fetchAndAttachSharedPostData(posts: PostDisplay[], userDid?: string): Promise<void> {
-    const postsWithShares = posts.filter((post) => post.sharedPostId);
-    if (postsWithShares.length === 0) {
-        return;
-    }
-
-    const sharedPosts = await Promise.all(
-        postsWithShares.map(async (post) => ({
-            ownerPostId: post._id,
-            sharedPost: await getShareablePostPreview(post.sharedPostId!, userDid),
-        })),
-    );
-
-    const sharedPostMap = new Map(sharedPosts.map((entry) => [entry.ownerPostId, entry.sharedPost]));
-    postsWithShares.forEach((post) => {
-        post.sharedPostData = sharedPostMap.get(post._id) ?? null;
-    });
-}
 
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
     const { _id, ...postWithoutId } = post;

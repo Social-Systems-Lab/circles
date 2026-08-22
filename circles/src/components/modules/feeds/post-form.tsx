@@ -223,17 +223,31 @@ export function PostForm({
     const [selectedSdgs, setSelectedSdgs] = useState<SDG[]>(initialPost?.sdgs || []);
     const [isPreviewStep, setIsPreviewStep] = useState(false);
     const { toast } = useToast();
-    const sharePreviewPost = sharedPost ?? initialPost?.sharedPostData ?? null;
-    const isShareMode = Boolean(sharedPost || initialPost?.sharedPostId);
+    const sharePreviewPost = sharedPost
+        ? {
+              content: sharedPost.content,
+              title: sharedPost.title,
+              author: { name: sharedPost.author.name ?? "", pictureUrl: sharedPost.author.picture?.url },
+              circleName: sharedPost.circle?.name,
+              image: sharedPost.media?.[0]?.fileInfo?.url
+                  ? { url: sharedPost.media[0].fileInfo.url, alt: sharedPost.media[0].name || sharedPost.title }
+                  : undefined,
+              href:
+                  sharedPost.circle?.handle && sharedPost._id
+                      ? `/circles/${sharedPost.circle.handle}/post/${sharedPost._id}`
+                      : undefined,
+          }
+        : initialPost?.sharedPostData ?? null;
+    const isShareMode = Boolean(sharedPost || initialPost?.sharedPostData !== undefined);
     const postType = initialPost?.postType;
     const showTitle = !isShareMode && showsPostTitle(postType);
     const titleRequired = !isShareMode && requiresPostTitle(postType);
     const showRestrictedShareWarning = Boolean(
         isShareMode &&
-            sharePreviewPost &&
-            (((sharePreviewPost.userGroups?.length ?? 0) > 0 && !sharePreviewPost.userGroups?.includes("everyone")) ||
-                ((sharePreviewPost.feed?.userGroups?.length ?? 0) > 0 &&
-                    !sharePreviewPost.feed?.userGroups?.includes("everyone"))),
+            sharedPost &&
+            (((sharedPost.userGroups?.length ?? 0) > 0 && !sharedPost.userGroups?.includes("everyone")) ||
+                ((sharedPost.feed?.userGroups?.length ?? 0) > 0 &&
+                    !sharedPost.feed?.userGroups?.includes("everyone"))),
     );
 
     const itemDetail: CreatableItemDetail | undefined = useMemo(

@@ -1240,7 +1240,7 @@ export const PostItem = ({
             )}
 
             {/* Post content - using TruncatedPostContent for See More functionality */}
-            {!hideContent && !isFundingPreviewPost && (post.content.trim() || !post.sharedPostId) && (
+            {!hideContent && !isFundingPreviewPost && (post.content.trim() || post.sharedPostData === undefined) && (
                 <TruncatedPostContent
                     content={post.content}
                     mentions={post.mentionsDisplay}
@@ -1248,7 +1248,7 @@ export const PostItem = ({
                 />
             )}
 
-            {!hideContent && post.sharedPostId && (
+            {!hideContent && post.sharedPostData !== undefined && (
                 <div className="pl-4 pr-4">
                     <SharedPostPreview post={post.sharedPostData} fallbackText="Original post unavailable." />
                 </div>

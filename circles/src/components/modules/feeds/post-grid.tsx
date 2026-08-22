@@ -124,16 +124,7 @@ export function PostGrid({ posts, circle, feed, isLoading }: PostGridProps) {
         ) {
             return post.internalPreviewData.images[0]?.fileInfo?.url;
         }
-        if (post.sharedPostData?.media && post.sharedPostData.media.length > 0) {
-            return post.sharedPostData.media[0].fileInfo?.url;
-        }
-        if (
-            post.sharedPostData?.internalPreviewType === "funding" &&
-            post.sharedPostData.internalPreviewData &&
-            "coverImage" in post.sharedPostData.internalPreviewData
-        ) {
-            return post.sharedPostData.internalPreviewData.coverImage?.url;
-        }
+        if (post.sharedPostData?.image?.url) return post.sharedPostData.image.url;
         return null;
     };
 

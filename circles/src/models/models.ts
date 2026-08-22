@@ -272,6 +272,15 @@ export type InternalPreviewData =
           items?: Array<Pick<NonNullable<FundingAsk["items"]>[number], "status" | "price" | "currency" | "quantity">>;
       };
 
+export type SharedOriginalPreview = {
+    content: string;
+    title?: string;
+    author: { name: string; pictureUrl?: string };
+    circleName?: string;
+    image?: { url: string; alt?: string };
+    href?: string;
+};
+
 export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
     author: Circle;
     highlightedComment?: CommentDisplay;
@@ -293,7 +302,7 @@ export interface PostDisplay extends WithMetric<Omit<Post, "sdgs">> {
         | EventDisplay
         | FundingAskDisplay
         | null;
-    sharedPostData?: PostDisplay | null;
+    sharedPostData?: SharedOriginalPreview | null;
     sdgs?: Cause[];
 }
 
