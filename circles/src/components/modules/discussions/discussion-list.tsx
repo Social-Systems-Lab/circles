@@ -85,6 +85,7 @@ import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "../feeds/RichText";
+import { replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
 import UserBadge from "../users/user-badge";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
@@ -1473,9 +1474,9 @@ const CommentItem = ({
             // update comment
             startTransition(async () => {
                 const result = await editCommentAction(comment._id!, editContent);
-                if (result.success) {
+                if (result.success && result.comment) {
                     setIsEditing(false);
-                    // TODO get updated comment with mentions and update it in UI
+                    setComments((prevComments) => replaceCommentWithServerResult(prevComments, result.comment!));
                     toast({
                         title: "Comment updated",
                         variant: "success",

@@ -97,6 +97,7 @@ import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "./RichText";
+import { replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
 import UserBadge from "../users/user-badge";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
@@ -475,8 +476,18 @@ export const PostItem = ({
     const [likedByUsers, setLikedByUsers] = useState<Circle[] | undefined>(undefined);
 
     const [comments, setComments] = useState<CommentDisplay[]>(initialComments ?? []);
+    const [highlightedComment, setHighlightedComment] = useState<CommentDisplay | undefined>(post.highlightedComment);
     const [showAllComments, setShowAllComments] = useState(initialShowAllComments ?? false);
     const [newCommentContent, setNewCommentContent] = useState("");
+
+    useEffect(() => {
+        setHighlightedComment(post.highlightedComment);
+    }, [post.highlightedComment]);
+
+    const handleCommentUpdated = useCallback((updatedComment: CommentDisplay) => {
+        setComments((current) => replaceCommentWithServerResult(current, updatedComment));
+        setHighlightedComment((current) => (current?._id === updatedComment._id ? updatedComment : current));
+    }, []);
 
     const topLevelComments = useMemo(() => {
         if (!comments || comments.length <= 0) return [];
@@ -1551,12 +1562,13 @@ export const PostItem = ({
                               postType={post.postType}
                               readOnly={readOnly}
                               participationBlockReason={guardedCommunityReason}
+                              onCommentUpdated={handleCommentUpdated}
                           />
                       ))
-                    : post.highlightedComment && (
+                    : highlightedComment && (
                           <CommentItem
-                              key={post.highlightedComment._id}
-                              comment={post.highlightedComment}
+                              key={highlightedComment._id}
+                              comment={highlightedComment}
                               comments={comments}
                               setComments={setComments}
                               setShowAllComments={setShowAllComments}
@@ -1570,6 +1582,7 @@ export const PostItem = ({
                               postType={post.postType}
                               readOnly={readOnly}
                               participationBlockReason={guardedCommunityReason}
+                              onCommentUpdated={handleCommentUpdated}
                           />
                       )}
 
@@ -1654,6 +1667,7 @@ type CommentItemProps = {
     postType?: PostDisplay["postType"];
     readOnly?: boolean;
     participationBlockReason?: ParticipationBlockReason | null;
+    onCommentUpdated?: (comment: CommentDisplay) => void;
 };
 
 const CommentItem = ({
@@ -1671,6 +1685,7 @@ const CommentItem = ({
     postType,
     readOnly = false,
     participationBlockReason = null,
+    onCommentUpdated,
     depth = 0,
 }: CommentItemProps) => {
     const [showReplies, setShowReplies] = useState(false);
@@ -1876,9 +1891,13 @@ const CommentItem = ({
             // update comment
             startTransition(async () => {
                 const result = await editCommentAction(comment._id!, editContent);
-                if (result.success) {
+                if (result.success && result.comment) {
                     setIsEditing(false);
-                    // TODO get updated comment with mentions and update it in UI
+                    if (onCommentUpdated) {
+                        onCommentUpdated(result.comment);
+                    } else {
+                        setComments((prevComments) => replaceCommentWithServerResult(prevComments, result.comment!));
+                    }
                     toast({
                         title: "Comment updated",
                         variant: "success",
@@ -2134,6 +2153,7 @@ const CommentItem = ({
                                 postType={postType}
                                 readOnly={readOnly}
                                 participationBlockReason={guardedCommunityReason}
+                                onCommentUpdated={onCommentUpdated}
                             />
                         ))}
                     {(!showReplies || isHighlighted) && (

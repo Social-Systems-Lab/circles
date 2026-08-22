@@ -313,6 +313,7 @@ export const commentSchema = z.object({
     content: z.string(),
     createdBy: didSchema,
     createdAt: z.date(),
+    editedAt: z.date().optional(),
     reactions: z.record(z.string(), z.number()).default({}),
     replies: z.number().default(0),
     isDeleted: z.boolean().optional(),

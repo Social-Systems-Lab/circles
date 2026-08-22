@@ -51,6 +51,7 @@ import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
 import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
 import RichText from "./RichText";
+import { replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
 import { UserPicture } from "../members/user-picture";
 import { useRouter } from "next/navigation";
 import {
@@ -284,14 +285,14 @@ const CommentItem = ({
 
         startTransition(async () => {
             const result = await editCommentAction(comment._id!, editContent);
-            if (!result.success) {
+            if (!result.success || !result.comment) {
                 // Revert on failure
                 setComments((prevComments = []) =>
                     prevComments.map((c) => (c._id === comment._id ? { ...c, content: originalContent } : c)),
                 );
                 toast({ title: "Update Failed", description: result.message, variant: "destructive" });
             } else {
-                // Action succeeded, optimistic update is already done. Just show toast.
+                setComments((prevComments = []) => replaceCommentWithServerResult(prevComments, result.comment!));
                 toast({ title: "Comment updated", variant: "success" });
             }
         });

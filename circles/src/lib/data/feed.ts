@@ -1416,40 +1416,6 @@ export const getAllComments = async (postId: string, userDid: string | undefined
             },
         },
 
-        // **Adjusted Lookup for mentions in the comment**
-        {
-            $lookup: {
-                from: "circles",
-                let: {
-                    mentionIds: {
-                        $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                    },
-                },
-                pipeline: [
-                    {
-                        $match: {
-                            $expr: {
-                                $in: [{ $toString: "$_id" }, "$$mentionIds"],
-                            },
-                        },
-                    },
-                    {
-                        $project: {
-                            _id: { $toString: "$_id" },
-                            did: 1,
-                            name: 1,
-                            picture: 1,
-                            location: 1,
-                            description: 1,
-                            cover: 1,
-                            handle: 1,
-                        },
-                    },
-                ],
-                as: "mentionsDetails",
-            },
-        },
-
         // Final projection
         {
             $project: {
@@ -1459,35 +1425,10 @@ export const getAllComments = async (postId: string, userDid: string | undefined
                 content: 1,
                 createdBy: 1,
                 createdAt: 1,
+                editedAt: 1,
                 reactions: 1,
                 replies: 1,
                 isDeleted: 1,
-                mentions: 1,
-                // **Adjusted mapping of mentionsDisplay**
-                mentionsDisplay: {
-                    $map: {
-                        input: { $ifNull: ["$mentions", []] },
-                        as: "mention",
-                        in: {
-                            type: "$$mention.type",
-                            id: "$$mention.id",
-                            circle: {
-                                $arrayElemAt: [
-                                    {
-                                        $filter: {
-                                            input: { $ifNull: ["$mentionsDetails", []] },
-                                            as: "circle",
-                                            cond: {
-                                                $eq: ["$$circle._id", "$$mention.id"],
-                                            },
-                                        },
-                                    },
-                                    0,
-                                ],
-                            },
-                        },
-                    },
-                },
                 author: {
                     did: "$authorDetails.did",
                     name: "$authorDetails.name",

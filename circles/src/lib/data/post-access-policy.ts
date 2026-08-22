@@ -3,6 +3,7 @@ import type { Circle, CommentDisplay, Feature, Feed, Member, Post } from "@/mode
 import { canReadCircle } from "./circle-visibility-policy";
 import { getPostViewFeature } from "./constants";
 import { canReadPostSource } from "./post-source-access-policy";
+import { sanitizeCommentMentions } from "./comment-mention-policy";
 
 export type ReadablePostContext = { post: Post; feed: Feed; circle: Circle };
 export const POST_UNAVAILABLE_MESSAGE = "Post unavailable";
@@ -132,7 +133,7 @@ export async function getReadablePostComments(
     const context = await dependencies.resolveContext(postId, viewerDid);
     if (!context) return { success: false, message: POST_UNAVAILABLE_MESSAGE };
     const comments = await dependencies.loadComments(postId, viewerDid);
-    return { success: true, comments };
+    return { success: true, comments: await sanitizeCommentMentions(comments, viewerDid) };
 }
 
 type PublicUserFeedDependencies = {

@@ -27,6 +27,7 @@ import {
     createDefaultFeed,
     getShareablePostPreview,
     getFullPost,
+    getAllComments,
 } from "@/lib/data/feed";
 import { deleteFile, saveFile, isFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -88,6 +89,7 @@ import {
     resolveReadablePostContext,
 } from "@/lib/data/post-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
     resolveInternalPreviewAction,
     sanitizePostNestedContent,
@@ -1025,7 +1027,8 @@ export async function createCommentAction(
             console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
         }
 
-        return { success: true, message: "Comment created successfully", comment };
+        const [sanitizedComment] = await sanitizeCommentMentions([comment], userDid);
+        return { success: true, message: "Comment created successfully", comment: sanitizedComment };
     } catch (error) {
         console.error("🐞 [ACTION] Unhandled error in createCommentAction:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to create comment." };
@@ -1042,7 +1045,7 @@ export async function getAllCommentsAction(
 export async function editCommentAction(
     commentId: string,
     updatedContent: string,
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string; comment?: CommentDisplay }> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit a comment" };
@@ -1111,7 +1114,13 @@ export async function editCommentAction(
             console.error("Failed to send mention notifications:", notificationError);
         }
 
-        return { success: true, message: "Comment edited successfully" };
+        const updatedComments = await getAllComments(comment.postId, userDid);
+        const updatedComment = updatedComments.find((candidate) => candidate._id === commentId);
+        if (!updatedComment) {
+            return { success: false, message: "Comment not found" };
+        }
+        const [sanitizedComment] = await sanitizeCommentMentions([updatedComment], userDid);
+        return { success: true, message: "Comment edited successfully", comment: sanitizedComment };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to edit comment." };
     }

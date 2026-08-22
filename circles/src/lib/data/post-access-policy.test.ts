@@ -237,6 +237,22 @@ async function testCommentReadAuthorization() {
     assert.deepEqual(allowed, { success: true, comments });
     assert.equal(commentLoads, 1);
 
+    const metadataBearingComments = [
+        {
+            ...comments[0],
+            content: "[Hidden](/circles/secret/child)",
+            mentions: [{ type: "circle", id: oid().toString() }],
+            mentionsDisplay: [{ type: "circle", id: oid().toString(), circle: { name: "Forged" } }],
+        },
+    ] as any;
+    const sanitized = await getReadablePostComments(postId.toString(), viewerDid, {
+        resolveContext: async () => allowedContext,
+        loadComments: async () => metadataBearingComments,
+    });
+    assert.equal(sanitized.comments?.[0].content, "Unavailable Circle");
+    assert.equal(Object.hasOwn(sanitized.comments?.[0] ?? {}, "mentions"), false);
+    assert.equal(Object.hasOwn(sanitized.comments?.[0] ?? {}, "mentionsDisplay"), false);
+
     const deniedResults = await Promise.all(
         ["malformed", "missing", "outsider", "superadmin"].map((scenario) =>
             getReadablePostComments(postId.toString(), scenario, {
