@@ -29,6 +29,7 @@ import {
 import { canReadCircle } from "./circle-visibility-policy";
 import { buildSourceFilteredPostMatchStages } from "./post-source-access-policy";
 import { sanitizePostNestedContent } from "./post-nested-content-policy";
+import { sanitizeHighlightedCommentsOnPosts } from "./comment-mention-policy";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -426,36 +427,6 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                             as: "userReaction",
                         },
                     },
-                    {
-                        $lookup: {
-                            from: "circles",
-                            let: {
-                                mentionIds: {
-                                    $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                                },
-                            },
-                            pipeline: [
-                                {
-                                    $match: {
-                                        $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
-                                    },
-                                },
-                                {
-                                    $project: {
-                                        _id: { $toString: "$_id" },
-                                        did: 1,
-                                        name: 1,
-                                        picture: 1,
-                                        location: 1,
-                                        description: 1,
-                                        cover: 1,
-                                        handle: 1,
-                                    },
-                                },
-                            ],
-                            as: "mentionsDetails",
-                        },
-                    },
                 ],
                 as: "highlightedComment",
             },
@@ -509,32 +480,11 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                             content: "$highlightedComment.content",
                             createdBy: "$highlightedComment.createdBy",
                             createdAt: "$highlightedComment.createdAt",
+                            editedAt: "$highlightedComment.editedAt",
                             reactions: "$highlightedComment.reactions",
                             replies: "$highlightedComment.replies",
                             isDeleted: "$highlightedComment.isDeleted",
-                            mentions: "$highlightedComment.mentions",
-                            mentionsDisplay: {
-                                $map: {
-                                    input: { $ifNull: ["$highlightedComment.mentions", []] },
-                                    as: "mention",
-                                    in: {
-                                        type: "$$mention.type",
-                                        id: "$$mention.id",
-                                        circle: {
-                                            $arrayElemAt: [
-                                                {
-                                                    $filter: {
-                                                        input: { $ifNull: ["$highlightedComment.mentionsDetails", []] },
-                                                        as: "circle",
-                                                        cond: { $eq: ["$$circle._id", "$$mention.id"] },
-                                                    },
-                                                },
-                                                0,
-                                            ],
-                                        },
-                                    },
-                                },
-                            },
+                            rootParentId: { $toString: "$highlightedComment.rootParentId" },
                             author: {
                                 did: "$highlightedComment.authorDetails.did",
                                 name: "$highlightedComment.authorDetails.name",
@@ -572,7 +522,8 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
 
     const sanitizedPosts = await sanitizePostNestedContent(posts, userDid);
 
-    return sanitizedPosts[0];
+    const [postWithSanitizedHighlight] = await sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid);
+    return postWithSanitizedHighlight;
 };
 
 // Function to update the highlighted comment for a post
@@ -786,37 +737,6 @@ export async function getPostsFromMultipleFeeds(
                             as: "userReaction",
                         },
                     },
-                    // **Adjusted Lookup for mentions in highlighted comment**
-                    {
-                        $lookup: {
-                            from: "circles",
-                            let: {
-                                mentionIds: {
-                                    $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                                },
-                            },
-                            pipeline: [
-                                {
-                                    $match: {
-                                        $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
-                                    },
-                                },
-                                {
-                                    $project: {
-                                        _id: { $toString: "$_id" },
-                                        did: 1,
-                                        name: 1,
-                                        picture: 1,
-                                        location: 1,
-                                        description: 1,
-                                        cover: 1,
-                                        handle: 1,
-                                    },
-                                },
-                            ],
-                            as: "mentionsDetails",
-                        },
-                    },
                 ],
                 as: "highlightedComment",
             },
@@ -884,33 +804,11 @@ export async function getPostsFromMultipleFeeds(
                             content: "$highlightedComment.content",
                             createdBy: "$highlightedComment.createdBy",
                             createdAt: "$highlightedComment.createdAt",
+                            editedAt: "$highlightedComment.editedAt",
                             reactions: "$highlightedComment.reactions",
                             replies: "$highlightedComment.replies",
                             isDeleted: "$highlightedComment.isDeleted",
-                            mentions: "$highlightedComment.mentions",
-                            // **Adjusted mapping of mentionsDisplay in highlightedComment**
-                            mentionsDisplay: {
-                                $map: {
-                                    input: { $ifNull: ["$highlightedComment.mentions", []] },
-                                    as: "mention",
-                                    in: {
-                                        type: "$$mention.type",
-                                        id: "$$mention.id",
-                                        circle: {
-                                            $arrayElemAt: [
-                                                {
-                                                    $filter: {
-                                                        input: { $ifNull: ["$highlightedComment.mentionsDetails", []] },
-                                                        as: "circle",
-                                                        cond: { $eq: ["$$circle._id", "$$mention.id"] },
-                                                    },
-                                                },
-                                                0,
-                                            ],
-                                        },
-                                    },
-                                },
-                            },
+                            rootParentId: { $toString: "$highlightedComment.rootParentId" },
                             author: {
                                 did: "$highlightedComment.authorDetails.did",
                                 name: "$highlightedComment.authorDetails.name",
@@ -988,7 +886,7 @@ export async function getPostsFromMultipleFeeds(
         const sanitizedPosts = await sanitizePostNestedContent(filteredPosts, userDid);
         // --- End Fetch Internal Preview Data ---
 
-        return sanitizedPosts;
+        return sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid);
     }
 
     // If no user is specified, only return posts with "everyone" user group
@@ -1000,7 +898,7 @@ export async function getPostsFromMultipleFeeds(
     const sanitizedPosts = await sanitizePostNestedContent(publicPosts, userDid);
     // --- End Fetch Internal Preview Data ---
 
-    return sanitizedPosts;
+    return sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid);
 }
 
 export async function getPostsFromMultipleFeedsWithMetrics(
@@ -1154,37 +1052,6 @@ export const getPosts = async (
                             as: "userReaction",
                         },
                     },
-                    // **Adjusted Lookup for mentions in highlighted comment**
-                    {
-                        $lookup: {
-                            from: "circles",
-                            let: {
-                                mentionIds: {
-                                    $ifNull: [{ $map: { input: "$mentions", as: "m", in: "$$m.id" } }, []],
-                                },
-                            },
-                            pipeline: [
-                                {
-                                    $match: {
-                                        $expr: { $in: [{ $toString: "$_id" }, "$$mentionIds"] },
-                                    },
-                                },
-                                {
-                                    $project: {
-                                        _id: { $toString: "$_id" },
-                                        did: 1,
-                                        name: 1,
-                                        picture: 1,
-                                        location: 1,
-                                        description: 1,
-                                        cover: 1,
-                                        handle: 1,
-                                    },
-                                },
-                            ],
-                            as: "mentionsDetails",
-                        },
-                    },
                 ],
                 as: "highlightedComment",
             },
@@ -1247,33 +1114,11 @@ export const getPosts = async (
                             content: "$highlightedComment.content",
                             createdBy: "$highlightedComment.createdBy",
                             createdAt: "$highlightedComment.createdAt",
+                            editedAt: "$highlightedComment.editedAt",
                             reactions: "$highlightedComment.reactions",
                             replies: "$highlightedComment.replies",
                             isDeleted: "$highlightedComment.isDeleted",
-                            mentions: "$highlightedComment.mentions",
-                            // **Adjusted mapping of mentionsDisplay in highlightedComment**
-                            mentionsDisplay: {
-                                $map: {
-                                    input: { $ifNull: ["$highlightedComment.mentions", []] },
-                                    as: "mention",
-                                    in: {
-                                        type: "$$mention.type",
-                                        id: "$$mention.id",
-                                        circle: {
-                                            $arrayElemAt: [
-                                                {
-                                                    $filter: {
-                                                        input: { $ifNull: ["$highlightedComment.mentionsDetails", []] },
-                                                        as: "circle",
-                                                        cond: { $eq: ["$$circle._id", "$$mention.id"] },
-                                                    },
-                                                },
-                                                0,
-                                            ],
-                                        },
-                                    },
-                                },
-                            },
+                            rootParentId: { $toString: "$highlightedComment.rootParentId" },
                             author: {
                                 did: "$highlightedComment.authorDetails.did",
                                 name: "$highlightedComment.authorDetails.name",
@@ -1339,7 +1184,7 @@ export const getPosts = async (
         const sanitizedPosts = await sanitizePostNestedContent(filteredPosts, userDid);
         // --- End Fetch Internal Preview Data ---
 
-        return sanitizedPosts;
+        return sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid);
     }
 
     // If no user is specified, only return posts with "everyone" user group
@@ -1351,7 +1196,7 @@ export const getPosts = async (
     const sanitizedPosts = await sanitizePostNestedContent(publicPostsForFeed, userDid);
     // --- End Fetch Internal Preview Data ---
 
-    return sanitizedPosts;
+    return sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid);
 };
 
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
