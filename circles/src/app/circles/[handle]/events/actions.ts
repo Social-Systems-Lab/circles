@@ -64,8 +64,9 @@ import {
 } from "@/lib/data/eventNotifications";
 import { inviteUsersToEvent } from "@/lib/data/event";
 import { getMembers } from "@/lib/data/member";
-import { addCommentToDiscussion, getDiscussionWithComments } from "@/lib/data/discussion";
-import { resolveFeedActionViewerDid, resolveReadablePostContext } from "@/lib/data/post-access-policy";
+import { addCommentToDiscussion } from "@/lib/data/discussion";
+import { resolveFeedActionViewerDid } from "@/lib/data/post-access-policy";
+import { getReadableEventCommentDtos } from "@/lib/data/event-alternate-comment-policy";
 import { buildEventNoticeboardPostData } from "@/lib/event-noticeboard-post-policy";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
@@ -2277,12 +2278,9 @@ export async function getEventWithCommentsAction(eventId: string) {
     const viewerDid = await resolveFeedActionViewerDid();
     const event = await getEventById(eventId, viewerDid || "");
     if (!event) throw new Error("Event not found");
-    if (!event.commentPostId) return { ...event, comments: [] };
-    const context = await resolveReadablePostContext(event.commentPostId, viewerDid);
-    if (!context) throw new Error("Event not found");
-
-    const discussion = await getDiscussionWithComments(event.commentPostId, context.post.feedId);
-    return { ...event, comments: discussion?.comments || [] };
+    const comments = await getReadableEventCommentDtos(event, viewerDid);
+    if (!comments) throw new Error("Event not found");
+    return { ...event, comments };
 }
 
 /**

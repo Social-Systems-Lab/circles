@@ -9,7 +9,7 @@ export type PostSourceType = (typeof POST_SOURCE_TYPES)[number];
 
 type SourceResource = Task | Event | Goal | Issue | Proposal | FundingAsk;
 
-type PostSourceDependencies = {
+export type PostSourceDependencies = {
     findSource: (type: PostSourceType, id: ObjectId) => Promise<SourceResource | null>;
     findCircles: (ids: ObjectId[]) => Promise<Circle[]>;
     canReadOwner: (viewerDid: string | undefined, circle: Circle) => Promise<boolean>;
@@ -96,6 +96,23 @@ function getOwnerCircleIds(type: PostSourceType, source: SourceResource): string
     return Array.from(new Set(rawIds.map((id) => new ObjectId(id as string).toHexString())));
 }
 
+export async function canReadEventOwners(
+    event: Pick<Event, "circleId" | "hostCircleIds">,
+    viewerDid?: string,
+    dependencies: Pick<PostSourceDependencies, "findCircles" | "canReadOwner"> = defaultDependencies,
+): Promise<boolean> {
+    const ownerIds = getOwnerCircleIds("event", event as Event);
+    if (!ownerIds?.length) return false;
+    const circles = await dependencies.findCircles(ownerIds.map((id) => new ObjectId(id)));
+    const circleMap = new Map(circles.map((circle) => [circle._id?.toString(), circle]));
+    if (circleMap.size !== ownerIds.length) return false;
+    for (const ownerId of ownerIds) {
+        const circle = circleMap.get(ownerId);
+        if (!circle || !(await dependencies.canReadOwner(viewerDid, circle))) return false;
+    }
+    return true;
+}
+
 export async function canReadPostSource(
     post: Pick<
         Post,
@@ -123,6 +140,9 @@ export async function canReadPostSource(
             !ObjectId.isValid(post._id?.toString() ?? ""))
     ) {
         return true;
+    }
+    if (reference.type === "event") {
+        return canReadEventOwners(source as Event, viewerDid, dependencies);
     }
     const ownerIds = getOwnerCircleIds(reference.type, source);
     if (!ownerIds?.length) return false;
@@ -312,10 +332,7 @@ export async function buildReadablePostSourceAggregationStages(viewerDid?: strin
                                                     ],
                                                 },
                                                 {
-                                                    $eq: [
-                                                        { $arrayElemAt: ["$__sourceDocs.hostCircleIds", 0] },
-                                                        null,
-                                                    ],
+                                                    $eq: [{ $arrayElemAt: ["$__sourceDocs.hostCircleIds", 0] }, null],
                                                 },
                                             ],
                                         },

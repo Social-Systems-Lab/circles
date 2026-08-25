@@ -6,10 +6,7 @@ import type { Circle, Comment, CommentDisplay, PostDisplay } from "@/models/mode
 import { toCommentDto } from "./comment-dto";
 import { sanitizeCommentMentions } from "./comment-mention-policy";
 import { addCommentToDiscussionWithDependencies } from "./discussion-comment-create";
-import {
-    addReadableAlternateDiscussionComment,
-    getReadableAlternateDiscussion,
-} from "./discussion-alternate-policy";
+import { addReadableAlternateDiscussionComment, getReadableAlternateDiscussion } from "./discussion-alternate-policy";
 import { resolveReadablePostContext, type ReadablePostContext } from "./post-access-policy";
 
 const actions = readFileSync("src/app/circles/[handle]/discussions/actions.ts", "utf8");
@@ -19,11 +16,18 @@ const eventSource = readFileSync("src/app/circles/[handle]/events/actions.ts", "
 assert.match(actions, /getReadableAlternateDiscussion/);
 assert.match(actions, /addReadableAlternateDiscussionComment/);
 assert.match(dataSource, /discussion\.comments = comments\.map\(toCommentDto\)/);
-assert.doesNotMatch(dataSource.slice(dataSource.indexOf("const comments ="), dataSource.indexOf("return discussion")), /\.\.\.c/);
+assert.doesNotMatch(
+    dataSource.slice(dataSource.indexOf("const comments ="), dataSource.indexOf("return discussion")),
+    /\.\.\.c/,
+);
+const eventAddSource = eventSource.slice(
+    eventSource.indexOf("export async function addEventCommentAction"),
+    eventSource.indexOf("/**\n * Get event with comments"),
+);
 assert.equal(
-    createHash("sha256").update(eventSource).digest("hex"),
-    "cae83211fa9d15aa8ea8a7997d56b15bcaa9f355702fa977e3243954cbb73162",
-    "Phase 3B1b2c2b2a must not modify Event action source",
+    createHash("sha256").update(eventAddSource).digest("hex"),
+    "408cb605213049758a8c9cde51b8f9f9cef3ba2f2c9543c141ccf41749f09245",
+    "Phase 3B1b2c2b2b1 must not modify Event comment mutation behavior",
 );
 
 const circleId = new ObjectId();
@@ -66,11 +70,12 @@ const contextDependencies = (
     canReadSource: async () => true,
 });
 
-const resolveContext = (
-    member: boolean,
-    visibility: "public" | "secret" = "secret",
-    moderationStatus: "active" | "paused" | "suspended" | "removed" = "active",
-) =>
+const resolveContext =
+    (
+        member: boolean,
+        visibility: "public" | "secret" = "secret",
+        moderationStatus: "active" | "paused" | "suspended" | "removed" = "active",
+    ) =>
     (id: string, viewerDid?: string) =>
         resolveReadablePostContext(id, viewerDid, contextDependencies(member, visibility, moderationStatus) as never);
 
@@ -145,7 +150,10 @@ async function testAddOrchestration() {
         let adds = 0;
         await assert.rejects(
             addReadableAlternateDiscussionComment(postId.toString(), { content: "comment" }, viewerDid, {
-                resolveContext: resolveContext(false) as (id: string, did: string) => Promise<ReadablePostContext | null>,
+                resolveContext: resolveContext(false) as (
+                    id: string,
+                    did: string,
+                ) => Promise<ReadablePostContext | null>,
                 authorizeComment: async () => {
                     authorizations += 1;
                     return true;
@@ -336,15 +344,19 @@ async function testInsertAndReread() {
 
     let closedInsert = false;
     await assert.rejects(
-        addCommentToDiscussionWithDependencies(postId.toString(), { content: "comment", createdBy: "did:member" }, {
-            findDiscussion: async () => ({ closed: true }),
-            insertComment: async () => {
-                closedInsert = true;
-                return { insertedId };
+        addCommentToDiscussionWithDependencies(
+            postId.toString(),
+            { content: "comment", createdBy: "did:member" },
+            {
+                findDiscussion: async () => ({ closed: true }),
+                insertComment: async () => {
+                    closedInsert = true;
+                    return { insertedId };
+                },
+                updateLastActivity: async () => undefined,
+                now: () => createdAt,
             },
-            updateLastActivity: async () => undefined,
-            now: () => createdAt,
-        }),
+        ),
         /closed or not found/,
     );
     assert.equal(closedInsert, false);
