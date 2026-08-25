@@ -24,6 +24,11 @@ import {
 } from "@/lib/data/post-access-policy";
 import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
 import { sanitizePostNestedContent } from "@/lib/data/post-nested-content-policy";
+import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
+import {
+    addReadableAlternateDiscussionComment,
+    getReadableAlternateDiscussion,
+} from "@/lib/data/discussion-alternate-policy";
 
 /**
  * Create a new discussion in a circle
@@ -122,12 +127,12 @@ export async function listDiscussionsAction(handle: string) {
  */
 export async function getDiscussionAction(id: string) {
     const viewerDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
-    const context = await resolveReadablePostContext(id, viewerDid);
-    if (!context || context.post.postType !== "discussion") return null;
-    const discussion = await getDiscussionWithComments(id, context.post.feedId);
-    if (!discussion) return null;
-    const [sanitizedDiscussion] = await sanitizePostNestedContent([discussion as PostDisplay], viewerDid);
-    return sanitizedDiscussion;
+    return getReadableAlternateDiscussion(id, viewerDid, {
+        resolveContext: resolveReadablePostContext,
+        loadDiscussion: getDiscussionWithComments,
+        sanitizeComments: sanitizeCommentMentions,
+        sanitizePost: sanitizePostNestedContent,
+    });
 }
 
 /**
@@ -140,14 +145,16 @@ export async function addCommentAction(discussionId: string, data: Partial<Comme
     const user = await getUserByDid(userDid);
     if (!user) throw new Error("User not found");
 
-    const discussion = await getDiscussionWithComments(discussionId);
-    if (!discussion) throw new Error("Forum post not found");
-    const canComment = await canPerformCanonicalDiscussionAction(discussion, userDid, features.feed.comment);
-    if (!canComment) throw new Error("Not authorized to comment");
-
-    return addCommentToDiscussion(discussionId, {
-        ...data,
-        createdBy: userDid,
+    return addReadableAlternateDiscussionComment(discussionId, data, userDid, {
+        resolveContext: resolveReadablePostContext,
+        authorizeComment: (context, viewerDid) =>
+            canPerformCanonicalDiscussionAction(
+                { ...context.post, feed: context.feed },
+                viewerDid,
+                features.feed.comment,
+            ),
+        addComment: addCommentToDiscussion,
+        sanitizeComments: sanitizeCommentMentions,
     });
 }
 
