@@ -2,6 +2,13 @@ import { ObjectId, type Filter } from "mongodb";
 import type { Circle } from "@/models/models";
 import { getReadableLifecycleQuery } from "./circle-lifecycle-policy";
 import { circleVisibilityMongoQuery, getCanonicalMemberCircleIds } from "./circle-visibility-policy";
+import {
+    parseCircleReferenceOccurrences,
+    type CompleteMarkdownLinkOccurrence,
+} from "./circle-mention-markdown";
+
+export { findCompleteMarkdownLinkOccurrences, isMarkdownDelimiterEscaped } from "./circle-mention-markdown";
+export type { CompleteMarkdownLinkOccurrence } from "./circle-mention-markdown";
 
 export type MentionBearingTextItem = {
     content: string;
@@ -19,12 +26,6 @@ export type MentionContentPolicyDependencies = {
 
 export type MentionContentPolicyOptions = {
     exemptRangesByItem?: ReadonlyMap<MentionBearingTextItem, ReadonlySet<string>>;
-};
-
-export type CompleteMarkdownLinkOccurrence = {
-    start: number;
-    end: number;
-    target: string;
 };
 
 type Occurrence = {
@@ -59,84 +60,13 @@ const defaultDependencies: MentionContentPolicyDependencies = {
     },
 };
 
-export function isMarkdownDelimiterEscaped(content: string, index: number): boolean {
-    let backslashes = 0;
-    for (let cursor = index - 1; cursor >= 0 && content[cursor] === "\\"; cursor -= 1) backslashes += 1;
-    return backslashes % 2 === 1;
-}
-
-function findUnescapedDelimiter(content: string, delimiter: string, start: number): number {
-    for (let cursor = start; cursor < content.length; cursor += 1) {
-        if (content[cursor] === "\r" || content[cursor] === "\n") return -1;
-        if (content[cursor] === delimiter && !isMarkdownDelimiterEscaped(content, cursor)) return cursor;
-    }
-    return -1;
-}
-
-export function findCompleteMarkdownLinkOccurrences(content: string): CompleteMarkdownLinkOccurrence[] {
-    const occurrences: CompleteMarkdownLinkOccurrence[] = [];
-    for (let start = 0; start < content.length; start += 1) {
-        if (content[start] !== "[" || isMarkdownDelimiterEscaped(content, start)) continue;
-        if (start > 0 && content[start - 1] === "!" && !isMarkdownDelimiterEscaped(content, start - 1)) continue;
-
-        const labelEnd = findUnescapedDelimiter(content, "]", start + 1);
-        if (labelEnd < 0 || content[labelEnd + 1] !== "(") continue;
-        const destinationStart = labelEnd + 2;
-        let target: string;
-        let destinationEnd: number;
-        if (content[destinationStart] === "<") {
-            const angleEnd = findUnescapedDelimiter(content, ">", destinationStart + 1);
-            if (angleEnd < 0 || content[angleEnd + 1] !== ")") continue;
-            target = content.slice(destinationStart + 1, angleEnd);
-            destinationEnd = angleEnd + 1;
-        } else {
-            destinationEnd = findUnescapedDelimiter(content, ")", destinationStart);
-            if (destinationEnd < 0) continue;
-            target = content.slice(destinationStart, destinationEnd);
-        }
-        occurrences.push({ start, end: destinationEnd + 1, target });
-        start = destinationEnd;
-    }
-    return occurrences;
-}
-
-function classifyCircleReference(target: string): Omit<Occurrence, "start" | "end"> | null {
-    if (!target.startsWith("/circles/")) return null;
-    const encodedIdentifier = target.slice("/circles/".length);
-    if (
-        !encodedIdentifier ||
-        encodedIdentifier.includes("/") ||
-        encodedIdentifier.includes("?") ||
-        encodedIdentifier.includes("#") ||
-        /\s/.test(target)
-    ) {
-        return { identifier: null };
-    }
-    let identifier: string;
-    try {
-        identifier = decodeURIComponent(encodedIdentifier);
-    } catch {
-        return { identifier: null };
-    }
-    if (!identifier || identifier.includes("/") || identifier.includes("?") || identifier.includes("#") || /\s/.test(identifier)) {
-        return { identifier: null };
-    }
-    if (ObjectId.isValid(identifier)) {
-        const objectId = new ObjectId(identifier).toHexString();
-        return { identifier, objectId };
-    }
-    return { identifier, handle: identifier };
-}
-
 const rangeKey = ({ start, end }: Pick<CompleteMarkdownLinkOccurrence, "start" | "end">) => `${start}:${end}`;
 
 function parseOccurrences(item: MentionBearingTextItem, exemptRanges: ReadonlySet<string>): Occurrence[] {
     const occurrences: Occurrence[] = [];
-    for (const link of findCompleteMarkdownLinkOccurrences(item.content)) {
+    for (const link of parseCircleReferenceOccurrences(item.content)) {
         if (exemptRanges.has(rangeKey(link))) continue;
-        const classified = classifyCircleReference(link.target);
-        if (!classified) continue;
-        occurrences.push({ start: link.start, end: link.end, ...classified });
+        occurrences.push(link);
     }
     return occurrences;
 }
