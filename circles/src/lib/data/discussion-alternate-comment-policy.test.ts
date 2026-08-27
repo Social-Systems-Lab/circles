@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ObjectId } from "mongodb";
 import type { Circle, Comment, CommentDisplay, PostDisplay } from "@/models/models";
@@ -11,7 +10,6 @@ import { resolveReadablePostContext, type ReadablePostContext } from "./post-acc
 
 const actions = readFileSync("src/app/circles/[handle]/discussions/actions.ts", "utf8");
 const dataSource = readFileSync("src/lib/data/discussion.ts", "utf8");
-const eventSource = readFileSync("src/app/circles/[handle]/events/actions.ts", "utf8");
 
 assert.match(actions, /getReadableAlternateDiscussion/);
 assert.match(actions, /addReadableAlternateDiscussionComment/);
@@ -19,15 +17,6 @@ assert.match(dataSource, /discussion\.comments = comments\.map\(toCommentDto\)/)
 assert.doesNotMatch(
     dataSource.slice(dataSource.indexOf("const comments ="), dataSource.indexOf("return discussion")),
     /\.\.\.c/,
-);
-const eventAddSource = eventSource.slice(
-    eventSource.indexOf("export async function addEventCommentAction"),
-    eventSource.indexOf("/**\n * Get event with comments"),
-);
-assert.equal(
-    createHash("sha256").update(eventAddSource).digest("hex"),
-    "408cb605213049758a8c9cde51b8f9f9cef3ba2f2c9543c141ccf41749f09245",
-    "Phase 3B1b2c2b2b1 must not modify Event comment mutation behavior",
 );
 
 const circleId = new ObjectId();

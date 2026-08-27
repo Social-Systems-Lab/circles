@@ -14,6 +14,7 @@ import {
     EventOccurrenceInvitations,
     EventOccurrenceRsvps,
     Members,
+    Comments,
 } from "@/lib/data/db";
 import { createDefaultFeed, createPost, deletePost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
@@ -64,9 +65,15 @@ import {
 } from "@/lib/data/eventNotifications";
 import { inviteUsersToEvent } from "@/lib/data/event";
 import { getMembers } from "@/lib/data/member";
-import { addCommentToDiscussion } from "@/lib/data/discussion";
 import { resolveFeedActionViewerDid } from "@/lib/data/post-access-policy";
-import { getReadableEventCommentDtos } from "@/lib/data/event-alternate-comment-policy";
+import {
+    addEventCommentWithDependencies,
+    assertEventHostCirclesWritable,
+    getReadableEventCommentDtos,
+} from "@/lib/data/event-alternate-comment-policy";
+import { resolveReadablePostContext } from "@/lib/data/post-access-policy";
+import { createCommentForAuthorizedPost } from "@/lib/data/discussion-comment-create";
+import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import { buildEventNoticeboardPostData } from "@/lib/event-noticeboard-post-policy";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
@@ -327,10 +334,6 @@ const hasEventHostManagementPermission = async (
         }),
     );
     return checks.some(Boolean);
-};
-
-const assertEventHostCirclesWritable = async (event: Pick<EventModel, "circleId" | "hostCircleIds">) => {
-    await Promise.all(normalizeEventHostCircleIds(event).map((circleId) => assertCircleWritesAllowed(circleId)));
 };
 
 const revalidateEventHostPaths = (hostCircles: Circle[], eventId?: string) => {
@@ -2255,19 +2258,17 @@ export async function addEventCommentAction(eventId: string, data: Partial<Comme
     const user = await getUserByDid(userDid);
     if (!user) throw new Error("User not found");
 
-    const event = await getEventById(eventId, userDid);
-    if (!event) throw new Error("Event not found");
-
-    if (!event.commentPostId) {
-        throw new Error("Event has no comment post");
-    }
-
-    const canComment = await isAuthorized(userDid, event.circleId, features.feed.comment);
-    if (!canComment) throw new Error("Not authorized to comment");
-
-    return addCommentToDiscussion(event.commentPostId, {
-        ...data,
-        createdBy: userDid,
+    return addEventCommentWithDependencies(eventId, data, userDid, {
+        findEvent: getEventById,
+        resolvePost: resolveReadablePostContext,
+        assertHostsWritable: assertEventHostCirclesWritable,
+        authorizeComment: (did, circleId) => isAuthorized(did, circleId, features.feed.comment),
+        createComment: createCommentForAuthorizedPost,
+        createDependencies: {
+            insertComment: (comment) => Comments.insertOne(comment),
+            now: () => new Date(),
+        },
+        sanitizeComments: sanitizeCommentMentions,
     });
 }
 
