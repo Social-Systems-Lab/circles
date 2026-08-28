@@ -95,6 +95,7 @@ import {
     sanitizePostNestedContent,
     type InternalPreviewActionResult,
 } from "@/lib/data/post-nested-content-policy";
+import { orchestrateMainPostCreate, orchestrateMainPostUpdate } from "@/lib/data/post-write-policy";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -440,10 +441,7 @@ export async function createPostAction(
             return { success: false, message: "Target circle not found" };
         }
 
-        const postCreateFeature = getPostCreateFeature(postType);
-        if (!postCreateFeature) {
-            return { success: false, message: "Unsupported post type" };
-        }
+        const postCreateFeature = getPostCreateFeature(postType) || features.feed.post;
 
         const isOwnProfileFeed = targetCircle.circleType === "user" && targetCircle._id === currentUser._id;
         if (!isCommunityPost && targetCircle.circleType === "user" && !isOwnProfileFeed) {
@@ -451,167 +449,162 @@ export async function createPostAction(
         }
 
         const requestedFeed = requestedFeedId ? await getFeed(requestedFeedId) : null;
+        const targetPolicyPostType =
+            postType === "post" || postType === "community" || postType === "discussion" ? postType : undefined;
         const targetPolicy = validateCreatePostTargetPolicy({
-            postType,
+            postType: targetPolicyPostType,
             circleId,
             enabledModules: targetCircle.enabledModules,
             requestedFeed,
             content,
             mediaCount: validImageCount,
         });
-        if (!targetPolicy.ok) {
-            return { success: false, message: targetPolicy.message };
-        }
-
-        let feed: Feed | null;
-        if (isCommunityPost) {
-            feed = requestedFeed;
-        } else {
-            // Get the default feed for this circle
-            feed = await getFeedByHandle(circleId, "default"); // Changed to let
-        }
-
-        if (!feed && !isCommunityPost) {
-            // Create a default feed if it doesn't exist
-            console.log(`Default feed not found for circle ${circleId}, creating one.`);
-            feed = await createDefaultFeed(circleId);
-            if (!feed) {
-                return { success: false, message: "Failed to create default feed for this circle" };
-            }
-        }
-        if (!feed) {
-            return { success: false, message: "Feed not found" };
-        }
-
-        console.log("Creating post in feed", feed._id, "for circle", circleId, "by user", userDid);
-
-        const feedId = feed._id.toString();
-        const authorized =
-            !isCommunityPost && isOwnProfileFeed ? true : await isAuthorized(userDid, circleId, postCreateFeature);
-        if (!authorized) {
-            return { success: false, message: "You are not authorized to create posts here" };
-        }
-
-        if (sharedPostId) {
-            const shareablePost = await getShareablePostPreview(sharedPostId, userDid);
-            if (!shareablePost) {
-                return { success: false, message: "Original post unavailable." };
-            }
-        }
-
-        let post: Post = {
-            title: title.trim() || undefined,
-            content,
-            feedId,
-            createdBy: userDid,
-            createdAt: new Date(),
-            reactions: {},
-            comments: 0,
-            location,
-            sharedPostId,
-            userGroups: userGroups.length > 0 ? userGroups : ["everyone"], // Use provided user groups or default to everyone
-            // --- Add Link Preview Fields ---
-            linkPreviewUrl: linkPreviewUrl || undefined,
-            linkPreviewTitle: linkPreviewTitle || undefined,
-            linkPreviewDescription: linkPreviewDescription || undefined,
-            linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
-            // --- End Link Preview Fields ---
-            // +++ Add Internal Link Preview Fields +++
-            internalPreviewType: internalPreviewType || undefined,
-            internalPreviewId: internalPreviewId || undefined,
-            internalPreviewUrl: internalPreviewUrl || undefined,
-            // +++ End Internal Link Preview Fields +++
-            sdgs: sdgs || undefined,
-        };
-
-        if (postType) {
-            post.postType = postType as Post["postType"];
-        }
-
-        // console.log("creating post", JSON.stringify(post.location)); // Reduced logging
-        await postSchema.parseAsync(post);
-
-        // parse mentions in the comment content
-        const mentions = extractMentions(post.content);
-        await validateMentionPermissions(userDid, mentions);
-        post.mentions = mentions;
-        let newPost = await createPost(post);
-
+        let targetAuthorizationFailure: string | undefined;
+        let feed: Feed | null = null;
+        let post: Post;
         const savedCommunityFiles: Array<{ url: string }> = [];
-
-        try {
-            const savedMedia: Media[] = [];
-            let imageIndex = 0;
-            for (const image of images) {
-                if (isFile(image)) {
-                    const savedImage = await saveFile(
-                        image,
-                        `feeds/${feed._id}/${newPost._id}/post-image-${imageIndex}`,
-                        circleId,
-                        true,
-                    );
-                    savedMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
-                    if (isCommunityPost) {
-                        savedCommunityFiles.push({ url: savedImage.url });
-                    }
+        const result = await orchestrateMainPostCreate({
+            postType,
+            content,
+            writerDid: userDid,
+            authorizeTarget: async () => {
+                if (!targetPolicy.ok) {
+                    targetAuthorizationFailure = targetPolicy.message;
+                    return false;
                 }
-                ++imageIndex;
-            }
-
-            if (savedMedia.length > 0) {
-                newPost.media = savedMedia;
-                await updatePost(newPost);
-            }
-        } catch (error) {
-            if (isCommunityPost) {
-                console.error("Failed to save Community post images", error);
-                const cleanupResult = await cleanupUploadedFiles(savedCommunityFiles, deleteFile);
-                for (const cleanupFailure of cleanupResult.failedDeletes) {
-                    console.error("Failed to clean up Community post image after rollback", {
-                        postId: newPost._id,
-                        url: cleanupFailure.url,
-                        error: cleanupFailure.error,
-                    });
+                const authorized =
+                    !isCommunityPost && isOwnProfileFeed
+                        ? true
+                        : await isAuthorized(userDid, circleId, postCreateFeature);
+                if (!authorized) targetAuthorizationFailure = "You are not authorized to create posts here";
+                return authorized;
+            },
+            validateShare: sharedPostId
+                ? async () => Boolean(await getShareablePostPreview(sharedPostId, userDid))
+                : undefined,
+            buildDocument: async (canonicalWrite) => {
+                if (isCommunityPost) {
+                    feed = requestedFeed;
+                } else {
+                    feed = await getFeedByHandle(circleId, "default");
                 }
+                if (!feed && !isCommunityPost) {
+                    console.log(`Default feed not found for circle ${circleId}, creating one.`);
+                    feed = await createDefaultFeed(circleId);
+                    if (!feed) throw new Error("Failed to create default feed for this circle");
+                }
+                if (!feed) throw new Error("Feed not found");
+
+                console.log("Creating post in feed", feed._id, "for circle", circleId, "by user", userDid);
+                post = {
+                    title: title.trim() || undefined,
+                    content: canonicalWrite.content,
+                    feedId: feed._id.toString(),
+                    createdBy: userDid,
+                    createdAt: new Date(),
+                    reactions: {},
+                    comments: 0,
+                    location,
+                    sharedPostId,
+                    userGroups: userGroups.length > 0 ? userGroups : ["everyone"],
+                    linkPreviewUrl: linkPreviewUrl || undefined,
+                    linkPreviewTitle: linkPreviewTitle || undefined,
+                    linkPreviewDescription: linkPreviewDescription || undefined,
+                    linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
+                    internalPreviewType: internalPreviewType || undefined,
+                    internalPreviewId: internalPreviewId || undefined,
+                    internalPreviewUrl: internalPreviewUrl || undefined,
+                    sdgs: sdgs || undefined,
+                };
+                if (postType) post.postType = postType as Post["postType"];
+                await postSchema.parseAsync(post);
+                return post;
+            },
+            persistAndPublishVector: (document) => createPost(document),
+            upload: async (createdPost) => {
                 try {
-                    await deletePost(newPost._id);
-                } catch (rollbackError) {
-                    console.error("Failed to roll back Community post after image upload failure", {
-                        postId: newPost._id,
-                        error: rollbackError,
-                    });
+                    const savedMedia: Media[] = [];
+                    let imageIndex = 0;
+                    for (const image of images) {
+                        if (isFile(image)) {
+                            const savedImage = await saveFile(
+                                image,
+                                `feeds/${feed!._id}/${createdPost._id}/post-image-${imageIndex}`,
+                                circleId,
+                                true,
+                            );
+                            savedMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
+                            if (isCommunityPost) {
+                                savedCommunityFiles.push({ url: savedImage.url });
+                            }
+                        }
+                        ++imageIndex;
+                    }
+
+                    if (savedMedia.length > 0) {
+                        createdPost.media = savedMedia;
+                        await updatePost(createdPost);
+                    }
+                } catch (error) {
+                    if (isCommunityPost) {
+                        console.error("Failed to save Community post images", error);
+                        const cleanupResult = await cleanupUploadedFiles(savedCommunityFiles, deleteFile);
+                        for (const cleanupFailure of cleanupResult.failedDeletes) {
+                            console.error("Failed to clean up Community post image after rollback", {
+                                postId: createdPost._id,
+                                url: cleanupFailure.url,
+                                error: cleanupFailure.error,
+                            });
+                        }
+                        try {
+                            await deletePost(createdPost._id);
+                        } catch (rollbackError) {
+                            console.error("Failed to roll back Community post after image upload failure", {
+                                postId: createdPost._id,
+                                error: rollbackError,
+                            });
+                        }
+                        throw new Error("Failed to save Community post images");
+                    }
+                    console.log("Failed to save post media", error);
                 }
-                return { success: false, message: "Failed to save Community post images" };
-            }
-            console.log("Failed to save post media", error);
-        }
+            },
+            notify: async (createdPost, mentions) => {
+                try {
+                    if (mentions && mentions.length > 0) {
+                        const user = await getUserByDid(userDid);
 
-        // Send notifications for mentions
-        try {
-            if (mentions && mentions.length > 0) {
-                const user = await getUserByDid(userDid);
+                        // Get the Circle objects for all mentioned circles
+                        const mentionedCircles = await Promise.all(
+                            mentions.map(async (mention) => {
+                                return await getCircleById(mention.id);
+                            }),
+                        );
 
-                // Get the Circle objects for all mentioned circles
-                const mentionedCircles = await Promise.all(
-                    mentions.map(async (mention) => {
-                        return await getCircleById(mention.id);
-                    }),
-                );
-
-                // Filter out any null results
-                const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-                if (validMentionedCircles.length > 0) {
-                    await notifyPostMentions(newPost, user, validMentionedCircles);
+                        // Filter out any null results
+                        const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+                        if (validMentionedCircles.length > 0) {
+                            await notifyPostMentions(createdPost, user, validMentionedCircles);
+                        }
+                    }
+                } catch (notificationError) {
+                    console.error("Failed to send mention notifications:", notificationError);
                 }
-            }
-        } catch (notificationError) {
-            console.error("Failed to send mention notifications:", notificationError);
+            },
+        });
+        if (!result.ok) {
+            const message =
+                result.reason === "target"
+                    ? targetAuthorizationFailure || "You are not authorized to create posts here"
+                    : result.error;
+            return { success: false, message };
         }
+        const newPost = result.value;
 
-        const circle = await getCircleById(feed.circleId);
+        const circle = await getCircleById(feed!.circleId);
         if (circle) {
             const circlePath = await getCirclePath(circle);
-            const revalidationRoute = resolvePostRevalidationRoute(circlePath, post.postType);
+            const revalidationRoute = resolvePostRevalidationRoute(circlePath, post!.postType);
             if (revalidationRoute) {
                 revalidatePath(revalidationRoute);
             }
@@ -633,7 +626,7 @@ export async function createPostAction(
                     ...newPost,
                     author: currentUser,
                     circle: targetCircle,
-                    feed,
+                    feed: feed!,
                     circleType: "post",
                 } as PostDisplay,
             ],
@@ -728,11 +721,9 @@ export async function updatePostAction(
             return { success: false, message: contentPolicy.message };
         }
 
-        let feedId = post.feedId;
-        const updatedPost: Partial<Post> = {
+        const baseUpdate: Partial<Post> = {
             _id: postId,
             ...getPostTitleUpdate(post.postType, title),
-            content,
             editedAt: new Date(),
             location,
             // --- Add Link Preview Fields ---
@@ -748,58 +739,56 @@ export async function updatePostAction(
             // +++ End Internal Link Preview Fields +++
             sdgs: sdgs || undefined,
         };
-
-        // console.log("Updating post", JSON.stringify(updatedPost.location)); // Reduced logging
-        updatedPost.mentions = extractMentions(content);
-        await validateMentionPermissions(userDid, updatedPost.mentions);
-        const newMedia: Media[] = [];
-        let imageIndex = existingMedia.length;
-        for (const image of images) {
-            if (isFile(image)) {
-                const savedImage = await saveFile(
-                    image,
-                    `feeds/${feedId}/${postId}/post-image-${imageIndex}`,
-                    feed.circleId,
-                    true,
-                );
-                newMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
-                imageIndex++;
-            }
-        }
-
-        updatedPost.media = [...existingMedia, ...newMedia];
-        await updatePost(updatedPost);
-
-        // Send notifications for new mentions
-        try {
-            if (updatedPost.mentions && updatedPost.mentions.length > 0) {
-                const user = await getUserByDid(userDid);
-
-                // Get previous mentions to avoid duplicate notifications
-                const previousMentions = post.mentions?.map((m) => m.id) || [];
-
-                // Filter to only new mentions
-                const newMentions = updatedPost.mentions.filter((mention) => !previousMentions.includes(mention.id));
-                if (newMentions.length > 0) {
-                    // Get the Circle objects for all newly mentioned circles
-                    const mentionedCircles = await Promise.all(
-                        newMentions.map(async (mention) => {
-                            return await getCircleById(mention.id);
-                        }),
-                    );
-
-                    // Filter out any null results
-                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-
-                    if (validMentionedCircles.length > 0) {
-                        // Use the existing post with updated mentions
-                        const mergedPost = { ...post, ...updatedPost };
-                        await notifyPostMentions(mergedPost, user, validMentionedCircles);
+        const writeResult = await orchestrateMainPostUpdate({
+            content,
+            storedContent: post.content,
+            storedMentions: post.mentions || [],
+            writerDid: userDid,
+            baseUpdate,
+            upload: async () => {
+                const newMedia: Media[] = [];
+                let imageIndex = existingMedia.length;
+                for (const image of images) {
+                    if (isFile(image)) {
+                        const savedImage = await saveFile(
+                            image,
+                            `feeds/${post.feedId}/${postId}/post-image-${imageIndex}`,
+                            feed.circleId,
+                            true,
+                        );
+                        newMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
+                        imageIndex++;
                     }
                 }
-            }
-        } catch (notificationError) {
-            console.error("Failed to send mention notifications:", notificationError);
+                return [...existingMedia, ...newMedia];
+            },
+            applyUpload: (document, media) => {
+                document.media = media;
+            },
+            persistAndPublishVector: async (document) => updatePost(document),
+            notify: async (_value, updatedPost, mentions) => {
+                try {
+                    if (mentions.length > 0) {
+                        const user = await getUserByDid(userDid);
+                        const previousMentions = post.mentions?.map((mention) => mention.id) || [];
+                        const newMentions = mentions.filter((mention) => !previousMentions.includes(mention.id));
+                        if (newMentions.length > 0) {
+                            const mentionedCircles = await Promise.all(
+                                newMentions.map(async (mention) => await getCircleById(mention.id)),
+                            );
+                            const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+                            if (validMentionedCircles.length > 0) {
+                                await notifyPostMentions({ ...post, ...updatedPost }, user, validMentionedCircles);
+                            }
+                        }
+                    }
+                } catch (notificationError) {
+                    console.error("Failed to send mention notifications:", notificationError);
+                }
+            },
+        });
+        if (!writeResult.ok) {
+            return { success: false, message: writeResult.error };
         }
 
         const circle = await getCircleById(feed.circleId);

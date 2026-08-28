@@ -13,8 +13,6 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getUserByDid } from "@/lib/data/user";
 import { canInteract, getInteractionRequiredMessage } from "@/lib/auth/verification";
-import { extractMentions } from "@/lib/data/feed";
-import { getMentionableUserIdsForUserDid } from "@/lib/data/chat";
 import { createDefaultFeed, getFeedByHandle } from "@/lib/data/feed";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import {
@@ -29,6 +27,7 @@ import {
     addReadableAlternateDiscussionComment,
     getReadableAlternateDiscussion,
 } from "@/lib/data/discussion-alternate-policy";
+import { orchestrateAlternateDiscussionCreate } from "@/lib/data/post-write-policy";
 
 /**
  * Create a new discussion in a circle
@@ -43,72 +42,59 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
         throw new Error(getInteractionRequiredMessage("create discussions"));
     }
 
-    const circle = await getCircleByHandle(handle);
-    if (!circle) throw new Error("Circle not found");
-    if (!(await canReadCircle(userDid, circle))) throw new Error("Circle not found");
-
-    // For now, allow creation if user is authorized for posts in feeds (reuse feed.post permission)
-    const canCreate = await isAuthorized(userDid, circle._id as string, features.feed.post);
-    if (!canCreate) throw new Error("Not authorized to create forum posts");
-
-    let payload: any = {};
+    let rawPayload: Partial<Post> = {};
     if (data instanceof FormData) {
-        payload.title = data.get("title") as string;
-        payload.content = data.get("content") as string;
+        rawPayload.title = data.get("title") as string;
+        rawPayload.content = data.get("content") as string;
         const loc = data.get("location") as string | null;
         if (loc) {
             try {
-                payload.location = JSON.parse(loc);
+                rawPayload.location = JSON.parse(loc);
             } catch {
-                payload.location = null;
-            }
-        }
-        const mediaFiles = data.getAll("media") as File[];
-        if (mediaFiles && mediaFiles.length > 0) {
-            payload.media = [];
-            for (const file of mediaFiles) {
-                if (file instanceof File) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-                    // Save file to storage (local/public/uploads or S3 depending on setup)
-                    const filename = `${Date.now()}-${file.name}`;
-                    const fs = await import("fs");
-                    const path = await import("path");
-                    const uploadDir = path.join(process.cwd(), "public", "uploads");
-                    if (!fs.existsSync(uploadDir)) {
-                        fs.mkdirSync(uploadDir, { recursive: true });
-                    }
-                    const filePath = path.join(uploadDir, filename);
-                    fs.writeFileSync(filePath, buffer);
-                    payload.media.push(`/uploads/${filename}`);
-                }
+                rawPayload.location = undefined;
             }
         }
     } else {
-        payload = data;
+        rawPayload = data;
     }
 
-    // Extract mentions from content
-    const mentions = payload.content ? extractMentions(payload.content) : [];
-    if (mentions.length > 0) {
-        const mentionableUserIds = await getMentionableUserIdsForUserDid(userDid);
-        const hasBlockedMention = mentions.some((mention) => !mentionableUserIds.has(mention.id));
-        if (hasBlockedMention) {
-            throw new Error("You can only mention people you can message.");
-        }
-    }
-
-    let feed = await getFeedByHandle(circle._id.toString(), "default");
-    if (!feed) feed = await createDefaultFeed(circle._id.toString());
-    if (!feed?._id) throw new Error("Circle not found");
-
-    const discussion = await createDiscussion({
-        ...payload,
-        mentions,
-        feedId: feed._id.toString(),
-        createdBy: userDid,
-        circleId: circle._id.toString(),
+    const result = await orchestrateAlternateDiscussionCreate({
+        raw: rawPayload,
+        writerDid: userDid,
+        resolveTarget: () => getCircleByHandle(handle),
+        canReadTarget: (circle) => canReadCircle(userDid, circle),
+        authorizeFeature: (circle) => isAuthorized(userDid, circle._id as string, features.feed.post),
+        upload: async (authored) => {
+            if (data instanceof FormData) {
+                const mediaFiles = data.getAll("media") as File[];
+                if (mediaFiles && mediaFiles.length > 0) {
+                    authored.media = [];
+                    for (const file of mediaFiles) {
+                        if (file instanceof File) {
+                            const arrayBuffer = await file.arrayBuffer();
+                            const buffer = Buffer.from(arrayBuffer);
+                            const filename = `${Date.now()}-${file.name}`;
+                            const fs = await import("fs");
+                            const path = await import("path");
+                            const uploadDir = path.join(process.cwd(), "public", "uploads");
+                            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+                            fs.writeFileSync(path.join(uploadDir, filename), buffer);
+                            (authored.media as any[]).push(`/uploads/${filename}`);
+                        }
+                    }
+                }
+            }
+        },
+        resolveDestination: async (circle) => {
+            let feed = await getFeedByHandle(circle._id.toString(), "default");
+            if (!feed) feed = await createDefaultFeed(circle._id.toString());
+            if (!feed?._id) return null;
+            return { feedId: feed._id.toString(), circleId: circle._id.toString() };
+        },
+        persistAndPublishVector: createDiscussion,
     });
+    if (!result.ok) throw new Error(result.error);
+    const discussion = result.value;
     const [sanitizedDiscussion] = await sanitizePostNestedContent([discussion as PostDisplay], userDid);
     return sanitizedDiscussion;
 }

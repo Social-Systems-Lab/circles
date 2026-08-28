@@ -23,10 +23,18 @@ const defaultAddCommentToDiscussionDependencies: AddCommentToDiscussionDependenc
     now: () => new Date(),
 };
 
-export async function createDiscussion(data: Partial<Post>) {
+export async function createDiscussion(data: Partial<Post> & { circleId: string }) {
     const now = new Date();
     const doc: any = {
-        ...data,
+        title: data.title,
+        content: data.content || "",
+        location: data.location,
+        media: data.media || [],
+        mentions: data.mentions || [],
+        feedId: data.feedId,
+        circleId: data.circleId,
+        createdBy: data.createdBy,
+        userGroups: ["everyone"],
         postType: "discussion",
         pinned: false,
         closed: false,
@@ -34,37 +42,11 @@ export async function createDiscussion(data: Partial<Post>) {
         lastActivityAt: now,
     };
 
-    // Ensure both circleId and feedId are stored
-    if (data.feedId) {
-        doc.feedId = data.feedId;
-    }
-    if ((data as any).circleId) {
-        doc.circleId = (data as any).circleId;
-    }
-
     const result = await Posts.insertOne(doc);
 
     const newDiscussion: any = {
-        ...(data as Post),
+        ...doc,
         _id: result.insertedId.toString(),
-        postType: "discussion",
-        pinned: false,
-        closed: false,
-        createdAt: now,
-        lastActivityAt: now,
-        feedId: doc.feedId,
-        circleId: doc.circleId,
-        media: doc.media || [],
-        userGroups: doc.userGroups || ["everyone"],
-        mentions: doc.mentions || [],
-        linkPreviewUrl: doc.linkPreviewUrl,
-        linkPreviewTitle: doc.linkPreviewTitle,
-        linkPreviewDescription: doc.linkPreviewDescription,
-        linkPreviewImage: doc.linkPreviewImage,
-        internalPreviewType: doc.internalPreviewType,
-        internalPreviewId: doc.internalPreviewId,
-        internalPreviewUrl: doc.internalPreviewUrl,
-        sdgs: doc.sdgs || [],
     };
 
     // attach author
