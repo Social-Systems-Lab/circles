@@ -97,9 +97,10 @@ import {
 } from "@/lib/data/post-nested-content-policy";
 import { orchestrateMainPostCreate, orchestrateMainPostUpdate } from "@/lib/data/post-write-policy";
 import {
-    orchestrateAuthoredCommentCreate,
-    orchestrateAuthoredCommentEdit,
-} from "@/lib/data/comment-write-policy";
+    resolveInternalPreviewForWrite,
+    resolveInternalPreviewUpdateForWrite,
+} from "@/lib/data/internal-preview-write-policy";
+import { orchestrateAuthoredCommentCreate, orchestrateAuthoredCommentEdit } from "@/lib/data/comment-write-policy";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -418,7 +419,10 @@ export async function createPostAction(
             | "post"
             | "proposal"
             | "issue"
-            | "task" // Added task type
+            | "task"
+            | "event"
+            | "goal"
+            | "funding"
             | undefined;
         const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
         const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
@@ -472,7 +476,12 @@ export async function createPostAction(
             validateShare: sharedPostId
                 ? async () => Boolean(await getShareablePostPreview(sharedPostId, userDid))
                 : undefined,
-            buildDocument: async (canonicalWrite) => {
+            resolvePreview: () =>
+                resolveInternalPreviewForWrite(
+                    { type: internalPreviewType, id: internalPreviewId, url: internalPreviewUrl },
+                    userDid,
+                ),
+            buildDocument: async (canonicalWrite, canonicalPreview) => {
                 if (isCommunityPost) {
                     feed = requestedFeed;
                 } else {
@@ -501,9 +510,7 @@ export async function createPostAction(
                     linkPreviewTitle: linkPreviewTitle || undefined,
                     linkPreviewDescription: linkPreviewDescription || undefined,
                     linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
-                    internalPreviewType: internalPreviewType || undefined,
-                    internalPreviewId: internalPreviewId || undefined,
-                    internalPreviewUrl: internalPreviewUrl || undefined,
+                    ...(canonicalPreview || {}),
                     sdgs: sdgs || undefined,
                 };
                 if (postType) post.postType = postType as Post["postType"];
@@ -628,9 +635,7 @@ export async function createPostAction(
     }
 }
 
-export async function updatePostAction(
-    formData: FormData,
-): Promise<PostUpdateResult> {
+export async function updatePostAction(formData: FormData): Promise<PostUpdateResult> {
     const userDid = await getAuthenticatedUserDid();
 
     if (!userDid) {
@@ -660,10 +665,18 @@ export async function updatePostAction(
             | "post"
             | "proposal"
             | "issue"
-            | "task" // Added task type
+            | "task"
+            | "event"
+            | "goal"
+            | "funding"
             | undefined;
         const internalPreviewId = formData.get("internalPreviewId") as string | undefined;
         const internalPreviewUrl = formData.get("internalPreviewUrl") as string | undefined;
+        const internalPreviewRequestPresence = {
+            type: formData.has("internalPreviewType"),
+            id: formData.has("internalPreviewId"),
+            url: formData.has("internalPreviewUrl"),
+        };
         // +++ End Internal Link Preview Data Extraction +++
         const sdgsStr = formData.get("sdgs") as string;
         const sdgs = sdgsStr ? JSON.parse(sdgsStr) : undefined;
@@ -722,11 +735,6 @@ export async function updatePostAction(
             linkPreviewDescription: linkPreviewDescription || undefined,
             linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
             // --- End Link Preview Fields ---
-            // +++ Add Internal Link Preview Fields +++
-            internalPreviewType: internalPreviewType || undefined,
-            internalPreviewId: internalPreviewId || undefined,
-            internalPreviewUrl: internalPreviewUrl || undefined,
-            // +++ End Internal Link Preview Fields +++
             sdgs: sdgs || undefined,
         };
         const writeResult = await orchestrateMainPostUpdate({
@@ -735,6 +743,17 @@ export async function updatePostAction(
             storedMentions: post.mentions || [],
             writerDid: userDid,
             baseUpdate,
+            resolvePreview: () =>
+                resolveInternalPreviewUpdateForWrite({
+                    request: { type: internalPreviewType, id: internalPreviewId, url: internalPreviewUrl },
+                    presence: internalPreviewRequestPresence,
+                    stored: {
+                        internalPreviewType: post.internalPreviewType,
+                        internalPreviewId: post.internalPreviewId,
+                        internalPreviewUrl: post.internalPreviewUrl,
+                    },
+                    writerDid: userDid,
+                }),
             upload: async () => {
                 const newMedia: Media[] = [];
                 let imageIndex = existingMedia.length;
@@ -901,7 +920,11 @@ export async function createCommentAction(
 
         const authorized = await isAuthorized(userDid, feed.circleId, commentFeature);
         if (!authorized) {
-            const participationMessage = await getCommunityParticipationDeniedMessage(userDid, post.postType, "comment");
+            const participationMessage = await getCommunityParticipationDeniedMessage(
+                userDid,
+                post.postType,
+                "comment",
+            );
             if (participationMessage) {
                 return { success: false, message: participationMessage };
             }
@@ -960,9 +983,9 @@ export async function createCommentAction(
                             if (validatedParent) await notifyCommentReply(post, validatedParent, inserted, user);
                         }
                         if (prepared.mentions.length) {
-                            const circles = (await Promise.all(prepared.mentions.map(({ id }) => getCircleById(id)))).filter(
-                                (circle): circle is Circle => circle !== null,
-                            );
+                            const circles = (
+                                await Promise.all(prepared.mentions.map(({ id }) => getCircleById(id)))
+                            ).filter((circle): circle is Circle => circle !== null);
                             if (circles.length) await notifyCommentMentions(inserted, post, user, circles);
                         }
                     } catch (notificationError) {

@@ -29,6 +29,7 @@ import {
     TaskDisplay,
     Cause as SDG,
 } from "@/models/models";
+import { appendPreviewFormData } from "@/lib/internal-preview-form-data";
 import {
     CreatableItemKey,
     CreatableItemDetail,
@@ -237,7 +238,7 @@ export function PostForm({
                       ? `/circles/${sharedPost.circle.handle}/post/${sharedPost._id}`
                       : undefined,
           }
-        : initialPost?.sharedPostData ?? null;
+        : (initialPost?.sharedPostData ?? null);
     const isShareMode = Boolean(sharedPost || initialPost?.sharedPostData !== undefined);
     const postType = initialPost?.postType;
     const showTitle = !isShareMode && showsPostTitle(postType);
@@ -246,8 +247,7 @@ export function PostForm({
         isShareMode &&
             sharedPost &&
             (((sharedPost.userGroups?.length ?? 0) > 0 && !sharedPost.userGroups?.includes("everyone")) ||
-                ((sharedPost.feed?.userGroups?.length ?? 0) > 0 &&
-                    !sharedPost.feed?.userGroups?.includes("everyone"))),
+                ((sharedPost.feed?.userGroups?.length ?? 0) > 0 && !sharedPost.feed?.userGroups?.includes("everyone"))),
     );
 
     const itemDetail: CreatableItemDetail | undefined = useMemo(
@@ -334,7 +334,19 @@ export function PostForm({
     );
     const fetchPreviewController = useRef<AbortController | null>(null);
 
-    const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(null);
+    const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(
+        initialPost?.internalPreviewType &&
+            initialPost.internalPreviewId &&
+            initialPost.internalPreviewUrl &&
+            initialPost.internalPreviewData
+            ? {
+                  type: initialPost.internalPreviewType,
+                  id: initialPost.internalPreviewId,
+                  url: initialPost.internalPreviewUrl,
+                  data: initialPost.internalPreviewData,
+              }
+            : null,
+    );
     const [isInternalPreviewLoading, setIsInternalPreviewLoading] = useState(false);
     const fetchInternalPreviewController = useRef<AbortController | null>(null);
     const [previewRemovedManually, setPreviewRemovedManually] = useState(false);
@@ -628,16 +640,13 @@ export function PostForm({
             if (location) {
                 formData.append("location", JSON.stringify(location));
             }
-            if (linkPreview) {
-                formData.append("linkPreviewUrl", linkPreview.url);
-                if (linkPreview.title) formData.append("linkPreviewTitle", linkPreview.title);
-                if (linkPreview.description) formData.append("linkPreviewDescription", linkPreview.description);
-                if (linkPreview.image) formData.append("linkPreviewImageUrl", linkPreview.image);
-            } else if (internalPreview) {
-                formData.append("internalPreviewType", internalPreview.type);
-                formData.append("internalPreviewId", internalPreview.id);
-                formData.append("internalPreviewUrl", internalPreview.url);
-            }
+            appendPreviewFormData({
+                formData,
+                initialInternalPreview: Boolean(initialPost?.internalPreviewType),
+                internalPreview,
+                linkPreview,
+                previewRemovedManually,
+            });
             if (selectedSdgs.length > 0) {
                 const validSdgs = selectedSdgs.filter((s) => s._id).map((s) => s._id);
                 if (validSdgs.length > 0) {

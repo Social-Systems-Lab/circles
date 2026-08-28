@@ -30,6 +30,7 @@ import {
     TaskDisplay,
     Cause as SDG,
 } from "@/models/models";
+import { appendPreviewFormData } from "@/lib/internal-preview-form-data";
 import {
     CreatableItemKey,
     CreatableItemDetail,
@@ -304,7 +305,19 @@ export function DiscussionForm({
     );
     const fetchPreviewController = useRef<AbortController | null>(null);
 
-    const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(null);
+    const [internalPreview, setInternalPreview] = useState<InternalPreviewDisplayData | null>(
+        initialPost?.internalPreviewType &&
+            initialPost.internalPreviewId &&
+            initialPost.internalPreviewUrl &&
+            initialPost.internalPreviewData
+            ? {
+                  type: initialPost.internalPreviewType,
+                  id: initialPost.internalPreviewId,
+                  url: initialPost.internalPreviewUrl,
+                  data: initialPost.internalPreviewData,
+              }
+            : null,
+    );
     const [isInternalPreviewLoading, setIsInternalPreviewLoading] = useState(false);
     const fetchInternalPreviewController = useRef<AbortController | null>(null);
     const [previewRemovedManually, setPreviewRemovedManually] = useState(false);
@@ -548,16 +561,13 @@ export function DiscussionForm({
             if (location) {
                 formData.append("location", JSON.stringify(location));
             }
-            if (linkPreview) {
-                formData.append("linkPreviewUrl", linkPreview.url);
-                if (linkPreview.title) formData.append("linkPreviewTitle", linkPreview.title);
-                if (linkPreview.description) formData.append("linkPreviewDescription", linkPreview.description);
-                if (linkPreview.image) formData.append("linkPreviewImageUrl", linkPreview.image);
-            } else if (internalPreview) {
-                formData.append("internalPreviewType", internalPreview.type);
-                formData.append("internalPreviewId", internalPreview.id);
-                formData.append("internalPreviewUrl", internalPreview.url);
-            }
+            appendPreviewFormData({
+                formData,
+                initialInternalPreview: Boolean(initialPost?.internalPreviewType),
+                internalPreview,
+                linkPreview,
+                previewRemovedManually,
+            });
             if (selectedSdgs.length > 0) {
                 const validSdgs = selectedSdgs.filter((s) => s._id).map((s) => s._id);
                 if (validSdgs.length > 0) {
@@ -609,8 +619,7 @@ export function DiscussionForm({
                     return;
                 } else {
                     const circleHandle =
-                        selectedCircle?.handle ||
-                        (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
+                        selectedCircle?.handle || (moduleHandle && moduleHandle !== "feed" ? moduleHandle : undefined);
                     // navigate to the newly created forum post
                     if (response.post?._id && circleHandle) {
                         window.location.href = `/circles/${circleHandle}/discussions/${response.post._id}`;

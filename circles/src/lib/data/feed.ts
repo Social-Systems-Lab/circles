@@ -1,16 +1,7 @@
 // feed.ts - Feed data access functions
 import { Feeds, Posts, Comments, Reactions, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
-import {
-    Feed,
-    Post,
-    PostDisplay,
-    Comment,
-    CommentDisplay,
-    Circle,
-    Mention,
-    SortingOptions,
-} from "@/models/models";
+import { Feed, Post, PostDisplay, Comment, CommentDisplay, Circle, Mention, SortingOptions } from "@/models/models";
 import { getCircleById, SAFE_CIRCLE_PROJECTION, updateCircle, getCircleByHandle } from "./circle";
 import { getUserByDid } from "./user";
 import { getMetrics } from "../utils/metrics";
@@ -30,6 +21,7 @@ import { canReadCircle } from "./circle-visibility-policy";
 import { buildSourceFilteredPostMatchStages } from "./post-source-access-policy";
 import { sanitizePostNestedContent } from "./post-nested-content-policy";
 import { sanitizeHighlightedCommentsOnPosts } from "./comment-mention-policy";
+import { applyPostUpdateOperation } from "./post-update-operation";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -1203,7 +1195,7 @@ export const getPosts = async (
 export const updatePost = async (post: Partial<Post>): Promise<void> => {
     const { _id, ...postWithoutId } = post;
     const ownershipChanges = Object.prototype.hasOwnProperty.call(postWithoutId, "feedId");
-    const mutate = () => Posts.updateOne({ _id: new ObjectId(_id) }, { $set: postWithoutId });
+    const mutate = () => applyPostUpdateOperation(Posts.updateOne.bind(Posts), _id!, postWithoutId);
     let result = ownershipChanges
         ? await runDerivedResourceVectorSafeMutation({
               kind: "posts",

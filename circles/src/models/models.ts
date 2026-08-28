@@ -2,6 +2,7 @@ import { Toast } from "@/components/ui/use-toast";
 import type { ChatAttachment } from "@/lib/chat/mongo-types";
 import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
 import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
+import { isCanonicalInternalPreviewRoute } from "@/lib/internal-preview-route";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { z } from "zod";
@@ -246,7 +247,7 @@ export const postSchema = z.object({
     // Internal Link Preview Fields
     internalPreviewType: z.enum(["circle", "post", "proposal", "issue", "task", "goal", "event", "funding"]).optional(),
     internalPreviewId: z.string().optional(), // Handle for circle, ID for others
-    internalPreviewUrl: z.string().url().optional(),
+    internalPreviewUrl: z.string().refine(isCanonicalInternalPreviewRoute, "Invalid internal preview URL").optional(),
     sdgs: z.array(z.string()).optional(),
     // Discussion-specific fields
     pinned: z.boolean().default(false).optional(),

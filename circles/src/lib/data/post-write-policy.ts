@@ -1,5 +1,10 @@
 import type { Mention, Post } from "@/models/models";
 import { canonicalizeCircleMentionsForWrite, type CircleMentionWriteResult } from "./circle-mention-write-policy";
+import {
+    PREVIEW_UNAVAILABLE,
+    type CanonicalInternalPreview,
+    type InternalPreviewUpdate,
+} from "./internal-preview-write-policy";
 
 export const POST_WRITE_UNAVAILABLE = "One or more references are unavailable.";
 
@@ -68,13 +73,14 @@ export async function orchestrateMainPostCreate<TDocument extends Partial<Post>,
     isAllowedPostType?: typeof isClientCreatablePostType;
     resolve?: typeof resolvePostContentForWrite;
     validateShare?: () => Promise<boolean>;
-    buildDocument: (write: CanonicalPostWrite) => Promise<TDocument>;
+    resolvePreview?: () => Promise<CanonicalInternalPreview | null>;
+    buildDocument: (write: CanonicalPostWrite, preview: CanonicalInternalPreview | null) => Promise<TDocument>;
     persistAndPublishVector: (document: TDocument) => Promise<TValue>;
     upload: (value: TValue) => Promise<void>;
     notify: (value: TValue, mentions: Mention[]) => Promise<void>;
 }): Promise<
     | { ok: true; value: TValue; document: TDocument; write: CanonicalPostWrite }
-    | { ok: false; error: string; reason: "target" | "postType" | "mention" | "share" }
+    | { ok: false; error: string; reason: "target" | "postType" | "mention" | "share" | "preview" }
 > {
     if (!(await input.authorizeTarget())) return { ok: false, error: "Not authorized", reason: "target" };
     if (!(input.isAllowedPostType || isClientCreatablePostType)(input.postType)) {
@@ -85,8 +91,14 @@ export async function orchestrateMainPostCreate<TDocument extends Partial<Post>,
     if (input.validateShare && !(await input.validateShare())) {
         return { ok: false, error: "Original post unavailable.", reason: "share" };
     }
+    let preview: CanonicalInternalPreview | null = null;
+    try {
+        preview = input.resolvePreview ? await input.resolvePreview() : null;
+    } catch {
+        return { ok: false, error: PREVIEW_UNAVAILABLE, reason: "preview" };
+    }
 
-    const baseDocument = await input.buildDocument(write);
+    const baseDocument = await input.buildDocument(write, preview);
     const document = {
         ...baseDocument,
         content: write.content,
@@ -105,6 +117,7 @@ export async function orchestrateMainPostUpdate<TDocument extends Partial<Post>,
     writerDid: string;
     baseUpdate: TDocument;
     resolve?: typeof resolvePostContentForWrite;
+    resolvePreview?: () => Promise<InternalPreviewUpdate>;
     upload: (write: { content: string; mentions: Mention[]; changed: boolean }) => Promise<TUpload>;
     applyUpload: (document: TDocument, upload: TUpload) => void;
     persistAndPublishVector: (document: TDocument) => Promise<TValue>;
@@ -113,11 +126,28 @@ export async function orchestrateMainPostUpdate<TDocument extends Partial<Post>,
     const write = await prepareMainPostUpdate(input);
     if (!write.ok) return write;
 
+    let preview: InternalPreviewUpdate = { mode: "preserve" };
+    try {
+        if (input.resolvePreview) preview = await input.resolvePreview();
+    } catch {
+        return { ok: false, error: PREVIEW_UNAVAILABLE };
+    }
+
     const document = {
         ...input.baseUpdate,
         content: write.content,
         mentions: write.mentions,
     } as TDocument;
+    if (preview.mode === "set" || (preview.mode === "preserve" && preview.preview)) {
+        Object.assign(document, preview.preview, { internalPreviewData: undefined });
+    } else if (preview.mode === "remove") {
+        Object.assign(document, {
+            internalPreviewType: undefined,
+            internalPreviewId: undefined,
+            internalPreviewUrl: undefined,
+            internalPreviewData: undefined,
+        });
+    }
     const upload = await input.upload(write);
     input.applyUpload(document, upload);
     const value = await input.persistAndPublishVector(document);
