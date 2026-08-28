@@ -4,6 +4,7 @@
 import {
     createPost,
     createComment,
+    incrementCommentReplies,
     likeContent,
     unlikeContent,
     getReactions,
@@ -17,7 +18,6 @@ import {
     getPosts,
     updateComment,
     deleteComment,
-    extractMentions,
     getPostsWithMetrics,
     getPostsFromMultipleFeeds,
     getAccessibleFeedIdsForUser,
@@ -75,7 +75,7 @@ import {
 } from "@/lib/data/notifications";
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
-import { getMentionableUserIdsForUserDid, searchMentionableUsersForUserDid } from "@/lib/data/chat";
+import { searchMentionableUsersForUserDid } from "@/lib/data/chat";
 import { validateCreatePostTargetPolicy } from "@/lib/data/post-creation-policy";
 import { canDeletePost, canEditOwnPost, resolvePostRevalidationRoute } from "@/lib/data/post-action-policy";
 import { cleanupUploadedFiles } from "@/lib/data/post-upload-rollback";
@@ -96,6 +96,10 @@ import {
     type InternalPreviewActionResult,
 } from "@/lib/data/post-nested-content-policy";
 import { orchestrateMainPostCreate, orchestrateMainPostUpdate } from "@/lib/data/post-write-policy";
+import {
+    orchestrateAuthoredCommentCreate,
+    orchestrateAuthoredCommentEdit,
+} from "@/lib/data/comment-write-policy";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -163,20 +167,6 @@ type ExpectedPreview = {
     mediaType?: string;
     contentType?: string;
     favicons?: string[];
-};
-
-const mentionPermissionErrorMessage = "You can only mention people you can message.";
-
-const validateMentionPermissions = async (userDid: string, mentions?: Array<{ id: string }>): Promise<void> => {
-    if (!mentions?.length) {
-        return;
-    }
-
-    const mentionableUserIds = await getMentionableUserIdsForUserDid(userDid);
-    const hasBlockedMention = mentions.some((mention) => !mentionableUserIds.has(mention.id));
-    if (hasBlockedMention) {
-        throw new Error(mentionPermissionErrorMessage);
-    }
 };
 
 const isPostModuleEnabled = async (post: Post, feed: Feed): Promise<boolean> => {
@@ -892,6 +882,7 @@ export async function createCommentAction(
             console.log("🐞 [ACTION] Post not found:", postId);
             return { success: false, message: "Post not found" };
         }
+        const canonicalPostId = String(post._id);
 
         // check if user is authorized to comment
         const feed = await getFeed(post.feedId);
@@ -924,17 +915,6 @@ export async function createCommentAction(
             return { success: false, message: "User not found" };
         }
 
-        let comment: CommentDisplay = {
-            postId: postId,
-            parentCommentId: parentCommentId,
-            content: content,
-            createdBy: userDid,
-            createdAt: new Date(),
-            reactions: {},
-            replies: 0,
-            author: user,
-        };
-
         console.log("🐞 [ACTION] Creating comment:", {
             postId,
             parentCommentId,
@@ -946,76 +926,52 @@ export async function createCommentAction(
             postAuthorDid: post.createdBy,
         });
 
-        // parse mentions in the comment content
-        const mentions = extractMentions(comment.content);
-        await validateMentionPermissions(userDid, mentions);
-        comment.mentions = mentions;
-
-        try {
-            await commentSchema.parseAsync(comment);
-        } catch (validationError) {
-            console.error("🐞 [ACTION] Comment validation failed:", validationError);
-            return { success: false, message: "Invalid comment data" };
-        }
-
-        // Create the comment in the database
-        let newComment;
-        try {
-            newComment = await createComment(comment);
-            comment._id = newComment._id;
-            console.log("🐞 [ACTION] Comment created successfully:", newComment._id);
-        } catch (dbError) {
-            console.error("🐞 [ACTION] Database error creating comment:", dbError);
-            return { success: false, message: "Database error creating comment" };
-        }
-
-        // Send notifications directly without setTimeout, but still don't block on them
-        try {
-            console.log("🐞 [ACTION] Sending notifications for comment:", newComment._id);
-
-            // 1. If it's a direct comment on a post, notify the post author
-            if (!parentCommentId) {
-                // Use Promise.resolve to avoid blocking, but still within current process
-                console.log("🐞 [ACTION] Post comment notification sent to author:", post.createdBy);
-                await notifyPostComment(post, newComment, user);
-            }
-
-            // 2. If it's a reply to another comment, notify the parent comment author
-            else {
-                const parentComment = await getComment(parentCommentId);
-                if (parentComment) {
-                    await notifyCommentReply(post, parentComment, newComment, user);
-                    console.log("🐞 [ACTION] Comment reply notification sent to:", parentComment.createdBy);
-                }
-            }
-
-            // 3. If the comment has mentions, notify mentioned users
-            if (mentions && mentions.length > 0) {
-                // Get the Circle objects for all mentioned circles
-                const mentionedCircles = await Promise.all(
-                    mentions.map(async (mention) => {
-                        return await getCircleById(mention.id);
-                    }),
-                );
-
-                // Filter out any null results
-                const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-
-                if (validMentionedCircles.length > 0) {
-                    await notifyCommentMentions(newComment, post, user, validMentionedCircles);
-                    console.log(
-                        "🐞 [ACTION] Mention notifications sent to:",
-                        validMentionedCircles.map((c) => c.name).join(", "),
-                    );
-                }
-            }
-
-            console.log("🐞 [ACTION] Notifications sent successfully for comment:", newComment._id);
-        } catch (notificationError) {
-            // Log but don't fail the comment creation if notifications fail
-            console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
-        }
-
+        let validatedParent: Comment | null = null;
+        const { inserted: newComment } = await orchestrateAuthoredCommentCreate({
+            postId: canonicalPostId,
+            parentCommentId,
+            content,
+            writerDid: userDid,
+            dependencies: {
+                findParentComment: async (id) => {
+                    validatedParent = await getComment(id.toString());
+                    return validatedParent;
+                },
+                insert: async (prepared, targetPostId) => {
+                    const comment: Comment = {
+                        postId: targetPostId,
+                        parentCommentId: prepared.parentCommentId,
+                        content: prepared.content,
+                        mentions: prepared.mentions,
+                        createdBy: userDid,
+                        createdAt: new Date(),
+                        reactions: {},
+                        replies: 0,
+                    };
+                    await commentSchema.parseAsync(comment);
+                    return createComment(comment);
+                },
+                incrementParentReplies: incrementCommentReplies,
+                notify: async (inserted, prepared) => {
+                    try {
+                        if (!prepared.parentCommentId) {
+                            await notifyPostComment(post, inserted, user);
+                        } else {
+                            if (validatedParent) await notifyCommentReply(post, validatedParent, inserted, user);
+                        }
+                        if (prepared.mentions.length) {
+                            const circles = (await Promise.all(prepared.mentions.map(({ id }) => getCircleById(id)))).filter(
+                                (circle): circle is Circle => circle !== null,
+                            );
+                            if (circles.length) await notifyCommentMentions(inserted, post, user, circles);
+                        }
+                    } catch (notificationError) {
+                        console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
+                    }
+                },
+            },
+        });
+        const comment = { ...newComment, author: user } as CommentDisplay;
         const [sanitizedComment] = await sanitizeCommentMentions([comment], userDid);
         return { success: true, message: "Comment created successfully", comment: sanitizedComment };
     } catch (error) {
@@ -1062,46 +1018,33 @@ export async function editCommentAction(
             return { success: false, message: "You are not authorized to edit this comment" };
         }
 
-        const updatedMentions = extractMentions(updatedContent);
-        await validateMentionPermissions(userDid, updatedMentions);
-        await updateComment(commentId, updatedContent, updatedMentions);
-
-        // Send notifications for new mentions
-
-        try {
-            const post = await getPost(comment.postId);
-            if (post && updatedMentions && updatedMentions.length > 0) {
-                const user = await getUserByDid(userDid);
-                // Get previous mentions to avoid duplicate notifications
-                const previousMentions = comment.mentions?.map((m) => m.id) || [];
-                // Filter to only new mentions
-                const newMentions = updatedMentions.filter((mention) => !previousMentions.includes(mention.id));
-
-                if (newMentions.length > 0) {
-                    // Get the Circle objects for all newly mentioned circles
-                    const mentionedCircles = await Promise.all(
-                        newMentions.map(async (mention) => {
-                            return await getCircleById(mention.id);
-                        }),
-                    );
-
-                    // Filter out any null results
-                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-                    if (validMentionedCircles.length > 0) {
-                        // Use the updated comment
-                        const updatedCommentObj = {
-                            ...comment,
-                            content: updatedContent,
-                            mentions: updatedMentions,
-                        };
-
-                        await notifyCommentMentions(updatedCommentObj, post, user, validMentionedCircles);
+        await orchestrateAuthoredCommentEdit({
+            postId: comment.postId,
+            content: updatedContent,
+            writerDid: userDid,
+            dependencies: {
+                update: async (canonicalContent, mentions) => {
+                    await updateComment(commentId, canonicalContent, mentions);
+                    return { ...comment, content: canonicalContent, mentions, editedAt: new Date() };
+                },
+                notify: async (updatedComment, mentions) => {
+                    try {
+                        const previous = new Set(comment.mentions?.map(({ id }) => id) ?? []);
+                        const newMentions = mentions.filter(({ id }) => !previous.has(id));
+                        if (!newMentions.length) return;
+                        const post = await getPost(comment.postId);
+                        const user = await getUserByDid(userDid);
+                        if (!post || !user) return;
+                        const circles = (await Promise.all(newMentions.map(({ id }) => getCircleById(id)))).filter(
+                            (circle): circle is Circle => circle !== null,
+                        );
+                        if (circles.length) await notifyCommentMentions(updatedComment, post, user, circles);
+                    } catch (notificationError) {
+                        console.error("Failed to send mention notifications:", notificationError);
                     }
-                }
-            }
-        } catch (notificationError) {
-            console.error("Failed to send mention notifications:", notificationError);
-        }
+                },
+            },
+        });
 
         const updatedComments = await getAllComments(comment.postId, userDid);
         const updatedComment = updatedComments.find((candidate) => candidate._id === commentId);

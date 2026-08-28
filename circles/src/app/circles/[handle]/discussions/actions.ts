@@ -124,7 +124,10 @@ export async function getDiscussionAction(id: string) {
 /**
  * Add a comment to a discussion
  */
-export async function addCommentAction(discussionId: string, data: Partial<Comment>) {
+export async function addCommentAction(
+    discussionId: string,
+    data: { content: string; parentCommentId?: string | null },
+) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) throw new Error("Unauthorized");
 

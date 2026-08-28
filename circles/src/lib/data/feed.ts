@@ -549,9 +549,6 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
 
         if (!comment.parentCommentId) {
             await updateHighlightedComment(comment.postId);
-        } else {
-            // update replies
-            await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { replies: 1 } });
         }
 
         console.log("💾 [DB] Comment created successfully:", {
@@ -564,6 +561,10 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
         console.error("💾 [DB] Error creating comment:", error);
         throw error; // Important to propagate the error
     }
+};
+
+export const incrementCommentReplies = async (commentId: string): Promise<void> => {
+    await Comments.updateOne({ _id: new ObjectId(commentId) }, { $inc: { replies: 1 } });
 };
 
 export const deleteComment = async (commentId: string): Promise<void> => {

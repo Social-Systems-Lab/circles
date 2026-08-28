@@ -7,7 +7,9 @@ import {
     type AddEventCommentDependencies,
 } from "./event-alternate-comment-policy";
 import { createCommentForAuthorizedPost } from "./discussion-comment-create";
+import { prepareAuthoredComment } from "./comment-write-policy";
 import { sanitizeCommentMentions } from "./comment-mention-policy";
+import { toCommentDto } from "./comment-dto";
 import type { ReadablePostContext } from "./post-access-policy";
 import { canReadEventOwners } from "./post-source-access-policy";
 import { canReadCircle } from "./circle-visibility-policy";
@@ -18,6 +20,7 @@ const secondaryId = new ObjectId();
 const feedId = new ObjectId();
 const postId = new ObjectId();
 const insertedId = new ObjectId();
+const parentId = new ObjectId();
 const createdAt = new Date("2026-08-27T08:00:00Z");
 
 const event = (overrides: Record<string, unknown> = {}) =>
@@ -88,8 +91,18 @@ function dependencies(
                 input.inserted?.push(comment);
                 return { insertedId };
             },
+            incrementParentReplies: async () => undefined,
             now: () => createdAt,
         },
+        prepareComment: (request) =>
+            prepareAuthoredComment({
+                ...request,
+                dependencies: {
+                    ...request.dependencies,
+                    canonicalize: async (content) => ({ ok: true, content, mentions: [] }),
+                },
+            }),
+        findParentComment: async () => ({ postId: postId.toString() }),
         sanitizeComments:
             input.sanitizeComments ??
             (async (comments) => {
@@ -151,6 +164,20 @@ function lifecycleByOwner(
 async function testSuccessfulOrderingAndSafeReturn() {
     const order: string[] = [];
     const inserted: Comment[] = [];
+    let increments = 0;
+    let dtos = 0;
+    let sanitizers = 0;
+    const deps = dependencies({ order, inserted });
+    deps.createDependencies.incrementParentReplies = async () => { increments += 1; };
+    deps.toCommentDto = (comment) => {
+        dtos += 1;
+        return toCommentDto(comment);
+    };
+    deps.sanitizeComments = async (comments) => {
+        sanitizers += 1;
+        order.push("sanitize");
+        return comments.map((comment) => ({ ...comment, content: "Available Circle / Unavailable Circle" }));
+    };
     const response = await addEventCommentWithDependencies(
         eventId.toString(),
         {
@@ -159,7 +186,7 @@ async function testSuccessfulOrderingAndSafeReturn() {
             createdBy: "did:forged",
             createdAt: new Date(0),
             content: "[Readable](/circles/readable) / [Secret](/circles/secret)",
-            parentCommentId: "parent",
+            parentCommentId: parentId.toString(),
             replies: 99,
             reactions: { leak: 99 },
             editedAt: new Date(),
@@ -172,21 +199,22 @@ async function testSuccessfulOrderingAndSafeReturn() {
             unknown: { nested: true },
         } as never,
         "did:member",
-        dependencies({ order, inserted }),
+        deps,
     );
     assert.deepEqual(order, ["event", "access", "write", "authorize", "insert", "sanitize"]);
     assert.equal(inserted.length, 1);
+    assert.deepEqual([increments, dtos, sanitizers], [1, 1, 1]);
     assert.equal(inserted[0].postId, postId.toString());
     assert.equal(inserted[0].createdBy, "did:member");
     assert.equal(inserted[0].createdAt, createdAt);
-    assert.equal(inserted[0].parentCommentId, "parent");
+    assert.equal(inserted[0].parentCommentId, parentId.toString());
     assert.deepEqual(inserted[0].reactions, {});
     assert.equal(inserted[0].replies, 0);
     for (const key of ["_id", "editedAt", "isDeleted"]) assert.equal(Object.hasOwn(inserted[0], key), false);
     assert.deepEqual(response, {
         _id: insertedId.toString(),
         postId: postId.toString(),
-        parentCommentId: "parent",
+        parentCommentId: parentId.toString(),
         content: "Available Circle / Unavailable Circle",
         createdBy: "did:member",
         createdAt,
@@ -231,6 +259,39 @@ async function testInsertDtoAndRealMentionSanitation() {
     assert.equal(response.content, "[Canonical Circle](/circles/canonical) Unavailable Circle");
     assert.equal(response.createdBy, "did:member");
     assert.equal(response.postId, postId.toString());
+}
+
+async function testCrossPostParentDeniedBeforeInsert() {
+    let inserts = 0;
+    let increments = 0;
+    let dtos = 0;
+    let sanitizers = 0;
+    const deps = dependencies();
+    deps.findParentComment = async () => ({ postId: new ObjectId().toString() });
+    deps.createDependencies.insertComment = async () => {
+        inserts += 1;
+        return { insertedId };
+    };
+    deps.createDependencies.incrementParentReplies = async () => { increments += 1; };
+    deps.toCommentDto = (comment) => {
+        dtos += 1;
+        return toCommentDto(comment);
+    };
+    deps.sanitizeComments = async (comments) => {
+        sanitizers += 1;
+        return [...comments];
+    };
+    await assert.rejects(
+        addEventCommentWithDependencies(
+            eventId.toString(),
+            { content: "reply", parentCommentId: parentId.toString() },
+            "did:member",
+            deps,
+        ),
+        /Comment target unavailable\./,
+    );
+    assert.equal(inserts, 0);
+    assert.deepEqual([increments, dtos, sanitizers], [0, 0, 0]);
 }
 
 async function testFeatureAndAccessDenials() {
@@ -387,7 +448,7 @@ async function testDistinctPublicAndSecretSuccessPaths() {
 async function expectNeutralDenial(
     deps: AddEventCommentDependencies,
     viewerDid: string,
-    data: Partial<Comment> = { content: "denied" },
+    data: { content: string; parentCommentId?: string | null } = { content: "denied" },
 ) {
     await assert.rejects(
         addEventCommentWithDependencies(eventId.toString(), data, viewerDid, deps),
@@ -491,6 +552,7 @@ async function testMalformedHostsThroughOrchestration() {
 
 async function main() {
     await testSuccessfulOrderingAndSafeReturn();
+    await testCrossPostParentDeniedBeforeInsert();
     await testInsertDtoAndRealMentionSanitation();
     await testFeatureAndAccessDenials();
     await testLifecycleMatrix();

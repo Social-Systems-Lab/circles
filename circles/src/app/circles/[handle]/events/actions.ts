@@ -73,7 +73,9 @@ import {
 } from "@/lib/data/event-alternate-comment-policy";
 import { resolveReadablePostContext } from "@/lib/data/post-access-policy";
 import { createCommentForAuthorizedPost } from "@/lib/data/discussion-comment-create";
+import { prepareAuthoredComment } from "@/lib/data/comment-write-policy";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
+import { toCommentDto } from "@/lib/data/comment-dto";
 import { buildEventNoticeboardPostData } from "@/lib/event-noticeboard-post-policy";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
@@ -2251,7 +2253,10 @@ export async function getCircleMembersAction(circleHandle: string): Promise<GetC
 /**
  * Add a comment to an event (via its shadow post)
  */
-export async function addEventCommentAction(eventId: string, data: Partial<Comment>) {
+export async function addEventCommentAction(
+    eventId: string,
+    data: { content: string; parentCommentId?: string | null },
+) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) throw new Error("Unauthorized");
 
@@ -2266,8 +2271,14 @@ export async function addEventCommentAction(eventId: string, data: Partial<Comme
         createComment: createCommentForAuthorizedPost,
         createDependencies: {
             insertComment: (comment) => Comments.insertOne(comment),
+            incrementParentReplies: async (id) => {
+                await Comments.updateOne({ _id: id }, { $inc: { replies: 1 } });
+            },
             now: () => new Date(),
         },
+        prepareComment: prepareAuthoredComment,
+        findParentComment: async (id) => Comments.findOne({ _id: id }, { projection: { postId: 1 } }),
+        toCommentDto,
         sanitizeComments: sanitizeCommentMentions,
     });
 }

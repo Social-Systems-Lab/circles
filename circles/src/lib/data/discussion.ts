@@ -13,14 +13,21 @@ import {
     addCommentToDiscussionWithDependencies,
     type AddCommentToDiscussionDependencies,
 } from "./discussion-comment-create";
+import { prepareAuthoredComment, type AuthoredCommentRequest } from "./comment-write-policy";
 
 const defaultAddCommentToDiscussionDependencies: AddCommentToDiscussionDependencies = {
     findDiscussion: async (id) => Posts.findOne({ _id: id, postType: "discussion" }),
     insertComment: async (comment) => Comments.insertOne(comment),
+    incrementParentReplies: async (id) => {
+        await Comments.updateOne({ _id: id }, { $inc: { replies: 1 } });
+    },
     updateLastActivity: async (id, at) => {
         await Posts.updateOne({ _id: id }, { $set: { lastActivityAt: at } });
     },
     now: () => new Date(),
+    prepareComment: prepareAuthoredComment,
+    findParentComment: async (id) => Comments.findOne({ _id: id }, { projection: { postId: 1 } }),
+    toCommentDto,
 };
 
 export async function createDiscussion(data: Partial<Post> & { circleId: string }) {
@@ -171,7 +178,7 @@ export async function getDiscussionWithComments(id: string, authorizedFeedId?: s
  */
 export async function addCommentToDiscussion(
     discussionId: string,
-    data: Partial<Comment>,
+    data: AuthoredCommentRequest & { createdBy: string },
     dependencies: AddCommentToDiscussionDependencies = defaultAddCommentToDiscussionDependencies,
 ) {
     return addCommentToDiscussionWithDependencies(discussionId, data, dependencies);

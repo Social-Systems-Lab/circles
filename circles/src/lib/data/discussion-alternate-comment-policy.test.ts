@@ -5,6 +5,7 @@ import type { Circle, Comment, CommentDisplay, PostDisplay } from "@/models/mode
 import { toCommentDto } from "./comment-dto";
 import { sanitizeCommentMentions } from "./comment-mention-policy";
 import { addCommentToDiscussionWithDependencies } from "./discussion-comment-create";
+import { prepareAuthoredComment } from "./comment-write-policy";
 import { addReadableAlternateDiscussionComment, getReadableAlternateDiscussion } from "./discussion-alternate-policy";
 import { resolveReadablePostContext, type ReadablePostContext } from "./post-access-policy";
 
@@ -160,9 +161,10 @@ async function testAddOrchestration() {
     }
 
     const sequence: string[] = [];
+    const alternatePostId = postId.toString().toUpperCase();
     const returned = await addReadableAlternateDiscussionComment(
-        postId.toString(),
-        { content: "comment", createdBy: "did:forged" },
+        alternatePostId,
+        { content: "comment" },
         "did:member",
         {
             resolveContext: resolveContext(true) as (id: string, did: string) => Promise<ReadablePostContext | null>,
@@ -170,8 +172,10 @@ async function testAddOrchestration() {
                 sequence.push("authorize");
                 return true;
             },
-            addComment: async (_id, comment) => {
+            addComment: async (id, comment) => {
                 sequence.push("insert");
+                assert.equal(id, postId.toString());
+                assert.notEqual(id, alternatePostId);
                 assert.equal(comment.createdBy, "did:member");
                 return { ...baseComment, content: comment.content! } as Comment;
             },
@@ -258,11 +262,81 @@ async function testAddOrchestration() {
     assert.equal(pausedAdds, 0);
 }
 
+async function testAlternateWriteEffectCounts() {
+    const parentId = new ObjectId();
+    const insertedId = new ObjectId();
+    const createdAt = new Date("2026-08-28T08:00:00Z");
+
+    for (const crossPost of [false, true]) {
+        let inserts = 0;
+        let increments = 0;
+        let dtos = 0;
+        let sanitizers = 0;
+        let validatedTarget = "";
+        const alternatePostId = postId.toString().toUpperCase();
+        const attempt = addReadableAlternateDiscussionComment(
+            alternatePostId,
+            { content: "reply", parentCommentId: parentId.toString() },
+            "did:member",
+            {
+                resolveContext: resolveContext(true, "public") as (
+                    id: string,
+                    did: string,
+                ) => Promise<ReadablePostContext | null>,
+                authorizeComment: async () => true,
+                addComment: (canonicalPostId, data) => addCommentToDiscussionWithDependencies(
+                    canonicalPostId,
+                    data,
+                    {
+                        findDiscussion: async (id) => {
+                            assert.equal(id.toString(), postId.toString());
+                            return { closed: false };
+                        },
+                        insertComment: async (comment) => {
+                            inserts += 1;
+                            assert.equal(comment.postId, postId.toString());
+                            assert.notEqual(comment.postId, alternatePostId);
+                            return { insertedId };
+                        },
+                        incrementParentReplies: async () => { increments += 1; },
+                        updateLastActivity: async () => undefined,
+                        now: () => createdAt,
+                        prepareComment: prepareAuthoredComment,
+                        findParentComment: async () => {
+                            validatedTarget = canonicalPostId;
+                            return { postId: crossPost ? new ObjectId().toString() : canonicalPostId };
+                        },
+                        toCommentDto: (comment) => {
+                            dtos += 1;
+                            return toCommentDto(comment);
+                        },
+                    },
+                ),
+                sanitizeComments: async (comments) => {
+                    sanitizers += 1;
+                    return [...comments];
+                },
+            },
+        );
+
+        if (crossPost) {
+            await assert.rejects(attempt, /Comment target unavailable\./);
+            assert.deepEqual([inserts, increments, dtos, sanitizers], [0, 0, 0, 0]);
+        } else {
+            const result = await attempt;
+            assert.equal(result.postId, postId.toString());
+            assert.deepEqual([inserts, increments, dtos, sanitizers], [1, 1, 1, 1]);
+        }
+        assert.equal(validatedTarget, postId.toString());
+    }
+}
+
 async function testInsertAndReread() {
     const createdAt = new Date("2026-08-23T10:00:00Z");
     const activityAt = new Date("2026-08-23T10:00:01Z");
     const insertedId = new ObjectId();
     const forgedId = new ObjectId();
+    const parentId = new ObjectId();
     let inserted: Comment | undefined;
     let updates = 0;
     const response = await addCommentToDiscussionWithDependencies(
@@ -270,7 +344,7 @@ async function testInsertAndReread() {
         {
             _id: forgedId,
             postId: "forged-post",
-            parentCommentId: "parent-id",
+            parentCommentId: parentId.toString(),
             content: "content",
             createdBy: "did:server-user",
             createdAt: new Date("2000-01-01T00:00:00Z"),
@@ -289,6 +363,7 @@ async function testInsertAndReread() {
                 inserted = comment;
                 return { insertedId };
             },
+            incrementParentReplies: async () => undefined,
             updateLastActivity: async (_id, at) => {
                 updates += 1;
                 assert.equal(at, activityAt);
@@ -297,12 +372,14 @@ async function testInsertAndReread() {
                 const values = [createdAt, activityAt];
                 return () => values.shift()!;
             })(),
+            prepareComment: prepareAuthoredComment,
+            findParentComment: async () => ({ postId: postId.toString() }),
         },
     );
     assert.ok(inserted);
     assert.equal(Object.hasOwn(inserted, "_id"), false);
     assert.equal(inserted.postId, postId.toString());
-    assert.equal(inserted.parentCommentId, "parent-id");
+    assert.equal(inserted.parentCommentId, parentId.toString());
     assert.equal(inserted.content, "content");
     assert.equal(inserted.createdBy, "did:server-user");
     assert.equal(inserted.createdAt, createdAt);
@@ -315,7 +392,7 @@ async function testInsertAndReread() {
     assert.deepEqual(response, {
         _id: insertedId.toString(),
         postId: postId.toString(),
-        parentCommentId: "parent-id",
+        parentCommentId: parentId.toString(),
         content: "content",
         createdBy: "did:server-user",
         createdAt,
@@ -342,13 +419,38 @@ async function testInsertAndReread() {
                     closedInsert = true;
                     return { insertedId };
                 },
+                incrementParentReplies: async () => undefined,
                 updateLastActivity: async () => undefined,
                 now: () => createdAt,
+                prepareComment: prepareAuthoredComment,
+                findParentComment: async () => null,
             },
         ),
         /closed or not found/,
     );
     assert.equal(closedInsert, false);
+
+    let crossPostInsert = false;
+    await assert.rejects(
+        addCommentToDiscussionWithDependencies(
+            postId.toString(),
+            { content: "reply", parentCommentId: parentId.toString(), createdBy: "did:member" },
+            {
+                findDiscussion: async () => ({ closed: false }),
+                insertComment: async () => {
+                    crossPostInsert = true;
+                    return { insertedId };
+                },
+                incrementParentReplies: async () => undefined,
+                updateLastActivity: async () => undefined,
+                now: () => createdAt,
+                prepareComment: prepareAuthoredComment,
+                findParentComment: async () => ({ postId: new ObjectId().toString() }),
+            },
+        ),
+        /Comment target unavailable\./,
+    );
+    assert.equal(crossPostInsert, false);
 
     let stringEditedAtInsert: Comment | undefined;
     await addCommentToDiscussionWithDependencies(
@@ -360,8 +462,11 @@ async function testInsertAndReread() {
                 stringEditedAtInsert = comment;
                 return { insertedId };
             },
+            incrementParentReplies: async () => undefined,
             updateLastActivity: async () => undefined,
             now: () => createdAt,
+            prepareComment: prepareAuthoredComment,
+            findParentComment: async () => null,
         },
     );
     assert.ok(stringEditedAtInsert);
@@ -404,6 +509,7 @@ async function testMentionBatchAndEventDtoCompatibility() {
 async function main() {
     await testReadOrchestration();
     await testAddOrchestration();
+    await testAlternateWriteEffectCounts();
     await testInsertAndReread();
     await testMentionBatchAndEventDtoCompatibility();
     console.log("alternate Discussion comment policy tests passed");

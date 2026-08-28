@@ -1,5 +1,6 @@
 import type { Comment, CommentDisplay, PostDisplay } from "@/models/models";
 import type { ReadablePostContext } from "./post-access-policy";
+import type { AuthoredCommentRequest } from "./comment-write-policy";
 
 type DiscussionWithComments = Omit<PostDisplay, "comments"> & { comments: CommentDisplay[] };
 
@@ -28,13 +29,13 @@ export async function getReadableAlternateDiscussion(
 export type AlternateDiscussionAddDependencies = {
     resolveContext: (postId: string, viewerDid: string) => Promise<ReadablePostContext | null>;
     authorizeComment: (context: ReadablePostContext, viewerDid: string) => Promise<boolean>;
-    addComment: (postId: string, data: Partial<Comment>) => Promise<Comment>;
+    addComment: (postId: string, data: AuthoredCommentRequest & { createdBy: string }) => Promise<Comment>;
     sanitizeComments: (comments: readonly CommentDisplay[], viewerDid: string) => Promise<CommentDisplay[]>;
 };
 
 export async function addReadableAlternateDiscussionComment(
     postId: string,
-    data: Partial<Comment>,
+    data: AuthoredCommentRequest,
     viewerDid: string,
     dependencies: AlternateDiscussionAddDependencies,
 ): Promise<CommentDisplay> {
@@ -42,7 +43,7 @@ export async function addReadableAlternateDiscussionComment(
     if (!context || context.post.postType !== "discussion") throw new Error("Forum post not found");
     if (!(await dependencies.authorizeComment(context, viewerDid))) throw new Error("Not authorized to comment");
 
-    const comment = await dependencies.addComment(postId, { ...data, createdBy: viewerDid });
+    const comment = await dependencies.addComment(String(context.post._id), { ...data, createdBy: viewerDid });
     const [sanitizedComment] = await dependencies.sanitizeComments([comment as CommentDisplay], viewerDid);
     return sanitizedComment;
 }

@@ -7,6 +7,11 @@ import { canReadEventOwners } from "./post-source-access-policy";
 import { assertCircleWritesAllowed } from "./circle-lifecycle-policy";
 import { createCommentForAuthorizedPost, type CreateCommentDependencies } from "./discussion-comment-create";
 import { toCommentDto } from "./comment-dto";
+import {
+    prepareAuthoredComment,
+    type AuthoredCommentRequest,
+    type SafeAuthoredCommentInput,
+} from "./comment-write-policy";
 
 type EventCommentReadDependencies = {
     canReadOwners: (event: Pick<Event, "circleId" | "hostCircleIds">, viewerDid?: string) => Promise<boolean>;
@@ -78,17 +83,20 @@ export type AddEventCommentDependencies = {
     authorizeComment: (viewerDid: string, circleId: string) => Promise<boolean>;
     createComment: (
         postId: string,
-        data: Partial<Comment>,
+        data: SafeAuthoredCommentInput,
         createdBy: string,
         dependencies: CreateCommentDependencies,
     ) => Promise<Comment>;
     createDependencies: CreateCommentDependencies;
+    prepareComment: typeof prepareAuthoredComment;
+    findParentComment: (id: ObjectId) => Promise<Pick<Comment, "postId"> | null>;
+    toCommentDto?: typeof toCommentDto;
     sanitizeComments: (comments: readonly CommentDisplay[], viewerDid?: string) => Promise<CommentDisplay[]>;
 };
 
 export async function addEventCommentWithDependencies(
     eventId: string,
-    data: Partial<Comment>,
+    data: AuthoredCommentRequest,
     userDid: string,
     dependencies: AddEventCommentDependencies,
 ): Promise<CommentDisplay> {
@@ -105,12 +113,22 @@ export async function addEventCommentWithDependencies(
     if (!(await dependencies.authorizeComment(userDid, String(context.circle._id)))) {
         throw new Error("Not authorized to comment");
     }
+    const prepared = await dependencies.prepareComment({
+        postId: String(context.post._id),
+        parentCommentId: data.parentCommentId,
+        content: data.content!,
+        writerDid: userDid,
+        dependencies: { findParentComment: dependencies.findParentComment },
+    });
     const inserted = await dependencies.createComment(
         String(context.post._id),
-        data,
+        prepared,
         userDid,
         dependencies.createDependencies,
     );
-    const [sanitized] = await dependencies.sanitizeComments([toCommentDto(inserted) as CommentDisplay], userDid);
+    const [sanitized] = await dependencies.sanitizeComments(
+        [(dependencies.toCommentDto ?? toCommentDto)(inserted) as CommentDisplay],
+        userDid,
+    );
     return sanitized;
 }
