@@ -83,10 +83,12 @@ import type { PostUpdateResult } from "@/lib/data/post-list-state";
 import { normalizePostId } from "@/lib/data/post-update-identity";
 import {
     getReadablePostComments,
+    POST_UNAVAILABLE_MESSAGE,
     resolveFeedActionViewerDid,
     resolvePublicUserFeed,
     resolveReadablePostContext,
 } from "@/lib/data/post-access-policy";
+import { orchestrateOrdinaryPostEdit } from "@/lib/data/post-mutation-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
@@ -648,9 +650,9 @@ export async function updatePostAction(formData: FormData): Promise<PostUpdateRe
     }
 
     try {
-        const postId = normalizePostId(formData.get("postId"));
-        if (!postId) {
-            return { success: false, message: "Post not found" };
+        const submittedPostId = normalizePostId(formData.get("postId"));
+        if (!submittedPostId) {
+            return { success: false, message: POST_UNAVAILABLE_MESSAGE };
         }
         const content = formData.get("content") as string;
         const title = formData.get("title") as string | null;
@@ -674,112 +676,113 @@ export async function updatePostAction(formData: FormData): Promise<PostUpdateRe
             url: formData.has("internalPreviewUrl"),
         };
         // +++ End Internal Link Preview Data Extraction +++
-        const post = await getPost(postId);
-        if (!post) {
-            return { success: false, message: "Post not found" };
-        }
-        const feed = await getFeed(post.feedId);
-        if (!feed || !(await isPostModuleEnabled(post, feed)) || !getPostCreateFeature(post.postType)) {
-            return { success: false, message: "Post not found" };
-        }
-        if (circleId && feed.circleId !== circleId) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const isCommunityPost = post.postType === "community";
-        const isCreateAuthorized = isCommunityPost
-            ? await isAuthorized(userDid, feed.circleId, getPostCreateFeature(post.postType)!)
-            : true;
-        const editAccess = canEditOwnPost({
-            postType: post.postType,
-            isAuthor: post.createdBy === userDid,
-            isCreateAuthorized,
-        });
-        if (!editAccess.ok) {
-            return { success: false, message: editAccess.message };
-        }
-
-        const existingMedia: Media[] = [];
-        const mediaStr = formData.getAll("existingMedia") as string[];
-        for (const media of mediaStr) {
-            existingMedia.push(JSON.parse(media));
-        }
-        const images = formData.getAll("media") as File[];
-        const validImageCount = images.filter((image) => isFile(image)).length;
-        const contentPolicy = validatePostUpdateContent({
-            postType: post.postType,
-            title,
-            existingTitle: post.title,
-            content,
-            mediaCount: existingMedia.length + validImageCount,
-        });
-        if (!contentPolicy.ok) {
-            return { success: false, message: contentPolicy.message };
-        }
-
-        const baseUpdate = buildMainPostUpdateBaseDocument(formData, { _id: postId, postType: post.postType });
-        const writeResult = await orchestrateMainPostUpdate({
-            content,
-            storedContent: post.content,
-            storedMentions: post.mentions || [],
-            writerDid: userDid,
-            baseUpdate,
-            resolvePreview: () =>
-                resolveInternalPreviewUpdateForWrite({
-                    request: { type: internalPreviewType, id: internalPreviewId, url: internalPreviewUrl },
-                    presence: internalPreviewRequestPresence,
-                    stored: {
-                        internalPreviewType: post.internalPreviewType,
-                        internalPreviewId: post.internalPreviewId,
-                        internalPreviewUrl: post.internalPreviewUrl,
-                    },
-                    writerDid: userDid,
-                }),
-            upload: async () => {
-                const newMedia: Media[] = [];
-                let imageIndex = existingMedia.length;
-                for (const image of images) {
-                    if (isFile(image)) {
-                        const savedImage = await saveFile(
-                            image,
-                            `feeds/${post.feedId}/${postId}/post-image-${imageIndex}`,
-                            feed.circleId,
-                            true,
-                        );
-                        newMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
-                        imageIndex++;
-                    }
+        const editResult = await orchestrateOrdinaryPostEdit({
+            postId: submittedPostId,
+            actorDid: userDid,
+            submittedCircleId: circleId,
+            authorize: async ({ post, feed }) => {
+                if (!(await isPostModuleEnabled(post, feed)) || !getPostCreateFeature(post.postType)) {
+                    return { ok: false, message: POST_UNAVAILABLE_MESSAGE };
                 }
-                return [...existingMedia, ...newMedia];
+                const isCommunityPost = post.postType === "community";
+                const isCreateAuthorized = isCommunityPost
+                    ? await isAuthorized(userDid, feed.circleId, getPostCreateFeature(post.postType)!)
+                    : true;
+                return canEditOwnPost({
+                    postType: post.postType,
+                    isAuthor: post.createdBy === userDid,
+                    isCreateAuthorized,
+                });
             },
-            applyUpload: (document, media) => {
-                document.media = media;
-            },
-            persistAndPublishVector: async (document) => updatePost(document),
-            notify: async (_value, updatedPost, mentions) => {
-                try {
-                    if (mentions.length > 0) {
-                        const user = await getUserByDid(userDid);
-                        const previousMentions = post.mentions?.map((mention) => mention.id) || [];
-                        const newMentions = mentions.filter((mention) => !previousMentions.includes(mention.id));
-                        if (newMentions.length > 0) {
-                            const mentionedCircles = await Promise.all(
-                                newMentions.map(async (mention) => await getCircleById(mention.id)),
-                            );
-                            const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
-                            if (validMentionedCircles.length > 0) {
-                                await notifyPostMentions({ ...post, ...updatedPost }, user, validMentionedCircles);
+            execute: async ({ post, feed, normalizedPostId: postId }) => {
+                const existingMedia: Media[] = [];
+                const mediaStr = formData.getAll("existingMedia") as string[];
+                for (const media of mediaStr) existingMedia.push(JSON.parse(media));
+                const images = formData.getAll("media") as File[];
+                const validImageCount = images.filter((image) => isFile(image)).length;
+                const contentPolicy = validatePostUpdateContent({
+                    postType: post.postType,
+                    title,
+                    existingTitle: post.title,
+                    content,
+                    mediaCount: existingMedia.length + validImageCount,
+                });
+                if (!contentPolicy.ok) return { success: false as const, message: contentPolicy.message };
+
+                const baseUpdate = buildMainPostUpdateBaseDocument(formData, { _id: postId, postType: post.postType });
+                const writeResult = await orchestrateMainPostUpdate({
+                    content,
+                    storedContent: post.content,
+                    storedMentions: post.mentions || [],
+                    writerDid: userDid,
+                    baseUpdate,
+                    resolvePreview: () =>
+                        resolveInternalPreviewUpdateForWrite({
+                            request: { type: internalPreviewType, id: internalPreviewId, url: internalPreviewUrl },
+                            presence: internalPreviewRequestPresence,
+                            stored: {
+                                internalPreviewType: post.internalPreviewType,
+                                internalPreviewId: post.internalPreviewId,
+                                internalPreviewUrl: post.internalPreviewUrl,
+                            },
+                            writerDid: userDid,
+                        }),
+                    upload: async () => {
+                        const newMedia: Media[] = [];
+                        let imageIndex = existingMedia.length;
+                        for (const image of images) {
+                            if (isFile(image)) {
+                                const savedImage = await saveFile(
+                                    image,
+                                    `feeds/${post.feedId}/${postId}/post-image-${imageIndex}`,
+                                    feed.circleId,
+                                    true,
+                                );
+                                newMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
+                                imageIndex++;
                             }
                         }
-                    }
-                } catch (notificationError) {
-                    console.error("Failed to send mention notifications:", notificationError);
-                }
+                        return [...existingMedia, ...newMedia];
+                    },
+                    applyUpload: (document, media) => {
+                        document.media = media;
+                    },
+                    persistAndPublishVector: async (document) => updatePost(document),
+                    notify: async (_value, updatedPost, mentions) => {
+                        try {
+                            if (mentions.length > 0) {
+                                const user = await getUserByDid(userDid);
+                                const previousMentions = post.mentions?.map((mention) => mention.id) || [];
+                                const newMentions = mentions.filter(
+                                    (mention) => !previousMentions.includes(mention.id),
+                                );
+                                if (newMentions.length > 0) {
+                                    const mentionedCircles = await Promise.all(
+                                        newMentions.map(async (mention) => await getCircleById(mention.id)),
+                                    );
+                                    const validMentionedCircles = mentionedCircles.filter((circle) => circle !== null);
+                                    if (validMentionedCircles.length > 0) {
+                                        await notifyPostMentions(
+                                            { ...post, ...updatedPost },
+                                            user,
+                                            validMentionedCircles,
+                                        );
+                                    }
+                                }
+                            }
+                        } catch (notificationError) {
+                            console.error("Failed to send mention notifications:", notificationError);
+                        }
+                    },
+                });
+                return writeResult.ok
+                    ? { success: true as const, post, feed, postId }
+                    : { success: false as const, message: writeResult.error };
             },
         });
-        if (!writeResult.ok) {
-            return { success: false, message: writeResult.error };
-        }
+        if (!editResult.ok) return { success: false, message: editResult.message };
+        if (!editResult.value.success) return editResult.value;
+        const { post, feed, postId } = editResult.value;
 
         const circle = await getCircleById(feed.circleId);
         if (circle) {

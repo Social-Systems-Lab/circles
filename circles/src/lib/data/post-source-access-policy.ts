@@ -6,6 +6,11 @@ import { getReadableLifecycleQuery } from "./circle-lifecycle-policy";
 export const PARENT_POST_SOURCE_TYPES = ["task", "event", "goal", "issue", "proposal"] as const;
 export const POST_SOURCE_TYPES = [...PARENT_POST_SOURCE_TYPES, "funding"] as const;
 export type PostSourceType = (typeof POST_SOURCE_TYPES)[number];
+export type PostSourceReference = {
+    type: PostSourceType;
+    id: string;
+    marker: "parent" | "funding" | "legacyFunding";
+};
 
 type SourceResource = Task | Event | Goal | Issue | Proposal | FundingAsk;
 
@@ -57,7 +62,7 @@ export function getPostSourceReference(
         | "internalPreviewId"
         | "internalPreviewType"
     >,
-): { type: PostSourceType; id: string; marker: "parent" | "funding" | "legacyFunding" } | null | false {
+): PostSourceReference | null | false {
     const hasParentType = post.parentItemType !== undefined;
     const hasParentId = post.parentItemId !== undefined;
     if (hasParentType || hasParentId) {
