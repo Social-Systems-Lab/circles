@@ -1,12 +1,35 @@
 import type { Mention, Post } from "@/models/models";
+import { getPostTitleUpdate } from "./post-content-policy";
 import { canonicalizeCircleMentionsForWrite, type CircleMentionWriteResult } from "./circle-mention-write-policy";
 import {
     PREVIEW_UNAVAILABLE,
     type CanonicalInternalPreview,
     type InternalPreviewUpdate,
 } from "./internal-preview-write-policy";
+import { ORIGINAL_POST_UNAVAILABLE } from "./shared-original-write-policy";
 
 export const POST_WRITE_UNAVAILABLE = "One or more references are unavailable.";
+
+export function buildMainPostUpdateBaseDocument(
+    formData: FormData,
+    post: Pick<Post, "_id" | "postType">,
+): Partial<Post> {
+    const title = formData.get("title") as string | null;
+    const locationStr = formData.get("location") as string | null;
+    const linkPreviewImageUrl = formData.get("linkPreviewImageUrl") as string | null;
+    const sdgsStr = formData.get("sdgs") as string | null;
+    return {
+        _id: post._id,
+        ...getPostTitleUpdate(post.postType, title),
+        editedAt: new Date(),
+        location: locationStr ? JSON.parse(locationStr) : undefined,
+        linkPreviewUrl: (formData.get("linkPreviewUrl") as string | null) || undefined,
+        linkPreviewTitle: (formData.get("linkPreviewTitle") as string | null) || undefined,
+        linkPreviewDescription: (formData.get("linkPreviewDescription") as string | null) || undefined,
+        linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
+        sdgs: sdgsStr ? JSON.parse(sdgsStr) : undefined,
+    };
+}
 
 const CLIENT_CREATABLE_POST_TYPES = new Set(["post", "community", "discussion"]);
 
@@ -72,9 +95,13 @@ export async function orchestrateMainPostCreate<TDocument extends Partial<Post>,
     authorizeTarget: () => Promise<boolean>;
     isAllowedPostType?: typeof isClientCreatablePostType;
     resolve?: typeof resolvePostContentForWrite;
-    validateShare?: () => Promise<boolean>;
+    resolveShare?: () => Promise<string>;
     resolvePreview?: () => Promise<CanonicalInternalPreview | null>;
-    buildDocument: (write: CanonicalPostWrite, preview: CanonicalInternalPreview | null) => Promise<TDocument>;
+    buildDocument: (
+        write: CanonicalPostWrite,
+        preview: CanonicalInternalPreview | null,
+        sharedPostId: string | undefined,
+    ) => Promise<TDocument>;
     persistAndPublishVector: (document: TDocument) => Promise<TValue>;
     upload: (value: TValue) => Promise<void>;
     notify: (value: TValue, mentions: Mention[]) => Promise<void>;
@@ -88,8 +115,11 @@ export async function orchestrateMainPostCreate<TDocument extends Partial<Post>,
     }
     const write = await (input.resolve || resolvePostContentForWrite)(input.content, input.writerDid);
     if (!write.ok) return { ok: false, error: write.error, reason: "mention" };
-    if (input.validateShare && !(await input.validateShare())) {
-        return { ok: false, error: "Original post unavailable.", reason: "share" };
+    let sharedPostId: string | undefined;
+    try {
+        sharedPostId = input.resolveShare ? await input.resolveShare() : undefined;
+    } catch {
+        return { ok: false, error: ORIGINAL_POST_UNAVAILABLE, reason: "share" };
     }
     let preview: CanonicalInternalPreview | null = null;
     try {
@@ -98,7 +128,7 @@ export async function orchestrateMainPostCreate<TDocument extends Partial<Post>,
         return { ok: false, error: PREVIEW_UNAVAILABLE, reason: "preview" };
     }
 
-    const baseDocument = await input.buildDocument(write, preview);
+    const baseDocument = await input.buildDocument(write, preview, sharedPostId);
     const document = {
         ...baseDocument,
         content: write.content,

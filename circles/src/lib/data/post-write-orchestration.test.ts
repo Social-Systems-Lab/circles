@@ -2,13 +2,21 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { ObjectId } from "mongodb";
-import type { Circle, Mention, Post } from "@/models/models";
+import type { Circle, Feed, Member, Mention, Post } from "@/models/models";
 import { canReadCircle } from "./circle-visibility-policy";
-import { resolveInternalPreviewUrl } from "./post-nested-content-policy";
+import { resolveReadablePostContext } from "./post-access-policy";
+import { canReadPostSource } from "./post-source-access-policy";
+import {
+    getShareablePostPreview,
+    resolveInternalPreviewUrl,
+    type NestedContentDependencies,
+} from "./post-nested-content-policy";
 import { resolveInternalPreviewForWrite, resolveInternalPreviewUpdateForWrite } from "./internal-preview-write-policy";
+import { resolveSharedOriginalForWrite } from "./shared-original-write-policy";
 import type { CircleMentionWriteResult } from "./circle-mention-write-policy";
 import {
     POST_WRITE_UNAVAILABLE,
+    buildMainPostUpdateBaseDocument,
     isClientCreatablePostType,
     orchestrateAlternateDiscussionCreate,
     orchestrateMainPostCreate,
@@ -90,8 +98,13 @@ async function testMainCreateSuccess() {
         authorizeTarget: async () => (stages.push("target-auth"), true),
         isAllowedPostType: (postType) => (stages.push("postType"), isClientCreatablePostType(postType)),
         resolve: async () => (stages.push("mention"), canonicalWrite),
-        validateShare: async () => (stages.push("share"), true),
-        buildDocument: async () => ({ title: "Authored", content: "caller", createdBy: writerDid }),
+        resolveShare: async () => (stages.push("share"), "canonical-share"),
+        buildDocument: async (_write, _preview, sharedPostId) => ({
+            title: "Authored",
+            content: "caller",
+            createdBy: writerDid,
+            sharedPostId,
+        }),
         persistAndPublishVector: async (document) => {
             stages.push("persistence");
             inserts += 1;
@@ -123,6 +136,7 @@ async function testMainCreateSuccess() {
     assert.equal(vectors, 1);
     assert.equal(notifications, 1);
     assert.equal(persisted?.content, canonicalWrite.content);
+    assert.equal(persisted?.sharedPostId, "canonical-share");
     assert.deepEqual(persisted?.mentions, canonicalMentions);
     assert.equal((persisted?.mentions as Mention[]).length, 1);
     assert.notDeepEqual(persisted?.mentions, forged.mentions);
@@ -132,7 +146,7 @@ async function testMainCreateSuccess() {
 async function runMainCreateDenial(input: {
     postType: string;
     resolve: () => Promise<CircleMentionWriteResult>;
-    validateShare?: () => Promise<boolean>;
+    resolveShare?: () => Promise<string>;
 }) {
     const calls = { authorize: 0, postType: 0, mention: 0, share: 0, persist: 0, vector: 0, upload: 0, notify: 0 };
     const result = await orchestrateMainPostCreate({
@@ -142,7 +156,7 @@ async function runMainCreateDenial(input: {
         authorizeTarget: async () => ((calls.authorize += 1), true),
         isAllowedPostType: (postType) => ((calls.postType += 1), isClientCreatablePostType(postType)),
         resolve: async () => ((calls.mention += 1), input.resolve()),
-        validateShare: input.validateShare ? async () => ((calls.share += 1), input.validateShare!()) : undefined,
+        resolveShare: input.resolveShare ? async () => ((calls.share += 1), input.resolveShare!()) : undefined,
         buildDocument: async () => ({ content: "caller", createdBy: writerDid }),
         persistAndPublishVector: async (document) => {
             calls.persist += 1;
@@ -159,7 +173,7 @@ async function testMainCreateDenials() {
     const secret = await runMainCreateDenial({
         postType: "post",
         resolve: async () => ({ ok: false, error: POST_WRITE_UNAVAILABLE }),
-        validateShare: async () => true,
+        resolveShare: async () => "canonical-share",
     });
     assert.deepEqual(secret.result, { ok: false, error: POST_WRITE_UNAVAILABLE, reason: "mention" });
     assert.deepEqual(secret.calls, {
@@ -189,7 +203,9 @@ async function testMainCreateDenials() {
     const share = await runMainCreateDenial({
         postType: "post",
         resolve: async () => canonicalWrite,
-        validateShare: async () => false,
+        resolveShare: async () => {
+            throw new Error("sensitive denial");
+        },
     });
     assert.deepEqual(share.result, { ok: false, error: "Original post unavailable.", reason: "share" });
     assert.deepEqual(share.calls, {
@@ -219,7 +235,7 @@ async function testMainCreatePreviewOrderingAndEffects() {
         authorizeTarget: async () => (stages.push("auth"), true),
         isAllowedPostType: () => (stages.push("type"), true),
         resolve: async () => (stages.push("mentions"), canonicalWrite),
-        validateShare: async () => (stages.push("share"), true),
+        resolveShare: async () => (stages.push("share"), "canonical-share"),
         resolvePreview: async () => (stages.push("preview"), canonicalPreview),
         buildDocument: async (_write, preview) => ({ title: "post", ...(preview || {}) }),
         persistAndPublishVector: async (document) => {
@@ -251,7 +267,7 @@ async function testMainCreatePreviewOrderingAndEffects() {
             writerDid: `did:${actor}`,
             authorizeTarget: async () => true,
             resolve: async () => canonicalWrite,
-            validateShare: async () => true,
+            resolveShare: async () => "canonical-share",
             resolvePreview: async () => {
                 throw new Error(`sensitive ${actor}`);
             },
@@ -268,6 +284,139 @@ async function testMainCreatePreviewOrderingAndEffects() {
     }
 }
 
+async function testMainCreateCanonicalSharedOriginal() {
+    const run = async (input: {
+        candidate?: string;
+        actorDid: string;
+        secret?: boolean;
+        member?: boolean;
+        sourceBound?: boolean;
+        sourceReadable?: boolean;
+    }) => {
+        const originalObjectId = new ObjectId();
+        const originalId = originalObjectId.toHexString();
+        const feedObjectId = new ObjectId();
+        const ownerObjectId = new ObjectId();
+        const sourceObjectId = new ObjectId();
+        const sourceOwnerObjectId = new ObjectId();
+        const author = { did: "did:author", name: "Author", isVerified: true } as Circle;
+        const owner = {
+            _id: ownerObjectId,
+            name: "Canonical owner",
+            handle: "canonical-owner",
+            circleType: "circle",
+            visibility: input.secret ? "secret" : "public",
+            moderationStatus: "active",
+            enabledModules: ["feed"],
+        } as Circle;
+        const sourceOwner = {
+            _id: sourceOwnerObjectId,
+            name: "Source owner",
+            handle: "source-owner",
+            circleType: "circle",
+            visibility: input.sourceReadable === false ? "secret" : "public",
+            moderationStatus: "active",
+        } as Circle;
+        const feed = { _id: feedObjectId, circleId: ownerObjectId.toHexString(), handle: "default" } as Feed;
+        const original = {
+            _id: originalObjectId,
+            feedId: feedObjectId.toHexString(),
+            createdBy: author.did!,
+            createdAt: new Date(),
+            content: "Canonical original",
+            reactions: {},
+            comments: 0,
+            userGroups: ["everyone"],
+            ...(input.sourceBound
+                ? { postType: "task" as const, parentItemType: "task" as const, parentItemId: sourceObjectId.toHexString() }
+                : {}),
+        } as Post;
+        const effects = { readableLookup: 0, preview: 0, persist: 0, vector: 0, upload: 0, notify: 0 };
+        let persisted: Record<string, unknown> | undefined;
+        const resolvePost = (postId: string, viewerDid?: string) =>
+            resolveReadablePostContext(postId, viewerDid, {
+                findPost: async (id) => {
+                    effects.readableLookup += 1;
+                    return id.equals(originalObjectId) ? original : null;
+                },
+                findFeed: async (id) => (id.equals(feedObjectId) ? feed : null),
+                findCircle: async (id) => (id.equals(ownerObjectId) ? owner : null),
+                findMember: async (did, circleId) =>
+                    input.member && did === input.actorDid && circleId === ownerObjectId.toHexString()
+                        ? ({ userDid: did, circleId } as Member)
+                        : null,
+                findAuthor: async (did) => (did === author.did ? author : null),
+                authorizeFeature: async () => true,
+                canReadSource: (post, did) =>
+                    canReadPostSource(post, did, {
+                        findSource: async (type, id) =>
+                            input.sourceBound && type === "task" && id.equals(sourceObjectId)
+                                ? ({ _id: sourceObjectId, circleId: sourceOwnerObjectId.toHexString() } as never)
+                                : null,
+                        findCircles: async (ids) =>
+                            ids.some((id) => id.equals(sourceOwnerObjectId)) ? [sourceOwner] : [],
+                        canReadOwner: (viewerDid, circle) =>
+                            canReadCircle(viewerDid, circle, { getMember: async () => null }),
+                    }),
+            });
+        const nestedDependencies: NestedContentDependencies = {
+            findResources: async () => [],
+            findCirclesByHandles: async () => [],
+            findReadableCircles: async () => [],
+            findAuthors: async (dids) => (dids.includes(author.did!) ? [author] : []),
+            resolvePost,
+            findReadableMentionCircles: async () => [],
+        };
+        const result = await orchestrateMainPostCreate({
+            postType: "post",
+            content: "commentary",
+            writerDid: input.actorDid,
+            authorizeTarget: async () => true,
+            resolve: async () => canonicalWrite,
+            resolveShare: () =>
+                resolveSharedOriginalForWrite(
+                    input.candidate ?? originalId.toUpperCase(),
+                    input.actorDid,
+                    (candidate, did) => getShareablePostPreview(candidate, did, nestedDependencies),
+                ),
+            resolvePreview: async () => (effects.preview += 1, null),
+            buildDocument: async (_write, _preview, sharedPostId) => ({ title: "Share", sharedPostId }),
+            persistAndPublishVector: async (document) => {
+                effects.persist += 1;
+                effects.vector += 1;
+                persisted = document as Record<string, unknown>;
+                return document;
+            },
+            upload: async () => void (effects.upload += 1),
+            notify: async () => void (effects.notify += 1),
+        });
+        return { result, effects, persisted, originalId };
+    };
+
+    for (const sourceBound of [false, true]) {
+        const success = await run({ actorDid: writerDid, sourceBound, sourceReadable: true });
+        assert.equal(success.result.ok, true);
+        assert.equal(success.persisted?.sharedPostId, success.originalId);
+        assert.equal("sharedPostData" in success.persisted!, false);
+        assert.deepEqual(success.effects, { readableLookup: 1, preview: 1, persist: 1, vector: 1, upload: 1, notify: 1 });
+    }
+
+    for (const actorDid of ["did:outsider", "did:superadmin"]) {
+        const denied = await run({ actorDid, secret: true });
+        assert.deepEqual(denied.result, { ok: false, error: "Original post unavailable.", reason: "share" });
+        assert.deepEqual(denied.effects, { readableLookup: 1, preview: 0, persist: 0, vector: 0, upload: 0, notify: 0 });
+    }
+    assert.equal(previewActors.get("did:superadmin")?.isSuperadmin, true);
+
+    const sourceDenied = await run({ actorDid: writerDid, sourceBound: true, sourceReadable: false });
+    assert.deepEqual(sourceDenied.result, { ok: false, error: "Original post unavailable.", reason: "share" });
+    assert.deepEqual(sourceDenied.effects, { readableLookup: 1, preview: 0, persist: 0, vector: 0, upload: 0, notify: 0 });
+
+    const malformed = await run({ actorDid: writerDid, candidate: "not-an-object-id" });
+    assert.deepEqual(malformed.result, { ok: false, error: "Original post unavailable.", reason: "share" });
+    assert.deepEqual(malformed.effects, { readableLookup: 0, preview: 0, persist: 0, vector: 0, upload: 0, notify: 0 });
+}
+
 async function testMainCreateWithRealPreviewResolver() {
     const run = async (
         fixture: ReturnType<typeof previewAccessFixture>,
@@ -282,7 +431,7 @@ async function testMainCreateWithRealPreviewResolver() {
             writerDid: actorDid,
             authorizeTarget: async () => true,
             resolve: async () => canonicalWrite,
-            validateShare: async () => true,
+            resolveShare: async () => "canonical-share",
             resolvePreview: () => resolveInternalPreviewForWrite(request, actorDid, fixture.resolve),
             buildDocument: async (_write, preview) => ({ ...(preview || {}) }),
             persistAndPublishVector: async (document) => {
@@ -420,6 +569,80 @@ async function testMainUpdateSuccessDeniedAndUnchanged() {
     assert.equal(unchangedPersisted?.content, "same");
     assert.deepEqual(unchangedPersisted?.mentions, storedMentions);
     assert.equal(unchangedPersisted?.title, "Allowed update");
+}
+
+async function testMainUpdatePreservesImmutableSharedState() {
+    const sharedA = new ObjectId().toHexString();
+    const sharedB = new ObjectId().toHexString();
+    const cases = [
+        { name: "unrelated", stored: { sharedPostId: sharedA }, attack: {} },
+        {
+            name: "forged add",
+            stored: {},
+            attack: { sharedPostId: sharedB, sharedPostData: JSON.stringify({ nested: { secret: true } }) },
+        },
+        {
+            name: "forged change",
+            stored: { sharedPostId: sharedA },
+            attack: { sharedPostId: sharedB, sharedPostData: JSON.stringify({ author: { name: "forged" } }) },
+        },
+        {
+            name: "forged remove",
+            stored: { sharedPostId: sharedA },
+            attack: { sharedPostId: "", sharedPostData: "null" },
+        },
+    ];
+    for (const testCase of cases) {
+        const formData = new FormData();
+        formData.set("title", `Allowed ${testCase.name}`);
+        formData.set("location", JSON.stringify({ name: "Allowed location" }));
+        for (const [key, value] of Object.entries({
+            ...testCase.attack,
+            sharedOriginal: JSON.stringify({ content: "forged" }),
+            sharedPost: JSON.stringify({ id: sharedB }),
+            nestedSharedMetadata: JSON.stringify({ original: { id: sharedB } }),
+            unknownNestedObject: JSON.stringify({ sharedPostData: { secret: true } }),
+        })) formData.set(key, value);
+
+        const baseUpdate = buildMainPostUpdateBaseDocument(formData, { _id: "post", postType: "post" });
+        let updateDocument: Record<string, unknown> | undefined;
+        let shareResolverCalls = 0;
+        const stored = { ...testCase.stored, sharedPostData: undefined };
+        const result = await orchestrateMainPostUpdate({
+            content: "same",
+            storedContent: "same",
+            storedMentions: [],
+            writerDid,
+            baseUpdate,
+            resolve: async () => {
+                shareResolverCalls += 1;
+                return canonicalWrite;
+            },
+            upload: async () => ["existing-media"],
+            applyUpload: (document, media) => void ((document as Record<string, unknown>).media = media),
+            persistAndPublishVector: async (document) => {
+                updateDocument = document as Record<string, unknown>;
+                return document;
+            },
+            notify: async () => undefined,
+        });
+        assert.equal(result.ok, true, testCase.name);
+        assert.equal(shareResolverCalls, 0, testCase.name);
+        for (const forbidden of [
+            "sharedPostId",
+            "sharedPostData",
+            "sharedOriginal",
+            "sharedPost",
+            "nestedSharedMetadata",
+            "unknownNestedObject",
+        ]) assert.equal(forbidden in updateDocument!, false, `${testCase.name}: ${forbidden}`);
+        const final = { ...stored, ...updateDocument } as Record<string, unknown>;
+        assert.equal(final.sharedPostId, testCase.stored.sharedPostId, testCase.name);
+        assert.equal(final.sharedPostData, undefined, testCase.name);
+        assert.equal(final.title, `Allowed ${testCase.name}`);
+        assert.deepEqual(final.location, { name: "Allowed location" });
+        assert.deepEqual(final.media, ["existing-media"]);
+    }
 }
 
 async function testMainUpdatePreviewMatrix() {
@@ -801,8 +1024,10 @@ async function main() {
     await testMainCreateSuccess();
     await testMainCreateDenials();
     await testMainCreatePreviewOrderingAndEffects();
+    await testMainCreateCanonicalSharedOriginal();
     await testMainCreateWithRealPreviewResolver();
     await testMainUpdateSuccessDeniedAndUnchanged();
+    await testMainUpdatePreservesImmutableSharedState();
     await testMainUpdatePreviewMatrix();
     await testMainUpdateWithRealPreviewResolverAndIntent();
     await testAlternateDiscussionBehavior();

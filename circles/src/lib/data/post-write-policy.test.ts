@@ -61,6 +61,7 @@ async function testAlternateDiscussionPayloadNarrowing() {
         sourceResourceType: "funding",
         sourceResourceId: "forged-source",
         sharedPostId: "forged-share",
+        sharedPostData: { content: "forged", author: { name: "forged" }, nested: { secret: true } },
         internalPreviewType: "task",
         internalPreviewId: "forged-preview",
         internalPreviewUrl: "https://example.test/forged",
@@ -94,6 +95,7 @@ async function testAlternateDiscussionPayloadNarrowing() {
         "sourceResourceType",
         "sourceResourceId",
         "sharedPostId",
+        "sharedPostData",
         "internalPreviewType",
         "internalPreviewId",
         "internalPreviewUrl",
@@ -113,6 +115,11 @@ async function testProductionCallSitesUseCanonicalResolver() {
     const discussionActions = await readFile(`${root}/src/app/circles/[handle]/discussions/actions.ts`, "utf8");
     assert.match(feedActions, /orchestrateMainPostCreate\(\{/);
     assert.match(feedActions, /orchestrateMainPostUpdate\(\{/);
+    assert.match(feedActions, /resolveSharedOriginalForWrite\(sharedPostId, userDid, getShareablePostPreview\)/);
+    assert.match(feedActions, /sharedPostId: canonicalSharedPostId/);
+    assert.doesNotMatch(feedActions, /formData\.get\(["']sharedPostData["']\)/);
+    const updateAction = feedActions.slice(feedActions.indexOf("export async function updatePostAction"));
+    assert.doesNotMatch(updateAction, /formData\.get\(["']sharedPost(Id|Data)["']\)/);
     assert.match(discussionActions, /orchestrateAlternateDiscussionCreate\(\{/);
     assert.doesNotMatch(discussionActions, /\.\.\.payload/);
 }

@@ -37,7 +37,7 @@ type InternalPreviewActionDependencies = {
     resolvePreview?: (url: string, viewerDid: string) => Promise<ResolvedInternalPreview | null>;
 };
 
-type NestedContentDependencies = {
+export type NestedContentDependencies = {
     findResources: (
         type: Exclude<InternalPreviewType, "circle" | "post">,
         ids: ObjectId[],
@@ -559,6 +559,19 @@ export async function sanitizePostNestedContent(
     const mentionSafePosts = await sanitizePostMentions(posts, viewerDid, dependencies);
     const previewSafePosts = await sanitizeInternalPreviews(mentionSafePosts, viewerDid, dependencies);
     return sanitizeSharedOriginals(previewSafePosts, viewerDid, dependencies, 0, MAX_SHARED_POST_DEPTH);
+}
+
+export async function getShareablePostPreview(
+    postId: string,
+    userDid?: string,
+    dependencies?: NestedContentDependencies,
+): Promise<SharedOriginalPreview | null> {
+    const [probe] = await sanitizePostNestedContent(
+        [{ content: "", sharedPostId: postId } as PostDisplay],
+        userDid,
+        dependencies,
+    );
+    return probe.sharedPostData ?? null;
 }
 
 export function parseInternalPreviewUrl(url: string): { type: InternalPreviewType; id: string } | null {

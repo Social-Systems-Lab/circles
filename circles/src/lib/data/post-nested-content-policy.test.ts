@@ -630,7 +630,8 @@ function testProductionReadSeamsUseCommonSanitizer() {
     const postListSource = readFileSync("src/components/modules/feeds/post-list.tsx", "utf8");
     const sharedPreviewSource = readFileSync("src/components/modules/feeds/SharedPostPreview.tsx", "utf8");
     assert.equal(feedSource.includes("fetchAndAttachInternalPreviewData"), false);
-    assert.ok((feedSource.match(/sanitizePostNestedContent\(/g) ?? []).length >= 6);
+    assert.ok((feedSource.match(/sanitizePostNestedContent\(/g) ?? []).length >= 5);
+    assert.match(feedSource, /getShareablePostPreview[\s\S]*resolveShareablePostPreview/);
     assert.match(actionSource, /getPostAction[\s\S]*sanitizePostNestedContent/);
     assert.match(directPageSource, /getFullPost/);
     assert.equal(feedSource.includes("fetchAndAttachSharedPostData"), false);

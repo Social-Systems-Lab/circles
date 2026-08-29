@@ -19,7 +19,10 @@ import {
 } from "./post-access-policy";
 import { canReadCircle } from "./circle-visibility-policy";
 import { buildSourceFilteredPostMatchStages } from "./post-source-access-policy";
-import { sanitizePostNestedContent } from "./post-nested-content-policy";
+import {
+    getShareablePostPreview as resolveShareablePostPreview,
+    sanitizePostNestedContent,
+} from "./post-nested-content-policy";
 import { sanitizeHighlightedCommentsOnPosts } from "./comment-mention-policy";
 import { applyPostUpdateOperation } from "./post-update-operation";
 
@@ -316,10 +319,11 @@ export const canUserViewPost = async (post: Post, userDid?: string): Promise<boo
     return post.userGroups.some((group) => memberGroups.includes(group));
 };
 
-export const getShareablePostPreview = async (postId: string, userDid?: string) => {
-    const [probe] = await sanitizePostNestedContent([{ content: "", sharedPostId: postId } as PostDisplay], userDid);
-    return probe.sharedPostData ?? null;
-};
+export const getShareablePostPreview = async (
+    postId: string,
+    userDid?: string,
+    dependencies?: Parameters<typeof sanitizePostNestedContent>[2],
+) => resolveShareablePostPreview(postId, userDid, dependencies);
 
 export const getFullPost = async (postId: string, userDid?: string): Promise<PostDisplay | null> => {
     const context = await resolveReadablePostContext(postId, userDid);

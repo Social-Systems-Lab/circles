@@ -25,7 +25,6 @@ import {
     getPublicFeeds,
     createFeed,
     createDefaultFeed,
-    getShareablePostPreview,
     getFullPost,
     getAllComments,
 } from "@/lib/data/feed";
@@ -79,7 +78,7 @@ import { searchMentionableUsersForUserDid } from "@/lib/data/chat";
 import { validateCreatePostTargetPolicy } from "@/lib/data/post-creation-policy";
 import { canDeletePost, canEditOwnPost, resolvePostRevalidationRoute } from "@/lib/data/post-action-policy";
 import { cleanupUploadedFiles } from "@/lib/data/post-upload-rollback";
-import { getPostTitleUpdate, validatePostUpdateContent } from "@/lib/data/post-content-policy";
+import { validatePostUpdateContent } from "@/lib/data/post-content-policy";
 import type { PostUpdateResult } from "@/lib/data/post-list-state";
 import { normalizePostId } from "@/lib/data/post-update-identity";
 import {
@@ -92,10 +91,16 @@ import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
     resolveInternalPreviewAction,
+    getShareablePostPreview,
     sanitizePostNestedContent,
     type InternalPreviewActionResult,
 } from "@/lib/data/post-nested-content-policy";
-import { orchestrateMainPostCreate, orchestrateMainPostUpdate } from "@/lib/data/post-write-policy";
+import {
+    buildMainPostUpdateBaseDocument,
+    orchestrateMainPostCreate,
+    orchestrateMainPostUpdate,
+} from "@/lib/data/post-write-policy";
+import { resolveSharedOriginalForWrite } from "@/lib/data/shared-original-write-policy";
 import {
     resolveInternalPreviewForWrite,
     resolveInternalPreviewUpdateForWrite,
@@ -473,15 +478,15 @@ export async function createPostAction(
                 if (!authorized) targetAuthorizationFailure = "You are not authorized to create posts here";
                 return authorized;
             },
-            validateShare: sharedPostId
-                ? async () => Boolean(await getShareablePostPreview(sharedPostId, userDid))
+            resolveShare: sharedPostId
+                ? () => resolveSharedOriginalForWrite(sharedPostId, userDid, getShareablePostPreview)
                 : undefined,
             resolvePreview: () =>
                 resolveInternalPreviewForWrite(
                     { type: internalPreviewType, id: internalPreviewId, url: internalPreviewUrl },
                     userDid,
                 ),
-            buildDocument: async (canonicalWrite, canonicalPreview) => {
+            buildDocument: async (canonicalWrite, canonicalPreview, canonicalSharedPostId) => {
                 if (isCommunityPost) {
                     feed = requestedFeed;
                 } else {
@@ -504,7 +509,7 @@ export async function createPostAction(
                     reactions: {},
                     comments: 0,
                     location,
-                    sharedPostId,
+                    sharedPostId: canonicalSharedPostId,
                     userGroups: userGroups.length > 0 ? userGroups : ["everyone"],
                     linkPreviewUrl: linkPreviewUrl || undefined,
                     linkPreviewTitle: linkPreviewTitle || undefined,
@@ -650,15 +655,6 @@ export async function updatePostAction(formData: FormData): Promise<PostUpdateRe
         const content = formData.get("content") as string;
         const title = formData.get("title") as string | null;
         const circleId = formData.get("circleId") as string;
-        const locationStr = formData.get("location") as string;
-        const location = locationStr ? JSON.parse(locationStr) : undefined;
-
-        // --- Add Link Preview Data Extraction ---
-        const linkPreviewUrl = formData.get("linkPreviewUrl") as string | undefined;
-        const linkPreviewTitle = formData.get("linkPreviewTitle") as string | undefined;
-        const linkPreviewDescription = formData.get("linkPreviewDescription") as string | undefined;
-        const linkPreviewImageUrl = formData.get("linkPreviewImageUrl") as string | undefined;
-        // --- End Link Preview Data Extraction ---
         // +++ Internal Link Preview Data Extraction +++
         const internalPreviewType = formData.get("internalPreviewType") as
             | "circle"
@@ -678,9 +674,6 @@ export async function updatePostAction(formData: FormData): Promise<PostUpdateRe
             url: formData.has("internalPreviewUrl"),
         };
         // +++ End Internal Link Preview Data Extraction +++
-        const sdgsStr = formData.get("sdgs") as string;
-        const sdgs = sdgsStr ? JSON.parse(sdgsStr) : undefined;
-
         const post = await getPost(postId);
         if (!post) {
             return { success: false, message: "Post not found" };
@@ -724,19 +717,7 @@ export async function updatePostAction(formData: FormData): Promise<PostUpdateRe
             return { success: false, message: contentPolicy.message };
         }
 
-        const baseUpdate: Partial<Post> = {
-            _id: postId,
-            ...getPostTitleUpdate(post.postType, title),
-            editedAt: new Date(),
-            location,
-            // --- Add Link Preview Fields ---
-            linkPreviewUrl: linkPreviewUrl || undefined,
-            linkPreviewTitle: linkPreviewTitle || undefined,
-            linkPreviewDescription: linkPreviewDescription || undefined,
-            linkPreviewImage: linkPreviewImageUrl ? { url: linkPreviewImageUrl } : undefined,
-            // --- End Link Preview Fields ---
-            sdgs: sdgs || undefined,
-        };
+        const baseUpdate = buildMainPostUpdateBaseDocument(formData, { _id: postId, postType: post.postType });
         const writeResult = await orchestrateMainPostUpdate({
             content,
             storedContent: post.content,
