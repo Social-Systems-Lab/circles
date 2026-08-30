@@ -90,6 +90,7 @@ import {
 } from "@/lib/data/post-access-policy";
 import { orchestrateOrdinaryPostEdit } from "@/lib/data/post-mutation-access-policy";
 import { orchestrateOrdinaryPostDelete } from "@/lib/data/post-delete-access-policy";
+import { orchestratePostReaction } from "@/lib/data/post-reaction-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
@@ -1109,6 +1110,24 @@ export async function likeContentAction(
     }
 
     try {
+        if (contentType === "post") {
+            const result = await orchestratePostReaction({
+                postId: contentId,
+                actorDid: userDid,
+                mutate: (context) => likeContent(context.normalizedPostId, "post", userDid, reactionType),
+                afterMutation: async (context) => {
+                    try {
+                        const reactor = await getUserByDid(userDid);
+                        await notifyPostLike(context.normalizedPostId, reactor, reactionType);
+                    } catch (notificationError) {
+                        console.error("Failed to send like notification:", notificationError);
+                    }
+                },
+            });
+            if (!result.ok) return { success: false, message: result.message };
+            return { success: true, message: "Content liked successfully" };
+        }
+
         let postId: string | undefined = contentId;
         let comment: Comment | null = null;
         if (contentType === "comment") {
@@ -1138,15 +1157,13 @@ export async function likeContentAction(
             return { success: false, message: "You are not authorized to like content on the noticeboard" };
         }
 
-        await likeContent(contentId, contentType, userDid, reactionType);
+        const didMutate = await likeContent(contentId, contentType, userDid, reactionType);
 
         // Send notification
         try {
             const reactor = await getUserByDid(userDid);
 
-            if (contentType === "post") {
-                await notifyPostLike(contentId, reactor, reactionType);
-            } else if (comment) {
+            if (didMutate && comment) {
                 await notifyCommentLike(comment, post, reactor, reactionType);
             }
         } catch (notificationError) {
@@ -1170,6 +1187,16 @@ export async function unlikeContentAction(
     }
 
     try {
+        if (contentType === "post") {
+            const result = await orchestratePostReaction({
+                postId: contentId,
+                actorDid: userDid,
+                mutate: (context) => unlikeContent(context.normalizedPostId, "post", userDid, reactionType),
+            });
+            if (!result.ok) return { success: false, message: result.message };
+            return { success: true, message: "Content unliked successfully" };
+        }
+
         const context = await getPostAndFeedForContent(contentId, contentType);
         if (!context) {
             return { success: false, message: "Content not found" };

@@ -25,6 +25,7 @@ import {
 } from "./post-nested-content-policy";
 import { sanitizeHighlightedCommentsOnPosts } from "./comment-mention-policy";
 import { applyPostUpdateOperation } from "./post-update-operation";
+import { applyLikeMutation, applyUnlikeMutation, type ReactionMutationInput } from "./reaction-mutation";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -1384,36 +1385,8 @@ export const likeContent = async (
     contentType: "post" | "comment",
     userDid: string,
     reactionType: string = "like",
-): Promise<void> => {
-    // make sure like doesn't already exist
-    const existingReaction = await Reactions.findOne({
-        contentId,
-        contentType,
-        userDid,
-        reactionType,
-    });
-
-    if (existingReaction) {
-        return;
-    }
-
-    await Reactions.insertOne({
-        contentId,
-        contentType,
-        userDid,
-        reactionType,
-        createdAt: new Date(),
-    });
-
-    const collection = contentType === "post" ? Posts : Comments;
-    await collection.updateOne({ _id: new ObjectId(contentId) }, { $inc: { [`reactions.${reactionType}`]: 1 } });
-
-    if (contentType === "comment") {
-        const comment = await Comments.findOne({ _id: new ObjectId(contentId) });
-        if (comment && !comment.parentCommentId) {
-            await updateHighlightedComment(comment.postId);
-        }
-    }
+): Promise<boolean> => {
+    return applyLikeMutation({ contentId, contentType, userDid, reactionType }, reactionMutationDependencies);
 };
 
 export const unlikeContent = async (
@@ -1421,23 +1394,27 @@ export const unlikeContent = async (
     contentType: "post" | "comment",
     userDid: string,
     reactionType: string = "like",
-): Promise<void> => {
-    await Reactions.deleteOne({
-        contentId,
-        contentType,
-        userDid,
-        reactionType,
-    });
+): Promise<boolean> => {
+    return applyUnlikeMutation({ contentId, contentType, userDid, reactionType }, reactionMutationDependencies);
+};
 
-    const collection = contentType === "post" ? Posts : Comments;
-    await collection.updateOne({ _id: new ObjectId(contentId) }, { $inc: { [`reactions.${reactionType}`]: -1 } });
-
-    if (contentType === "comment") {
-        const comment = await Comments.findOne({ _id: new ObjectId(contentId) });
-        if (comment && !comment.parentCommentId) {
-            await updateHighlightedComment(comment.postId);
-        }
-    }
+const reactionMutationDependencies = {
+    findExisting: async (input: ReactionMutationInput) => Boolean(await Reactions.findOne(input)),
+    insert: async (input: ReactionMutationInput) => {
+        await Reactions.insertOne({ ...input, createdAt: new Date() });
+    },
+    remove: async (input: ReactionMutationInput) => (await Reactions.deleteOne(input)).deletedCount > 0,
+    incrementCounter: async (input: ReactionMutationInput, amount: 1 | -1) => {
+        const collection = input.contentType === "post" ? Posts : Comments;
+        await collection.updateOne(
+            { _id: new ObjectId(input.contentId) },
+            { $inc: { [`reactions.${input.reactionType}`]: amount } },
+        );
+    },
+    refreshHighlightedComment: async (input: ReactionMutationInput) => {
+        const comment = await Comments.findOne({ _id: new ObjectId(input.contentId) });
+        if (comment && !comment.parentCommentId) await updateHighlightedComment(comment.postId);
+    },
 };
 
 export const getReactions = async (contentId: string, contentType: "post" | "comment"): Promise<Circle[]> => {
