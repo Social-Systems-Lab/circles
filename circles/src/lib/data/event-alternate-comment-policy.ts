@@ -12,6 +12,9 @@ import {
     type AuthoredCommentRequest,
     type SafeAuthoredCommentInput,
 } from "./comment-write-policy";
+import { isEventShadowBound } from "./event-shadow-binding-policy";
+
+export { isEventShadowBound } from "./event-shadow-binding-policy";
 
 type EventCommentReadDependencies = {
     canReadOwners: (event: Pick<Event, "circleId" | "hostCircleIds">, viewerDid?: string) => Promise<boolean>;
@@ -27,11 +30,6 @@ const defaultDependencies: EventCommentReadDependencies = {
     sanitizeComments: sanitizeCommentMentions,
 };
 
-const sameId = (left: unknown, right: unknown): boolean =>
-    (typeof left === "string" || left instanceof ObjectId) &&
-    (typeof right === "string" || right instanceof ObjectId) &&
-    String(left) === String(right);
-
 export async function assertEventHostCirclesWritable(
     event: Pick<Event, "circleId" | "hostCircleIds">,
     assertWritable: (circleId: string) => Promise<void> = assertCircleWritesAllowed,
@@ -41,22 +39,6 @@ export async function assertEventHostCirclesWritable(
     const hostIds = [event.circleId, ...(event.hostCircleIds ?? [])];
     if (hostIds.some((id) => typeof id !== "string" || !ObjectId.isValid(id))) throw new Error("Event not found");
     await Promise.all([...new Set(hostIds)].map(assertWritable));
-}
-
-export function isEventShadowBound(
-    event: Pick<Event, "_id" | "circleId" | "commentPostId">,
-    context: ReadablePostContext,
-) {
-    const { post, feed, circle } = context;
-    return (
-        sameId(post._id, event.commentPostId) &&
-        post.parentItemType === "event" &&
-        sameId(post.parentItemId, event._id) &&
-        sameId(post.feedId, feed._id) &&
-        sameId(feed.circleId, circle._id) &&
-        sameId(circle._id, event.circleId) &&
-        (post.postType === "event" || post.postType === "discussion")
-    );
 }
 
 /** Returns null for every denied or unavailable Event/shadow state. */

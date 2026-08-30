@@ -91,6 +91,7 @@ import {
 import { orchestrateOrdinaryPostEdit } from "@/lib/data/post-mutation-access-policy";
 import { orchestrateOrdinaryPostDelete } from "@/lib/data/post-delete-access-policy";
 import { orchestratePostReaction } from "@/lib/data/post-reaction-access-policy";
+import { orchestrateCommentReaction } from "@/lib/data/comment-reaction-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
@@ -1128,48 +1129,20 @@ export async function likeContentAction(
             return { success: true, message: "Content liked successfully" };
         }
 
-        let postId: string | undefined = contentId;
-        let comment: Comment | null = null;
-        if (contentType === "comment") {
-            comment = await getComment(contentId);
-            if (!comment) {
-                return { success: false, message: "Comment not found" };
-            }
-            postId = comment.postId;
-        }
-
-        const post = await getPost(postId);
-        if (!post) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const feed = await getFeed(post.feedId);
-        if (!feed || !(await isPostModuleEnabled(post, feed))) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const canReact = await canReactToPostForAction(post, feed, userDid);
-        if (!canReact) {
-            const participationMessage = await getCommunityParticipationDeniedMessage(userDid, post.postType, "react");
-            if (participationMessage) {
-                return { success: false, message: participationMessage };
-            }
-            return { success: false, message: "You are not authorized to like content on the noticeboard" };
-        }
-
-        const didMutate = await likeContent(contentId, contentType, userDid, reactionType);
-
-        // Send notification
-        try {
-            const reactor = await getUserByDid(userDid);
-
-            if (didMutate && comment) {
-                await notifyCommentLike(comment, post, reactor, reactionType);
-            }
-        } catch (notificationError) {
-            console.error("Failed to send like notification:", notificationError);
-        }
-
+        const result = await orchestrateCommentReaction({
+            commentId: contentId,
+            actorDid: userDid,
+            mutate: (context) => likeContent(context.normalizedCommentId, "comment", userDid, reactionType),
+            afterMutation: async (context) => {
+                try {
+                    const reactor = await getUserByDid(userDid);
+                    await notifyCommentLike(context.comment, context.post, reactor, reactionType);
+                } catch (notificationError) {
+                    console.error("Failed to send like notification:", notificationError);
+                }
+            },
+        });
+        if (!result.ok) return { success: false, message: result.message };
         return { success: true, message: "Content liked successfully" };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to like content." };
@@ -1197,25 +1170,12 @@ export async function unlikeContentAction(
             return { success: true, message: "Content unliked successfully" };
         }
 
-        const context = await getPostAndFeedForContent(contentId, contentType);
-        if (!context) {
-            return { success: false, message: "Content not found" };
-        }
-
-        const canReact = await canReactToPostForAction(context.post, context.feed, userDid);
-        if (!canReact) {
-            const participationMessage = await getCommunityParticipationDeniedMessage(
-                userDid,
-                context.post.postType,
-                "react",
-            );
-            if (participationMessage) {
-                return { success: false, message: participationMessage };
-            }
-            return { success: false, message: "You are not authorized to unlike content on the noticeboard" };
-        }
-
-        await unlikeContent(contentId, contentType, userDid, reactionType);
+        const result = await orchestrateCommentReaction({
+            commentId: contentId,
+            actorDid: userDid,
+            mutate: (context) => unlikeContent(context.normalizedCommentId, "comment", userDid, reactionType),
+        });
+        if (!result.ok) return { success: false, message: result.message };
         return { success: true, message: "Content unliked successfully" };
     } catch (error) {
         return { success: false, message: error instanceof Error ? error.message : "Failed to unlike content." };

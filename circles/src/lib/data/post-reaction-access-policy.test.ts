@@ -277,8 +277,8 @@ async function testProductionWiring() {
     const unlikeBranch = actions.slice(actions.indexOf("export async function unlikeContentAction"));
     assert.match(likeBranch, /if \(contentType === "post"\)[\s\S]*orchestratePostReaction\(\{/);
     assert.match(unlikeBranch, /if \(contentType === "post"\)[\s\S]*orchestratePostReaction\(\{/);
-    assert.match(likeBranch, /const didMutate = await likeContent\(contentId, contentType/);
-    assert.match(unlikeBranch, /const context = await getPostAndFeedForContent\(contentId, contentType\)/);
+    assert.match(likeBranch, /orchestrateCommentReaction\(\{/);
+    assert.match(unlikeBranch, /orchestrateCommentReaction\(\{/);
 
     const feed = await readFile(`${root}/src/lib/data/feed.ts`, "utf8");
     assert.match(feed, /return applyLikeMutation\(\{ contentId, contentType, userDid, reactionType \}/);
