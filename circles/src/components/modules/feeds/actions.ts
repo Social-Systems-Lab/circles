@@ -89,6 +89,7 @@ import {
     resolveReadablePostContext,
 } from "@/lib/data/post-access-policy";
 import { orchestrateOrdinaryPostEdit } from "@/lib/data/post-mutation-access-policy";
+import { orchestrateOrdinaryPostDelete } from "@/lib/data/post-delete-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
@@ -811,56 +812,40 @@ export async function deletePostAction(postId: string): Promise<{ success: boole
     }
 
     try {
-        const post = await getPost(postId);
-        if (!post) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const feed = await getFeed(post.feedId);
-        if (!feed) {
-            return { success: false, message: "Noticeboard not found" };
-        }
-        if (!(await isPostModuleEnabled(post, feed))) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const createFeature = getPostCreateFeature(post.postType);
-        const moderateFeature = getPostModerateFeature(post.postType);
-        if (!createFeature || !moderateFeature) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const isCommunityPost = post.postType === "community";
-        const isCreateAuthorized = isCommunityPost ? await isAuthorized(userDid, feed.circleId, createFeature) : true;
-        const isModerateAuthorized =
-            post.createdBy === userDid ? false : await isAuthorized(userDid, feed.circleId, moderateFeature);
-
-        const deleteAccess = canDeletePost({
-            postType: post.postType,
-            isAuthor: post.createdBy === userDid,
-            isCreateAuthorized,
-            isModerateAuthorized,
+        const result = await orchestrateOrdinaryPostDelete({
+            postId,
+            actorDid: userDid,
+            authorize: async ({ post, feed }) => {
+                if (!(await isPostModuleEnabled(post, feed))) return { ok: false };
+                const createFeature = getPostCreateFeature(post.postType);
+                const moderateFeature = getPostModerateFeature(post.postType);
+                if (!createFeature || !moderateFeature) return { ok: false };
+                const isCommunityPost = post.postType === "community";
+                const isCreateAuthorized = isCommunityPost
+                    ? await isAuthorized(userDid, feed.circleId, createFeature)
+                    : true;
+                const isModerateAuthorized =
+                    post.createdBy === userDid ? false : await isAuthorized(userDid, feed.circleId, moderateFeature);
+                return canDeletePost({
+                    postType: post.postType,
+                    isAuthor: post.createdBy === userDid,
+                    isCreateAuthorized,
+                    isModerateAuthorized,
+                });
+            },
+            executeDelete: async ({ normalizedPostId }) => deletePost(normalizedPostId),
+            revalidate: async ({ post, circle }) => {
+                const circlePath = await getCirclePath(circle);
+                const revalidationRoute = resolvePostRevalidationRoute(circlePath, post.postType);
+                if (revalidationRoute) revalidatePath(revalidationRoute);
+                revalidatePath("/explore");
+            },
         });
-        if (!deleteAccess.ok) {
-            return { success: false, message: deleteAccess.message };
-        }
-
-        await deletePost(postId);
-
-        const circle = await getCircleById(feed.circleId);
-        if (circle) {
-            const circlePath = await getCirclePath(circle);
-            const revalidationRoute = resolvePostRevalidationRoute(circlePath, post.postType);
-            if (revalidationRoute) {
-                revalidatePath(revalidationRoute);
-            }
-        }
-        revalidatePath("/explore");
+        if (!result.ok) return { success: false, message: result.message };
 
         return { success: true, message: "Post deleted successfully" };
-    } catch (error) {
-        console.error("Error deleting post:", error);
-        return { success: false, message: "An error occurred while deleting the post" };
+    } catch {
+        return { success: false, message: POST_UNAVAILABLE_MESSAGE };
     }
 }
 
