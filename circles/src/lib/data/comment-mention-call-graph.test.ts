@@ -110,8 +110,14 @@ for (const source of [fullPostSource, multiFeedSource, singleFeedSource]) {
 const createStart = actions.indexOf("export async function createCommentAction");
 const editStart = actions.indexOf("export async function editCommentAction");
 const createSource = actions.slice(createStart, editStart);
-const editSource = actions.slice(editStart, actions.indexOf("export async function deleteCommentAction"));
 assert.match(createSource, /orchestrateCommentCreate/);
+const editSource = actions.slice(editStart, actions.indexOf("export async function deleteCommentAction", editStart));
+assert.match(editSource, /orchestrateCommentEdit\(\{/);
+assert.doesNotMatch(editSource, /getPostAndFeedForContent/);
+assert.doesNotMatch(editSource, /const comment = await getComment/);
+assert.match(editSource, /findCurrentEvent:\s*getEventById/);
+assert.match(editSource, /canReadCurrentEventHosts:\s*canReadEventOwners/);
+assert.match(editSource, /assertEventHostsWritable:\s*assertEventHostCirclesWritable/);
 assert.match(createSource, /addCommentToDiscussion/);
 assert.match(createSource, /addEventCommentWithDependencies/);
 assert.match(createSource, /findEvent:\s*getEventById/);

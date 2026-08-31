@@ -110,11 +110,7 @@ import {
     resolveInternalPreviewForWrite,
     resolveInternalPreviewUpdateForWrite,
 } from "@/lib/data/internal-preview-write-policy";
-import {
-    orchestrateAuthoredCommentCreate,
-    orchestrateAuthoredCommentEdit,
-    prepareAuthoredComment,
-} from "@/lib/data/comment-write-policy";
+import { orchestrateAuthoredCommentCreate, prepareAuthoredComment } from "@/lib/data/comment-write-policy";
 import {
     COMMENT_CREATE_UNAVAILABLE_MESSAGE,
     orchestrateCommentCreate,
@@ -129,6 +125,9 @@ import { createCommentForAuthorizedPost } from "@/lib/data/discussion-comment-cr
 import { Comments } from "@/lib/data/db";
 import { toCommentDto } from "@/lib/data/comment-dto";
 import { getEventById } from "@/lib/data/event";
+import { canonicalizeCircleMentionsForWrite } from "@/lib/data/circle-mention-write-policy";
+import { COMMENT_EDIT_UNAVAILABLE_MESSAGE, orchestrateCommentEdit } from "@/lib/data/comment-edit-access-policy";
+import { canReadEventOwners } from "@/lib/data/post-source-access-policy";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -986,64 +985,50 @@ export async function editCommentAction(
     }
 
     try {
-        const comment = await getComment(commentId);
-
-        if (!comment) {
-            return { success: false, message: "Comment not found" };
-        }
-
-        if (comment.createdBy !== userDid) {
-            return { success: false, message: "You are not authorized to edit this comment" };
-        }
-
-        const context = await getPostAndFeedForContent(commentId, "comment");
-        const commentFeature = context ? getPostCommentFeature(context.post.postType) : null;
-        if (!context || !commentFeature) {
-            return { success: false, message: "Comment not found" };
-        }
-
-        const authorized = await isAuthorized(userDid, context.feed.circleId, commentFeature);
-        if (!authorized) {
-            return { success: false, message: "You are not authorized to edit this comment" };
-        }
-
-        await orchestrateAuthoredCommentEdit({
-            postId: comment.postId,
+        const result = await orchestrateCommentEdit({
+            commentId,
+            actorDid: userDid,
             content: updatedContent,
-            writerDid: userDid,
-            dependencies: {
-                update: async (canonicalContent, mentions) => {
-                    await updateComment(commentId, canonicalContent, mentions);
-                    return { ...comment, content: canonicalContent, mentions, editedAt: new Date() };
-                },
-                notify: async (updatedComment, mentions) => {
-                    try {
-                        const previous = new Set(comment.mentions?.map(({ id }) => id) ?? []);
-                        const newMentions = mentions.filter(({ id }) => !previous.has(id));
-                        if (!newMentions.length) return;
-                        const post = await getPost(comment.postId);
-                        const user = await getUserByDid(userDid);
-                        if (!post || !user) return;
-                        const circles = (await Promise.all(newMentions.map(({ id }) => getCircleById(id)))).filter(
-                            (circle): circle is Circle => circle !== null,
-                        );
-                        if (circles.length) await notifyCommentMentions(updatedComment, post, user, circles);
-                    } catch (notificationError) {
-                        console.error("Failed to send mention notifications:", notificationError);
-                    }
-                },
+            authorizationDependencies: {
+                authorizeFeature: (did, circleId, feature) => isAuthorized(did, circleId, feature),
+                findCurrentEvent: getEventById,
+                canReadCurrentEventHosts: canReadEventOwners,
+                assertEventHostsWritable: assertEventHostCirclesWritable,
+            },
+            canonicalize: canonicalizeCircleMentionsForWrite,
+            update: async (context, canonicalContent, mentions) => {
+                await updateComment(context.normalizedCommentId, canonicalContent, mentions);
+                return { ...context.comment, content: canonicalContent, mentions, editedAt: new Date() };
+            },
+            notify: async (updatedComment, context, mentions) => {
+                try {
+                    const previous = new Set(context.comment.mentions?.map(({ id }) => id) ?? []);
+                    const newMentions = mentions.filter(({ id }) => !previous.has(id));
+                    if (!newMentions.length) return;
+                    const user = await getUserByDid(userDid);
+                    if (!user) return;
+                    const circles = (await Promise.all(newMentions.map(({ id }) => getCircleById(id)))).filter(
+                        (circle): circle is Circle => circle !== null,
+                    );
+                    if (circles.length) await notifyCommentMentions(updatedComment, context.post, user, circles);
+                } catch (notificationError) {
+                    console.error("Failed to send mention notifications:", notificationError);
+                }
             },
         });
+        if (!result.ok) return { success: false, message: result.message };
 
-        const updatedComments = await getAllComments(comment.postId, userDid);
-        const updatedComment = updatedComments.find((candidate) => candidate._id === commentId);
+        const updatedComments = await getAllComments(result.context.normalizedPostId, userDid);
+        const updatedComment = updatedComments.find(
+            (candidate) => candidate._id === result.context.normalizedCommentId,
+        );
         if (!updatedComment) {
-            return { success: false, message: "Comment not found" };
+            return { success: false, message: COMMENT_EDIT_UNAVAILABLE_MESSAGE };
         }
         const [sanitizedComment] = await sanitizeCommentMentions([updatedComment], userDid);
         return { success: true, message: "Comment edited successfully", comment: sanitizedComment };
     } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to edit comment." };
+        return { success: false, message: COMMENT_EDIT_UNAVAILABLE_MESSAGE };
     }
 }
 
