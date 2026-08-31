@@ -55,7 +55,10 @@ const multiFeedSource = extractExportedFunction(
     "export async function getPostsFromMultipleFeeds(",
     "export async function getPostsFromMultipleFeedsWithMetrics(",
 );
-const singleFeedSource = extractExportedFunction("export const getPosts = async (", "export const updatePost = async (");
+const singleFeedSource = extractExportedFunction(
+    "export const getPosts = async (",
+    "export const updatePost = async (",
+);
 
 assert.ok(fullPostSource.startsWith("export const getFullPost = async ("));
 assert.ok(multiFeedSource.startsWith("export async function getPostsFromMultipleFeeds("));
@@ -67,7 +70,9 @@ assert.doesNotMatch(singleFeedSource, /getPostsFromMultipleFeeds/);
 
 const fullAccessIndex = fullPostSource.indexOf("resolveReadablePostContext(postId, userDid)");
 const fullPostSanitizerIndex = fullPostSource.indexOf("sanitizePostNestedContent(posts, userDid)");
-const fullHighlightSanitizerIndex = fullPostSource.indexOf("sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid)");
+const fullHighlightSanitizerIndex = fullPostSource.indexOf(
+    "sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid)",
+);
 assert.ok(fullAccessIndex >= 0);
 assert.ok(fullPostSanitizerIndex >= 0);
 assert.ok(fullHighlightSanitizerIndex >= 0);
@@ -106,6 +111,12 @@ const createStart = actions.indexOf("export async function createCommentAction")
 const editStart = actions.indexOf("export async function editCommentAction");
 const createSource = actions.slice(createStart, editStart);
 const editSource = actions.slice(editStart, actions.indexOf("export async function deleteCommentAction"));
+assert.match(createSource, /orchestrateCommentCreate/);
+assert.match(createSource, /addCommentToDiscussion/);
+assert.match(createSource, /addEventCommentWithDependencies/);
+assert.match(createSource, /findEvent:\s*getEventById/);
+assert.doesNotMatch(createSource, /findEvent:\s*async[^\n]*event/);
+assert.doesNotMatch(createSource, /const post = await getPost\(postId\)/);
 assert.ok(createSource.lastIndexOf("notifyCommentMentions") < createSource.lastIndexOf("sanitizeCommentMentions"));
 assert.match(createSource, /comment:\s*sanitizedComment/);
 assert.match(editSource, /sanitizeCommentMentions/);

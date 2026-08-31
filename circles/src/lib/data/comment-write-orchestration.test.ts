@@ -79,20 +79,32 @@ async function testParentDenials() {
         let inserts = 0;
         let increments = 0;
         let notifications = 0;
-        await assert.rejects(orchestrateAuthoredCommentCreate({
-            postId,
-            parentCommentId: fixture.parentCommentId,
-            content: "plain",
-            writerDid: "did:writer",
-            dependencies: {
-                canonicalize: allowed,
-                findParentComment: async () => fixture.parentPostId === null ? null : { postId: fixture.parentPostId },
-                insert: async () => (inserts += 1),
-                incrementParentReplies: async () => { increments += 1; },
-                notify: async () => { notifications += 1; },
-            },
-        }), (error: unknown) => error instanceof Error && error.message === COMMENT_TARGET_UNAVAILABLE);
-        assert.deepEqual([inserts, increments, notifications], [0, 0, 0]);
+        let mentionResolutions = 0;
+        await assert.rejects(
+            orchestrateAuthoredCommentCreate({
+                postId,
+                parentCommentId: fixture.parentCommentId,
+                content: "plain",
+                writerDid: "did:writer",
+                dependencies: {
+                    canonicalize: async (value) => {
+                        mentionResolutions += 1;
+                        return allowed(value);
+                    },
+                    findParentComment: async () =>
+                        fixture.parentPostId === null ? null : { postId: fixture.parentPostId },
+                    insert: async () => (inserts += 1),
+                    incrementParentReplies: async () => {
+                        increments += 1;
+                    },
+                    notify: async () => {
+                        notifications += 1;
+                    },
+                },
+            }),
+            (error: unknown) => error instanceof Error && error.message === COMMENT_TARGET_UNAVAILABLE,
+        );
+        assert.deepEqual([mentionResolutions, inserts, increments, notifications], [0, 0, 0, 0]);
     }
 }
 
@@ -126,19 +138,28 @@ async function testCanonicalTargetAndInsertFailure() {
 
     let increments = 0;
     let notifications = 0;
-    await assert.rejects(orchestrateAuthoredCommentCreate({
-        postId,
-        parentCommentId: parentId,
-        content: "plain",
-        writerDid: "did:writer",
-        dependencies: {
-            canonicalize: allowed,
-            findParentComment: async () => ({ postId }),
-            insert: async () => { throw new Error("insert failed"); },
-            incrementParentReplies: async () => { increments += 1; },
-            notify: async () => { notifications += 1; },
-        },
-    }), /insert failed/);
+    await assert.rejects(
+        orchestrateAuthoredCommentCreate({
+            postId,
+            parentCommentId: parentId,
+            content: "plain",
+            writerDid: "did:writer",
+            dependencies: {
+                canonicalize: allowed,
+                findParentComment: async () => ({ postId }),
+                insert: async () => {
+                    throw new Error("insert failed");
+                },
+                incrementParentReplies: async () => {
+                    increments += 1;
+                },
+                notify: async () => {
+                    notifications += 1;
+                },
+            },
+        }),
+        /insert failed/,
+    );
     assert.deepEqual([increments, notifications], [0, 0]);
 }
 

@@ -1,9 +1,6 @@
 import type { Comment, Mention } from "@/models/models";
 import { ObjectId } from "mongodb";
-import {
-    canonicalizeCircleMentionsForWrite,
-    type CircleMentionWriteResult,
-} from "./circle-mention-write-policy";
+import { canonicalizeCircleMentionsForWrite, type CircleMentionWriteResult } from "./circle-mention-write-policy";
 
 export const COMMENT_TARGET_UNAVAILABLE = "Comment target unavailable.";
 
@@ -30,18 +27,22 @@ export async function prepareAuthoredComment(input: {
     writerDid: string;
     dependencies: PrepareAuthoredCommentDependencies;
 }): Promise<SafeAuthoredCommentInput> {
+    const parentCommentId = input.parentCommentId ?? null;
+    if (parentCommentId) {
+        if (!ObjectId.isValid(parentCommentId)) throw new Error(COMMENT_TARGET_UNAVAILABLE);
+        const normalizedParentId = new ObjectId(parentCommentId).toHexString();
+        const parent = await input.dependencies.findParentComment(new ObjectId(normalizedParentId));
+        if (!parent || !ObjectId.isValid(String(parent.postId))) throw new Error(COMMENT_TARGET_UNAVAILABLE);
+        if (new ObjectId(String(parent.postId)).toHexString() !== new ObjectId(input.postId).toHexString()) {
+            throw new Error(COMMENT_TARGET_UNAVAILABLE);
+        }
+    }
+
     const canonical = await (input.dependencies.canonicalize ?? canonicalizeCircleMentionsForWrite)(
         input.content,
         input.writerDid,
     );
     if (!canonical.ok) throw new Error(canonical.error);
-
-    const parentCommentId = input.parentCommentId ?? null;
-    if (parentCommentId) {
-        if (!ObjectId.isValid(parentCommentId)) throw new Error(COMMENT_TARGET_UNAVAILABLE);
-        const parent = await input.dependencies.findParentComment(new ObjectId(parentCommentId));
-        if (!parent || String(parent.postId) !== String(input.postId)) throw new Error(COMMENT_TARGET_UNAVAILABLE);
-    }
 
     return { content: canonical.content, mentions: canonical.mentions, parentCommentId };
 }

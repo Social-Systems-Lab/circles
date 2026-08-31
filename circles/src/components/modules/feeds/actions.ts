@@ -110,7 +110,25 @@ import {
     resolveInternalPreviewForWrite,
     resolveInternalPreviewUpdateForWrite,
 } from "@/lib/data/internal-preview-write-policy";
-import { orchestrateAuthoredCommentCreate, orchestrateAuthoredCommentEdit } from "@/lib/data/comment-write-policy";
+import {
+    orchestrateAuthoredCommentCreate,
+    orchestrateAuthoredCommentEdit,
+    prepareAuthoredComment,
+} from "@/lib/data/comment-write-policy";
+import {
+    COMMENT_CREATE_UNAVAILABLE_MESSAGE,
+    orchestrateCommentCreate,
+    type CommentCreateContext,
+} from "@/lib/data/comment-create-access-policy";
+import { addCommentToDiscussion } from "@/lib/data/discussion";
+import {
+    addEventCommentWithDependencies,
+    assertEventHostCirclesWritable,
+} from "@/lib/data/event-alternate-comment-policy";
+import { createCommentForAuthorizedPost } from "@/lib/data/discussion-comment-create";
+import { Comments } from "@/lib/data/db";
+import { toCommentDto } from "@/lib/data/comment-dto";
+import { getEventById } from "@/lib/data/event";
 
 // Global posts: posts from all public feeds
 export async function getGlobalPostsAction(
@@ -862,115 +880,92 @@ export async function createCommentAction(
     }
 
     try {
-        console.log("🐞 [ACTION] Creating comment action start:", {
-            postId,
-            contentPreview: content.substring(0, 30),
-        });
-
-        const post = await getPost(postId);
-        if (!post) {
-            console.log("🐞 [ACTION] Post not found:", postId);
-            return { success: false, message: "Post not found" };
-        }
-        const canonicalPostId = String(post._id);
-
-        // check if user is authorized to comment
-        const feed = await getFeed(post.feedId);
-        if (!feed) {
-            console.log("🐞 [ACTION] Feed not found:", post.feedId);
-            return { success: false, message: "Feed not found" };
-        }
-        if (!(await isPostModuleEnabled(post, feed))) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const commentFeature = getPostCommentFeature(post.postType);
-        if (!commentFeature) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const authorized = await isAuthorized(userDid, feed.circleId, commentFeature);
-        if (!authorized) {
-            const participationMessage = await getCommunityParticipationDeniedMessage(
-                userDid,
-                post.postType,
-                "comment",
-            );
-            if (participationMessage) {
-                return { success: false, message: participationMessage };
-            }
-            console.log("🐞 [ACTION] User not authorized:", { userDid });
-            return { success: false, message: "You are not authorized to comment on the noticeboard" };
-        }
-
         const user = await getUserByDid(userDid);
-        if (!user) {
-            console.log("🐞 [ACTION] User not found:", userDid);
-            return { success: false, message: "User not found" };
-        }
+        if (!user) return { success: false, message: COMMENT_CREATE_UNAVAILABLE_MESSAGE };
 
-        console.log("🐞 [ACTION] Creating comment:", {
+        const executeGeneric = async (context: CommentCreateContext) => {
+            let validatedParent: Comment | null = null;
+            const { inserted } = await orchestrateAuthoredCommentCreate({
+                postId: context.normalizedPostId,
+                parentCommentId,
+                content,
+                writerDid: userDid,
+                dependencies: {
+                    findParentComment: async (id) => {
+                        validatedParent = await getComment(id.toString());
+                        return validatedParent;
+                    },
+                    insert: async (prepared, targetPostId) => {
+                        const comment: Comment = {
+                            postId: targetPostId,
+                            parentCommentId: prepared.parentCommentId,
+                            content: prepared.content,
+                            mentions: prepared.mentions,
+                            createdBy: userDid,
+                            createdAt: new Date(),
+                            reactions: {},
+                            replies: 0,
+                        };
+                        await commentSchema.parseAsync(comment);
+                        return createComment(comment);
+                    },
+                    incrementParentReplies: incrementCommentReplies,
+                    notify: async (created, prepared) => {
+                        try {
+                            if (!prepared.parentCommentId) await notifyPostComment(context.post, created, user);
+                            else if (validatedParent)
+                                await notifyCommentReply(context.post, validatedParent, created, user);
+                            if (prepared.mentions.length) {
+                                const circles = (
+                                    await Promise.all(prepared.mentions.map(({ id }) => getCircleById(id)))
+                                ).filter((circle): circle is Circle => circle !== null);
+                                if (circles.length) await notifyCommentMentions(created, context.post, user, circles);
+                            }
+                        } catch (notificationError) {
+                            console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
+                        }
+                    },
+                },
+            });
+            return { ...inserted, author: user } as CommentDisplay;
+        };
+
+        const result = await orchestrateCommentCreate({
             postId,
-            parentCommentId,
-            contentPreview: content.substring(0, 50) + (content.length > 50 ? "..." : ""),
-            authorDid: userDid,
-            authorName: user?.name,
-            feedId: post.feedId,
-            feedHandle: feed.handle,
-            postAuthorDid: post.createdBy,
+            actorDid: userDid,
+            executeGeneric,
+            executeDiscussion: async (context) =>
+                (await addCommentToDiscussion(context.normalizedPostId, {
+                    content,
+                    parentCommentId,
+                    createdBy: userDid,
+                })) as CommentDisplay,
+            executeEvent: async (context, event) =>
+                addEventCommentWithDependencies(String(event._id), { content, parentCommentId }, userDid, {
+                    findEvent: getEventById,
+                    resolvePost: resolveReadablePostContext,
+                    assertHostsWritable: assertEventHostCirclesWritable,
+                    authorizeComment: (did, circleId) => isAuthorized(did, circleId, features.feed.comment),
+                    createComment: createCommentForAuthorizedPost,
+                    createDependencies: {
+                        insertComment: (comment) => Comments.insertOne(comment),
+                        incrementParentReplies: async (id) => {
+                            await Comments.updateOne({ _id: id }, { $inc: { replies: 1 } });
+                        },
+                        now: () => new Date(),
+                    },
+                    prepareComment: prepareAuthoredComment,
+                    findParentComment: async (id) => Comments.findOne({ _id: id }, { projection: { postId: 1 } }),
+                    toCommentDto,
+                    sanitizeComments: sanitizeCommentMentions,
+                }),
         });
-
-        let validatedParent: Comment | null = null;
-        const { inserted: newComment } = await orchestrateAuthoredCommentCreate({
-            postId: canonicalPostId,
-            parentCommentId,
-            content,
-            writerDid: userDid,
-            dependencies: {
-                findParentComment: async (id) => {
-                    validatedParent = await getComment(id.toString());
-                    return validatedParent;
-                },
-                insert: async (prepared, targetPostId) => {
-                    const comment: Comment = {
-                        postId: targetPostId,
-                        parentCommentId: prepared.parentCommentId,
-                        content: prepared.content,
-                        mentions: prepared.mentions,
-                        createdBy: userDid,
-                        createdAt: new Date(),
-                        reactions: {},
-                        replies: 0,
-                    };
-                    await commentSchema.parseAsync(comment);
-                    return createComment(comment);
-                },
-                incrementParentReplies: incrementCommentReplies,
-                notify: async (inserted, prepared) => {
-                    try {
-                        if (!prepared.parentCommentId) {
-                            await notifyPostComment(post, inserted, user);
-                        } else {
-                            if (validatedParent) await notifyCommentReply(post, validatedParent, inserted, user);
-                        }
-                        if (prepared.mentions.length) {
-                            const circles = (
-                                await Promise.all(prepared.mentions.map(({ id }) => getCircleById(id)))
-                            ).filter((circle): circle is Circle => circle !== null);
-                            if (circles.length) await notifyCommentMentions(inserted, post, user, circles);
-                        }
-                    } catch (notificationError) {
-                        console.error("🐞 [ACTION] Failed to send notifications:", notificationError);
-                    }
-                },
-            },
-        });
-        const comment = { ...newComment, author: user } as CommentDisplay;
-        const [sanitizedComment] = await sanitizeCommentMentions([comment], userDid);
+        if (!result.ok) return { success: false, message: result.message };
+        const [sanitizedComment] = await sanitizeCommentMentions([result.value], userDid);
         return { success: true, message: "Comment created successfully", comment: sanitizedComment };
     } catch (error) {
         console.error("🐞 [ACTION] Unhandled error in createCommentAction:", error);
-        return { success: false, message: error instanceof Error ? error.message : "Failed to create comment." };
+        return { success: false, message: COMMENT_CREATE_UNAVAILABLE_MESSAGE };
     }
 }
 
