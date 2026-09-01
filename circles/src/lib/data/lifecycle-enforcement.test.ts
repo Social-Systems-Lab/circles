@@ -72,12 +72,15 @@ for (const [functionName, nextFunctionName, authorizationException] of guardedTa
 
 const updateTaskBody = functionBody(tasks, "updateTaskAction", "updateTaskPriorityAction");
 assert.match(updateTaskBody, /assertCircleWritesAllowed\(sourceCircle\._id as string\)/);
-assert.match(updateTaskBody, /assertCircleWritesAllowed\(targetCircle\._id as string\)/);
 for (const sideEffect of [/saveFile\(/, /deleteFile\(/, /updateTask\(/, /upsertShiftNoticeboardPost\(/]) {
-    assertBefore(updateTaskBody, /await Promise\.all\(\[\s*assertCircleWritesAllowed/, sideEffect, "task move preflight");
+    assertBefore(updateTaskBody, /await assertCircleWritesAllowed/, sideEffect, "task update preflight");
 }
 
-const rankingInvalidation = functionBody(tasks, "invalidateUserRankingsIfNeededAction", "// --- Modify existing actions");
+const rankingInvalidation = functionBody(
+    tasks,
+    "invalidateUserRankingsIfNeededAction",
+    "// --- Modify existing actions",
+);
 assertBefore(
     rankingInvalidation,
     /assertCircleWritesAllowed\(circleId\)/,

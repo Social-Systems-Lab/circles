@@ -70,6 +70,11 @@ import {
 import { ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { buildOutcomeTaskCompletionUpdate, getOutcomeTaskCompletionPlan } from "@/lib/task-completion-policy";
+import {
+    resolveTaskUpdateOwnership,
+    TASK_UPDATE_UNAVAILABLE_MESSAGE,
+} from "@/lib/data/task-reference-integrity-policy";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 
 type GetTasksActionResult = {
     tasks: TaskDisplay[];
@@ -787,40 +792,24 @@ export async function updateTaskAction(
             return { success: false, message: "User not authenticated" };
         }
 
-        const task = await getTaskById(taskId, userDid); // Fetch task
-        if (!task) {
-            return { success: false, message: "Task not found" };
+        const requestedCircleId = formData.has("circleId") ? data.circleId : undefined;
+        const resolvedOwnership = await resolveTaskUpdateOwnership(taskId, requestedCircleId, (canonicalTaskId) =>
+            getTaskById(canonicalTaskId, userDid),
+        );
+        if (!resolvedOwnership) {
+            return { success: false, message: TASK_UPDATE_UNAVAILABLE_MESSAGE };
         }
-
-        const sourceCircleId = task.circleId;
-        if (!sourceCircleId || !ObjectId.isValid(sourceCircleId)) {
-            return { success: false, message: "Task source circle is invalid" };
-        }
+        const { task } = resolvedOwnership;
+        const sourceCircleId = resolvedOwnership.ownership.circleId;
 
         const sourceCircle = await getCircleById(sourceCircleId);
-        if (!sourceCircle?._id) {
-            return { success: false, message: "Task source circle not found" };
+        if (!sourceCircle?._id || !(await canReadCircle(userDid, sourceCircle))) {
+            return { success: false, message: TASK_UPDATE_UNAVAILABLE_MESSAGE };
         }
+        const targetCircle = sourceCircle;
+        if (!targetCircle.handle) return { success: false, message: TASK_UPDATE_UNAVAILABLE_MESSAGE };
 
-        const requestedTargetCircleId = data.circleId?.trim();
-        if (requestedTargetCircleId && !ObjectId.isValid(requestedTargetCircleId)) {
-            return { success: false, message: "Target circle is invalid" };
-        }
-
-        const targetCircle = requestedTargetCircleId ? await getCircleById(requestedTargetCircleId) : sourceCircle;
-        if (!targetCircle?._id || !targetCircle.handle) {
-            return { success: false, message: "Target circle not found" };
-        }
-        if (requestedTargetCircleId && targetCircle.handle !== circleHandle) {
-            return { success: false, message: "Target circle does not match selected route" };
-        }
-
-        await Promise.all([
-            assertCircleWritesAllowed(sourceCircle._id as string),
-            ...(targetCircle._id !== sourceCircle._id
-                ? [assertCircleWritesAllowed(targetCircle._id as string)]
-                : []),
-        ]);
+        await assertCircleWritesAllowed(sourceCircle._id as string);
 
         const isAuthor = userDid === task.createdBy;
         const canModerate = await isAuthorized(userDid, sourceCircle._id as string, features.tasks?.moderate);
@@ -830,34 +819,6 @@ export async function updateTaskAction(
                 success: false,
                 message: "Not authorized to update this task at its current stage",
             };
-        }
-
-        const didTargetCircleChange = sourceCircle._id !== targetCircle._id;
-        if (didTargetCircleChange) {
-            const requiredTargetModuleHandle = data.taskType === "shift" ? "shifts" : "tasks";
-            if (!targetCircle.enabledModules?.includes(requiredTargetModuleHandle)) {
-                return {
-                    success: false,
-                    message:
-                        data.taskType === "shift"
-                            ? "Shifts are not enabled in the selected circle"
-                            : "Tasks are not enabled in the selected circle",
-                };
-            }
-
-            const user = await getUserPrivate(userDid);
-            if (!canParticipate(user)) {
-                return { success: false, message: getParticipationRequiredMessage("move tasks") };
-            }
-
-            const canCreateInTarget =
-                targetCircle.circleType === "user"
-                    ? targetCircle._id === user?._id
-                    : await isAuthorized(userDid, targetCircle._id as string, features.tasks?.create || "tasks_create");
-
-            if (!canCreateInTarget) {
-                return { success: false, message: "Not authorized to move this task to the selected circle" };
-            }
         }
 
         const existingTaskType = task.taskType ?? "outcome";
@@ -967,7 +928,7 @@ export async function updateTaskAction(
             images: finalImages,
             location: locationData,
             targetDate: targetDateForUpdate,
-            circleId: targetCircle._id as string,
+            circleId: sourceCircleId,
             userGroups: data.userGroups || task.userGroups,
             updatedAt: new Date(),
             // Pass goalId directly (can be string or empty string for removal)
