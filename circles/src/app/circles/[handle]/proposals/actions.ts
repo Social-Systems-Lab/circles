@@ -21,6 +21,7 @@ import {
 import { getCircleByHandle, ensureModuleIsEnabledOnCircle } from "@/lib/data/circle"; // Added ensureModuleIsEnabledOnCircle
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import { orchestrateFallbackCommentShadow } from "@/lib/data/fallback-comment-shadow-orchestration";
 import { getUserByDid } from "@/lib/data/user";
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias, import isFile
 import { features } from "@/lib/data/constants";
@@ -132,72 +133,12 @@ export async function getProposalsAction(circleHandle: string): Promise<Proposal
  */
 export async function ensureShadowPostForProposalAction(proposalId: string, circleId: string): Promise<string | null> {
     try {
-        await assertCircleWritesAllowed(circleId);
-        if (!ObjectId.isValid(proposalId) || !ObjectId.isValid(circleId)) {
-            console.error("Invalid proposalId or circleId provided to ensureShadowPostForProposalAction");
-            return null;
-        }
-
-        // Use the Proposals collection directly
-        const proposal = await Proposals.findOne({ _id: new ObjectId(proposalId) });
-
-        if (!proposal) {
-            console.error(`Proposal not found: ${proposalId}`);
-            return null;
-        }
-
-        // If commentPostId already exists, return it
-        if (proposal.commentPostId) {
-            return proposal.commentPostId;
-        }
-
-        // --- Create Shadow Post if missing ---
-        console.log(`Shadow post missing for proposal ${proposalId}, attempting creation...`);
-        const feed = await Feeds.findOne({ circleId: circleId });
-        if (!feed) {
-            console.warn(
-                `No feed found for circle ${circleId} to create shadow post for proposal ${proposalId}. Cannot enable comments.`,
-            );
-            return null; // Cannot create post without a feed
-        }
-
-        const shadowPostData: Omit<Post, "_id"> = {
-            feedId: feed._id.toString(),
-            createdBy: proposal.createdBy, // Use proposal creator
-            createdAt: new Date(),
-            content: `Proposal: ${proposal.name}`, // Simple content
-            postType: "proposal",
-            parentItemId: proposal._id.toString(),
-            parentItemType: "proposal",
-            userGroups: proposal.userGroups || [],
-            comments: 0,
-            reactions: {},
-        };
-
-        const shadowPost = await createPost(shadowPostData); // Use the imported createPost
-
-        if (shadowPost && shadowPost._id) {
-            const commentPostIdString = shadowPost._id.toString();
-            const updateResult = await Proposals.updateOne(
-                { _id: proposal._id },
-                { $set: { commentPostId: commentPostIdString } },
-            );
-            if (updateResult.modifiedCount === 1) {
-                console.log(`Shadow post ${commentPostIdString} created and linked to proposal ${proposalId}`);
-                return commentPostIdString; // Return the new ID
-            } else {
-                console.error(`Failed to link shadow post ${commentPostIdString} back to proposal ${proposalId}`);
-                // Optional: Delete orphaned shadow post
-                // await Posts.deleteOne({ _id: shadowPost._id });
-                return null; // Linking failed
-            }
-        } else {
-            console.error(`Failed to create shadow post for proposal ${proposalId}`);
-            return null; // Post creation failed
-        }
+        const actorDid = await getAuthenticatedUserDid();
+        if (!actorDid) return null;
+        return await orchestrateFallbackCommentShadow("proposal", proposalId, circleId, actorDid);
     } catch (error) {
-        console.error(`Error in ensureShadowPostForProposalAction for proposal ${proposalId}:`, error);
-        return null; // Return null on any error
+        console.error("Fallback Comment shadow is unavailable", error);
+        return null;
     }
 }
 

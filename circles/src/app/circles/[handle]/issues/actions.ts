@@ -16,6 +16,7 @@ import {
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import { orchestrateFallbackCommentShadow } from "@/lib/data/fallback-comment-shadow-orchestration";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user"; // Added getUserPrivate
 import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Import isFile
 import { features } from "@/lib/data/constants"; // Assuming features.issues will be added here
@@ -915,70 +916,11 @@ export const getMembersAction = async (circleId: string) => {
  */
 export async function ensureShadowPostForIssueAction(issueId: string, circleId: string): Promise<string | null> {
     try {
-        await assertCircleWritesAllowed(circleId);
-        if (!ObjectId.isValid(issueId) || !ObjectId.isValid(circleId)) {
-            console.error("Invalid issueId or circleId provided to ensureShadowPostForIssueAction");
-            return null;
-        }
-
-        const issue = await Issues.findOne({ _id: new ObjectId(issueId) });
-
-        if (!issue) {
-            console.error(`Issue not found: ${issueId}`);
-            return null;
-        }
-
-        // If commentPostId already exists, return it
-        if (issue.commentPostId) {
-            return issue.commentPostId;
-        }
-
-        // --- Create Shadow Post if missing ---
-        console.log(`Shadow post missing for issue ${issueId}, attempting creation...`);
-        const feed = await Feeds.findOne({ circleId: circleId });
-        if (!feed) {
-            console.warn(
-                `No feed found for circle ${circleId} to create shadow post for issue ${issueId}. Cannot enable comments.`,
-            );
-            return null; // Cannot create post without a feed
-        }
-
-        const shadowPostData: Omit<Post, "_id"> = {
-            feedId: feed._id.toString(),
-            createdBy: issue.createdBy, // Use issue creator
-            createdAt: new Date(),
-            content: `Issue: ${issue.title}`, // Simple content
-            postType: "issue",
-            parentItemId: issue._id.toString(),
-            parentItemType: "issue",
-            userGroups: issue.userGroups || [],
-            comments: 0,
-            reactions: {},
-        };
-
-        const shadowPost = await createPost(shadowPostData); // Use the imported createPost
-
-        if (shadowPost && shadowPost._id) {
-            const commentPostIdString = shadowPost._id.toString();
-            const updateResult = await Issues.updateOne(
-                { _id: issue._id },
-                { $set: { commentPostId: commentPostIdString } },
-            );
-            if (updateResult.modifiedCount === 1) {
-                console.log(`Shadow post ${commentPostIdString} created and linked to issue ${issueId}`);
-                return commentPostIdString; // Return the new ID
-            } else {
-                console.error(`Failed to link shadow post ${commentPostIdString} back to issue ${issueId}`);
-                // Optional: Delete orphaned shadow post
-                // await Posts.deleteOne({ _id: shadowPost._id });
-                return null; // Linking failed
-            }
-        } else {
-            console.error(`Failed to create shadow post for issue ${issueId}`);
-            return null; // Post creation failed
-        }
+        const actorDid = await getAuthenticatedUserDid();
+        if (!actorDid) return null;
+        return await orchestrateFallbackCommentShadow("issue", issueId, circleId, actorDid);
     } catch (error) {
-        console.error(`Error in ensureShadowPostForIssueAction for issue ${issueId}:`, error);
-        return null; // Return null on any error
+        console.error("Fallback Comment shadow is unavailable", error);
+        return null;
     }
 }
