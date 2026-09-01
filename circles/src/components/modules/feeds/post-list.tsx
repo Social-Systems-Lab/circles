@@ -93,11 +93,16 @@ import {
     logLevel,
 } from "@/lib/data/constants";
 import { SuggestionDataItem } from "react-mentions";
+import type { CommentDeleteDisposition } from "@/lib/data/comment-delete-access-policy";
 import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "./RichText";
-import { replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
+import {
+    applyCommentDeleteDisposition,
+    applyHighlightedCommentDeleteDisposition,
+    replaceCommentWithServerResult,
+} from "@/lib/data/comment-list-state";
 import UserBadge from "../users/user-badge";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
@@ -736,9 +741,11 @@ export const PostItem = ({
         }
     };
 
-    const onDeleteComment = (commentId: string) => {
-        // TODO if top level comment anonymize it and if nested comment remove it
-        setComments((prev) => prev.filter((c) => c._id !== commentId));
+    const onDeleteComment = (commentId: string, disposition: CommentDeleteDisposition, tombstone?: CommentDisplay) => {
+        setComments((current) => applyCommentDeleteDisposition(current, commentId, disposition, tombstone));
+        setHighlightedComment((current) =>
+            applyHighlightedCommentDeleteDisposition(current, commentId, disposition, tombstone),
+        );
     };
 
     const handleImageClick = (index: number, e?: React.MouseEvent) => {
@@ -1661,7 +1668,7 @@ type CommentItemProps = {
     setShowAllComments: Dispatch<SetStateAction<boolean>>;
     feed: Feed;
     circle: Circle;
-    onDeleteComment: (commentId: string) => void;
+    onDeleteComment: (commentId: string, disposition: CommentDeleteDisposition, tombstone?: CommentDisplay) => void;
     isHighlighted?: boolean;
     onShowAllComments: () => void;
     postType?: PostDisplay["postType"];
@@ -1867,7 +1874,7 @@ const CommentItem = ({
                     title: "Comment deleted",
                     variant: "success",
                 });
-                onDeleteComment(comment._id!);
+                if (result.disposition) onDeleteComment(comment._id!, result.disposition, result.comment);
             } else {
                 toast({
                     title: result.message,

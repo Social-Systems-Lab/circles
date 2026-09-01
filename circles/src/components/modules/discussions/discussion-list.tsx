@@ -85,7 +85,7 @@ import { over, set } from "lodash";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import RichText from "../feeds/RichText";
-import { replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
+import { applyCommentDeleteDisposition, replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
 import UserBadge from "../users/user-badge";
 import { motion } from "framer-motion";
 import { ListFilter } from "@/components/utils/list-filter";
@@ -1450,7 +1450,10 @@ const CommentItem = ({
                     title: "Comment deleted",
                     variant: "success",
                 });
-                onDeleteComment(comment._id!);
+                if (result.disposition)
+                    setComments((current) =>
+                        applyCommentDeleteDisposition(current, comment._id!, result.disposition!, result.comment),
+                    );
             } else {
                 toast({
                     title: result.message,

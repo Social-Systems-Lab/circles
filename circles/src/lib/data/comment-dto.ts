@@ -1,5 +1,6 @@
 import type { Comment } from "@/models/models";
 import { ObjectId } from "mongodb";
+import type { CommentDeleteDisposition } from "./comment-delete-access-policy";
 
 export type CommentDto = Pick<
     Comment,
@@ -14,6 +15,8 @@ export type CommentDto = Pick<
     | "replies"
     | "isDeleted"
 >;
+
+export type DeletedCommentDto = CommentDto & { mentions: [] };
 
 type CommentLike = Partial<Record<keyof CommentDto, unknown>>;
 
@@ -61,4 +64,21 @@ export function toCommentDto(input: CommentLike): CommentDto {
     if (typeof input.isDeleted === "boolean") dto.isDeleted = input.isDeleted;
 
     return dto;
+}
+
+/** A deletion result never exposes mention identities, but makes erasure explicit to browser clients. */
+export function toDeletedCommentDto(input: CommentLike): DeletedCommentDto {
+    return { ...toCommentDto(input), mentions: [] };
+}
+
+export function toCommentDeleteActionSuccess(
+    disposition: Exclude<CommentDeleteDisposition, "hard-delete">,
+    input: CommentLike,
+) {
+    return {
+        success: true as const,
+        message: "Comment deleted successfully",
+        disposition,
+        comment: toDeletedCommentDto(input),
+    };
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
-import { toCommentDto } from "./comment-dto";
+import { toCommentDeleteActionSuccess, toCommentDto } from "./comment-dto";
 
 const createdAt = new Date("2026-08-23T08:00:00Z");
 const editedAt = new Date("2026-08-23T09:00:00Z");
@@ -98,5 +98,27 @@ const unsafeId = toCommentDto({
 } as never);
 assert.equal(arbitraryToStringCalled, false);
 assert.equal(unsafeId._id, undefined);
+
+for (const disposition of ["tombstone", "already-deleted"] as const) {
+    const deletionPayload = toCommentDeleteActionSuccess(disposition, {
+        _id: id,
+        postId: "post-id",
+        parentCommentId: null,
+        content: "",
+        createdBy: "anonymous",
+        createdAt,
+        reactions: {},
+        replies: 1,
+        isDeleted: true,
+        mentions: [{ type: "circle", id: "must-not-survive" }],
+    } as never);
+    assert.equal(deletionPayload.success, true);
+    assert.equal(deletionPayload.disposition, disposition);
+    assert.deepEqual(deletionPayload.comment.mentions, [], `${disposition} action payload explicitly clears mentions`);
+    assert.equal(deletionPayload.comment.content, "");
+    assert.equal(deletionPayload.comment.createdBy, "anonymous");
+    assert.deepEqual(deletionPayload.comment.reactions, {});
+    assert.equal(deletionPayload.comment.isDeleted, true);
+}
 
 console.log("comment DTO tests passed");

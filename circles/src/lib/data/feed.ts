@@ -26,6 +26,7 @@ import {
 import { sanitizeHighlightedCommentsOnPosts } from "./comment-mention-policy";
 import { applyPostUpdateOperation } from "./post-update-operation";
 import { applyLikeMutation, applyUnlikeMutation, type ReactionMutationInput } from "./reaction-mutation";
+import { highlightedCommentFilter, highlightedCommentPointerUpdate } from "./highlighted-comment-policy";
 
 export const getFeedsByCircleId = async (circleId: string): Promise<Feed[]> => {
     const feeds = await Feeds.find({
@@ -525,13 +526,13 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
 
 // Function to update the highlighted comment for a post
 export const updateHighlightedComment = async (postId: string): Promise<void> => {
-    const mostLikedComment = await Comments.find({ postId, parentCommentId: null })
+    const mostLikedComment = await Comments.find(highlightedCommentFilter(postId))
         .sort({ "reactions.like": -1, createdAt: -1 })
         .limit(1)
         .toArray();
 
-    const highlightedCommentId = mostLikedComment.length > 0 ? mostLikedComment[0]._id?.toString() : undefined;
-    await Posts.updateOne({ _id: new ObjectId(postId) }, { $set: { highlightedCommentId } });
+    const highlightedCommentId = mostLikedComment[0]?._id?.toString();
+    await Posts.updateOne({ _id: new ObjectId(postId) }, highlightedCommentPointerUpdate(highlightedCommentId));
 };
 
 export const createComment = async (comment: Comment): Promise<Comment> => {
@@ -562,41 +563,6 @@ export const createComment = async (comment: Comment): Promise<Comment> => {
 
 export const incrementCommentReplies = async (commentId: string): Promise<void> => {
     await Comments.updateOne({ _id: new ObjectId(commentId) }, { $inc: { replies: 1 } });
-};
-
-export const deleteComment = async (commentId: string): Promise<void> => {
-    const comment = await Comments.findOne({ _id: new ObjectId(commentId) });
-    if (!comment) return;
-
-    if (comment.replies > 0) {
-        // mark the comment as deleted and anonymize its data
-        await Comments.updateOne(
-            { _id: new ObjectId(commentId) },
-            {
-                $set: {
-                    isDeleted: true,
-                    content: "",
-                    createdBy: "anonymous",
-                    reactions: {},
-                },
-            },
-        );
-    } else {
-        // If the comment has no replies, delete it
-        await Comments.deleteOne({ _id: new ObjectId(commentId) });
-
-        // Decrement comment count for the post
-        await Posts.updateOne({ _id: new ObjectId(comment.postId) }, { $inc: { comments: -1 } });
-
-        if (comment.parentCommentId) {
-            // Decrement comment count for the parent comment
-            await Comments.updateOne({ _id: new ObjectId(comment.parentCommentId) }, { $inc: { replies: -1 } });
-        }
-    }
-
-    if (!comment.parentCommentId) {
-        await updateHighlightedComment(comment.postId);
-    }
 };
 
 // Function to get posts from multiple feeds

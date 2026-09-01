@@ -17,7 +17,6 @@ import {
     getComment,
     getPosts,
     updateComment,
-    deleteComment,
     getPostsWithMetrics,
     getPostsFromMultipleFeeds,
     getAccessibleFeedIdsForUser,
@@ -123,10 +122,16 @@ import {
 } from "@/lib/data/event-alternate-comment-policy";
 import { createCommentForAuthorizedPost } from "@/lib/data/discussion-comment-create";
 import { Comments } from "@/lib/data/db";
-import { toCommentDto } from "@/lib/data/comment-dto";
+import { toCommentDeleteActionSuccess, toCommentDto } from "@/lib/data/comment-dto";
 import { getEventById } from "@/lib/data/event";
 import { canonicalizeCircleMentionsForWrite } from "@/lib/data/circle-mention-write-policy";
 import { COMMENT_EDIT_UNAVAILABLE_MESSAGE, orchestrateCommentEdit } from "@/lib/data/comment-edit-access-policy";
+import {
+    COMMENT_DELETE_UNAVAILABLE_MESSAGE,
+    mongoCommentDeletePersistence,
+    orchestrateCommentDelete,
+    type CommentDeleteDisposition,
+} from "@/lib/data/comment-delete-access-policy";
 import { canReadEventOwners } from "@/lib/data/post-source-access-policy";
 
 // Global posts: posts from all public feeds
@@ -1032,51 +1037,37 @@ export async function editCommentAction(
     }
 }
 
-export async function deleteCommentAction(commentId: string): Promise<{ success: boolean; message?: string }> {
+export async function deleteCommentAction(commentId: string): Promise<{
+    success: boolean;
+    message?: string;
+    disposition?: CommentDeleteDisposition;
+    comment?: CommentDisplay;
+}> {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete a comment" };
     }
 
     try {
-        const comment = await getComment(commentId);
-
-        if (!comment) {
-            return { success: false, message: "Comment not found" };
+        const result = await orchestrateCommentDelete({
+            commentId,
+            actorDid: userDid,
+            authorizationDependencies: {
+                authorizeFeature: (did, circleId, feature) => isAuthorized(did, circleId, feature),
+                findCurrentEvent: getEventById,
+                canReadCurrentEventHosts: canReadEventOwners,
+                assertEventHostsWritable: assertEventHostCirclesWritable,
+            },
+            persistence: mongoCommentDeletePersistence,
+        });
+        if (!result.ok) return { success: false, message: result.message };
+        if (result.disposition === "hard-delete") {
+            return { success: true, message: "Comment deleted successfully", disposition: result.disposition };
         }
-
-        const post = await getPost(comment.postId);
-        if (!post) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const feed = await getFeed(post.feedId);
-        if (!feed) {
-            return { success: false, message: "Noticeboard not found" };
-        }
-        if (!(await isPostModuleEnabled(post, feed))) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const commentFeature = getPostCommentFeature(post.postType);
-        const moderateFeature = getPostModerateFeature(post.postType);
-        if (!commentFeature || !moderateFeature) {
-            return { success: false, message: "Post not found" };
-        }
-
-        const canDeleteOwn =
-            comment.createdBy === userDid && (await isAuthorized(userDid, feed.circleId, commentFeature));
-        const canModerate = await isAuthorized(userDid, feed.circleId, moderateFeature);
-
-        if (!canDeleteOwn && !canModerate) {
-            return { success: false, message: "You are not authorized to delete this comment" };
-        }
-
-        await deleteComment(commentId);
-
-        return { success: true, message: "Comment deleted successfully" };
+        const payload = toCommentDeleteActionSuccess(result.disposition, result.comment!);
+        return { ...payload, comment: payload.comment as unknown as CommentDisplay };
     } catch (error) {
-        return { success: false, message: error instanceof Error ? error.message : "Failed to delete comment." };
+        return { success: false, message: COMMENT_DELETE_UNAVAILABLE_MESSAGE };
     }
 }
 

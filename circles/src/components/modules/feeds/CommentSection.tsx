@@ -51,7 +51,7 @@ import { isAuthorized } from "@/lib/auth/client-auth";
 import { features } from "@/lib/data/constants";
 import { MentionsInput, Mention, MentionItem, SuggestionDataItem } from "react-mentions";
 import RichText from "./RichText";
-import { replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
+import { applyCommentDeleteDisposition, replaceCommentWithServerResult } from "@/lib/data/comment-list-state";
 import { UserPicture } from "../members/user-picture";
 import { useRouter } from "next/navigation";
 import {
@@ -263,7 +263,10 @@ const CommentItem = ({
             const result = await deleteCommentAction(comment._id!);
             if (result.success) {
                 toast({ title: "Comment deleted", variant: "success" });
-                onDeleteComment(comment._id!); // Use callback to update parent state
+                if (result.disposition)
+                    setComments((current) =>
+                        applyCommentDeleteDisposition(current, comment._id!, result.disposition!, result.comment),
+                    );
             } else {
                 toast({ title: "Delete Failed", description: result.message, variant: "destructive" });
             }
@@ -668,8 +671,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({
 
     // Callback for CommentItem to update state when a comment is deleted
     const onDeleteComment = (commentId: string) => {
-        setComments((prev) => prev.filter((c) => c._id !== commentId && c.parentCommentId !== commentId)); // Remove comment and its direct replies
-        // Note: This doesn't handle nested replies removal optimistically. A full refetch might be simpler or more robust backend handling.
+        setComments((prev) => prev.filter((c) => c._id !== commentId));
     };
 
     return (
