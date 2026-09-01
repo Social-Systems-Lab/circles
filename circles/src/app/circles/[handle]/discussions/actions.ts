@@ -28,6 +28,7 @@ import {
     getReadableAlternateDiscussion,
 } from "@/lib/data/discussion-alternate-policy";
 import { orchestrateAlternateDiscussionCreate } from "@/lib/data/post-write-policy";
+import { orchestrateDiscussionModeration } from "@/lib/data/discussion-moderation-access-policy";
 
 /**
  * Create a new discussion in a circle
@@ -154,12 +155,13 @@ export async function pinDiscussionAction(id: string, pinned: boolean) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) throw new Error("Unauthorized");
 
-    const discussion = await getDiscussionWithComments(id);
-    if (!discussion) throw new Error("Forum post not found");
-    const canModerate = await canPerformCanonicalDiscussionAction(discussion, userDid, features.feed.moderate);
-    if (!canModerate) throw new Error("Not authorized to pin forum posts");
-
-    return pinDiscussion(id, pinned);
+    const result = await orchestrateDiscussionModeration({
+        postId: id,
+        actorDid: userDid,
+        persist: (normalizedPostId) => pinDiscussion(normalizedPostId, pinned),
+    });
+    if (!result.ok) throw new Error(result.message);
+    return result.value;
 }
 
 /**
@@ -169,10 +171,11 @@ export async function closeDiscussionAction(id: string) {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) throw new Error("Unauthorized");
 
-    const discussion = await getDiscussionWithComments(id);
-    if (!discussion) throw new Error("Forum post not found");
-    const canModerate = await canPerformCanonicalDiscussionAction(discussion, userDid, features.feed.moderate);
-    if (!canModerate) throw new Error("Not authorized to close forum posts");
-
-    return closeDiscussion(id);
+    const result = await orchestrateDiscussionModeration({
+        postId: id,
+        actorDid: userDid,
+        persist: (normalizedPostId) => closeDiscussion(normalizedPostId),
+    });
+    if (!result.ok) throw new Error(result.message);
+    return result.value;
 }
