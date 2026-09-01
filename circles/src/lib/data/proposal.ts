@@ -1,5 +1,5 @@
 // proposal.ts - Proposal data access functions
-import { Proposals, Circles, Members, Reactions, Feeds, Posts, RankedLists } from "./db"; // Added Feeds, Posts, RankedLists
+import { Proposals, Circles, Members, Reactions, Posts, RankedLists } from "./db"; // Added Posts, RankedLists
 import { ObjectId } from "mongodb";
 import {
     Proposal,
@@ -13,7 +13,7 @@ import {
 } from "@/models/models"; // Added Post type, RankedList
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getUserByDid } from "./user";
-import { createPost } from "./feed"; // Import createPost from feed.ts
+import { createInitialCommentShadow } from "./initial-comment-shadow";
 import { upsertVbdProposals } from "./vdb";
 import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 // import { getStalenessInfo } from "./ranking"; // getStalenessInfo is not exported from ranking
@@ -689,27 +689,22 @@ export const createProposal = async (
 
         // --- Create Shadow Post ---
         try {
-            const feed = await Feeds.findOne({ circleId: proposalData.circleId });
-            if (!feed) {
+            const shadowPost = await createInitialCommentShadow(proposalData.circleId, {
+                createdBy: proposalData.createdBy,
+                createdAt: new Date(),
+                content: `Proposal: ${proposalData.name}`, // Simple content
+                postType: "proposal",
+                parentItemId: createdProposalId.toString(),
+                parentItemType: "proposal",
+                userGroups: proposalData.userGroups || [],
+                comments: 0,
+                reactions: {},
+            });
+            if (!shadowPost) {
                 console.warn(
                     `No feed found for circle ${proposalData.circleId} to create shadow post for proposal ${createdProposalId}. Commenting will be disabled.`,
                 );
             } else {
-                const shadowPostData: Omit<Post, "_id"> = {
-                    feedId: feed._id.toString(),
-                    createdBy: proposalData.createdBy,
-                    createdAt: new Date(),
-                    content: `Proposal: ${proposalData.name}`, // Simple content
-                    postType: "proposal",
-                    parentItemId: createdProposalId.toString(),
-                    parentItemType: "proposal",
-                    userGroups: proposalData.userGroups || [],
-                    comments: 0,
-                    reactions: {},
-                };
-
-                const shadowPost = await createPost(shadowPostData);
-
                 // --- Update Proposal with commentPostId ---
                 if (shadowPost && shadowPost._id) {
                     const commentPostIdString = shadowPost._id.toString();

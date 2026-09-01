@@ -51,7 +51,26 @@ assert.match(
 assert.doesNotMatch(orchestration, /ensureCanonicalEventShadow/, "fallback seam does not absorb Event orchestration");
 
 const event = fs.readFileSync(path.join(process.cwd(), "src/lib/data/event-shadow-orchestration.ts"), "utf8");
-assert.match(event, /export async function ensureCanonicalEventShadow/, "Event canonical shadow path is unchanged");
+assert.match(event, /export async function ensureCanonicalEventShadow/, "Event keeps its canonical shadow seam");
+assert.match(event, /Feeds\.findOne\(\{ circleId, handle: "default" \}\)/, "Event fallback selects default Feed");
+assert.match(event, /commentPostId: \{ \$exists: false \}/, "Event backlink update is conditional");
+assert.doesNotMatch(
+    event,
+    /Events\.updateOne\(\{ _id: eventId \}, \{ \$set: \{ commentPostId \} \}\)/,
+    "Event fallback cannot unconditionally overwrite commentPostId",
+);
+
+for (const type of ["task", "goal", "issue", "proposal", "event"]) {
+    const source = fs.readFileSync(path.join(process.cwd(), `src/lib/data/${type}.ts`), "utf8");
+    assert.match(source, /createInitialCommentShadow\(/, `${type} initial shadow uses the canonical creation seam`);
+}
+
+const initialShadow = fs.readFileSync(path.join(process.cwd(), "src/lib/data/initial-comment-shadow.ts"), "utf8");
+assert.match(
+    initialShadow,
+    /findFeed\(\{ circleId: canonicalCircleId, handle: "default" \}\)/,
+    "initial shadow seam selects the canonical default Feed",
+);
 
 const eventActions = fs.readFileSync(path.join(process.cwd(), "src/app/circles/[handle]/events/actions.ts"), "utf8");
 assert.match(

@@ -2,7 +2,6 @@ import {
     Circles,
     Events,
     EventRsvps,
-    Feeds,
     Posts,
     EventInvitations,
     EventOccurrences,
@@ -31,7 +30,7 @@ import {
     filterEventsForOccurrenceParticipation,
 } from "@/lib/event-occurrence";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
-import { createPost } from "./feed";
+import { createInitialCommentShadow } from "./initial-comment-shadow";
 import { upsertVbdEvents } from "./vdb";
 import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { notifyEventInvitation } from "./notifications";
@@ -881,23 +880,18 @@ export const createEvent = async (data: Omit<Event, "_id" | "commentPostId">, in
 
     // Create shadow post for comments (if feed exists)
     try {
-        const feed = await Feeds.findOne({ circleId: data.circleId });
-        if (feed) {
-            const shadowPostData: Omit<Post, "_id"> = {
-                feedId: feed._id.toString(),
-                createdBy: data.createdBy,
-                createdAt: new Date(),
-                content: `Event: ${data.title}`,
-                postType: "event",
-                parentItemId: createdEventId.toString(),
-                parentItemType: "event",
-                userGroups: data.userGroups || [],
-                comments: 0,
-                reactions: {},
-            };
-
-            const shadowPost = await createPost(shadowPostData);
-
+        const shadowPost = await createInitialCommentShadow(data.circleId, {
+            createdBy: data.createdBy,
+            createdAt: new Date(),
+            content: `Event: ${data.title}`,
+            postType: "event",
+            parentItemId: createdEventId.toString(),
+            parentItemType: "event",
+            userGroups: data.userGroups || [],
+            comments: 0,
+            reactions: {},
+        });
+        if (shadowPost) {
             if (shadowPost && shadowPost._id) {
                 const commentPostIdString = shadowPost._id.toString();
                 const updateResult = await Events.updateOne(

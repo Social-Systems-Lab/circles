@@ -1,12 +1,12 @@
 // task.ts - Task data access functions
-import { Tasks, Circles, Members, Reactions, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
+import { Tasks, Circles, Members, Reactions, RankedLists, Posts } from "./db"; // Added Posts
 import { ObjectId } from "mongodb";
 import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post, TaskPriority, TaskClaim } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
 import { features } from "./constants"; // RANKING_STALENESS_DAYS is now in ranking.ts
-import { createPost } from "./feed"; // Import createPost from feed.ts
+import { createInitialCommentShadow } from "./initial-comment-shadow";
 import { upsertVbdTasks } from "./vdb";
 import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
@@ -840,27 +840,22 @@ export const createTask = async (taskData: Omit<Task, "_id" | "commentPostId">):
 
         // --- Create Shadow Post ---
         try {
-            const feed = await Feeds.findOne({ circleId: taskData.circleId });
-            if (!feed) {
+            const shadowPost = await createInitialCommentShadow(taskData.circleId, {
+                createdBy: taskData.createdBy,
+                createdAt: new Date(),
+                content: `Task: ${taskData.title}`, // Simple content
+                postType: "task",
+                parentItemId: createdTaskId.toString(),
+                parentItemType: "task",
+                userGroups: taskData.userGroups || [],
+                comments: 0,
+                reactions: {},
+            });
+            if (!shadowPost) {
                 console.warn(
                     `No feed found for circle ${taskData.circleId} to create shadow post for task ${createdTaskId}. Commenting will be disabled.`,
                 );
             } else {
-                const shadowPostData: Omit<Post, "_id"> = {
-                    feedId: feed._id.toString(),
-                    createdBy: taskData.createdBy,
-                    createdAt: new Date(),
-                    content: `Task: ${taskData.title}`, // Simple content
-                    postType: "task",
-                    parentItemId: createdTaskId.toString(),
-                    parentItemType: "task",
-                    userGroups: taskData.userGroups || [],
-                    comments: 0,
-                    reactions: {},
-                };
-
-                const shadowPost = await createPost(shadowPostData);
-
                 // --- Update Task with commentPostId ---
                 if (shadowPost && shadowPost._id) {
                     const commentPostIdString = shadowPost._id.toString();

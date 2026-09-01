@@ -1,11 +1,11 @@
 // goal.ts - Goal data access functions
-import { Goals, Circles, RankedLists, Feeds, Posts } from "./db"; // Added Feeds, Posts
+import { Goals, Circles, RankedLists, Posts } from "./db"; // Added Posts
 import { ObjectId } from "mongodb";
 import { Goal, GoalDisplay, GoalStage, RankedList, Post } from "@/models/models"; // Added Post type
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 // RANKING_STALENESS_DAYS is now in ranking.ts
-import { createPost } from "./feed"; // Import createPost from feed.ts
+import { createInitialCommentShadow } from "./initial-comment-shadow";
 import { upsertVbdGoals } from "./vdb";
 import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
@@ -416,31 +416,23 @@ export const createGoal = async (
 
         // --- Create Shadow Post ---
         try {
-            // Find a default feed for the circle (e.g., handle 'general' or the first one)
-            // TODO: Consider a more robust feed selection strategy if needed
-            const feed = await Feeds.findOne({ circleId: goalData.circleId });
-            if (!feed) {
+            const shadowPost = await createInitialCommentShadow(goalData.circleId, {
+                createdBy: goalData.createdBy,
+                createdAt: new Date(), // Use current time for post creation
+                content: `Goal: ${goalData.title}`, // Simple content for the shadow post
+                postType: "goal",
+                parentItemId: createdGoalId.toString(),
+                parentItemType: "goal",
+                userGroups: goalData.userGroups || [], // Inherit user groups from goal
+                comments: 0, // Initialize comment count
+                reactions: {}, // Initialize reactions
+            });
+            if (!shadowPost) {
                 console.warn(
                     `No feed found for circle ${goalData.circleId} to create shadow post for goal ${createdGoalId}. Commenting will be disabled.`,
                 );
                 // Proceed without shadow post, goal is already created
             } else {
-                const shadowPostData: Omit<Post, "_id"> = {
-                    feedId: feed._id.toString(),
-                    createdBy: goalData.createdBy,
-                    createdAt: new Date(), // Use current time for post creation
-                    content: `Goal: ${goalData.title}`, // Simple content for the shadow post
-                    postType: "goal",
-                    parentItemId: createdGoalId.toString(),
-                    parentItemType: "goal",
-                    userGroups: goalData.userGroups || [], // Inherit user groups from goal
-                    comments: 0, // Initialize comment count
-                    reactions: {}, // Initialize reactions
-                    // Ensure all required fields from postSchema are present or have defaults
-                };
-
-                const shadowPost = await createPost(shadowPostData); // Use the imported createPost function
-
                 // --- Update Goal with commentPostId ---
                 if (shadowPost && shadowPost._id) {
                     const commentPostIdString = shadowPost._id.toString();

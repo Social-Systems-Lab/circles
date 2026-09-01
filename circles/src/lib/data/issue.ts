@@ -1,9 +1,9 @@
 // issue.ts - Issue data access functions
-import { Issues, Circles, Members, Reactions, Feeds, Posts } from "./db"; // Added Feeds, Posts
+import { Issues, Circles, Members, Reactions, Posts } from "./db"; // Added Posts
 import { ObjectId } from "mongodb";
 import { Issue, IssueDisplay, IssueStage, Circle, Member, Post } from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
-import { createPost } from "./feed"; // Import createPost from feed.ts
+import { createInitialCommentShadow } from "./initial-comment-shadow";
 import { upsertVbdIssues } from "./vdb";
 import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 // No longer need getUserByDid if we use $lookup consistently
@@ -395,27 +395,22 @@ export const createIssue = async (issueData: Omit<Issue, "_id" | "commentPostId"
 
         // --- Create Shadow Post ---
         try {
-            const feed = await Feeds.findOne({ circleId: issueData.circleId });
-            if (!feed) {
+            const shadowPost = await createInitialCommentShadow(issueData.circleId, {
+                createdBy: issueData.createdBy,
+                createdAt: new Date(),
+                content: `Issue: ${issueData.title}`, // Simple content
+                postType: "issue",
+                parentItemId: createdIssueId.toString(),
+                parentItemType: "issue",
+                userGroups: issueData.userGroups || [],
+                comments: 0,
+                reactions: {},
+            });
+            if (!shadowPost) {
                 console.warn(
                     `No feed found for circle ${issueData.circleId} to create shadow post for issue ${createdIssueId}. Commenting will be disabled.`,
                 );
             } else {
-                const shadowPostData: Omit<Post, "_id"> = {
-                    feedId: feed._id.toString(),
-                    createdBy: issueData.createdBy,
-                    createdAt: new Date(),
-                    content: `Issue: ${issueData.title}`, // Simple content
-                    postType: "issue",
-                    parentItemId: createdIssueId.toString(),
-                    parentItemType: "issue",
-                    userGroups: issueData.userGroups || [],
-                    comments: 0,
-                    reactions: {},
-                };
-
-                const shadowPost = await createPost(shadowPostData);
-
                 // --- Update Issue with commentPostId ---
                 if (shadowPost && shadowPost._id) {
                     const commentPostIdString = shadowPost._id.toString();
