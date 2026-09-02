@@ -15,6 +15,7 @@ import {
     EventOccurrenceRsvps,
     Members,
     Comments,
+    Posts,
 } from "@/lib/data/db";
 import { createDefaultFeed, createPost, deletePost, getFeedByHandle, updatePost } from "@/lib/data/feed";
 import {
@@ -103,6 +104,12 @@ import {
 } from "@/lib/data/event-host-write-policy";
 import { ensureCanonicalEventShadow } from "@/lib/data/event-shadow-orchestration";
 import { parseEventHostCircleIds, uniqueEventHostIds } from "@/lib/data/event-host-input";
+import { orchestrateEventUpdate } from "@/lib/data/event-update-orchestration";
+import {
+    EVENT_NOTICEBOARD_UNAVAILABLE_MESSAGE,
+    hasStoredEventNoticeboardReferences,
+    shouldOrchestrateEventNoticeboardUpdate,
+} from "@/lib/data/event-noticeboard-binding-orchestration";
 
 // ----- Types -----
 
@@ -528,24 +535,20 @@ const upsertEventNoticeboardPost = async ({
     if (!postData) return null;
 
     if (noticeboardPostId) {
-        try {
-            await updatePost({
-                _id: noticeboardPostId,
-                title: postData.title,
-                content: postData.content,
-                editedAt: new Date(),
-                userGroups: postData.userGroups,
-                postType: postData.postType,
-                internalPreviewType: postData.internalPreviewType,
-                internalPreviewId: postData.internalPreviewId,
-                internalPreviewUrl: postData.internalPreviewUrl,
-                parentItemType: postData.parentItemType,
-                parentItemId: postData.parentItemId,
-            });
-            return noticeboardPostId;
-        } catch (error) {
-            console.error("Failed to update linked noticeboard post for event:", error);
-        }
+        await updatePost({
+            _id: noticeboardPostId,
+            title: postData.title,
+            content: postData.content,
+            editedAt: new Date(),
+            userGroups: postData.userGroups,
+            postType: postData.postType,
+            internalPreviewType: postData.internalPreviewType,
+            internalPreviewId: postData.internalPreviewId,
+            internalPreviewUrl: postData.internalPreviewUrl,
+            parentItemType: postData.parentItemType,
+            parentItemId: postData.parentItemId,
+        });
+        return noticeboardPostId;
     }
 
     const createdPost = await createPost(
@@ -1069,31 +1072,24 @@ export async function updateEventAction(
 
         const remainingExistingUrls = new Set(parsedExistingMedia.map((m) => m?.fileInfo?.url));
         const toDelete = existingImages.filter((img) => !remainingExistingUrls.has(img.fileInfo.url));
-
-        // Upload new
-        let newlyUploaded: Media[] = [];
-        if (newFiles.length > 0) {
-            const uploadPromises = newFiles.map(async (file) => {
-                const prefix = `event_image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-                return await saveFile(file, prefix, circle._id as string, true);
-            });
-            const results = await Promise.all(uploadPromises);
-            newlyUploaded = results.map(
+        const uploadEventMedia = async (): Promise<Media[]> => {
+            const results = await Promise.all(
+                newFiles.map((file) => {
+                    const prefix = `event_image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+                    return saveFile(file, prefix, circle._id as string, true);
+                }),
+            );
+            return results.map(
                 (r: StorageFileInfo): Media => ({
                     name: r.originalName || "Uploaded Image",
                     type: newFiles.find((f) => f.name === r.originalName)?.type || "application/octet-stream",
-                    fileInfo: {
-                        url: r.url,
-                        fileName: r.fileName,
-                        originalName: r.originalName,
-                    },
+                    fileInfo: { url: r.url, fileName: r.fileName, originalName: r.originalName },
                 }),
             );
-        }
-
-        if (toDelete.length > 0) {
-            await Promise.allSettled(toDelete.map((img) => deleteFile(img.fileInfo.url)));
-        }
+        };
+        const deleteOldEventMedia = async () => {
+            if (toDelete.length) await Promise.allSettled(toDelete.map((img) => deleteFile(img.fileInfo.url)));
+        };
 
         const startAt = data.startAt ? parseDate(data.startAt) : event.startAt;
         const endAt = data.endAt ? parseDate(data.endAt) : event.endAt;
@@ -1103,7 +1099,6 @@ export async function updateEventAction(
         const updateData: Partial<EventModel> = {
             title: data.title,
             description: data.description,
-            images: [...parsedExistingMedia, ...newlyUploaded],
             location: locationData,
             userGroups: data.userGroups || event.userGroups,
             isVirtual: parseBool(data.isVirtual),
@@ -1128,10 +1123,22 @@ export async function updateEventAction(
         const user = await getUserByDid(userDid);
         if (!user) return { success: false, message: "User not found" };
 
-        const success = await updateEventDb(eventId, updateData, user);
-        if (!success) return { success: false, message: "Failed to update event" };
+        const noticeboardPublicationRequested = shouldPublishToNoticeboard(formData);
+        const hasStoredNoticeboardState = hasStoredEventNoticeboardReferences(event);
+        const shouldOrchestrateNoticeboardUpdate = shouldOrchestrateEventNoticeboardUpdate({
+            publicationRequested: noticeboardPublicationRequested,
+            hasStoredNoticeboardState,
+        });
 
         if (updateData.stage === "draft") {
+            const uploaded = await uploadEventMedia();
+            await deleteOldEventMedia();
+            const success = await updateEventDb(
+                eventId,
+                { ...updateData, images: [...parsedExistingMedia, ...uploaded] },
+                user,
+            );
+            if (!success) return { success: false, message: "Failed to update event" };
             await removeEventNoticeboardPosts(event);
             if (event.noticeboardPostId || Object.keys(event.noticeboardPostIdsByCircleId || {}).length > 0) {
                 await Events.updateOne(
@@ -1139,33 +1146,65 @@ export async function updateEventAction(
                     { $unset: { noticeboardPostId: "", noticeboardPostIdsByCircleId: "" } },
                 );
             }
-        } else if (shouldPublishToNoticeboard(formData)) {
-            try {
-                const removedHostPostIds = Object.entries(event.noticeboardPostIdsByCircleId || {})
-                    .filter(([hostCircleId]) => !hostCircleIds.includes(hostCircleId))
-                    .map(([, noticeboardPostId]) => noticeboardPostId);
-                await removeEventNoticeboardPosts({
-                    noticeboardPostIdsByCircleId: Object.fromEntries(
-                        removedHostPostIds.map((noticeboardPostId) => [noticeboardPostId, noticeboardPostId]),
-                    ),
-                });
-
-                const noticeboardPostIds = await upsertEventNoticeboardPosts({
-                    hostCircles,
-                    event: {
-                        ...event,
-                        ...updateData,
-                        _id: eventId,
-                        createdBy: event.createdBy,
-                        noticeboardPostId: event.noticeboardPostId,
-                        noticeboardPostIdsByCircleId: event.noticeboardPostIdsByCircleId,
-                    },
-                });
-                await Events.updateOne({ _id: new ObjectId(eventId) }, { $set: noticeboardPostIds });
-            } catch (error) {
-                console.error("Failed to create linked noticeboard post for event:", error);
-                return { success: true, message: "Event updated, but Noticeboard post could not be created." };
+        } else if (shouldOrchestrateNoticeboardUpdate) {
+            const hostCircleById = new Map(hostCircles.map((hostCircle) => [hostCircle._id!.toString(), hostCircle]));
+            const result = await orchestrateEventUpdate({
+                eventId,
+                primaryCircleId: event.circleId,
+                existingHostCircleIds: event.hostCircleIds,
+                requestedHostCircleIds: hostCircleIds,
+                noticeboardPostId: event.noticeboardPostId,
+                noticeboardPostIdsByCircleId: event.noticeboardPostIdsByCircleId,
+                shouldSynchronizeNoticeboard: true,
+                noticeboardPublicationRequested,
+                findPostById: async (id) => Posts.findOne({ _id: id }),
+                findFeedById: async (id) => Feeds.findOne({ _id: id }),
+                uploadMedia: uploadEventMedia,
+                deleteOldMedia: deleteOldEventMedia,
+                updateEvent: (uploaded) =>
+                    updateEventDb(eventId, { ...updateData, images: [...parsedExistingMedia, ...uploaded] }, user),
+                synchronizeHost: async (hostCircleId, binding) => {
+                    const hostCircle = hostCircleById.get(hostCircleId);
+                    if (!hostCircle?.handle) throw new Error("Authorized Event host unavailable.");
+                    return upsertEventNoticeboardPost({
+                        circle: hostCircle,
+                        circleHandle: hostCircle.handle,
+                        event: { ...event, ...updateData, _id: eventId, createdBy: event.createdBy },
+                        noticeboardPostId: binding?.postId,
+                    });
+                },
+                writeNoticeboardBacklinks: async (map, primaryPostId) => {
+                    await Events.updateOne(
+                        { _id: new ObjectId(eventId) },
+                        { $set: { noticeboardPostIdsByCircleId: map, noticeboardPostId: primaryPostId } },
+                    );
+                },
+                revalidate: () => revalidateEventHostPaths(hostCircles, eventId),
+            });
+            if (result.status === "noticeboard-unavailable") {
+                return { success: false, message: EVENT_NOTICEBOARD_UNAVAILABLE_MESSAGE };
             }
+            if (result.status === "event-update-failed") {
+                return { success: false, message: "Failed to update event" };
+            }
+            if (result.status === "noticeboard-sync-failed") {
+                console.error("Failed to synchronize linked noticeboard posts for event:", result.error);
+                return {
+                    success: true,
+                    message:
+                        "Event updated, but Noticeboard synchronization did not complete; some Noticeboard posts may already have been updated.",
+                };
+            }
+            return { success: true, message: "Event published successfully" };
+        } else {
+            const uploaded = await uploadEventMedia();
+            await deleteOldEventMedia();
+            const success = await updateEventDb(
+                eventId,
+                { ...updateData, images: [...parsedExistingMedia, ...uploaded] },
+                user,
+            );
+            if (!success) return { success: false, message: "Failed to update event" };
         }
 
         revalidateEventHostPaths(hostCircles, eventId);
