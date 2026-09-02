@@ -75,6 +75,9 @@ import {
     TASK_UPDATE_UNAVAILABLE_MESSAGE,
 } from "@/lib/data/task-reference-integrity-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { NOTICEBOARD_UNAVAILABLE_MESSAGE } from "@/lib/data/shift-noticeboard-binding-orchestration";
+import type { ValidatedShiftNoticeboardBinding } from "@/lib/data/shift-noticeboard-binding-orchestration";
+import { orchestrateShiftUpdate } from "@/lib/data/shift-update-orchestration";
 
 type GetTasksActionResult = {
     tasks: TaskDisplay[];
@@ -134,28 +137,24 @@ const upsertShiftNoticeboardPost = async ({
     circle,
     circleHandle,
     task,
+    validatedExistingBinding,
 }: {
     circle: Circle;
     circleHandle: string;
     task: Pick<Task, "_id" | "title" | "description" | "participantNotes" | "createdBy" | "noticeboardPostId">;
+    validatedExistingBinding?: ValidatedShiftNoticeboardBinding;
 }): Promise<string | null> => {
     if (!circle._id || !task._id) {
         return null;
     }
-
-    let feed = await getFeedByHandle(circle._id.toString(), "default");
-    if (!feed) {
-        feed = await createDefaultFeed(circle._id.toString());
-    }
-    if (!feed?._id) {
-        throw new Error("Noticeboard feed not found.");
+    if (task.noticeboardPostId !== null && task.noticeboardPostId !== undefined && !validatedExistingBinding) {
+        throw new Error(NOTICEBOARD_UNAVAILABLE_MESSAGE);
     }
 
     const taskId = task._id.toString();
     const postData: Partial<Post> = {
         title: task.title,
         content: buildShiftNoticeboardPostContent(task),
-        feedId: feed._id.toString(),
         createdBy: task.createdBy,
         createdAt: new Date(),
         editedAt: new Date(),
@@ -168,24 +167,25 @@ const upsertShiftNoticeboardPost = async ({
         internalPreviewUrl: getTaskInternalPreviewUrl(circleHandle, taskId),
     };
 
-    if (task.noticeboardPostId) {
-        try {
-            await updatePost({
-                _id: task.noticeboardPostId,
-                title: postData.title,
-                content: postData.content,
-                editedAt: new Date(),
-                userGroups: postData.userGroups,
-                postType: postData.postType,
-                internalPreviewType: postData.internalPreviewType,
-                internalPreviewId: postData.internalPreviewId,
-                internalPreviewUrl: postData.internalPreviewUrl,
-            });
-            return task.noticeboardPostId;
-        } catch (error) {
-            console.error("Failed to update linked noticeboard post for shift:", error);
-        }
+    if (validatedExistingBinding) {
+        await updatePost({
+            _id: validatedExistingBinding.postId,
+            title: postData.title,
+            content: postData.content,
+            editedAt: new Date(),
+            userGroups: postData.userGroups,
+            postType: postData.postType,
+            internalPreviewType: postData.internalPreviewType,
+            internalPreviewId: postData.internalPreviewId,
+            internalPreviewUrl: postData.internalPreviewUrl,
+        });
+        return validatedExistingBinding.postId;
     }
+
+    let feed = await getFeedByHandle(circle._id.toString(), "default");
+    if (!feed) feed = await createDefaultFeed(circle._id.toString());
+    if (!feed?._id) throw new Error("Noticeboard feed not found.");
+    postData.feedId = feed._id.toString();
 
     const createdPost = await createPost(
         await postSchema.parseAsync({
@@ -891,60 +891,12 @@ export async function updateTaskAction(
         const imagesToDelete = existingImages.filter(
             (existing) => !remainingExistingMediaUrls.has(existing.fileInfo.url),
         );
-        let newlyUploadedImages: Media[] = [];
-        if (newImageFiles.length > 0) {
-            const uploadPromises = newImageFiles.map(async (file) => {
-                const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, targetCircle._id as string, true);
-            });
-            const uploadResults = await Promise.all(uploadPromises);
-            newlyUploadedImages = uploadResults.map(
-                (result: StorageFileInfo): Media => ({
-                    name: result.originalName || "Uploaded Image",
-                    type: newImageFiles.find((f) => f.name === result.originalName)?.type || "application/octet-stream",
-                    fileInfo: {
-                        url: result.url,
-                        fileName: result.fileName,
-                        originalName: result.originalName,
-                    },
-                }),
-            );
-        }
-        if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map((img) => deleteFile(img.fileInfo.url));
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err));
-        }
-        const finalImages: Media[] = [...parsedExistingMedia, ...newlyUploadedImages];
-
-        // Prepare update data
-        const updateData: Omit<Partial<Task>, "goalId" | "eventId" | "priority" | "taskGroup"> & {
+        type TaskUpdateData = Omit<Partial<Task>, "goalId" | "eventId" | "priority" | "taskGroup"> & {
             goalId?: string;
             eventId?: string;
             priority?: TaskPriority | "";
             taskGroup?: string | "";
-        } = {
-            title: data.title,
-            description: data.description,
-            images: finalImages,
-            location: locationData,
-            targetDate: targetDateForUpdate,
-            circleId: sourceCircleId,
-            userGroups: data.userGroups || task.userGroups,
-            updatedAt: new Date(),
-            // Pass goalId directly (can be string or empty string for removal)
-            goalId: data.goalId ?? "",
-            eventId: data.eventId ?? "",
-            taskType: data.taskType,
-            slots: data.taskType === "shift" ? data.slots : undefined,
-            shiftStartTime: data.taskType === "shift" ? data.shiftStartTime : undefined,
-            shiftDurationMinutes: data.taskType === "shift" ? data.shiftDurationMinutes : undefined,
-            participants: data.taskType === "shift" ? (task.participants ?? []) : undefined,
-            participantNotes: data.taskType === "shift" ? data.participantNotes : undefined,
-            priority: data.priority ?? "",
-            taskGroup: data.taskType === "shift" ? "" : (data.taskGroup ?? ""),
         };
-
-        // Update task in DB (Data function handles $set/$unset logic)
         const fieldsToUnset: (keyof Task)[] = [];
         if (data.taskType !== "shift") {
             fieldsToUnset.push("slots", "shiftStartTime", "shiftDurationMinutes", "participants", "participantNotes");
@@ -952,36 +904,7 @@ export async function updateTaskAction(
             fieldsToUnset.push("taskGroup");
         }
 
-        const success = await updateTask(taskId, updateData, fieldsToUnset);
-
-        if (!success) {
-            return { success: false, message: "Failed to update task" };
-        }
-
-        if (data.taskType === "shift" && shouldPublishToNoticeboard(formData)) {
-            try {
-                const noticeboardPostId = await upsertShiftNoticeboardPost({
-                    circle: targetCircle,
-                    circleHandle: targetCircle.handle,
-                    task: {
-                        ...task,
-                        ...updateData,
-                        _id: taskId,
-                        createdBy: task.createdBy,
-                        noticeboardPostId: task.noticeboardPostId,
-                    },
-                });
-                if (noticeboardPostId && noticeboardPostId !== task.noticeboardPostId) {
-                    await Tasks.updateOne({ _id: new ObjectId(taskId) }, { $set: { noticeboardPostId } });
-                }
-                revalidatePath(`/circles/${targetCircle.handle}/feed`);
-            } catch (error) {
-                console.error("Failed to create linked noticeboard post for shift:", error);
-                return { success: true, message: "Task updated, but Noticeboard post could not be created." };
-            }
-        }
-
-        // Revalidate relevant pages
+        let updateData: TaskUpdateData | undefined;
         const revalidateTaskRoutes = (handle: string) => {
             revalidatePath(`/circles/${handle}/tasks`);
             revalidatePath(`/circles/${handle}/tasks/${taskId}`);
@@ -990,10 +913,99 @@ export async function updateTaskAction(
                 revalidatePath(`/circles/${handle}/shifts/${taskId}`);
             }
         };
-        if (sourceCircle.handle) {
-            revalidateTaskRoutes(sourceCircle.handle);
+
+        const updateResult = await orchestrateShiftUpdate({
+            storedNoticeboardPostId: task.noticeboardPostId,
+            expectedTaskId: task._id,
+            expectedCircleId: sourceCircleId,
+            shouldSynchronizeNoticeboard: data.taskType === "shift" && shouldPublishToNoticeboard(formData),
+            findPostById: (id) => Posts.findOne({ _id: id }),
+            findFeedById: (id) => Feeds.findOne({ _id: id }),
+            uploadMedia: async () => {
+                if (newImageFiles.length === 0) return [];
+                const uploadResults = await Promise.all(
+                    newImageFiles.map(async (file) => {
+                        const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                        return await saveFile(file, fileNamePrefix, targetCircle._id as string, true);
+                    }),
+                );
+                return uploadResults.map(
+                    (result: StorageFileInfo): Media => ({
+                        name: result.originalName || "Uploaded Image",
+                        type:
+                            newImageFiles.find((file) => file.name === result.originalName)?.type ||
+                            "application/octet-stream",
+                        fileInfo: {
+                            url: result.url,
+                            fileName: result.fileName,
+                            originalName: result.originalName,
+                        },
+                    }),
+                );
+            },
+            deleteOldMedia: async () => {
+                if (imagesToDelete.length === 0) return;
+                const deletePromises = imagesToDelete.map((image) => deleteFile(image.fileInfo.url));
+                await Promise.all(deletePromises).catch((error) =>
+                    console.error("Failed to delete some images:", error),
+                );
+            },
+            updateTask: async (newlyUploadedImages) => {
+                updateData = {
+                    title: data.title,
+                    description: data.description,
+                    images: [...parsedExistingMedia, ...newlyUploadedImages],
+                    location: locationData,
+                    targetDate: targetDateForUpdate,
+                    circleId: sourceCircleId,
+                    userGroups: data.userGroups || task.userGroups,
+                    updatedAt: new Date(),
+                    goalId: data.goalId ?? "",
+                    eventId: data.eventId ?? "",
+                    taskType: data.taskType,
+                    slots: data.taskType === "shift" ? data.slots : undefined,
+                    shiftStartTime: data.taskType === "shift" ? data.shiftStartTime : undefined,
+                    shiftDurationMinutes: data.taskType === "shift" ? data.shiftDurationMinutes : undefined,
+                    participants: data.taskType === "shift" ? (task.participants ?? []) : undefined,
+                    participantNotes: data.taskType === "shift" ? data.participantNotes : undefined,
+                    priority: data.priority ?? "",
+                    taskGroup: data.taskType === "shift" ? "" : (data.taskGroup ?? ""),
+                };
+                return updateTask(taskId, updateData, fieldsToUnset);
+            },
+            synchronizeNoticeboard: (validatedExistingBinding) =>
+                upsertShiftNoticeboardPost({
+                    circle: targetCircle,
+                    circleHandle: targetCircle.handle!,
+                    task: {
+                        ...task,
+                        ...updateData!,
+                        _id: taskId,
+                        createdBy: task.createdBy,
+                        noticeboardPostId: task.noticeboardPostId,
+                    },
+                    validatedExistingBinding,
+                }),
+            writeNoticeboardBacklink: async (noticeboardPostId) => {
+                await Tasks.updateOne({ _id: new ObjectId(taskId) }, { $set: { noticeboardPostId } });
+            },
+            revalidate: (noticeboardSynchronized) => {
+                if (noticeboardSynchronized) revalidatePath(`/circles/${targetCircle.handle}/feed`);
+                if (sourceCircle.handle) revalidateTaskRoutes(sourceCircle.handle);
+                revalidateTaskRoutes(targetCircle.handle!);
+            },
+        });
+
+        if (updateResult.status === "noticeboard-unavailable") {
+            return { success: false, message: NOTICEBOARD_UNAVAILABLE_MESSAGE };
         }
-        revalidateTaskRoutes(targetCircle.handle);
+        if (updateResult.status === "task-update-failed") {
+            return { success: false, message: "Failed to update task" };
+        }
+        if (updateResult.status === "noticeboard-sync-failed") {
+            console.error("Failed to create linked noticeboard post for shift:", updateResult.error);
+            return { success: true, message: "Task updated, but Noticeboard post could not be created." };
+        }
 
         return { success: true, message: "Task updated successfully" };
     } catch (error) {
