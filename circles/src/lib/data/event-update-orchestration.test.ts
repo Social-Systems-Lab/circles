@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
-import { orchestrateEventUpdate } from "./event-update-orchestration";
+import { deleteEventMediaWithFailurePropagation, orchestrateEventUpdate } from "./event-update-orchestration";
 import {
     hasStoredEventNoticeboardReferences,
     shouldOrchestrateEventNoticeboardUpdate,
@@ -93,6 +93,9 @@ const run = (c: ReturnType<typeof counts>, overrides: Record<string, unknown> = 
             }
             return binding?.postId || observed.createdPostId;
         },
+        deleteValidatedPost: async () => {
+            c.postDelete++;
+        },
         writeNoticeboardBacklinks: async (map, primaryPostId) => {
             c.backlink++;
             observed.backlinkMap = { ...map };
@@ -184,12 +187,10 @@ async function main() {
         true,
         "production branch selects explicit-unpublish preflight for valid stored state",
     );
-    assert.equal(
-        (await run(c, { noticeboardPublicationRequested: false })).status,
-        "noticeboard-unavailable",
-        "valid stored references plus explicit unpublish fail closed until b2b2",
-    );
-    assert.deepEqual(c, counts(), "valid explicit unpublish has zero effects");
+    assert.equal((await run(c, { noticeboardPublicationRequested: false })).status, "success");
+    assert.equal(c.postDelete, 3, "valid explicit unpublish deletes every validated Post");
+    assert.equal(c.eventUpdate, 1);
+    assert.equal(c.backlink, 1, "backlinks clear only after cleanup succeeds");
     assert.equal(
         productionBranchDecision({ publicationRequested: false }),
         false,
@@ -302,11 +303,15 @@ async function main() {
     assert.equal((await run(c, { noticeboardPostId: new ObjectId() })).status, "noticeboard-unavailable");
     assert.deepEqual(c, counts(), "primary/map disagreement has zero effects");
     c = counts();
+    observed = trace();
     assert.equal(
-        (await run(c, { existingHostCircleIds: circles, requestedHostCircleIds: circles.slice(0, 2) })).status,
-        "noticeboard-unavailable",
+        (await run(c, { existingHostCircleIds: circles, requestedHostCircleIds: circles.slice(0, 2) }, observed))
+            .status,
+        "success",
     );
-    assert.deepEqual(c, counts(), "host removal has zero effects and no delete");
+    assert.equal(c.postDelete, 1, "removed host cleanup deletes only its validated Post");
+    assert.equal(observed.backlinkMap?.[circles[2].toHexString()], undefined, "removed host map key is pruned");
+    assert.equal(c.postUpdate, 2, "retained hosts continue normal synchronization");
     c = counts();
     observed = trace();
     assert.equal(
@@ -450,6 +455,161 @@ async function main() {
     assert.equal(c.postUpdate, 2, "A succeeds, B fails, and C is not attempted");
     assert.deepEqual(observed.updatedPostIds, [posts[0]._id.toHexString()]);
     assert.equal(c.revalidate, 0, "failed partial synchronization does not revalidate");
+    c = counts();
+    assert.equal(
+        (
+            await run(c, {
+                existingHostCircleIds: circles,
+                requestedHostCircleIds: circles.slice(0, 2),
+                deleteValidatedPost: async () => {
+                    c.postDelete++;
+                    throw new Error("delete failed");
+                },
+            })
+        ).status,
+        "noticeboard-cleanup-failed",
+    );
+    assert.equal(c.postDelete, 1);
+    assert.equal(c.upload, 0, "removed-host delete failure precedes media");
+    assert.equal(c.eventUpdate, 0, "removed-host delete failure preserves source Event");
+    assert.equal(c.backlink, 0, "removed-host delete failure retains its map key");
+    assert.equal(c.postCreate, 0, "removed-host delete failure does not create replacement");
+    assert.equal(c.revalidate, 0);
+
+    c = counts();
+    let productionMediaDeleteAttempts = 0;
+    await assert.rejects(
+        deleteEventMediaWithFailurePropagation(["a", "b"], async (url) => {
+            productionMediaDeleteAttempts++;
+            if (url === "b") throw new Error("media delete failed");
+        }),
+        /media delete failed/,
+    );
+    assert.equal(productionMediaDeleteAttempts, 2, "production media helper propagates a rejected deletion");
+
+    c = counts();
+    let deleteAttempt = 0;
+    const partialUnpublish = await run(c, {
+        noticeboardPublicationRequested: false,
+        deleteValidatedPost: async () => {
+            deleteAttempt++;
+            c.postDelete++;
+            if (deleteAttempt === 2) throw new Error("second delete failed");
+        },
+    });
+    assert.equal(partialUnpublish.status, "noticeboard-cleanup-failed");
+    if (partialUnpublish.status === "noticeboard-cleanup-failed") assert.equal(partialUnpublish.partial, true);
+    assert.equal(c.postDelete, 2);
+    assert.equal(c.eventUpdate, 0, "partial unpublish failure preserves source Event");
+    assert.equal(c.backlink, 0, "partial unpublish failure does not clear remaining refs");
+    assert.equal(c.revalidate, 0);
+
+    for (const [name, overrides, phase] of [
+        [
+            "upload",
+            {
+                noticeboardPublicationRequested: false,
+                uploadMedia: async () => {
+                    throw new Error("upload failed");
+                },
+            },
+            "media",
+        ],
+        [
+            "old-media deletion",
+            {
+                noticeboardPublicationRequested: false,
+                deleteOldMedia: async () => {
+                    throw new Error("old-media deletion failed");
+                },
+            },
+            "media",
+        ],
+        [
+            "Event update",
+            {
+                noticeboardPublicationRequested: false,
+                updateEvent: async () => {
+                    throw new Error("Event update failed");
+                },
+            },
+            "event",
+        ],
+        [
+            "backlink persistence",
+            {
+                noticeboardPublicationRequested: false,
+                writeNoticeboardBacklinks: async () => {
+                    throw new Error("backlink persistence failed");
+                },
+            },
+            "backlinks",
+        ],
+    ] as const) {
+        c = counts();
+        const result = await run(c, overrides);
+        assert.equal(result.status, "post-cleanup-operation-failed", `${name} exception is explicit`);
+        if (result.status === "post-cleanup-operation-failed") {
+            assert.equal(result.phase, phase);
+            assert.equal(result.cleanupPerformed, true, `${name} retains cleanup disposition`);
+            assert.equal(result.sourceMutationPossible, phase !== "media");
+        }
+        assert.equal(c.postDelete, 3, `${name} happens after validated cleanup`);
+        assert.equal(c.revalidate, 0);
+    }
+
+    c = counts();
+    let fakeEventTitle = "before";
+    const ambiguousUpdate = await run(c, {
+        noticeboardPublicationRequested: false,
+        updateEvent: async () => {
+            c.eventUpdate++;
+            fakeEventTitle = "after";
+            throw new Error("ambiguous Event update");
+        },
+    });
+    assert.equal(fakeEventTitle, "after", "fake Event changed before update callback threw");
+    assert.equal(ambiguousUpdate.status, "post-cleanup-operation-failed");
+    if (ambiguousUpdate.status === "post-cleanup-operation-failed") {
+        assert.equal(ambiguousUpdate.phase, "event");
+        assert.equal(ambiguousUpdate.cleanupPerformed, true);
+        assert.equal(ambiguousUpdate.sourceMutationCompleted, false);
+        assert.equal(ambiguousUpdate.sourceMutationPossible, true);
+    }
+
+    c = counts();
+    const revalidationFailure = await run(c, {
+        noticeboardPublicationRequested: false,
+        revalidate: () => {
+            c.revalidate++;
+            throw new Error("revalidation failed");
+        },
+    });
+    assert.equal(revalidationFailure.status, "post-cleanup-operation-failed");
+    if (revalidationFailure.status === "post-cleanup-operation-failed") {
+        assert.equal(revalidationFailure.phase, "revalidate");
+        assert.equal(revalidationFailure.cleanupPerformed, true);
+        assert.equal(revalidationFailure.sourceMutationCompleted, true);
+        assert.equal(revalidationFailure.sourceMutationPossible, true);
+    }
+
+    c = counts();
+    const removedThenSyncFails = await run(c, {
+        existingHostCircleIds: circles,
+        requestedHostCircleIds: circles.slice(0, 2),
+        synchronizeHost: async () => {
+            throw new Error("retained synchronization failed");
+        },
+    });
+    assert.equal(removedThenSyncFails.status, "noticeboard-sync-failed");
+    if (removedThenSyncFails.status === "noticeboard-sync-failed") {
+        assert.equal(removedThenSyncFails.cleanupPerformed, true);
+        assert.equal(removedThenSyncFails.sourceMutationCompleted, true);
+        assert.equal(removedThenSyncFails.sourceMutationPossible, true);
+    }
+    assert.equal(c.postDelete, 1, "removed host cleanup completed before retained synchronization failed");
+    assert.equal(c.backlink, 0, "partial operation preserves backlink evidence");
+    assert.equal(c.revalidate, 0);
     console.log("event update orchestration tests passed");
 }
 
