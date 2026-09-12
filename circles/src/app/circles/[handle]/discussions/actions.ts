@@ -29,6 +29,7 @@ import {
 } from "@/lib/data/discussion-alternate-policy";
 import { orchestrateAlternateDiscussionCreate } from "@/lib/data/post-write-policy";
 import { orchestrateDiscussionModeration } from "@/lib/data/discussion-moderation-access-policy";
+import { saveCircleOwnedFile } from "@/lib/data/circle-media-storage";
 
 /**
  * Create a new discussion in a circle
@@ -65,22 +66,22 @@ export async function createDiscussionAction(handle: string, data: Partial<Post>
         resolveTarget: () => getCircleByHandle(handle),
         canReadTarget: (circle) => canReadCircle(userDid, circle),
         authorizeFeature: (circle) => isAuthorized(userDid, circle._id as string, features.feed.post),
-        upload: async (authored) => {
+        upload: async (authored, target) => {
             if (data instanceof FormData) {
                 const mediaFiles = data.getAll("media") as File[];
                 if (mediaFiles && mediaFiles.length > 0) {
                     authored.media = [];
                     for (const file of mediaFiles) {
                         if (file instanceof File) {
-                            const arrayBuffer = await file.arrayBuffer();
-                            const buffer = Buffer.from(arrayBuffer);
-                            const filename = `${Date.now()}-${file.name}`;
-                            const fs = await import("fs");
-                            const path = await import("path");
-                            const uploadDir = path.join(process.cwd(), "public", "uploads");
-                            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-                            fs.writeFileSync(path.join(uploadDir, filename), buffer);
-                            (authored.media as any[]).push(`/uploads/${filename}`);
+                            const saved = await saveCircleOwnedFile({
+                                actorDid: userDid,
+                                ownerCircle: target,
+                                file,
+                                fileName: "discussion-image",
+                                overwrite: true,
+                                resourceType: "post",
+                            });
+                            (authored.media as any[]).push({ name: file.name, type: file.type, fileInfo: saved });
                         }
                     }
                 }

@@ -27,7 +27,7 @@ type Variant =
     | "malformed-preview-id"
     | "wrong-task";
 
-const fixture = (variant: Variant = "valid", failPostUpdate = false) => {
+const fixture = (variant: Variant = "valid", failPostUpdate = false, failMediaCleanup = false) => {
     const taskId = new ObjectId();
     const sourceCircleId = new ObjectId();
     const postId = new ObjectId();
@@ -93,6 +93,7 @@ const fixture = (variant: Variant = "valid", failPostUpdate = false) => {
                 },
                 deleteOldMedia: async () => {
                     effects.imageDeletes++;
+                    if (failMediaCleanup) throw new Error("old media cleanup failed");
                 },
                 updateTask: async () => {
                     effects.taskUpdates++;
@@ -182,6 +183,13 @@ const main = async () => {
     assert.equal(valid.postUpdateTarget, valid.task.noticeboardPostId);
     assert.equal(valid.post.title, valid.task.title);
     assert.equal(valid.post.content, valid.task.description);
+
+    const cleanupFailure = fixture("valid", false, true);
+    const cleanupResult = await cleanupFailure.run();
+    assert.equal(cleanupResult.status, "media-cleanup-failed");
+    assert.equal(cleanupFailure.effects.taskUpdates, 1, "the source update remains persisted");
+    assert.equal(cleanupFailure.effects.imageDeletes, 1);
+    assert.equal(cleanupFailure.effects.postUpdates, 0, "later noticeboard effects do not run");
 
     const absent = fixture("absent");
     assert.deepEqual(await absent.run(), { status: "success" });

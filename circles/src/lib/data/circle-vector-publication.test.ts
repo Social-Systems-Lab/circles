@@ -365,6 +365,22 @@ const testVisibilityTransitions = async () => {
         };
     };
 
+    const blockedByMedia = makeDependencies("public");
+    blockedByMedia.dependencies.assertNoUnresolvedPublicMedia = async () => {
+        blockedByMedia.calls.push("media-preflight");
+        throw new Error("Public media must be migrated or removed");
+    };
+    await assert.rejects(
+        changeCircleVisibility({ circleId, actorDid, visibility: "secret" }, blockedByMedia.dependencies),
+        /Public media must be migrated or removed/,
+    );
+    assert.equal(blockedByMedia.getStored().visibility, "public");
+    assert.equal(
+        blockedByMedia.calls.some((call) => call.startsWith("mongo:")),
+        false,
+    );
+    assert.equal(blockedByMedia.calls.includes("delete"), false);
+
     const toSecret = makeDependencies(undefined);
     const secretResult = await changeCircleVisibility(
         { circleId, actorDid, visibility: "secret" },

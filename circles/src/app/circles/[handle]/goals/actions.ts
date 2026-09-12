@@ -9,7 +9,8 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { orchestrateFallbackCommentShadow } from "@/lib/data/fallback-comment-shadow-orchestration";
 import { getUserByDid } from "@/lib/data/user";
-import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
+import { FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
+import { cleanupCircleOwnedMedia, deleteCircleOwnedMedia, saveCircleOwnedFile } from "@/lib/data/circle-media-storage";
 import { features } from "@/lib/data/constants";
 import { Feeds, Goals, GoalMembers } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type (Removed duplicate Goal)
@@ -309,7 +310,14 @@ export async function createGoalAction( // Renamed function
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
                 const fileNamePrefix = `goal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`; // Updated prefix
-                return await saveFile(file, fileNamePrefix, circle._id as string, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "goal",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
 
@@ -513,7 +521,15 @@ export async function updateGoalAction(
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
                 const fileNamePrefix = `goal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id as string, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "goal",
+                    resourceId: goalId,
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
             newlyUploadedImages = uploadResults.map(
@@ -523,10 +539,6 @@ export async function updateGoalAction(
                     fileInfo: { url: result.url, fileName: result.fileName, originalName: result.originalName },
                 }),
             );
-        }
-        if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map((img) => deleteFile(img.fileInfo.url));
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err));
         }
         const finalImages: Media[] = [...parsedExistingMedia, ...newlyUploadedImages];
         // --- End Image Updates ---
@@ -557,11 +569,23 @@ export async function updateGoalAction(
             return { success: false, message: "Failed to update goal" };
         }
 
+        const cleanup = await cleanupCircleOwnedMedia(
+            imagesToDelete.map((img) => img.fileInfo.url),
+            circle._id!.toString(),
+        );
+        if (cleanup.status === "failed") console.error("Goal updated but old media cleanup failed:", cleanup.error);
+
         // Revalidate relevant pages
         revalidatePath(`/circles/${circleHandle}/goals`);
         revalidatePath(`/circles/${circleHandle}/goals/${goalId}`);
 
-        return { success: true, message: "Goal updated successfully" };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "The update was saved, but old media cleanup did not complete."
+                    : "Goal updated successfully",
+        };
     } catch (error) {
         console.error("Error updating goal:", error);
         return { success: false, message: "Failed to update goal" };
@@ -614,8 +638,11 @@ export async function deleteGoalAction( // Renamed function
         // --- Delete Associated Images ---
         if (goal.images && goal.images.length > 0) {
             // Renamed variable
-            const deletePromises = goal.images.map((img: Media) => deleteFile(img.fileInfo.url)); // Renamed variable, Added type Media
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some goal images:", err)); // Updated message, Log errors but continue
+            await Promise.all(
+                goal.images.map((img: Media) =>
+                    deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: circle._id!.toString() }),
+                ),
+            );
         }
         // --- End Delete Images ---
 
@@ -1003,7 +1030,14 @@ export async function completeGoalAction(
         if (resultImageFiles.length > 0) {
             const uploadPromises = resultImageFiles.map(async (file) => {
                 const fileNamePrefix = `goal_result_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circleId, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "goal",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
             uploadedResultImages = uploadResults.map(
@@ -1072,7 +1106,9 @@ export async function completeGoalAction(
         if (!updateSuccess) {
             // Attempt to delete uploaded images if goal update fails?
             if (uploadedResultImages.length > 0) {
-                const deletePromises = uploadedResultImages.map((img) => deleteFile(img.fileInfo.url));
+                const deletePromises = uploadedResultImages.map((img) =>
+                    deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: circleId }),
+                );
                 await Promise.all(deletePromises).catch((err) =>
                     console.error("Failed to clean up result images after goal completion failure:", err),
                 );

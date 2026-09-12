@@ -3,9 +3,11 @@ import { ObjectId } from "mongodb";
 import type { Circle, PrivateMedia } from "@/models/models";
 import {
     canReadPrivateMediaRecord,
+    deleteCirclePrivateFileWithDependencies,
     ensurePrivateMediaBucketExists,
     getPrivateMediaResponseHeaders,
     isPrivateMediaUrl,
+    isValidPrivateMediaRecordStorage,
     policyAllowsAnonymousObjectReads,
     resolvePrivateMediaRequest,
     savePrivateFileWithDependencies,
@@ -17,7 +19,7 @@ async function main() {
     const record: PrivateMedia = {
         storageClass: "private",
         bucket: "circles-private",
-        objectKey: "internal-key",
+        objectKey: `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.png`,
         ownerType: "circle",
         circleId,
         resourceType: "circle",
@@ -26,6 +28,67 @@ async function main() {
         size: 3,
         createdAt: new Date(),
     };
+
+    const validKeys = [
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.png`,
+    ];
+    for (const objectKey of validKeys) assert.equal(isValidPrivateMediaRecordStorage({ ...record, objectKey }), true);
+    for (const objectKey of [
+        `circle/${circleId}/------------------------------------`,
+        `circle/${circleId}/123e4567e89b42d3a456426614174000`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000-extra`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000/extra`,
+        `circle/${circleId}/../123e4567-e89b-42d3-a456-426614174000`,
+        `circle/${circleId}/123E4567-E89B-42D3-A456-426614174000`,
+        `circle/${circleId}/123e4567-e89b-12d3-a456-426614174000`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.bad.ext`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.png?download=1`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.png#fragment`,
+        `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.PNG`,
+        `circle/${new ObjectId().toHexString()}/123e4567-e89b-42d3-a456-426614174000.png`,
+    ]) {
+        assert.equal(isValidPrivateMediaRecordStorage({ ...record, objectKey }), false, objectKey);
+    }
+
+    const deleteMediaId = new ObjectId().toHexString();
+    const deleteHarness = async (stored: PrivateMedia, expectedCircleId: string) => {
+        let objectDeletes = 0;
+        let metadataDeletes = 0;
+        let recordRemains = true;
+        const result = deleteCirclePrivateFileWithDependencies(deleteMediaId, expectedCircleId, {
+            findRecord: async () => (recordRemains ? stored : null),
+            removeObject: async () => {
+                objectDeletes += 1;
+            },
+            deleteRecord: async () => {
+                metadataDeletes += 1;
+                recordRemains = false;
+            },
+        });
+        return { result, effects: () => ({ objectDeletes, metadataDeletes, recordRemains }) };
+    };
+
+    const sameCircleDelete = await deleteHarness(record, circleId);
+    await sameCircleDelete.result;
+    assert.deepEqual(sameCircleDelete.effects(), { objectDeletes: 1, metadataDeletes: 1, recordRemains: false });
+
+    const foreignCircleDelete = await deleteHarness(record, new ObjectId().toHexString());
+    await assert.rejects(foreignCircleDelete.result, /unavailable/);
+    assert.deepEqual(foreignCircleDelete.effects(), { objectDeletes: 0, metadataDeletes: 0, recordRemains: true });
+
+    const conversationDelete = await deleteHarness(
+        {
+            ...record,
+            ownerType: "conversation",
+            circleId: undefined,
+            conversationId: "conversation-1",
+            objectKey: "conversation/conversation-1/123e4567-e89b-42d3-a456-426614174000.png",
+        },
+        circleId,
+    );
+    await assert.rejects(conversationDelete.result, /unavailable/);
+    assert.deepEqual(conversationDelete.effects(), { objectDeletes: 0, metadataDeletes: 0, recordRemains: true });
 
     async function allowed(status: Circle["moderationStatus"], member: boolean, userDid = "member") {
         return canReadPrivateMediaRecord(userDid, record, {
@@ -56,8 +119,7 @@ async function main() {
                 moderationStatus: "active",
             }),
             isMember: async () => false,
-            canReadCircle: (viewerDid, circle) =>
-                canReadCircle(viewerDid, circle, { getMember: async () => null }),
+            canReadCircle: (viewerDid, circle) => canReadCircle(viewerDid, circle, { getMember: async () => null }),
         }),
         false,
         "secret non-members are denied by the central circle read policy",

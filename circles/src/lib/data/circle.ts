@@ -471,6 +471,9 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
         // Ensure we have the creator's DID
         throw new Error("Authenticated user DID is required to create a circle.");
     }
+    if (circle.visibility === "secret") {
+        throw new Error("Secret Circle creation remains disabled.");
+    }
     await assertCanSetCircleVisibility({
         actorDid: authenticatedUserDid,
         circleType: circle.circleType ?? "circle",

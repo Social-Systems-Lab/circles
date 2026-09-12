@@ -31,7 +31,13 @@ import { Circle, FileInfo, FormSubmitResponse, Media, UserPrivate } from "@/mode
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
-import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added deleteFile
+import { isFile } from "@/lib/data/storage";
+import {
+    canRetainSubmittedCircleMediaUrl,
+    collectReplacedCircleMedia,
+    persistCircleThenCleanupMedia,
+    saveCircleOwnedFile,
+} from "@/lib/data/circle-media-storage";
 import { sanitizeSocialLinks } from "@/lib/utils/social-links";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { Circles } from "@/lib/data/db";
@@ -686,7 +692,14 @@ export async function saveAbout(values: {
         // Handle picture upload (keeping existing logic for profile picture)
         if (isFile(values.picture)) {
             // save the picture and get the file info
-            circleUpdateData.picture = await saveFile(values.picture, "picture", values._id, true);
+            circleUpdateData.picture = await saveCircleOwnedFile({
+                actorDid: userDid,
+                ownerCircle: existingCircle,
+                file: values.picture,
+                fileName: "picture",
+                overwrite: true,
+                resourceType: "circle",
+            });
             revalidatePath(circleUpdateData.picture.url);
         }
 
@@ -701,7 +714,14 @@ export async function saveAbout(values: {
                     // New file upload
                     try {
                         console.log(`Uploading new image: ${imageItem.file.name}`);
-                        const savedFileInfo: FileInfo = await saveFile(imageItem.file, "image", values._id, true);
+                        const savedFileInfo: FileInfo = await saveCircleOwnedFile({
+                            actorDid: userDid,
+                            ownerCircle: existingCircle,
+                            file: imageItem.file,
+                            fileName: "image",
+                            overwrite: true,
+                            resourceType: "circle",
+                        });
                         finalMediaArray.push({
                             name: imageItem.file.name,
                             type: imageItem.file.type,
@@ -722,7 +742,7 @@ export async function saveAbout(values: {
                     if (existingMedia) {
                         finalMediaArray.push(existingMedia);
                         finalImageUrls.add(existingMedia.fileInfo.url);
-                    } else {
+                    } else if (canRetainSubmittedCircleMediaUrl(existingCircle, imageItem.existingMediaUrl)) {
                         // Fallback if not found (should ideally not happen if frontend state is correct)
                         console.warn(`Existing image URL not found in original data: ${imageItem.existingMediaUrl}`);
                         finalMediaArray.push({
@@ -738,25 +758,21 @@ export async function saveAbout(values: {
 
         // Handle deletion of images removed from the array
         const existingUrls = new Set(existingCircle.images?.map((m) => m.fileInfo.url) || []);
-        for (const urlToDelete of existingUrls) {
-            if (!finalImageUrls.has(urlToDelete)) {
-                try {
-                    console.log(`Deleting removed image: ${urlToDelete}`);
-                    await deleteFile(urlToDelete); // Assuming deleteFile takes the URL
-                    console.log(`Deleted successfully: ${urlToDelete}`);
-                    // No need to revalidate path for deleted files usually
-                } catch (deleteError) {
-                    console.error(`Failed to delete image ${urlToDelete}:`, deleteError);
-                    // Decide if this should be a critical error or just logged
-                }
-            }
-        }
+        const urlsToDelete = [...existingUrls].filter((url) => !finalImageUrls.has(url));
 
         circleUpdateData.images = finalMediaArray;
         // --- End Handle 'images' array ---
 
-        // update the circle
-        await updateCircle(circleUpdateData, userDid);
+        const replacedPicture = Object.hasOwn(circleUpdateData, "picture")
+            ? collectReplacedCircleMedia(existingCircle.picture, circleUpdateData.picture)
+            : [];
+        const cleanup = await persistCircleThenCleanupMedia(
+            () => updateCircle(circleUpdateData, userDid),
+            [...urlsToDelete, ...replacedPicture],
+            existingCircle._id!.toString(),
+        );
+        if (cleanup.status === "failed")
+            console.error("Circle update saved but old media cleanup failed:", cleanup.error);
 
         // clear page cache
         let circlePath = await getCirclePath(circleUpdateData);
@@ -767,7 +783,14 @@ export async function saveAbout(values: {
         const handleChanged = values.handle && values.handle !== existingCircle.handle;
         const newHandle = handleChanged ? values.handle : undefined;
 
-        return { success: true, message: "Circle about saved successfully", newHandle: newHandle };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "Changes were saved, but an old media file could not be removed."
+                    : "Circle about saved successfully",
+            newHandle: newHandle,
+        };
     } catch (error) {
         if (error instanceof Error) {
             return { success: false, message: error.message };

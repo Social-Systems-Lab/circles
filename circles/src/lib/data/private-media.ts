@@ -7,6 +7,7 @@ import { Circles, Members, PrivateMediaCollection } from "@/lib/data/db";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 
 export const PRIVATE_MEDIA_PATH_PREFIX = "/private-media/";
+const PRIVATE_MEDIA_URL_PATTERN = /^\/private-media\/([0-9a-fA-F]{24})$/;
 export const getPrivateMediaBucketName = () => process.env.MINIO_PRIVATE_BUCKET || "circles-private";
 export const getPublicMediaBucketName = () => process.env.MINIO_BUCKET || "circles";
 
@@ -200,22 +201,76 @@ export const savePrivateFile = (input: SavePrivateFileInput) =>
         insertRecord: (record) => PrivateMediaCollection.insertOne(record),
     });
 
-export async function deletePrivateFile(mediaId: string): Promise<void> {
+type DeletePrivateFileDependencies = {
+    findRecord: (id: ObjectId) => Promise<PrivateMedia | null>;
+    removeObject: (bucket: string, key: string) => Promise<unknown>;
+    deleteRecord: (id: ObjectId) => Promise<unknown>;
+};
+
+const defaultDeletePrivateFileDependencies: DeletePrivateFileDependencies = {
+    findRecord: (id) => PrivateMediaCollection.findOne({ _id: id }),
+    removeObject: (bucket, key) => privateMediaMinioClient.removeObject(bucket, key),
+    deleteRecord: (id) => PrivateMediaCollection.deleteOne({ _id: id }),
+};
+
+async function deletePrivateFileWithOwnerCheck(
+    mediaId: string,
+    expectedCircleId: string | undefined,
+    dependencies: DeletePrivateFileDependencies,
+): Promise<void> {
     if (!ObjectId.isValid(mediaId)) throw new Error("Invalid private media ID");
     const _id = new ObjectId(mediaId);
-    const record = await PrivateMediaCollection.findOne({ _id });
+    const record = await dependencies.findRecord(_id);
     if (!record) return;
-    if (record.bucket !== getPrivateMediaBucketName()) throw new Error("Invalid private media bucket");
+    if (!isValidPrivateMediaRecordStorage(record)) throw new Error("Invalid private media record");
+    if (
+        expectedCircleId !== undefined &&
+        (record.ownerType !== "circle" ||
+            !ObjectId.isValid(expectedCircleId) ||
+            record.circleId !== new ObjectId(expectedCircleId).toHexString())
+    ) {
+        throw new Error("Private media is unavailable");
+    }
 
     // Object-first means a database failure cannot leave an anonymously retrievable private object.
-    await privateMediaMinioClient.removeObject(record.bucket, record.objectKey);
-    await PrivateMediaCollection.deleteOne({ _id });
+    await dependencies.removeObject(record.bucket, record.objectKey);
+    await dependencies.deleteRecord(_id);
 }
 
-export const isPrivateMediaUrl = (url?: string | null): boolean =>
-    typeof url === "string" &&
-    url.startsWith(PRIVATE_MEDIA_PATH_PREFIX) &&
-    url.length > PRIVATE_MEDIA_PATH_PREFIX.length;
+export const deletePrivateFile = (mediaId: string): Promise<void> =>
+    deletePrivateFileWithOwnerCheck(mediaId, undefined, defaultDeletePrivateFileDependencies);
+
+export const deleteCirclePrivateFileWithDependencies = (
+    mediaId: string,
+    expectedCircleId: string,
+    dependencies: DeletePrivateFileDependencies,
+): Promise<void> => deletePrivateFileWithOwnerCheck(mediaId, expectedCircleId, dependencies);
+
+export const deleteCirclePrivateFile = (mediaId: string, expectedCircleId: string): Promise<void> =>
+    deletePrivateFileWithOwnerCheck(mediaId, expectedCircleId, defaultDeletePrivateFileDependencies);
+
+export const parsePrivateMediaUrl = (url?: string | null): string | null => {
+    if (typeof url !== "string") return null;
+    return PRIVATE_MEDIA_URL_PATTERN.exec(url)?.[1] ?? null;
+};
+
+export const isPrivateMediaUrl = (url?: string | null): boolean => parsePrivateMediaUrl(url) !== null;
+
+export const isValidPrivateMediaRecordStorage = (record: PrivateMedia): boolean => {
+    if (record.storageClass !== "private" || record.bucket !== getPrivateMediaBucketName()) return false;
+    if (record.ownerType === "circle") {
+        if (!record.circleId || !ObjectId.isValid(record.circleId)) return false;
+        const prefix = `circle/${new ObjectId(record.circleId).toHexString()}/`;
+        return new RegExp(
+            `^${prefix}[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:\\.[a-z0-9]{1,10})?$`,
+        ).test(record.objectKey);
+    }
+    return Boolean(
+        record.ownerType === "conversation" &&
+            record.conversationId &&
+            record.objectKey.startsWith(`conversation/${record.conversationId}/`),
+    );
+};
 
 export function getPrivateMediaResponseHeaders(record: PrivateMedia): Record<string, string> {
     const safeType = /^[\w.+-]+\/[\w.+-]+$/.test(record.contentType) ? record.contentType : "application/octet-stream";
@@ -242,11 +297,16 @@ export async function canReadPrivateMediaRecord(
     record: PrivateMedia,
     dependencies: AccessDependencies,
 ): Promise<boolean> {
-    if (!userDid || record.storageClass !== "private" || record.bucket !== getPrivateMediaBucketName()) return false;
+    if (!userDid || !isValidPrivateMediaRecordStorage(record)) return false;
     if (record.ownerType !== "circle" || !record.circleId || !ObjectId.isValid(record.circleId)) return false;
 
     const circle = await dependencies.findCircle(record.circleId);
-    if (!circle || !(await (dependencies.canReadCircle ?? canReadCircle)(userDid, circle))) return false;
+    if (
+        !circle ||
+        circle._id?.toString() !== new ObjectId(record.circleId).toHexString() ||
+        !(await (dependencies.canReadCircle ?? canReadCircle)(userDid, circle))
+    )
+        return false;
     // Private-media records remain member-only even for public circles.
     return dependencies.isMember(userDid, record.circleId);
 }

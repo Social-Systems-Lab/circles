@@ -72,7 +72,12 @@ for (const [functionName, nextFunctionName, authorizationException] of guardedTa
 
 const updateTaskBody = functionBody(tasks, "updateTaskAction", "updateTaskPriorityAction");
 assert.match(updateTaskBody, /assertCircleWritesAllowed\(sourceCircle\._id as string\)/);
-for (const sideEffect of [/saveFile\(/, /deleteFile\(/, /updateTask\(/, /upsertShiftNoticeboardPost\(/]) {
+for (const sideEffect of [
+    /saveCircleOwnedFile\(/,
+    /deleteCircleOwnedMedia\(/,
+    /updateTask\(/,
+    /upsertShiftNoticeboardPost\(/,
+]) {
     assertBefore(updateTaskBody, /await assertCircleWritesAllowed/, sideEffect, "task update preflight");
 }
 
@@ -95,8 +100,12 @@ assert.match(funding, /canWriteCircleByLifecycle\(circle\)/);
 const ranking = source("src/lib/data/ranking.ts");
 assert.match(ranking, /moderationStatus: "active"/);
 
-const circleData = source("src/lib/data/circle.ts");
-const lifecycleQuery = functionBody(circleData, "getDiscoverableLifecycleQuery", "getSwipeCircles");
+const lifecyclePolicy = source("src/lib/data/circle-lifecycle-policy.ts");
+const lifecycleQuery = functionBody(
+    lifecyclePolicy,
+    "export const getDiscoverableLifecycleQuery",
+    "export const getReadableLifecycleQuery",
+);
 assert.match(lifecycleQuery, /circleType: "user"/);
 
 console.log("lifecycle enforcement source tests passed");

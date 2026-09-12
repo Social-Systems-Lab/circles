@@ -21,7 +21,13 @@ import {
 } from "@/models/models"; // Added Media, FileInfo
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
 import { revalidatePath } from "next/cache";
-import { isFile, saveFile, deleteFile } from "@/lib/data/storage"; // Added isFile, saveFile, deleteFile
+import { isFile } from "@/lib/data/storage";
+import {
+    canRetainSubmittedCircleMediaUrl,
+    collectReplacedCircleMedia,
+    persistCircleThenCleanupMedia,
+    saveCircleOwnedFile,
+} from "@/lib/data/circle-media-storage";
 import { updateDonationIntent } from "@/lib/data/user";
 
 type SaveMissionActionResponse = {
@@ -394,16 +400,30 @@ export const saveProfileAction = async (
     }
 
     try {
+        const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
+        if (!authorized) {
+            return { success: false, message: "You are not authorized to edit profile" };
+        }
+
         let circle: Partial<Circle> = {
             _id: circleId,
             description,
             content,
         };
+        const existingCircle = await getCircleById(circleId);
+        if (!existingCircle) throw new Error("Circle not found for profile update.");
 
         // Handle picture upload (keeping existing logic for profile picture)
         if (isFile(picture)) {
             try {
-                circle.picture = await saveFile(picture, "picture", circleId, true);
+                circle.picture = await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: existingCircle,
+                    file: picture,
+                    fileName: "picture",
+                    overwrite: true,
+                    resourceType: "circle",
+                });
                 revalidatePath(circle.picture.url);
             } catch (uploadError) {
                 console.error("Failed to upload profile picture:", uploadError);
@@ -412,16 +432,22 @@ export const saveProfileAction = async (
 
         // --- Handle 'images' array ---
         const finalMediaArray: Media[] = [];
+        let urlsToDelete: string[] = [];
         const finalImageUrls = new Set<string>();
-        const existingCircle = await getCircleById(circleId); // Fetch existing circle data
-
-        if (images && existingCircle) {
+        if (images) {
             for (const imageItem of images) {
                 if (imageItem.file) {
                     // New file upload
                     try {
                         console.log(`Uploading new profile image: ${imageItem.file.name}`);
-                        const savedFileInfo: FileInfo = await saveFile(imageItem.file, "image", circleId, true);
+                        const savedFileInfo: FileInfo = await saveCircleOwnedFile({
+                            actorDid: userDid,
+                            ownerCircle: existingCircle,
+                            file: imageItem.file,
+                            fileName: "image",
+                            overwrite: true,
+                            resourceType: "circle",
+                        });
                         finalMediaArray.push({
                             name: imageItem.file.name,
                             type: imageItem.file.type,
@@ -441,7 +467,7 @@ export const saveProfileAction = async (
                     if (existingMedia) {
                         finalMediaArray.push(existingMedia);
                         finalImageUrls.add(existingMedia.fileInfo.url);
-                    } else {
+                    } else if (canRetainSubmittedCircleMediaUrl(existingCircle, imageItem.existingMediaUrl)) {
                         console.warn(`Existing profile image URL not found: ${imageItem.existingMediaUrl}`);
                         finalMediaArray.push({
                             name: "Existing Image",
@@ -455,26 +481,10 @@ export const saveProfileAction = async (
 
             // Handle deletion
             const existingUrls = new Set(existingCircle.images?.map((m) => m.fileInfo.url) || []);
-            for (const urlToDelete of existingUrls) {
-                if (!finalImageUrls.has(urlToDelete)) {
-                    try {
-                        console.log(`Deleting removed profile image: ${urlToDelete}`);
-                        await deleteFile(urlToDelete);
-                        console.log(`Deleted successfully: ${urlToDelete}`);
-                    } catch (deleteError) {
-                        console.error(`Failed to delete profile image ${urlToDelete}:`, deleteError);
-                    }
-                }
-            }
+            urlsToDelete = [...existingUrls].filter((url) => !finalImageUrls.has(url));
         }
         circle.images = finalMediaArray;
         // --- End Handle 'images' array ---
-
-        // Check if user is authorized to edit circle settings
-        let authorized = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
-        if (!authorized) {
-            return { success: false, message: "You are not authorized to edit profile" };
-        }
 
         // Add profile step to completedOnboardingSteps
         let user = await getUserByDid(userDid);
@@ -483,13 +493,28 @@ export const saveProfileAction = async (
             circle.completedOnboardingSteps.push("profile");
         }
 
-        await updateCircle(circle, userDid);
+        const replacedPicture = Object.hasOwn(circle, "picture")
+            ? collectReplacedCircleMedia(existingCircle.picture, circle.picture)
+            : [];
+        const cleanup = await persistCircleThenCleanupMedia(
+            () => updateCircle(circle, userDid),
+            [...urlsToDelete, ...replacedPicture],
+            existingCircle._id!.toString(),
+        );
+        if (cleanup.status === "failed")
+            console.error("Profile update saved but old media cleanup failed:", cleanup.error);
 
         // Clear page cache so pages update
         let circlePath = await getCirclePath(circle);
         revalidatePath(circlePath);
 
-        return { success: true, message: "Profile saved successfully" };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "Changes were saved, but an old media file could not be removed."
+                    : "Profile saved successfully",
+        };
     } catch (error) {
         console.log("error", error);
         if (error instanceof Error) {

@@ -41,7 +41,8 @@ import {
 } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate, getPrivateUserByDid, updateUser, getUserByHandle } from "@/lib/data/user";
-import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
+import { FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
+import { deleteCircleOwnedMedia, saveCircleOwnedFile } from "@/lib/data/circle-media-storage";
 import { features } from "@/lib/data/constants";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 
@@ -104,10 +105,7 @@ import {
 } from "@/lib/data/event-host-write-policy";
 import { ensureCanonicalEventShadow } from "@/lib/data/event-shadow-orchestration";
 import { parseEventHostCircleIds, uniqueEventHostIds } from "@/lib/data/event-host-input";
-import {
-    deleteEventMediaWithFailurePropagation,
-    orchestrateEventUpdate,
-} from "@/lib/data/event-update-orchestration";
+import { deleteEventMediaWithFailurePropagation, orchestrateEventUpdate } from "@/lib/data/event-update-orchestration";
 import { orchestrateEventNoticeboardCleanup } from "@/lib/data/event-noticeboard-cleanup-orchestration";
 import {
     orchestrateEventDestructiveLifecycle,
@@ -884,7 +882,14 @@ export async function createEventAction(
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
                 const prefix = `event_image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-                return await saveFile(file, prefix, circle._id as string, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: prefix,
+                    overwrite: true,
+                    resourceType: "event",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
             uploadedImages = uploadResults.map(
@@ -1097,7 +1102,15 @@ export async function updateEventAction(
             const results = await Promise.all(
                 newFiles.map((file) => {
                     const prefix = `event_image_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-                    return saveFile(file, prefix, circle._id as string, true);
+                    return saveCircleOwnedFile({
+                        actorDid: userDid,
+                        ownerCircle: circle,
+                        file,
+                        fileName: prefix,
+                        overwrite: true,
+                        resourceType: "event",
+                        resourceId: eventId,
+                    });
                 }),
             );
             return results.map(
@@ -1111,7 +1124,7 @@ export async function updateEventAction(
         const deleteOldEventMedia = async () => {
             await deleteEventMediaWithFailurePropagation(
                 toDelete.map((img) => img.fileInfo.url),
-                deleteFile,
+                (url) => deleteCircleOwnedMedia({ url, expectedCircleId: event.circleId }),
             );
         };
 
@@ -1321,7 +1334,11 @@ export async function deleteEventAction(
             cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
             prepare: async () => {
                 if (event.images?.length) {
-                    const results = await Promise.allSettled(event.images.map((img) => deleteFile(img.fileInfo.url)));
+                    const results = await Promise.allSettled(
+                        event.images.map((img) =>
+                            deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: event.circleId }),
+                        ),
+                    );
                     const rejected = results.find(
                         (result): result is PromiseRejectedResult => result.status === "rejected",
                     );

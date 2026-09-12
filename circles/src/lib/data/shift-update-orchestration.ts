@@ -9,6 +9,7 @@ export type ShiftUpdateOrchestrationResult =
     | { status: "success" }
     | { status: "noticeboard-unavailable" }
     | { status: "task-update-failed" }
+    | { status: "media-cleanup-failed"; error: unknown }
     | { status: "noticeboard-sync-failed"; error: unknown };
 
 export const orchestrateShiftUpdate = async <TMedia>({
@@ -52,10 +53,14 @@ export const orchestrateShiftUpdate = async <TMedia>({
     }
 
     const uploadedMedia = await uploadMedia();
-    await deleteOldMedia();
-
     if (!(await updateTask(uploadedMedia))) {
         return { status: "task-update-failed" };
+    }
+
+    try {
+        await deleteOldMedia();
+    } catch (error) {
+        return { status: "media-cleanup-failed", error };
     }
 
     if (shouldSynchronizeNoticeboard) {

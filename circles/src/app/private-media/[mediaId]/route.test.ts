@@ -10,7 +10,7 @@ const media: PrivateMedia = {
     _id: new ObjectId(mediaId),
     storageClass: "private",
     bucket: "circles-private",
-    objectKey: "circle/internal-object-key.png",
+    objectKey: `circle/${circleId}/123e4567-e89b-42d3-a456-426614174000.png`,
     ownerType: "circle",
     circleId,
     resourceType: "circle",
@@ -72,8 +72,18 @@ async function main() {
         ["invalid session", { authenticate: async () => Promise.reject(new Error("invalid session")) }],
         ["missing record", { findRecord: async () => null }],
         ["missing circle", { findCircle: async () => null }],
+        ["wrong circle", { findCircle: async () => ({ ...activeCircle, _id: new ObjectId() }) }],
         ["malformed circle", { findRecord: async () => ({ ...media, circleId: "malformed" }) }],
+        [
+            "wrong owner key",
+            { findRecord: async () => ({ ...media, objectKey: `circle/${new ObjectId().toHexString()}/file.png` }) },
+        ],
+        ["wrong bucket", { findRecord: async () => ({ ...media, bucket: "circles" }) }],
         ["non-member", { isMember: async () => false }],
+        ["former member", { authenticate: async () => "did:former", isMember: async () => false }],
+        ["chat-only member", { authenticate: async () => "did:chat-only", isMember: async () => false }],
+        ["wrong-Circle member", { authenticate: async () => "did:other-circle", isMember: async () => false }],
+        ["admin-group-only user", { authenticate: async () => "did:admin-group", isMember: async () => false }],
         ["ordinary superadmin non-member", { authenticate: async () => "did:superadmin", isMember: async () => false }],
         ["suspended", { findCircle: async () => ({ ...activeCircle, moderationStatus: "suspended" }) }],
         ["removed", { findCircle: async () => ({ ...activeCircle, moderationStatus: "removed" }) }],
@@ -88,6 +98,30 @@ async function main() {
     for (const [label, overrides] of denialCases) {
         assert.deepEqual(await neutralResponse(await invoke(makeHandler(overrides))), expectedNeutral, label);
     }
+
+    let malformedKeyObjectReads = 0;
+    assert.deepEqual(
+        await neutralResponse(
+            await invoke(
+                makeHandler({
+                    findRecord: async () => ({
+                        ...media,
+                        objectKey: `circle/${circleId}/------------------------------------`,
+                    }),
+                    statObject: async () => {
+                        malformedKeyObjectReads += 1;
+                    },
+                    getObject: async () => {
+                        malformedKeyObjectReads += 1;
+                        return Readable.from(Buffer.from("unexpected"));
+                    },
+                }),
+            ),
+        ),
+        expectedNeutral,
+        "malformed private object key",
+    );
+    assert.equal(malformedKeyObjectReads, 0, "malformed metadata never reaches private object storage");
 
     for (const moderationStatus of ["active", "paused"] as const) {
         const response = await invoke(makeHandler({ findCircle: async () => ({ ...activeCircle, moderationStatus }) }));

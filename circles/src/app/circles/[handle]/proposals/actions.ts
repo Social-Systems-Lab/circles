@@ -23,7 +23,13 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { orchestrateFallbackCommentShadow } from "@/lib/data/fallback-comment-shadow-orchestration";
 import { getUserByDid } from "@/lib/data/user";
-import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias, import isFile
+import { FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Correct storage functions and add FileInfo type alias, import isFile
+import {
+    cleanupCircleOwnedMedia,
+    cleanupMediaBeforeSourceDelete,
+    deleteCircleOwnedMedia,
+    saveCircleOwnedFile,
+} from "@/lib/data/circle-media-storage";
 import { features } from "@/lib/data/constants";
 import {
     getProposalsByCircleId,
@@ -260,7 +266,14 @@ export async function createProposalAction(
             const uploadPromises = imageFiles.map(async (file) => {
                 // Generate a unique filename prefix, saveFile adds timestamp
                 const fileNamePrefix = `proposal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id as string, true); // Use saveFile, overwrite=true
+                return await saveCircleOwnedFile({
+                    actorDid: userDid!,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "proposal",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
 
@@ -530,7 +543,15 @@ export async function updateProposalAction(
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
                 const fileNamePrefix = `proposal_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id.toString(), true); // Use saveFile
+                return await saveCircleOwnedFile({
+                    actorDid: userDid!,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "proposal",
+                    resourceId: proposalId,
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
 
@@ -545,19 +566,6 @@ export async function updateProposalAction(
                     },
                 }),
             );
-        }
-
-        // Delete removed files from storage using their URLs
-        if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map(async (img: Media) => {
-                try {
-                    await deleteFile(img.fileInfo.url); // Use deleteFile with URL
-                } catch (error) {
-                    console.error(`Failed to delete file ${img.fileInfo.url}:`, error);
-                    // Decide if failure to delete should stop the update or just be logged
-                }
-            });
-            await Promise.all(deletePromises);
         }
 
         // Combine remaining existing images and newly uploaded images
@@ -584,11 +592,23 @@ export async function updateProposalAction(
             return { success: false, message: "Failed to update proposal" };
         }
 
+        const cleanup = await cleanupCircleOwnedMedia(
+            imagesToDelete.map((img: Media) => img.fileInfo.url),
+            circle._id.toString(),
+        );
+        if (cleanup.status === "failed") console.error("Proposal updated but old media cleanup failed:", cleanup.error);
+
         // Revalidate the proposal pages
         revalidatePath(`/circles/${circleHandle}/proposals`);
         revalidatePath(`/circles/${circleHandle}/proposals/${proposalId}`);
 
-        return { success: true, message: "Proposal updated successfully" };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "The update was saved, but old media cleanup did not complete."
+                    : "Proposal updated successfully",
+        };
     } catch (error) {
         console.error("Error updating proposal:", error);
         return { success: false, message: "Failed to update proposal" };
@@ -637,10 +657,19 @@ export async function deleteProposalAction(
             return { success: false, message: "Not authorized to delete this proposal" };
         }
 
-        // Delete the proposal
-        const success = await deleteProposal(proposalId);
-
-        if (!success) {
+        const deletion = await cleanupMediaBeforeSourceDelete(
+            proposal.images?.map((image: Media) => image.fileInfo.url) ?? [],
+            circle._id.toString(),
+            () => deleteProposal(proposalId),
+        );
+        if (deletion.status === "cleanup-failed") {
+            console.error("Proposal media cleanup did not complete; source was preserved:", deletion.error);
+            return {
+                success: false,
+                message: "Proposal media cleanup did not complete. The Proposal was not deleted.",
+            };
+        }
+        if (deletion.status === "source-delete-failed") {
             return { success: false, message: "Failed to delete proposal" };
         }
 
@@ -1179,7 +1208,14 @@ export async function createGoalFromProposalAction(
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
                 const fileNamePrefix = `goal_image_${Date.now()}`;
-                return await saveFile(file, fileNamePrefix, circleId, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid!,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "proposal",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
             goalImages = uploadResults.map(

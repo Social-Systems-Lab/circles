@@ -28,7 +28,8 @@ import {
 import { getCircleByHandle, getCircleById } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user";
-import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
+import { FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage";
+import { deleteCircleOwnedMedia, saveCircleOwnedFile } from "@/lib/data/circle-media-storage";
 import { features } from "@/lib/data/constants";
 import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
@@ -626,7 +627,14 @@ export async function createTaskAction( // Renamed function
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
                 const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`; // Updated prefix
-                return await saveFile(file, fileNamePrefix, circle._id as string, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "task",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
 
@@ -926,7 +934,15 @@ export async function updateTaskAction(
                 const uploadResults = await Promise.all(
                     newImageFiles.map(async (file) => {
                         const fileNamePrefix = `task_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                        return await saveFile(file, fileNamePrefix, targetCircle._id as string, true);
+                        return await saveCircleOwnedFile({
+                            actorDid: userDid,
+                            ownerCircle: targetCircle,
+                            file,
+                            fileName: fileNamePrefix,
+                            overwrite: true,
+                            resourceType: "task",
+                            resourceId: taskId,
+                        });
                     }),
                 );
                 return uploadResults.map(
@@ -945,9 +961,10 @@ export async function updateTaskAction(
             },
             deleteOldMedia: async () => {
                 if (imagesToDelete.length === 0) return;
-                const deletePromises = imagesToDelete.map((image) => deleteFile(image.fileInfo.url));
-                await Promise.all(deletePromises).catch((error) =>
-                    console.error("Failed to delete some images:", error),
+                await Promise.all(
+                    imagesToDelete.map((image) =>
+                        deleteCircleOwnedMedia({ url: image.fileInfo.url, expectedCircleId: sourceCircleId }),
+                    ),
                 );
             },
             updateTask: async (newlyUploadedImages) => {
@@ -1001,6 +1018,10 @@ export async function updateTaskAction(
         }
         if (updateResult.status === "task-update-failed") {
             return { success: false, message: "Failed to update task" };
+        }
+        if (updateResult.status === "media-cleanup-failed") {
+            console.error("Task updated but old media cleanup failed:", updateResult.error);
+            return { success: true, message: "The update was saved, but old media cleanup did not complete." };
         }
         if (updateResult.status === "noticeboard-sync-failed") {
             console.error("Failed to create linked noticeboard post for shift:", updateResult.error);
@@ -1137,8 +1158,11 @@ export async function deleteTaskAction( // Renamed function
         // --- Delete Associated Images ---
         if (task.images && task.images.length > 0) {
             // Renamed variable
-            const deletePromises = task.images.map((img: Media) => deleteFile(img.fileInfo.url)); // Renamed variable, Added type Media
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some task images:", err)); // Updated message, Log errors but continue
+            await Promise.all(
+                task.images.map((img: Media) =>
+                    deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: circle._id!.toString() }),
+                ),
+            );
         }
         // --- End Delete Images ---
 

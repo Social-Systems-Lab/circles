@@ -18,7 +18,8 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { orchestrateFallbackCommentShadow } from "@/lib/data/fallback-comment-shadow-orchestration";
 import { getUserByDid, getUserPrivate } from "@/lib/data/user"; // Added getUserPrivate
-import { saveFile, deleteFile, FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Import isFile
+import { FileInfo as StorageFileInfo, isFile } from "@/lib/data/storage"; // Import isFile
+import { cleanupCircleOwnedMedia, deleteCircleOwnedMedia, saveCircleOwnedFile } from "@/lib/data/circle-media-storage";
 import { features } from "@/lib/data/constants"; // Assuming features.issues will be added here
 // Placeholder imports for issue data functions (to be created in src/lib/data/issue.ts)
 import {
@@ -288,7 +289,14 @@ export async function createIssueAction(
         if (imageFiles.length > 0) {
             const uploadPromises = imageFiles.map(async (file) => {
                 const fileNamePrefix = `issue_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id as string, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "issue",
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
 
@@ -494,7 +502,15 @@ export async function updateIssueAction(
         if (newImageFiles.length > 0) {
             const uploadPromises = newImageFiles.map(async (file) => {
                 const fileNamePrefix = `issue_image_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                return await saveFile(file, fileNamePrefix, circle._id as string, true);
+                return await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: circle,
+                    file,
+                    fileName: fileNamePrefix,
+                    overwrite: true,
+                    resourceType: "issue",
+                    resourceId: issueId,
+                });
             });
             const uploadResults = await Promise.all(uploadPromises);
             newlyUploadedImages = uploadResults.map(
@@ -504,11 +520,6 @@ export async function updateIssueAction(
                     fileInfo: { url: result.url, fileName: result.fileName, originalName: result.originalName },
                 }),
             );
-        }
-
-        if (imagesToDelete.length > 0) {
-            const deletePromises = imagesToDelete.map((img: Media) => deleteFile(img.fileInfo.url)); // Added type Media
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some images:", err)); // Log errors but continue
         }
 
         const finalImages: Media[] = [...parsedExistingMedia, ...newlyUploadedImages];
@@ -533,11 +544,23 @@ export async function updateIssueAction(
             return { success: false, message: "Failed to update issue" };
         }
 
+        const cleanup = await cleanupCircleOwnedMedia(
+            imagesToDelete.map((img: Media) => img.fileInfo.url),
+            circle._id!.toString(),
+        );
+        if (cleanup.status === "failed") console.error("Issue updated but old media cleanup failed:", cleanup.error);
+
         // Revalidate relevant pages
         revalidatePath(`/circles/${circleHandle}/issues`);
         revalidatePath(`/circles/${circleHandle}/issues/${issueId}`);
 
-        return { success: true, message: "Issue updated successfully" };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "The update was saved, but old media cleanup did not complete."
+                    : "Issue updated successfully",
+        };
     } catch (error) {
         console.error("Error updating issue:", error);
         return { success: false, message: "Failed to update issue" };
@@ -588,8 +611,11 @@ export async function deleteIssueAction(
 
         // --- Delete Associated Images ---
         if (issue.images && issue.images.length > 0) {
-            const deletePromises = issue.images.map((img: Media) => deleteFile(img.fileInfo.url)); // Added type Media
-            await Promise.all(deletePromises).catch((err) => console.error("Failed to delete some issue images:", err)); // Log errors but continue
+            await Promise.all(
+                issue.images.map((img: Media) =>
+                    deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: circle._id!.toString() }),
+                ),
+            );
         }
         // --- End Delete Images ---
 

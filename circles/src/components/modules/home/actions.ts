@@ -17,6 +17,11 @@ import { DETACH_ADMIN_CHANGE_BLOCK_MESSAGE, getPendingDetachCircleRequest } from
 import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
+import {
+    collectReplacedCircleMedia,
+    persistCircleThenCleanupMedia,
+    saveCircleOwnedFile,
+} from "@/lib/data/circle-media-storage";
 import { revalidatePath } from "next/cache";
 import {
     getUser,
@@ -348,11 +353,20 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
 
+        const ownerCircle = await getCircleById(circleId);
+        if (!ownerCircle) return { success: false, message: "Circle not found" };
         let updateData: Partial<Circle> = { _id: circleId };
 
         for (const [key, value] of formData.entries() as any) {
             if (key === "picture" || key === "cover") {
-                let fileInfo = await saveFile(value, key, circleId, true);
+                let fileInfo = await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle,
+                    file: value,
+                    fileName: key,
+                    overwrite: true,
+                    resourceType: "circle",
+                });
                 updateData[key as keyof Circle] = fileInfo;
                 revalidatePath(fileInfo.url);
             } else if (key === "location") {
@@ -366,12 +380,30 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
             }
         }
 
-        await updateCircle(updateData, userDid);
+        const circleWithCover = ownerCircle as Circle & { cover?: { url?: string } };
+        const updateWithCover = updateData as Partial<Circle> & { cover?: { url?: string } };
+        const replacedSingularMedia = (["picture", "cover"] as const).flatMap((key) =>
+            Object.hasOwn(updateWithCover, key)
+                ? collectReplacedCircleMedia(circleWithCover[key], updateWithCover[key])
+                : [],
+        );
+        const cleanup = await persistCircleThenCleanupMedia(
+            () => updateCircle(updateData, userDid),
+            replacedSingularMedia,
+            ownerCircle._id!.toString(),
+        );
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
         let circle = await getCircleById(circleId);
 
-        return { success: true, message: `Circle updated successfully`, circle };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "Changes were saved, but an old media file could not be removed."
+                    : "Circle updated successfully",
+            circle,
+        };
     } catch (error) {
         return { success: false, message: `Failed to update circle. ${error}` };
     }

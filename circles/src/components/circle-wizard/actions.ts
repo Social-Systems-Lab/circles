@@ -13,7 +13,13 @@ import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUser, getUserPrivate } from "@/lib/data/user"; // Corrected import for getUserPrivate
 import { features } from "@/lib/data/constants";
-import { isFile, saveFile, deleteFile } from "@/lib/data/storage";
+import { isFile } from "@/lib/data/storage";
+import {
+    canRetainSubmittedCircleMediaUrl,
+    collectReplacedCircleMedia,
+    persistCircleThenCleanupMedia,
+    saveCircleOwnedFile,
+} from "@/lib/data/circle-media-storage";
 import { addMember } from "@/lib/data/member";
 import { revalidatePath } from "next/cache";
 import { CircleData } from "./circle-wizard";
@@ -270,6 +276,7 @@ export async function saveProfileAction(
 
         const updateData: Partial<Circle> = { _id: circleId, description, content };
         let needUpdate = false;
+        let urlsToDelete: string[] = [];
         const existingCircle = await getCircleById(circleId); // Fetch existing circle data once
 
         if (!existingCircle) {
@@ -279,7 +286,14 @@ export async function saveProfileAction(
         // Handle profile picture upload
         if (isFile(picture)) {
             try {
-                updateData.picture = await saveFile(picture, "picture", circleId, true);
+                updateData.picture = await saveCircleOwnedFile({
+                    actorDid: userDid,
+                    ownerCircle: existingCircle,
+                    file: picture,
+                    fileName: "picture",
+                    overwrite: true,
+                    resourceType: "circle",
+                });
                 needUpdate = true;
                 revalidatePath(updateData.picture.url); // Revalidate picture path
             } catch (error) {
@@ -297,7 +311,14 @@ export async function saveProfileAction(
             for (const imageItem of images) {
                 if (imageItem.file && isFile(imageItem.file)) {
                     try {
-                        const savedFileInfo: FileInfo = await saveFile(imageItem.file, "image", circleId, true);
+                        const savedFileInfo: FileInfo = await saveCircleOwnedFile({
+                            actorDid: userDid,
+                            ownerCircle: existingCircle,
+                            file: imageItem.file,
+                            fileName: "image",
+                            overwrite: true,
+                            resourceType: "circle",
+                        });
                         finalMediaArray.push({
                             name: imageItem.file.name,
                             type: imageItem.file.type,
@@ -316,7 +337,7 @@ export async function saveProfileAction(
                     if (existingMedia) {
                         finalMediaArray.push(existingMedia);
                         finalImageUrls.add(existingMedia.fileInfo.url);
-                    } else {
+                    } else if (canRetainSubmittedCircleMediaUrl(existingCircle, imageItem.existingMediaUrl)) {
                         console.warn(`Existing image URL not found: ${imageItem.existingMediaUrl}`);
                         finalMediaArray.push({
                             name: "Existing Image",
@@ -330,16 +351,8 @@ export async function saveProfileAction(
 
             // Handle deletion
             const existingUrls = new Set(existingCircle.images?.map((m) => m.fileInfo.url) || []);
-            for (const urlToDelete of existingUrls) {
-                if (!finalImageUrls.has(urlToDelete)) {
-                    try {
-                        await deleteFile(urlToDelete);
-                        imagesChanged = true;
-                    } catch (deleteError) {
-                        console.error(`Failed to delete image ${urlToDelete}:`, deleteError);
-                    }
-                }
-            }
+            urlsToDelete = [...existingUrls].filter((url) => !finalImageUrls.has(url));
+            if (urlsToDelete.length > 0) imagesChanged = true;
 
             if (imagesChanged || finalMediaArray.length !== (existingCircle.images?.length || 0)) {
                 updateData.images = finalMediaArray;
@@ -348,9 +361,18 @@ export async function saveProfileAction(
         }
         // --- End Handle 'images' array ---
 
-        if (needUpdate) {
-            await updateCircle(updateData, userDid);
-        }
+        const replacedPicture = Object.hasOwn(updateData, "picture")
+            ? collectReplacedCircleMedia(existingCircle.picture, updateData.picture)
+            : [];
+        const cleanup = needUpdate
+            ? await persistCircleThenCleanupMedia(
+                  () => updateCircle(updateData, userDid),
+                  [...urlsToDelete, ...replacedPicture],
+                  existingCircle._id!.toString(),
+              )
+            : { status: "not-needed" as const };
+        if (cleanup.status === "failed")
+            console.error("Profile update saved but old media cleanup failed:", cleanup.error);
 
         const updatedCircle = await getCircleById(circleId); // Fetch potentially updated circle
         if (updatedCircle?.handle) {
@@ -358,7 +380,14 @@ export async function saveProfileAction(
             revalidatePath(circlePath);
             revalidatePath("/circles");
         }
-        return { success: true, message: "Profile updated successfully", data: { circle: updatedCircle } };
+        return {
+            success: true,
+            message:
+                cleanup.status === "failed"
+                    ? "Changes were saved, but an old media file could not be removed."
+                    : "Profile updated successfully",
+            data: { circle: updatedCircle },
+        };
     } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to save profile.";
         return { success: false, message: message + " " + JSON.stringify(error) };

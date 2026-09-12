@@ -27,7 +27,8 @@ import {
     getFullPost,
     getAllComments,
 } from "@/lib/data/feed";
-import { deleteFile, saveFile, isFile } from "@/lib/data/storage";
+import { isFile } from "@/lib/data/storage";
+import { deleteCircleOwnedMedia, saveCircleOwnedFile } from "@/lib/data/circle-media-storage";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import {
     features,
@@ -556,12 +557,15 @@ export async function createPostAction(
                     let imageIndex = 0;
                     for (const image of images) {
                         if (isFile(image)) {
-                            const savedImage = await saveFile(
-                                image,
-                                `feeds/${feed!._id}/${createdPost._id}/post-image-${imageIndex}`,
-                                circleId,
-                                true,
-                            );
+                            const savedImage = await saveCircleOwnedFile({
+                                actorDid: userDid,
+                                ownerCircle: targetCircle,
+                                file: image,
+                                fileName: `feeds/${feed!._id}/${createdPost._id}/post-image-${imageIndex}`,
+                                overwrite: true,
+                                resourceType: "post",
+                                resourceId: createdPost._id?.toString(),
+                            });
                             savedMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
                             if (isCommunityPost) {
                                 savedCommunityFiles.push({ url: savedImage.url });
@@ -577,7 +581,9 @@ export async function createPostAction(
                 } catch (error) {
                     if (isCommunityPost) {
                         console.error("Failed to save Community post images", error);
-                        const cleanupResult = await cleanupUploadedFiles(savedCommunityFiles, deleteFile);
+                        const cleanupResult = await cleanupUploadedFiles(savedCommunityFiles, (url) =>
+                            deleteCircleOwnedMedia({ url, expectedCircleId: targetCircle._id!.toString() }),
+                        );
                         for (const cleanupFailure of cleanupResult.failedDeletes) {
                             console.error("Failed to clean up Community post image after rollback", {
                                 postId: createdPost._id,
@@ -757,12 +763,17 @@ export async function updatePostAction(formData: FormData): Promise<PostUpdateRe
                         let imageIndex = existingMedia.length;
                         for (const image of images) {
                             if (isFile(image)) {
-                                const savedImage = await saveFile(
-                                    image,
-                                    `feeds/${post.feedId}/${postId}/post-image-${imageIndex}`,
-                                    feed.circleId,
-                                    true,
-                                );
+                                const ownerCircle = await getCircleById(feed.circleId);
+                                if (!ownerCircle) throw new Error("Circle not found");
+                                const savedImage = await saveCircleOwnedFile({
+                                    actorDid: userDid,
+                                    ownerCircle,
+                                    file: image,
+                                    fileName: `feeds/${post.feedId}/${postId}/post-image-${imageIndex}`,
+                                    overwrite: true,
+                                    resourceType: "post",
+                                    resourceId: postId,
+                                });
                                 newMedia.push({ name: image.name, type: image.type, fileInfo: savedImage });
                                 imageIndex++;
                             }

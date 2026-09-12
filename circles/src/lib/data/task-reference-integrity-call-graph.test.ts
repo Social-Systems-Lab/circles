@@ -21,8 +21,8 @@ for (const authorization of ["canReadCircle(", "assertCircleWritesAllowed(", "is
 for (const operation of [
     "getCircleById(",
     "assertCircleWritesAllowed(",
-    "saveFile(",
-    "deleteFile(",
+    "saveCircleOwnedFile(",
+    "deleteCircleOwnedMedia(",
     "updateTask(",
     "upsertShiftNoticeboardPost(",
     "revalidatePath(",
@@ -43,6 +43,10 @@ for (const operation of ["uploadMedia()", "deleteOldMedia()", "updateTask(upload
     const operationIndex = orchestration.indexOf(operation);
     assert.ok(operationIndex > resolver, `${operation} must remain downstream of backlink resolution`);
 }
+assert.ok(
+    orchestration.indexOf("updateTask(uploadedMedia)") < orchestration.indexOf("deleteOldMedia()"),
+    "source update must precede old-media cleanup so cleanup failure can be reported as partial success",
+);
 const synchronize = orchestration.indexOf("synchronizeNoticeboard(validatedBinding)");
 const createReplacementGuard = orchestration.indexOf('return { status: "noticeboard-sync-failed", error }');
 assert.ok(synchronize > resolver, "noticeboard synchronization must remain downstream of backlink resolution");

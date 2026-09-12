@@ -5,7 +5,12 @@ import { z } from "zod";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { createDefaultFeed, createPost, getFeedByHandle } from "@/lib/data/feed";
-import { deleteFile, isFile, saveFile } from "@/lib/data/storage";
+import { isFile } from "@/lib/data/storage";
+import {
+    completeFundingPostMutation,
+    getFundingPostMutationMessage,
+    saveCircleOwnedFile,
+} from "@/lib/data/circle-media-storage";
 import {
     deriveFundingTrustBadgeType,
     getFundingAskDocumentById,
@@ -37,21 +42,27 @@ const fundingAskFormSchema = z
             (value) => (typeof value === "string" ? value.toUpperCase() : value),
             fundingAskCurrencySchema.optional(),
         ),
-        items: z.preprocess((value) => {
-            if (Array.isArray(value)) {
-                return value;
-            }
+        items: z.preprocess(
+            (value) => {
+                if (Array.isArray(value)) {
+                    return value;
+                }
 
-            if (typeof value !== "string" || !value.trim()) {
-                return [];
-            }
+                if (typeof value !== "string" || !value.trim()) {
+                    return [];
+                }
 
-            try {
-                return JSON.parse(value);
-            } catch {
-                return value;
-            }
-        }, z.array(fundingAskItemSchema).min(1, "Add at least one funding item").max(25, "Add at most 25 funding items")),
+                try {
+                    return JSON.parse(value);
+                } catch {
+                    return value;
+                }
+            },
+            z
+                .array(fundingAskItemSchema)
+                .min(1, "Add at least one funding item")
+                .max(25, "Add at most 25 funding items"),
+        ),
         isProxy: z.preprocess((value) => value === "true" || value === true, z.boolean()),
         beneficiaryType: fundingAskBeneficiaryTypeSchema,
         beneficiaryName: z.preprocess(
@@ -112,11 +123,13 @@ const getCoverImageInput = async (formData: FormData) => {
 
 const resolveCoverImage = async ({
     formData,
-    circleId,
+    actorDid,
+    ownerCircle,
     existingCoverImage,
 }: {
     formData: FormData;
-    circleId: string;
+    actorDid: string;
+    ownerCircle: Circle;
     existingCoverImage?: z.infer<typeof fileInfoSchema>;
 }): Promise<{
     coverImage: z.infer<typeof fileInfoSchema> | undefined;
@@ -138,7 +151,14 @@ const resolveCoverImage = async ({
         };
     }
 
-    const uploadedCoverImage = await saveFile(coverImageInput as File, "funding-ask-cover", circleId, false);
+    const uploadedCoverImage = await saveCircleOwnedFile({
+        actorDid,
+        ownerCircle,
+        file: coverImageInput as File,
+        fileName: "funding-ask-cover",
+        overwrite: false,
+        resourceType: "funding",
+    });
     return {
         coverImage: uploadedCoverImage,
         shouldDeleteExisting: Boolean(existingCoverImage?.url && existingCoverImage.url !== uploadedCoverImage.url),
@@ -240,7 +260,8 @@ export async function createFundingAskAction(circleHandle: string, formData: For
         const creator = await Circles.findOne({ did: userDid });
         const { coverImage } = await resolveCoverImage({
             formData,
-            circleId: circle._id.toString(),
+            actorDid: userDid,
+            ownerCircle: circle,
         });
         const now = new Date();
         const requestStatus = parsed.data.submissionIntent === "draft" ? "draft" : "open";
@@ -350,7 +371,8 @@ export async function updateFundingAskAction(
 
         const { coverImage, shouldDeleteExisting } = await resolveCoverImage({
             formData,
-            circleId: circle._id.toString(),
+            actorDid: userDid,
+            ownerCircle: circle,
             existingCoverImage: existingAsk.coverImage,
         });
 
@@ -366,7 +388,14 @@ export async function updateFundingAskAction(
         const trustBadgeType = deriveFundingTrustBadgeType({
             isProxy: parsed.data.isProxy,
         });
-        const itemStatus = nextStatus === "draft" ? "draft" : nextStatus === "closed" ? "closed" : nextStatus === "completed" ? "completed" : "open";
+        const itemStatus =
+            nextStatus === "draft"
+                ? "draft"
+                : nextStatus === "closed"
+                  ? "closed"
+                  : nextStatus === "completed"
+                    ? "completed"
+                    : "open";
 
         const updated = await updateFundingAskDocument(askId, {
             title: parsed.data.title,
@@ -394,8 +423,12 @@ export async function updateFundingAskAction(
             return { success: false, message: "Funding request update failed." };
         }
 
-        if (shouldPublishToNoticeboard(formData) && nextStatus !== "draft" && !existingAsk.noticeboardPostId) {
-            try {
+        const postMutation = await completeFundingPostMutation(
+            shouldDeleteExisting && existingAsk.coverImage?.url ? [existingAsk.coverImage.url] : [],
+            circle._id.toString(),
+            async () => {
+                if (!(shouldPublishToNoticeboard(formData) && nextStatus !== "draft" && !existingAsk.noticeboardPostId))
+                    return;
                 const noticeboardPostId = await maybeCreateFundingNoticeboardPost({
                     circle,
                     circleHandle,
@@ -412,29 +445,19 @@ export async function updateFundingAskAction(
                     await updateFundingAskDocument(askId, { noticeboardPostId });
                     revalidatePath(`/circles/${circleHandle}/feed`);
                 }
-            } catch (error) {
-                console.error("Failed to create linked noticeboard post for funding request:", error);
-                revalidateFundingPaths(circleHandle, askId);
-                return {
-                    success: true,
-                    message: "Funding request updated, but Noticeboard post could not be created.",
-                    askId,
-                };
-            }
-        }
-
-        if (shouldDeleteExisting && existingAsk.coverImage?.url) {
-            try {
-                await deleteFile(existingAsk.coverImage.url);
-            } catch (error) {
-                console.error("Failed to delete replaced funding request image:", error);
-            }
-        }
+            },
+        );
+        if (postMutation.noticeboardSyncFailed)
+            console.error("Funding request updated but Noticeboard synchronization failed.");
+        if (postMutation.mediaCleanupFailed) console.error("Funding request updated but old media cleanup failed.");
 
         revalidateFundingPaths(circleHandle, askId);
         return {
             success: true,
-            message: nextStatus === "draft" ? "Funding request saved as draft." : "Funding request updated.",
+            message: getFundingPostMutationMessage(
+                postMutation,
+                nextStatus === "draft" ? "Funding request saved as draft." : "Funding request updated.",
+            ),
             askId,
         };
     } catch (error) {

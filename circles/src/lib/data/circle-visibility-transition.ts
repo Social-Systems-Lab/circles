@@ -36,6 +36,7 @@ export type CircleVisibilityTransitionDependencies = {
         targetId: string;
         details: Record<string, unknown>;
     }) => Promise<unknown>;
+    assertNoUnresolvedPublicMedia?: (circleId: string) => Promise<void>;
 };
 
 const defaultDependencies: CircleVisibilityTransitionDependencies = {
@@ -83,6 +84,11 @@ const defaultDependencies: CircleVisibilityTransitionDependencies = {
     appendAuditEvent: async (event) => {
         const { appendPlatformAuditEvent } = await import("@/lib/data/platform-audit");
         return appendPlatformAuditEvent(event);
+    },
+    assertNoUnresolvedPublicMedia: async () => {
+        // Phase 3C1a cannot yet prove a complete historical inventory across every
+        // legacy resource shape, so public-to-secret transitions fail closed.
+        throw new Error("Public media must be migrated or removed before this Circle can become Secret.");
     },
 };
 
@@ -142,6 +148,12 @@ export async function changeCircleVisibility(
     }
 
     if (target.data === "secret") {
+        const preflight =
+            dependencies.assertNoUnresolvedPublicMedia ??
+            (dependencies === defaultDependencies
+                ? defaultDependencies.assertNoUnresolvedPublicMedia!
+                : async () => undefined);
+        await preflight(circleId);
         await dependencies.deletePublicVectors([circleId]);
         await dependencies.assertPublicVectorsAbsent([circleId]);
         await dependencies.purgeDerivedVectors(circleId);

@@ -108,7 +108,7 @@ const directDelete = section(
     "export async function cancelEventOccurrenceAction",
 );
 const directCleanup = directDelete.indexOf("cleanupEventNoticeboardPosts(event)");
-const imageDelete = directDelete.indexOf("deleteFile(");
+const imageDelete = directDelete.indexOf("deleteCircleOwnedMedia(");
 const sourceDelete = directDelete.indexOf("deleteEventDb(eventId)");
 const directLifecycle = directDelete.indexOf("orchestrateEventDestructiveLifecycle({");
 for (const marker of [directLifecycle, directCleanup, imageDelete, sourceDelete]) assert.ok(marker >= 0);
