@@ -39,6 +39,11 @@ import { isAuthorized } from "../auth/auth";
 import { features } from "./constants";
 import { getCircleById } from "./circle";
 import { isAcceptedConnectionForUserDid } from "./relationships";
+import {
+    forEachReadableGlobalEventBatch,
+    GLOBAL_EVENT_READ_BATCH_SIZE,
+    type EventReaderHostPolicyDependencies,
+} from "./event-host-read-policy";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -72,6 +77,88 @@ export const SAFE_EVENT_PROJECTION = {
 } as const;
 
 type Range = { from?: Date; to?: Date };
+
+export type EventProductionReaderDependencies = {
+    findCircle: (circleId: string) => Promise<Circle | null>;
+    authorize: (userDid: string, circleId: string, feature: Parameters<typeof isAuthorized>[2]) => Promise<boolean>;
+    findViewer: (userDid: string) => Promise<Awaited<ReturnType<typeof getUserPrivate>>>;
+    findEventRsvps: (query: any) => Promise<EventRsvp[]>;
+    findOccurrenceRsvps: (query: any) => Promise<EventOccurrenceRsvp[]>;
+    findOccurrences: (query: any) => Promise<EventOccurrence[]>;
+    aggregateEvents: (pipeline: any[]) => Promise<EventDisplay[]>;
+    hostPolicyDependencies?: EventReaderHostPolicyDependencies;
+};
+
+const defaultEventProductionReaderDependencies: EventProductionReaderDependencies = {
+    findCircle: async (circleId) => Circles.findOne({ _id: new ObjectId(circleId) }),
+    authorize: isAuthorized,
+    findViewer: getUserPrivate,
+    findEventRsvps: async (query) => EventRsvps.find(query).toArray(),
+    findOccurrenceRsvps: async (query) => EventOccurrenceRsvps.find(query).toArray(),
+    findOccurrences: async (query) => EventOccurrences.find(query).toArray(),
+    aggregateEvents: async (pipeline) => Events.aggregate(pipeline).toArray() as Promise<EventDisplay[]>,
+};
+
+async function aggregateReadableGlobalEvents(
+    baseMatch: any,
+    viewerDid: string | undefined,
+    buildPipeline: (boundedMatch: any) => any[],
+    dependencies: EventProductionReaderDependencies,
+    selectBatch: (events: EventDisplay[]) => EventDisplay[] = (events) => events,
+): Promise<EventDisplay[]> {
+    const events: EventDisplay[] = [];
+    await forEachReadableGlobalEventBatch(
+        baseMatch,
+        viewerDid,
+        async (eventIds) => {
+            const batch = await dependencies.aggregateEvents(
+                buildPipeline({ $and: [baseMatch, { _id: { $in: eventIds } }] }),
+            );
+            events.push(...selectBatch(batch));
+        },
+        dependencies.hostPolicyDependencies,
+    );
+    return events;
+}
+
+async function loadEventOccurrenceEnrichment(
+    events: EventDisplay[],
+    range: Required<Range>,
+    dependencies: EventProductionReaderDependencies,
+    batchSize?: number,
+): Promise<{
+    occurrenceBySeriesAndKey: Map<string, EventOccurrence>;
+    rsvpsBySeriesAndKey: Map<string, EventOccurrenceRsvp[]>;
+}> {
+    const occurrenceBySeriesAndKey = new Map<string, EventOccurrence>();
+    const rsvpsBySeriesAndKey = new Map<string, EventOccurrenceRsvp[]>();
+    const chunkSize = batchSize ?? events.length;
+
+    for (let offset = 0; offset < events.length; offset += chunkSize) {
+        const recurringSeriesIds = events
+            .slice(offset, offset + chunkSize)
+            .filter((event) => event.recurrence)
+            .map((event) => String(event._id));
+        if (recurringSeriesIds.length === 0) continue;
+        const occurrenceQuery = {
+            seriesId: { $in: recurringSeriesIds },
+            occurrenceKey: { $gte: range.from.getTime(), $lte: range.to.getTime() },
+        };
+        const [occurrences, occurrenceRsvps] = await Promise.all([
+            dependencies.findOccurrences(occurrenceQuery),
+            dependencies.findOccurrenceRsvps(occurrenceQuery),
+        ]);
+        occurrences.forEach((occurrence) => {
+            occurrenceBySeriesAndKey.set(occurrenceMapKey(occurrence.seriesId, occurrence.occurrenceKey), occurrence);
+        });
+        occurrenceRsvps.forEach((rsvp) => {
+            const key = occurrenceMapKey(rsvp.seriesId, rsvp.occurrenceKey);
+            rsvpsBySeriesAndKey.set(key, [...(rsvpsBySeriesAndKey.get(key) || []), rsvp]);
+        });
+    }
+
+    return { occurrenceBySeriesAndKey, rsvpsBySeriesAndKey };
+}
 
 export function normalizeEventHostCircleIds(event: Pick<Event, "circleId" | "hostCircleIds">): string[] {
     return Array.from(new Set([event.circleId, ...(event.hostCircleIds || [])].filter(Boolean)));
@@ -184,12 +271,13 @@ export const getEventsByCircleId = async (
     range?: Range,
     includeCreated?: boolean,
     includeParticipating?: boolean,
+    dependencies: EventProductionReaderDependencies = defaultEventProductionReaderDependencies,
 ): Promise<EventDisplay[]> => {
     try {
         const dateMatch = buildRangeMatch(range);
-        const circle = await Circles.findOne({ _id: new ObjectId(circleId) });
-        const canReview = await isAuthorized(userDid, circleId, features.events.review);
-        const canModerate = await isAuthorized(userDid, circleId, features.events.moderate);
+        const circle = await dependencies.findCircle(circleId);
+        const canReview = await dependencies.authorize(userDid, circleId, features.events.review);
+        const canModerate = await dependencies.authorize(userDid, circleId, features.events.moderate);
         const canManageUnpublished = canReview || canModerate;
         const matchQuery: any = eventHostCircleMatch(circleId);
         let filterToParticipatingOccurrences = false;
@@ -205,7 +293,7 @@ export const getEventsByCircleId = async (
 
         let hiddenCancelledObjectIds: ObjectId[] = [];
         try {
-            const viewer = await getUserPrivate(userDid);
+            const viewer = await dependencies.findViewer(userDid);
             const hiddenIds = (viewer?.hiddenCancelledEventIds || []) as string[];
             hiddenCancelledObjectIds = hiddenIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         } catch (err) {
@@ -219,8 +307,8 @@ export const getEventsByCircleId = async (
             }
             if (includeParticipating) {
                 const [rsvps, occurrenceRsvps] = await Promise.all([
-                    EventRsvps.find({ userDid, status: "going" }).toArray(),
-                    EventOccurrenceRsvps.find({ userDid }).toArray(),
+                    dependencies.findEventRsvps({ userDid, status: "going" }),
+                    dependencies.findOccurrenceRsvps({ userDid }),
                 ]);
                 rsvps.forEach((rsvp) => {
                     legacyParticipatingSeriesIds.add(rsvp.eventId);
@@ -231,18 +319,14 @@ export const getEventsByCircleId = async (
                     if (rsvp.status === "going") participatingSeriesIds.add(rsvp.seriesId);
                 });
                 filterToParticipatingOccurrences = true;
-                const eventIds = Array.from(
-                    new Set([
-                        ...rsvps.map((rsvp) => rsvp.eventId),
-                        ...occurrenceRsvps.filter((rsvp) => rsvp.status === "going").map((rsvp) => rsvp.seriesId),
-                    ]),
-                )
-                    .filter((eventId) => ObjectId.isValid(eventId))
-                    .map((eventId) => new ObjectId(eventId));
-                userQueries.push({ _id: { $in: eventIds } });
             }
 
-            if (userQueries.length > 0) {
+            if (includeParticipating) {
+                // Participation is applied after bounded global candidate processing and recurrence expansion.
+                // Avoid materializing every participating Event ID into a single Mongo $in query.
+                delete matchQuery.$or;
+                delete matchQuery.$and;
+            } else if (userQueries.length > 0) {
                 // User profile circle:
                 // show events the user CREATED or is PARTICIPATING in,
                 // regardless of which circle the event belongs to
@@ -287,11 +371,17 @@ export const getEventsByCircleId = async (
                   ]
                 : [];
 
-        const events = (await Events.aggregate([
+        const isGlobalProfileBranch = Boolean(
+            circle &&
+                circle.circleType === "user" &&
+                circle.did === userDid &&
+                (includeCreated || includeParticipating),
+        );
+        const buildPipeline = (boundedMatch: any) => [
             // 1) Match circle and optional date overlap
             // 1) Match circle and optional date overlap OR recurrence
             {
-                $match: matchQuery,
+                $match: boundedMatch,
             },
             ...hideCancelledMatchStage,
 
@@ -466,33 +556,26 @@ export const getEventsByCircleId = async (
 
             // 7) Sort by soonest start date
             { $sort: { startAt: 1 } },
-        ]).toArray()) as EventDisplay[];
+        ];
+        const events = isGlobalProfileBranch
+            ? await aggregateReadableGlobalEvents(matchQuery, userDid, buildPipeline, dependencies, (batch) =>
+                  batch.filter(
+                      (event) =>
+                          (Boolean(includeCreated) && event.createdBy === userDid) ||
+                          (Boolean(includeParticipating) && participatingSeriesIds.has(String(event._id))),
+                  ),
+              )
+            : await dependencies.aggregateEvents(buildPipeline(matchQuery));
 
         let occurrenceBySeriesAndKey = new Map<string, EventOccurrence>();
         let rsvpsBySeriesAndKey = new Map<string, EventOccurrenceRsvp[]>();
         if (range?.from && range?.to) {
-            const recurringSeriesIds = events.filter((event) => event.recurrence).map((event) => String(event._id));
-            if (recurringSeriesIds.length > 0) {
-                const occurrences = await EventOccurrences.find({
-                    seriesId: { $in: recurringSeriesIds },
-                    occurrenceKey: { $gte: range.from.getTime(), $lte: range.to.getTime() },
-                }).toArray();
-                occurrenceBySeriesAndKey = new Map(
-                    occurrences.map((occurrence) => [
-                        occurrenceMapKey(occurrence.seriesId, occurrence.occurrenceKey),
-                        occurrence,
-                    ]),
-                );
-                const occurrenceRsvps = await EventOccurrenceRsvps.find({
-                    seriesId: { $in: recurringSeriesIds },
-                    occurrenceKey: { $gte: range.from.getTime(), $lte: range.to.getTime() },
-                }).toArray();
-                rsvpsBySeriesAndKey = occurrenceRsvps.reduce((map, rsvp) => {
-                    const key = occurrenceMapKey(rsvp.seriesId, rsvp.occurrenceKey);
-                    map.set(key, [...(map.get(key) || []), rsvp]);
-                    return map;
-                }, new Map<string, EventOccurrenceRsvp[]>());
-            }
+            ({ occurrenceBySeriesAndKey, rsvpsBySeriesAndKey } = await loadEventOccurrenceEnrichment(
+                events,
+                { from: range.from, to: range.to },
+                dependencies,
+                isGlobalProfileBranch ? GLOBAL_EVENT_READ_BATCH_SIZE : undefined,
+            ));
         }
 
         const expandedEvents =
@@ -1045,7 +1128,11 @@ export const changeEventStage = async (eventId: string, newStage: EventStage): P
  * Filters by optional date range overlap or, if no range provided, to upcoming (endAt >= now).
  * Ensures events have a location with lngLat.
  */
-export const getOpenEventsForMap = async (userDid: string, range?: Range): Promise<EventDisplay[]> => {
+export const getOpenEventsForMap = async (
+    userDid: string,
+    range?: Range,
+    dependencies: EventProductionReaderDependencies = defaultEventProductionReaderDependencies,
+): Promise<EventDisplay[]> => {
     try {
         const dateMatch = buildRangeMatch(range);
         const now = new Date();
@@ -1063,183 +1150,188 @@ export const getOpenEventsForMap = async (userDid: string, range?: Range): Promi
             baseMatch.endAt = { $gte: now };
         }
 
-        const events = (await Events.aggregate([
-            { $match: baseMatch },
+        const events = await aggregateReadableGlobalEvents(
+            baseMatch,
+            userDid || undefined,
+            (boundedMatch) => [
+                { $match: boundedMatch },
 
-            // Author
-            {
-                $lookup: {
-                    from: "circles",
-                    let: { authorDid: "$createdBy" },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $and: [
-                                        { $eq: ["$did", "$$authorDid"] },
-                                        { $eq: ["$circleType", "user"] },
-                                        { $ne: ["$$authorDid", null] },
-                                    ],
-                                },
-                            },
-                        },
-                        {
-                            $project: {
-                                ...SAFE_CIRCLE_PROJECTION,
-                                _id: { $toString: "$_id" },
-                            },
-                        },
-                    ],
-                    as: "authorDetails",
-                },
-            },
-            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
-
-            // Circle
-            {
-                $lookup: {
-                    from: "circles",
-                    let: { cId: { $toObjectId: "$circleId" } },
-                    pipeline: [
-                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
-                        {
-                            $project: {
-                                _id: { $toString: "$_id" },
-                                name: 1,
-                                handle: 1,
-                                picture: 1,
-                                enabledModules: 1,
-                            },
-                        },
-                    ],
-                    as: "circleDetails",
-                },
-            },
-            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
-
-            // RSVP counts
-            {
-                $lookup: {
-                    from: "eventRsvps",
-                    let: { eId: { $toString: "$_id" } },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: { $eq: ["$eventId", "$$eId"] },
-                            },
-                        },
-                        {
-                            $group: {
-                                _id: "$status",
-                                count: { $sum: 1 },
-                            },
-                        },
-                    ],
-                    as: "rsvpCounts",
-                },
-            },
-
-            // user RSVP
-            {
-                $lookup: {
-                    from: "eventRsvps",
-                    let: { eId: { $toString: "$_id" } },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
-                                },
-                            },
-                        },
-                        {
-                            $project: {
-                                _id: 0,
-                                status: 1,
-                            },
-                        },
-                    ],
-                    as: "userRsvpDocs",
-                },
-            },
-
-            // Current user's invitation
-            {
-                $lookup: {
-                    from: "eventInvitations",
-                    let: { eId: { $toString: "$_id" } },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
-                                },
-                            },
-                        },
-                        {
-                            $project: {
-                                _id: 0,
-                                status: 1,
-                            },
-                        },
-                    ],
-                    as: "userInvDocs",
-                },
-            },
-
-            // Visibility gating
-            {
-                $match: {
-                    $expr: {
-                        $or: [
-                            { $ne: ["$visibility", "private"] },
-                            { $eq: ["$createdBy", userDid] },
-                            { $gt: [{ $size: "$userRsvpDocs" }, 0] },
-                            { $gt: [{ $size: "$userInvDocs" }, 0] },
-                        ],
-                    },
-                },
-            },
-
-            // Final projection
-            {
-                $project: {
-                    ...SAFE_EVENT_PROJECTION,
-                    _id: { $toString: "$_id" },
-                    author: "$authorDetails",
-                    circle: "$circleDetails",
-                    attendees: {
-                        $let: {
-                            vars: {
-                                goingObj: {
-                                    $first: {
-                                        $filter: {
-                                            input: "$rsvpCounts",
-                                            as: "rc",
-                                            cond: { $eq: ["$$rc._id", "going"] },
-                                        },
+                // Author
+                {
+                    $lookup: {
+                        from: "circles",
+                        let: { authorDid: "$createdBy" },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            { $eq: ["$did", "$$authorDid"] },
+                                            { $eq: ["$circleType", "user"] },
+                                            { $ne: ["$$authorDid", null] },
+                                        ],
                                     },
                                 },
                             },
-                            in: { $ifNull: ["$$goingObj.count", 0] },
+                            {
+                                $project: {
+                                    ...SAFE_CIRCLE_PROJECTION,
+                                    _id: { $toString: "$_id" },
+                                },
+                            },
+                        ],
+                        as: "authorDetails",
+                    },
+                },
+                { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+                // Circle
+                {
+                    $lookup: {
+                        from: "circles",
+                        let: { cId: { $toObjectId: "$circleId" } },
+                        pipeline: [
+                            { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                            {
+                                $project: {
+                                    _id: { $toString: "$_id" },
+                                    name: 1,
+                                    handle: 1,
+                                    picture: 1,
+                                    enabledModules: 1,
+                                },
+                            },
+                        ],
+                        as: "circleDetails",
+                    },
+                },
+                { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
+                // RSVP counts
+                {
+                    $lookup: {
+                        from: "eventRsvps",
+                        let: { eId: { $toString: "$_id" } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: { $eq: ["$eventId", "$$eId"] },
+                                },
+                            },
+                            {
+                                $group: {
+                                    _id: "$status",
+                                    count: { $sum: 1 },
+                                },
+                            },
+                        ],
+                        as: "rsvpCounts",
+                    },
+                },
+
+                // user RSVP
+                {
+                    $lookup: {
+                        from: "eventRsvps",
+                        let: { eId: { $toString: "$_id" } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                    },
+                                },
+                            },
+                            {
+                                $project: {
+                                    _id: 0,
+                                    status: 1,
+                                },
+                            },
+                        ],
+                        as: "userRsvpDocs",
+                    },
+                },
+
+                // Current user's invitation
+                {
+                    $lookup: {
+                        from: "eventInvitations",
+                        let: { eId: { $toString: "$_id" } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                    },
+                                },
+                            },
+                            {
+                                $project: {
+                                    _id: 0,
+                                    status: 1,
+                                },
+                            },
+                        ],
+                        as: "userInvDocs",
+                    },
+                },
+
+                // Visibility gating
+                {
+                    $match: {
+                        $expr: {
+                            $or: [
+                                { $ne: ["$visibility", "private"] },
+                                { $eq: ["$createdBy", userDid] },
+                                { $gt: [{ $size: "$userRsvpDocs" }, 0] },
+                                { $gt: [{ $size: "$userInvDocs" }, 0] },
+                            ],
                         },
                     },
-                    userRsvpStatus: {
-                        $let: {
-                            vars: { firstRsvp: { $first: "$userRsvpDocs" } },
-                            in: {
-                                $ifNull: ["$$firstRsvp.status", "none"],
+                },
+
+                // Final projection
+                {
+                    $project: {
+                        ...SAFE_EVENT_PROJECTION,
+                        _id: { $toString: "$_id" },
+                        author: "$authorDetails",
+                        circle: "$circleDetails",
+                        attendees: {
+                            $let: {
+                                vars: {
+                                    goingObj: {
+                                        $first: {
+                                            $filter: {
+                                                input: "$rsvpCounts",
+                                                as: "rc",
+                                                cond: { $eq: ["$$rc._id", "going"] },
+                                            },
+                                        },
+                                    },
+                                },
+                                in: { $ifNull: ["$$goingObj.count", 0] },
+                            },
+                        },
+                        userRsvpStatus: {
+                            $let: {
+                                vars: { firstRsvp: { $first: "$userRsvpDocs" } },
+                                in: {
+                                    $ifNull: ["$$firstRsvp.status", "none"],
+                                },
                             },
                         },
                     },
                 },
-            },
 
-            // Sort soonest first
-            { $sort: { startAt: 1 } },
-        ]).toArray()) as EventDisplay[];
+                // Sort soonest first
+                { $sort: { startAt: 1 } },
+            ],
+            dependencies,
+        );
 
-        return events;
+        return events.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting open events for map:", error);
         throw error;
@@ -1253,7 +1345,11 @@ export const getOpenEventsForMap = async (userDid: string, range?: Range): Promi
  * - Stage must be "open"
  * - Applies visibility gating (public, creator, invited, or RSVP'ed)
  */
-export const getOpenEventsForList = async (userDid: string, range?: Range): Promise<EventDisplay[]> => {
+export const getOpenEventsForList = async (
+    userDid: string,
+    range?: Range,
+    dependencies: EventProductionReaderDependencies = defaultEventProductionReaderDependencies,
+): Promise<EventDisplay[]> => {
     try {
         const dateMatch = buildRangeMatch(range);
         const now = new Date();
@@ -1270,183 +1366,188 @@ export const getOpenEventsForList = async (userDid: string, range?: Range): Prom
             baseMatch.endAt = { $gte: now };
         }
 
-        const events = (await Events.aggregate([
-            { $match: baseMatch },
+        const events = await aggregateReadableGlobalEvents(
+            baseMatch,
+            userDid || undefined,
+            (boundedMatch) => [
+                { $match: boundedMatch },
 
-            // Author
-            {
-                $lookup: {
-                    from: "circles",
-                    let: { authorDid: "$createdBy" },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $and: [
-                                        { $eq: ["$did", "$$authorDid"] },
-                                        { $eq: ["$circleType", "user"] },
-                                        { $ne: ["$$authorDid", null] },
-                                    ],
-                                },
-                            },
-                        },
-                        {
-                            $project: {
-                                ...SAFE_CIRCLE_PROJECTION,
-                                _id: { $toString: "$_id" },
-                            },
-                        },
-                    ],
-                    as: "authorDetails",
-                },
-            },
-            { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
-
-            // Circle
-            {
-                $lookup: {
-                    from: "circles",
-                    let: { cId: { $toObjectId: "$circleId" } },
-                    pipeline: [
-                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
-                        {
-                            $project: {
-                                _id: { $toString: "$_id" },
-                                name: 1,
-                                handle: 1,
-                                picture: 1,
-                                enabledModules: 1,
-                            },
-                        },
-                    ],
-                    as: "circleDetails",
-                },
-            },
-            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
-
-            // RSVP counts
-            {
-                $lookup: {
-                    from: "eventRsvps",
-                    let: { eId: { $toString: "$_id" } },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: { $eq: ["$eventId", "$$eId"] },
-                            },
-                        },
-                        {
-                            $group: {
-                                _id: "$status",
-                                count: { $sum: 1 },
-                            },
-                        },
-                    ],
-                    as: "rsvpCounts",
-                },
-            },
-
-            // user RSVP
-            {
-                $lookup: {
-                    from: "eventRsvps",
-                    let: { eId: { $toString: "$_id" } },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
-                                },
-                            },
-                        },
-                        {
-                            $project: {
-                                _id: 0,
-                                status: 1,
-                            },
-                        },
-                    ],
-                    as: "userRsvpDocs",
-                },
-            },
-
-            // Current user's invitation
-            {
-                $lookup: {
-                    from: "eventInvitations",
-                    let: { eId: { $toString: "$_id" } },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
-                                },
-                            },
-                        },
-                        {
-                            $project: {
-                                _id: 0,
-                                status: 1,
-                            },
-                        },
-                    ],
-                    as: "userInvDocs",
-                },
-            },
-
-            // Visibility gating
-            {
-                $match: {
-                    $expr: {
-                        $or: [
-                            { $ne: ["$visibility", "private"] },
-                            { $eq: ["$createdBy", userDid] },
-                            { $gt: [{ $size: "$userRsvpDocs" }, 0] },
-                            { $gt: [{ $size: "$userInvDocs" }, 0] },
-                        ],
-                    },
-                },
-            },
-
-            // Final projection
-            {
-                $project: {
-                    ...SAFE_EVENT_PROJECTION,
-                    _id: { $toString: "$_id" },
-                    author: "$authorDetails",
-                    circle: "$circleDetails",
-                    attendees: {
-                        $let: {
-                            vars: {
-                                goingObj: {
-                                    $first: {
-                                        $filter: {
-                                            input: "$rsvpCounts",
-                                            as: "rc",
-                                            cond: { $eq: ["$$rc._id", "going"] },
-                                        },
+                // Author
+                {
+                    $lookup: {
+                        from: "circles",
+                        let: { authorDid: "$createdBy" },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            { $eq: ["$did", "$$authorDid"] },
+                                            { $eq: ["$circleType", "user"] },
+                                            { $ne: ["$$authorDid", null] },
+                                        ],
                                     },
                                 },
                             },
-                            in: { $ifNull: ["$$goingObj.count", 0] },
+                            {
+                                $project: {
+                                    ...SAFE_CIRCLE_PROJECTION,
+                                    _id: { $toString: "$_id" },
+                                },
+                            },
+                        ],
+                        as: "authorDetails",
+                    },
+                },
+                { $unwind: { path: "$authorDetails", preserveNullAndEmptyArrays: false } },
+
+                // Circle
+                {
+                    $lookup: {
+                        from: "circles",
+                        let: { cId: { $toObjectId: "$circleId" } },
+                        pipeline: [
+                            { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
+                            {
+                                $project: {
+                                    _id: { $toString: "$_id" },
+                                    name: 1,
+                                    handle: 1,
+                                    picture: 1,
+                                    enabledModules: 1,
+                                },
+                            },
+                        ],
+                        as: "circleDetails",
+                    },
+                },
+                { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
+
+                // RSVP counts
+                {
+                    $lookup: {
+                        from: "eventRsvps",
+                        let: { eId: { $toString: "$_id" } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: { $eq: ["$eventId", "$$eId"] },
+                                },
+                            },
+                            {
+                                $group: {
+                                    _id: "$status",
+                                    count: { $sum: 1 },
+                                },
+                            },
+                        ],
+                        as: "rsvpCounts",
+                    },
+                },
+
+                // user RSVP
+                {
+                    $lookup: {
+                        from: "eventRsvps",
+                        let: { eId: { $toString: "$_id" } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                    },
+                                },
+                            },
+                            {
+                                $project: {
+                                    _id: 0,
+                                    status: 1,
+                                },
+                            },
+                        ],
+                        as: "userRsvpDocs",
+                    },
+                },
+
+                // Current user's invitation
+                {
+                    $lookup: {
+                        from: "eventInvitations",
+                        let: { eId: { $toString: "$_id" } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [{ $eq: ["$eventId", "$$eId"] }, { $eq: ["$userDid", userDid] }],
+                                    },
+                                },
+                            },
+                            {
+                                $project: {
+                                    _id: 0,
+                                    status: 1,
+                                },
+                            },
+                        ],
+                        as: "userInvDocs",
+                    },
+                },
+
+                // Visibility gating
+                {
+                    $match: {
+                        $expr: {
+                            $or: [
+                                { $ne: ["$visibility", "private"] },
+                                { $eq: ["$createdBy", userDid] },
+                                { $gt: [{ $size: "$userRsvpDocs" }, 0] },
+                                { $gt: [{ $size: "$userInvDocs" }, 0] },
+                            ],
                         },
                     },
-                    userRsvpStatus: {
-                        $let: {
-                            vars: { firstRsvp: { $first: "$userRsvpDocs" } },
-                            in: {
-                                $ifNull: ["$$firstRsvp.status", "none"],
+                },
+
+                // Final projection
+                {
+                    $project: {
+                        ...SAFE_EVENT_PROJECTION,
+                        _id: { $toString: "$_id" },
+                        author: "$authorDetails",
+                        circle: "$circleDetails",
+                        attendees: {
+                            $let: {
+                                vars: {
+                                    goingObj: {
+                                        $first: {
+                                            $filter: {
+                                                input: "$rsvpCounts",
+                                                as: "rc",
+                                                cond: { $eq: ["$$rc._id", "going"] },
+                                            },
+                                        },
+                                    },
+                                },
+                                in: { $ifNull: ["$$goingObj.count", 0] },
+                            },
+                        },
+                        userRsvpStatus: {
+                            $let: {
+                                vars: { firstRsvp: { $first: "$userRsvpDocs" } },
+                                in: {
+                                    $ifNull: ["$$firstRsvp.status", "none"],
+                                },
                             },
                         },
                     },
                 },
-            },
 
-            // Sort soonest first
-            { $sort: { startAt: 1 } },
-        ]).toArray()) as EventDisplay[];
+                // Sort soonest first
+                { $sort: { startAt: 1 } },
+            ],
+            dependencies,
+        );
 
-        return events;
+        return events.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
     } catch (error) {
         console.error("Error getting open events for list:", error);
         throw error;

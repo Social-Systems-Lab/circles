@@ -42,6 +42,10 @@ import {
     reconcileSecretOwnedDerivedPublicVectors,
     type DerivedVectorPointPage,
 } from "@/lib/data/derived-vector-reconciliation";
+import {
+    backfillReadableEventSemanticResults,
+    type EventSemanticSearchDependencies,
+} from "./event-semantic-search-policy";
 
 let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
@@ -828,9 +832,20 @@ const calculateCosineSimilarity = (vecA: number[], vecB: number[]): number => {
 export interface SearchResultItem {
     _id: string; // Original MongoDB ObjectId as string
     qdrantId: string; // Qdrant UUID
-    type: "circle" | "project" | "user" | "post"; // Type of content
+    type: "circle" | "project" | "user" | "post" | "event"; // Type of content
     score: number; // Similarity score from Qdrant
 }
+
+export type SemanticSearchInfrastructure = {
+    getQdrantClient: typeof getQdrantClient;
+    getOpenAiClient: typeof getOpenAiClient;
+    eventPolicyDependencies?: EventSemanticSearchDependencies;
+};
+
+const defaultSemanticSearchInfrastructure: SemanticSearchInfrastructure = {
+    getQdrantClient,
+    getOpenAiClient,
+};
 
 // Function for semantic search across specified collections
 export const semanticSearchContent = async (options: {
@@ -838,8 +853,17 @@ export const semanticSearchContent = async (options: {
     categories: string[]; // e.g., ['circles', 'posts']
     limit?: number;
     sdgHandles?: string[];
+    viewerDid?: string;
+    dependencies?: SemanticSearchInfrastructure;
 }): Promise<SearchResultItem[]> => {
-    const { query, categories, limit = 20, sdgHandles } = options;
+    const {
+        query,
+        categories,
+        limit = 20,
+        sdgHandles,
+        viewerDid,
+        dependencies = defaultSemanticSearchInfrastructure,
+    } = options;
 
     if (!isVdbEnabled()) {
         logVdbDisabled("semantic search");
@@ -850,8 +874,8 @@ export const semanticSearchContent = async (options: {
         return [];
     }
 
-    const client = await getQdrantClient();
-    const openai = getOpenAiClient();
+    const client = await dependencies.getQdrantClient();
+    const openai = dependencies.getOpenAiClient();
 
     try {
         // 1. Get embedding for the search query
@@ -870,7 +894,7 @@ export const semanticSearchContent = async (options: {
         }
 
         // 2. Prepare search requests for each category (collection)
-        const searchPromises = categories.map((collectionName) => {
+        const searchPromises = categories.map(async (collectionName) => {
             // Ensure collection name is valid
             if (!vdbCollections.includes(collectionName as VbdCategories)) {
                 console.warn(`Invalid collection name provided: ${collectionName}`);
@@ -887,6 +911,52 @@ export const semanticSearchContent = async (options: {
                         },
                     },
                 ];
+            }
+
+            if (collectionName === "events") {
+                return backfillReadableEventSemanticResults<SearchResultItem>({
+                    limit,
+                    viewerDid,
+                    dependencies: dependencies.eventPolicyDependencies,
+                    fetchPage: async (offset, pageLimit) => {
+                        if (queryVector) {
+                            const numericOffset = typeof offset === "number" ? offset : 0;
+                            const hits = await client.search(collectionName, {
+                                vector: queryVector,
+                                limit: pageLimit,
+                                offset: numericOffset,
+                                with_payload: true,
+                                filter,
+                            });
+                            return {
+                                results: hits.map((hit: any) => ({
+                                    _id: hit.payload?.mongoId,
+                                    qdrantId: hit.id,
+                                    type: "event" as const,
+                                    score: hit.score,
+                                })),
+                                nextOffset: numericOffset + hits.length,
+                                exhausted: hits.length < pageLimit,
+                            };
+                        }
+                        const response = await client.scroll(collectionName, {
+                            limit: pageLimit,
+                            offset,
+                            with_payload: true,
+                            filter,
+                        });
+                        return {
+                            results: response.points.map((hit: any) => ({
+                                _id: hit.payload?.mongoId,
+                                qdrantId: hit.id,
+                                type: "event" as const,
+                                score: hit.score ?? 0,
+                            })),
+                            nextOffset: response.next_page_offset as string | number | undefined,
+                            exhausted: response.next_page_offset == null,
+                        };
+                    },
+                });
             }
 
             if (queryVector) {
@@ -916,11 +986,19 @@ export const semanticSearchContent = async (options: {
         searchResults.forEach((resultSet, index) => {
             const collectionName = categories[index]; // Get the corresponding collection name
 
+            if (collectionName === "events") {
+                combinedResults.push(...(resultSet as SearchResultItem[]));
+                return;
+            }
+
             resultSet.forEach((hit: any) => {
                 const payload = hit.payload;
-                const type = collectionName === "posts" ? "post" : payload?.circleType || "circle"; // Determine type
-
-                console.log("Search hit:", hit);
+                const type =
+                    collectionName === "posts"
+                        ? "post"
+                        : collectionName === "events"
+                          ? "event"
+                          : payload?.circleType || "circle"; // Determine type
 
                 // Map payload to SearchResultItem structure
                 const resultItem: SearchResultItem = {

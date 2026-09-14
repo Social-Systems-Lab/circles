@@ -2,7 +2,9 @@ import { ObjectId } from "mongodb";
 import type { Circle, Event, Feed, Goal, Issue, Post, PostDisplay, Proposal, Task } from "@/models/models";
 import { Circles, Events, Feeds, Goals, Issues, Posts, Proposals, Tasks } from "@/lib/data/db";
 import { isCircleEligibleForPublicVectorIndex } from "@/lib/data/circle-visibility-policy";
+import { canDiscoverCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 import type { DerivedVectorKind, VectorResource } from "@/lib/data/derived-vector-publication";
+import { normalizeEventHostsForRead } from "./event-host-read-policy";
 
 type DerivedResource = Post | PostDisplay | Task | Event | Goal | Issue | Proposal;
 
@@ -33,8 +35,7 @@ export const getAuthoritativeOwnerCircleIds = (
         return feed ? normalizeOwnerIds([feed.circleId]) : null;
     }
     if (kind === "events") {
-        const event = resource as Event;
-        return normalizeOwnerIds([event.circleId, ...(event.hostCircleIds || [])]);
+        return normalizeEventHostsForRead(resource as Event);
     }
     return normalizeOwnerIds([(resource as Task | Goal | Issue | Proposal).circleId]);
 };
@@ -60,7 +61,13 @@ export const filterDerivedResourcesForPublicVectorIndex = <TResource extends Der
                   : null;
         return Boolean(
             allOwnerIds?.length &&
-                allOwnerIds.every((circleId) => isCircleEligibleForPublicVectorIndex(circlesById.get(circleId))),
+                allOwnerIds.every((circleId) => {
+                    const circle = circlesById.get(circleId);
+                    return (
+                        isCircleEligibleForPublicVectorIndex(circle) &&
+                        (kind !== "events" || canDiscoverCircleByLifecycle(circle))
+                    );
+                }),
         );
     });
 };
@@ -89,7 +96,10 @@ const defaultOwnershipResolverDependencies: DerivedOwnershipResolverDependencies
             DerivedResource[]
         >,
     findCircles: (circleIds) =>
-        Circles.find({ _id: { $in: circleIds } }, { projection: { _id: 1, circleType: 1, visibility: 1 } }).toArray(),
+        Circles.find(
+            { _id: { $in: circleIds } },
+            { projection: { _id: 1, circleType: 1, visibility: 1, moderationStatus: 1 } },
+        ).toArray(),
 };
 
 const loadPostSourceOwners = async (posts: DerivedResource[], dependencies: DerivedOwnershipResolverDependencies) => {

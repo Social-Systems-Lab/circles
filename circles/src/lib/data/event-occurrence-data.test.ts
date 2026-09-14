@@ -20,13 +20,18 @@ assert.match(
 );
 assert.match(
     eventDataSource,
-    /EventOccurrences\.find\(\{[\s\S]*seriesId: \{ \$in: recurringSeriesIds \}[\s\S]*occurrenceKey: \{ \$gte:/,
-    "list reads batch occurrence state by series IDs and range",
+    /findOccurrences: async \(query\) => EventOccurrences\.find\(query\)\.toArray\(\)/,
+    "the production recurrence dependency reads EventOccurrences with the supplied query",
+);
+assert.match(
+    eventDataSource,
+    /const occurrenceQuery = \{\s*seriesId: \{ \$in: recurringSeriesIds \},\s*occurrenceKey: \{ \$gte: range\.from\.getTime\(\), \$lte: range\.to\.getTime\(\) \},\s*\};[\s\S]*dependencies\.findOccurrences\(occurrenceQuery\)/,
+    "recurrence enrichment uses the production seam with series-bound and range-bound occurrence identity",
 );
 assert.equal(
-    (eventDataSource.match(/EventOccurrences\.find\(\{/g) || []).length,
+    (eventDataSource.match(/dependencies\.findOccurrences\(occurrenceQuery\)/g) || []).length,
     1,
-    "list expansion uses one batched occurrence query rather than one query per generated occurrence",
+    "recurrence enrichment has one batched occurrence-loading seam rather than per-Event queries",
 );
 
 console.log("event occurrence data tests passed");

@@ -30,6 +30,9 @@ const legacyCircle = { _id: id(), circleType: "circle" } as any;
 const secretCircle = { _id: id(), circleType: "circle", visibility: "secret" } as any;
 const secretProject = { _id: id(), circleType: "project", visibility: "secret" } as any;
 const rawSecretUser = { _id: id(), circleType: "user", visibility: "secret" } as any;
+const suspendedCircle = { _id: id(), circleType: "circle", visibility: "public", moderationStatus: "suspended" } as any;
+const removedCircle = { _id: id(), circleType: "circle", visibility: "public", moderationStatus: "removed" } as any;
+const pausedCircle = { _id: id(), circleType: "circle", visibility: "public", moderationStatus: "paused" } as any;
 
 const resource = (circleId: unknown) => ({ _id: id(), circleId }) as any;
 
@@ -108,6 +111,20 @@ async function testOwnership() {
         0,
     );
     assert.equal(getAuthoritativeOwnerCircleIds("events", { ...allPublic, hostCircleIds: ["bad"] }), null);
+    assert.equal(getAuthoritativeOwnerCircleIds("events", { ...allPublic, hostCircleIds: "not-an-array" }), null);
+    assert.equal(getAuthoritativeOwnerCircleIds("events", { ...allPublic, hostCircleIds: {} }), null);
+    for (const unavailable of [suspendedCircle, removedCircle]) {
+        assert.equal(
+            filterDerivedResourcesForPublicVectorIndex("events", [resource(unavailable._id.toString())], [unavailable])
+                .length,
+            0,
+        );
+    }
+    assert.equal(
+        filterDerivedResourcesForPublicVectorIndex("events", [resource(pausedCircle._id.toString())], [pausedCircle])
+            .length,
+        1,
+    );
 }
 
 async function testPublication() {
@@ -378,9 +395,7 @@ async function testRawPointReconciliation() {
         },
     });
     assert.deepEqual(offsets, [undefined, "page-2"]);
-    assert.deepEqual(rawDeletes, [
-        { kind: "posts", ids: ["missing-payload", "malformed-payload", 42] },
-    ]);
+    assert.deepEqual(rawDeletes, [{ kind: "posts", ids: ["missing-payload", "malformed-payload", 42] }]);
     assert.deepEqual(rawVerifies, rawDeletes);
     assert.deepEqual(mongoDeletes, [[existingSecretId], [orphanId]]);
     assert.equal(counts.posts, 5);
@@ -401,7 +416,10 @@ async function testRawPointReconciliation() {
         assertRawPointsAbsent: async () => {
             rerunCalls.push("raw-verify");
         },
-        scrollPoints: async () => ({ points: [{ pointId: "public-point", mongoId: existingPublicId }], nextOffset: null }),
+        scrollPoints: async () => ({
+            points: [{ pointId: "public-point", mongoId: existingPublicId }],
+            nextOffset: null,
+        }),
     });
     assert.deepEqual(rerunCalls, []);
 }
@@ -429,9 +447,7 @@ async function testProductionPurgeLookup() {
     assert.deepEqual((filters.get("posts") as any).$or[0], { feedId: { $in: [feedId] } });
     for (const parentItemType of ["task", "event", "goal", "issue", "proposal"]) {
         assert.equal(
-            (filters.get("posts") as any).$or.some(
-                (condition: any) => condition.parentItemType === parentItemType,
-            ),
+            (filters.get("posts") as any).$or.some((condition: any) => condition.parentItemType === parentItemType),
             true,
         );
     }
