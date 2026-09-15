@@ -2,7 +2,9 @@ import { ObjectId } from "mongodb";
 import { Events } from "@/lib/data/db";
 import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import type { Event as EventModel, Location } from "@/models/models";
-import { normalizeEventHostCircleIds } from "@/lib/data/event";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { canReadEventContent } from "@/lib/data/event-host-read-policy";
+import { getEventIcsRouteOverrides } from "@/lib/data/ics-route-test-dependencies";
 
 // Helpers for ICS formatting
 function pad(n: number): string {
@@ -77,80 +79,109 @@ function slugifyForFilename(s: string): string {
     return base || "event";
 }
 
-export async function GET(req: Request, ctx: { params: Promise<{ handle: string; eventId: string }> }): Promise<Response> {
-    try {
-        const { handle, eventId } = await ctx.params;
-        if (!handle || !eventId || !ObjectId.isValid(eventId)) {
-            return new Response("Invalid parameters", { status: 400 });
+const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "private, no-store" } });
+
+type EventIcsDependencies = {
+    authenticate: typeof getAuthenticatedUserDid;
+    findCircle: typeof getCircleByHandle;
+    findEvent: (id: ObjectId) => Promise<EventModel | null>;
+    contentPolicyDependencies?: Parameters<typeof canReadEventContent>[2];
+};
+
+const defaultDependencies: EventIcsDependencies = {
+    authenticate: getAuthenticatedUserDid,
+    findCircle: getCircleByHandle,
+    findEvent: async (id) => (await Events.findOne({ _id: id })) as EventModel | null,
+};
+
+function createEventIcsGetHandler(dependencies: EventIcsDependencies = defaultDependencies) {
+    return async function GET(
+        req: Request,
+        ctx: { params: Promise<{ handle: string; eventId: string }> },
+    ): Promise<Response> {
+        try {
+            const deps = { ...dependencies, ...getEventIcsRouteOverrides() };
+            const { handle, eventId } = await ctx.params;
+            if (!handle || !eventId || !ObjectId.isValid(eventId)) {
+                return notFound();
+            }
+
+            const viewerDid = await deps.authenticate();
+            const circle = await deps.findCircle(handle);
+            if (!circle || !circle._id || !isCirclePublished(circle)) {
+                return notFound();
+            }
+
+            const event = await deps.findEvent(new ObjectId(eventId));
+            if (!event) {
+                return notFound();
+            }
+
+            if (
+                !(await canReadEventContent(
+                    event,
+                    { viewerDid, routeHostId: String(circle._id), requiredStage: "open" },
+                    deps.contentPolicyDependencies,
+                ))
+            ) {
+                return notFound();
+            }
+
+            const origin = new URL(req.url).origin;
+            const eventUrl = `${origin}/circles/${handle}/events/${eventId}`;
+
+            const isAllDay = !!event.allDay;
+            const dtStamp = toUTCStringBasic(new Date());
+            const uid = `event-${eventId}@${new URL(origin).hostname}`;
+            const summary = escapeICS(event.title);
+            const description = escapeICS(event.description);
+            const locStr = event.isVirtual ? "Online" : locationToString(event.location);
+
+            const lines: string[] = [
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "PRODID:-//Circles//Events//EN",
+                "CALSCALE:GREGORIAN",
+                "METHOD:PUBLISH",
+                "BEGIN:VEVENT",
+                `UID:${uid}`,
+                `DTSTAMP:${dtStamp}`,
+            ];
+
+            if (isAllDay) {
+                // All-day: DTEND is exclusive per RFC 5545, so add one day
+                lines.push(`DTSTART;VALUE=DATE:${toDateOnly(event.startAt)}`);
+                lines.push(`DTEND;VALUE=DATE:${toDateOnly(addDays(new Date(event.endAt), 1))}`);
+            } else {
+                lines.push(`DTSTART:${toUTCStringBasic(new Date(event.startAt))}`);
+                lines.push(`DTEND:${toUTCStringBasic(new Date(event.endAt))}`);
+            }
+
+            lines.push(`SUMMARY:${summary}`);
+            if (description) lines.push(`DESCRIPTION:${description}`);
+            if (locStr) lines.push(`LOCATION:${escapeICS(locStr)}`);
+            if (event.virtualUrl) lines.push(`URL:${escapeICS(event.virtualUrl)}`);
+            // Always include canonical URL to the event page
+            lines.push(`URL:${escapeICS(eventUrl)}`);
+            lines.push("END:VEVENT");
+            lines.push("END:VCALENDAR");
+
+            const ics = foldLines(lines);
+            const filename = `${slugifyForFilename(event.title)}.ics`;
+
+            return new Response(ics, {
+                status: 200,
+                headers: {
+                    "Content-Type": "text/calendar; charset=utf-8",
+                    "Content-Disposition": `attachment; filename="${filename}"`,
+                    "Cache-Control": "private, no-store",
+                },
+            });
+        } catch (err) {
+            console.error("Error generating ICS:", err);
+            return notFound();
         }
-
-        const circle = await getCircleByHandle(handle);
-        if (!circle || !circle._id || !isCirclePublished(circle)) {
-            return new Response("Circle not found", { status: 404 });
-        }
-
-        const event = (await Events.findOne({ _id: new ObjectId(eventId) })) as EventModel | null;
-        if (!event) {
-            return new Response("Event not found", { status: 404 });
-        }
-
-        // Ensure event is hosted by the circle and is open
-        if (!normalizeEventHostCircleIds(event).includes(String(circle._id)) || event.stage !== "open") {
-            return new Response("Event not accessible", { status: 404 });
-        }
-
-        const origin = new URL(req.url).origin;
-        const eventUrl = `${origin}/circles/${handle}/events/${eventId}`;
-
-        const isAllDay = !!event.allDay;
-        const dtStamp = toUTCStringBasic(new Date());
-        const uid = `event-${eventId}@${new URL(origin).hostname}`;
-        const summary = escapeICS(event.title);
-        const description = escapeICS(event.description);
-        const locStr = event.isVirtual ? "Online" : locationToString(event.location);
-
-        const lines: string[] = [
-            "BEGIN:VCALENDAR",
-            "VERSION:2.0",
-            "PRODID:-//Circles//Events//EN",
-            "CALSCALE:GREGORIAN",
-            "METHOD:PUBLISH",
-            "BEGIN:VEVENT",
-            `UID:${uid}`,
-            `DTSTAMP:${dtStamp}`,
-        ];
-
-        if (isAllDay) {
-            // All-day: DTEND is exclusive per RFC 5545, so add one day
-            lines.push(`DTSTART;VALUE=DATE:${toDateOnly(event.startAt)}`);
-            lines.push(`DTEND;VALUE=DATE:${toDateOnly(addDays(new Date(event.endAt), 1))}`);
-        } else {
-            lines.push(`DTSTART:${toUTCStringBasic(new Date(event.startAt))}`);
-            lines.push(`DTEND:${toUTCStringBasic(new Date(event.endAt))}`);
-        }
-
-        lines.push(`SUMMARY:${summary}`);
-        if (description) lines.push(`DESCRIPTION:${description}`);
-        if (locStr) lines.push(`LOCATION:${escapeICS(locStr)}`);
-        if (event.virtualUrl) lines.push(`URL:${escapeICS(event.virtualUrl)}`);
-        // Always include canonical URL to the event page
-        lines.push(`URL:${escapeICS(eventUrl)}`);
-        lines.push("END:VEVENT");
-        lines.push("END:VCALENDAR");
-
-        const ics = foldLines(lines);
-        const filename = `${slugifyForFilename(event.title)}.ics`;
-
-        return new Response(ics, {
-            status: 200,
-            headers: {
-                "Content-Type": "text/calendar; charset=utf-8",
-                "Content-Disposition": `attachment; filename="${filename}"`,
-                "Cache-Control": "public, max-age=300, s-maxage=300",
-            },
-        });
-    } catch (err) {
-        console.error("Error generating ICS:", err);
-        return new Response("Failed to generate ICS", { status: 500 });
-    }
+    };
 }
+
+export const GET = createEventIcsGetHandler();

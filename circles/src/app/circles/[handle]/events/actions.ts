@@ -692,17 +692,37 @@ export async function getEventsAction(
  * Get single event by id
  */
 export async function getEventAction(circleHandle: string, eventId: string): Promise<EventDisplay | null> {
+    return getEventActionWithDependencies(circleHandle, eventId, {
+        authenticate: getAuthenticatedUserDid,
+        findCircle: getCircleByHandle,
+        authorizeView: (userDid, circleId) => isAuthorized(userDid, circleId, features.events.view),
+        findEvent: getEventById,
+    });
+}
+
+export type GetEventActionDependencies = {
+    authenticate: () => Promise<string | undefined>;
+    findCircle: typeof getCircleByHandle;
+    authorizeView: (userDid: string, circleId: string) => Promise<boolean>;
+    findEvent: (eventId: string, userDid: string) => Promise<EventDisplay | null>;
+};
+
+export async function getEventActionWithDependencies(
+    circleHandle: string,
+    eventId: string,
+    dependencies: GetEventActionDependencies,
+): Promise<EventDisplay | null> {
     try {
-        const userDid = await getAuthenticatedUserDid();
+        const userDid = await dependencies.authenticate();
         if (!userDid) return null;
 
-        const circle = await getCircleByHandle(circleHandle);
+        const circle = await dependencies.findCircle(circleHandle);
         if (!circle) return null;
 
-        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
+        const canView = await dependencies.authorizeView(userDid, circle._id as string);
         if (!canView) return null;
 
-        const event = await getEventById(eventId, userDid);
+        const event = await dependencies.findEvent(eventId, userDid);
         if (event && !isRouteCircleEventHost(circle._id!.toString(), event)) {
             return null;
         }

@@ -1,6 +1,10 @@
 import { Events } from "@/lib/data/db";
 import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import { eventHostCircleMatch } from "@/lib/data/event";
+import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { canReadCircleContent, filterEventsByContentReadPolicy } from "@/lib/data/event-host-read-policy";
+import type { Circle, Event } from "@/models/models";
+import { getCircleIcsRouteOverrides } from "@/lib/data/ics-route-test-dependencies";
 
 // Helpers for ICS formatting
 function pad(n: number): string {
@@ -66,102 +70,142 @@ function slugifyForFilename(s: string): string {
     return base || "events";
 }
 
-export async function GET(req: Request, ctx: { params: Promise<{ handle: string }> }): Promise<Response> {
-    try {
-        const { handle } = await ctx.params;
-        if (!handle) {
-            return new Response("Invalid parameters", { status: 400 });
-        }
+const notFound = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "private, no-store" } });
 
-        const circle = await getCircleByHandle(handle);
-        if (!circle || !circle._id || !isCirclePublished(circle)) {
-            return new Response("Circle not found", { status: 404 });
-        }
+type CircleIcsDependencies = {
+    authenticate: typeof getAuthenticatedUserDid;
+    findCircle: (handle: string) => Promise<Circle | null>;
+    findEvents: (circleId: string, query: { stage: "open"; endingAtOrAfter: Date; limit: 500 }) => Promise<Event[]>;
+    circlePolicyDependencies?: Parameters<typeof canReadCircleContent>[2];
+    contentPolicyDependencies?: Parameters<typeof filterEventsByContentReadPolicy>[2];
+};
 
-        // Only include published, upcoming events for this circle
-        const now = new Date();
-        const circleIdStr = String(circle._id);
-        const events = await Events.find({
-            ...eventHostCircleMatch(circleIdStr),
-            stage: "open",
-            endAt: { $gte: now },
+const defaultDependencies: CircleIcsDependencies = {
+    authenticate: getAuthenticatedUserDid,
+    findCircle: getCircleByHandle,
+    findEvents: async (circleId, query) =>
+        Events.find({
+            ...eventHostCircleMatch(circleId),
+            stage: query.stage,
+            endAt: { $gte: query.endingAtOrAfter },
         })
             .sort({ startAt: 1 })
-            .limit(500)
-            .toArray();
+            .limit(query.limit)
+            .toArray(),
+};
 
-        const origin = new URL(req.url).origin;
-        const hostname = new URL(origin).hostname;
-        const calName = `${circle.name || circle.handle || "Circle"} Events`;
-        const calDesc = `Upcoming events for ${circle.name || circle.handle || "this circle"} on Circles`;
-
-        const lines: string[] = [
-            "BEGIN:VCALENDAR",
-            "VERSION:2.0",
-            "PRODID:-//Circles//Events Feed//EN",
-            "CALSCALE:GREGORIAN",
-            "METHOD:PUBLISH",
-            `X-WR-CALNAME:${escapeICS(calName)}`,
-            `X-WR-CALDESC:${escapeICS(calDesc)}`,
-        ];
-
-        const dtStamp = toUTCStringBasic(new Date());
-
-        for (const ev of events) {
-            const isAllDay = !!ev.allDay;
-            const uid = `event-${String(ev._id)}@${hostname}`;
-            const summary = escapeICS(ev.title);
-            const description = escapeICS(ev.description);
-            const eventUrl = `${origin}/circles/${handle}/events/${String(ev._id)}`;
-
-            lines.push("BEGIN:VEVENT");
-            lines.push(`UID:${uid}`);
-            lines.push(`DTSTAMP:${dtStamp}`);
-
-            if (isAllDay) {
-                lines.push(`DTSTART;VALUE=DATE:${toDateOnly(new Date(ev.startAt))}`);
-                lines.push(`DTEND;VALUE=DATE:${toDateOnly(addDays(new Date(ev.endAt), 1))}`);
-            } else {
-                lines.push(`DTSTART:${toUTCStringBasic(new Date(ev.startAt))}`);
-                lines.push(`DTEND:${toUTCStringBasic(new Date(ev.endAt))}`);
+function createCircleIcsGetHandler(dependencies: CircleIcsDependencies = defaultDependencies) {
+    return async function GET(req: Request, ctx: { params: Promise<{ handle: string }> }): Promise<Response> {
+        try {
+            const deps = { ...dependencies, ...getCircleIcsRouteOverrides() };
+            const { handle } = await ctx.params;
+            if (!handle) {
+                return notFound();
             }
 
-            lines.push(`SUMMARY:${summary}`);
-            if (description) lines.push(`DESCRIPTION:${description}`);
-
-            // Virtual URL as URL (if available)
-            if (ev.virtualUrl) lines.push(`URL:${escapeICS(ev.virtualUrl)}`);
-            // Canonical URL to event page (always include)
-            lines.push(`URL:${escapeICS(eventUrl)}`);
-
-            // Location (prefer "Online" for virtual)
-            if (ev.isVirtual) {
-                lines.push("LOCATION:Online");
-            } else if (ev.location) {
-                const parts = [ev.location.street, ev.location.city, ev.location.region, ev.location.country].filter(
-                    Boolean,
-                );
-                lines.push(`LOCATION:${escapeICS(parts.join(", "))}`);
+            const viewerDid = await deps.authenticate();
+            const circle = await deps.findCircle(handle);
+            if (
+                !circle ||
+                !circle._id ||
+                !isCirclePublished(circle) ||
+                !(await canReadCircleContent(circle, viewerDid, deps.circlePolicyDependencies))
+            ) {
+                return notFound();
             }
 
-            lines.push("END:VEVENT");
+            // Only include published, upcoming events for this circle
+            const now = new Date();
+            const circleIdStr = String(circle._id);
+            const candidates = await deps.findEvents(circleIdStr, {
+                stage: "open",
+                endingAtOrAfter: now,
+                limit: 500,
+            });
+            const events = await filterEventsByContentReadPolicy(
+                candidates,
+                { viewerDid, routeHostId: circleIdStr, requiredStage: "open" },
+                deps.contentPolicyDependencies,
+            );
+
+            const origin = new URL(req.url).origin;
+            const hostname = new URL(origin).hostname;
+            const calName = `${circle.name || circle.handle || "Circle"} Events`;
+            const calDesc = `Upcoming events for ${circle.name || circle.handle || "this circle"} on Circles`;
+
+            const lines: string[] = [
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "PRODID:-//Circles//Events Feed//EN",
+                "CALSCALE:GREGORIAN",
+                "METHOD:PUBLISH",
+                `X-WR-CALNAME:${escapeICS(calName)}`,
+                `X-WR-CALDESC:${escapeICS(calDesc)}`,
+            ];
+
+            const dtStamp = toUTCStringBasic(new Date());
+
+            for (const ev of events) {
+                const isAllDay = !!ev.allDay;
+                const uid = `event-${String(ev._id)}@${hostname}`;
+                const summary = escapeICS(ev.title);
+                const description = escapeICS(ev.description);
+                const eventUrl = `${origin}/circles/${handle}/events/${String(ev._id)}`;
+
+                lines.push("BEGIN:VEVENT");
+                lines.push(`UID:${uid}`);
+                lines.push(`DTSTAMP:${dtStamp}`);
+
+                if (isAllDay) {
+                    lines.push(`DTSTART;VALUE=DATE:${toDateOnly(new Date(ev.startAt))}`);
+                    lines.push(`DTEND;VALUE=DATE:${toDateOnly(addDays(new Date(ev.endAt), 1))}`);
+                } else {
+                    lines.push(`DTSTART:${toUTCStringBasic(new Date(ev.startAt))}`);
+                    lines.push(`DTEND:${toUTCStringBasic(new Date(ev.endAt))}`);
+                }
+
+                lines.push(`SUMMARY:${summary}`);
+                if (description) lines.push(`DESCRIPTION:${description}`);
+
+                // Virtual URL as URL (if available)
+                if (ev.virtualUrl) lines.push(`URL:${escapeICS(ev.virtualUrl)}`);
+                // Canonical URL to event page (always include)
+                lines.push(`URL:${escapeICS(eventUrl)}`);
+
+                // Location (prefer "Online" for virtual)
+                if (ev.isVirtual) {
+                    lines.push("LOCATION:Online");
+                } else if (ev.location) {
+                    const parts = [
+                        ev.location.street,
+                        ev.location.city,
+                        ev.location.region,
+                        ev.location.country,
+                    ].filter(Boolean);
+                    lines.push(`LOCATION:${escapeICS(parts.join(", "))}`);
+                }
+
+                lines.push("END:VEVENT");
+            }
+
+            lines.push("END:VCALENDAR");
+
+            const ics = foldLines(lines);
+            const filename = `${slugifyForFilename(circle.handle || circle.name || "events")}.ics`;
+
+            return new Response(ics, {
+                status: 200,
+                headers: {
+                    "Content-Type": "text/calendar; charset=utf-8",
+                    "Content-Disposition": `inline; filename="${filename}"`,
+                    "Cache-Control": "private, no-store",
+                },
+            });
+        } catch (err) {
+            console.error("Error generating ICS feed:", err);
+            return notFound();
         }
-
-        lines.push("END:VCALENDAR");
-
-        const ics = foldLines(lines);
-        const filename = `${slugifyForFilename(circle.handle || circle.name || "events")}.ics`;
-
-        return new Response(ics, {
-            status: 200,
-            headers: {
-                "Content-Type": "text/calendar; charset=utf-8",
-                "Content-Disposition": `inline; filename="${filename}"`,
-                "Cache-Control": "public, max-age=300, s-maxage=300",
-            },
-        });
-    } catch (err) {
-        console.error("Error generating ICS feed:", err);
-        return new Response("Failed to generate ICS feed", { status: 500 });
-    }
+    };
 }
+
+export const GET = createCircleIcsGetHandler();

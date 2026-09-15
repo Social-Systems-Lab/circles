@@ -10,6 +10,17 @@ export type EventHostReadPolicyDependencies = {
     findMemberships: (viewerDid: string, circleIds: string[]) => Promise<Array<Pick<Member, "userDid" | "circleId">>>;
 };
 
+export type EventContentReadPolicyDependencies = EventHostReadPolicyDependencies & {
+    findPrivateEntitledEventIds: (viewerDid: string, eventIds: string[]) => Promise<string[]>;
+};
+
+export type EventContentReadOptions = {
+    viewerDid?: string;
+    routeHostId?: string;
+    requiredStage?: Event["stage"];
+    preEntitledPrivateEventIds?: string[];
+};
+
 export type EventReaderHostPolicyDependencies = EventHostReadPolicyDependencies & {
     findEventCandidatePage: (
         match: Document,
@@ -36,6 +47,44 @@ const defaultDependencies: EventHostReadPolicyDependencies = {
         ).toArray();
     },
 };
+
+const defaultContentDependencies: EventContentReadPolicyDependencies = {
+    ...defaultDependencies,
+    findPrivateEntitledEventIds: async (viewerDid, eventIds) => {
+        const { EventInvitations, EventRsvps } = await import("./db");
+        const [rsvps, invitations] = await Promise.all([
+            EventRsvps.find(
+                { userDid: viewerDid, eventId: { $in: eventIds } },
+                { projection: { eventId: 1 } },
+            ).toArray(),
+            EventInvitations.find(
+                { userDid: viewerDid, eventId: { $in: eventIds } },
+                { projection: { eventId: 1 } },
+            ).toArray(),
+        ]);
+        return [...rsvps, ...invitations].map((row) => row.eventId);
+    },
+};
+
+export async function canReadCircleContent(
+    circle: Circle | null | undefined,
+    viewerDid?: string,
+    dependencies: Pick<EventHostReadPolicyDependencies, "findMemberships"> = defaultDependencies,
+): Promise<boolean> {
+    if (!circle?._id || !canReadCircleByLifecycle(circle)) return false;
+    if (
+        circle.circleType !== "user" &&
+        circle.visibility !== undefined &&
+        circle.visibility !== "public" &&
+        circle.visibility !== "secret"
+    )
+        return false;
+    if (getCircleVisibility(circle) !== "secret") return true;
+    if (!viewerDid) return false;
+    const circleId = circle._id.toString();
+    const memberships = await dependencies.findMemberships(viewerDid, [circleId]);
+    return memberships.some((member) => member.userDid === viewerDid && member.circleId === circleId);
+}
 
 /** Strict, primary-first normalization for legacy Event host state. */
 export function normalizeEventHostsForRead(event: EventHostShape): string[] | null {
@@ -97,6 +146,52 @@ export async function filterEventsByReadableHosts<TEvent extends EventHostShape>
                 }),
         );
     });
+}
+
+/** Every-host readability plus additive private-Event entitlement and optional caller constraints. */
+export async function filterEventsByContentReadPolicy<
+    TEvent extends EventHostShape & Pick<Event, "_id" | "visibility" | "createdBy" | "stage">,
+>(
+    events: TEvent[],
+    options: EventContentReadOptions = {},
+    dependencies: Partial<EventContentReadPolicyDependencies> = defaultContentDependencies,
+): Promise<TEvent[]> {
+    const deps = { ...defaultContentDependencies, ...dependencies };
+    const constrained = events.filter((event) => {
+        const hostIds = normalizeEventHostsForRead(event);
+        return Boolean(
+            hostIds?.length &&
+                (!options.routeHostId || hostIds.includes(options.routeHostId)) &&
+                (!options.requiredStage || event.stage === options.requiredStage),
+        );
+    });
+    const hostReadable = await filterEventsByReadableHosts(constrained, options.viewerDid, deps);
+    const privateIds = hostReadable
+        .filter((event) => event.visibility === "private" && event.createdBy !== options.viewerDid)
+        .map((event) => event._id?.toString())
+        .filter((eventId): eventId is string => Boolean(eventId));
+    const entitledIds = new Set([
+        ...(options.preEntitledPrivateEventIds || []),
+        ...(options.viewerDid && privateIds.length
+            ? await deps.findPrivateEntitledEventIds(options.viewerDid, privateIds)
+            : []),
+    ]);
+    return hostReadable.filter(
+        (event) =>
+            event.visibility !== "private" ||
+            event.createdBy === options.viewerDid ||
+            entitledIds.has(event._id?.toString() || ""),
+    );
+}
+
+export async function canReadEventContent<
+    TEvent extends EventHostShape & Pick<Event, "_id" | "visibility" | "createdBy" | "stage">,
+>(
+    event: TEvent,
+    options: EventContentReadOptions = {},
+    dependencies?: Partial<EventContentReadPolicyDependencies>,
+): Promise<boolean> {
+    return (await filterEventsByContentReadPolicy([event], options, dependencies)).length === 1;
 }
 
 /**

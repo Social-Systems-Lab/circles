@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { eventOccurrenceInvitationSchema } from "@/models/models";
+import { ObjectId } from "mongodb";
+import { formatEventOccurrenceId } from "@/lib/event-occurrence";
+import { getEventById, type SingleEventReadDependencies } from "@/lib/data/event";
 import {
     getEffectiveEventOccurrenceParticipants,
     mergeEventOccurrenceInviteCandidates,
@@ -210,12 +213,12 @@ assert.match(manageSource, /features\.events\.moderate/, "a moderator in a host 
 assert.match(manageSource, /checks\.some\(Boolean\)/, "one host management permission is sufficient");
 assert.match(
     eventDataSource,
-    /recurringInstance[\s\S]*EventOccurrenceInvitations\.findOne\([\s\S]*seriesId:[\s\S]*occurrenceKey:[\s\S]*userDid/,
-    "private visibility checks the exact occurrence identity and invitee",
+    /findOccurrenceInvitation: async \(seriesId, occurrenceKey, userDid\) =>\s*EventOccurrenceInvitations\.findOne\(\{ seriesId, occurrenceKey, userDid \}\)/,
+    "the production dependency reads an invitation by exact series, occurrence, and invitee identity",
 );
 assert.match(
     eventDataSource,
-    /const occurrenceInvitation = recurringInstance\s*\?[\s\S]*?: null/,
+    /const occurrenceInvitation = recurringInstance\s*\?\s*await dependencies\.findOccurrenceInvitation\(\s*recurringInstance\.seriesId,\s*recurringInstance\.occurrenceKey,\s*userDid,?\s*\)\s*: null/,
     "base series routes do not use occurrence invitations",
 );
 assert.match(eventDataSource, /EventOccurrenceInvitations\.deleteMany\(\{ seriesId: eventId \}\)/);
@@ -285,4 +288,70 @@ assert.match(
 );
 assert.doesNotMatch(pickerSource, /notifyEventOccurrenceInvitation|inviteUsersToEventOccurrenceAction/);
 
-console.log("event occurrence invitation tests passed");
+async function assertOccurrenceInvitationReadOrchestration() {
+    const canonicalSeriesId = new ObjectId();
+    const startAt = new Date("2030-01-01T10:00:00.000Z");
+    const exactOccurrence = new Date("2030-01-02T10:00:00.000Z");
+    const exactOccurrenceKey = exactOccurrence.getTime();
+    const viewerDid = "did:example:exact-invitee";
+    const calls: Array<[string, number, string]> = [];
+    const candidate = {
+        _id: canonicalSeriesId.toHexString(),
+        circleId: new ObjectId().toHexString(),
+        hostCircleIds: [],
+        createdBy: "did:example:creator",
+        visibility: "private",
+        stage: "open",
+        title: "Private recurring Event",
+        startAt,
+        endAt: new Date("2030-01-01T11:00:00.000Z"),
+        recurrence: { frequency: "daily", interval: 1 },
+    } as any;
+    let occurrenceInvitationEntitled = false;
+    const dependencies: SingleEventReadDependencies = {
+        findOccurrenceInvitation: async (readSeriesId, readOccurrenceKey, readViewerDid) => {
+            calls.push([readSeriesId, readOccurrenceKey, readViewerDid]);
+            return { message: "Exact invitation" } as any;
+        },
+        aggregateEvent: async (pipeline) => {
+            assert.deepEqual(pipeline[0], { $match: { _id: canonicalSeriesId } });
+            return [candidate];
+        },
+        canReadContent: async (_event, readViewerDid, entitled) => {
+            assert.equal(readViewerDid, viewerDid);
+            occurrenceInvitationEntitled = entitled;
+            return true;
+        },
+        canManageUnpublished: async () => false,
+        findOccurrence: async (readSeriesId, readOccurrenceKey) => {
+            assert.equal(readSeriesId, canonicalSeriesId.toHexString());
+            assert.equal(readOccurrenceKey, exactOccurrenceKey);
+            return null;
+        },
+        findOccurrenceRsvps: async (readSeriesId, readOccurrenceKey) => {
+            assert.equal(readSeriesId, canonicalSeriesId.toHexString());
+            assert.equal(readOccurrenceKey, exactOccurrenceKey);
+            return [];
+        },
+    };
+
+    const occurrenceId = formatEventOccurrenceId(canonicalSeriesId.toHexString(), exactOccurrence);
+    const result = await getEventById(occurrenceId, viewerDid, dependencies);
+    assert.deepEqual(calls, [[canonicalSeriesId.toHexString(), exactOccurrenceKey, viewerDid]]);
+    assert.equal(occurrenceInvitationEntitled, true, "the exact invitation is passed as private-Event entitlement");
+    assert.equal(result?.occurrenceInvitationMessage, "Exact invitation");
+
+    calls.length = 0;
+    await getEventById(canonicalSeriesId.toHexString(), viewerDid, dependencies);
+    assert.deepEqual(calls, [], "a canonical base-series read cannot consume occurrence invitation entitlement");
+}
+
+assertOccurrenceInvitationReadOrchestration()
+    .then(() => {
+        console.log("event occurrence invitation tests passed");
+        process.exit(0);
+    })
+    .catch((error) => {
+        console.error(error);
+        process.exitCode = 1;
+    });

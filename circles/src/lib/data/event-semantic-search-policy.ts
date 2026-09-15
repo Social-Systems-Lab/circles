@@ -1,16 +1,13 @@
 import { ObjectId } from "mongodb";
 import type { Event } from "@/models/models";
-import {
-    filterEventsByReadableHosts,
-    type EventHostReadPolicyDependencies,
-} from "./event-host-read-policy";
+import { filterEventsByContentReadPolicy, type EventContentReadPolicyDependencies } from "./event-host-read-policy";
 
 type SemanticResult = { _id: string; type: string };
 
 export type EventSemanticSearchDependencies = {
     findEvents: (ids: ObjectId[]) => Promise<Event[]>;
     findPrivateEntitledEventIds: (viewerDid: string, eventIds: string[]) => Promise<string[]>;
-    hostPolicyDependencies?: EventHostReadPolicyDependencies;
+    hostPolicyDependencies?: Partial<EventContentReadPolicyDependencies>;
 };
 
 const defaultDependencies: EventSemanticSearchDependencies = {
@@ -47,26 +44,15 @@ export async function filterReadableEventSemanticResults<TResult extends Semanti
     if (eventResults.length === 0) return results;
     const validIds = Array.from(new Set(eventResults.map((result) => result._id).filter(ObjectId.isValid)));
     const events = validIds.length ? await dependencies.findEvents(validIds.map((id) => new ObjectId(id))) : [];
-    const readable = await filterEventsByReadableHosts(events, viewerDid, dependencies.hostPolicyDependencies);
-    const privateEventIds = readable
-        .filter((event) => event.visibility === "private" && event.createdBy !== viewerDid)
-        .map((event) => event._id?.toString())
-        .filter((eventId): eventId is string => Boolean(eventId));
-    const entitledPrivateIds = new Set(
-        viewerDid && privateEventIds.length
-            ? await dependencies.findPrivateEntitledEventIds(viewerDid, privateEventIds)
-            : [],
+    const readable = await filterEventsByContentReadPolicy(
+        events,
+        { viewerDid },
+        {
+            ...(dependencies.hostPolicyDependencies || {}),
+            findPrivateEntitledEventIds: dependencies.findPrivateEntitledEventIds,
+        },
     );
-    const readableIds = new Set(
-        readable
-            .filter(
-                (event) =>
-                    event.visibility !== "private" ||
-                    event.createdBy === viewerDid ||
-                    entitledPrivateIds.has(event._id?.toString() || ""),
-            )
-            .map((event) => event._id?.toString()),
-    );
+    const readableIds = new Set(readable.map((event) => event._id?.toString()));
     return results.filter((result) => result.type !== "event" || readableIds.has(result._id));
 }
 

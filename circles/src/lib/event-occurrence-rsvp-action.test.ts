@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { ObjectId } from "mongodb";
+import { getEventsByCircleId, type EventProductionReaderDependencies } from "@/lib/data/event";
 
 const actionsSource = readFileSync("src/app/circles/[handle]/events/actions.ts", "utf8");
 const targetHelper = actionsSource.match(
@@ -113,13 +115,13 @@ assert.match(
 );
 assert.match(
     eventDataSource,
-    /EventOccurrenceRsvps\.find\(\{[\s\S]*seriesId: \{ \$in: recurringSeriesIds \}/,
-    "list reads batch occurrence RSVPs",
+    /findOccurrenceRsvps: async \(query\) => EventOccurrenceRsvps\.find\(query\)\.toArray\(\)/,
+    "the production dependency executes the supplied occurrence RSVP query",
 );
 assert.match(
     eventDataSource,
-    /EventOccurrenceRsvps\.find\(\{ userDid \}\)\.toArray\(\)/,
-    "participating reads batch all of the user's occurrence overrides for precedence filtering",
+    /dependencies\.findOccurrenceRsvps\(occurrenceQuery\)/,
+    "recurrence enrichment uses the occurrence RSVP dependency seam",
 );
 assert.match(
     eventDataSource,
@@ -127,4 +129,84 @@ assert.match(
     "ordinary circle lists bypass the personal participating filter",
 );
 
-console.log("event occurrence RSVP action tests passed");
+async function assertOccurrenceRsvpReadOrchestration() {
+    const routeCircleId = new ObjectId();
+    const seriesObjectId = new ObjectId();
+    const seriesId = seriesObjectId.toHexString();
+    const viewerDid = "did:example:viewer";
+    const range = {
+        from: new Date("2030-01-01T00:00:00.000Z"),
+        to: new Date("2030-01-03T00:00:00.000Z"),
+    };
+    const occurrenceQueries: any[] = [];
+    let candidatePageReads = 0;
+    const dependencies: EventProductionReaderDependencies = {
+        findCircle: async () => ({ _id: routeCircleId, circleType: "circle" }) as any,
+        authorize: async () => false,
+        findViewer: async () => null as any,
+        findEventRsvps: async () => [],
+        findOccurrenceRsvps: async (query) => {
+            occurrenceQueries.push(query);
+            return [];
+        },
+        findOccurrences: async () => [],
+        aggregateEvents: async () => [
+            {
+                _id: seriesId,
+                circleId: routeCircleId.toHexString(),
+                hostCircleIds: [],
+                createdBy: "did:example:creator",
+                visibility: "public",
+                stage: "open",
+                title: "Recurring Event",
+                startAt: new Date("2030-01-01T10:00:00.000Z"),
+                endAt: new Date("2030-01-01T11:00:00.000Z"),
+                recurrence: { frequency: "daily", interval: 1 },
+            } as any,
+        ],
+        hostPolicyDependencies: {
+            findEventCandidatePage: async () => {
+                candidatePageReads += 1;
+                return candidatePageReads === 1
+                    ? [{ _id: seriesObjectId, circleId: routeCircleId.toHexString(), hostCircleIds: [] }]
+                    : [];
+            },
+            findCircles: async () => [
+                { _id: routeCircleId, circleType: "circle", visibility: "public", moderationStatus: "active" } as any,
+            ],
+            findMemberships: async () => [],
+        },
+    };
+
+    await getEventsByCircleId(routeCircleId.toHexString(), viewerDid, range, false, false, dependencies);
+    assert.deepEqual(occurrenceQueries, [
+        {
+            seriesId: { $in: [seriesId] },
+            occurrenceKey: { $gte: range.from.getTime(), $lte: range.to.getTime() },
+        },
+    ]);
+
+    occurrenceQueries.length = 0;
+    candidatePageReads = 0;
+    dependencies.findCircle = async () => ({
+        _id: routeCircleId,
+        circleType: "user",
+        did: viewerDid,
+    }) as any;
+    await getEventsByCircleId(routeCircleId.toHexString(), viewerDid, range, false, true, dependencies);
+    assert.deepEqual(
+        occurrenceQueries[0],
+        { userDid: viewerDid },
+        "participating reads request all exact occurrence overrides for the viewer",
+    );
+}
+
+assertOccurrenceRsvpReadOrchestration()
+    .then(() => {
+        console.log("event occurrence RSVP action tests passed");
+        process.exit(0);
+    })
+    .catch((error) => {
+        console.error(error);
+        process.exitCode = 1;
+    });

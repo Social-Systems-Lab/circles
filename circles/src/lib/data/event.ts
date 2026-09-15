@@ -8,7 +8,7 @@ import {
     EventOccurrenceRsvps,
     EventOccurrenceInvitations,
 } from "./db";
-import { ObjectId } from "mongodb";
+import { ObjectId, type Document } from "mongodb";
 import {
     Event,
     EventDisplay,
@@ -20,6 +20,7 @@ import {
     EventInvitation,
     EventOccurrence,
     EventOccurrenceRsvp,
+    EventOccurrenceInvitation,
 } from "@/models/models";
 import {
     buildRecurringOccurrenceDisplay,
@@ -40,6 +41,7 @@ import { features } from "./constants";
 import { getCircleById } from "./circle";
 import { isAcceptedConnectionForUserDid } from "./relationships";
 import {
+    canReadEventContent,
     forEachReadableGlobalEventBatch,
     GLOBAL_EVENT_READ_BATCH_SIZE,
     type EventReaderHostPolicyDependencies,
@@ -611,7 +613,39 @@ export const getEventsByCircleId = async (
 /**
  * Get a single event by ID with author, circle and RSVP info.
  */
-export const getEventById = async (eventId: string, userDid: string): Promise<EventDisplay | null> => {
+export type SingleEventReadDependencies = {
+    findOccurrenceInvitation: (
+        seriesId: string,
+        occurrenceKey: number,
+        userDid: string,
+    ) => Promise<EventOccurrenceInvitation | null>;
+    aggregateEvent: (pipeline: Document[]) => Promise<EventDisplay[]>;
+    canReadContent: (event: EventDisplay, viewerDid: string, occurrenceInvitationEntitled: boolean) => Promise<boolean>;
+    canManageUnpublished: (viewerDid: string, event: EventDisplay) => Promise<boolean>;
+    findOccurrence: (seriesId: string, occurrenceKey: number) => Promise<EventOccurrence | null>;
+    findOccurrenceRsvps: (seriesId: string, occurrenceKey: number) => Promise<EventOccurrenceRsvp[]>;
+};
+
+const defaultSingleEventReadDependencies: SingleEventReadDependencies = {
+    findOccurrenceInvitation: async (seriesId, occurrenceKey, userDid) =>
+        EventOccurrenceInvitations.findOne({ seriesId, occurrenceKey, userDid }),
+    aggregateEvent: async (pipeline) => (await Events.aggregate(pipeline).toArray()) as EventDisplay[],
+    canReadContent: async (event, viewerDid, occurrenceInvitationEntitled) =>
+        canReadEventContent(event, {
+            viewerDid: viewerDid || undefined,
+            preEntitledPrivateEventIds: occurrenceInvitationEntitled ? [String(event._id)] : [],
+        }),
+    canManageUnpublished: canManageEvent,
+    findOccurrence: async (seriesId, occurrenceKey) => EventOccurrences.findOne({ seriesId, occurrenceKey }),
+    findOccurrenceRsvps: async (seriesId, occurrenceKey) =>
+        EventOccurrenceRsvps.find({ seriesId, occurrenceKey }).toArray(),
+};
+
+export const getEventById = async (
+    eventId: string,
+    userDid: string,
+    dependencies: SingleEventReadDependencies = defaultSingleEventReadDependencies,
+): Promise<EventDisplay | null> => {
     try {
         const recurringInstance = parseEventOccurrenceId(eventId);
         const lookupEventId = recurringInstance?.seriesId ?? eventId;
@@ -621,14 +655,14 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
         }
 
         const occurrenceInvitation = recurringInstance
-            ? await EventOccurrenceInvitations.findOne({
-                  seriesId: recurringInstance.seriesId,
-                  occurrenceKey: recurringInstance.occurrenceKey,
+            ? await dependencies.findOccurrenceInvitation(
+                  recurringInstance.seriesId,
+                  recurringInstance.occurrenceKey,
                   userDid,
-              })
+              )
             : null;
 
-        const events = (await Events.aggregate([
+        const events = await dependencies.aggregateEvent([
             { $match: { _id: new ObjectId(lookupEventId) } },
 
             // Author
@@ -800,14 +834,17 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
                     },
                 },
             },
-        ]).toArray()) as EventDisplay[];
+        ]);
 
         if (events.length === 0) {
             return null;
         }
 
         const event = events[0];
-        const canManageUnpublished = await canManageEvent(userDid, event);
+        if (!(await dependencies.canReadContent(event, userDid, Boolean(occurrenceInvitation)))) {
+            return null;
+        }
+        const canManageUnpublished = await dependencies.canManageUnpublished(userDid, event);
 
         if (
             (event.stage === "draft" || event.stage === "review") &&
@@ -834,14 +871,11 @@ export const getEventById = async (eventId: string, userDid: string): Promise<Ev
             return null;
         }
 
-        const occurrence = await EventOccurrences.findOne({
-            seriesId: String(event._id),
-            occurrenceKey: recurringInstance.occurrenceKey,
-        });
-        const occurrenceRsvps = await EventOccurrenceRsvps.find({
-            seriesId: String(event._id),
-            occurrenceKey: recurringInstance.occurrenceKey,
-        }).toArray();
+        const occurrence = await dependencies.findOccurrence(String(event._id), recurringInstance.occurrenceKey);
+        const occurrenceRsvps = await dependencies.findOccurrenceRsvps(
+            String(event._id),
+            recurringInstance.occurrenceKey,
+        );
         const occurrenceEvent = buildRecurringInstance(
             event,
             recurringInstance.originalStartAt,
