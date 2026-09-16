@@ -21,7 +21,8 @@ import {
     getUnreadCountsForUser,
     getTopicUnreadCountsForUser,
     getLegacyUnreadCountForUser,
-    listConversationsForUser,
+    listConversationCandidatesForUser,
+    mapConversationsToChatRoomDisplays,
     mapConversationToChatRoomDisplay,
     markConversationRead,
     markTopicRead,
@@ -35,7 +36,7 @@ import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } fr
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { getAuthenticatedUserDid as getProductionAuthenticatedUserDid } from "@/lib/auth/auth";
 import { extractChatMentionIds } from "@/lib/chat/mention-markup";
 import { normalizeObjectIdHex, sumConversationUnreadCounts } from "@/lib/chat/topic-read-state";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
@@ -44,6 +45,13 @@ import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { getDmEligibility } from "@/lib/data/relationships";
 import { assertCircleWritesAllowed, canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
+import { buildConversationScopedReplyFilter, CHAT_UNAVAILABLE_MESSAGE, evaluateConversationAccess } from "@/lib/chat/conversation-access-policy";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
+import { authorizeCircleChatEntry } from "@/lib/chat/circle-chat-entry-orchestration";
+import { getChatActionContext, getChatActionViewerDid, observeChatActionEffect } from "@/lib/chat/chat-action-context";
+
+const getAuthenticatedUserDid = () => getChatActionViewerDid(getProductionAuthenticatedUserDid);
 
 const normalizeMediaUrl = (url?: string): string | undefined => {
     if (!url) return url;
@@ -75,7 +83,9 @@ const isUploadedFileLike = (value: FormDataEntryValue | null): value is File => 
 };
 
 const ensureParticipatingMessagingUser = async (userDid: string, action: string): Promise<string | null> => {
-    const user = await Circles.findOne(
+    const user = getChatActionContext()?.findMessagingUser
+        ? await getChatActionContext()!.findMessagingUser!(userDid)
+        : await Circles.findOne(
         { did: userDid },
         {
             projection: {
@@ -289,41 +299,36 @@ export const resolveMongoConversationAccess = async (
     userDid: string,
     intent: "read" | "write" = "read",
 ) => {
-    let conversation = await findConversationById(conversationId);
+    const context = getChatActionContext();
+    let conversation = context?.findConversation
+        ? await context.findConversation(conversationId)
+        : await findConversationById(conversationId);
 
     // If conversationId is actually a handle (e.g. "dm-..."), try resolving by handle.
-    if (!conversation) {
+    if (!conversation && !context?.findConversation) {
         const { ChatConversations } = await import("@/lib/data/db");
         conversation = await ChatConversations.findOne({ handle: conversationId });
     }
 
     if (!conversation) {
-        return { ok: false, message: "Chat not found" };
+        return { ok: false, message: CHAT_UNAVAILABLE_MESSAGE };
     }
 
-    const unauthorized = { ok: false as const, message: "You are not authorized to access this chat" };
-
-    if (conversation.circleId) {
-        const ownerCircle = await getCircleById(conversation.circleId);
-        if (!ownerCircle) return unauthorized;
-        if (ownerCircle.circleType !== "user") {
-            if (intent === "write") {
-                try {
-                    await assertCircleWritesAllowed(conversation.circleId);
-                } catch {
-                    return unauthorized;
-                }
-            } else if (!canReadCircleByLifecycle(ownerCircle)) {
-                return unauthorized;
-            }
-        }
-    }
-
-    // Non-circle DM + announcement behavior remains participant-based.
-    if (conversation.type === "dm" || conversation.type === "announcement") {
-        if (!conversation.participants?.includes(userDid)) return unauthorized;
-        return { ok: true, conversation };
-    }
+    const unauthorized = { ok: false as const, message: CHAT_UNAVAILABLE_MESSAGE };
+    const circleId = typeof conversation.circleId === "string" ? conversation.circleId : undefined;
+    const ownerCircle = circleId && ObjectId.isValid(circleId)
+        ? context?.findCircle
+            ? await context.findCircle(circleId)
+            : await getCircleById(circleId)
+        : null;
+    const canonicalMember = circleId
+        ? Boolean(
+              context?.findCanonicalMember
+                  ? await context.findCanonicalMember(userDid, circleId)
+                  : await Members.findOne({ userDid, circleId }, { projection: { _id: 1 } }),
+          )
+        : false;
+    if (ownerCircle && intent === "read" && !canReadCircleByLifecycle(ownerCircle)) return unauthorized;
 
     // Non-DM: enforce strict membership in ChatRoomMembers
     const chatRoomId = String((conversation as any)._id);
@@ -337,12 +342,81 @@ export const resolveMongoConversationAccess = async (
         delete membershipQuery.chatRoomId;
     }
 
-    const membership: any = await ChatRoomMembers.findOne(membershipQuery);
-    if (!membership) return unauthorized;
-
-    if (!isActiveGroupMembership(membership)) return unauthorized;
+    const membership: any = conversation.type === "dm"
+        ? null
+        : context?.findChatMember
+          ? await context.findChatMember(userDid, chatRoomId)
+          : await ChatRoomMembers.findOne(membershipQuery);
+    const allowed = evaluateConversationAccess({
+        conversation,
+        viewerDid: userDid,
+        intent,
+        ownerCircle,
+        canonicalMember,
+        chatMember: isActiveGroupMembership(membership),
+    });
+    if (!allowed) return unauthorized;
 
     return { ok: true, conversation };
+};
+
+export const resolveMongoConversationAccessBatch = async (
+    conversationIds: string[],
+    userDid: string,
+    intent: "read" | "write" = "read",
+): Promise<Set<string>> => {
+    const uniqueIds = Array.from(new Set(conversationIds.filter(Boolean)));
+    if (!uniqueIds.length) return new Set();
+    if (getChatActionContext()?.findConversation) {
+        const checks = await Promise.all(uniqueIds.map(async (id) => ({ id, access: await resolveMongoConversationAccess(id, userDid, intent) })));
+        return new Set(checks.filter(({ access }) => access.ok).flatMap(({ id, access }) => [id, access.conversation?._id?.toString?.()].filter(Boolean) as string[]));
+    }
+    const objectIds = uniqueIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+    const conversations = await ChatConversations.find({
+        archived: { $ne: true },
+        $or: [{ _id: { $in: objectIds } }, { handle: { $in: uniqueIds } }],
+    }).toArray();
+    const circleIds = Array.from(
+        new Set(conversations.map((conversation: any) => conversation.circleId).filter((id): id is string => typeof id === "string")),
+    );
+    const circleObjectIds = circleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+    const [circles, canonicalRows, chatRows] = await Promise.all([
+        circleObjectIds.length ? Circles.find({ _id: { $in: circleObjectIds } }).toArray() : Promise.resolve([]),
+        circleIds.length
+            ? Members.find({ userDid, circleId: { $in: circleIds } }, { projection: { circleId: 1 } }).toArray()
+            : Promise.resolve([]),
+        ChatRoomMembers.find(
+            ({
+                userDid,
+                $or: [
+                    { chatRoomId: { $in: uniqueIds } },
+                    ...(objectIds.length ? [{ chatRoomId: { $in: objectIds } }] : []),
+                ],
+            } as any),
+            { projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 } },
+        ).toArray(),
+    ]);
+    const circleById = new Map(circles.map((circle: any) => [circle._id.toString(), circle]));
+    const canonicalIds = new Set(canonicalRows.map((row: any) => row.circleId));
+    const activeChatIds = new Set(
+        chatRows.filter(isActiveGroupMembership).map((row: any) => row.chatRoomId?.toString?.() || String(row.chatRoomId)),
+    );
+    const allowed = new Set<string>();
+    for (const conversation of conversations) {
+        const id = conversation._id.toString();
+        if (evaluateConversationAccess({
+            conversation,
+            viewerDid: userDid,
+            intent,
+            ownerCircle: typeof conversation.circleId === "string" ? circleById.get(conversation.circleId) : null,
+            canonicalMember: typeof conversation.circleId === "string" && canonicalIds.has(conversation.circleId),
+            chatMember: activeChatIds.has(id),
+        })) {
+            allowed.add(id);
+            if (conversation.handle) allowed.add(conversation.handle);
+        }
+    }
+    return allowed;
 };
 
 const validateReplyTargetForConversation = async (
@@ -397,30 +471,48 @@ export const listChatRoomsAction = async (): Promise<{
     try {
         // Why this broke: delegating through listChatRoomsForUser used provider branching.
         // A provider mismatch could hide Mongo DMs in production.
-        const memberRows = await Members.find({ userDid }).toArray();
-        const circleIds = memberRows.map((membership: any) => membership.circleId).filter(Boolean) as string[];
-        const circleObjectIds = circleIds
-            .map((id) => {
-                try {
-                    return new ObjectId(id);
-                } catch {
-                    return null;
-                }
-            })
-            .filter(Boolean) as ObjectId[];
-        const circles = await Circles.find(
-            { _id: { $in: circleObjectIds } },
-            { projection: { _id: 1, did: 1, circleType: 1, moderationStatus: 1 } },
-        ).toArray();
-        const allowedCircleIds = circles
-            .filter(
-                (circle: any) =>
-                    (circle.circleType === "user" && circle.did === userDid) ||
-                    (circle.circleType !== "user" && canReadCircleByLifecycle(circle)),
-            )
-            .map((circle: any) => circle._id.toString());
-
-        const rooms = await listConversationsForUser(userDid, allowedCircleIds);
+        const context = getChatActionContext();
+        const batch = await loadAuthorizedConversationCandidates(userDid, {
+            findCanonicalMemberships: async (did) => context?.findCanonicalMemberships
+                ? context.findCanonicalMemberships(did)
+                : Members.find({ userDid: did }).toArray(),
+            findCandidates: context?.findCandidates || listConversationCandidatesForUser,
+            findOwningCircles: async (circleIds) => {
+                if (context?.findOwningCircles) return context.findOwningCircles(circleIds);
+                const ids = circleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+                return ids.length
+                    ? Circles.find(
+                          { _id: { $in: ids } },
+                          { projection: { _id: 1, did: 1, circleType: 1, visibility: 1, moderationStatus: 1 } },
+                      ).toArray()
+                    : [];
+            },
+            findChatMemberships: async (conversationIds) => {
+                if (context?.findChatMemberships) return context.findChatMemberships(conversationIds);
+                const ids = conversationIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+                return conversationIds.length
+                    ? ChatRoomMembers.find(
+                          {
+                              $or: [
+                                  { chatRoomId: { $in: conversationIds } },
+                                  ...(ids.length ? [{ chatRoomId: { $in: ids } }] : []),
+                              ],
+                          } as any,
+                          { projection: { chatRoomId: 1, userDid: 1, status: 1, active: 1, isActive: 1 } },
+                      ).toArray()
+                    : [];
+            },
+        });
+        const authorizedConversations = batch.conversations;
+        const circles = batch.ownerCircles;
+        const candidateMemberships = batch.memberships;
+        authorizedConversations.sort((a, b) =>
+            (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) - (a.updatedAt ? new Date(a.updatedAt).getTime() : 0),
+        );
+        // Participant and Circle metadata hydration happens only after canonical authorization.
+        const rooms = context?.mapConversations
+            ? await context.mapConversations(userDid, authorizedConversations, circles)
+            : await mapConversationsToChatRoomDisplays(userDid, authorizedConversations, circles as Circle[]);
         const groupRoomIds = rooms
             .filter((room) => !room.isDirect && typeof room._id === "string" && room._id.length > 0)
             .map((room) => room._id as string);
@@ -434,16 +526,11 @@ export const listChatRoomsAction = async (): Promise<{
             : [];
         const groupRoomById = new Map(groupRooms.map((room: any) => [room._id.toString(), room]));
 
-        const memberQuery: any = { $or: [{ chatRoomId: { $in: groupRoomIds } }] };
-        if (groupRoomObjectIds.length > 0) {
-            memberQuery.$or.push({ chatRoomId: { $in: groupRoomObjectIds } });
-        }
-        const memberships =
-            groupRoomIds.length > 0
-                ? await ChatRoomMembers.find(memberQuery, {
-                      projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 },
-                  }).toArray()
-                : [];
+        const authorizedGroupRoomIds = new Set(groupRoomIds);
+        const memberships = candidateMemberships.filter((membership: any) => {
+            const id = membership.chatRoomId?.toString?.() || String(membership.chatRoomId);
+            return authorizedGroupRoomIds.has(id);
+        });
 
         const groupMemberCounts = new Map<string, number>();
         for (const membership of memberships) {
@@ -455,7 +542,9 @@ export const listChatRoomsAction = async (): Promise<{
         }
 
         const conversationIds = rooms.map((room) => room._id || room.handle).filter(Boolean) as string[];
-        const unreadCounts = await getUnreadCountsForUser(userDid, conversationIds);
+        const unreadCounts = context?.getUnreadCounts
+            ? await context.getUnreadCounts(userDid, conversationIds)
+            : await getUnreadCountsForUser(userDid, conversationIds);
         const roomsWithUnread = rooms.map((room) => ({
             ...room,
             picture:
@@ -489,7 +578,9 @@ export const fetchRecentMessagesAction = async (
     }
 
     try {
-        const docs = await fetchRecentMessages(conversationId, limit);
+        const docs = getChatActionContext()?.fetchRecentMessages
+            ? await getChatActionContext()!.fetchRecentMessages!(conversationId, limit)
+            : await fetchRecentMessages(conversationId, limit);
         if (!docs.length) {
             return { success: true, messages: [], oldestId: undefined };
         }
@@ -511,7 +602,7 @@ export const fetchRecentMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find({ _id: { $in: replyObjectIds } }).toArray()) as any[])
+            ? ((await ChatMessageDocs.find(buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -552,7 +643,7 @@ export const fetchRecentMessagesAction = async (
                   }))
                 : replyDoc?.attachments;
 
-            const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction) => {
+            const reactions = (doc.reactions || []).reduce((acc: Record<string, any[]>, reaction: any) => {
                 if (!acc[reaction.emoji]) acc[reaction.emoji] = [];
                 acc[reaction.emoji].push({
                     sender: reaction.userDid,
@@ -581,7 +672,7 @@ export const fetchRecentMessagesAction = async (
             };
 
             const normalizedAttachments = Array.isArray(doc.attachments)
-                ? doc.attachments.map((attachment) => ({
+                ? doc.attachments.map((attachment: ChatAttachment) => ({
                       ...attachment,
                       url: normalizeMediaUrl(attachment?.url) || attachment?.url,
                   }))
@@ -665,7 +756,7 @@ export const fetchLegacyLooseMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find({ _id: { $in: replyObjectIds }, conversationId }).toArray()) as any[])
+            ? ((await ChatMessageDocs.find(buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -802,7 +893,7 @@ export const fetchMongoMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find({ _id: { $in: replyObjectIds } }).toArray()) as any[])
+            ? ((await ChatMessageDocs.find({ _id: { $in: replyObjectIds }, conversationId }).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -941,21 +1032,31 @@ export const sendMongoMessageAction = async (
     }
 
     try {
-        const doc = await createMessage({
+        const messageInput = {
             conversationId,
             senderDid: userDid,
             body: content,
             createdAt: new Date(),
             replyToMessageId,
             format,
-        });
-        await sendConversationMessageNotifications({
+        };
+        observeChatActionEffect("message-persistence");
+        const doc = getChatActionContext()?.createMessage
+            ? await getChatActionContext()!.createMessage!(messageInput)
+            : await createMessage(messageInput);
+        const notificationInput = {
             conversationId,
             conversation: access.conversation,
             senderDid: userDid,
             messageBody: content,
             messageId: doc._id as string,
-        });
+        };
+        observeChatActionEffect("notification");
+        if (getChatActionContext()?.notifyMessage) {
+            await getChatActionContext()!.notifyMessage!(notificationInput);
+        } else {
+            await sendConversationMessageNotifications(notificationInput);
+        }
         return { success: true, messageId: doc._id as string };
     } catch (error) {
         console.error("❌ Error sending mongo message:", error);
@@ -1012,7 +1113,10 @@ export const sendMongoAttachmentAction = async (
             return { success: false, message: "Could not resolve storage owner" };
         }
 
-        const fileInfo = await saveFile(file, "chat-attachment", ownerCircle._id as string, true);
+        observeChatActionEffect("storage-write");
+        const fileInfo = getChatActionContext()?.saveFile
+            ? await getChatActionContext()!.saveFile!(file, "chat-attachment", ownerCircle._id as string, true)
+            : await saveFile(file, "chat-attachment", ownerCircle._id as string, true);
         const attachment = {
             url: fileInfo.url,
             key: fileInfo.fileName,
@@ -1021,6 +1125,7 @@ export const sendMongoAttachmentAction = async (
             size: file.size,
         };
 
+        observeChatActionEffect("message-persistence");
         const doc = threadId
             ? await createThreadReply(threadId, conversationId, userDid, {
                   body: file.name,
@@ -1041,6 +1146,7 @@ export const sendMongoAttachmentAction = async (
                 message: threadId ? "Topic not found for this conversation" : "Failed to send attachment",
             };
         }
+        observeChatActionEffect("notification");
         await sendConversationMessageNotifications({
             conversationId,
             conversation: access.conversation,
@@ -1064,15 +1170,18 @@ export const editMongoMessageAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in to edit messages" };
     }
-    if (!ObjectId.isValid(messageId)) return { success: false, message: "Message not found" };
+    if (!ObjectId.isValid(messageId)) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
 
-    const messageDoc = await ChatMessageDocs.findOne(
+    const messageDoc = getChatActionContext()?.findMessage
+        ? await getChatActionContext()!.findMessage!(messageId)
+        : await ChatMessageDocs.findOne(
         { _id: new ObjectId(messageId) },
         { projection: { conversationId: 1 } },
     );
-    if (!messageDoc?.conversationId) return { success: false, message: "Message not found" };
+    if (!messageDoc?.conversationId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
+    observeChatActionEffect("message-edit");
     const updated = await updateMessage(messageId, userDid, content);
     return updated ? { success: true } : { success: false, message: "Failed to edit message" };
 };
@@ -1082,15 +1191,18 @@ export const deleteMongoMessageAction = async (messageId: string): Promise<{ suc
     if (!userDid) {
         return { success: false, message: "You need to be logged in to delete messages" };
     }
-    if (!ObjectId.isValid(messageId)) return { success: false, message: "Message not found" };
+    if (!ObjectId.isValid(messageId)) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
 
-    const messageDoc = await ChatMessageDocs.findOne(
+    const messageDoc = getChatActionContext()?.findMessage
+        ? await getChatActionContext()!.findMessage!(messageId)
+        : await ChatMessageDocs.findOne(
         { _id: new ObjectId(messageId) },
         { projection: { conversationId: 1 } },
     );
-    if (!messageDoc?.conversationId) return { success: false, message: "Message not found" };
+    if (!messageDoc?.conversationId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
+    observeChatActionEffect("message-delete");
     const deleted = await deleteMessage(messageId, userDid);
     return deleted ? { success: true } : { success: false, message: "Failed to delete message" };
 };
@@ -1106,16 +1218,18 @@ export const toggleMongoReactionAction = async (
 
     let messageDoc: { conversationId?: string } | null = null;
     try {
-        messageDoc = (await ChatMessageDocs.findOne(
+        messageDoc = (getChatActionContext()?.findMessage
+            ? await getChatActionContext()!.findMessage!(messageId)
+            : await ChatMessageDocs.findOne(
             { _id: new ObjectId(messageId) },
             { projection: { conversationId: 1 } },
         )) as { conversationId?: string } | null;
     } catch {
-        return { success: false, message: "Invalid message id" };
+        return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     }
 
     if (!messageDoc?.conversationId) {
-        return { success: false, message: "Message not found" };
+        return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     }
 
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
@@ -1123,6 +1237,7 @@ export const toggleMongoReactionAction = async (
         return { success: false, message: access.message };
     }
 
+    observeChatActionEffect("reaction-mutation");
     const reactions = await toggleReaction(messageId, userDid, emoji);
     if (!reactions) {
         return { success: false, message: "Failed to update reaction" };
@@ -1253,7 +1368,9 @@ export const createMongoGroupChatAction = async (
                 return { success: false, message: "Could not resolve storage owner" };
             }
 
-            const fileInfo = await saveFile(avatarFile, "chat-group-avatar", ownerCircle._id as string, true);
+            const fileInfo = getChatActionContext()?.saveFile
+                ? await getChatActionContext()!.saveFile!(avatarFile, "chat-group-avatar", ownerCircle._id as string, true)
+                : await saveFile(avatarFile, "chat-group-avatar", ownerCircle._id as string, true);
             picture = { url: fileInfo.url };
         }
 
@@ -1318,17 +1435,37 @@ export const contactCircleAdminsAction = async (
         return { success: false, message: "Message is required" };
     }
 
-    const circle = await getCircleById(circleId);
+    const circle = await authorizeCircleChatEntry(userDid, circleId, "write", {
+        loadCircle: async (id) => getChatActionContext()?.findCircle
+            ? getChatActionContext()!.findCircle!(id)
+            : getCircleById(id),
+        canRead: async (did, value) => canReadCircle(did, value, {
+            getMember: async (viewerDid, ownerId) => getChatActionContext()?.findCanonicalMember
+                ? getChatActionContext()!.findCanonicalMember!(viewerDid, ownerId)
+                : Members.findOne({ userDid: viewerDid, circleId: ownerId }),
+        }),
+        assertWritable: assertCircleWritesAllowed,
+    });
     if (!circle?._id) {
-        return { success: false, message: "Circle not found" };
+        return { success: false, message: "Circle unavailable" };
     }
     if (circle.circleType === "user") {
         return { success: false, message: "This contact flow is available for circles and projects only" };
     }
     try {
-        await assertCircleWritesAllowed(circleId);
+        await assertCircleWritesAllowed(circle);
     } catch {
         return { success: false, message: "This circle is not accepting messages right now" };
+    }
+    if (getChatActionContext()?.contactCircleAdminsEffect) {
+        return await getChatActionContext()!.contactCircleAdminsEffect!({
+            circleId,
+            message: trimmedMessage,
+            offeredSkillHandles,
+            contactType,
+            userDid,
+            circle,
+        });
     }
 
     const adminRows = await Members.find({ circleId, userGroups: "admins" }, { projection: { userDid: 1 } }).toArray();
@@ -1388,6 +1525,7 @@ export const contactCircleAdminsAction = async (
             participants = Array.from(new Set([...(existingConversation.participants || []), ...baseParticipants]));
 
             if (ObjectId.isValid(conversationId)) {
+                observeChatActionEffect("conversation-mutation");
                 await ChatConversations.updateOne(
                     { _id: new ObjectId(conversationId) },
                     {
@@ -1407,6 +1545,7 @@ export const contactCircleAdminsAction = async (
                 );
             }
         } else {
+            observeChatActionEffect("conversation-ensure-create");
             const conversation = await createConversation({
                 type: "group",
                 circleId,
@@ -1429,6 +1568,8 @@ export const contactCircleAdminsAction = async (
         const now = new Date();
         for (const participantDid of participants) {
             const role = adminDidSet.has(participantDid) ? "admin" : "member";
+            observeChatActionEffect("member-add");
+            observeChatActionEffect("membership-mutation");
             await ChatRoomMembers.updateOne(
                 buildChatRoomMembershipFilter(participantDid, conversationId),
                 {
@@ -1450,6 +1591,8 @@ export const contactCircleAdminsAction = async (
         }
 
         if (offeredSkillsContext) {
+            observeChatActionEffect("message-persistence");
+            observeChatActionEffect("conversation-mutation");
             await createMessage({
                 conversationId,
                 senderDid: userDid,
@@ -1458,12 +1601,15 @@ export const contactCircleAdminsAction = async (
             });
         }
 
+        observeChatActionEffect("message-persistence");
+        observeChatActionEffect("conversation-mutation");
         await createMessage({
             conversationId,
             senderDid: userDid,
             body: trimmedMessage,
             createdAt: new Date(),
         });
+        observeChatActionEffect("notification");
         await sendConversationMessageNotifications({
             conversationId,
             conversation: existingConversation || {
@@ -1497,15 +1643,8 @@ export const getUnreadCountsAction = async (
     }
 
     try {
-        const accessChecks = await Promise.all(
-            conversationIds.map(async (conversationId) => ({
-                conversationId,
-                access: await resolveMongoConversationAccess(conversationId, userDid, "read"),
-            })),
-        );
-        const allowedConversationIds = accessChecks
-            .filter(({ access }) => access.ok)
-            .map(({ conversationId }) => conversationId);
+        const allowed = await resolveMongoConversationAccessBatch(conversationIds, userDid, "read");
+        const allowedConversationIds = conversationIds.filter((conversationId) => allowed.has(conversationId));
         const counts = await getUnreadCountsForUser(userDid, allowedConversationIds);
         return { success: true, counts };
     } catch (error) {
@@ -1532,6 +1671,7 @@ export const markConversationReadAction = async (
         effectiveLastSeen = await getLatestLegacyMessageIdForConversation(conversationId);
     }
 
+    observeChatActionEffect("conversation-read-state");
     await markConversationRead(userDid, conversationId, effectiveLastSeen);
     return { success: true };
 };
@@ -1581,6 +1721,7 @@ export const markTopicReadAction = async (
 
     const validatedCursor = await validateTopicReadCursor(conversationId, normalizedTopicId, lastSeenMessageId);
     if (!validatedCursor) return { success: false, message: "Invalid topic read boundary" };
+    observeChatActionEffect("topic-read-state");
     await markTopicRead(userDid, conversationId, normalizedTopicId, validatedCursor);
     return { success: true, lastReadMessageId: validatedCursor };
 };
@@ -1601,6 +1742,7 @@ export const createThreadAction = async (
     }
     try {
         const { createThread } = await import("@/lib/data/mongo-chat");
+        observeChatActionEffect("topic-create");
         const doc = await createThread(conversationId, userDid, title.trim(), body.trim(), hashtags);
         if (!doc?._id) return { success: false, message: "Failed to create thread" };
         return { success: true, threadId: doc._id.toString() };
@@ -1630,6 +1772,7 @@ export const updateTopicAction = async (
     if (!access.ok) return { success: false, message: access.message };
 
     try {
+        observeChatActionEffect("topic-update");
         const result = await updateTopic(topicId, conversationId, userDid, title.trim(), body.trim());
         return result.success ? { success: true } : { success: false, message: getTopicMutationError(result.reason) };
     } catch (error) {
@@ -1649,6 +1792,7 @@ export const deleteTopicAction = async (
     if (!access.ok) return { success: false, message: access.message };
 
     try {
+        observeChatActionEffect("topic-delete");
         const result = await deleteTopic(topicId, conversationId, userDid);
         return result.success
             ? { success: true, deletedReplyCount: result.deletedReplyCount }
@@ -1679,10 +1823,12 @@ export const sendThreadReplyAction = async (
     }
     try {
         const { sendThreadReply } = await import("@/lib/data/mongo-chat");
+        observeChatActionEffect("reply-create");
         const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim(), replyToMessageId);
         if (!doc?._id) return { success: false, message: "Topic not found for this conversation" };
         // Fire notifications (DM and circle-contact conversations only for now)
         try {
+            observeChatActionEffect("notification");
             await sendConversationMessageNotifications({
                 conversationId,
                 conversation: access.conversation,

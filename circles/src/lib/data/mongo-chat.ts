@@ -1,12 +1,12 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction, ChatReadState } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers, ChatTopicReadStates } from "./db";
+import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers, ChatTopicReadStates, Circles } from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-sender";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
-import { syncPlatformBroadcastsForUser } from "@/lib/data/platform-broadcasts";
+import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
 import { buildUnreadMessagesQuery } from "@/lib/chat/unread-counts";
 import {
@@ -19,7 +19,6 @@ import {
 } from "@/lib/chat/topic-read-state";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 import { buildConversationUpdatedAtCompareAndSetFilter } from "@/lib/chat/topic-mutations";
-import { canWriteCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 import {
     buildMonotonicLegacyCursorUpdate,
     buildReadStateV2InitializationOperation,
@@ -324,9 +323,10 @@ export const ensureConversationForCircle = async (circleId: string): Promise<Cha
     });
 };
 
-const mapConversationsToChatRoomDisplays = async (
+export const mapConversationsToChatRoomDisplays = async (
     userDid: string,
     conversations: ChatConversation[],
+    preloadedOwnerCircles?: Circle[],
 ): Promise<ChatRoomDisplay[]> => {
     const participantDids = Array.from(
         new Set(conversations.flatMap((conversation) => conversation.participants || [])),
@@ -337,13 +337,10 @@ const mapConversationsToChatRoomDisplays = async (
     const circleIdsToLoad = Array.from(
         new Set(conversations.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
     );
-    const circleById = new Map<string, Circle>();
-    for (const id of circleIdsToLoad) {
-        const circle = await getCircleById(id);
-        if (circle) {
-            circleById.set(id, circle);
-        }
-    }
+    const loadedOwnerCircles = preloadedOwnerCircles ?? (await Promise.all(circleIdsToLoad.map(getCircleById))).filter(
+        (circle): circle is Circle => !!circle,
+    );
+    const circleById = new Map(loadedOwnerCircles.map((circle) => [circle._id.toString(), circle]));
 
     return conversations.map((conversation) => {
         const isDirect = conversation.type === "dm";
@@ -393,6 +390,24 @@ const mapConversationsToChatRoomDisplays = async (
     });
 };
 
+/** Read-only raw candidates. Authorization and all display hydration happen at the caller. */
+export const listConversationCandidatesForUser = async (
+    userDid: string,
+    canonicalCircleIds: string[],
+): Promise<Array<ChatConversation & { _id: ObjectId }>> => {
+    const conversations = (await ChatConversations.find({
+        archived: { $ne: true },
+        $or: [
+            { type: "dm", participants: userDid },
+            { type: { $ne: "dm" }, participants: userDid },
+            { type: { $ne: "dm" }, circleId: { $in: canonicalCircleIds } },
+        ],
+    }).toArray()) as ChatConversation[];
+    return Array.from(
+        new Map(conversations.map((conversation) => [conversation._id.toString(), normalizeConversation(conversation)])).values(),
+    ) as Array<ChatConversation & { _id: ObjectId }>;
+};
+
 export const mapConversationToChatRoomDisplay = async (
     userDid: string,
     conversation: ChatConversation,
@@ -403,170 +418,31 @@ export const mapConversationToChatRoomDisplay = async (
 };
 
 export const listConversationsForUser = async (userDid: string, circleIds: string[]): Promise<ChatRoomDisplay[]> => {
-    try {
-        await syncPlatformBroadcastsForUser(userDid);
-    } catch (error) {
-        console.error("Failed to sync platform broadcast for user:", error);
-    }
-
-    const circleConversationIds: string[] = [];
-    for (const circleId of circleIds) {
-        const circle = await getCircleById(circleId);
-        const conversation = canWriteCircleByLifecycle(circle)
-            ? await ensureConversationForCircle(circleId)
-            : await ChatConversations.findOne({ circleId, archived: { $ne: true } });
-        if (conversation?._id) circleConversationIds.push(conversation._id.toString());
-    }
-
-    const circleConversationObjectIds = circleConversationIds
-        .filter((id) => ObjectId.isValid(id))
-        .map((id) => new ObjectId(id));
-    const dmConversations = (await ChatConversations.find({
-        type: "dm",
-        participants: userDid,
-        archived: { $ne: true },
-    }).toArray()) as ChatConversation[];
-    // Why this broke: on prod, incomplete Members rows can make allowed circle ids empty.
-    // DMs must never depend on circle-derived visibility to show up after creation.
-    const groupConversations = (await ChatConversations.find({
-        type: { $ne: "dm" },
-        archived: { $ne: true },
-        $or: [{ participants: userDid }, { _id: { $in: circleConversationObjectIds } }],
-    }).toArray()) as ChatConversation[];
-
-    const normalized = Array.from(
-        new Map(
-            [...dmConversations, ...groupConversations].map((conversation) => [
-                conversation._id.toString(),
-                normalizeConversation(conversation),
-            ]),
-        ).values(),
-    );
-    const groupConversationIds = normalized
-        .filter((conversation) => conversation.type === "group" && conversation?._id)
-        .map((conversation) => conversation._id.toString());
-    const groupConversationById = new Map(
-        normalized
-            .filter((conversation) => conversation.type === "group" && conversation?._id)
-            .map((conversation) => [conversation._id.toString(), conversation]),
-    );
-    const groupConversationObjectIds = groupConversationIds
-        .filter((id) => ObjectId.isValid(id))
-        .map((id) => new ObjectId(id));
-
-    const activeGroupConversationIds = new Set<string>();
-    const participantGroupConversationIds = new Set<string>();
-    for (const [conversationId, conversation] of groupConversationById.entries()) {
-        if ((conversation.participants || []).includes(userDid)) {
-            participantGroupConversationIds.add(conversationId);
-        }
-    }
-
-    if (groupConversationIds.length > 0) {
-        const membershipQuery: any = {
-            userDid,
-            $or: [{ chatRoomId: { $in: groupConversationIds } }],
-        };
-        if (groupConversationObjectIds.length > 0) {
-            membershipQuery.$or.push({ chatRoomId: { $in: groupConversationObjectIds } });
-        }
-
-        const memberships = await ChatRoomMembers.find(membershipQuery, {
-            projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 },
-        }).toArray();
-
-        for (const membership of memberships) {
-            if (!isActiveGroupMembership(membership)) {
-                continue;
-            }
-            const rawChatRoomId = (membership as { chatRoomId?: unknown }).chatRoomId;
-            const chatRoomId = rawChatRoomId ? String(rawChatRoomId) : undefined;
-            if (chatRoomId) {
-                activeGroupConversationIds.add(chatRoomId);
-            }
-        }
-    }
-
-    const fallbackGroupConversationIds = Array.from(participantGroupConversationIds).filter(
-        (conversationId) => !activeGroupConversationIds.has(conversationId),
-    );
-    if (fallbackGroupConversationIds.length > 0) {
-        // Why this broke: some group creation paths don't write memberships OR userDid source differs.
-        // Lazily backfill memberships only when none exist for a conversation.
-        const fallbackGroupConversationObjectIds = fallbackGroupConversationIds
-            .filter((id) => ObjectId.isValid(id))
-            .map((id) => new ObjectId(id));
-        const fallbackMembershipQuery: any = { $or: [{ chatRoomId: { $in: fallbackGroupConversationIds } }] };
-        if (fallbackGroupConversationObjectIds.length > 0) {
-            fallbackMembershipQuery.$or.push({ chatRoomId: { $in: fallbackGroupConversationObjectIds } });
-        }
-
-        const fallbackMemberships = await ChatRoomMembers.find(fallbackMembershipQuery, {
-            projection: { chatRoomId: 1, userDid: 1 },
-        }).toArray();
-        const fallbackMembershipIds = new Set(
-            fallbackMemberships
-                .map((membership) => {
-                    const rawChatRoomId = (membership as { chatRoomId?: unknown }).chatRoomId;
-                    return rawChatRoomId ? String(rawChatRoomId) : null;
-                })
-                .filter(Boolean) as string[],
-        );
-
-        for (const conversationId of fallbackGroupConversationIds) {
-            const conversation = groupConversationById.get(conversationId);
-            if (!conversation) {
-                continue;
-            }
-
-            if (!fallbackMembershipIds.has(conversationId)) {
-                const participants = Array.from(
-                    new Set((conversation.participants || []).filter((participantDid) => !!participantDid)),
-                );
-                if (participants.length > 0) {
-                    const conversationJoinedAt = conversation.createdAt || new Date();
-                    await ChatRoomMembers.bulkWrite(
-                        participants.map((participantDid) => ({
-                            updateOne: {
-                                filter: { userDid: participantDid, chatRoomId: conversationId },
-                                update: {
-                                    $setOnInsert: {
-                                        userDid: participantDid,
-                                        chatRoomId: conversationId,
-                                        circleId: conversation.circleId,
-                                        joinedAt: conversationJoinedAt,
-                                        role: "member",
-                                        status: "active",
-                                        active: true,
-                                        isActive: true,
-                                    } as any,
-                                },
-                                upsert: true,
-                            },
-                        })),
-                        { ordered: false },
-                    );
-                }
-            }
-        }
-    }
-
-    const visibleConversations = normalized.filter((conversation) => {
-        if (conversation.type === "dm" || conversation.type === "announcement") return true;
-        const conversationId = conversation._id.toString();
-        return activeGroupConversationIds.has(conversationId);
+    const batch = await loadAuthorizedConversationCandidates(userDid, {
+        findCanonicalMemberships: async () => circleIds.map((circleId) => ({ userDid, circleId })),
+        findCandidates: listConversationCandidatesForUser,
+        findOwningCircles: async (candidateCircleIds) => {
+            const ids = candidateCircleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+            return ids.length ? Circles.find({ _id: { $in: ids } }).toArray() : [];
+        },
+        findChatMemberships: async (conversationIds) => {
+            const ids = conversationIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+            return conversationIds.length
+                ? ChatRoomMembers.find({
+                      $or: [
+                          { chatRoomId: { $in: conversationIds } },
+                          ...(ids.length ? [{ chatRoomId: { $in: ids } }] : []),
+                      ],
+                  } as any).toArray()
+                : [];
+        },
     });
-
-    // Why this broke: Mongo does not guarantee document order.
-    // Without explicit sorting, production can render inconsistent or empty lists.
-    // Always sort by latest activity.
-    visibleConversations.sort((a, b) => {
+    batch.conversations.sort((a, b) => {
         const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
         return bTime - aTime;
     });
-
-    return mapConversationsToChatRoomDisplays(userDid, visibleConversations);
+    return mapConversationsToChatRoomDisplays(userDid, batch.conversations, batch.ownerCircles as Circle[]);
 };
 
 export const fetchRecentMessages = async (conversationId: string, limit: number = 50): Promise<ChatMessageDoc[]> => {

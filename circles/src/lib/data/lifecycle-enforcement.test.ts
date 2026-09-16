@@ -43,7 +43,7 @@ assert.match(chat, /canReadCircleByLifecycle\(ownerCircle\)/);
 const contactCircleAdmins = functionBody(chat, "contactCircleAdminsAction", "getUnreadCountsAction");
 assertBefore(
     contactCircleAdmins,
-    /assertCircleWritesAllowed\(circleId\)/,
+    /assertCircleWritesAllowed\(circle(?:Id)?\)/,
     /Members\.find\(\{ circleId, userGroups: "admins" \}/,
     "circle contact admin lookup",
 );
@@ -54,7 +54,7 @@ for (const protectedWrite of [
     /createMessage\(/,
     /sendConversationMessageNotifications\(/,
 ]) {
-    assertBefore(contactCircleAdmins, /assertCircleWritesAllowed\(circleId\)/, protectedWrite, "circle contact write");
+    assertBefore(contactCircleAdmins, /assertCircleWritesAllowed\(circle(?:Id)?\)/, protectedWrite, "circle contact write");
 }
 
 const tasks = source("src/app/circles/[handle]/tasks/actions.ts");

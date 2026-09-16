@@ -1,9 +1,8 @@
 // chat/[handle]/page.tsx - chat room page
 
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ChatRoomComponent } from "@/components/modules/chat/chat-room";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getUserPrivate } from "@/lib/data/user";
 
 type ChatRoomPageProps = {
     params: Promise<{ handle: string }>;
@@ -16,26 +15,25 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
         redirect("/welcome");
     }
 
-    const privateUser = await getUserPrivate(userDid);
     const { resolveMongoConversationAccess } = await import("@/components/modules/chat/mongo-actions");
-    const { listConversationsForUser } = await import("@/lib/data/mongo-chat");
+    const { listChatRoomsAction } = await import("@/components/modules/chat/mongo-actions");
 
     const slug = params.handle;
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(slug);
-    const circleIds = (privateUser?.memberships || []).map((m) => m.circleId).filter(Boolean);
-    const chats = await listConversationsForUser(userDid, circleIds);
+    const listResult = await listChatRoomsAction();
+    const chats = listResult.success ? listResult.rooms || [] : [];
 
     // 1) If slug is an ObjectId, treat it as conversationId.
     if (isObjectId) {
         const access = await resolveMongoConversationAccess(slug, userDid);
         if (!access.ok || !access.conversation) {
-            redirect("/unauthorized");
+            notFound();
         }
 
         const chatRoom = chats.find((room) => String(room._id) === slug);
 
         if (!chatRoom) {
-            redirect("/unauthorized");
+            notFound();
         }
 
         return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} />;
@@ -44,7 +42,7 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
     // 2) Otherwise treat slug as handle and redirect to canonical /chat/<conversationId>.
     const match = chats.find((c) => c.handle === slug || c.circle?.handle === slug);
     if (!match?._id) {
-        redirect("/unauthorized");
+        notFound();
     }
 
     redirect(`/chat/${match._id}`);
