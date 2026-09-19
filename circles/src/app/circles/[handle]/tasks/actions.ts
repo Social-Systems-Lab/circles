@@ -33,6 +33,7 @@ import { deleteCircleOwnedMedia, saveCircleOwnedFile } from "@/lib/data/circle-m
 import { features } from "@/lib/data/constants";
 import { Circles, db, RankedLists } from "@/lib/data/db"; // Import db directly
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import { getTaskReadBoundaryOverrides, isTaskBoundToRouteCircle } from "@/lib/data/task-read-policy";
 import { orchestrateFallbackCommentShadow } from "@/lib/data/fallback-comment-shadow-orchestration";
 // Placeholder imports for task data functions (from src/lib/data/task.ts)
 import {
@@ -274,7 +275,10 @@ export async function getTaskAction(circleHandle: string, taskId: string): Promi
     // Renamed function, param, return type
     try {
         // Get the current user
-        const userDid = await getAuthenticatedUserDid();
+        const overrides = getTaskReadBoundaryOverrides();
+        const userDid = overrides.getAuthenticatedUserDid
+            ? await overrides.getAuthenticatedUserDid()
+            : await getAuthenticatedUserDid();
         if (!userDid) {
             // Not authenticated, cannot view
             return null;
@@ -282,7 +286,9 @@ export async function getTaskAction(circleHandle: string, taskId: string): Promi
         }
 
         // Get the circle
-        const circle = await getCircleByHandle(circleHandle);
+        const circle = overrides.getCircleByHandle
+            ? await overrides.getCircleByHandle(circleHandle)
+            : await getCircleByHandle(circleHandle);
         if (!circle) {
             // Circle doesn't exist
             return null;
@@ -291,13 +297,19 @@ export async function getTaskAction(circleHandle: string, taskId: string): Promi
 
         // Get the task from the database first (Data function)
         // We need the task data to check its specific userGroups for visibility
-        const task = await getTaskById(taskId, userDid); // Renamed function call, param, variable
+        const task = overrides.getTaskById
+            ? await overrides.getTaskById(taskId, userDid)
+            : await getTaskById(taskId, userDid); // Renamed function call, param, variable
         if (!task) {
             // Renamed variable
             return null;
         }
 
-        const visibleTasks = await filterTasksForViewer([task], userDid);
+        if (!isTaskBoundToRouteCircle(task, circle)) return null;
+
+        const visibleTasks = overrides.filterTasksForViewer
+            ? await overrides.filterTasksForViewer([task], userDid)
+            : await filterTasksForViewer([task], userDid);
         if (visibleTasks.length === 0) {
             return null;
         }

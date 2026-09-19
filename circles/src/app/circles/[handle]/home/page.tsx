@@ -4,10 +4,10 @@ import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import AboutPage from "@/components/modules/home/AboutPage";
 import type { VerifiedContributionItem } from "@/components/modules/home/VerifiedContributionsPanel";
-import { getTasksByCircleId, getVerifiedTasksForUser } from "@/lib/data/task";
+import { getTasksByCircleId } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
 import { getShiftEndAt, getShiftStartAt, isShiftTask } from "@/components/modules/tasks/shift-task-utils";
-import type { TaskDisplay, TaskPermissions } from "@/models/models";
+import type { TaskDisplay } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
 import { getMember, getMembers } from "@/lib/data/member";
@@ -18,6 +18,7 @@ import {
     getLinkedVibeIdDid,
     type CircleMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
+import { getProfileContributionPanelData } from "./profile-contribution-panel-data";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -54,37 +55,9 @@ export default async function CircleHomePage(props: PageProps) {
             : [];
 
     if (circle.circleType === "user" && circle.did) {
-        const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(circle.did, viewerDid);
-        const permissionsByCircleId = new Map<string, TaskPermissions>();
+        const { items, totalPublicCount } = await getProfileContributionPanelData(circle.did, viewerDid);
         verifiedContributionPublicCount = totalPublicCount;
-
-        verifiedContributions = (
-            await Promise.all(
-                visibleTasks.map(async (task) => {
-                    if (!task.circle?._id) {
-                        return null;
-                    }
-
-                    let permissions = permissionsByCircleId.get(task.circle._id);
-                    if (!permissions) {
-                        permissions = {
-                            canModerate: await isAuthorized(viewerDid, task.circle._id, features.tasks.moderate),
-                            canReview: await isAuthorized(viewerDid, task.circle._id, features.tasks.review),
-                            canAssign: await isAuthorized(viewerDid, task.circle._id, features.tasks.assign),
-                            canResolve: await isAuthorized(viewerDid, task.circle._id, features.tasks.resolve),
-                            canComment: await isAuthorized(viewerDid, task.circle._id, features.tasks.comment),
-                        };
-                        permissionsByCircleId.set(task.circle._id, permissions);
-                    }
-
-                    return {
-                        task,
-                        circle: task.circle,
-                        permissions,
-                    };
-                }),
-            )
-        ).filter((item): item is VerifiedContributionItem => item !== null);
+        verifiedContributions = items;
     }
 
     if (showFundingPanel && viewerDid) {

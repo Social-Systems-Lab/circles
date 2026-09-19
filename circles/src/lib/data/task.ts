@@ -1,7 +1,17 @@
 // task.ts - Task data access functions
 import { Tasks, Circles, Members, Reactions, RankedLists, Posts } from "./db"; // Added Posts
 import { ObjectId } from "mongodb";
-import { Task, TaskDisplay, TaskStage, Circle, Member, RankedList, Post, TaskPriority, TaskClaim } from "@/models/models"; // Added Post type
+import {
+    Task,
+    TaskDisplay,
+    TaskStage,
+    Circle,
+    Member,
+    RankedList,
+    Post,
+    TaskPriority,
+    TaskClaim,
+} from "@/models/models"; // Added Post type
 import { getCircleById, SAFE_CIRCLE_PROJECTION } from "./circle";
 import { getMemberIdsByUserGroup } from "./member";
 import { isAuthorized } from "../auth/auth";
@@ -10,6 +20,10 @@ import { createInitialCommentShadow } from "./initial-comment-shadow";
 import { upsertVbdTasks } from "./vdb";
 import { runDerivedResourceVectorSafeMutation } from "./derived-vector-publication";
 import { getAggregateRanking, RankingContext } from "./ranking"; // Import the new generic function
+import { canReadCircleByLifecycle } from "./circle-lifecycle-policy";
+import { evaluateCircleVisibilityAccess } from "./circle-visibility-policy";
+import { filterContributionsByPublicSource, isQualifyingProfileContribution } from "./contribution-visibility-policy";
+import { getTaskReadBoundaryOverrides } from "./task-read-policy";
 // No longer need getUserByDid if we use $lookup consistently
 
 // Safe projection for task queries, similar to proposals
@@ -90,7 +104,10 @@ const getViewerMembershipsByCircleId = async (viewerDid?: string): Promise<Map<s
         return viewerMemberships;
     }
 
-    const memberships = await Members.find({ userDid: viewerDid }).toArray();
+    const overrides = getTaskReadBoundaryOverrides();
+    const memberships = overrides.findViewerMemberships
+        ? await overrides.findViewerMemberships(viewerDid)
+        : await Members.find({ userDid: viewerDid }).toArray();
     for (const membership of memberships) {
         viewerMemberships.set(membership.circleId, membership.userGroups ?? []);
     }
@@ -114,20 +131,51 @@ const canViewerAccessTaskUserGroups = (
     return task.userGroups.some((group) => viewerGroupsInCircle.includes(group));
 };
 
-export const filterTasksForViewer = async (tasks: TaskDisplay[], viewerDid?: string): Promise<TaskDisplay[]> => {
+export const filterTasksForViewer = async (
+    tasks: TaskDisplay[],
+    viewerDid?: string,
+    preloadedSourceCircles?: Circle[],
+): Promise<TaskDisplay[]> => {
+    const overrides = getTaskReadBoundaryOverrides();
     const viewerMembershipsByCircleId = await getViewerMembershipsByCircleId(viewerDid);
+    const sourceIds = Array.from(
+        new Set(
+            tasks
+                .map((task) => task.circleId)
+                .filter((id): id is string => typeof id === "string" && ObjectId.isValid(id)),
+        ),
+    );
+    const sourceCircles =
+        preloadedSourceCircles ??
+        (sourceIds.length
+            ? overrides.findSourceCircles
+                ? await overrides.findSourceCircles(sourceIds)
+                : await Circles.find(
+                      { _id: { $in: sourceIds.map((id) => new ObjectId(id)) } },
+                      { projection: SAFE_CIRCLE_PROJECTION },
+                  ).toArray()
+            : []);
+    const sourceById = new Map(sourceCircles.map((circle) => [circle._id.toString(), circle]));
     const canViewTasksModuleByCircleId = new Map<string, boolean>();
     const visibleTasks: TaskDisplay[] = [];
 
     for (const task of tasks) {
-        const circleId = task.circle?._id || task.circleId;
-        if (!circleId) {
+        const circleId = task.circleId;
+        if (!circleId || !ObjectId.isValid(circleId)) {
             continue;
         }
 
+        const sourceCircle = sourceById.get(new ObjectId(circleId).toHexString());
+        if (sourceCircle?.circleType !== "circle" && sourceCircle?.circleType !== "project") continue;
+        if (!sourceCircle || !canReadCircleByLifecycle(sourceCircle)) continue;
+        const isMember = Boolean(viewerDid && viewerMembershipsByCircleId.has(circleId));
+        if (!evaluateCircleVisibilityAccess({ circle: sourceCircle, viewerDid, isMember }).canRead) continue;
+
         let canViewTasksModule = canViewTasksModuleByCircleId.get(circleId);
         if (canViewTasksModule === undefined) {
-            canViewTasksModule = await isAuthorized(viewerDid, circleId, features.tasks.view);
+            canViewTasksModule = overrides.authorizeTaskModule
+                ? await overrides.authorizeTaskModule(viewerDid, circleId, features.tasks.view)
+                : await isAuthorized(viewerDid, circleId, features.tasks.view);
             canViewTasksModuleByCircleId.set(circleId, canViewTasksModule);
         }
 
@@ -631,13 +679,18 @@ export const getTaskById = async (
     }
 };
 
-export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: string): Promise<{ totalPublicCount: number; visibleTasks: TaskDisplay[] }> => {
+export const getVerifiedTasksForUser = async (
+    userDid: string,
+    viewerDid?: string,
+): Promise<{ totalPublicCount: number; visibleTasks: TaskDisplay[] }> => {
     try {
-        const tasks = (await Tasks.aggregate([
+        const overrides = getTaskReadBoundaryOverrides();
+        const pipeline = [
             {
                 $match: {
                     $or: [
                         {
+                            taskType: { $ne: "shift" },
                             assignedTo: userDid,
                             stage: "resolved",
                             verifiedAt: { $exists: true, $ne: null },
@@ -744,26 +797,6 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
             {
                 $lookup: {
                     from: "circles",
-                    let: { cId: { $toObjectId: "$circleId" } },
-                    pipeline: [
-                        { $match: { $expr: { $eq: ["$_id", "$$cId"] } } },
-                        {
-                            $project: {
-                                _id: { $toString: "$_id" },
-                                name: 1,
-                                handle: 1,
-                                picture: 1,
-                                enabledModules: 1,
-                            },
-                        },
-                    ],
-                    as: "circleDetails",
-                },
-            },
-            { $unwind: { path: "$circleDetails", preserveNullAndEmptyArrays: true } },
-            {
-                $lookup: {
-                    from: "circles",
                     let: { verifierDid: "$contributionVerifiedBy" },
                     pipeline: [
                         {
@@ -795,7 +828,6 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                     author: "$authorDetails",
                     assignee: "$assigneeDetails",
                     participantProfiles: "$participantProfiles",
-                    circle: "$circleDetails",
                     verifier: "$verifierDetails",
                     verifiedAt: "$contributionVerifiedAt",
                     verifiedBy: "$contributionVerifiedBy",
@@ -803,10 +835,33 @@ export const getVerifiedTasksForUser = async (userDid: string, viewerDid?: strin
                 },
             },
             { $sort: { verifiedAt: -1 } },
-        ]).toArray()) as TaskDisplay[];
+        ];
+        const tasks = overrides.aggregateContributionTasks
+            ? await overrides.aggregateContributionTasks(pipeline)
+            : ((await Tasks.aggregate(pipeline).toArray()) as TaskDisplay[]);
 
-        const totalPublicCount = (await filterTasksForViewer(tasks)).length;
-        const visibleTasks = await filterTasksForViewer(tasks, viewerDid);
+        const qualifyingTasks = tasks.filter((task) => isQualifyingProfileContribution(task, userDid));
+        const sourceIds = Array.from(
+            new Set(
+                qualifyingTasks
+                    .map((task) => task.circleId)
+                    .filter((id): id is string => typeof id === "string" && ObjectId.isValid(id)),
+            ),
+        );
+        const sourceCircles = sourceIds.length
+            ? overrides.findSourceCircles
+                ? await overrides.findSourceCircles(sourceIds)
+                : await Circles.find(
+                      { _id: { $in: sourceIds.map((id) => new ObjectId(id)) } },
+                      { projection: SAFE_CIRCLE_PROJECTION },
+                  ).toArray()
+            : [];
+        const publicSourceTasks = filterContributionsByPublicSource(qualifyingTasks, sourceCircles).map((task) => ({
+            ...task,
+            circle: { ...task.circle, _id: task.circle._id!.toString() } as Circle,
+        }));
+        const totalPublicCount = publicSourceTasks.length;
+        const visibleTasks = await filterTasksForViewer(publicSourceTasks, viewerDid, sourceCircles);
         return {
             totalPublicCount,
             visibleTasks: visibleTasks.slice(0, 10),
@@ -1109,7 +1164,8 @@ export const submitTaskClaim = async (
             { projection: { assignedTo: 1, stage: 1, taskType: 1, claims: 1 } },
         );
         const hasDuplicatePendingClaim = (existingTask?.claims || []).some(
-            (existingClaim: TaskClaim) => existingClaim.claimantDid === claimantDid && existingClaim.status === "pending",
+            (existingClaim: TaskClaim) =>
+                existingClaim.claimantDid === claimantDid && existingClaim.status === "pending",
         );
 
         return {
@@ -1153,7 +1209,9 @@ export const reviewTaskClaim = async (
                 { projection: { claims: 1 } },
             );
 
-            const approvedClaim = (task?.claims || []).find((claim: TaskClaim) => claim.claimId === claimId && claim.status === "pending");
+            const approvedClaim = (task?.claims || []).find(
+                (claim: TaskClaim) => claim.claimId === claimId && claim.status === "pending",
+            );
             if (!approvedClaim) {
                 return false;
             }
