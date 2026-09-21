@@ -13,7 +13,6 @@ import Link from "next/link";
 import { submitLoginFormAction } from "./actions"; // Import the action object
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
-import { VibeIdAuthButton } from "@/components/auth/vibe-id-auth-button";
 
 // Zod schema based on loginFormSchema
 const loginValidationSchema = z.object({
@@ -83,13 +82,14 @@ export function LoginForm(): React.ReactElement {
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted mb-4 w-full space-y-6 md:min-w-[400px]">
                 <h2 className="text-center text-2xl font-semibold">Login</h2>
                 <p className="text-center text-sm text-muted-foreground">Enter your email and password to log in.</p>
-		<div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-		 <div className="font-medium">Password update required for some users</div>
-    <div className="mt-1">
-        If you created your account before 2026, you may need to reset your password before signing in.
-	Please click <span className="font-medium">Forgot Password</span> and follow the email instructions to set a new password.
-    </div>
-</div>
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <div className="font-medium">Password update required for some users</div>
+                    <div className="mt-1">
+                        If you created your account before 2026, you may need to reset your password before signing in.
+                        Please click <span className="font-medium">Forgot Password</span> and follow the email
+                        instructions to set a new password.
+                    </div>
+                </div>
 
                 <FormField
                     control={form.control}
@@ -132,17 +132,6 @@ export function LoginForm(): React.ReactElement {
                 <Button type="submit" disabled={isSubmitting} className="w-full">
                     {isSubmitting ? "Logging in..." : "Log in"}
                 </Button>
-
-                <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-white px-2 text-muted-foreground">or</span>
-                    </div>
-                </div>
-
-                <VibeIdAuthButton />
 
                 <div className="text-center text-sm text-muted-foreground">
                     Don&#39;t have an account?{" "}

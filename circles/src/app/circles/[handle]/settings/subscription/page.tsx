@@ -3,11 +3,6 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import SubscriptionFormSettings from "./subscription-form-settings";
 import { getTelegramChannelViewForUser } from "@/lib/data/external-notification-channels";
-import {
-    createPlatformMembershipCredentialCard,
-    getLinkedVibeIdDid,
-    type PlatformMembershipCredentialCardData,
-} from "@/lib/vibe-id/membership-credentials";
 import { EmailVerificationBanner } from "./email-verification-banner";
 
 type SubscriptionProps = {
@@ -19,19 +14,10 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
     const circle = await getCircleByHandle(params.handle);
     const userDid = await getAuthenticatedUserDid();
     const user = userDid ? await getUserPrivate(userDid) : null;
-    let membershipCredential: PlatformMembershipCredentialCardData | null = null;
     const telegramChannel = userDid ? await getTelegramChannelViewForUser(userDid) : null;
 
     if (!circle || !user || user.handle !== circle.handle) {
         return <div>Unauthorized</div>;
-    }
-
-    const subjectVibeDid = getLinkedVibeIdDid(user);
-    if (subjectVibeDid) {
-        membershipCredential = createPlatformMembershipCredentialCard({
-            user,
-            subjectVibeDid,
-        });
     }
 
     return (
@@ -45,11 +31,7 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
             </div>
             <div className="mt-8 max-w-5xl space-y-8">
                 <EmailVerificationBanner user={user} />
-                <SubscriptionFormSettings
-                    user={user}
-                    membershipCredential={membershipCredential}
-                    telegramChannel={telegramChannel}
-                />
+                <SubscriptionFormSettings user={user} telegramChannel={telegramChannel} />
             </div>
         </div>
     );

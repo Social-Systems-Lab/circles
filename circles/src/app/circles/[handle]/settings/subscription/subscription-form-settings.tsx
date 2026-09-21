@@ -2,11 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { Circle } from "@/models/models";
-import type { PlatformMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 import type { TelegramChannelView } from "@/lib/data/external-notification-channels";
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
-import { VibeIdSettingsCard } from "./vibe-id-settings-card";
 import { TelegramNotificationsSettingsCard } from "./telegram-notifications-card";
 import { updateEmailPreferenceSetting } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,12 +28,14 @@ const emailPreferenceOptions: { key: EmailPreferenceKey; label: string; descript
     {
         key: "emailTaskUpdates",
         label: "Email me about updates to tasks assigned to me",
-        description: "Includes assigned task changes, revision requests, and verification updates in a once-daily email digest.",
+        description:
+            "Includes assigned task changes, revision requests, and verification updates in a once-daily email digest.",
     },
     {
         key: "emailVerificationUpdates",
         label: "Email me about verification or admin thread updates that need my response",
-        description: "Includes verification and admin thread replies needing your attention in a once-daily email digest.",
+        description:
+            "Includes verification and admin thread replies needing your attention in a once-daily email digest.",
     },
 ];
 
@@ -48,11 +48,9 @@ const getInitialEmailPreferences = (user: Circle): Record<EmailPreferenceKey, bo
 
 export default function SubscriptionFormSettings({
     user,
-    membershipCredential,
     telegramChannel,
 }: {
     user: Circle;
-    membershipCredential?: PlatformMembershipCredentialCardData | null;
     telegramChannel?: TelegramChannelView | null;
 }) {
     const [subscriptionAttempted, setSubscriptionAttempted] = useState(false);
@@ -65,7 +63,6 @@ export default function SubscriptionFormSettings({
     if (subscriptionAttempted) {
         return (
             <div className="space-y-8">
-                <VibeIdSettingsCard user={user} membershipCredential={membershipCredential} />
                 <VerificationSettingsCard user={user} />
                 <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
                 <TelegramNotificationsSettingsCard initialChannel={telegramChannel} />
@@ -73,13 +70,15 @@ export default function SubscriptionFormSettings({
                     <div className="space-y-1 px-1">
                         <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>
                         <p className="text-sm text-muted-foreground">
-                            Founding Supporters help keep Kamooni open, independent, and useful for members and communities.
+                            Founding Supporters help keep Kamooni open, independent, and useful for members and
+                            communities.
                         </p>
                     </div>
                     <div className="rounded-lg border bg-muted/20 px-6 py-8 text-center">
                         <h3 className="text-2xl font-bold tracking-tight">Thank You!</h3>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Your subscription is being processed. Your supporting membership status will be updated shortly.
+                            Your subscription is being processed. Your supporting membership status will be updated
+                            shortly.
                         </p>
                     </div>
                 </section>
@@ -89,7 +88,6 @@ export default function SubscriptionFormSettings({
 
     return (
         <div className="space-y-8">
-            <VibeIdSettingsCard user={user} membershipCredential={membershipCredential} />
             <VerificationSettingsCard user={user} />
             <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
             <TelegramNotificationsSettingsCard initialChannel={telegramChannel} />
@@ -138,7 +136,8 @@ function EmailPreferencesSettingsCard({ initialValues }: { initialValues: Record
             <CardHeader className="space-y-2 pb-5">
                 <CardTitle className="text-2xl font-semibold tracking-tight">Email Preferences</CardTitle>
                 <CardDescription className="max-w-2xl text-sm leading-6">
-                    Actionable update emails are grouped into a once-daily digest. Turn off anything you do not want to receive.
+                    Actionable update emails are grouped into a once-daily digest. Turn off anything you do not want to
+                    receive.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

@@ -39,8 +39,6 @@ import { UserPicture } from "../members/user-picture";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
-import MembershipCredentialCard from "./MembershipCredentialCard";
-import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
 
@@ -57,7 +55,6 @@ interface AboutPageProps {
     showUpcomingShiftsPanel?: boolean;
     adminLeaders?: MemberDisplay[];
     proofOfHumanitySummary?: HumanityVerificationSummary | null;
-    membershipCredential?: CircleMembershipCredentialCardData | null;
 }
 
 export default function AboutPage({
@@ -73,7 +70,6 @@ export default function AboutPage({
     showUpcomingShiftsPanel = false,
     adminLeaders = [],
     proofOfHumanitySummary = null,
-    membershipCredential = null,
 }: AboutPageProps) {
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -183,7 +179,6 @@ export default function AboutPage({
     const hasAdminDetails = !isUserProfile && adminLeaders.length > 0;
     const shouldShowVerifiedContributions = isUserProfile;
     const shouldShowProofOfHumanity = isUserProfile && !!proofOfHumanitySummary;
-    const shouldShowMembershipCredential = !isUserProfile && !!membershipCredential;
     const shouldShowFundingPanel = showFundingPanel;
     const shouldShowUpcomingShiftsPanel = showUpcomingShiftsPanel;
     const followerCount = circle.members ? Math.max(circle.members - 1, 0) : 0;
@@ -261,14 +256,14 @@ export default function AboutPage({
             className: "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600",
         },
     ].filter((chip): chip is { key: string; label: string; className: string } => Boolean(chip));
-    const shouldShowProfileStatus = isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
+    const shouldShowProfileStatus =
+        isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
     const hasSidebarContent =
         shouldShowProfileStatus ||
         hasOverviewDetails ||
         hasAdminDetails ||
         hasNeedsMatchingDetails ||
         shouldShowProofOfHumanity ||
-        shouldShowMembershipCredential ||
         shouldShowVerifiedContributions ||
         shouldShowFundingPanel ||
         shouldShowUpcomingShiftsPanel;
@@ -537,7 +532,7 @@ export default function AboutPage({
                                             <Badge
                                                 key={chip.key}
                                                 variant="outline"
-                                                className={`border-0 rounded-full px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
+                                                className={`rounded-full border-0 px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
                                             >
                                                 {chip.label}
                                             </Badge>
@@ -769,12 +764,6 @@ export default function AboutPage({
                                             })}
                                         </div>
                                     </TooltipProvider>
-                                </div>
-                            )}
-
-                            {shouldShowMembershipCredential && membershipCredential && (
-                                <div className="md:order-10">
-                                    <MembershipCredentialCard credential={membershipCredential} />
                                 </div>
                             )}
                         </div>
