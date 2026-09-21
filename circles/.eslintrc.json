@@ -1,3 +1,17 @@
 {
-  "extends": "next/core-web-vitals"
+    "extends": "next/core-web-vitals",
+    "overrides": [
+        {
+            "files": ["**/*.test.ts", "src/test/**/*.ts"],
+            "rules": {
+                "react-hooks/rules-of-hooks": "off"
+            }
+        },
+        {
+            "files": ["**/*.test.ts", "**/*.test.tsx", "src/test/**"],
+            "rules": {
+                "@next/next/no-html-link-for-pages": "off"
+            }
+        }
+    ]
 }

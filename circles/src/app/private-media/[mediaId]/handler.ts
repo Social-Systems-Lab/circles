@@ -46,7 +46,9 @@ export const createPrivateMediaGetHandler = (dependencies: PrivateMediaRouteDepe
             if (!record) return notFound();
 
             const objectStream = await dependencies.getObject(record);
-            return new Response(Readable.toWeb(objectStream) as ReadableStream, {
+            // `Readable.toWeb` is typed against Node's own ReadableStream, which TypeScript treats as
+            // unrelated to the DOM one `Response` expects even though they are the same object here.
+            return new Response(Readable.toWeb(objectStream) as unknown as ReadableStream, {
                 status: 200,
                 headers: getPrivateMediaResponseHeaders(record),
             });

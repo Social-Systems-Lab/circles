@@ -1,0 +1,47 @@
+# Backing services for the end-to-end suite.
+#
+# These run on their own ports so the development stack (docker-compose.local.yml) can stay up:
+# the e2e run gets a database it is allowed to wipe, and your local data is never touched.
+#
+#   bun run e2e:services        start
+#   bun run e2e:services:down   stop and delete the data
+#
+# CI does not use this file; the workflow declares the same images as service containers.
+
+name: circles-e2e
+
+services:
+    mongo:
+        image: mongo:7.0
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: e2e
+            MONGO_INITDB_ROOT_PASSWORD: e2e
+            MONGO_INITDB_DATABASE: circles
+        ports:
+            - "27018:27017"
+        # Data lives in the container only: every `down` starts over from nothing.
+        tmpfs:
+            - /data/db
+        healthcheck:
+            test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    # Only needed by tests that upload files. The rest of the suite runs without it.
+    minio:
+        image: minio/minio
+        environment:
+            MINIO_ROOT_USER: e2eminio
+            MINIO_ROOT_PASSWORD: e2eminiopassword
+        command: server /data --console-address :9101
+        ports:
+            - "9100:9000"
+            - "9101:9101"
+        tmpfs:
+            - /data
+        healthcheck:
+            test: ["CMD", "mc", "ready", "local"]
+            interval: 5s
+            timeout: 5s
+            retries: 20

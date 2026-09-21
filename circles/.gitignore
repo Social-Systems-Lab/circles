@@ -59,3 +59,12 @@ tmp/
 
 # Local runtime data
 /circles/
+
+# playwright e2e artifacts (sessions, reports, traces/videos/screenshots, server scratch dir)
+/e2e/.auth/
+/e2e/.report/
+/e2e/.results/
+/e2e/.tmp/
+/test-results/
+/playwright-report/
+/blob-report/
