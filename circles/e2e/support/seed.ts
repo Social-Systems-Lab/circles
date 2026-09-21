@@ -20,6 +20,7 @@ import {
 } from "@/lib/data/constants";
 import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
 import { getDefaultHeroImage } from "@/lib/default-heroes";
+import { ONBOARDING_STEPS } from "@/models/models";
 import { RUN_ID_FIELD } from "./env";
 
 export type SeededUser = {
@@ -77,10 +78,11 @@ export class Seeder {
     }
 
     /**
-     * A user who can take part: email verified, profile complete, guidelines accepted.
+     * A user who can take part: email verified, profile complete, guidelines accepted, onboarding finished.
      *
      * Override any of those to test the states that block participation, for example
-     * `user({ isEmailVerified: false })`.
+     * `user({ isEmailVerified: false })`. An unfinished onboarding opens a modal over every page, so
+     * `user({ completedOnboardingSteps: [] })` is how to test that flow, and why it is finished by default.
      */
     async user(overrides: Document = {}): Promise<SeededUser> {
         const token = this.token();
@@ -107,6 +109,7 @@ export class Seeder {
             accountStatus: "active",
             verificationStatus: "unverified",
             communityGuidelinesAcceptance: acceptedCommunityGuidelines(now),
+            completedOnboardingSteps: [...ONBOARDING_STEPS],
             createdAt: now,
             ...overrides,
         });
