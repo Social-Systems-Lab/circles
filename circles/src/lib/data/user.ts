@@ -22,6 +22,7 @@ import { db } from "./db";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ACTIVE_VERIFICATION_REQUEST_STATUSES } from "./verification-workflow";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
+import { assertCanonicalUserHandle, assertCanonicalUserHandleChange } from "@/lib/auth/canonical-user-handle";
 
 export const getVerificationStatus = async (userDid: string): Promise<"verified" | "pending" | "unverified"> => {
     const user = await getUserByDid(userDid);
@@ -115,6 +116,8 @@ export const createNewUser = (
     emailVerificationToken?: string,
     emailVerificationTokenExpiry?: Date,
 ): Circle => {
+    assertCanonicalUserHandle(handle);
+
     let user: Circle = {
         did,
         publicKey,
@@ -370,15 +373,36 @@ export const getUserPrivate = async (userDid: string): Promise<UserPrivate> => {
 };
 
 // update user
-export const updateUser = async (user: Partial<UserPrivate>, authenticatedUserDid: string): Promise<void> => {
+export type UpdateUserDependencies = {
+    getPrivateUserByDid: typeof getPrivateUserByDid;
+    getCircleById: typeof getCircleById;
+    findCircleByHandle: (filter: Record<string, unknown>) => Promise<Circle | null>;
+    updateCircleRecord: (
+        filter: Record<string, unknown>,
+        update: Record<string, unknown>,
+    ) => Promise<{ matchedCount: number }>;
+};
+
+const getDefaultUpdateUserDependencies = (): UpdateUserDependencies => ({
+    getPrivateUserByDid,
+    getCircleById,
+    findCircleByHandle: (filter) => Circles.findOne(filter),
+    updateCircleRecord: (filter, update) => Circles.updateOne(filter, update),
+});
+
+export const updateUser = async (
+    user: Partial<UserPrivate>,
+    authenticatedUserDid: string,
+    dependencies: UpdateUserDependencies = getDefaultUpdateUserDependencies(),
+): Promise<void> => {
     const { _id, ...userWithoutId } = user;
     if (!_id) {
         throw new Error("User ID (_id) is required for update");
     }
 
     // Fetch the existing user circle to check ownership
-    const existingUserCircle = await getPrivateUserByDid(userWithoutId.did ?? ""); // Use did from update payload if available, otherwise fetch by _id first? Let's fetch by _id first for safety.
-    const existingCircleById = await getCircleById(_id); // Fetch by ID first
+    const existingUserCircle = await dependencies.getPrivateUserByDid(userWithoutId.did ?? ""); // Use did from update payload if available, otherwise fetch by _id first? Let's fetch by _id first for safety.
+    const existingCircleById = await dependencies.getCircleById(_id); // Fetch by ID first
 
     if (!existingCircleById) {
         throw new Error("User circle not found");
@@ -403,8 +427,25 @@ export const updateUser = async (user: Partial<UserPrivate>, authenticatedUserDi
     delete userWithoutId.email; // Email should likely be updated via a separate, dedicated process if needed
     delete userWithoutId.circleType; // User circle type should not change
 
+    const handleWasSubmitted =
+        Object.prototype.hasOwnProperty.call(userWithoutId, "handle") && userWithoutId.handle !== undefined;
+    if (handleWasSubmitted) {
+        assertCanonicalUserHandleChange(existingCircleById.handle, userWithoutId.handle);
+        if (userWithoutId.handle !== existingCircleById.handle) {
+            const conflictingCircle = await dependencies.findCircleByHandle({
+                handle: userWithoutId.handle,
+                _id: { $ne: new ObjectId(_id) },
+            });
+            if (conflictingCircle) {
+                throw new Error(`Handle "${userWithoutId.handle}" is already in use.`);
+            }
+        }
+    } else {
+        delete userWithoutId.handle;
+    }
+
     // Proceed with the update
-    let result = await Circles.updateOne({ _id: new ObjectId(_id) }, { $set: userWithoutId });
+    let result = await dependencies.updateCircleRecord({ _id: new ObjectId(_id) }, { $set: userWithoutId });
     if (result.matchedCount === 0) {
         // This should theoretically not happen due to the check above, but keep for safety
         throw new Error("User not found during update operation");

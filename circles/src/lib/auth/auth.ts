@@ -11,6 +11,7 @@ import { cookies } from "next/headers";
 import { createSession, generateUserToken, verifyUserToken } from "./jwt";
 import { readAuthToken } from "./cookie";
 import { createNewUser, getUserById, getUserPrivate } from "../data/user";
+import { assertCanonicalUserHandle } from "./canonical-user-handle";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
@@ -56,6 +57,7 @@ export const createUserAccount = async (
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
     }
+    assertCanonicalUserHandle(handle);
 
     // check if email is already in use
     let existingUser = await Circles.findOne({ email: email });

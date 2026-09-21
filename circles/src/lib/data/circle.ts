@@ -24,6 +24,7 @@ import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
+import { assertCanonicalUserHandle, assertCanonicalUserHandleChange } from "@/lib/auth/canonical-user-handle";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
 import {
@@ -471,6 +472,9 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
         // Ensure we have the creator's DID
         throw new Error("Authenticated user DID is required to create a circle.");
     }
+    if (circle.circleType === "user") {
+        assertCanonicalUserHandle(circle.handle);
+    }
     if (circle.visibility === "secret") {
         throw new Error("Secret Circle creation remains disabled.");
     }
@@ -559,14 +563,41 @@ export const getCircleByDid = async (did: string): Promise<Circle> => {
     return circle;
 };
 
-export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid: string): Promise<void> => {
+export type UpdateCircleDependencies = {
+    getCircleById: typeof getCircleById;
+    assertCircleWritesAllowed: typeof assertCircleWritesAllowed;
+    findCircleByHandle: (filter: Record<string, unknown>) => Promise<Circle | null>;
+    updateCircleRecord: (
+        filter: Record<string, unknown>,
+        update: Record<string, unknown>,
+    ) => Promise<{ matchedCount: number }>;
+    upsertVbdCircles: typeof upsertVbdCircles;
+    getChatRoomByHandle: typeof getChatRoomByHandle;
+    updateChatRoom: typeof updateChatRoom;
+};
+
+const getDefaultUpdateCircleDependencies = (): UpdateCircleDependencies => ({
+    getCircleById,
+    assertCircleWritesAllowed,
+    findCircleByHandle: (filter) => Circles.findOne(filter),
+    updateCircleRecord: (filter, update) => Circles.updateOne(filter, update),
+    upsertVbdCircles,
+    getChatRoomByHandle,
+    updateChatRoom,
+});
+
+export const updateCircle = async (
+    circle: Partial<Circle>,
+    authenticatedUserDid: string,
+    dependencies: UpdateCircleDependencies = getDefaultUpdateCircleDependencies(),
+): Promise<void> => {
     const { _id, ...circleWithoutId } = circle;
     if (!_id) {
         throw new Error("Circle ID is required for update");
     }
 
     // Fetch the existing circle to check ownership for user circles
-    const existingCircle = await getCircleById(_id);
+    const existingCircle = await dependencies.getCircleById(_id);
     if (!existingCircle) {
         throw new Error("Circle not found");
     }
@@ -581,8 +612,15 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
             );
             throw new Error("Unauthorized: Cannot update another user's circle profile.");
         }
+        const handleWasSubmitted =
+            Object.prototype.hasOwnProperty.call(circleWithoutId, "handle") && circleWithoutId.handle !== undefined;
+        if (handleWasSubmitted) {
+            assertCanonicalUserHandleChange(existingCircle.handle, circleWithoutId.handle);
+        } else {
+            delete circleWithoutId.handle;
+        }
     } else {
-        await assertCircleWritesAllowed(_id.toString());
+        await dependencies.assertCircleWritesAllowed(_id.toString());
     }
     // Note: For non-user circles, authorization is assumed to be handled by the calling action using isAuthorized()
 
@@ -593,7 +631,7 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
 
     // Check for handle conflict if handle is being updated
     if (circleWithoutId.handle && circleWithoutId.handle !== existingCircle.handle) {
-        const conflictingCircle = await Circles.findOne({
+        const conflictingCircle = await dependencies.findCircleByHandle({
             handle: circleWithoutId.handle,
             _id: { $ne: new ObjectId(_id) }, // Exclude the current circle
         });
@@ -607,24 +645,24 @@ export const updateCircle = async (circle: Partial<Circle>, authenticatedUserDid
     if (existingCircle.circleType !== "user") {
         updateFilter.$or = [{ moderationStatus: "active" }, { moderationStatus: { $exists: false } }];
     }
-    let result = await Circles.updateOne(updateFilter, { $set: circleWithoutId });
+    let result = await dependencies.updateCircleRecord(updateFilter, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
         // This should theoretically not happen due to the getCircleById check above, but keep for safety
         throw new Error("Circle not found during update operation");
     }
 
     // update circle embedding
-    let c = await getCircleById(_id);
+    let c = await dependencies.getCircleById(_id);
     try {
-        await upsertVbdCircles([c]);
+        await dependencies.upsertVbdCircles([c]);
     } catch (e) {
         console.error("Failed to upsert circle embedding", e);
     }
 
     // update circle chat room
-    const membersChat = await getChatRoomByHandle(_id.toString(), "members");
+    const membersChat = await dependencies.getChatRoomByHandle(_id.toString(), "members");
     if (membersChat) {
-        await updateChatRoom({
+        await dependencies.updateChatRoom({
             _id: membersChat._id,
             name: circle.name, // keep chat name in sync
             picture: circle.picture, // keep chat avatar in sync
