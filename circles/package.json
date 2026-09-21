@@ -10,6 +10,7 @@
         "lint": "next lint",
         "test:components": "bun test src/components",
         "test:components:watch": "bun test --watch src/components",
+        "test:modules": "bun scripts/run-module-tests.ts",
         "check:chat-actions": "tsc --pretty false --noEmit -p tsconfig.json",
         "generate:vibeid-issuer-key": "node scripts/generate-vibeid-issuer-key.js",
         "seed:performance": "bun scripts/seed-performance-fixture.ts"
