@@ -85,8 +85,8 @@
         "mongodb": "^6.21.0",
         "next": "15.5.25",
         "next-themes": "^0.3.0",
-        "openai": "^4.104.0",
-        "postmark": "^4.0.7",
+        "openai": "^7",
+        "postmark": "^5",
         "react": "19.0.0-rc-69d4b800-20241021",
         "react-custom-scrollbars-2": "^4.5.0",
         "react-day-picker": "8.10.1",
@@ -105,12 +105,12 @@
         "remark-breaks": "^4.0.0",
         "remark-gfm": "^4.0.1",
         "rrule": "^2.8.1",
-        "sharp": "^0.33.5",
+        "sharp": "^0.35.4",
         "sonner": "^1.7.4",
         "stripe": "^22.6.2",
         "tailwind-merge": "^2.6.1",
         "tailwindcss-animate": "^1.0.7",
-        "uuid": "^10.0.0",
+        "uuid": "^14",
         "vaul": "^1.1.2",
         "zod": "^3.25.76"
     },
@@ -125,12 +125,11 @@
         "@types/fs-extra": "^11.0.4",
         "@types/lodash": "^4.17.25",
         "@types/mapbox-gl": "^3.5.0",
-        "@types/node": "^20.19.43",
+        "@types/node": "^22",
         "@types/react": "npm:types-react@19.0.0-rc.1",
         "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
         "@types/react-mentions": "^4.4.1",
         "@types/rrule": "^2.2.9",
-        "@types/uuid": "^10.0.0",
         "cross-env": "^7.0.3",
         "eslint": "^8.57.1",
         "eslint-config-next": "15.0.1",
@@ -144,6 +143,7 @@
     "overrides": {
         "@types/react": "npm:types-react@19.0.0-rc.1",
         "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
-        "fast-xml-parser": "^4.5.6"
+        "fast-xml-parser": "^4.5.6",
+        "sharp": "^0.35.4"
     }
 }
