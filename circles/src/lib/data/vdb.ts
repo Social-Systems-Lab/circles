@@ -921,8 +921,8 @@ export const semanticSearchContent = async (options: {
                     fetchPage: async (offset, pageLimit) => {
                         if (queryVector) {
                             const numericOffset = typeof offset === "number" ? offset : 0;
-                            const hits = await client.search(collectionName, {
-                                vector: queryVector,
+                            const { points: hits } = await client.query(collectionName, {
+                                query: queryVector,
                                 limit: pageLimit,
                                 offset: numericOffset,
                                 with_payload: true,
@@ -960,12 +960,14 @@ export const semanticSearchContent = async (options: {
             }
 
             if (queryVector) {
-                return client.search(collectionName, {
-                    vector: queryVector,
-                    limit: limit,
-                    with_payload: true, // We need the payload data
-                    filter: filter,
-                });
+                return client
+                    .query(collectionName, {
+                        query: queryVector,
+                        limit: limit,
+                        with_payload: true, // We need the payload data
+                        filter: filter,
+                    })
+                    .then((response) => response.points);
             } else {
                 // When no query vector, use scroll with filtering
                 return client

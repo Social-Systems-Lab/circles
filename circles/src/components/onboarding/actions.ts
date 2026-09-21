@@ -304,8 +304,8 @@ export const fetchSdgsMatchedToCircle = async (circleId: string): Promise<FetchS
         const circleVector = circleObject.vector as number[];
 
         // Perform the search for sdgs near the circle's vector
-        const response = await client.search("sdgs", {
-            vector: circleVector,
+        const { points: response } = await client.query("sdgs", {
+            query: circleVector,
             limit: 100,
         });
 
@@ -351,8 +351,8 @@ export const fetchSkillsMatchedToCircle = async (circleId: string): Promise<Fetc
         const circleVector = circleObject.vector as number[];
 
         // Perform the search for skills near the circle's vector
-        const response = await client.search("skills", {
-            vector: circleVector,
+        const { points: response } = await client.query("skills", {
+            query: circleVector,
             limit: 100,
         });
 
@@ -734,8 +734,8 @@ export const fetchMissionStatements = async (circleId: string): Promise<FetchMis
         const circleVector = circleObject.vector as number[];
 
         // Perform the search for missions near the circle's vector
-        const response = await client.search("circles", {
-            vector: circleVector,
+        const { points: response } = await client.query("circles", {
+            query: circleVector,
             limit: 30,
         });
 

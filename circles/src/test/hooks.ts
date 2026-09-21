@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, mock, setSystemTime, spyOn } from "bun:test";
 
-type ConsoleMethod = "log" | "warn" | "error";
+type ConsoleMethod = "log" | "info" | "warn" | "error";
 type Spy = ReturnType<typeof spyOn>;
 
 /**

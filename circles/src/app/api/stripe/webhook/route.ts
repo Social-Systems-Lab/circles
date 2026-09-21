@@ -25,7 +25,7 @@ function toDate(unixSeconds?: number | null): Date | undefined {
 
 function getInterval(price: Stripe.Price | null | undefined): "month" | "year" | undefined {
     const interval = price?.recurring?.interval;
-    return interval === "year" || interval === "month" ? interval : undefined;
+    return interval === "year" ? "year" : interval === "month" ? "month" : undefined;
 }
 
 async function resolveUserFromEvent(event: Stripe.Event) {
