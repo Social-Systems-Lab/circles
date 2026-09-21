@@ -1,120 +1,24 @@
-// Global setup for component tests, preloaded by bun test (see bunfig.toml).
-// happy-dom must be registered before React DOM is imported by any test file.
+// Global test setup, preloaded by bun test (see bunfig.toml).
+//
+// Two constraints decide how this file is written.
+//
+// 1. Testing Library must be evaluated after happy-dom is registered, because it binds to `document` when it
+//    loads. It and jest-dom are CommonJS, and Bun runs a CommonJS dependency while it is *loading* an ES
+//    module's imports, ahead of every ES module body — so a static `import` would evaluate them first. They
+//    are `require`d below instead, which runs at the call, after "./register-dom" has run.
+//
+// 2. Nothing here may sit behind a top-level `await`. Under `bun test --isolate` a preload's code after an
+//    `await` runs too late, so `expect.extend` and `afterEach` would be silently lost and every jest-dom
+//    matcher would be undefined. (This is why the original `await import(...)` had to go.)
+
+import "./isolate-bare-run"; // first: a bare `bun test` re-runs itself and exits before anything else loads
+import "./register-dom";
+import "./contain-process-exit";
 
 import { afterEach, expect } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-GlobalRegistrator.register();
-
-// Radix primitives measure and observe elements that happy-dom does not implement.
-// These stubs keep the components mountable without altering their behavior.
-class ResizeObserverStub {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-}
-
-class DOMRectStub {
-    constructor(
-        public x = 0,
-        public y = 0,
-        public width = 0,
-        public height = 0,
-    ) {}
-    get top() {
-        return this.y;
-    }
-    get left() {
-        return this.x;
-    }
-    get right() {
-        return this.x + this.width;
-    }
-    get bottom() {
-        return this.y + this.height;
-    }
-    toJSON() {
-        return { ...this };
-    }
-}
-
-const globalWithStubs = globalThis as Record<string, unknown>;
-
-globalWithStubs.ResizeObserver ??= ResizeObserverStub;
-globalWithStubs.DOMRect ??= DOMRectStub;
-
-if (!globalThis.matchMedia) {
-    globalThis.matchMedia = ((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-    })) as typeof globalThis.matchMedia;
-}
-
-if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = function scrollIntoView() {};
-}
-
-if (!Element.prototype.hasPointerCapture) {
-    Element.prototype.hasPointerCapture = function hasPointerCapture() {
-        return false;
-    };
-}
-
-if (!Element.prototype.setPointerCapture) {
-    Element.prototype.setPointerCapture = function setPointerCapture() {};
-}
-
-if (!Element.prototype.releasePointerCapture) {
-    Element.prototype.releasePointerCapture = function releasePointerCapture() {};
-}
-
-// Radix Presence chooses between a synchronous unmount and an animation-driven one by reading
-// `getComputedStyle(node).animationName` (@radix-ui/react-presence). Tailwind's animate-in
-// classes give those nodes a real animation name, so Presence waits for `animationend` and then
-// schedules a fill-mode reset on a macrotask — both of which land outside Testing Library's
-// `act` under happy-dom and produce React's "not wrapped in act(...)" warning.
-//
-// Forcing animation/transition metrics to "none" / "0s" makes Presence take the synchronous
-// path, which is the recommended way to keep overlay tests deterministic (disable animations in
-// the test environment) rather than swallowing the warning.
-const originalGetComputedStyle = window.getComputedStyle.bind(window);
-window.getComputedStyle = ((element: Element, pseudoElt?: string | null) => {
-    const styles = originalGetComputedStyle(element, pseudoElt);
-    return new Proxy(styles, {
-        get(target, property, receiver) {
-            if (
-                property === "animationName" ||
-                property === "webkitAnimationName" ||
-                property === "transitionProperty"
-            ) {
-                return "none";
-            }
-            if (
-                property === "animationDuration" ||
-                property === "webkitAnimationDuration" ||
-                property === "transitionDuration" ||
-                property === "webkitTransitionDuration" ||
-                property === "transitionDelay" ||
-                property === "webkitTransitionDelay"
-            ) {
-                return "0s";
-            }
-            const value = Reflect.get(target, property, receiver);
-            return typeof value === "function" ? value.bind(target) : value;
-        },
-    });
-}) as typeof window.getComputedStyle;
-
-// Testing Library modules bind to `document` when they load, so they may only be
-// imported after happy-dom has registered its globals above.
-const matchers = await import("@testing-library/jest-dom/matchers");
-const { act, cleanup } = await import("@testing-library/react");
+const matchers: typeof import("@testing-library/jest-dom/matchers") = require("@testing-library/jest-dom/matchers");
+const { act, cleanup }: typeof import("@testing-library/react") = require("@testing-library/react");
 
 expect.extend({ ...matchers } as Parameters<typeof expect.extend>[0]);
 

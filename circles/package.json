@@ -8,6 +8,7 @@
         "build": "cross-env IS_BUILD=true next build",
         "start": "next start",
         "lint": "next lint",
+        "test": "bun test --parallell",
         "test:components": "bun test src/components",
         "test:components:watch": "bun test --watch src/components",
         "test:modules": "bun scripts/run-module-tests.ts",

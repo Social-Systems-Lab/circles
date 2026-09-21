@@ -1,0 +1,34 @@
+# Bun reads bunfig.toml from the directory it is launched in, not from the nearest parent, and the app
+# lives one level down in ./circles. Editors that open the repository root (the VS Code test explorer,
+# for one) run `bun test` from here, where the app's own bunfig.toml is never seen. Without the happy-dom
+# preload every component test fails with "ReferenceError: document is not defined".
+#
+# Keep this in step with circles/bunfig.toml (the first three ignore entries are explained there).
+#
+# The remaining entries are older script-style tests that read source files by a working-directory-relative
+# path (`readFile("src/lib/data/feed.ts")`). They only work when bun starts in circles/circles, so from here
+# they fail with ENOENT. They still run in a normal `bun run test` from the app directory, so nothing is
+# lost. (Changing directory from a preload instead is not an option: bun re-resolves the preload path
+# against the current directory for every test file, so every file after the first fails to load.)
+[test]
+preload = ["./circles/src/test/setup.ts"]
+pathIgnorePatterns = [
+    "**/e2e/**",
+    "**/secret-media-call-graph.test.ts",
+    "**/private-media/**/route.test.ts",
+    "**/comment-mention-call-graph.test.ts",
+    "**/discussion-alternate-comment-policy.test.ts",
+    "**/event-noticeboard-update-call-graph.test.ts",
+    "**/event-occurrence-data.test.ts",
+    "**/fallback-comment-shadow-call-graph.test.ts",
+    "**/lifecycle-enforcement.test.ts",
+    "**/post-nested-content-policy.test.ts",
+    "**/source-default-feed-selection.test.ts",
+    "**/task-reference-integrity-call-graph.test.ts",
+    "**/event-create-publish.test.ts",
+    "**/event-external-invite.test.ts",
+    "**/event-occurrence-cancellation.test.ts",
+    "**/event-occurrence-invitation.test.ts",
+    "**/event-occurrence-rsvp-action.test.ts",
+    "**/event-semantic-search-policy.test.ts",
+]
