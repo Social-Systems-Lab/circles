@@ -148,7 +148,7 @@ Do these in a **browser**, signed in, in this order. Each one exercises a librar
    Run a semantic search. Open onboarding and confirm the suggested SDGs, skills and mission
    statements still appear.
 
-6. **UI bits** (sonner 2, cmdk 1.1, next-themes 0.4)
+6. **UI bits** (cmdk 1.1, next-themes 0.4, tailwind-merge 3)
    Trigger any toast, open the command palette, toggle dark mode.
 
 ---
