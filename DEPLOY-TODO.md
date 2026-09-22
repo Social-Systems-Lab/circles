@@ -43,8 +43,8 @@ failure is a stop.
 bun audit
 ```
 
-Expected: **1 vulnerability** (a moderate, dev-server-only advisory reached through `react-scan`).
-See "Known remaining" at the end.
+Expected: **2 vulnerabilities, both moderate**, both deliberately accepted. See "Known remaining"
+at the end.
 
 Then build the production image locally to prove the Node 22 build works before the server tries it:
 
@@ -173,14 +173,26 @@ Verify with the same `curl` as step 5.
 
 ## Known remaining
 
-One advisory is deliberately not fixed:
+Two advisories are deliberately not fixed. Both are moderate and neither is reachable in
+production:
 
-- **esbuild** (moderate), reached through `react-scan` → its dev server can be queried by any
-  website. It only affects a local development machine, never the production container.
-  `react-scan` 0.5.7 fixes it but breaks the webpack build, so `react-scan` stays at 0.2.14.
+- **esbuild**, through `react-scan` → its dev server can be queried by any website. It only
+  affects a local development machine, never the production container. `react-scan` 0.5.7 fixes it
+  but breaks the webpack build, so `react-scan` stays at 0.2.14.
+- **stream-json**, through `minio` → an O(depth²) DoS in its `pick`/`ignore`/`filter`/`replace`
+  filters. `minio` only uses it in its bucket-notification client, which this app never calls.
+  Forcing stream-json 3.x breaks the build outright: 3.x moved its files under `src/` and minio's
+  ESM build imports `stream-json/jsonl/Parser.js` literally, which webpack cannot resolve.
 
-Two upgrades were attempted and deliberately reverted:
+Three upgrades were attempted and deliberately reverted, none of them security fixes:
 
-- **React 19.0.0-RC → 19.3.0 stable** made a cold production build go from ~21 seconds to 15–34
-  minutes. Not a security fix, so it was reverted. Worth revisiting separately.
+- **React 19.0.0-RC → 19.3.0 stable** made Next's own cold production build time go from ~21
+  seconds to 15 minutes, and 34 minutes on a second run. Verified against a control build on the
+  RC and confirmed not to be caused by react-scan. Worth investigating on its own.
+- **sonner 1 → 2** changes the Toaster DOM, its close control and dismissal behaviour, failing 6
+  existing assertions. A real UI change, so out of scope for a security pass.
 - **react-scan 0.5.7**, as above.
+
+`react-day-picker` stays at 8.10.1 (v9+ is a full API rewrite used by five real forms) and
+`@react-spring/web` at 9 (its only test mocks the package entirely, so an upgrade could not be
+verified). Neither has an advisory.
