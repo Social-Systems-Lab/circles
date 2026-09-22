@@ -49,6 +49,35 @@ type DigestCandidateUser = {
     lastActionableEmailDigestAt?: Date;
 };
 
+type DigestNotification = {
+    _id?: ObjectId;
+    type: NotificationType;
+    createdAt: Date;
+};
+
+type ActionableEmailDigestDependencies = {
+    now: () => Date;
+    getCandidateUsers: (cutoff: Date, limit: number) => Promise<DigestCandidateUser[]>;
+    getUnreadNotifications: (
+        userDid: string,
+        enabledNotificationTypes: NotificationType[],
+    ) => Promise<DigestNotification[]>;
+    sendEmail: typeof sendEmail;
+    markNotificationsEmailed: (notificationIds: ObjectId[], sentAt: Date) => Promise<void>;
+    markUserDigestSent: (userId: ObjectId, sentAt: Date) => Promise<void>;
+    markUserDigestChecked: (userId: ObjectId, checkedAt: Date) => Promise<void>;
+};
+
+type DigestCandidateCursor = {
+    sort: (sort: Record<string, 1 | -1>) => DigestCandidateCursor;
+    limit: (limit: number) => DigestCandidateCursor;
+    toArray: () => Promise<unknown[]>;
+};
+
+type DigestCandidateCollection = {
+    find: (query: Record<string, unknown>, options: Record<string, unknown>) => DigestCandidateCursor;
+};
+
 const getEmailBaseUrl = (): string => (process.env.CIRCLES_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 const pluralize = (count: number, singular: string): string => (count === 1 ? singular : `${singular}s`);
@@ -91,53 +120,103 @@ const markUserDigestSent = async (userId: ObjectId, sentAt: Date) => {
     );
 };
 
-const getCandidateUsers = async (cutoff: Date, limit: number): Promise<DigestCandidateUser[]> =>
-    (await Circles.find(
+const markUserDigestChecked = async (userId: ObjectId, checkedAt: Date) => {
+    await Circles.updateOne(
+        { _id: userId },
         {
-            circleType: "user",
-            did: { $exists: true, $type: "string", $ne: "" },
-            email: { $exists: true, $type: "string", $ne: "" },
-            $or: [
-                { emailMissedMessages: { $ne: false } },
-                { emailTaskAssigned: true },
-                { emailTaskUpdates: true },
-                { emailVerificationUpdates: true },
-            ],
-            $and: [
-                {
-                    $or: [
-                        { lastActionableEmailDigestAt: { $exists: false } },
-                        { lastActionableEmailDigestAt: { $lte: cutoff } },
-                    ],
+            $set: {
+                lastActionableEmailDigestCheckedAt: checkedAt,
+            },
+        },
+    );
+};
+
+export const getActionableEmailDigestCandidateUsers = async (
+    cutoff: Date,
+    limit: number,
+    collection: DigestCandidateCollection = Circles as unknown as DigestCandidateCollection,
+): Promise<DigestCandidateUser[]> =>
+    (await collection
+        .find(
+            {
+                circleType: "user",
+                did: { $exists: true, $type: "string", $ne: "" },
+                email: { $exists: true, $type: "string", $ne: "" },
+                $or: [
+                    { emailMissedMessages: { $ne: false } },
+                    { emailTaskAssigned: true },
+                    { emailTaskUpdates: true },
+                    { emailVerificationUpdates: true },
+                ],
+                $and: [
+                    {
+                        $or: [
+                            { lastActionableEmailDigestAt: { $exists: false } },
+                            { lastActionableEmailDigestAt: { $lte: cutoff } },
+                        ],
+                    },
+                ],
+            },
+            {
+                projection: {
+                    did: 1,
+                    email: 1,
+                    name: 1,
+                    handle: 1,
+                    emailMissedMessages: 1,
+                    emailTaskAssigned: 1,
+                    emailTaskUpdates: 1,
+                    emailVerificationUpdates: 1,
+                    lastActionableEmailDigestAt: 1,
+                    lastActionableEmailDigestCheckedAt: 1,
                 },
-            ],
+            },
+        )
+        .sort({ lastActionableEmailDigestCheckedAt: 1, _id: 1 })
+        .limit(Math.min(DEFAULT_PROCESS_LIMIT, Math.max(1, limit)))
+        .toArray()) as DigestCandidateUser[];
+
+const getUnreadNotifications = async (
+    userDid: string,
+    enabledNotificationTypes: NotificationType[],
+): Promise<DigestNotification[]> =>
+    (await Notifications.find(
+        {
+            userId: userDid,
+            isRead: false,
+            type: { $in: enabledNotificationTypes },
         },
         {
             projection: {
-                did: 1,
-                email: 1,
-                name: 1,
-                handle: 1,
-                emailMissedMessages: 1,
-                emailTaskAssigned: 1,
-                emailTaskUpdates: 1,
-                emailVerificationUpdates: 1,
-                lastActionableEmailDigestAt: 1,
+                _id: 1,
+                type: 1,
+                createdAt: 1,
             },
         },
-    )
-        .sort({ lastActionableEmailDigestAt: 1, _id: 1 })
-        .limit(Math.max(1, limit))
-        .toArray()) as DigestCandidateUser[];
+    ).toArray()) as DigestNotification[];
 
 const getEnabledNotificationTypes = (user: DigestCandidateUser): NotificationType[] =>
     DIGEST_CATEGORY_DEFINITIONS.flatMap((category) =>
         isCategoryEnabled(user, category) ? [...category.notificationTypes] : [],
     );
 
-export const processDailyActionableEmailDigests = async (limit: number = DEFAULT_PROCESS_LIMIT) => {
-    const now = new Date();
+const defaultDependencies: ActionableEmailDigestDependencies = {
+    now: () => new Date(),
+    getCandidateUsers: getActionableEmailDigestCandidateUsers,
+    getUnreadNotifications,
+    sendEmail,
+    markNotificationsEmailed,
+    markUserDigestSent,
+    markUserDigestChecked,
+};
+
+export const processDailyActionableEmailDigests = async (
+    limit: number = DEFAULT_PROCESS_LIMIT,
+    dependencies: ActionableEmailDigestDependencies = defaultDependencies,
+) => {
+    const now = dependencies.now();
     const cutoff = new Date(now.getTime() - DAILY_DIGEST_INTERVAL_MS);
+    const candidateLimit = Math.min(DEFAULT_PROCESS_LIMIT, Math.max(1, limit));
     const stats = {
         scannedUsers: 0,
         eligibleUsers: 0,
@@ -150,97 +229,89 @@ export const processDailyActionableEmailDigests = async (limit: number = DEFAULT
         return stats;
     }
 
-    const candidateUsers = await getCandidateUsers(cutoff, limit);
+    const candidateUsers = await dependencies.getCandidateUsers(cutoff, candidateLimit);
     const baseUrl = getEmailBaseUrl();
 
     for (const user of candidateUsers) {
         stats.scannedUsers += 1;
-
-        const enabledNotificationTypes = getEnabledNotificationTypes(user);
-        if (!enabledNotificationTypes.length) {
-            stats.skipped += 1;
-            continue;
-        }
-
-        const unreadNotifications = await Notifications.find(
-            {
-                userId: user.did,
-                isRead: false,
-                type: { $in: enabledNotificationTypes },
-            },
-            {
-                projection: {
-                    _id: 1,
-                    type: 1,
-                    createdAt: 1,
-                },
-            },
-        ).toArray();
-
-        if (!unreadNotifications.length) {
-            stats.skipped += 1;
-            continue;
-        }
-
-        const hasDigestEligibleActivity = unreadNotifications.some((notification) => notification.createdAt <= cutoff);
-        if (!hasDigestEligibleActivity) {
-            stats.skipped += 1;
-            continue;
-        }
-
-        const counts = new Map<string, number>();
-        for (const category of DIGEST_CATEGORY_DEFINITIONS) {
-            if (!isCategoryEnabled(user, category)) {
+        try {
+            const enabledNotificationTypes = getEnabledNotificationTypes(user);
+            if (!enabledNotificationTypes.length) {
+                stats.skipped += 1;
                 continue;
             }
 
-            const notificationTypes = category.notificationTypes as readonly ActionableNotificationType[];
-            const count = unreadNotifications.filter((notification) =>
-                notificationTypes.includes(notification.type as ActionableNotificationType),
-            ).length;
-            if (count > 0) {
-                counts.set(category.preferenceKey, count);
+            const unreadNotifications = await dependencies.getUnreadNotifications(user.did, enabledNotificationTypes);
+
+            if (!unreadNotifications.length) {
+                stats.skipped += 1;
+                continue;
             }
-        }
 
-        const summaryLines = buildDigestSummaryLines(counts);
-        if (!summaryLines.length) {
-            stats.skipped += 1;
-            continue;
-        }
+            const hasDigestEligibleActivity = unreadNotifications.some(
+                (notification) => notification.createdAt <= cutoff,
+            );
+            if (!hasDigestEligibleActivity) {
+                stats.skipped += 1;
+                continue;
+            }
 
-        stats.eligibleUsers += 1;
+            const counts = new Map<string, number>();
+            for (const category of DIGEST_CATEGORY_DEFINITIONS) {
+                if (!isCategoryEnabled(user, category)) {
+                    continue;
+                }
 
-        try {
-            await sendEmail({
-                to: user.email,
-                templateAlias: "notification-reminder",
-                templateModel: {
-                    name: user.name || user.handle || "there",
-                    notifications: summaryLines,
-                    actionUrl: baseUrl,
-                    productUrl: baseUrl,
-                    introText: "You have activity waiting on Kamooni.",
-                    bodyText: "Here is your daily digest of actionable updates.",
-                    summaryText: summaryLines.join(" • "),
-                    actionText: "Open Kamooni",
-                },
-            });
+                const notificationTypes = category.notificationTypes as readonly ActionableNotificationType[];
+                const count = unreadNotifications.filter((notification) =>
+                    notificationTypes.includes(notification.type as ActionableNotificationType),
+                ).length;
+                if (count > 0) {
+                    counts.set(category.preferenceKey, count);
+                }
+            }
 
-            await Promise.all([
-                markNotificationsEmailed(
-                    unreadNotifications
-                        .map((notification) => notification._id)
-                        .filter((id): id is ObjectId => id instanceof ObjectId),
-                    now,
-                ),
-                markUserDigestSent(user._id, now),
-            ]);
+            const summaryLines = buildDigestSummaryLines(counts);
+            if (!summaryLines.length) {
+                stats.skipped += 1;
+                continue;
+            }
 
-            stats.sent += 1;
-        } catch (error) {
-            console.error(`Failed to send actionable email digest to ${user.did}:`, error);
-            stats.failed += 1;
+            stats.eligibleUsers += 1;
+
+            try {
+                await dependencies.sendEmail({
+                    to: user.email,
+                    templateAlias: "notification-reminder",
+                    templateModel: {
+                        name: user.name || user.handle || "there",
+                        notifications: summaryLines,
+                        actionUrl: baseUrl,
+                        productUrl: baseUrl,
+                        introText: "You have activity waiting on Kamooni.",
+                        bodyText: "Here is your daily digest of actionable updates.",
+                        summaryText: summaryLines.join(" • "),
+                        actionText: "Open Kamooni",
+                    },
+                });
+
+                await Promise.all([
+                    dependencies.markNotificationsEmailed(
+                        unreadNotifications
+                            .map((notification) => notification._id)
+                            .filter((id): id is ObjectId => id instanceof ObjectId),
+                        now,
+                    ),
+                    dependencies.markUserDigestSent(user._id, now),
+                ]);
+
+                stats.sent += 1;
+            } catch (error) {
+                console.error(`Failed to send actionable email digest to ${user.did}:`, error);
+                stats.failed += 1;
+            }
+        } finally {
+            await dependencies.markUserDigestChecked(user._id, now);
         }
     }
 
