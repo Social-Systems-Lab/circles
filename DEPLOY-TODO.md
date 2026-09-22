@@ -43,8 +43,7 @@ failure is a stop.
 bun audit
 ```
 
-Expected: **2 vulnerabilities, both moderate**, both deliberately accepted. See "Known remaining"
-at the end.
+Expected: **no vulnerabilities**.
 
 Then build the production image locally to prove the Node 22 build works before the server tries it:
 
@@ -151,6 +150,11 @@ Do these in a **browser**, signed in, in this order. Each one exercises a librar
 6. **UI bits** (cmdk 1.1, next-themes 0.4, tailwind-merge 3)
    Trigger any toast, open the command palette, toggle dark mode.
 
+7. **File storage again** — specifically the webpack alias fix
+   Same as check 2 (upload/list/download). This confirms the build actually contains a working
+   `minio` bundle; if the alias in `next.config.mjs` were ever wrong, `/storage/[...path]` and
+   `/uploads/[...path]` would 500 on first request rather than fail at build time.
+
 ---
 
 ## Rollback
@@ -173,16 +177,22 @@ Verify with the same `curl` as step 5.
 
 ## Known remaining
 
-Two advisories are deliberately not fixed. Both are moderate and neither is reachable in
-production:
+None. `bun audit` reports zero vulnerabilities.
 
-- **esbuild**, through `react-scan` → its dev server can be queried by any website. It only
-  affects a local development machine, never the production container. `react-scan` 0.5.7 fixes it
-  but breaks the webpack build, so `react-scan` stays at 0.2.14.
-- **stream-json**, through `minio` → an O(depth²) DoS in its `pick`/`ignore`/`filter`/`replace`
-  filters. `minio` only uses it in its bucket-notification client, which this app never calls.
-  Forcing stream-json 3.x breaks the build outright: 3.x moved its files under `src/` and minio's
-  ESM build imports `stream-json/jsonl/Parser.js` literally, which webpack cannot resolve.
+Two advisories were initially accepted as unreachable and later patched properly:
+
+- **esbuild**, through `react-scan`'s own `dependencies` (not our code): overridden to `^0.25.0`.
+  react-scan 0.2.14 never actually `require`s esbuild from the code path our `scan()` import uses —
+  the only reference in its bundled `dist/index.js` is its own `package.json` re-embedded as a
+  string constant for its CLI (`bin/cli.js`), which nothing in this repo invokes.
+- **stream-json**, through `minio`: overridden to `^3.7.0`, plus a webpack alias in
+  `next.config.mjs`. The real problem was a casing bug in minio's own bundled output —
+  `dist/main/notification.js` and `dist/esm/notification.mjs` both import
+  `"stream-json/jsonl/Parser.js"` (capital P), while stream-json 3.x ships the file as lowercase
+  `parser.js`. macOS's case-insensitive filesystem hides this; Linux does not, so it only broke the
+  Docker build, never a local Mac build. The alias redirects the broken specifier to the real file.
+  Re-verified against a real MinIO server, including `client.listenBucketNotification()` — the one
+  code path that actually loads this module.
 
 Three upgrades were attempted and deliberately reverted, none of them security fixes:
 
