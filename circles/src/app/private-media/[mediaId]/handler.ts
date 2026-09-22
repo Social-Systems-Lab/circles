@@ -17,7 +17,11 @@ type PrivateMediaRouteDependencies = {
     getObject: (record: PrivateMedia) => Promise<Readable>;
 };
 
-const notFound = () => new NextResponse("Not found", { status: 404 });
+const notFound = () =>
+    new NextResponse("Not found", {
+        status: 404,
+        headers: { "content-type": "text/plain;charset=UTF-8" },
+    });
 
 export const createPrivateMediaGetHandler = (dependencies: PrivateMediaRouteDependencies) =>
     async function privateMediaGetHandler(
