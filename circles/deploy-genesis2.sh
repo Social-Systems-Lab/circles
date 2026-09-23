@@ -50,14 +50,14 @@ echo "Running branding guard for Kamooni..."
 run_mongo_script() {
   local script_path="$1"
   (cd "$APP_DIR" && docker compose exec -T db sh -lc \
-    'mongosh "$MONGO_INITDB_DATABASE" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet' \
+    'mongosh "$MONGODB_URI" --quiet' \
     < "$script_path")
 }
 
 chat_read_state_v2_is_complete() {
   local result
   result="$(cd "$APP_DIR" && docker compose exec -T db sh -lc \
-    'mongosh "$MONGO_INITDB_DATABASE" --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet --eval '\''db.schemaMigrations.countDocuments({_id:"chat-read-state-v2",status:"complete"})'\''')"
+    'mongosh "$MONGODB_URI" --quiet --eval '\''db.schemaMigrations.countDocuments({_id:"chat-read-state-v2",status:"complete"})'\''')"
   [[ "$result" == "1" ]]
 }
 
