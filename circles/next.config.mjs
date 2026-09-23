@@ -49,6 +49,16 @@ const nextConfig = {
         config.resolve.alias["stream-json/jsonl/Parser.js"] = require.resolve("stream-json/jsonl/parser.js");
         return config;
     },
+    turbopack: {
+        // Same fix as the webpack alias above, for `next dev --turbopack`, which does not read the
+        // `webpack()` config block at all. Unlike webpack's `resolve.alias`, Turbopack's `resolveAlias`
+        // wants an import specifier (resolved via normal module resolution), not an absolute filesystem
+        // path — passing `require.resolve(...)`'s absolute path made Turbopack treat it as relative and
+        // mangle it into "./Users/...". The bare lowercase specifier resolves correctly on its own.
+        resolveAlias: {
+            "stream-json/jsonl/Parser.js": "stream-json/jsonl/parser.js",
+        },
+    },
 };
 
 export default nextConfig;
