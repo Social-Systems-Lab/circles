@@ -1,12 +1,12 @@
 import { Circle, CircleType, WithMetric } from "@/models/models";
 import { Circles } from "./db";
-import {
-    getDiscoverableLifecycleQuery,
-    getPublishedCircleQuery,
-    isCirclePublished,
-    SAFE_CIRCLE_PROJECTION,
-} from "./circle";
+import { getDiscoverableLifecycleQuery, getPublishedCircleQuery, isCirclePublished } from "./circle";
 import { buildSearchableTypeClauses, isSearchEligibleCircle } from "@/lib/data/search-visibility";
+import {
+    buildPublicSearchableCircle,
+    buildPublicSearchResult,
+    PUBLIC_SEARCH_CIRCLE_PROJECTION,
+} from "@/lib/data/public-search-result";
 
 const SEARCHABLE_TYPES: CircleType[] = ["circle", "project", "user"];
 const SEARCHABLE_FIELDS = [
@@ -18,15 +18,21 @@ const SEARCHABLE_FIELDS = [
     "skills",
     "interests",
     "causes",
+] as const;
+
+const PUBLIC_NESTED_SEARCHABLE_FIELDS = [
     "offers.text",
     "offers.skills",
     "engagements.text",
     "engagements.interests",
     "needs.text",
     "needs.tags",
-    "location.city",
-    "location.region",
-    "location.country",
+] as const;
+
+const PUBLIC_LOCATION_SEARCHABLE_FIELDS = [
+    { field: "location.country", precisions: [0, 1, 2, 3, 4] },
+    { field: "location.region", precisions: [1, 2, 3, 4] },
+    { field: "location.city", precisions: [2, 3, 4] },
 ] as const;
 
 type SearchCirclesOptions = {
@@ -134,7 +140,7 @@ const scoreCircleSearchMatch = (circle: Circle, query: string, tokens: string[])
     score += scoreQueryAgainstValues(query, tokens, structuredTerms, { exact: 70, prefix: 48, contains: 30 });
     score += scoreQueryAgainstValues(query, tokens, longTextTerms, { exact: 42, prefix: 24, contains: 14 });
 
-    if (circle.circleType === "user") {
+    if (score > 0 && circle.circleType === "user") {
         score += 3;
     }
 
@@ -146,7 +152,12 @@ const buildCandidateQuery = (query: string, circleTypes: CircleType[], sdgHandle
 
     const clauses: Record<string, unknown>[] = [
         {
-            $and: [{ $or: discoverableTypeClauses }, getPublishedCircleQuery(), getDiscoverableLifecycleQuery()],
+            $and: [
+                { $or: discoverableTypeClauses },
+                getPublishedCircleQuery(),
+                getDiscoverableLifecycleQuery(),
+                { $or: [{ circleType: { $ne: "user" } }, { accountStatus: { $ne: "rejected" } }] },
+            ],
         },
     ];
 
@@ -158,7 +169,16 @@ const buildCandidateQuery = (query: string, circleTypes: CircleType[], sdgHandle
         const tokens = [query, ...tokenizeQuery(query)].filter(Boolean);
         const regexes = tokens.map((token) => new RegExp(escapeRegex(token), "i"));
         clauses.push({
-            $or: regexes.flatMap((regex) => SEARCHABLE_FIELDS.map((field) => ({ [field]: regex }))),
+            $or: regexes.flatMap((regex) => [
+                ...SEARCHABLE_FIELDS.map((field) => ({ [field]: regex })),
+                ...PUBLIC_NESTED_SEARCHABLE_FIELDS.map((field) => {
+                    const [section] = field.split(".");
+                    return { $and: [{ [`${section}.visibility`]: "public" }, { [field]: regex }] };
+                }),
+                ...PUBLIC_LOCATION_SEARCHABLE_FIELDS.map(({ field, precisions }) => ({
+                    $and: [{ "location.precision": { $in: [...precisions] } }, { [field]: regex }],
+                })),
+            ]),
         });
     }
 
@@ -177,7 +197,7 @@ export const searchDiscoverableCircles = async ({
     const candidateLimit = Math.max(limit * 6, 120);
     const candidateQuery = buildCandidateQuery(normalizedQuery, normalizedTypes, normalizedSdgs);
 
-    const circles = (await Circles.find(candidateQuery, { projection: SAFE_CIRCLE_PROJECTION })
+    const circles = (await Circles.find(candidateQuery, { projection: PUBLIC_SEARCH_CIRCLE_PROJECTION })
         .limit(candidateLimit)
         .toArray()) as Circle[];
     const tokens = tokenizeQuery(normalizedQuery);
@@ -188,7 +208,8 @@ export const searchDiscoverableCircles = async ({
                 circle._id = circle._id.toString();
             }
 
-            const score = scoreCircleSearchMatch(circle, normalizedQuery, tokens);
+            const publicSearchableCircle = buildPublicSearchableCircle(circle);
+            const score = scoreCircleSearchMatch(publicSearchableCircle, normalizedQuery, tokens);
             return { circle, score };
         })
         .filter(({ circle, score }) => {
@@ -226,11 +247,5 @@ export const searchDiscoverableCircles = async ({
 
     const maxScore = scored[0]?.score || 1;
 
-    return scored.map(({ circle, score }) => ({
-        ...circle,
-        metrics: {
-            searchRank: score / maxScore,
-            similarity: score / maxScore,
-        },
-    }));
+    return scored.map(({ circle, score }) => buildPublicSearchResult(circle, score / maxScore));
 };

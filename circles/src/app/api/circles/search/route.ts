@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         const type = searchParams.get("type") as CircleType | null;
 
         if (!q || q.trim().length === 0) {
-            return NextResponse.json({ circles: [] });
+            return NextResponse.json({ circles: [] }, { headers: { "Cache-Control": "no-store" } });
         }
 
         const circles = await searchDiscoverableCircles({
@@ -19,9 +19,9 @@ export async function GET(req: NextRequest) {
             circleTypes: type ? [type] : undefined,
         });
 
-        return NextResponse.json({ circles });
+        return NextResponse.json({ circles }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
         console.error("GET /api/circles/search failed:", error);
-        return NextResponse.json({ circles: [] }, { status: 500 });
+        return NextResponse.json({ circles: [] }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 }
