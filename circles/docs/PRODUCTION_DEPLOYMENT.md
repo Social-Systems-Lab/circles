@@ -5,9 +5,11 @@ This is the canonical normal production deployment workflow for Kamooni / Circle
 Source of truth: [`../deploy-genesis2.sh`](../deploy-genesis2.sh). The filename is legacy and retained for compatibility; do not rename it as part of routine deployment work.
 
 The persistent topic-unread rollout includes a one-time, idempotent chat read-state V2 migration. The new image is built
-while the current application remains available. The deployment then enters a short maintenance window: it stops every
-`circles` application container, confirms no old writer remains, migrates and verifies Mongo, and starts only the new V2
-image. Never run this migration while an old application process can still write `chatReadStates`.
+while the current application remains available. If the migration is already complete, it is verified while the current
+application remains live before that application is replaced. If the migration is incomplete, the deployment enters a
+maintenance window to stop every `circles` application container, confirm no old writer remains, migrate and verify Mongo,
+and start only the new V2 image. Invalid migration status or authentication failure aborts before production is stopped.
+Never run this migration while an old application process can still write `chatReadStates`.
 
 ## Scope
 
@@ -50,7 +52,7 @@ The script also refuses to deploy if the working tree is dirty.
 
 ## Deploy
 
-Deploy only from `origin/main`:
+Normal releases deploy only from the approved `origin/main` branch:
 
 ```bash
 cd /root/circles/circles && ./circles/deploy-genesis2.sh main
@@ -58,17 +60,22 @@ cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 
 The `deploykamooni` shell command is not installed and must not be used or documented as the deployment method.
 
+For a separately authorized emergency release, the same script accepts the approved remote branch as its explicit argument.
+This does not change the default production policy: normal releases still deploy from approved `origin/main`.
+
 The script:
 
 - confirms it is running from `/root/circles/circles`
-- fetches `origin/main`
-- checks out `main`
-- resets the server checkout to `origin/main`
+- fetches the requested remote branch (`main` for normal releases)
+- checks out the requested branch
+- resets the server checkout to the requested `origin/<branch>`
 - exports the deployed `GIT_SHA` and `BUILD_TIME`
 - runs the Kamooni branding guard
 - builds the `circles` Docker Compose service
-- stops every Compose instance of the old `circles` service and confirms none is running
-- runs the idempotent chat read-state V2 migration while the application is offline
+- reads the migration completion status before stopping the current application and accepts only `0` or `1`
+- for status `1`, verifies the completed migration while the current application remains running, then replaces it
+- for status `0`, stops every old `circles` service instance, confirms none is running, migrates, verifies, and starts the new application
+- aborts before stopping the application if URI resolution, authentication, or the status query fails
 - verifies there are no legacy/incomplete rows or duplicate logical `chatReadStates` keys
 - creates/verifies the required unique `chatTopicReadStates` identity index
 - starts only the newly built V2 `circles` image
@@ -80,8 +87,10 @@ the normal replacement flow. Duplicate or malformed state, and a missing require
 
 Migration authentication uses the resolved `MONGODB_URI` from the Compose `circles` service, including while that service
 is stopped. Mongo's `MONGO_INITDB_ROOT_*` environment values are initialization settings and may no longer match the
-credentials of an existing database volume. Migration and verification JavaScript is executed by `mongosh --file` so the
-deployment cannot remain attached to an interactive shell after a script finishes.
+credentials of an existing database volume. The URI is transferred to the database container over standard input rather
+than process arguments. Migration and verification JavaScript is executed by `mongosh --file` so the deployment cannot
+remain attached to an interactive shell after a script finishes. URI resolution, authentication, and the migration-status
+query must succeed before the currently running application is stopped.
 
 ## V2 maintenance-window and failure rules
 
@@ -89,10 +98,12 @@ Only the `circles` Next.js service imports the chat read-state write functions. 
 HTTP endpoint and does not connect to Mongo; while `circles` is stopped it cannot cause a chat read-state write. Mongo,
 nginx, MinIO, Qdrant, Watchtower, and the optional Matrix services do not contain chat read-state write paths.
 
-The offline window covers migration, verification, new-container startup, and health/version confirmation. Migration is
-linear in the number of remaining non-V2 `chatReadStates` rows, including one historical-message lookup and one guarded
-update per row. Verification scans read states for legacy, malformed, and duplicate logical keys. Production duration
-therefore depends on row count and Mongo performance; do not promise a fixed duration.
+When the completion count is `0`, the offline window covers migration, verification, new-container startup, and
+health/version confirmation. Migration is linear in the number of remaining non-V2 `chatReadStates` rows, including one
+historical-message lookup and one guarded update per row. Verification scans read states for legacy, malformed, and
+duplicate logical keys. Production duration therefore depends on row count and Mongo performance; do not promise a fixed
+duration. When the count is `1`, verification runs before the current application is replaced, so there is no migration
+maintenance window.
 
 Failure behavior:
 
