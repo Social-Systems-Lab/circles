@@ -1,6 +1,7 @@
 import type { Circle, CircleType } from "@/models/models";
 
-export const isSearchEligibleCircle = (circle: Circle) => Boolean(circle.circleType);
+export const isSearchEligibleCircle = (circle: Circle) =>
+    Boolean(circle.circleType) && !(circle.circleType === "user" && circle.accountStatus === "rejected");
 
 export const buildSearchableTypeClauses = (circleTypes: CircleType[]): Record<string, unknown>[] => {
     const clauses: Record<string, unknown>[] = [];
