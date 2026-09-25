@@ -102,13 +102,17 @@ export const formatFundingItemSummary = (item: FundingAskItem) => {
     return parts.join(" ");
 };
 
-export const isFundingItemOpen = (item: FundingAskItem) => item.status === "open";
+export const isFundingItemOpen = (item: Pick<FundingAskItem, "status">) => item.status === "open";
 
-export const getFundingOpenItems = (ask: FundingAsk) => (ask.items || []).filter(isFundingItemOpen);
+type FundingItemsOnly = {
+    items?: Array<Pick<FundingAskItem, "title" | "note" | "price" | "currency" | "status">>;
+};
 
-export const getFundingOpenItemCount = (ask: FundingAsk) => getFundingOpenItems(ask).length;
+export const getFundingOpenItems = (ask: FundingItemsOnly) => (ask.items || []).filter(isFundingItemOpen);
 
-export const getFundingOpenItemTotals = (ask: FundingAsk) => {
+export const getFundingOpenItemCount = (ask: FundingItemsOnly) => getFundingOpenItems(ask).length;
+
+export const getFundingOpenItemTotals = (ask: FundingItemsOnly) => {
     const totals = new Map<FundingAskCurrency, number>();
 
     for (const item of getFundingOpenItems(ask)) {
@@ -119,7 +123,7 @@ export const getFundingOpenItemTotals = (ask: FundingAsk) => {
     return totals;
 };
 
-export const formatFundingOpenItemTotals = (ask: FundingAsk) => {
+export const formatFundingOpenItemTotals = (ask: FundingItemsOnly) => {
     const entries = Array.from(getFundingOpenItemTotals(ask).entries());
 
     if (entries.length === 0) {
@@ -168,9 +172,5 @@ export function FundingTrustBadge({
 }
 
 export function FundingProxyBadge({ className }: { className?: string }) {
-    return (
-        <Badge className={cn("border-transparent bg-rose-50 text-rose-700", className)}>
-            Proxy
-        </Badge>
-    );
+    return <Badge className={cn("border-transparent bg-rose-50 text-rose-700", className)}>Proxy</Badge>;
 }

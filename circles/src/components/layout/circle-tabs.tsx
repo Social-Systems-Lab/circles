@@ -5,11 +5,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { userAtom } from "@/lib/data/atoms";
-import { useAtom } from "jotai";
 import { useMemo, useCallback, useEffect, useState, useRef } from "react";
-import type { Circle, Module } from "@/models/models";
-import { features, getFeature, hiddenPublicModuleHandles, LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
+import type { Module } from "@/models/models";
+import { LOG_LEVEL_TRACE, logLevel, modules } from "@/lib/data/constants";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,12 +18,12 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 
 type CircleTabsProps = {
-    circle: Circle;
+    handle?: string;
+    visibleModuleHandles: string[];
 };
 
-export function CircleTabs({ circle }: CircleTabsProps) {
+export function CircleTabs({ handle, visibleModuleHandles }: CircleTabsProps) {
     const pathname = usePathname();
-    const [user] = useAtom(userAtom);
 
     useEffect(() => {
         if (logLevel >= LOG_LEVEL_TRACE) {
@@ -33,52 +31,12 @@ export function CircleTabs({ circle }: CircleTabsProps) {
         }
     }, []);
 
-    // Determine user's access groups for the current circle
-    const userGroups = useMemo(() => {
-        const membership = user?.memberships?.find((m) => m.circleId === circle?._id);
-        return membership ? membership.userGroups : [];
-    }, [user, circle?._id]);
-
-    // Check if the user has access to a specific module
-    const hasAccess = useCallback(
-        (moduleHandle: string) => {
-            const accessModuleHandle = moduleHandle === "shifts" ? "tasks" : moduleHandle;
-            let allowedUserGroups =
-                circle.accessRules?.[accessModuleHandle]?.view ||
-                getFeature(accessModuleHandle, "view")?.defaultUserGroups ||
-                [];
-            return (
-                allowedUserGroups.includes("everyone") || userGroups.some((group) => allowedUserGroups.includes(group))
-            );
-        },
-        [circle.accessRules, userGroups],
-    );
-
-    const enabledModules = useMemo(() => {
-        // loop through all modules and check if they are enabled for the circle
-        let moduleList: string[] = [];
-        if (!circle.enabledModules) {
-            return moduleList;
-        }
-
-        for (let moduleHandle of modules.map((m) => m.handle)) {
-            let isModuleEnabled = circle.enabledModules.includes(moduleHandle);
-            if (isModuleEnabled && hasAccess(moduleHandle)) {
-                moduleList.push(moduleHandle);
-            }
-        }
-        return moduleList;
-    }, [circle.enabledModules]);
-
-    // Filter modules based on enabledModules and excludeFromMenu
     const visibleModules = useMemo(() => {
-        return enabledModules
-            .filter((moduleHandle) => {
-                let m = modules.find((x) => x.handle === moduleHandle);
-                return m && !hiddenPublicModuleHandles.includes(moduleHandle) && hasAccess(moduleHandle);
-            })
-            .map((moduleHandle) => modules.find((x) => x.handle === moduleHandle)!);
-    }, [enabledModules, hasAccess]);
+        return visibleModuleHandles.flatMap((moduleHandle) => {
+            const visibleModule = modules.find((candidate) => candidate.handle === moduleHandle);
+            return visibleModule ? [visibleModule] : [];
+        });
+    }, [visibleModuleHandles]);
 
     const [visibleTabs, setVisibleTabs] = useState<Module[]>([]);
     const [hiddenTabs, setHiddenTabs] = useState<Module[]>([]);
@@ -91,12 +49,12 @@ export function CircleTabs({ circle }: CircleTabsProps) {
     const getPath = useCallback(
         (moduleHandle: string) => {
             if (moduleHandle === "settings") {
-                return `/circles/${circle.handle}/${moduleHandle}/about`;
+                return `/circles/${handle}/${moduleHandle}/about`;
             }
 
-            return `/circles/${circle.handle}/${moduleHandle}`;
+            return `/circles/${handle}/${moduleHandle}`;
         },
-        [circle.handle],
+        [handle],
     );
 
     const activeModule = useMemo(() => {

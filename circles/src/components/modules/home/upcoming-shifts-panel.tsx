@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
-import type { TaskDisplay } from "@/models/models";
+import type { ClientUpcomingShiftDto } from "@/lib/data/client-circle-dto";
 import { getShiftEndAt, getShiftStartAt } from "@/components/modules/tasks/shift-task-utils";
 
 type UpcomingShiftsPanelVisibility = "visible" | "sign_in" | "members_only";
 
 type UpcomingShiftsPanelProps = {
     circleHandle: string;
-    shifts: TaskDisplay[];
+    shifts: ClientUpcomingShiftDto[];
     visibility: UpcomingShiftsPanelVisibility;
 };
 
-const formatShiftDateTime = (task: TaskDisplay) => {
+const formatShiftDateTime = (task: ClientUpcomingShiftDto) => {
     const startAt = getShiftStartAt(task);
     const endAt = getShiftEndAt(task);
 
@@ -29,9 +29,9 @@ const formatShiftDateTime = (task: TaskDisplay) => {
     return endLabel ? `${dayLabel} · ${startLabel} - ${endLabel}` : `${dayLabel} · ${startLabel}`;
 };
 
-const getCapacityLabel = (task: TaskDisplay) => {
+const getCapacityLabel = (task: ClientUpcomingShiftDto) => {
     const slots = task.slots ?? 0;
-    const signedUpCount = task.participants?.length ?? 0;
+    const signedUpCount = task.participantCount;
 
     if (slots < 1) {
         return "Capacity to be confirmed";
@@ -48,7 +48,9 @@ export function UpcomingShiftsPanel({ circleHandle, shifts, visibility }: Upcomi
         <div className="rounded-[15px] border-0 bg-white px-4 pb-4 pt-3 shadow-lg sm:px-5 sm:pb-5 sm:pt-4 md:px-6 md:pb-6 md:pt-5">
             <div className="mb-2.5">
                 <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Upcoming Shifts</div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Upcoming Shifts
+                    </div>
                     {visibility === "visible" ? (
                         <Button asChild variant="ghost" size="sm">
                             <Link href={`/circles/${circleHandle}/events?filter=shifts`}>View all</Link>
@@ -78,11 +80,17 @@ export function UpcomingShiftsPanel({ circleHandle, shifts, visibility }: Upcomi
                             >
                                 <div className="space-y-1.5">
                                     <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-semibold text-slate-900 sm:text-[15px]">{shift.title}</div>
-                                        <div className="mt-0.5 text-sm text-slate-600">{formatShiftDateTime(shift)}</div>
+                                        <div className="text-sm font-semibold text-slate-900 sm:text-[15px]">
+                                            {shift.title}
+                                        </div>
+                                        <div className="mt-0.5 text-sm text-slate-600">
+                                            {formatShiftDateTime(shift)}
+                                        </div>
                                     </div>
                                     <div className="flex items-center justify-between gap-3">
-                                        <div className="text-sm font-medium text-emerald-700">{getCapacityLabel(shift)}</div>
+                                        <div className="text-sm font-medium text-emerald-700">
+                                            {getCapacityLabel(shift)}
+                                        </div>
                                         <Button asChild size="sm" className="shrink-0">
                                             <Link href={`/circles/${circleHandle}/tasks/${shift._id}?source=about`}>
                                                 View shift

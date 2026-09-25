@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import AboutPage from "@/components/modules/home/AboutPage";
-import type { VerifiedContributionItem } from "@/components/modules/home/VerifiedContributionsPanel";
 import { getTasksByCircleId } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
 import { getShiftEndAt, getShiftStartAt, isShiftTask } from "@/components/modules/tasks/shift-task-utils";
@@ -13,6 +12,10 @@ import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsks
 import { getMembers } from "@/lib/data/member";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { getProfileContributionPanelData } from "./profile-contribution-panel-data";
+import { buildAboutPageClientProps, type ServerVerifiedContributionInput } from "@/lib/data/client-circle-dto";
+import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { resolveCircleRouteAccess } from "../circle-route-access";
+import type { MemberDisplay } from "@/models/models";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -22,15 +25,15 @@ type PageProps = {
 
 export default async function CircleHomePage(props: PageProps) {
     const { handle } = await props.params;
-    const viewerDid = await getAuthenticatedUserDid();
+    const access = await resolveCircleRouteAccess(handle, {
+        findCircle: getCircleByHandle,
+        authenticate: getAuthenticatedUserDid,
+        canReadCircle,
+    });
+    if (!access) notFound();
+    const { circle, viewerDid } = access;
 
-    // Fetch circle data
-    const circle = await getCircleByHandle(handle);
-    if (!circle) {
-        notFound();
-    }
-
-    let verifiedContributions: VerifiedContributionItem[] = [];
+    let verifiedContributions: ServerVerifiedContributionInput[] = [];
     let verifiedContributionPublicCount = 0;
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
@@ -42,10 +45,20 @@ export default async function CircleHomePage(props: PageProps) {
     const showFundingPanel = isFundingEnabledForCircle(circle);
     const showUpcomingShiftsPanel = circle.circleType !== "user" && (circle.enabledModules?.includes("tasks") ?? false);
     const showAdminsPublicly = circle.showAdminsPublicly !== false;
-    const adminLeaders =
-        showAdminsPublicly && circle.circleType !== "user" && circle._id
-            ? (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins")).slice(0, 6)
-            : [];
+    let adminLeaders: MemberDisplay[] = [];
+    if (showAdminsPublicly && circle.circleType !== "user" && circle._id) {
+        const adminMembers = (await getMembers(circle._id)).filter((member) => member.userGroups?.includes("admins"));
+        const visibleAdmins = await Promise.all(
+            adminMembers.map(async (member) => {
+                if (!member.handle) return null;
+                const profile = await getCircleByHandle(member.handle);
+                return profile && (await canReadCircle(viewerDid, profile))
+                    ? ({ ...member, ...profile, userGroups: member.userGroups } as MemberDisplay)
+                    : null;
+            }),
+        );
+        adminLeaders = visibleAdmins.filter((member): member is MemberDisplay => member !== null).slice(0, 6);
+    }
 
     if (circle.circleType === "user" && circle.did) {
         const { items, totalPublicCount } = await getProfileContributionPanelData(circle.did, viewerDid);
@@ -109,20 +122,21 @@ export default async function CircleHomePage(props: PageProps) {
         }
     }
 
-    return (
-        <AboutPage
-            circle={circle}
-            verifiedContributions={verifiedContributions}
-            verifiedContributionPublicCount={verifiedContributionPublicCount}
-            fundingPreviewAsks={fundingPreviewAsks}
-            fundingPanelVisibility={fundingPanelVisibility}
-            upcomingShiftTasks={JSON.parse(JSON.stringify(upcomingShiftTasks))}
-            upcomingShiftsVisibility={upcomingShiftsVisibility}
-            canCreateFundingAsk={canCreateFundingAsk}
-            showFundingPanel={showFundingPanel}
-            showUpcomingShiftsPanel={showUpcomingShiftsPanel}
-            adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}
-            proofOfHumanitySummary={proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null}
-        />
-    );
+    const aboutPageProps = buildAboutPageClientProps({
+        circle,
+        viewerDid,
+        adminLeaders,
+        verifiedContributions,
+        verifiedContributionPublicCount,
+        fundingPreviewAsks,
+        fundingPanelVisibility,
+        upcomingShiftTasks,
+        upcomingShiftsVisibility,
+        canCreateFundingAsk,
+        showFundingPanel,
+        showUpcomingShiftsPanel,
+        proofOfHumanitySummary,
+    });
+
+    return <AboutPage {...aboutPageProps} />;
 }

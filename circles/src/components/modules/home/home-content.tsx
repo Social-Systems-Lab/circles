@@ -2,7 +2,11 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { Circle } from "@/models/models";
+import type {
+    ClientCircleDto,
+    ClientHumanityVerificationSummaryDto,
+    ClientParentCircleDto,
+} from "@/lib/data/client-circle-dto";
 import { FaUsers } from "react-icons/fa";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
@@ -28,9 +32,6 @@ import { MoreHorizontal, Settings } from "lucide-react";
 import Link from "next/link";
 import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
-import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
-import { isVerifiedUser } from "@/lib/auth/verification";
-import { hasContributorPerks } from "@/lib/auth/perks";
 import { ProfileCompletionChecklist } from "@/components/profile-completion/profile-completion-checklist";
 import {
     Dialog,
@@ -42,11 +43,12 @@ import {
 } from "@/components/ui/dialog";
 
 type HomeContentProps = {
-    circle: Circle;
+    circle: ClientCircleDto;
     authorizedToEdit: boolean;
     viewerDid?: string | null;
-    parentCircle?: Circle;
-    proofOfHumanitySummary?: HumanityVerificationSummary | null;
+    parentCircle?: ClientParentCircleDto;
+    proofOfHumanitySummary?: ClientHumanityVerificationSummaryDto | null;
+    shouldSuppressWelcomeOnboarding?: boolean;
 };
 
 export default function HomeContent({
@@ -55,6 +57,7 @@ export default function HomeContent({
     viewerDid,
     parentCircle,
     proofOfHumanitySummary,
+    shouldSuppressWelcomeOnboarding = false,
 }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const isKamooniRootCircle = circle?.handle === "default" || circle?.handle === "kamooni";
@@ -89,15 +92,7 @@ export default function HomeContent({
             return;
         }
 
-        const completedOnboardingSteps = circle.completedOnboardingSteps ?? [];
-        const hasSeenWelcomeOnboarding =
-            completedOnboardingSteps.includes("welcome") ||
-            completedOnboardingSteps.includes("member") ||
-            completedOnboardingSteps.includes("final");
-        const shouldSuppressWelcomeDialog =
-            isVerifiedUser(circle) || hasContributorPerks(circle) || hasSeenWelcomeOnboarding;
-
-        if (shouldSuppressWelcomeDialog) {
+        if (shouldSuppressWelcomeOnboarding) {
             setShowWelcomeDialog(false);
             return;
         }
@@ -108,7 +103,7 @@ export default function HomeContent({
         if (!alreadySeen) {
             setShowWelcomeDialog(true);
         }
-    }, [circle, isOwnUserProfile]);
+    }, [circle.handle, isOwnUserProfile, shouldSuppressWelcomeOnboarding]);
 
     const handleWelcomeDialogChange = (nextOpen: boolean) => {
         setShowWelcomeDialog(nextOpen);
@@ -125,9 +120,7 @@ export default function HomeContent({
                     <DialogHeader>
                         <DialogTitle>Welcome to Kamooni!</DialogTitle>
                         <DialogDescription className="space-y-3">
-                            <p>
-                                To interact with others, complete your profile and agree to the Kamooni rules.
-                            </p>
+                            <p>To interact with others, complete your profile and agree to the Kamooni rules.</p>
                             <p>It only takes three quick steps.</p>
                         </DialogDescription>
                     </DialogHeader>
@@ -151,7 +144,9 @@ export default function HomeContent({
                                     isCompact ? "left-1/2 top-[-50px] -translate-x-1/2" : "top-[-25px]"
                                 }`}
                             >
-                                <div className={`relative ${isCompact ? "h-[100px] w-[100px]" : "h-[150px] w-[150px]"}`}>
+                                <div
+                                    className={`relative ${isCompact ? "h-[100px] w-[100px]" : "h-[150px] w-[150px]"}`}
+                                >
                                     {authorizedToEdit ? (
                                         <EditableImage
                                             id="picture"
@@ -201,7 +196,9 @@ export default function HomeContent({
                                 </div>
 
                                 <div className="absolute right-0 top-0 flex flex-row items-center gap-1 pt-2">
-                                    {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
+                                    {user && circle.circleType === "circle" && isMember && (
+                                        <ChatButton circle={circle} />
+                                    )}
                                     {!isUser && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
@@ -295,7 +292,9 @@ export default function HomeContent({
 
                             {isCompact && !isUser && (
                                 <div className="flex w-full flex-wrap items-center justify-center gap-2 pb-2 pt-3">
-                                    {user && circle.circleType === "circle" && isMember && <ChatButton circle={circle} />}
+                                    {user && circle.circleType === "circle" && isMember && (
+                                        <ChatButton circle={circle} />
+                                    )}
                                     <InviteButton circle={circle} />
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
