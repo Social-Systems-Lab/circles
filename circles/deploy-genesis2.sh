@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Never trace this script: later commands handle the application's credential-bearing MongoDB URI.
+set +x
 set -euo pipefail
 
 EXPECTED_DIR="/root/circles/circles"
@@ -51,12 +53,17 @@ resolve_application_mongodb_uri() {
   # Resolve the exact environment assigned to the application service. This works even when
   # the existing circles container is stopped because the newly built image runs only `node -e`.
   (cd "$APP_DIR" && docker compose run --rm --no-deps -T circles \
-    node -e 'const uri = process.env.MONGODB_URI || ""; if (!uri) process.exit(1); process.stdout.write(uri)')
+    node -e 'const uri = process.env.MONGODB_URI || ""; if (!uri || /[\r\n]/.test(uri)) process.exit(1); process.stdout.write(uri)')
 }
 
 if ! APP_MONGODB_URI="$(resolve_application_mongodb_uri)" || [[ -z "$APP_MONGODB_URI" ]]; then
   echo "Error: could not resolve MONGODB_URI from the Compose circles service environment." >&2
   echo "Migration authentication requires the same MONGODB_URI used by the application." >&2
+  exit 1
+fi
+
+if [[ "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then
+  echo "Error: resolved MONGODB_URI contains an invalid line break." >&2
   exit 1
 fi
 
@@ -69,21 +76,34 @@ run_mongo_script() {
   fi
 
   # MONGO_INITDB_ROOT_PASSWORD initializes a new Mongo volume; it is not authoritative after
-  # initialization. Use the application's working URI and a file so mongosh cannot remain in REPL mode.
-  (cd "$APP_DIR" && docker compose exec -T -e MONGODB_URI="$APP_MONGODB_URI" db sh -lc \
-    'script_file="$(mktemp /tmp/circles-mongo-script.XXXXXX.js)" || exit 1
+  # initialization. Send the application's URI over stdin so it never appears in process arguments.
+  # The temporary JavaScript file contains connection code and the migration script, but not the URI.
+  {
+    printf '%s\n' "$APP_MONGODB_URI"
+    cat "$absolute_script_path"
+  } | (cd "$APP_DIR" && docker compose exec -T db sh -lc \
+    'IFS= read -r MONGODB_URI || exit 1
+     [ -n "$MONGODB_URI" ] || exit 1
+     export MONGODB_URI
+     script_file="$(mktemp /tmp/circles-mongo-script.XXXXXX.js)" || exit 1
      trap '\''rm -f "$script_file"'\'' EXIT
-     cat > "$script_file" || exit 1
-     mongosh "$MONGODB_URI" --quiet --file "$script_file"' \
-    < "$absolute_script_path")
+     chmod 600 "$script_file" || exit 1
+     printf '\''%s\n'\'' '\''db = connect(process.env.MONGODB_URI);'\'' > "$script_file" || exit 1
+     cat >> "$script_file" || exit 1
+     mongosh --nodb --quiet --file "$script_file" >/dev/null 2>&1')
 }
 
-chat_read_state_v2_is_complete() {
-  local result
-  # Use the same authoritative application URI as migration and verification.
-  result="$(cd "$APP_DIR" && docker compose exec -T -e MONGODB_URI="$APP_MONGODB_URI" db sh -lc \
-    'mongosh "$MONGODB_URI" --quiet --eval '\''db.schemaMigrations.countDocuments({_id:"chat-read-state-v2",status:"complete"})'\''')"
-  [[ "$result" == "1" ]]
+get_chat_read_state_v2_completion_count() {
+  # Use the same authoritative application URI without placing it in process arguments or logs.
+  printf '%s\n' "$APP_MONGODB_URI" | (cd "$APP_DIR" && docker compose exec -T db sh -lc \
+    'IFS= read -r MONGODB_URI || exit 1
+     [ -n "$MONGODB_URI" ] || exit 1
+     export MONGODB_URI
+     result="$(mongosh --nodb --quiet --eval '\''const migrationDb = connect(process.env.MONGODB_URI); migrationDb.schemaMigrations.countDocuments({_id:"chat-read-state-v2",status:"complete"})'\'' 2>/dev/null)" || exit 1
+     case "$result" in
+       ""|*[!0-9]*) exit 1 ;;
+       *) printf '\''%s\n'\'' "$result" ;;
+     esac')
 }
 
 fail_offline() {
@@ -93,7 +113,19 @@ fail_offline() {
   exit 1
 }
 
-if chat_read_state_v2_is_complete; then
+if ! CHAT_READ_STATE_V2_COMPLETION_COUNT="$(get_chat_read_state_v2_completion_count)"; then
+  echo "Error: could not authenticate to Mongo or read chat migration status; migration was not started." >&2
+  echo "The currently running circles application was not stopped or replaced." >&2
+  exit 1
+fi
+
+if [[ "$CHAT_READ_STATE_V2_COMPLETION_COUNT" != "0" && "$CHAT_READ_STATE_V2_COMPLETION_COUNT" != "1" ]]; then
+  echo "Error: unexpected chat migration completion count; migration was not started." >&2
+  echo "The currently running circles application was not stopped or replaced." >&2
+  exit 1
+fi
+
+if [[ "$CHAT_READ_STATE_V2_COMPLETION_COUNT" == "1" ]]; then
   echo "Chat read-state V2 migration is already complete; running the safe idempotent verifier without a migration window."
   if ! run_mongo_script scripts/verify-chat-read-state-v2.mongo.js; then
     echo "Error: chat read-state V2 verification failed; the current V2 application was not replaced." >&2
