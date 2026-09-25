@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
+import type { ClientAdminDisplayDto, ClientCircleDto } from "@/lib/data/client-circle-dto";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, ExternalLink } from "lucide-react";
@@ -11,7 +11,7 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
 import { useAtom } from "jotai";
-import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
+import { userAtom } from "@/lib/data/atoms";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,7 +36,6 @@ import { UpcomingShiftsPanel } from "./upcoming-shifts-panel";
 import type { FundingAskDisplay, TaskDisplay } from "@/models/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserPicture } from "../members/user-picture";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import MembershipCredentialCard from "./MembershipCredentialCard";
@@ -45,7 +44,7 @@ import { isVerifiedUser } from "@/lib/auth/verification";
 import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
 
 interface AboutPageProps {
-    circle: Circle;
+    circle: ClientCircleDto;
     verifiedContributions?: VerifiedContributionItem[];
     verifiedContributionPublicCount?: number;
     fundingPreviewAsks?: FundingAskDisplay[];
@@ -55,9 +54,10 @@ interface AboutPageProps {
     canCreateFundingAsk?: boolean;
     showFundingPanel?: boolean;
     showUpcomingShiftsPanel?: boolean;
-    adminLeaders?: MemberDisplay[];
+    adminLeaders?: ClientAdminDisplayDto[];
     proofOfHumanitySummary?: HumanityVerificationSummary | null;
     membershipCredential?: CircleMembershipCredentialCardData | null;
+    showFoundingBadge?: boolean;
 }
 
 export default function AboutPage({
@@ -74,14 +74,12 @@ export default function AboutPage({
     adminLeaders = [],
     proofOfHumanitySummary = null,
     membershipCredential = null,
+    showFoundingBadge = false,
 }: AboutPageProps) {
     const isCompact = useIsCompact();
-    const isMobile = useIsMobile();
     const router = useRouter();
     const { toast } = useToast();
     const [user] = useAtom(userAtom);
-    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
     const [isInterestsExpanded, setIsInterestsExpanded] = React.useState(false);
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
@@ -220,7 +218,7 @@ export default function AboutPage({
             return null;
         }
 
-        if (circle.isFoundingMember) {
+        if (showFoundingBadge) {
             return "Founding Member";
         }
 
@@ -261,7 +259,8 @@ export default function AboutPage({
             className: "bg-slate-100 text-slate-600 hover:bg-slate-100 hover:text-slate-600",
         },
     ].filter((chip): chip is { key: string; label: string; className: string } => Boolean(chip));
-    const shouldShowProfileStatus = isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
+    const shouldShowProfileStatus =
+        isUserProfile && (relationshipStatusLabel || followerCount > 0 || memberStatusLabel);
     const hasSidebarContent =
         shouldShowProfileStatus ||
         hasOverviewDetails ||
@@ -276,31 +275,8 @@ export default function AboutPage({
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
 
-    const getLeaderRole = (leader: MemberDisplay) => {
-        if (leader.userGroups?.includes("admins")) return "Admin";
-        if (leader.userGroups?.includes("moderators")) return "Moderator";
-        return "Member";
-    };
-
-    const openLeaderPreview = (leader: MemberDisplay) => {
-        if (isMobile) {
-            if (leader.handle) {
-                router.push(`/circles/${leader.handle}`);
-            }
-            return;
-        }
-
-        const contentPreviewData: ContentPreviewData = {
-            type: "member",
-            content: leader,
-        };
-
-        setContentPreview((current) => {
-            const isSameLeader =
-                current?.type === "member" &&
-                (current.content as MemberDisplay | undefined)?.userDid === leader.userDid;
-            return isSameLeader && sidePanelContentVisible === "content" ? undefined : contentPreviewData;
-        });
+    const openLeaderPreview = (leader: ClientAdminDisplayDto) => {
+        if (leader.handle) router.push(`/circles/${leader.handle}`);
     };
 
     const openContactDialog = (nextContactType: "offer_help" | "ask_question" = "offer_help") => {
@@ -537,7 +513,7 @@ export default function AboutPage({
                                             <Badge
                                                 key={chip.key}
                                                 variant="outline"
-                                                className={`border-0 rounded-full px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
+                                                className={`rounded-full border-0 px-3 py-1 text-sm font-medium shadow-none ${chip.className}`}
                                             >
                                                 {chip.label}
                                             </Badge>
@@ -731,9 +707,9 @@ export default function AboutPage({
                                     <TooltipProvider>
                                         <div className="space-y-3">
                                             {adminLeaders.map((leader) => {
-                                                const role = getLeaderRole(leader);
+                                                const role = leader.publicRole;
                                                 return (
-                                                    <Tooltip key={leader.userDid}>
+                                                    <Tooltip key={leader.handle || leader.name}>
                                                         <TooltipTrigger asChild>
                                                             <button
                                                                 type="button"

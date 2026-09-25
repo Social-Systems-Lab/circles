@@ -8,6 +8,8 @@ import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
+import { getMember } from "@/lib/data/member";
+import { buildLayoutClientProps } from "@/lib/data/client-circle-dto";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -36,8 +38,8 @@ export default async function RootLayout(props: Props) {
     const parentCircle = circle.parentCircleId ? await getCircleById(circle.parentCircleId) : undefined;
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, userDid) : null;
-    const plainCircle = JSON.parse(JSON.stringify(circle));
-    const plainParentCircle = parentCircle ? JSON.parse(JSON.stringify(parentCircle)) : undefined;
+    const viewerMembership = userDid && circle._id ? await getMember(userDid, circle._id.toString()) : null;
+    const clientProps = buildLayoutClientProps(circle, parentCircle, userDid, viewerMembership?.userGroups ?? []);
     const plainProofOfHumanitySummary = proofOfHumanitySummary
         ? JSON.parse(JSON.stringify(proofOfHumanitySummary))
         : null;
@@ -45,16 +47,15 @@ export default async function RootLayout(props: Props) {
     return (
         <>
             <>
-                <HomeCover circle={plainCircle} />
+                <HomeCover {...clientProps.homeCover} />
                 <HomeContent
-                    circle={plainCircle}
+                    {...clientProps.homeContent}
                     authorizedToEdit={authorizedToEdit}
                     viewerDid={userDid}
-                    parentCircle={plainParentCircle}
                     proofOfHumanitySummary={plainProofOfHumanitySummary}
                 />
             </>
-            <CircleTabs circle={plainCircle} />
+            <CircleTabs {...clientProps.circleTabs} />
 
             {children}
         </>

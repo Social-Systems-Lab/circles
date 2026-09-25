@@ -18,6 +18,7 @@ import {
     getLinkedVibeIdDid,
     type CircleMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
+import { buildHomeClientProps } from "@/lib/data/client-circle-dto";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -144,7 +145,10 @@ export default async function CircleHomePage(props: PageProps) {
     }
 
     if (circle.circleType !== "user" && circle._id && viewerDid) {
-        const [viewer, member] = await Promise.all([getUserPrivate(viewerDid), getMember(viewerDid, String(circle._id))]);
+        const [viewer, member] = await Promise.all([
+            getUserPrivate(viewerDid),
+            getMember(viewerDid, String(circle._id)),
+        ]);
         const subjectVibeDid = getLinkedVibeIdDid(viewer);
         if (member && subjectVibeDid) {
             membershipCredential = createCircleMembershipCredentialCard({
@@ -155,9 +159,11 @@ export default async function CircleHomePage(props: PageProps) {
         }
     }
 
+    const clientProps = buildHomeClientProps(circle, adminLeaders, viewerDid);
+
     return (
         <AboutPage
-            circle={circle}
+            {...clientProps.aboutPage}
             verifiedContributions={verifiedContributions}
             verifiedContributionPublicCount={verifiedContributionPublicCount}
             fundingPreviewAsks={fundingPreviewAsks}
@@ -167,7 +173,6 @@ export default async function CircleHomePage(props: PageProps) {
             canCreateFundingAsk={canCreateFundingAsk}
             showFundingPanel={showFundingPanel}
             showUpcomingShiftsPanel={showUpcomingShiftsPanel}
-            adminLeaders={JSON.parse(JSON.stringify(adminLeaders))}
             proofOfHumanitySummary={proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null}
             membershipCredential={membershipCredential}
         />
