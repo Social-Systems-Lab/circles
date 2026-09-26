@@ -17,8 +17,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { Circle, HumanityVerificationDisplay, HumanityVerificationLevel } from "@/models/models";
-import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import { HumanityVerificationLevel } from "@/models/models";
+import type {
+    ClientCircleDto,
+    ClientHumanityVerificationDto,
+    ClientHumanityVerificationSummaryDto,
+} from "@/lib/data/client-circle-dto";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
     removeProofOfHumanityVerificationAction,
@@ -26,8 +30,8 @@ import {
 } from "./proof-of-humanity-actions";
 
 type ProofOfHumanityCardProps = {
-    circle: Circle;
-    summary: HumanityVerificationSummary;
+    circle: ClientCircleDto;
+    summary: ClientHumanityVerificationSummaryDto;
 };
 
 const headerHumanButtonClassName =
@@ -66,8 +70,8 @@ export function ProofOfHumanityHeaderAction({
     circle,
     summary,
 }: {
-    circle: Circle;
-    summary: HumanityVerificationSummary;
+    circle: ClientCircleDto;
+    summary: ClientHumanityVerificationSummaryDto;
 }) {
     if (circle.circleType !== "user") {
         return null;
@@ -371,8 +375,8 @@ export function ProofOfHumanityCard({ circle, summary }: ProofOfHumanityCardProp
     );
 }
 
-function VerifierRow({ verification }: { verification: HumanityVerificationDisplay }) {
-    const verifierName = verification.verifier?.name || verification.verifier?.handle || verification.verifierDid;
+function VerifierRow({ verification }: { verification: ClientHumanityVerificationDto }) {
+    const verifierName = verification.verifier?.name || verification.verifier?.handle || "Kamooni member";
     const levelLabel = verification.level === "met_in_real_life" ? "Met in real life" : "Real person";
 
     return (

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Circle, ContentPreviewData, MemberDisplay } from "@/models/models";
+import type { AboutPageClientProps, ClientAdminDisplayDto } from "@/lib/data/client-circle-dto";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, ExternalLink } from "lucide-react";
@@ -11,7 +11,7 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import RichText from "../feeds/RichText";
 import SdgList from "../sdgs/SdgList";
 import { useAtom } from "jotai";
-import { contentPreviewAtom, sidePanelContentVisibleAtom, userAtom } from "@/lib/data/atoms";
+import { userAtom } from "@/lib/data/atoms";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,32 +30,14 @@ import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
-import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
+import VerifiedContributionsPanel from "./VerifiedContributionsPanel";
 import { FundingPanel } from "@/components/modules/funding/funding-panel";
 import { UpcomingShiftsPanel } from "./upcoming-shifts-panel";
-import type { FundingAskDisplay, TaskDisplay } from "@/models/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserPicture } from "../members/user-picture";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
-import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
-
-interface AboutPageProps {
-    circle: Circle;
-    verifiedContributions?: VerifiedContributionItem[];
-    verifiedContributionPublicCount?: number;
-    fundingPreviewAsks?: FundingAskDisplay[];
-    fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
-    upcomingShiftTasks?: TaskDisplay[];
-    upcomingShiftsVisibility?: "visible" | "sign_in" | "members_only";
-    canCreateFundingAsk?: boolean;
-    showFundingPanel?: boolean;
-    showUpcomingShiftsPanel?: boolean;
-    adminLeaders?: MemberDisplay[];
-    proofOfHumanitySummary?: HumanityVerificationSummary | null;
-}
 
 export default function AboutPage({
     circle,
@@ -70,14 +52,12 @@ export default function AboutPage({
     showUpcomingShiftsPanel = false,
     adminLeaders = [],
     proofOfHumanitySummary = null,
-}: AboutPageProps) {
+    showFoundingBadge = false,
+}: AboutPageClientProps) {
     const isCompact = useIsCompact();
-    const isMobile = useIsMobile();
     const router = useRouter();
     const { toast } = useToast();
     const [user] = useAtom(userAtom);
-    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
-    const [, setContentPreview] = useAtom(contentPreviewAtom);
     const [isSkillsExpanded, setIsSkillsExpanded] = React.useState(false);
     const [isInterestsExpanded, setIsInterestsExpanded] = React.useState(false);
     const [isNeedsExpanded, setIsNeedsExpanded] = React.useState(false);
@@ -215,7 +195,7 @@ export default function AboutPage({
             return null;
         }
 
-        if (circle.isFoundingMember) {
+        if (showFoundingBadge) {
             return "Founding Member";
         }
 
@@ -271,31 +251,8 @@ export default function AboutPage({
     const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
 
-    const getLeaderRole = (leader: MemberDisplay) => {
-        if (leader.userGroups?.includes("admins")) return "Admin";
-        if (leader.userGroups?.includes("moderators")) return "Moderator";
-        return "Member";
-    };
-
-    const openLeaderPreview = (leader: MemberDisplay) => {
-        if (isMobile) {
-            if (leader.handle) {
-                router.push(`/circles/${leader.handle}`);
-            }
-            return;
-        }
-
-        const contentPreviewData: ContentPreviewData = {
-            type: "member",
-            content: leader,
-        };
-
-        setContentPreview((current) => {
-            const isSameLeader =
-                current?.type === "member" &&
-                (current.content as MemberDisplay | undefined)?.userDid === leader.userDid;
-            return isSameLeader && sidePanelContentVisible === "content" ? undefined : contentPreviewData;
-        });
+    const openLeaderPreview = (leader: ClientAdminDisplayDto) => {
+        if (leader.handle) router.push(`/circles/${leader.handle}`);
     };
 
     const openContactDialog = (nextContactType: "offer_help" | "ask_question" = "offer_help") => {
@@ -726,9 +683,9 @@ export default function AboutPage({
                                     <TooltipProvider>
                                         <div className="space-y-3">
                                             {adminLeaders.map((leader) => {
-                                                const role = getLeaderRole(leader);
+                                                const role = leader.publicRole;
                                                 return (
-                                                    <Tooltip key={leader.userDid}>
+                                                    <Tooltip key={leader.handle || leader.name}>
                                                         <TooltipTrigger asChild>
                                                             <button
                                                                 type="button"

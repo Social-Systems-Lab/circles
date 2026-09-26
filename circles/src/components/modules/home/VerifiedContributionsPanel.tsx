@@ -2,18 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAtom } from "jotai";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
-import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
-import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, ContentPreviewData, TaskDisplay, TaskPermissions } from "@/models/models";
+import type { ClientContributionDto } from "@/lib/data/client-circle-dto";
 
-export type VerifiedContributionItem = {
-    task: TaskDisplay;
-    circle: Circle;
-    permissions: TaskPermissions;
-};
+export type VerifiedContributionItem = ClientContributionDto;
 
 type VerifiedContributionsPanelProps = {
     items: VerifiedContributionItem[];
@@ -22,14 +15,8 @@ type VerifiedContributionsPanelProps = {
 
 const PREVIEW_LIMIT = 5;
 
-export default function VerifiedContributionsPanel({
-    items,
-    totalPublicCount,
-}: VerifiedContributionsPanelProps) {
+export default function VerifiedContributionsPanel({ items, totalPublicCount }: VerifiedContributionsPanelProps) {
     const router = useRouter();
-    const isCompact = useIsCompact();
-    const [, setContentPreview] = useAtom(contentPreviewAtom);
-    const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
     const [showAllVisible, setShowAllVisible] = useState(false);
 
@@ -43,31 +30,9 @@ export default function VerifiedContributionsPanel({
             if (!item.circle.handle) {
                 return;
             }
-
-            if (isCompact) {
-                router.push(`/circles/${item.circle.handle}/tasks/${item.task._id}`);
-                return;
-            }
-
-            const preview: ContentPreviewData = {
-                type: "task",
-                content: item.task,
-                props: {
-                    circle: item.circle,
-                    permissions: item.permissions,
-                },
-            };
-
-            setContentPreview((current) => {
-                const isCurrentTask =
-                    current?.type === "task" &&
-                    current.content._id === item.task._id &&
-                    sidePanelContentVisible === "content";
-
-                return isCurrentTask ? undefined : preview;
-            });
+            router.push(`/circles/${item.circle.handle}/tasks/${item.task._id}`);
         },
-        [isCompact, router, setContentPreview, sidePanelContentVisible],
+        [router],
     );
 
     return (
@@ -79,9 +44,7 @@ export default function VerifiedContributionsPanel({
             {!hasAnyContributions ? (
                 <div className="mt-2 space-y-1">
                     <p className="text-sm text-muted-foreground">No verified contributions yet</p>
-                    <p className="text-xs text-muted-foreground">
-                        Complete tasks to build your contribution history
-                    </p>
+                    <p className="text-xs text-muted-foreground">Complete tasks to build your contribution history</p>
                 </div>
             ) : (
                 <>
@@ -156,7 +119,9 @@ export default function VerifiedContributionsPanel({
                                                 {showAllVisible ? "Show less" : "Show all"}
                                             </button>
                                         ) : (
-                                            <p className="text-sm text-muted-foreground">Showing all visible contributions</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Showing all visible contributions
+                                            </p>
                                         )}
                                     </div>
                                 </>

@@ -4,19 +4,15 @@ import React from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { FundingAskDisplay } from "@/models/models";
-import {
-    formatFundingAmount,
-    formatFundingOpenItemTotals,
-    getFundingOpenItemCount,
-} from "./funding-shared";
+import type { ClientFundingPreviewDto } from "@/lib/data/client-circle-dto";
+import { formatFundingAmount, formatFundingOpenItemTotals, getFundingOpenItemCount } from "./funding-shared";
 import { FundingDemoButton } from "./funding-demo-button";
 
 type FundingPanelVisibility = "visible" | "sign_in" | "members_only";
 
 type FundingPanelProps = {
     circleHandle: string;
-    asks: FundingAskDisplay[];
+    asks: ClientFundingPreviewDto[];
     canCreate: boolean;
     visibility: FundingPanelVisibility;
 };
@@ -30,7 +26,9 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
         <div className="rounded-[15px] border-0 bg-white px-4 pb-4 pt-3 shadow-lg sm:px-5 sm:pb-5 sm:pt-4 md:px-6 md:pb-6 md:pt-5">
             <div className="mb-3">
                 <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Funding Needs</div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Funding Needs
+                    </div>
                     {visibility === "visible" ? (
                         <Button asChild variant="ghost" size="sm">
                             <Link href={`/circles/${circleHandle}/funding`}>View all</Link>
@@ -71,7 +69,9 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
                                     onClick={() => setExpandedId((current) => (current === askId ? null : askId))}
                                 >
                                     <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-semibold text-slate-900 sm:text-[15px]">{ask.title}</div>
+                                        <div className="text-sm font-semibold text-slate-900 sm:text-[15px]">
+                                            {ask.title}
+                                        </div>
                                         <div className="mt-0.5 line-clamp-1 text-sm text-slate-600">
                                             {ask.shortStory || formatFundingOpenItemTotals(ask)}
                                         </div>
@@ -81,7 +81,11 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
                                         <div className="whitespace-nowrap">
                                             {openItemCount} open item{openItemCount === 1 ? "" : "s"}
                                         </div>
-                                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                        {isExpanded ? (
+                                            <ChevronUp className="h-4 w-4" />
+                                        ) : (
+                                            <ChevronDown className="h-4 w-4" />
+                                        )}
                                     </div>
                                 </button>
 
@@ -95,9 +99,13 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
                                                 >
                                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                                         <div className="min-w-0">
-                                                            <div className="text-sm font-medium text-slate-900">{item.title}</div>
+                                                            <div className="text-sm font-medium text-slate-900">
+                                                                {item.title}
+                                                            </div>
                                                             {item.note ? (
-                                                                <div className="mt-0.5 line-clamp-2 text-sm text-slate-600">{item.note}</div>
+                                                                <div className="mt-0.5 line-clamp-2 text-sm text-slate-600">
+                                                                    {item.note}
+                                                                </div>
                                                             ) : null}
                                                         </div>
 
@@ -114,7 +122,9 @@ export function FundingPanel({ circleHandle, asks, canCreate, visibility }: Fund
 
                                         <div className="mt-2 flex justify-end">
                                             <Button asChild variant="ghost" size="sm" className="px-2">
-                                                <Link href={`/circles/${circleHandle}/funding/${askId}`}>View request</Link>
+                                                <Link href={`/circles/${circleHandle}/funding/${askId}`}>
+                                                    View request
+                                                </Link>
                                             </Button>
                                         </div>
                                     </div>

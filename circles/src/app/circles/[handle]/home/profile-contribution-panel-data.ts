@@ -1,4 +1,4 @@
-import type { VerifiedContributionItem } from "@/components/modules/home/VerifiedContributionsPanel";
+import type { ServerVerifiedContributionInput } from "@/lib/data/client-circle-dto";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getVerifiedTasksForUser } from "@/lib/data/task";
@@ -16,7 +16,7 @@ export async function getProfileContributionPanelData(
     profileDid: string,
     viewerDid: Awaited<ReturnType<typeof getAuthenticatedUserDid>>,
     dependencies: ProfileContributionPanelDependencies = defaultDependencies,
-): Promise<{ items: VerifiedContributionItem[]; totalPublicCount: number }> {
+): Promise<{ items: ServerVerifiedContributionInput[]; totalPublicCount: number }> {
     const { totalPublicCount, visibleTasks } = await getVerifiedTasksForUser(profileDid, viewerDid);
     const permissionsByCircleId = new Map<string, TaskPermissions>();
 
@@ -45,7 +45,7 @@ export async function getProfileContributionPanelData(
                 };
             }),
         )
-    ).filter((item): item is VerifiedContributionItem => item !== null);
+    ).filter((item): item is ServerVerifiedContributionInput => item !== null);
 
     return { items, totalPublicCount };
 }

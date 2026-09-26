@@ -2,12 +2,13 @@
 
 import React from "react";
 import Image from "next/image"; // Keep Image import if needed elsewhere, or remove if unused after changes
-import { Circle, Media } from "@/models/models";
+import { Media } from "@/models/models";
+import type { ClientCircleDto } from "@/lib/data/client-circle-dto";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import ImageCarousel from "@/components/ui/image-carousel"; // Import the new carousel component
 
 type HomeContentProps = {
-    circle: Circle;
+    circle: ClientCircleDto;
 };
 
 // Remove authorizedToEdit from props destructuring
