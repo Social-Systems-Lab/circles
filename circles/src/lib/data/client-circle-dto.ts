@@ -1,7 +1,20 @@
 import { getFeature, hiddenPublicModuleHandles, modules } from "@/lib/data/constants";
 import { canSeeFoundingBadge, hasContributorPerks } from "@/lib/auth/perks";
 import { isVerifiedUser } from "@/lib/auth/verification";
-import type { Circle, Location, Media, MemberDisplay, Question, SocialLink } from "@/models/models";
+import type {
+    Circle,
+    FundingAskDisplay,
+    FundingAskItem,
+    Location,
+    Media,
+    MemberDisplay,
+    Question,
+    SocialLink,
+    TaskDisplay,
+    TaskPermissions,
+} from "@/models/models";
+import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 
 export type ClientCircleDto = Pick<
     Circle,
@@ -43,6 +56,103 @@ export type ClientAdminDisplayDto = {
     picture: { url: string };
     location?: Location;
     publicRole: "Admin" | "Moderator" | "Member";
+};
+
+export type ClientContributionDto = {
+    dtoKind: "client-contribution";
+    task: {
+        dtoKind: "client-contribution-task";
+        _id?: string;
+        title: string;
+        verifiedAt?: Date;
+        contributionNote?: string;
+    };
+    circle: {
+        dtoKind: "client-contribution-circle";
+        name: string;
+        handle?: string;
+    };
+};
+
+export type ClientFundingPreviewDto = {
+    dtoKind: "client-funding-preview";
+    _id?: string;
+    title: string;
+    shortStory: string;
+    items: Array<Pick<FundingAskItem, "title" | "note" | "price" | "currency" | "status">>;
+};
+
+export type ClientUpcomingShiftDto = {
+    dtoKind: "client-upcoming-shift";
+    _id?: string;
+    title: string;
+    slots?: number;
+    participantCount: number;
+    targetDate?: Date | null;
+    shiftStartTime?: string;
+    shiftDurationMinutes?: number;
+};
+
+export type ClientVerifierDisplayDto = {
+    dtoKind: "client-verifier-display";
+    name?: string;
+    handle?: string;
+    picture?: { url: string };
+};
+
+export type ClientHumanityVerificationDto = {
+    dtoKind: "client-humanity-verification";
+    _id?: string;
+    level: "real_person" | "met_in_real_life";
+    note?: string;
+    verifier?: ClientVerifierDisplayDto;
+};
+
+export type ClientHumanityVerificationSummaryDto = {
+    dtoKind: "client-humanity-verification-summary";
+    realPersonCount: number;
+    metInRealLifeCount: number;
+    totalActiveCount: number;
+    verifications: ClientHumanityVerificationDto[];
+    viewerVerification: ClientHumanityVerificationDto | null;
+    canCurrentViewerVerify: boolean;
+    isOwnProfile: boolean;
+};
+
+export type ServerVerifiedContributionInput = { task: TaskDisplay; circle: Circle; permissions: TaskPermissions };
+
+export type AboutPageClientProps = {
+    circle: ClientCircleDto;
+    showFoundingBadge: boolean;
+    adminLeaders: ClientAdminDisplayDto[];
+    verifiedContributions: ClientContributionDto[];
+    verifiedContributionPublicCount: number;
+    fundingPreviewAsks: ClientFundingPreviewDto[];
+    fundingPanelVisibility: "visible" | "sign_in" | "members_only";
+    upcomingShiftTasks: ClientUpcomingShiftDto[];
+    upcomingShiftsVisibility: "visible" | "sign_in" | "members_only";
+    canCreateFundingAsk: boolean;
+    showFundingPanel: boolean;
+    showUpcomingShiftsPanel: boolean;
+    proofOfHumanitySummary: ClientHumanityVerificationSummaryDto | null;
+    membershipCredential: CircleMembershipCredentialCardData | null;
+};
+
+export type BuildAboutPageClientPropsInput = {
+    circle: Circle;
+    viewerDid?: string;
+    adminLeaders?: MemberDisplay[];
+    verifiedContributions?: ServerVerifiedContributionInput[];
+    verifiedContributionPublicCount?: number;
+    fundingPreviewAsks?: FundingAskDisplay[];
+    fundingPanelVisibility: AboutPageClientProps["fundingPanelVisibility"];
+    upcomingShiftTasks?: TaskDisplay[];
+    upcomingShiftsVisibility: AboutPageClientProps["upcomingShiftsVisibility"];
+    canCreateFundingAsk?: boolean;
+    showFundingPanel?: boolean;
+    showUpcomingShiftsPanel?: boolean;
+    proofOfHumanitySummary?: HumanityVerificationSummary | null;
+    membershipCredential?: CircleMembershipCredentialCardData | null;
 };
 
 const copyStringArray = (value: unknown): string[] | undefined =>
@@ -228,6 +338,7 @@ export const buildLayoutClientProps = (
     parentCircle: Circle | undefined,
     viewerDid: string | undefined,
     viewerGroups: string[],
+    proofOfHumanitySummary?: HumanityVerificationSummary | null,
 ) => {
     const isProfileSubject = circle.circleType === "user" && Boolean(viewerDid) && viewerDid === circle.did;
     return {
@@ -238,6 +349,7 @@ export const buildLayoutClientProps = (
             shouldSuppressWelcomeOnboarding:
                 isProfileSubject &&
                 (isVerifiedUser(circle) || hasContributorPerks(circle) || hasCompletedWelcomeOnboarding(circle)),
+            proofOfHumanitySummary: buildClientHumanityVerificationSummaryDto(proofOfHumanitySummary),
         },
         circleTabs: {
             handle: circle.handle,
@@ -246,10 +358,128 @@ export const buildLayoutClientProps = (
     };
 };
 
-export const buildHomeClientProps = (circle: Circle, adminLeaders: MemberDisplay[] = [], viewerDid?: string) => ({
-    aboutPage: {
-        circle: buildClientCircleDto(circle),
-        adminLeaders: adminLeaders.map(buildClientAdminDisplayDto),
-        showFoundingBadge: canSeeFoundingBadge(viewerDid, circle),
+const copyOptionalDate = (value: unknown): Date | undefined => {
+    const date = value instanceof Date ? new Date(value) : typeof value === "string" ? new Date(value) : undefined;
+    return date && Number.isFinite(date.getTime()) ? date : undefined;
+};
+
+export const buildClientContributionDto = (item: ServerVerifiedContributionInput): ClientContributionDto => ({
+    dtoKind: "client-contribution",
+    task: {
+        dtoKind: "client-contribution-task",
+        ...(item.task._id !== undefined ? { _id: item.task._id.toString() } : {}),
+        title: item.task.title,
+        ...(copyOptionalDate(item.task.verifiedAt) ? { verifiedAt: copyOptionalDate(item.task.verifiedAt) } : {}),
+        ...(typeof item.task.contributionNote === "string" ? { contributionNote: item.task.contributionNote } : {}),
     },
+    circle: {
+        dtoKind: "client-contribution-circle",
+        name: item.circle.name ?? "Kamooni circle",
+        ...(typeof item.circle.handle === "string" ? { handle: item.circle.handle } : {}),
+    },
+});
+
+export const buildClientFundingPreviewDto = (ask: FundingAskDisplay): ClientFundingPreviewDto => ({
+    dtoKind: "client-funding-preview",
+    ...(ask._id !== undefined ? { _id: ask._id.toString() } : {}),
+    title: ask.title,
+    shortStory: ask.shortStory,
+    items: (ask.items ?? []).flatMap((item) =>
+        typeof item.title === "string" &&
+        typeof item.price === "number" &&
+        Number.isFinite(item.price) &&
+        typeof item.currency === "string" &&
+        typeof item.status === "string"
+            ? [
+                  {
+                      title: item.title,
+                      ...(typeof item.note === "string" ? { note: item.note } : {}),
+                      price: item.price,
+                      currency: item.currency,
+                      status: item.status,
+                  },
+              ]
+            : [],
+    ),
+});
+
+export const buildClientUpcomingShiftDto = (task: TaskDisplay): ClientUpcomingShiftDto => ({
+    dtoKind: "client-upcoming-shift",
+    ...(task._id !== undefined ? { _id: task._id.toString() } : {}),
+    title: task.title,
+    ...(typeof task.slots === "number" ? { slots: task.slots } : {}),
+    participantCount: task.participants?.length ?? 0,
+    ...(task.targetDate === null ? { targetDate: null } : {}),
+    ...(copyOptionalDate(task.targetDate) ? { targetDate: copyOptionalDate(task.targetDate) } : {}),
+    ...(typeof task.shiftStartTime === "string" ? { shiftStartTime: task.shiftStartTime } : {}),
+    ...(typeof task.shiftDurationMinutes === "number" ? { shiftDurationMinutes: task.shiftDurationMinutes } : {}),
+});
+
+export const buildClientVerifierDisplayDto = (
+    circle: Circle | null | undefined,
+): ClientVerifierDisplayDto | undefined =>
+    circle
+        ? {
+              dtoKind: "client-verifier-display",
+              ...(typeof circle.name === "string" ? { name: circle.name } : {}),
+              ...(typeof circle.handle === "string" ? { handle: circle.handle } : {}),
+              ...(copyPicture(circle.picture) ? { picture: copyPicture(circle.picture) } : {}),
+          }
+        : undefined;
+
+const buildClientHumanityVerificationDto = (
+    verification: HumanityVerificationSummary["verifications"][number],
+): ClientHumanityVerificationDto => ({
+    dtoKind: "client-humanity-verification",
+    ...(verification._id !== undefined ? { _id: verification._id.toString() } : {}),
+    level: verification.level,
+    ...(typeof verification.note === "string" ? { note: verification.note } : {}),
+    ...(buildClientVerifierDisplayDto(verification.verifier)
+        ? { verifier: buildClientVerifierDisplayDto(verification.verifier) }
+        : {}),
+});
+
+export const buildClientHumanityVerificationSummaryDto = (
+    summary?: HumanityVerificationSummary | null,
+): ClientHumanityVerificationSummaryDto | null =>
+    summary
+        ? {
+              dtoKind: "client-humanity-verification-summary",
+              realPersonCount: summary.realPersonCount,
+              metInRealLifeCount: summary.metInRealLifeCount,
+              totalActiveCount: summary.totalActiveCount,
+              verifications: summary.verifications.map(buildClientHumanityVerificationDto),
+              viewerVerification: summary.viewerVerification
+                  ? buildClientHumanityVerificationDto(summary.viewerVerification)
+                  : null,
+              canCurrentViewerVerify: summary.canCurrentViewerVerify,
+              isOwnProfile: summary.isOwnProfile,
+          }
+        : null;
+
+export const buildAboutPageClientProps = (input: BuildAboutPageClientPropsInput): AboutPageClientProps => ({
+    circle: buildClientCircleDto(input.circle),
+    showFoundingBadge: canSeeFoundingBadge(input.viewerDid, input.circle),
+    adminLeaders: (input.adminLeaders ?? []).map(buildClientAdminDisplayDto),
+    verifiedContributions: (input.verifiedContributions ?? []).map(buildClientContributionDto),
+    verifiedContributionPublicCount: input.verifiedContributionPublicCount ?? 0,
+    fundingPreviewAsks: (input.fundingPreviewAsks ?? []).map(buildClientFundingPreviewDto),
+    fundingPanelVisibility: input.fundingPanelVisibility,
+    upcomingShiftTasks: (input.upcomingShiftTasks ?? []).map(buildClientUpcomingShiftDto),
+    upcomingShiftsVisibility: input.upcomingShiftsVisibility,
+    canCreateFundingAsk: input.canCreateFundingAsk ?? false,
+    showFundingPanel: input.showFundingPanel ?? false,
+    showUpcomingShiftsPanel: input.showUpcomingShiftsPanel ?? false,
+    proofOfHumanitySummary: buildClientHumanityVerificationSummaryDto(input.proofOfHumanitySummary),
+    membershipCredential: input.membershipCredential ?? null,
+});
+
+export const buildHomeClientProps = (circle: Circle, adminLeaders: MemberDisplay[] = [], viewerDid?: string) => ({
+    aboutPage: buildAboutPageClientProps({
+        circle,
+        adminLeaders,
+        viewerDid,
+        fundingPanelVisibility: viewerDid ? "members_only" : "sign_in",
+        upcomingShiftsVisibility: viewerDid ? "members_only" : "sign_in",
+    }),
 });

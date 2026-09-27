@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { ClientAdminDisplayDto, ClientCircleDto } from "@/lib/data/client-circle-dto";
+import type { AboutPageClientProps, ClientAdminDisplayDto } from "@/lib/data/client-circle-dto";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, ExternalLink } from "lucide-react";
@@ -30,35 +30,15 @@ import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
-import VerifiedContributionsPanel, { type VerifiedContributionItem } from "./VerifiedContributionsPanel";
+import VerifiedContributionsPanel from "./VerifiedContributionsPanel";
 import { FundingPanel } from "@/components/modules/funding/funding-panel";
 import { UpcomingShiftsPanel } from "./upcoming-shifts-panel";
-import type { FundingAskDisplay, TaskDisplay } from "@/models/models";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserPicture } from "../members/user-picture";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
-import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import MembershipCredentialCard from "./MembershipCredentialCard";
-import type { CircleMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
-
-interface AboutPageProps {
-    circle: ClientCircleDto;
-    verifiedContributions?: VerifiedContributionItem[];
-    verifiedContributionPublicCount?: number;
-    fundingPreviewAsks?: FundingAskDisplay[];
-    fundingPanelVisibility?: "visible" | "sign_in" | "members_only";
-    upcomingShiftTasks?: TaskDisplay[];
-    upcomingShiftsVisibility?: "visible" | "sign_in" | "members_only";
-    canCreateFundingAsk?: boolean;
-    showFundingPanel?: boolean;
-    showUpcomingShiftsPanel?: boolean;
-    adminLeaders?: ClientAdminDisplayDto[];
-    proofOfHumanitySummary?: HumanityVerificationSummary | null;
-    membershipCredential?: CircleMembershipCredentialCardData | null;
-    showFoundingBadge?: boolean;
-}
 
 export default function AboutPage({
     circle,
@@ -75,7 +55,7 @@ export default function AboutPage({
     proofOfHumanitySummary = null,
     membershipCredential = null,
     showFoundingBadge = false,
-}: AboutPageProps) {
+}: AboutPageClientProps) {
     const isCompact = useIsCompact();
     const router = useRouter();
     const { toast } = useToast();

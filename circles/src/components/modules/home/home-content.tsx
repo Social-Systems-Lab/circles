@@ -2,7 +2,11 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import type { ClientCircleDto, ClientParentCircleDto } from "@/lib/data/client-circle-dto";
+import type {
+    ClientCircleDto,
+    ClientHumanityVerificationSummaryDto,
+    ClientParentCircleDto,
+} from "@/lib/data/client-circle-dto";
 import { FaUsers } from "react-icons/fa";
 import EditableImage from "./editable-image";
 import EditableField from "./editable-field";
@@ -28,7 +32,6 @@ import { MoreHorizontal, Settings } from "lucide-react";
 import Link from "next/link";
 import SocialLinks from "./social-links";
 import { ProofOfHumanityHeaderAction } from "./proof-of-humanity-card";
-import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { ProfileCompletionChecklist } from "@/components/profile-completion/profile-completion-checklist";
 import {
     Dialog,
@@ -44,7 +47,7 @@ type HomeContentProps = {
     authorizedToEdit: boolean;
     viewerDid?: string | null;
     parentCircle?: ClientParentCircleDto;
-    proofOfHumanitySummary?: HumanityVerificationSummary | null;
+    proofOfHumanitySummary?: ClientHumanityVerificationSummaryDto | null;
     shouldSuppressWelcomeOnboarding?: boolean;
 };
 

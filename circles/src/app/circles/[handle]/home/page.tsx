@@ -3,22 +3,16 @@ import { notFound } from "next/navigation";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import AboutPage from "@/components/modules/home/AboutPage";
-import type { VerifiedContributionItem } from "@/components/modules/home/VerifiedContributionsPanel";
 import { getTasksByCircleId, getVerifiedTasksForUser } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
 import { getShiftEndAt, getShiftStartAt, isShiftTask } from "@/components/modules/tasks/shift-task-utils";
 import type { TaskDisplay, TaskPermissions } from "@/models/models";
 import type { FundingAskDisplay } from "@/models/models";
 import { getFundingCirclePermissions, isFundingEnabledForCircle, listFundingAsksByCircleId } from "@/lib/data/funding";
-import { getMember, getMembers } from "@/lib/data/member";
+import { getMembers } from "@/lib/data/member";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
-import { getUserPrivate } from "@/lib/data/user";
-import {
-    createCircleMembershipCredentialCard,
-    getLinkedVibeIdDid,
-    type CircleMembershipCredentialCardData,
-} from "@/lib/vibe-id/membership-credentials";
-import { buildHomeClientProps } from "@/lib/data/client-circle-dto";
+import { buildAboutPageClientProps, type ServerVerifiedContributionInput } from "@/lib/data/client-circle-dto";
+import { resolveAboutPageMembershipCredential } from "@/lib/data/about-page-membership-credential";
 
 // TODO: Add error handling and loading states more robustly
 
@@ -36,14 +30,13 @@ export default async function CircleHomePage(props: PageProps) {
         notFound();
     }
 
-    let verifiedContributions: VerifiedContributionItem[] = [];
+    let verifiedContributions: ServerVerifiedContributionInput[] = [];
     let verifiedContributionPublicCount = 0;
     let fundingPreviewAsks: FundingAskDisplay[] = [];
     let fundingPanelVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let upcomingShiftTasks: TaskDisplay[] = [];
     let upcomingShiftsVisibility: "visible" | "sign_in" | "members_only" = viewerDid ? "members_only" : "sign_in";
     let canCreateFundingAsk = false;
-    let membershipCredential: CircleMembershipCredentialCardData | null = null;
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, viewerDid) : null;
     const showFundingPanel = isFundingEnabledForCircle(circle);
@@ -85,7 +78,7 @@ export default async function CircleHomePage(props: PageProps) {
                     };
                 }),
             )
-        ).filter((item): item is VerifiedContributionItem => item !== null);
+        ).filter((item): item is ServerVerifiedContributionInput => item !== null);
     }
 
     if (showFundingPanel && viewerDid) {
@@ -144,37 +137,23 @@ export default async function CircleHomePage(props: PageProps) {
         }
     }
 
-    if (circle.circleType !== "user" && circle._id && viewerDid) {
-        const [viewer, member] = await Promise.all([
-            getUserPrivate(viewerDid),
-            getMember(viewerDid, String(circle._id)),
-        ]);
-        const subjectVibeDid = getLinkedVibeIdDid(viewer);
-        if (member && subjectVibeDid) {
-            membershipCredential = createCircleMembershipCredentialCard({
-                circle,
-                member,
-                subjectVibeDid,
-            });
-        }
-    }
+    const membershipCredential = await resolveAboutPageMembershipCredential(circle);
+    const aboutPageProps = buildAboutPageClientProps({
+        circle,
+        viewerDid,
+        adminLeaders,
+        verifiedContributions,
+        verifiedContributionPublicCount,
+        fundingPreviewAsks,
+        fundingPanelVisibility,
+        upcomingShiftTasks,
+        upcomingShiftsVisibility,
+        canCreateFundingAsk,
+        showFundingPanel,
+        showUpcomingShiftsPanel,
+        proofOfHumanitySummary,
+        membershipCredential,
+    });
 
-    const clientProps = buildHomeClientProps(circle, adminLeaders, viewerDid);
-
-    return (
-        <AboutPage
-            {...clientProps.aboutPage}
-            verifiedContributions={verifiedContributions}
-            verifiedContributionPublicCount={verifiedContributionPublicCount}
-            fundingPreviewAsks={fundingPreviewAsks}
-            fundingPanelVisibility={fundingPanelVisibility}
-            upcomingShiftTasks={JSON.parse(JSON.stringify(upcomingShiftTasks))}
-            upcomingShiftsVisibility={upcomingShiftsVisibility}
-            canCreateFundingAsk={canCreateFundingAsk}
-            showFundingPanel={showFundingPanel}
-            showUpcomingShiftsPanel={showUpcomingShiftsPanel}
-            proofOfHumanitySummary={proofOfHumanitySummary ? JSON.parse(JSON.stringify(proofOfHumanitySummary)) : null}
-            membershipCredential={membershipCredential}
-        />
-    );
+    return <AboutPage {...aboutPageProps} />;
 }

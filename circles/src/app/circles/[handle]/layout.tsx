@@ -39,21 +39,19 @@ export default async function RootLayout(props: Props) {
     const proofOfHumanitySummary =
         circle.circleType === "user" && circle.did ? await getHumanityVerificationSummary(circle.did, userDid) : null;
     const viewerMembership = userDid && circle._id ? await getMember(userDid, circle._id.toString()) : null;
-    const clientProps = buildLayoutClientProps(circle, parentCircle, userDid, viewerMembership?.userGroups ?? []);
-    const plainProofOfHumanitySummary = proofOfHumanitySummary
-        ? JSON.parse(JSON.stringify(proofOfHumanitySummary))
-        : null;
+    const clientProps = buildLayoutClientProps(
+        circle,
+        parentCircle,
+        userDid,
+        viewerMembership?.userGroups ?? [],
+        proofOfHumanitySummary,
+    );
 
     return (
         <>
             <>
                 <HomeCover {...clientProps.homeCover} />
-                <HomeContent
-                    {...clientProps.homeContent}
-                    authorizedToEdit={authorizedToEdit}
-                    viewerDid={userDid}
-                    proofOfHumanitySummary={plainProofOfHumanitySummary}
-                />
+                <HomeContent {...clientProps.homeContent} authorizedToEdit={authorizedToEdit} viewerDid={userDid} />
             </>
             <CircleTabs {...clientProps.circleTabs} />
 

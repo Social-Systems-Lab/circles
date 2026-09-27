@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Circle } from "@/models/models";
 import {
+    buildAboutPageClientProps,
     buildClientCircleDto,
     buildClientLocation,
     buildHomeClientProps,
@@ -25,6 +26,12 @@ const forbiddenSentinels = [
     "private-custom-group",
     "raw-membership-id",
     "did:example:leader-private",
+    "contribution-profile-secret",
+    "funding-creator-secret",
+    "funding-supporter-secret",
+    "shift-profile-secret",
+    "verifier-profile-secret",
+    "private-secret-circle-name",
 ];
 
 const makeCircle = (circleType: "circle" | "user"): Circle =>
@@ -301,4 +308,117 @@ test("owner-scoped welcome suppression preserves verified and contributor perk b
         assert.equal(outsiderProps.homeContent.shouldSuppressWelcomeOnboarding, false);
         assertForbiddenDataAbsent(JSON.parse(JSON.stringify(outsiderProps)));
     }
+});
+
+test("complete AboutPage boundary recursively sanitizes every auxiliary bundle", () => {
+    const nestedProfile = (sentinel: string) =>
+        ({
+            ...makeCircle("user"),
+            name: sentinel,
+            email: `${sentinel}@example.test`,
+            metadata: { sentinel },
+            userGroups: ["private-custom-group"],
+        }) as unknown as Circle;
+    const contributionCircle = nestedProfile("contribution-profile-secret");
+    contributionCircle.name = "Visible contribution circle";
+    contributionCircle.handle = "visible-contribution-circle";
+    const task = {
+        _id: "task-id",
+        title: "Visible contribution",
+        verifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+        contributionNote: "Visible note",
+        author: nestedProfile("contribution-profile-secret"),
+        assignee: nestedProfile("contribution-profile-secret"),
+        verifier: nestedProfile("contribution-profile-secret"),
+        circle: contributionCircle,
+        participantProfiles: [nestedProfile("contribution-profile-secret")],
+    } as unknown as import("@/models/models").TaskDisplay;
+    const fundingAsk = {
+        _id: "funding-id",
+        title: "Visible funding title",
+        shortStory: "Visible funding story",
+        items: [{ title: "Visible item", price: 25, currency: "EUR", status: "open", note: "Visible item note" }],
+        creator: nestedProfile("funding-creator-secret"),
+        activeSupporter: nestedProfile("funding-supporter-secret"),
+        circle: nestedProfile("private-secret-circle-name"),
+    } as unknown as import("@/models/models").FundingAskDisplay;
+    const shift = {
+        _id: "shift-id",
+        title: "Visible shift",
+        slots: 4,
+        participants: [{ userDid: "did:private:participant", joinedAt: new Date() }],
+        participantProfiles: [nestedProfile("shift-profile-secret")],
+        author: nestedProfile("shift-profile-secret"),
+        circle: nestedProfile("private-secret-circle-name"),
+        targetDate: new Date("2026-02-01T00:00:00.000Z"),
+        shiftStartTime: "09:30",
+        shiftDurationMinutes: 60,
+    } as unknown as import("@/models/models").TaskDisplay;
+    const verifier = nestedProfile("verifier-profile-secret");
+    verifier.name = "Visible Verifier";
+    verifier.handle = "visible-verifier";
+    const verification = {
+        _id: "verification-id",
+        verifierDid: "did:private:verifier",
+        subjectDid: "did:private:subject",
+        level: "real_person" as const,
+        note: "Visible verification note",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        verifier,
+        metadata: { sentinel: "verifier-profile-secret" },
+    };
+
+    const props = buildAboutPageClientProps({
+        circle: makeCircle("user"),
+        viewerDid: "did:example:outsider",
+        verifiedContributions: [
+            {
+                task,
+                circle: contributionCircle,
+                permissions: {
+                    canModerate: false,
+                    canReview: false,
+                    canAssign: false,
+                    canResolve: false,
+                    canComment: true,
+                },
+            },
+        ],
+        verifiedContributionPublicCount: 1,
+        fundingPreviewAsks: [fundingAsk],
+        fundingPanelVisibility: "visible",
+        upcomingShiftTasks: [shift],
+        upcomingShiftsVisibility: "visible",
+        canCreateFundingAsk: true,
+        showFundingPanel: true,
+        showUpcomingShiftsPanel: true,
+        proofOfHumanitySummary: {
+            realPersonCount: 1,
+            metInRealLifeCount: 0,
+            totalActiveCount: 1,
+            verifications: [verification],
+            viewerVerification: verification,
+            canCurrentViewerVerify: true,
+            isOwnProfile: false,
+        },
+    });
+
+    const serialized = JSON.parse(JSON.stringify(props));
+    assertForbiddenDataAbsent(serialized);
+    assert.equal(props.verifiedContributions[0].dtoKind, "client-contribution");
+    assert.equal(props.fundingPreviewAsks[0].dtoKind, "client-funding-preview");
+    assert.equal(props.upcomingShiftTasks[0].dtoKind, "client-upcoming-shift");
+    assert.equal(props.proofOfHumanitySummary?.dtoKind, "client-humanity-verification-summary");
+    assert.equal(props.proofOfHumanitySummary?.verifications[0].verifier?.dtoKind, "client-verifier-display");
+    assert.equal(Object.hasOwn(props.proofOfHumanitySummary?.verifications[0] ?? {}, "verifierDid"), false);
+});
+
+test("serialized-boundary regression guard rejects a raw Circle added beside safe props", () => {
+    const safe = buildAboutPageClientProps({
+        circle: makeCircle("circle"),
+        fundingPanelVisibility: "sign_in",
+        upcomingShiftsVisibility: "sign_in",
+    });
+    assert.throws(() => assertForbiddenDataAbsent({ ...safe, accidentalRawCircle: makeCircle("circle") }));
 });
