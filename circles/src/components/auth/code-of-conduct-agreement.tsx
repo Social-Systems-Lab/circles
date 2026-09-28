@@ -6,7 +6,7 @@ import { acceptCodeOfConductAction } from "@/components/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { UserPrivate } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 export type CodeOfConductAgreementResult = {
     success: boolean;
@@ -14,9 +14,9 @@ export type CodeOfConductAgreementResult = {
 };
 
 type CodeOfConductAgreementProps = {
-    user: UserPrivate | null | undefined;
-    onUserChange?: (user: UserPrivate) => void;
-    onComplete?: (user: UserPrivate) => Promise<CodeOfConductAgreementResult | void>;
+    user: AuthenticatedClientUser | null | undefined;
+    onUserChange?: (user: AuthenticatedClientUser) => void;
+    onComplete?: (user: AuthenticatedClientUser) => Promise<CodeOfConductAgreementResult | void>;
     context?: "verification" | "profileCompletion";
 };
 
@@ -24,18 +24,15 @@ const CODE_OF_CONDUCT_COPY = {
     verification: {
         badge: "Pilot Verification",
         heading: "Agree to the Kamooni Code of Conduct",
-        body:
-            "To keep Kamooni useful, welcoming, and trustworthy, please agree to use the platform honestly, respectfully, and constructively. This includes representing yourself truthfully, treating artists, fans, and hosts with respect, protecting private information, avoiding spam or manipulation, and helping keep community spaces safe and useful.",
-        note:
-            "This agreement is part of Kamooni profile verification. Email verification remains a separate step that only confirms your email address.",
+        body: "To keep Kamooni useful, welcoming, and trustworthy, please agree to use the platform honestly, respectfully, and constructively. This includes representing yourself truthfully, treating artists, fans, and hosts with respect, protecting private information, avoiding spam or manipulation, and helping keep community spaces safe and useful.",
+        note: "This agreement is part of Kamooni profile verification. Email verification remains a separate step that only confirms your email address.",
         checkboxLabel: "I agree to the Kamooni Code of Conduct.",
         buttonLabel: "Continue",
     },
     profileCompletion: {
         badge: "Kamooni Rules",
         heading: "Agree to the Kamooni Code of Conduct",
-        body:
-            "To keep Kamooni useful, welcoming, and trustworthy, please agree to use the platform honestly, respectfully, and constructively. This includes representing yourself truthfully, treating others with respect, protecting private information, avoiding spam or manipulation, and helping keep community spaces safe and useful.",
+        body: "To keep Kamooni useful, welcoming, and trustworthy, please agree to use the platform honestly, respectfully, and constructively. This includes representing yourself truthfully, treating others with respect, protecting private information, avoiding spam or manipulation, and helping keep community spaces safe and useful.",
         note: null,
         checkboxLabel: "I agree to the Kamooni Code of Conduct.",
         buttonLabel: "Agree and continue",
@@ -54,7 +51,7 @@ export function CodeOfConductAgreement({
     const copy = CODE_OF_CONDUCT_COPY[context];
 
     const handleContinue = async () => {
-        if (!agreed) {
+        if (!agreed || !user) {
             return;
         }
 
@@ -68,13 +65,14 @@ export function CodeOfConductAgreement({
                 return;
             }
 
-            onUserChange?.(response.user);
+            const nextUser = { ...user, ...response.user };
+            onUserChange?.(nextUser);
 
             if (!onComplete) {
                 return;
             }
 
-            const nextStep = await onComplete(response.user);
+            const nextStep = await onComplete(nextUser);
             if (nextStep && nextStep.success === false) {
                 setErrorMessage(nextStep.message || "Could not continue.");
             }

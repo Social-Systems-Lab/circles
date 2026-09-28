@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added C
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Proposal, ProposalStage, Location, UserPrivate } from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Proposal, ProposalStage, Location } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Info, MapPinIcon, MapPin } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import ImageItem
@@ -38,7 +39,7 @@ type ProposalFormValues = Omit<z.infer<typeof proposalFormSchema>, "images" | "l
 };
 
 interface ProposalFormProps {
-    user: UserPrivate;
+    user: AuthenticatedClientUser;
     itemDetail: CreatableItemDetail;
     proposal?: Proposal;
     proposalId?: string;

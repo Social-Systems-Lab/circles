@@ -16,7 +16,7 @@ import {
     normalizeCommunityGuidelineAgreementState,
 } from "@/lib/community-guidelines";
 import { cn } from "@/lib/utils";
-import { UserPrivate } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 const SCREEN_ORDER = ["welcome", "why", ...COMMUNITY_GUIDELINE_RULES.map((rule) => rule.id), "confirmation"] as const;
 const CONFIRMATION_SCREEN_INDEX = SCREEN_ORDER.indexOf("confirmation");
@@ -50,8 +50,7 @@ const COMMUNITY_GUIDELINES_FLOW_COPY = {
         welcomeNote:
             "This takes less than a minute. It is not legal fine print. It is a clear human commitment to how we work together.",
         whyTitle: "Trust makes participation possible.",
-        whyBody:
-            "These rules set the baseline for honest participation, respect, privacy, and responsible behavior.",
+        whyBody: "These rules set the baseline for honest participation, respect, privacy, and responsible behavior.",
         confirmationTitle: "You're all set.",
         confirmationBody: "You have actively agreed to all five of Kamooni's core community rules.",
         completingLabel: "Finishing the rules step...",
@@ -78,9 +77,9 @@ export type CommunityGuidelinesFlowResult = {
 };
 
 type CommunityGuidelinesAgreementFlowProps = {
-    user: UserPrivate | null | undefined;
-    onUserChange?: (user: UserPrivate) => void;
-    onComplete?: (user: UserPrivate) => Promise<CommunityGuidelinesFlowResult | void>;
+    user: AuthenticatedClientUser | null | undefined;
+    onUserChange?: (user: AuthenticatedClientUser) => void;
+    onComplete?: (user: AuthenticatedClientUser) => Promise<CommunityGuidelinesFlowResult | void>;
     context?: "verification" | "profileCompletion";
 };
 
@@ -149,7 +148,7 @@ export function CommunityGuidelinesAgreementFlow({
         setCurrentScreenIndex((prev) => Math.max(prev - 1, 0));
     };
 
-    const continueAfterCompletion = async (nextUser: UserPrivate) => {
+    const continueAfterCompletion = async (nextUser: AuthenticatedClientUser) => {
         if (!onComplete) {
             return;
         }
@@ -168,6 +167,9 @@ export function CommunityGuidelinesAgreementFlow({
     };
 
     const handleRuleAction = async (ruleId: CommunityGuidelineRuleId) => {
+        if (!user) {
+            return;
+        }
         if (isAcceptedCommunityGuidelineRule(acceptanceState[ruleId])) {
             goToNextScreen();
             return;
@@ -185,11 +187,12 @@ export function CommunityGuidelinesAgreementFlow({
 
             const nextState = normalizeCommunityGuidelineAgreementState(response.user.communityGuidelinesAcceptance);
             setAcceptanceState(nextState);
-            onUserChange?.(response.user);
+            const nextUser = { ...user, ...response.user };
+            onUserChange?.(nextUser);
 
             if (hasAcceptedAllCommunityGuidelines(nextState)) {
                 setCurrentScreenIndex(CONFIRMATION_SCREEN_INDEX);
-                await continueAfterCompletion(response.user);
+                await continueAfterCompletion(nextUser);
                 return;
             }
 
@@ -215,13 +218,9 @@ export function CommunityGuidelinesAgreementFlow({
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 text-[#8a5822]">
                                 <ShieldCheck className="h-5 w-5" />
-                                <span className="text-xs font-semibold uppercase tracking-[0.24em]">
-                                    {copy.badge}
-                                </span>
+                                <span className="text-xs font-semibold uppercase tracking-[0.24em]">{copy.badge}</span>
                             </div>
-                            <h2 className="text-2xl font-semibold text-[#2d2116] sm:text-[2rem]">
-                                {copy.title}
-                            </h2>
+                            <h2 className="text-2xl font-semibold text-[#2d2116] sm:text-[2rem]">{copy.title}</h2>
                         </div>
                         <div className="min-w-[160px] text-right">
                             <div className="text-sm font-medium text-[#6e573d]">
@@ -247,12 +246,8 @@ export function CommunityGuidelinesAgreementFlow({
                                 <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">
                                     {copy.welcomeTitle}
                                 </h3>
-                                <p className="text-base leading-7 text-[#4c3b29]">
-                                    {copy.welcomeBody}
-                                </p>
-                                <p className="text-base leading-7 text-[#4c3b29]">
-                                    {copy.welcomeNote}
-                                </p>
+                                <p className="text-base leading-7 text-[#4c3b29]">{copy.welcomeBody}</p>
+                                <p className="text-base leading-7 text-[#4c3b29]">{copy.welcomeNote}</p>
                             </div>
                         )}
 
@@ -261,12 +256,8 @@ export function CommunityGuidelinesAgreementFlow({
                                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#9d6b2f]">
                                     Why this matters
                                 </p>
-                                <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">
-                                    {copy.whyTitle}
-                                </h3>
-                                <p className="text-base leading-7 text-[#4c3b29]">
-                                    {copy.whyBody}
-                                </p>
+                                <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">{copy.whyTitle}</h3>
+                                <p className="text-base leading-7 text-[#4c3b29]">{copy.whyBody}</p>
                                 <p className="text-base leading-7 text-[#4c3b29]">
                                     You will agree to each rule one by one. Each agreement is saved with its own
                                     timestamp.
@@ -278,7 +269,9 @@ export function CommunityGuidelinesAgreementFlow({
                             <div className="space-y-5">
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <span className="rounded-full bg-[#f8ecd5] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#8a5822]">
-                                        Rule {COMMUNITY_GUIDELINE_RULES.findIndex((rule) => rule.id === currentRule.id) + 1} of 5
+                                        Rule{" "}
+                                        {COMMUNITY_GUIDELINE_RULES.findIndex((rule) => rule.id === currentRule.id) + 1}{" "}
+                                        of 5
                                     </span>
                                     <span className="rounded-full border border-[#ead3ac] px-3 py-1 text-xs font-medium text-[#6e573d]">
                                         ID: {currentRule.id}
@@ -326,9 +319,7 @@ export function CommunityGuidelinesAgreementFlow({
                                 <h3 className="text-3xl font-semibold leading-tight text-[#2d2116]">
                                     {copy.confirmationTitle}
                                 </h3>
-                                <p className="text-base leading-7 text-[#4c3b29]">
-                                    {copy.confirmationBody}
-                                </p>
+                                <p className="text-base leading-7 text-[#4c3b29]">{copy.confirmationBody}</p>
                                 <div className="grid gap-3 sm:grid-cols-2">
                                     {COMMUNITY_GUIDELINE_RULES.map((rule) => (
                                         <div

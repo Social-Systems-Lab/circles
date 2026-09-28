@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import { Circle, UserPrivate } from "@/models/models";
+import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { Bookmark, BookmarkCheck, Loader2 } from "lucide-react";
 import { useAtom } from "jotai";
@@ -24,8 +24,8 @@ export const BookmarkButton: React.FC<BookmarkButtonProps> = ({ circle, renderCo
 
     const circleId = circle?._id?.toString();
     const isBookmarked =
-        !!user && !!circleId && Array.isArray((user as UserPrivate).bookmarkedCircles)
-            ? (user as UserPrivate).bookmarkedCircles!.includes(circleId)
+        !!user && !!circleId && Array.isArray(user.bookmarkedCircles)
+            ? user.bookmarkedCircles.includes(circleId)
             : false;
 
     const onToggleBookmark = () => {
@@ -46,14 +46,16 @@ export const BookmarkButton: React.FC<BookmarkButtonProps> = ({ circle, renderCo
         } else {
             nextList.add(circleId);
         }
-        setUser({ ...(prevUser as UserPrivate), bookmarkedCircles: Array.from(nextList) });
+        setUser({ ...prevUser, bookmarkedCircles: Array.from(nextList) });
 
         setIsLoading(true);
         startTransition(async () => {
             try {
                 const updated = await toggleBookmarkAction(circleId);
                 if (updated) {
-                    setUser(updated);
+                    setUser((currentUser) =>
+                        currentUser ? { ...currentUser, bookmarkedCircles: updated.bookmarkedCircles } : currentUser,
+                    );
                     toast({
                         title: isBookmarked ? "Removed bookmark" : "Bookmarked",
                         description: isBookmarked
@@ -62,7 +64,7 @@ export const BookmarkButton: React.FC<BookmarkButtonProps> = ({ circle, renderCo
                     });
                 } else {
                     // Rollback on failure
-                    setUser(prevUser as UserPrivate);
+                    setUser(prevUser);
                     toast({
                         title: "Error",
                         description: "Failed to update bookmark. Please try again.",
@@ -70,7 +72,7 @@ export const BookmarkButton: React.FC<BookmarkButtonProps> = ({ circle, renderCo
                     });
                 }
             } catch (e) {
-                setUser(prevUser as UserPrivate);
+                setUser(prevUser);
                 toast({
                     title: "Error",
                     description: "An unexpected error occurred.",

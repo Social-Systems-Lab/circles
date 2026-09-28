@@ -530,7 +530,11 @@ export const UserToolbox = () => {
                     return;
                 }
 
-                setUser(updatedUser);
+                setUser({
+                    ...previousUser,
+                    pinnedCircles: updatedUser.pinnedCircles,
+                    bookmarkedCircles: updatedUser.bookmarkedCircles,
+                });
             } catch (error) {
                 console.error("Failed to toggle bookmark pin", error);
                 setUser(previousUser);

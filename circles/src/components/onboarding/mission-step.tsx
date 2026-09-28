@@ -29,7 +29,7 @@ function MissionStep({ userData, setUserData, nextStep, prevStep }: OnboardingSt
     const handleNext = async () => {
         startTransition(async () => {
             console.log("Saving mission");
-            const response = await saveMissionAction(userData.mission, user?._id);
+            const response = await saveMissionAction(userData.mission, user?._id ?? "");
             if (!response.success) {
                 // Handle error
                 console.error(response.message);
