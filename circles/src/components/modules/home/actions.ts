@@ -32,6 +32,13 @@ import {
 import { UserRelationships } from "@/lib/data/db";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import type { AuthenticatedClientUser, BookmarkStateDto, PinStateDto } from "@/lib/data/client-user-dto";
+import { toAuthenticatedClientUser, toBookmarkStateDto, toPinStateDto } from "@/lib/data/client-user-dto";
+import {
+    executeAuthenticatedUserMutation,
+    getAuthenticatedClientUserBoundary,
+    getOwnedUserUpdateBoundary,
+} from "@/lib/data/client-user-boundary";
 
 type CircleActionResponse = {
     success: boolean;
@@ -40,13 +47,8 @@ type CircleActionResponse = {
     circle?: Circle;
 };
 
-export const getUserPrivateAction = async (): Promise<UserPrivate | undefined> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return undefined;
-    }
-
-    return await getUserPrivate(userDid);
+export const getUserPrivateAction = async (): Promise<AuthenticatedClientUser | undefined> => {
+    return getAuthenticatedClientUserBoundary({ getAuthenticatedUserDid, getUserPrivate });
 };
 
 export const followCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
@@ -183,9 +185,9 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
 };
 
 /**
- * Toggle bookmark for a circle. Returns the updated UserPrivate on success.
+ * Toggle bookmark for a circle. Returns the updated bookmark state on success.
  */
-export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+export const toggleBookmarkAction = async (circleId: string): Promise<BookmarkStateDto | undefined> => {
     const token = readAuthToken(await cookies());
 
     try {
@@ -199,20 +201,15 @@ export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivat
             return undefined;
         }
 
-        // Get current user and toggle bookmark based on current state
-        const current = (await getUserPrivate(userDid)) as UserPrivate;
-        const currentList = current.bookmarkedCircles ?? [];
-        const isBookmarked = currentList.includes(circleId);
-
-        if (isBookmarked) {
-            await removeBookmark(userDid, circleId);
-        } else {
-            await addBookmark(userDid, circleId);
-        }
-
-        // Return updated user
-        const updated = (await getUserPrivate(userDid)) as UserPrivate;
-        return updated;
+        return executeAuthenticatedUserMutation(
+            userDid,
+            { getUserPrivate },
+            async (did, current) => {
+                if ((current.bookmarkedCircles ?? []).includes(circleId)) await removeBookmark(did, circleId);
+                else await addBookmark(did, circleId);
+            },
+            toBookmarkStateDto,
+        );
     } catch (error) {
         console.error("Failed to toggle bookmark", error);
         return undefined;
@@ -249,9 +246,9 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
 };
 
 /**
- * Pin a circle for the current user. Returns updated UserPrivate.
+ * Pin a circle for the current user. Returns the updated pin and bookmark state.
  */
-export const pinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+export const pinCircleAction = async (circleId: string): Promise<PinStateDto | undefined> => {
     const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
@@ -259,9 +256,12 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
         const userDid = payload.userDid as string;
         if (!userDid) return undefined;
 
-        await pinCircle(userDid, circleId);
-        const updated = (await getUserPrivate(userDid)) as UserPrivate;
-        return updated;
+        return executeAuthenticatedUserMutation(
+            userDid,
+            { getUserPrivate },
+            async (did) => pinCircle(did, circleId),
+            toPinStateDto,
+        );
     } catch (e) {
         console.error("Failed to pin circle", e);
         return undefined;
@@ -269,9 +269,9 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
 };
 
 /**
- * Unpin a circle for the current user. Returns updated UserPrivate.
+ * Unpin a circle for the current user. Returns the updated pin and bookmark state.
  */
-export const unpinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+export const unpinCircleAction = async (circleId: string): Promise<PinStateDto | undefined> => {
     const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
@@ -279,26 +279,23 @@ export const unpinCircleAction = async (circleId: string): Promise<UserPrivate |
         const userDid = payload.userDid as string;
         if (!userDid) return undefined;
 
-        await unpinCircle(userDid, circleId);
-        const updated = (await getUserPrivate(userDid)) as UserPrivate;
-        return updated;
+        return executeAuthenticatedUserMutation(
+            userDid,
+            { getUserPrivate },
+            async (did) => unpinCircle(did, circleId),
+            toPinStateDto,
+        );
     } catch (e) {
         console.error("Failed to unpin circle", e);
         return undefined;
     }
 };
 
-export const updateUser = async (userId: string, formData: FormData): Promise<UserPrivate | undefined> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return undefined;
-    }
-
+export const updateUser = async (userId: string, formData: FormData): Promise<AuthenticatedClientUser | undefined> => {
     try {
-        const currentUser = await getUserById(userId);
-        if (!currentUser || currentUser.did !== userDid) {
-            return undefined;
-        }
+        const owner = await getOwnedUserUpdateBoundary(userId, { getAuthenticatedUserDid, getUserById });
+        if (!owner) return undefined;
+        const { authenticatedDid: userDid, currentUser } = owner;
 
         let updateData: Partial<Circle> = { _id: userId };
 
@@ -321,7 +318,7 @@ export const updateUser = async (userId: string, formData: FormData): Promise<Us
         await updateCircle(updateData, userDid);
         revalidatePath(`/circles/${currentUser.handle}`);
         const updatedUser = await getUserPrivate(userDid);
-        return updatedUser;
+        return toAuthenticatedClientUser(updatedUser);
     } catch (error) {
         console.error("Failed to update user", error);
         return undefined;

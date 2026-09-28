@@ -11,17 +11,8 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-    Circle,
-    Media,
-    Task,
-    Location,
-    GoalDisplay,
-    EventDisplay,
-    UserPrivate,
-    TaskPriority,
-    type TaskType,
-} from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, TaskPriority, type TaskType } from "@/models/models"; // Added UserPrivate
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -150,7 +141,7 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
 };
 
 interface TaskFormProps {
-    user: UserPrivate; // Added user
+    user: AuthenticatedClientUser;
     itemDetail: CreatableItemDetail; // Added itemDetail
     task?: Task;
     taskId?: string;
@@ -258,9 +249,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
             const previousCircle = selectedCircleRef.current;
-            const isDifferentCircle = Boolean(
-                previousCircle?._id && circle?._id && previousCircle._id !== circle._id,
-            );
+            const isDifferentCircle = Boolean(previousCircle?._id && circle?._id && previousCircle._id !== circle._id);
             selectedCircleRef.current = circle;
             setSelectedCircle(circle);
             setGoals([]);

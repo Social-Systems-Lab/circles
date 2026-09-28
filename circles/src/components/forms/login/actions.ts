@@ -6,6 +6,7 @@ import { Circles } from "@/lib/data/db";
 import { getUserPrivate } from "@/lib/data/user";
 import fs from "fs";
 import path from "path";
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -22,10 +23,7 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
         }
 
         // Prefer exact email lookup with case-insensitive collation for deterministic matching.
-        let user = await Circles.findOne(
-            { email: normalizedEmail },
-            { collation: { locale: "en", strength: 2 } },
-        );
+        let user = await Circles.findOne({ email: normalizedEmail }, { collation: { locale: "en", strength: 2 } });
         if (!user) {
             // Fallback for legacy records: exact escaped regex (still case-insensitive).
             const emailRegex = new RegExp(`^${escapeRegExp(normalizedEmail)}$`, "i");
@@ -66,7 +64,11 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
         let privateUser = await getUserPrivate(user.did!);
         await createUserSession(privateUser, user.did!);
 
-        return { success: true, message: "User authenticated successfully", data: { user: privateUser } };
+        return {
+            success: true,
+            message: "User authenticated successfully",
+            data: { user: toAuthenticatedClientUser(privateUser) },
+        };
     } catch (error) {
         if (error instanceof AuthenticationError) {
             if (process.env.NODE_ENV !== "production") {

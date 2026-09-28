@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { GoalDisplay, UserPrivate, type TaskType } from "@/models/models"; // Circle removed as it's handled in TaskForm
+import { GoalDisplay, type TaskType } from "@/models/models"; // Circle removed as it's handled in TaskForm
 import { TaskForm } from "@/components/modules/tasks/task-form";
 import { CreatableItemDetail, CreatableItemKey } from "./global-create-dialog-content";
 // CircleSelector import removed, will be in TaskForm
@@ -71,7 +71,7 @@ export const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 {user &&
                     itemDetail && ( // Ensure itemDetail is available
                         <TaskForm
-                            user={user as UserPrivate} // Pass user to TaskForm
+                            user={user}
                             itemDetail={itemDetail} // Pass itemDetail for CircleSelector
                             initialSelectedCircleId={initialSelectedCircleId} // Pass down
                             initialTaskType={initialTaskType}

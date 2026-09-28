@@ -222,7 +222,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const currentUserPendingClaim = pendingClaims.find((claim) => claim.claimantDid === currentUserDid);
     const isCircleMember =
         circle.did === currentUserDid ||
-        Boolean(user?.memberships?.some((membership) => String(membership.circle?._id) === String(circle._id)));
+        Boolean(user?.memberships?.some((membership) => membership.circleId === String(circle._id)));
     const canClaimTask =
         !isShiftTask &&
         !permissions.canAssign &&

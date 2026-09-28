@@ -2,7 +2,6 @@
 
 import React, { useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { UserPrivate } from "@/models/models";
 import { TaskForm } from "@/components/modules/tasks/task-form";
 import { CreatableItemDetail, creatableItemsList } from "./global-create-dialog-content";
 import { useAtom } from "jotai";
@@ -51,7 +50,7 @@ export const CreateShiftDialog: React.FC<CreateShiftDialogProps> = ({
                 {!user && <p className="p-4 text-red-500">Please log in to create a shift.</p>}
                 {user && (
                     <TaskForm
-                        user={user as UserPrivate}
+                        user={user}
                         itemDetail={itemDetail}
                         initialSelectedCircleId={initialSelectedCircleId}
                         initialTaskType="shift"

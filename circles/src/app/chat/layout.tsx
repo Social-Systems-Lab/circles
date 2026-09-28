@@ -144,7 +144,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const isUserAdmin =
         selectedChat && user?.chatRoomMemberships
             ? (() => {
-                  const membership = user.chatRoomMemberships.find((m) => m.chatRoom._id === selectedChat._id);
+                  const membership = user.chatRoomMemberships.find((m) => m.chatRoomId === String(selectedChat._id));
                   // Check role field, fallback to true for backward compatibility with old groups
                   // (groups created before role field was added)
                   return !!(membership?.role === "admin" || (membership && !membership.role));

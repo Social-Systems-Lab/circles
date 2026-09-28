@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Circle, ProposalDisplay, UserPrivate } from "@/models/models";
+import { Circle, ProposalDisplay } from "@/models/models";
 import { GoalForm } from "@/components/modules/goals/goal-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
 // CircleSelector import removed, will be in GoalForm
@@ -64,7 +64,7 @@ export const CreateGoalDialog: React.FC<CreateGoalDialogProps> = ({
                 {!user && <p className="p-4 text-red-500">Please log in to create a goal.</p>}
                 {user && itemDetail && (
                     <GoalForm
-                        user={user as UserPrivate}
+                        user={user}
                         itemDetail={itemDetail}
                         onFormSubmitSuccess={handleFormSuccess}
                         onCancel={handleCancel}

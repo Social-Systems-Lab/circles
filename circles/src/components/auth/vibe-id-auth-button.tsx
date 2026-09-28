@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
-import type { UserPrivate } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type VibeIdRequest = {
     requestId: string;
@@ -20,7 +20,7 @@ type VibeIdRequest = {
 
 type VibeIdStatusResponse = {
     status: "pending" | "approved" | "needs_signup" | "linked" | "rejected" | "failed" | "expired";
-    user?: UserPrivate;
+    user?: AuthenticatedClientUser;
     profile?: {
         displayName?: string;
     };
@@ -71,7 +71,7 @@ export function VibeIdAuthButton({ label = "Continue with VibeID", onNeedsSignup
         };
     }, []);
 
-    const finishAuthentication = (user: UserPrivate) => {
+    const finishAuthentication = (user: AuthenticatedClientUser) => {
         setUser(user);
         setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
         closePrompt();
