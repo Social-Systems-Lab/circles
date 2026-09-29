@@ -12,6 +12,7 @@ import { ObjectId } from "mongodb";
 import { UserPrivate } from "@/models/models"; // Added import
 import { getUserPrivate } from "@/lib/data/user"; // Corrected function name
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added import
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string; issueId: string }>;
@@ -94,7 +95,7 @@ export default async function EditIssuePage(props: PageProps) {
 
             {/* Render IssueForm, passing circle, circleHandle, and the existing issue */}
             <IssueForm
-                user={userProfile}
+                user={toAuthenticatedClientUser(userProfile)}
                 itemDetail={itemDetailForIssueForm}
                 circle={circle}
                 issue={issue}

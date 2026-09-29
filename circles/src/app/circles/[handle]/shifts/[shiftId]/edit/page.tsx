@@ -10,6 +10,7 @@ import { redirect, notFound } from "next/navigation";
 import { ObjectId } from "mongodb";
 import { getUserPrivate } from "@/lib/data/user";
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string; shiftId: string }>;
@@ -84,7 +85,7 @@ export default async function EditShiftPage(props: PageProps) {
                 <h1 className="text-2xl font-bold">Edit Shift</h1>
             </div>
             <TaskForm
-                user={userProfile}
+                user={toAuthenticatedClientUser(userProfile)}
                 itemDetail={itemDetailForTaskForm}
                 circle={circle}
                 task={shift}

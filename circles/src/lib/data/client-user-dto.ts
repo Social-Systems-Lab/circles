@@ -74,6 +74,32 @@ export type GuidelineStateDto = Pick<
     "communityGuidelinesAcceptance" | "communityGuidelinesAcceptedAt"
 >;
 
+export type AccountSettingsClientUser = Pick<
+    AuthenticatedClientUser,
+    | "name"
+    | "handle"
+    | "picture"
+    | "images"
+    | "description"
+    | "content"
+    | "circleType"
+    | "isEmailVerified"
+    | "isVerified"
+    | "isMember"
+> & {
+    email?: string;
+    emailMissedMessages: boolean;
+    emailTaskAssigned: boolean;
+    emailTaskUpdates: boolean;
+    emailVerificationUpdates: boolean;
+    canManageStripeMembership: boolean;
+    membershipStatusLabel?: string;
+    linkedVibeId?: {
+        did: string;
+        profile?: { displayName?: string; initials?: string; avatarUrl?: string };
+    };
+};
+
 const copyStrings = (value: unknown): string[] | undefined =>
     Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
 
@@ -275,3 +301,66 @@ export const toGuidelineStateDto = (user: UserPrivate): GuidelineStateDto => ({
     communityGuidelinesAcceptance: sanitizeCommunityGuidelinesAcceptance(user.communityGuidelinesAcceptance),
     communityGuidelinesAcceptedAt: user.communityGuidelinesAcceptedAt,
 });
+
+export function toAccountSettingsClientUser(user: UserPrivate): AccountSettingsClientUser {
+    const clientUser = toAuthenticatedClientUser(user);
+    const rawVibeId = user.metadata?.authProviders?.vibeId as
+        | { did?: unknown; profile?: { displayName?: unknown; initials?: unknown; avatarUrl?: unknown } }
+        | undefined;
+    const profile = rawVibeId?.profile;
+    const linkedVibeId =
+        typeof rawVibeId?.did === "string"
+            ? {
+                  did: rawVibeId.did,
+                  ...(profile
+                      ? {
+                            profile: {
+                                ...(typeof profile.displayName === "string"
+                                    ? { displayName: profile.displayName }
+                                    : {}),
+                                ...(typeof profile.initials === "string" ? { initials: profile.initials } : {}),
+                                ...(typeof profile.avatarUrl === "string" ? { avatarUrl: profile.avatarUrl } : {}),
+                            },
+                        }
+                      : {}),
+              }
+            : undefined;
+    const membershipState = user.subscription?.membershipState;
+    const membershipStatusLabel =
+        membershipState === "active"
+            ? "active"
+            : membershipState === "grace_period"
+              ? "grace period"
+              : membershipState === "cancelled"
+                ? "cancelled"
+                : membershipState === "past_due"
+                  ? "past due"
+                  : membershipState === "unpaid"
+                    ? "unpaid"
+                    : membershipState === "inactive"
+                      ? "inactive"
+                      : undefined;
+
+    return {
+        ...(clientUser.name ? { name: clientUser.name } : {}),
+        ...(clientUser.handle ? { handle: clientUser.handle } : {}),
+        ...(clientUser.picture ? { picture: clientUser.picture } : {}),
+        ...(clientUser.images ? { images: clientUser.images } : {}),
+        ...(clientUser.description ? { description: clientUser.description } : {}),
+        ...(clientUser.content ? { content: clientUser.content } : {}),
+        ...(clientUser.circleType ? { circleType: clientUser.circleType } : {}),
+        ...(typeof clientUser.isEmailVerified === "boolean" ? { isEmailVerified: clientUser.isEmailVerified } : {}),
+        ...(typeof clientUser.isVerified === "boolean" ? { isVerified: clientUser.isVerified } : {}),
+        ...(typeof clientUser.isMember === "boolean" ? { isMember: clientUser.isMember } : {}),
+        ...(typeof user.email === "string" ? { email: user.email } : {}),
+        emailMissedMessages: user.emailMissedMessages !== false,
+        emailTaskAssigned: user.emailTaskAssigned === true,
+        emailTaskUpdates: user.emailTaskUpdates === true,
+        emailVerificationUpdates: user.emailVerificationUpdates === true,
+        canManageStripeMembership:
+            user.subscription?.provider === "stripe" &&
+            (membershipState === "active" || membershipState === "grace_period"),
+        ...(membershipStatusLabel ? { membershipStatusLabel } : {}),
+        ...(linkedVibeId ? { linkedVibeId } : {}),
+    };
+}

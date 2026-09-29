@@ -12,6 +12,7 @@ import { ObjectId } from "mongodb";
 import { UserPrivate } from "@/models/models"; // Added import
 import { getUserPrivate } from "@/lib/data/user"; // Corrected function name
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Added import
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string; goalId: string }>;
@@ -90,7 +91,7 @@ export default async function EditGoalPage(props: PageProps) {
                 <h1 className="text-2xl font-bold">Edit Goal</h1>
             </div>
             <GoalForm
-                user={userProfile}
+                user={toAuthenticatedClientUser(userProfile)}
                 itemDetail={itemDetailForGoalForm}
                 goal={goal}
                 goalId={goalId} // Use the string goalId from params

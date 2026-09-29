@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { OnboardingStepProps } from "@/components/onboarding/onboarding";
 import SubscriptionForm from "@/app/circles/[handle]/settings/subscription/subscription-form";
-import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { completeMemberStep } from "@/components/onboarding/actions";
 import { useAtom } from "jotai";
@@ -75,7 +74,17 @@ export default function MemberStep({ circle, nextStep }: OnboardingStepProps) {
         <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl font-bold">Become a Member</h1>
             <p className="mb-4">Support our community by becoming a member.</p>
-            <SubscriptionForm circle={circle as Circle} onDialogClose={handleDialogClose} />
+            <SubscriptionForm
+                circle={{
+                    isMember: circle.isMember,
+                    canManageStripeMembership:
+                        circle.subscription?.provider === "stripe" &&
+                        (circle.subscription.membershipState === "active" ||
+                            circle.subscription.membershipState === "grace_period"),
+                    membershipStatusLabel: circle.subscription?.membershipState?.replace("_", " "),
+                }}
+                onDialogClose={handleDialogClose}
+            />
             <Button variant="link" onClick={handleSkip} className="mt-4" disabled={isSubmitting}>
                 Skip for now
             </Button>

@@ -5,6 +5,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCirclesByIds, getCirclesWithMetrics, getMetricsForCircles } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import { Circle, SortingOptions, WithMetric } from "@/models/models";
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type CirclesProps = {
     params: Promise<{ handle: string }>;
@@ -55,7 +56,7 @@ export default async function Home(props: CirclesProps) {
                 </div>
             </div>
             <CirclesList
-                circle={user || ({} as Circle)}
+                circle={user ? toAuthenticatedClientUser(user) : ({} as Circle)}
                 circles={circles}
                 activeTab={activeTab}
                 isProjectsList={circleType === "project"}

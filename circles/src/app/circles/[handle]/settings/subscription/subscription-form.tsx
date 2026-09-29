@@ -6,24 +6,31 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Circle } from "@/models/models";
+import type { AccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import Image from "next/image";
 import { useToast } from "@/components/ui/use-toast";
 
 type MembershipPanel = "free" | "member" | null;
 type SupporterTier = 1 | 2 | 5 | 10;
 
-export default function SubscriptionForm({ circle: user }: { circle: Circle; onDialogClose?: () => void }) {
+type SubscriptionClientState = Pick<
+    AccountSettingsClientUser,
+    "isMember" | "canManageStripeMembership" | "membershipStatusLabel"
+>;
+
+export default function SubscriptionForm({
+    circle: user,
+}: {
+    circle: SubscriptionClientState;
+    onDialogClose?: () => void;
+}) {
     const { toast } = useToast();
     const [isLoadingMonthly, setIsLoadingMonthly] = useState(false);
     const [isLoadingPortal, setIsLoadingPortal] = useState(false);
     const [openPanel, setOpenPanel] = useState<MembershipPanel>(null);
 
     const isMember = user.isMember;
-    const membershipState = user.subscription?.membershipState;
-    const canManageStripeMembership =
-        user.subscription?.provider === "stripe" &&
-        (membershipState === "active" || membershipState === "grace_period");
+    const canManageStripeMembership = user.canManageStripeMembership;
 
     async function startCheckout(amount: SupporterTier) {
         setIsLoadingMonthly(true);
@@ -120,7 +127,10 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle; onD
 
                         <CardContent className="flex flex-grow flex-col space-y-4">
                             <div className="space-y-4 text-left text-sm text-muted-foreground">
-                                <p>Founding Supporters help keep Kamooni open, independent, and useful for members and communities.</p>
+                                <p>
+                                    Founding Supporters help keep Kamooni open, independent, and useful for members and
+                                    communities.
+                                </p>
                                 <p>
                                     As a thank you, supporters receive a few extra benefits, can invite five friends if
                                     there is a queue, and will be invited to help shape Kamooni as the community grows.
@@ -130,8 +140,8 @@ export default function SubscriptionForm({ circle: user }: { circle: Circle; onD
                             {isMember && (
                                 <div className="rounded-xl border bg-white p-3 text-sm text-muted-foreground">
                                     <div className="font-medium text-foreground">Founding Supporter active</div>
-                                    {membershipState && (
-                                        <div className="mt-1">State: {membershipState.replace("_", " ")}</div>
+                                    {user.membershipStatusLabel && (
+                                        <div className="mt-1">State: {user.membershipStatusLabel}</div>
                                     )}
                                 </div>
                             )}
@@ -208,8 +218,8 @@ function FreeMembershipPanel() {
             <h3 className="text-2xl font-bold text-foreground">How Test Pilots can become supporters</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
                 <p>
-                    Kamooni needs funding to stay open, independent, and accessible to as many people as possible, and we also want to
-                    recognise the value volunteers bring to the wider community.
+                    Kamooni needs funding to stay open, independent, and accessible to as many people as possible, and
+                    we also want to recognise the value volunteers bring to the wider community.
                 </p>
                 <p>
                     <strong className="font-semibold text-foreground">
@@ -249,7 +259,9 @@ function MemberBenefitsPanel({
         <div className="space-y-5 pr-8">
             <h3 className="text-2xl font-bold text-foreground">Why become a Founding Supporter</h3>
             <div className="space-y-4 text-sm leading-7 text-muted-foreground">
-                <p>Supporting Kamooni helps keep the platform open, healthy, and available to members and communities.</p>
+                <p>
+                    Supporting Kamooni helps keep the platform open, healthy, and available to members and communities.
+                </p>
                 <div>
                     <p className="mb-3">
                         As a thank you, supporters receive a few extra benefits. Founding Supporters can:
@@ -264,12 +276,14 @@ function MemberBenefitsPanel({
                             else and help shape how they develop
                         </li>
                         <li>
-                            <strong className="font-semibold text-foreground">help shape the Kamooni roadmap</strong> and
-                            suggest what to build or improve next
+                            <strong className="font-semibold text-foreground">help shape the Kamooni roadmap</strong>{" "}
+                            and suggest what to build or improve next
                         </li>
                         <li>
                             create{" "}
-                            <strong className="font-semibold text-foreground">independent artist, host, or community profiles</strong>{" "}
+                            <strong className="font-semibold text-foreground">
+                                independent artist, host, or community profiles
+                            </strong>{" "}
                             with more options
                         </li>
                         <li>
@@ -338,8 +352,8 @@ function MemberBenefitsPanel({
                     sustain itself, we want to show our supporters a little extra appreciation.
                 </p>
                 <p>
-                    Being a supporter is not only about access. It is also a way to actively support the wider music community
-                    and make space for more people to take part.
+                    Being a supporter is not only about access. It is also a way to actively support the wider music
+                    community and make space for more people to take part.
                 </p>
             </div>
 

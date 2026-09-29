@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import type { UserPrivate } from "@/models/models";
-import { toAuthenticatedClientUser, toBookmarkStateDto, toGuidelineStateDto, toPinStateDto } from "./client-user-dto";
+import {
+    toAccountSettingsClientUser,
+    toAuthenticatedClientUser,
+    toBookmarkStateDto,
+    toGuidelineStateDto,
+    toPinStateDto,
+} from "./client-user-dto";
 
 const privateSentinels = [
     "PRIVATE_PUBLIC_KEY",
@@ -116,7 +122,22 @@ const rawUser = {
         lastWebhookEventId: "PRIVATE_WEBHOOK_EVENT_ID",
     },
     donationIntent: { marker: "PRIVATE_DONATION_INTENT" },
-    metadata: { onboardingFlow: "v2-signup", secret: "PRIVATE_METADATA" },
+    metadata: {
+        onboardingFlow: "v2-signup",
+        secret: "PRIVATE_METADATA",
+        authProviders: {
+            vibeId: {
+                did: "did:vibe:safe-owner",
+                profile: {
+                    displayName: "Safe Vibe Name",
+                    initials: "SV",
+                    avatarUrl: "https://example.test/vibe.png",
+                    privateSentinel: "PRIVATE_METADATA",
+                },
+                privateSentinel: "PRIVATE_METADATA",
+            },
+        },
+    },
     location: {
         precision: 7,
         country: "Sweden",
@@ -278,6 +299,58 @@ const assertSensitivePropertyNamesAbsent = (value: unknown, path = "clientUser")
 };
 
 assertSensitivePropertyNamesAbsent(clientUser);
+
+const accountSettingsUser = toAccountSettingsClientUser(rawUser);
+const serializedAccountSettingsUser = JSON.stringify(accountSettingsUser);
+for (const sentinel of privateSentinels.filter((sentinel) => sentinel !== "PRIVATE_EMAIL")) {
+    assert.equal(
+        serializedAccountSettingsUser.includes(sentinel),
+        false,
+        `${sentinel} must not cross the account-settings browser boundary`,
+    );
+}
+
+const accountSettingsSensitivePropertyNames = new Set([
+    ...sensitivePropertyNames,
+    "subscription",
+    "provider",
+    "membershipState",
+]);
+accountSettingsSensitivePropertyNames.delete("email");
+
+const assertAccountSettingsSensitivePropertyNamesAbsent = (value: unknown, path = "accountSettingsUser"): void => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+        assert.equal(
+            accountSettingsSensitivePropertyNames.has(key),
+            false,
+            `${path}.${key} must not cross the account-settings browser boundary`,
+        );
+        assertAccountSettingsSensitivePropertyNamesAbsent(child, `${path}.${key}`);
+    }
+};
+
+assertAccountSettingsSensitivePropertyNamesAbsent(accountSettingsUser);
+assert.equal(accountSettingsUser.email, "PRIVATE_EMAIL", "owner account settings retain the email required by the UI");
+assert.equal(accountSettingsUser.name, "Safe Name");
+assert.equal(accountSettingsUser.handle, "safe-handle");
+assert.equal(accountSettingsUser.isEmailVerified, true);
+assert.equal(accountSettingsUser.isVerified, true);
+assert.equal(accountSettingsUser.isMember, true);
+assert.equal(accountSettingsUser.emailMissedMessages, true);
+assert.equal(accountSettingsUser.emailTaskAssigned, false);
+assert.equal(accountSettingsUser.emailTaskUpdates, false);
+assert.equal(accountSettingsUser.emailVerificationUpdates, false);
+assert.equal(accountSettingsUser.canManageStripeMembership, false);
+assert.equal(accountSettingsUser.membershipStatusLabel, undefined);
+assert.deepEqual(accountSettingsUser.linkedVibeId, {
+    did: "did:vibe:safe-owner",
+    profile: {
+        displayName: "Safe Vibe Name",
+        initials: "SV",
+        avatarUrl: "https://example.test/vibe.png",
+    },
+});
 
 assert.equal(clientUser.did, "did:example:owner");
 assert.equal(clientUser.name, "Safe Name");

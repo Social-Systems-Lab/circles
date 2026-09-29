@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 // No longer need createProposalAction import here
 import { Media, UserPrivate } from "@/models/models"; // Import Media type, UserPrivate
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Import CreatableItemDetail
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -80,7 +81,7 @@ export default async function CreateProposalPage(props: PageProps) {
 
             {/* Remove onSubmit, pass circleHandle */}
             <ProposalForm
-                user={user as UserPrivate}
+                user={toAuthenticatedClientUser(user)}
                 itemDetail={
                     {
                         // Define itemDetail for 'proposal' locally

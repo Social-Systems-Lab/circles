@@ -8,6 +8,7 @@ import {
     getLinkedVibeIdDid,
     type PlatformMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
+import { toAccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import { EmailVerificationBanner } from "./email-verification-banner";
 
 type SubscriptionProps = {
@@ -25,6 +26,8 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
     if (!circle || !user || user.handle !== circle.handle) {
         return <div>Unauthorized</div>;
     }
+
+    const clientUser = toAccountSettingsClientUser(user);
 
     const subjectVibeDid = getLinkedVibeIdDid(user);
     if (subjectVibeDid) {
@@ -44,9 +47,9 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
                 </p>
             </div>
             <div className="mt-8 max-w-5xl space-y-8">
-                <EmailVerificationBanner user={user} />
+                <EmailVerificationBanner user={clientUser} />
                 <SubscriptionFormSettings
-                    user={user}
+                    user={clientUser}
                     membershipCredential={membershipCredential}
                     telegramChannel={telegramChannel}
                 />

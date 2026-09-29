@@ -10,6 +10,7 @@ import { features } from "@/lib/data/constants";
 import { redirect } from "next/navigation";
 import { Media, UserPrivate } from "@/models/models"; // Import Media type, UserPrivate
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Keep type import
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string; proposalId: string }>;
@@ -102,7 +103,7 @@ export default async function EditProposalPage(props: PageProps) {
 
             {/* Remove onSubmit, pass circleHandle and proposalId */}
             <ProposalForm
-                user={user as UserPrivate}
+                user={toAuthenticatedClientUser(user)}
                 itemDetail={
                     {
                         // Define itemDetail for 'proposal' locally

@@ -2,19 +2,23 @@
 
 import QRCode from "react-qr-code";
 import { useEffect, useRef, useState } from "react";
-import { BadgeCheck, Check, Copy, ExternalLink, KeyRound, Loader2, QrCode, Smartphone, WalletCards } from "lucide-react";
+import {
+    BadgeCheck,
+    Check,
+    Copy,
+    ExternalLink,
+    KeyRound,
+    Loader2,
+    QrCode,
+    Smartphone,
+    WalletCards,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import type { Circle } from "@/models/models";
+import type { AccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import type { PlatformMembershipCredentialCardData } from "@/lib/vibe-id/membership-credentials";
 
 type VibeIdRequest = {
@@ -42,12 +46,6 @@ type LinkedVibeId = {
     profile?: VibeIdProfile;
 };
 
-function getLinkedVibeId(user: Circle): LinkedVibeId | undefined {
-    const metadata = user.metadata as { authProviders?: { vibeId?: { did?: string; profile?: VibeIdProfile } } } | undefined;
-    const vibeId = metadata?.authProviders?.vibeId;
-    return vibeId?.did ? { did: vibeId.did, profile: vibeId.profile } : undefined;
-}
-
 function formatDidChip(did: string): string {
     if (did.length <= 20) {
         return did;
@@ -60,11 +58,11 @@ export function VibeIdSettingsCard({
     user,
     membershipCredential,
 }: {
-    user: Circle;
+    user: AccountSettingsClientUser;
     membershipCredential?: PlatformMembershipCredentialCardData | null;
 }) {
     const { toast } = useToast();
-    const [linkedVibeId, setLinkedVibeId] = useState(getLinkedVibeId(user));
+    const [linkedVibeId, setLinkedVibeId] = useState(user.linkedVibeId);
     const [copied, setCopied] = useState(false);
     const [credentialCopied, setCredentialCopied] = useState(false);
     const [isMembershipQrVisible, setIsMembershipQrVisible] = useState(false);
@@ -97,7 +95,7 @@ export function VibeIdSettingsCard({
 
             if (result.status === "linked") {
                 closePrompt();
-                setLinkedVibeId(result.vibeDid ? { did: result.vibeDid, profile: result.profile } : getLinkedVibeId(user));
+                setLinkedVibeId(result.vibeDid ? { did: result.vibeDid, profile: result.profile } : user.linkedVibeId);
                 toast({ title: "VibeID connected" });
                 return;
             }
@@ -228,12 +226,18 @@ export function VibeIdSettingsCard({
                                             <WalletCards className="h-4 w-4" />
                                             Credential
                                         </div>
-                                        <div className="text-base font-semibold text-foreground">Kamooni membership</div>
+                                        <div className="text-base font-semibold text-foreground">
+                                            Kamooni membership
+                                        </div>
                                         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                            Claim this credential in VibeID to keep a signed proof of your active Kamooni membership.
+                                            Claim this credential in VibeID to keep a signed proof of your active
+                                            Kamooni membership.
                                         </p>
                                     </div>
-                                    <Badge variant={membershipCredential ? "outline" : "secondary"} className="w-fit gap-1">
+                                    <Badge
+                                        variant={membershipCredential ? "outline" : "secondary"}
+                                        className="w-fit gap-1"
+                                    >
                                         <BadgeCheck className="h-3.5 w-3.5" />
                                         {membershipCredential ? "Available" : "Membership inactive"}
                                     </Badge>
@@ -263,14 +267,19 @@ export function VibeIdSettingsCard({
                                                 </a>
                                             </Button>
                                             <Button type="button" variant="outline" onClick={copyCredential}>
-                                                {credentialCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                                                {credentialCopied ? (
+                                                    <Check className="mr-2 h-4 w-4" />
+                                                ) : (
+                                                    <Copy className="mr-2 h-4 w-4" />
+                                                )}
                                                 {credentialCopied ? "Copied" : "Copy"}
                                             </Button>
                                         </div>
                                     </div>
                                 ) : (
                                     <p className="mt-4 text-sm text-muted-foreground">
-                                        A membership credential becomes available here when your Kamooni membership is active.
+                                        A membership credential becomes available here when your Kamooni membership is
+                                        active.
                                     </p>
                                 )}
                             </div>
@@ -282,10 +291,19 @@ export function VibeIdSettingsCard({
                     )}
 
                     <div className="flex justify-end">
-                    <Button type="button" variant={linkedVibeId ? "outline" : "default"} disabled={isStarting} onClick={startLink}>
-                        {isStarting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                        {linkedVibeId ? "Reconnect VibeID" : "Connect VibeID"}
-                    </Button>
+                        <Button
+                            type="button"
+                            variant={linkedVibeId ? "outline" : "default"}
+                            disabled={isStarting}
+                            onClick={startLink}
+                        >
+                            {isStarting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <KeyRound className="mr-2 h-4 w-4" />
+                            )}
+                            {linkedVibeId ? "Reconnect VibeID" : "Connect VibeID"}
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
