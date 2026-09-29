@@ -133,6 +133,25 @@ async function main(): Promise<void> {
     assert.match(auth, /user: toGuidelineStateDto\(updatedUser\)/);
     assert.equal((vibeId.match(/completeClientAuthenticationBoundary/g) ?? []).length, 3);
 
+    const authenticatedClientBoundaryFiles = [
+        "src/app/circles/page.tsx",
+        "src/app/circles/[handle]/issues/create/page.tsx",
+        "src/app/circles/[handle]/issues/[issueId]/edit/page.tsx",
+        "src/app/circles/[handle]/proposals/create/page.tsx",
+        "src/app/circles/[handle]/proposals/[proposalId]/edit/page.tsx",
+        "src/app/circles/[handle]/goals/create/page.tsx",
+        "src/app/circles/[handle]/goals/[goalId]/edit/page.tsx",
+        "src/app/circles/[handle]/tasks/create/page.tsx",
+        "src/app/circles/[handle]/tasks/[taskId]/edit/page.tsx",
+        "src/app/circles/[handle]/shifts/[shiftId]/edit/page.tsx",
+    ];
+    for (const file of authenticatedClientBoundaryFiles) {
+        assert.match(read(file), /toAuthenticatedClientUser\(/, `${file} must project its client-bound user`);
+    }
+    const accountSettingsPage = read("src/app/circles/[handle]/settings/subscription/page.tsx");
+    assert.match(accountSettingsPage, /toAccountSettingsClientUser\(user\)/);
+    assert.doesNotMatch(accountSettingsPage, /user=\{user\}/);
+
     console.log("client-user executable browser/auth boundary tests passed");
 }
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { Circle } from "@/models/models";
+import type { AccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import { VerifyAccountButton } from "@/components/modules/auth/verify-account-button";
 import { VerificationThreadMessageList } from "@/components/modules/verification/verification-thread-message-list";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
@@ -43,11 +43,7 @@ const formatDate = (value?: string | null) => {
     return new Date(value).toLocaleString();
 };
 
-export function VerificationSettingsCard({
-    user,
-}: {
-    user: Circle;
-}) {
+export function VerificationSettingsCard({ user }: { user: AccountSettingsClientUser }) {
     const [thread, setThread] = useState<ApplicantVerificationThread | null>(null);
     const [body, setBody] = useState("");
     const [files, setFiles] = useState<File[]>([]);
@@ -137,9 +133,13 @@ export function VerificationSettingsCard({
                         </CardDescription>
                     </div>
                     <div className="flex w-fit flex-col items-start gap-1 rounded-lg border px-3 py-2 sm:items-end">
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</span>
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Status
+                        </span>
                         {status ? (
-                            <Badge variant={STATUS_VARIANTS[status] ?? "outline"}>{STATUS_LABELS[status] ?? status}</Badge>
+                            <Badge variant={STATUS_VARIANTS[status] ?? "outline"}>
+                                {STATUS_LABELS[status] ?? status}
+                            </Badge>
                         ) : (
                             <Badge variant="outline">Not submitted</Badge>
                         )}
@@ -190,7 +190,10 @@ export function VerificationSettingsCard({
 
                         {isRejected ? (
                             <div className="space-y-3 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                                <div>This verification request is closed. You can submit a new request when you are ready.</div>
+                                <div>
+                                    This verification request is closed. You can submit a new request when you are
+                                    ready.
+                                </div>
                                 <VerifyAccountButton onStatusChange={loadThread} />
                             </div>
                         ) : null}
@@ -247,9 +250,7 @@ export function VerificationSettingsCard({
                             </div>
                         ) : shouldShowLockedNotice ? (
                             <div className="space-y-3 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-                                <div>
-                                    Replies are currently locked until an admin asks for more information.
-                                </div>
+                                <div>Replies are currently locked until an admin asks for more information.</div>
                             </div>
                         ) : null}
                     </>
