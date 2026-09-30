@@ -1,11 +1,12 @@
 "use client";
 
 import { useIsCompact } from "@/components/utils/use-is-compact";
-import { Circle, UserAndCircleInfo } from "@/models/models";
+import { UserAndCircleInfo } from "@/models/models";
 import { FormNav, NavItem } from "@/components/forms/form-nav";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { getUserOrCircleInfo } from "@/lib/utils/form";
+import type { SettingsNavigationDto } from "@/lib/data/settings-navigation-dto";
 
 type SettingsForm = {
     name: string | UserAndCircleInfo;
@@ -63,18 +64,18 @@ const settingsForms: SettingsForm[] = [
 ];
 
 export type SettingsLayoutWrapperProps = {
-    circle: Circle;
+    navigation: SettingsNavigationDto;
     children: React.ReactNode;
 };
 
-export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrapperProps) => {
+export const SettingsLayoutWrapper = ({ children, navigation }: SettingsLayoutWrapperProps) => {
     const isCompact = useIsCompact();
-    const isUser = circle.circleType === "user";
+    const isUser = navigation.circleType === "user";
     const [user] = useAtom(userAtom);
     const navItems = settingsForms
         .filter((item) => {
             if (item.handle === "subscription") {
-                return user?.handle === circle.handle;
+                return user?.handle === navigation.handle;
             }
             return true;
         })
@@ -99,7 +100,7 @@ export const SettingsLayoutWrapper = ({ children, circle }: SettingsLayoutWrappe
                     minWidth: isCompact ? "0px" : "240px",
                 }}
             >
-                <FormNav items={navItems} circle={circle} />
+                <FormNav items={navItems} handle={navigation.handle} />
             </div>
             {children}
         </div>
