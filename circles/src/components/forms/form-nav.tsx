@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { buttonVariants } from "../ui/button";
-import { Circle } from "@/models/models";
 import { useIsCompact } from "../utils/use-is-compact";
 import { useEffect } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
@@ -16,11 +15,11 @@ export type NavItem = {
 
 type FormNavProps = {
     items: NavItem[];
-    circle: Circle;
+    handle?: string;
     className?: string;
 };
 
-export const FormNav: React.FC<FormNavProps> = ({ items, circle, className, ...props }) => {
+export const FormNav: React.FC<FormNavProps> = ({ items, handle, className, ...props }) => {
     const pathname = usePathname();
     const filteredItems = items.filter((item) => item.handle !== "server-settings");
     const isCompact = useIsCompact();
@@ -32,7 +31,7 @@ export const FormNav: React.FC<FormNavProps> = ({ items, circle, className, ...p
     }, []);
 
     const getPath = (item: NavItem) => {
-        return `/circles/${circle.handle}/settings${item.handle ? `/${item.handle}` : ""}`;
+        return `/circles/${handle}/settings${item.handle ? `/${item.handle}` : ""}`;
     };
 
     return (
