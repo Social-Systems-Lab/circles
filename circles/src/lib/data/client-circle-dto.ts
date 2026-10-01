@@ -8,6 +8,7 @@ import type {
     Location,
     Media,
     MemberDisplay,
+    Metrics,
     Question,
     SocialLink,
     TaskDisplay,
@@ -45,6 +46,12 @@ export type ClientCircleDto = Pick<
     offers?: Circle["offers"];
     engagements?: Circle["engagements"];
     needs?: Circle["needs"];
+};
+
+export type PublicMapCircleDto = ClientCircleDto & {
+    createdAt?: Date;
+    metrics?: Omit<Metrics, "distance" | "proximity" | "rank">;
+    mapEligibility?: { profileComplete?: boolean };
 };
 
 export type ClientParentCircleDto = Pick<Circle, "_id" | "name" | "handle" | "circleType">;
@@ -288,6 +295,31 @@ export const buildClientCircleDto = (circle: Circle): ClientCircleDto => ({
     ...(copyPublicEngagements(circle.engagements) ? { engagements: copyPublicEngagements(circle.engagements) } : {}),
     ...(copyPublicNeeds(circle.needs) ? { needs: copyPublicNeeds(circle.needs) } : {}),
 });
+
+const buildPublicMapMetrics = (value: unknown): PublicMapCircleDto["metrics"] => {
+    if (!value || typeof value !== "object") return undefined;
+    const source = value as Record<string, unknown>;
+    const metrics: NonNullable<PublicMapCircleDto["metrics"]> = {};
+    for (const key of ["similarity", "recentness", "popularity", "activity", "searchRank"] as const) {
+        if (typeof source[key] === "number" && Number.isFinite(source[key])) metrics[key] = source[key];
+    }
+    return Object.keys(metrics).length ? metrics : undefined;
+};
+
+export const buildPublicMapCircleDto = (
+    circle: Circle & { metrics?: Metrics; mapEligibility?: { profileComplete?: boolean } },
+): PublicMapCircleDto => {
+    const dto = buildClientCircleDto(circle);
+    const metrics = buildPublicMapMetrics(circle.metrics);
+    return {
+        ...dto,
+        ...(circle.createdAt instanceof Date ? { createdAt: new Date(circle.createdAt) } : {}),
+        ...(metrics ? { metrics } : {}),
+        ...(circle.mapEligibility?.profileComplete === true ? { mapEligibility: { profileComplete: true } } : {}),
+    };
+};
+
+export const buildPinnedCircleDto = (circle: Circle): ClientCircleDto => buildClientCircleDto(circle);
 
 export const buildClientParentCircleDto = (circle?: Circle | null): ClientParentCircleDto | undefined =>
     circle

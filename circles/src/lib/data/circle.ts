@@ -15,6 +15,7 @@ import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from ".
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, getDefaultModules } from "./constants";
 import { getMetrics } from "../utils/metrics";
+import { applyPublicMapMetricsAndSort } from "./public-map-metrics";
 import { deleteVbdCircle, deleteVbdPost, upsertVbdCircles } from "./vdb";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
 import { createDefaultFeed } from "./feed";
@@ -433,6 +434,17 @@ export const getMetricsForCircles = async (
     // sort circles by rank
     circles.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
     return circles;
+};
+
+export const getPublicMapMetricsForCircles = async (
+    circles: WithMetric<Circle>[],
+    userDid: string | undefined,
+    sort?: SortingOptions,
+) => {
+    const user = userDid
+        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
+        : undefined;
+    return applyPublicMapMetricsAndSort(circles, user, new Date(), getMetrics, sort);
 };
 
 export const createDefaultCircle = (): Circle => {

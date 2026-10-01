@@ -7,12 +7,13 @@ import { Circle, UserPrivate } from "@/models/models";
 import type { PinStateDto } from "@/lib/data/client-user-dto";
 import { toPinStateDto } from "@/lib/data/client-user-dto";
 import { executeAuthenticatedUserMutation } from "@/lib/data/client-user-boundary";
+import { buildPinnedCircleDto, type ClientCircleDto } from "@/lib/data/client-circle-dto";
 
 /**
  * GET /api/pins
  * Returns pinned circles in pinned order for the authenticated user.
  */
-export async function GET(): Promise<NextResponse<Circle[]>> {
+export async function GET(): Promise<NextResponse<ClientCircleDto[]>> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
@@ -29,7 +30,7 @@ export async function GET(): Promise<NextResponse<Circle[]>> {
         const circles = await getCirclesByIds(ids);
         const byId = new Map(circles.map((c) => [c._id?.toString(), c]));
         const ordered = ids.map((id) => byId.get(id)).filter((c): c is Circle => !!c);
-        return NextResponse.json(ordered);
+        return NextResponse.json(ordered.map(buildPinnedCircleDto));
     } catch (error) {
         console.error("GET /api/pins failed:", error);
         return NextResponse.json([]);

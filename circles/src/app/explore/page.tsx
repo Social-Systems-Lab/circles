@@ -1,11 +1,12 @@
 // \app\page.tsx - default app route showing hybrid map and card swipe interface
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { getCirclesWithMetrics, getMetricsForCircles, getSwipeCircles } from "@/lib/data/circle";
+import { getPublicMapMetricsForCircles, getSwipeCircles } from "@/lib/data/circle";
 import { getServerSettings } from "@/lib/data/server-settings";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
 import MapExplorer from "@/components/modules/circles/map-explorer";
 import { redirect } from "next/navigation";
 import { SortingOptions } from "@/models/models";
+import { buildPublicMapCircleDto } from "@/lib/data/client-circle-dto";
 
 type HomeProps = {
     params: Promise<{ handle: string }>;
@@ -23,11 +24,12 @@ export default async function Home(props: HomeProps) {
 
     // Get circles with location data for the map and cards
     const circles = await getSwipeCircles();
-    const circlesWithMetrics = await getMetricsForCircles(circles, userDid, sort as SortingOptions);
+    const circlesWithMetrics = await getPublicMapMetricsForCircles(circles, userDid, sort as SortingOptions);
+    const publicCircles = circlesWithMetrics.map(buildPublicMapCircleDto);
 
     return (
-        <ContentDisplayWrapper content={circlesWithMetrics}>
-            <MapExplorer allDiscoverableCircles={circlesWithMetrics} mapboxKey={serverConfig?.mapboxKey ?? ""} />
+        <ContentDisplayWrapper content={publicCircles}>
+            <MapExplorer allDiscoverableCircles={publicCircles} mapboxKey={serverConfig?.mapboxKey ?? ""} />
         </ContentDisplayWrapper>
     );
 }
