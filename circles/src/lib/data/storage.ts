@@ -2,6 +2,7 @@
 
 import fs from "fs-extra";
 import path from "path";
+import { randomUUID } from "crypto";
 import { Client as MinioClient } from "minio";
 
 const resolveMinioHost = () => {
@@ -36,6 +37,8 @@ const minioClient = new MinioClient({
 });
 
 const bucketName = "circles";
+export const verificationBucketName = process.env.MINIO_VERIFICATION_BUCKET || "circles-verification";
+export const VERIFICATION_STORAGE_SCHEME = "verification-private://";
 
 export const isFile = (file: any) => {
     return file && typeof file === "object" && file.type && file.size;
@@ -64,6 +67,18 @@ const ensureBucketExists = async () => {
     }
 };
 
+const ensureVerificationBucketExists = async () => {
+    const exists = await minioClient.bucketExists(verificationBucketName);
+    if (!exists) {
+        await minioClient.makeBucket(verificationBucketName);
+    }
+    try {
+        await minioClient.setBucketPolicy(verificationBucketName, "");
+    } catch (error: any) {
+        if (error?.code !== "NoSuchBucketPolicy" && error?.code !== "NoSuchPolicy") throw error;
+    }
+};
+
 const checkIfFileExists = async (circleId: string, fileName: string): Promise<boolean> => {
     try {
         const objectName = `${circleId}/${fileName}`;
@@ -85,7 +100,8 @@ export const saveFile = async (
     fileName: string,
     circleId: string,
     overwrite: boolean,
-): Promise<FileInfo> => {    // --- Local filesystem override for development ---
+): Promise<FileInfo> => {
+    // --- Local filesystem override for development ---
     if (process.env.LOCAL_FS_STORAGE === "true" && process.env.NODE_ENV !== "production") {
         const uploadDir = path.join(process.cwd(), "public", "uploads");
         if (!fs.existsSync(uploadDir)) {
@@ -109,7 +125,7 @@ export const saveFile = async (
         const extension = resolveFileExtension(originalName, file?.type);
         const finalName = `${Date.now()}-${fileName}${extension}`;
         const filePath = path.join(uploadDir, finalName);
-        
+
         const fileDir = path.dirname(filePath);
         if (!fs.existsSync(fileDir)) {
             fs.mkdirSync(fileDir, { recursive: true });
@@ -191,6 +207,69 @@ export const saveFile = async (
         throw error;
     }
 };
+
+export const saveVerificationFile = async (file: File, requestId: string, messageId: string): Promise<FileInfo> => {
+    const originalName = file.name || "verification-attachment";
+    const contentType = file.type || "application/octet-stream";
+    const extension = resolveFileExtension(originalName, contentType);
+    const objectName = `${requestId}/${messageId}/${randomUUID()}${extension}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (process.env.LOCAL_FS_STORAGE === "true" && process.env.NODE_ENV !== "production") {
+        const privateDir = path.join(process.cwd(), "circles_data", "verification-attachments");
+        const filePath = path.join(privateDir, objectName);
+        await fs.ensureDir(path.dirname(filePath));
+        await fs.writeFile(filePath, buffer);
+    } else {
+        await ensureVerificationBucketExists();
+        await minioClient.putObject(verificationBucketName, objectName, buffer, buffer.length, {
+            "Content-Type": contentType,
+        });
+    }
+
+    return {
+        originalName,
+        fileName: path.basename(objectName),
+        url: `${VERIFICATION_STORAGE_SCHEME}${objectName}`,
+    };
+};
+
+export const getVerificationFile = async (
+    locator: string,
+): Promise<{ stream: NodeJS.ReadableStream; contentType: string }> => {
+    if (locator.startsWith(VERIFICATION_STORAGE_SCHEME)) {
+        const objectName = locator.slice(VERIFICATION_STORAGE_SCHEME.length);
+        if (!objectName || objectName.includes("..")) throw new Error("Invalid verification attachment locator");
+
+        if (process.env.LOCAL_FS_STORAGE === "true" && process.env.NODE_ENV !== "production") {
+            const privateRoot = path.join(process.cwd(), "circles_data", "verification-attachments");
+            const filePath = path.resolve(privateRoot, objectName);
+            if (!filePath.startsWith(`${path.resolve(privateRoot)}${path.sep}`)) {
+                throw new Error("Invalid verification attachment locator");
+            }
+            return { stream: fs.createReadStream(filePath), contentType: "application/octet-stream" };
+        }
+
+        const stat = await minioClient.statObject(verificationBucketName, objectName);
+        return {
+            stream: await minioClient.getObject(verificationBucketName, objectName),
+            contentType: stat.metaData?.["content-type"] || "application/octet-stream",
+        };
+    }
+
+    const legacyPrefix = "/storage/";
+    const prefixIndex = locator.indexOf(legacyPrefix);
+    const objectName = prefixIndex >= 0 ? locator.slice(prefixIndex + legacyPrefix.length) : "";
+    if (!isLegacyVerificationObject(objectName)) throw new Error("Invalid verification attachment locator");
+    const stat = await minioClient.statObject(bucketName, objectName);
+    return {
+        stream: await minioClient.getObject(bucketName, objectName),
+        contentType: stat.metaData?.["content-type"] || "application/octet-stream",
+    };
+};
+
+export const isLegacyVerificationObject = (objectName: string): boolean =>
+    objectName.split("/").at(-1)?.startsWith("verification-attachment") === true;
 
 // Function to delete a file from MinIO based on its URL
 export const deleteFile = async (fileUrl: string): Promise<void> => {
