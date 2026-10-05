@@ -29,7 +29,7 @@ import {
     changeIssueStage,
     assignIssue,
 } from "@/lib/data/issue";
-import { getMembers } from "@/lib/data/member";
+import { getAuthorizedMemberPickerResult } from "@/lib/data/member-picker";
 import { Feeds, Posts, Issues } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type
 import { createPost } from "@/lib/data/feed"; // Import createPost
@@ -889,19 +889,8 @@ export async function assignIssueAction(
 }
 
 export const getMembersAction = async (circleId: string) => {
-    // Get the current user
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "User not authenticated" };
-    }
-    const user = await getUserByDid(userDid); // For notifications
-    if (!user) {
-        return { success: false, message: "User data not found" };
-    }
-
-    // get members of circle
-    let members = await getMembers(circleId);
-    return members;
+    return getAuthorizedMemberPickerResult({ viewerDid: userDid, circleId, requiredFeature: features.issues.assign });
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.

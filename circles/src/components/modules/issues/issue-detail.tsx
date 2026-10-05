@@ -1,12 +1,24 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react"; // Added useEffect
-import { Circle, IssueDisplay, IssueStage, IssueUrgency, MemberDisplay } from "@/models/models"; // Added MemberDisplay
+import { Circle, IssueDisplay, IssueStage, IssueUrgency } from "@/models/models";
+import type { MemberPickerDto } from "@/lib/data/member-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
-import { Loader2, MoreHorizontal, Pencil, Trash2, MapPin, User, CheckCircle, Clock, Play, CalendarIcon } from "lucide-react";
+import {
+    Loader2,
+    MoreHorizontal,
+    Pencil,
+    Trash2,
+    MapPin,
+    User,
+    CheckCircle,
+    Clock,
+    Play,
+    CalendarIcon,
+} from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { UserPicture } from "../members/user-picture";
 import { getFullLocationName } from "@/lib/utils";
@@ -112,7 +124,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
     const [targetStage, setTargetStage] = useState<IssueStage | null>(null);
     const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false);
     const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-    const [members, setMembers] = useState<MemberDisplay[]>([]); // Changed type to MemberDisplay[]
+    const [members, setMembers] = useState<MemberPickerDto[]>([]);
     const [selectedAssigneeDid, setSelectedAssigneeDid] = useState<string | undefined>(issue.assignedTo);
     const [selectedUrgency, setSelectedUrgency] = useState<IssueUrgency | "not_set">(issue.urgency ?? "not_set");
     const [selectedTargetDate, setSelectedTargetDate] = useState<Date | undefined>(
@@ -148,12 +160,12 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
 
     // Fetch members when assign dialog opens
     useEffect(() => {
-        if (assignDialogOpen) {
+        if (permissions.canAssign && assignDialogOpen) {
             const fetchMembers = async () => {
                 try {
                     const result = await getMembersAction(circle._id as string);
-                    if (Array.isArray(result)) {
-                        setMembers(result);
+                    if (result.success) {
+                        setMembers(result.members);
                     } else {
                         // Handle potential error object returned by the action
                         console.error("Failed to fetch members:", result.message);
@@ -177,7 +189,7 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
             };
             fetchMembers();
         }
-    }, [assignDialogOpen, circle._id, toast]);
+    }, [assignDialogOpen, circle._id, permissions.canAssign, toast]);
 
     useEffect(() => {
         setSelectedUrgency(issue.urgency ?? "not_set");
@@ -608,7 +620,11 @@ const IssueDetail: React.FC<IssueDetailProps> = ({ issue, circle, permissions, c
                                         )}
                                         disabled={isPending}
                                     >
-                                        {selectedTargetDate ? format(selectedTargetDate, "PPP") : <span>Pick a date</span>}
+                                        {selectedTargetDate ? (
+                                            format(selectedTargetDate, "PPP")
+                                        ) : (
+                                            <span>Pick a date</span>
+                                        )}
                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>

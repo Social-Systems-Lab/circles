@@ -23,7 +23,6 @@ import {
     changeGoalStage,
     getCompletedGoalsByCircleId, // Added
 } from "@/lib/data/goal";
-import { getMembers } from "@/lib/data/member";
 import {
     notifyGoalSubmittedForReview,
     notifyGoalApproved,
@@ -741,22 +740,6 @@ export async function changeGoalStageAction( // Renamed function
         return { success: false, message: "Failed to change goal stage" }; // Updated message
     }
 }
-
-export const getMembersAction = async (circleId: string) => {
-    // Get the current user
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "User not authenticated" };
-    }
-    const user = await getUserByDid(userDid); // For notifications
-    if (!user) {
-        return { success: false, message: "User data not found" };
-    }
-
-    // get members of circle
-    let members = await getMembers(circleId);
-    return members;
-};
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
 

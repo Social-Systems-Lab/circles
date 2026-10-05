@@ -7,7 +7,6 @@ import {
     Circle,
     TaskDisplay,
     TaskStage,
-    MemberDisplay,
     TaskPermissions,
     TaskPriority,
     TaskParticipant,
@@ -94,6 +93,7 @@ import {
     isShiftTask as isShiftTaskItem,
 } from "./shift-task-utils";
 import { getShiftStageInfo, getTaskPriorityInfo, getTaskStageInfo, getTaskWorkflowStatusBadge } from "./task-ui";
+import type { MemberPickerDto } from "@/lib/data/member-picker";
 
 const taskPriorityOptions: { value: TaskPriority | "none"; label: string }[] = [
     { value: "critical", label: "Critical" },
@@ -191,7 +191,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const [selectedStage, setSelectedStage] = useState<TaskStage>(task.stage);
     const [assignDialogOpen, setAssignDialogOpen] = useState(false);
     const [requestChangesDialogOpen, setRequestChangesDialogOpen] = useState(false);
-    const [members, setMembers] = useState<MemberDisplay[]>([]);
+    const [members, setMembers] = useState<MemberPickerDto[]>([]);
     const [selectedAssigneeDid, setSelectedAssigneeDid] = useState<string | undefined>(task.assignedTo); // Use task prop
     const [selectedPriority, setSelectedPriority] = useState<TaskPriority | "none">(task.priority ?? "none");
     const [changesRequestNote, setChangesRequestNote] = useState(task.reviewRequestedChangesNote ?? "");
@@ -293,16 +293,14 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
     const memberNameByDid = new Map(
         members
             .filter(
-                (member): member is MemberDisplay & { userDid: string } =>
-                    typeof member.userDid === "string" && member.userDid.length > 0,
+                (member): member is MemberPickerDto => typeof member.userDid === "string" && member.userDid.length > 0,
             )
             .map((member) => [member.userDid, member.name || member.userDid]),
     );
     const memberByDid = new Map(
         members
             .filter(
-                (member): member is MemberDisplay & { userDid: string } =>
-                    typeof member.userDid === "string" && member.userDid.length > 0,
+                (member): member is MemberPickerDto => typeof member.userDid === "string" && member.userDid.length > 0,
             )
             .map((member) => [member.userDid, member]),
     );
@@ -380,12 +378,12 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
 
     // Fetch members when assign dialog opens
     useEffect(() => {
-        if (assignDialogOpen || pendingClaims.length > 0) {
+        if (permissions.canAssign && (assignDialogOpen || pendingClaims.length > 0)) {
             const fetchMembers = async () => {
                 try {
                     const result = await getMembersAction(circle._id as string);
-                    if (Array.isArray(result)) {
-                        setMembers(result);
+                    if (result.success) {
+                        setMembers(result.members);
                     } else {
                         // Handle potential error object returned by the action
                         console.error("Failed to fetch members:", result.message);
@@ -409,7 +407,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
             };
             fetchMembers();
         }
-    }, [assignDialogOpen, pendingClaims.length, circle._id, toast]);
+    }, [assignDialogOpen, pendingClaims.length, circle._id, permissions.canAssign, toast]);
 
     const itemDetailPath = `/circles/${circle.handle}/${isShiftTask ? "shifts" : "tasks"}/${task._id}`;
     const itemEditPath = `${itemDetailPath}/edit`;
@@ -518,15 +516,6 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                       content: profile,
                   };
         });
-    };
-
-    const openClaimantPreview = (claim: TaskClaim) => {
-        const claimant = getClaimantMember(claim);
-        if (!claimant) {
-            return;
-        }
-
-        openUserPreview(claimant as Circle);
     };
 
     const handleReviewClaim = (claimId: string, decision: "approved" | "declined") => {
@@ -1534,10 +1523,6 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                         <div className="space-y-3">
                             {pendingClaims.map((claim) => {
                                 const claimant = getClaimantMember(claim);
-                                const claimantHandle =
-                                    claimant?.handle && claimant.handle !== getClaimantLabel(claim)
-                                        ? `@${claimant.handle}`
-                                        : null;
 
                                 return (
                                     <div
@@ -1545,10 +1530,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                         className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
                                     >
                                         <div className="flex min-w-0 items-center gap-3">
-                                            <div
-                                                className={claimant ? "cursor-pointer" : ""}
-                                                onClick={claimant ? () => openClaimantPreview(claim) : undefined}
-                                            >
+                                            <div>
                                                 <UserPicture
                                                     name={claimant?.name || getClaimantLabel(claim)}
                                                     picture={claimant?.picture?.url}
@@ -1556,20 +1538,10 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, circle, permissions, curr
                                                 />
                                             </div>
                                             <div className="min-w-0">
-                                                <button
-                                                    type="button"
-                                                    className={cn(
-                                                        "truncate text-left text-base font-medium text-foreground",
-                                                        claimant ? "hover:underline" : "cursor-default",
-                                                    )}
-                                                    onClick={claimant ? () => openClaimantPreview(claim) : undefined}
-                                                    disabled={!claimant}
-                                                >
+                                                <div className="truncate text-left text-base font-medium text-foreground">
                                                     {getClaimantLabel(claim)}
-                                                </button>
+                                                </div>
                                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                                                    {claimantHandle && <span>{claimantHandle}</span>}
-                                                    {claimantHandle && <span aria-hidden="true">•</span>}
                                                     <span>
                                                         Claimed{" "}
                                                         {formatDistanceToNow(new Date(claim.createdAt), {
