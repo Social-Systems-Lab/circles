@@ -44,6 +44,8 @@ import {
     MessageEmailReminder,
 } from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
+import type { MembershipCredentialHandoff } from "@/lib/vibe-id/membership-credential-handoffs";
+import type { MembershipCredentialStatus } from "@/lib/vibe-id/membership-credential-statuses";
 import { COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS } from "./feed-indexes";
 import { EVENT_OCCURRENCE_UNIQUE_INDEX_KEYS, EVENT_OCCURRENCE_UNIQUE_INDEX_OPTIONS } from "./event-occurrence-indexes";
 import {
@@ -117,6 +119,8 @@ let StripeWebhookEvents: Collection<any>;
 let UserRelationships: Collection<any>;
 let HumanityVerifications: Collection<HumanityVerification>;
 let PlatformAuditEvents: Collection<PlatformAuditEvent>;
+let MembershipCredentialHandoffs: Collection<MembershipCredentialHandoff>;
+let MembershipCredentialStatuses: Collection<MembershipCredentialStatus>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -191,6 +195,20 @@ if (process.env.IS_BUILD !== "true") {
     HumanityVerifications = db.collection<HumanityVerification>("humanityVerifications");
     PlatformSettingsCollection = db.collection<PlatformSettings>("platformSettings");
     PlatformAuditEvents = db.collection<PlatformAuditEvent>("platformAuditEvents");
+    MembershipCredentialHandoffs = db.collection<MembershipCredentialHandoff>("membershipCredentialHandoffs");
+    MembershipCredentialHandoffs.createIndex({ tokenHash: 1 }, { unique: true }).catch((error) => {
+        console.error("Failed to create membership credential handoff token index:", error);
+    });
+    MembershipCredentialHandoffs.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch((error) => {
+        console.error("Failed to create membership credential handoff expiry index:", error);
+    });
+    MembershipCredentialStatuses = db.collection<MembershipCredentialStatus>("membershipCredentialStatuses");
+    MembershipCredentialStatuses.createIndex({ tokenHash: 1 }, { unique: true }).catch((error) => {
+        console.error("Failed to create membership credential status token index:", error);
+    });
+    MembershipCredentialStatuses.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch((error) => {
+        console.error("Failed to create membership credential status expiry index:", error);
+    });
 }
 export async function getDb() {
     if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
@@ -251,4 +269,6 @@ export {
     HumanityVerifications,
     PlatformSettingsCollection,
     PlatformAuditEvents,
+    MembershipCredentialHandoffs,
+    MembershipCredentialStatuses,
 };

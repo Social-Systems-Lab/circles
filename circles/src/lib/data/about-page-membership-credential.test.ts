@@ -74,6 +74,12 @@ const dependencies = (
     findPrivateUser: async () => viewer,
     getLinkedIdentity: () => LINKED_VIBE_DID,
     createCredential: () => credential,
+    createHandoff: async () => ({
+        token: "opaque-token",
+        subjectVibeDid: LINKED_VIBE_DID,
+        deepLinkUrl: credential.deepLinkUrl,
+        credentialUrl: credential.credentialUrl,
+    }),
     ...overrides,
 });
 
@@ -234,7 +240,7 @@ test("a canonical authenticated member receives the unchanged membership card", 
         }),
     );
     assert.equal(receivedUser, viewer);
-    assert.equal(resolved, credential);
+    assert.deepEqual(resolved, credential);
 
     const browserOutput = buildAboutPageClientProps({
         circle,
@@ -242,6 +248,5 @@ test("a canonical authenticated member receives the unchanged membership card", 
         fundingPanelVisibility: "visible",
         upcomingShiftsVisibility: "visible",
     });
-    assert.equal(browserOutput.membershipCredential, credential);
     assert.deepEqual(browserOutput.membershipCredential, credential);
 });

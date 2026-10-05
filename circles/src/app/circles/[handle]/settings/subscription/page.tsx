@@ -10,6 +10,7 @@ import {
 } from "@/lib/vibe-id/membership-credentials";
 import { toAccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import { EmailVerificationBanner } from "./email-verification-banner";
+import { createMembershipCredentialHandoffForSession } from "@/lib/vibe-id/membership-credential-handoffs";
 
 type SubscriptionProps = {
     params: Promise<{ handle: string }>;
@@ -35,6 +36,17 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
             user,
             subjectVibeDid,
         });
+        if (membershipCredential) {
+            const handoff = await createMembershipCredentialHandoffForSession({ credentialType: "platform" });
+            membershipCredential =
+                handoff?.subjectVibeDid === subjectVibeDid
+                    ? {
+                          ...membershipCredential,
+                          deepLinkUrl: handoff.deepLinkUrl,
+                          credentialUrl: handoff.credentialUrl,
+                      }
+                    : null;
+        }
     }
 
     return (

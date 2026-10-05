@@ -9,6 +9,10 @@ import {
     type CircleMembershipCredentialCardData,
 } from "@/lib/vibe-id/membership-credentials";
 import type { Circle, Member, UserPrivate } from "@/models/models";
+import {
+    createMembershipCredentialHandoffForSession,
+    type MembershipCredentialHandoffResult,
+} from "@/lib/vibe-id/membership-credential-handoffs";
 
 export type AboutPageMembershipCredentialDependencies = {
     authenticate: () => Promise<string | undefined>;
@@ -20,6 +24,7 @@ export type AboutPageMembershipCredentialDependencies = {
         member: Member;
         subjectVibeDid: string;
     }) => CircleMembershipCredentialCardData | null;
+    createHandoff: (circleId: string) => Promise<MembershipCredentialHandoffResult | null>;
 };
 
 const defaultDependencies: AboutPageMembershipCredentialDependencies = {
@@ -28,6 +33,7 @@ const defaultDependencies: AboutPageMembershipCredentialDependencies = {
     findPrivateUser: getUserPrivate,
     getLinkedIdentity: getLinkedVibeIdDid,
     createCredential: createCircleMembershipCredentialCard,
+    createHandoff: (circleId) => createMembershipCredentialHandoffForSession({ credentialType: "circle", circleId }),
 };
 
 export async function resolveAboutPageMembershipCredential(
@@ -62,7 +68,15 @@ export async function resolveAboutPageMembershipCredential(
             member,
             subjectVibeDid: linkedVibeDid,
         });
-        return credential?.subjectDid === linkedVibeDid ? credential : null;
+        if (credential?.subjectDid !== linkedVibeDid) return null;
+
+        const handoff = await dependencies.createHandoff(circleId);
+        if (!handoff || handoff.subjectVibeDid !== linkedVibeDid) return null;
+        return {
+            ...credential,
+            deepLinkUrl: handoff.deepLinkUrl,
+            credentialUrl: handoff.credentialUrl,
+        };
     } catch {
         return null;
     }
