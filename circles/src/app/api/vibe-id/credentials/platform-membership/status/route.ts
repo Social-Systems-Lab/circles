@@ -1,34 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Circles } from "@/lib/data/db";
-import { isPlatformMember } from "@/lib/vibe-id/membership-credentials";
-import type { Circle } from "@/models/models";
+import { resolveMembershipCredentialStatus } from "@/lib/vibe-id/membership-credential-statuses";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-    const subjectDid = request.nextUrl.searchParams.get("subjectDid")?.trim() || "";
-
-    if (!subjectDid) {
-        return NextResponse.json({ status: "unknown", message: "Missing subjectDid." }, { status: 400 });
+    const token = request.nextUrl.searchParams.get("token")?.trim() || "";
+    let status: "active" | "revoked" | "unknown" = "unknown";
+    try {
+        status = await resolveMembershipCredentialStatus({ token, credentialType: "platform" });
+    } catch {
+        status = "unknown";
     }
-
-    const user = await Circles.findOne({
-        circleType: "user",
-        "metadata.authProviders.vibeId.did": subjectDid,
-    });
-    if (!user) {
-        return NextResponse.json({
-            status: "revoked",
+    return NextResponse.json(
+        {
+            status,
             checkedAt: new Date().toISOString(),
-            reason: "subject_not_found",
-        });
-    }
-
-    const active = isPlatformMember(user as Circle);
-    return NextResponse.json({
-        status: active ? "active" : "revoked",
-        checkedAt: new Date().toISOString(),
-        reason: active ? undefined : "membership_not_active",
-    });
+        },
+        { headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } },
+    );
 }
