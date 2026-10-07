@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import type { Circle } from "@/models/models";
+import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
 import {
     getEventOccurrenceSeriesParticipantCandidatesAction,
     inviteUsersToEventOccurrenceAction,
@@ -27,12 +27,10 @@ type Props = {
 export default function OccurrenceInviteModal(props: Props) {
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
-    const [selectedUsers, setSelectedUsers] = useState<Circle[]>([]);
+    const [selectedUsers, setSelectedUsers] = useState<EventInviteCandidateDto[]>([]);
     const [message, setMessage] = useState("");
     const [isAddingSeriesParticipants, setIsAddingSeriesParticipants] = useState(false);
-    const [effectiveStatusByDid, setEffectiveStatusByDid] = useState<
-        Record<string, "going" | "interested">
-    >({});
+    const [effectiveStatusByDid, setEffectiveStatusByDid] = useState<Record<string, "going" | "interested">>({});
     const [seriesParticipantSummary, setSeriesParticipantSummary] = useState<{
         added: number;
         alreadySelected: number;
@@ -114,14 +112,15 @@ export default function OccurrenceInviteModal(props: Props) {
                     result.newlyInvited + result.updatedAndResent > 0
                         ? "Invitations and updates sent"
                         : "No invitations sent",
-                description: [
-                    result.newlyInvited > 0 && `${result.newlyInvited} new`,
-                    result.updatedAndResent > 0 && `${result.updatedAndResent} updated`,
-                    result.alreadyInvitedNotResent > 0 && `${result.alreadyInvitedNotResent} already invited`,
-                    result.skipped > 0 && `${result.skipped} skipped`,
-                ]
-                    .filter(Boolean)
-                    .join(" · ") || undefined,
+                description:
+                    [
+                        result.newlyInvited > 0 && `${result.newlyInvited} new`,
+                        result.updatedAndResent > 0 && `${result.updatedAndResent} updated`,
+                        result.alreadyInvitedNotResent > 0 && `${result.alreadyInvitedNotResent} already invited`,
+                        result.skipped > 0 && `${result.skipped} skipped`,
+                    ]
+                        .filter(Boolean)
+                        .join(" · ") || undefined,
             });
             setSelectedUsers([]);
             setMessage("");

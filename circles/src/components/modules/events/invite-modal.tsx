@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Circle } from "@/models/models";
+import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import UserPicker from "@/components/forms/user-picker";
@@ -17,10 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-type InviteCandidate = Circle & {
-    inviteSources?: ("circle_member" | "contact")[];
-    inviteSourceLabel?: string;
-};
+type InviteCandidate = EventInviteCandidateDto;
 
 type Props = {
     circleHandle: string;
