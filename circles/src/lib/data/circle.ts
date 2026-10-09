@@ -1,15 +1,6 @@
 // circle.ts - circle creation and management
 
-import {
-    Circle,
-    CirclePublishStatus,
-    CircleType,
-    PlatformMetrics,
-    Post,
-    ServerSettings,
-    SortingOptions,
-    WithMetric,
-} from "@/models/models";
+import { Circle, CircleType, PlatformMetrics, Post, ServerSettings, SortingOptions, WithMetric } from "@/models/models";
 import { getServerSettings } from "./server-settings";
 import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
 import { ObjectId } from "mongodb";
@@ -25,6 +16,8 @@ import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
 import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+export { getCirclePublishStatus, getPublishedCircleQuery, isCirclePublished } from "./circle-publication-policy";
+import { getPublishedCircleQuery } from "./circle-publication-policy";
 
 export const SAFE_CIRCLE_PROJECTION = {
     _id: 1,
@@ -169,16 +162,6 @@ export const getDefaultCircle = async (inServerConfig: ServerSettings | null = n
 
     return circle;
 };
-
-export const getCirclePublishStatus = (circle?: Partial<Circle> | null): CirclePublishStatus =>
-    circle?.publishStatus ?? "published";
-
-export const isCirclePublished = (circle?: Partial<Circle> | null): boolean =>
-    getCirclePublishStatus(circle) === "published";
-
-export const getPublishedCircleQuery = (): any => ({
-    $or: [{ publishStatus: "published" as const }, { publishStatus: { $exists: false } }],
-});
 
 export const getDiscoverableLifecycleQuery = (): any => ({
     $or: [

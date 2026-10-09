@@ -19,7 +19,7 @@ import { mapOpenAtom } from "@/lib/data/atoms";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 
 interface InviteButtonProps {
-    circle: Circle;
+    circle: Pick<Circle, "handle" | "circleType">;
     renderCompact?: boolean;
 }
 
@@ -30,7 +30,11 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact }) =>
     const isUser = circle?.circleType === "user";
     const compact = isCompact || renderCompact;
 
-    const getCirclePagePath = (circle: Circle, pageHandle: string, absolutePath: boolean): string => {
+    const getCirclePagePath = (
+        circle: Pick<Circle, "handle" | "circleType">,
+        pageHandle: string,
+        absolutePath: boolean,
+    ): string => {
         if (typeof window === "undefined") {
             return "";
         }

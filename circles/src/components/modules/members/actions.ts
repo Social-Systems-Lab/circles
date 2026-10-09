@@ -14,7 +14,7 @@ import { countAdmins, getMember, removeMember, updateMemberUserGroups } from "@/
 import { sendNotifications } from "@/lib/data/notifications";
 import { getUserPrivate } from "@/lib/data/user";
 import { safeModifyMemberUserGroups } from "@/lib/utils";
-import { Circle, MemberDisplay } from "@/models/models";
+import { Circle } from "@/models/models";
 import { revalidatePath } from "next/cache";
 
 type RemoveMemberResponse = {
@@ -28,7 +28,11 @@ const ADMIN_ROLE_REMOVAL_REQUEST_CREATED_MESSAGE =
 const ADMIN_ROLE_REMOVAL_REQUEST_ALREADY_PENDING_MESSAGE =
     "An admin removal request is already pending for this admin.";
 
-async function notifyTargetAdminOfRemovalRequest(circle: Circle, targetUserDid: string, requestedByDid: string): Promise<void> {
+async function notifyTargetAdminOfRemovalRequest(
+    circle: Circle,
+    targetUserDid: string,
+    requestedByDid: string,
+): Promise<void> {
     try {
         const [requester, targetAdmin] = await Promise.all([
             getUserPrivate(requestedByDid),
@@ -47,13 +51,17 @@ async function notifyTargetAdminOfRemovalRequest(circle: Circle, targetUserDid: 
     }
 }
 
-export const removeMemberAction = async (member: MemberDisplay, circle: Circle): Promise<RemoveMemberResponse> => {
+export const removeMemberAction = async (targetUserDid: string, circleId: string): Promise<RemoveMemberResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to remove a member" };
     }
 
     try {
+        const circle = await getCircleById(circleId);
+        if (!circle) return { success: false, message: "Circle not found" };
+        const member = await getMember(targetUserDid, circleId);
+        if (!member) return { success: false, message: "Member not found" };
         // confirm the user is authorized to remove member
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.general.remove_lower_members);
         let canRemoveSameLevel = await isAuthorized(
@@ -129,8 +137,8 @@ type UpdateUserGroupsResponse = {
 };
 
 export const updateUserGroupsAction = async (
-    member: MemberDisplay,
-    circle: Circle,
+    targetUserDid: string,
+    circleId: string,
     newGroups: string[],
 ): Promise<UpdateUserGroupsResponse> => {
     const userDid = await getAuthenticatedUserDid();
@@ -139,6 +147,10 @@ export const updateUserGroupsAction = async (
     }
 
     try {
+        const circle = await getCircleById(circleId);
+        if (!circle) return { success: false, message: "Circle not found" };
+        const member = await getMember(targetUserDid, circleId);
+        if (!member) return { success: false, message: "Member not found" };
         // confirm the user is authorized to edit user groups
         let authorized = await isAuthorized(userDid, circle._id ?? "", features.general.edit_lower_user_groups);
         let canEditSameLevel = await isAuthorized(
@@ -240,7 +252,7 @@ type AdminRoleRemovalRequestResponse = {
 
 export const approveAdminRoleRemovalRequestAction = async (
     requestId: string,
-    circle: Circle,
+    circleId: string,
 ): Promise<AdminRoleRemovalRequestResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -248,6 +260,8 @@ export const approveAdminRoleRemovalRequestAction = async (
     }
 
     try {
+        const circle = await getCircleById(circleId);
+        if (!circle) return { success: false, message: "Circle not found" };
         await approveAdminRoleRemovalRequest({ requestId, targetUserDid: userDid });
 
         let circlePath = await getCirclePath(circle);
@@ -264,7 +278,7 @@ export const approveAdminRoleRemovalRequestAction = async (
 
 export const declineAdminRoleRemovalRequestAction = async (
     requestId: string,
-    circle: Circle,
+    circleId: string,
 ): Promise<AdminRoleRemovalRequestResponse> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -272,6 +286,8 @@ export const declineAdminRoleRemovalRequestAction = async (
     }
 
     try {
+        const circle = await getCircleById(circleId);
+        if (!circle) return { success: false, message: "Circle not found" };
         await declineAdminRoleRemovalRequest({ requestId, targetUserDid: userDid });
 
         let circlePath = await getCirclePath(circle);

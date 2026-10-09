@@ -8,6 +8,11 @@ import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
 import { upsertFollowState } from "./relationships";
 import { assertCircleWritesAllowed } from "./circle-lifecycle-policy";
+export {
+    getMemberDirectoryForViewer,
+    getMemberDirectoryManagement,
+    getPublicMemberDirectory,
+} from "./member-directory-data";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
