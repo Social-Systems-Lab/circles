@@ -81,6 +81,7 @@ mock.module("@/lib/auth/auth", () => ({
     },
 }));
 mock.module("@/lib/data/constants", () => ({
+    getPostViewFeature: () => ({ handle: "view", module: "feed", defaultUserGroups: ["everyone"] }),
     features: {
         events: {
             view: {
@@ -124,6 +125,9 @@ mock.module("@/lib/data/db", () => ({
     EventOccurrenceInvitations: { find: () => cursor([]) },
     EventInvitations: {},
     Feeds: {},
+    Posts: {},
+    Comments: {},
+    PrivateMediaCollection: {},
 }));
 
 mock.module("@/lib/event-publish-capability", () => ({
@@ -149,6 +153,7 @@ mock.module("@/lib/data/circle", () => ({
     getCircleByHandle: async () => actionState.routeCircle,
     ensureModuleIsEnabledOnCircle: async () => undefined,
     getCirclesBySearchQuery: async () => [],
+    getDiscoverableCirclesBySearchQuery: async () => [],
     getCirclesByDids: async () => [],
     getCirclesByIds: async (ids: string[]) =>
         ids.flatMap((id) => (actionState.circles[id] ? [actionState.circles[id]] : [])),
@@ -223,6 +228,8 @@ mock.module("@/lib/data/eventOccurrenceRsvp", () => ({ upsertEventOccurrenceRsvp
 mock.module("@/lib/data/eventOccurrenceInvitation", () => ({ upsertEventOccurrenceInvitation: async () => undefined }));
 mock.module("@/lib/data/circle-lifecycle-policy", () => ({
     getCircleModerationStatus: (candidateCircle?: any) => candidateCircle?.moderationStatus ?? "active",
+    getDiscoverableLifecycleQuery: () => ({}),
+    getReadableLifecycleQuery: () => ({}),
     canReadCircleByLifecycle: (candidateCircle?: any) =>
         candidateCircle?.circleType === "user" ||
         ["active", "paused"].includes(candidateCircle?.moderationStatus ?? "active"),

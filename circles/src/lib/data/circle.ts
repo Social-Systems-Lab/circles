@@ -42,7 +42,6 @@ import {
     getPublishedCircleQuery,
     sanitizeCircleDiscoveryResult,
 } from "@/lib/data/circle-discovery-queries";
-
 export {
     buildCircleListQuery,
     buildCommunityRelatedCirclesQuery,
