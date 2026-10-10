@@ -6,6 +6,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { Circles } from "@/lib/data/db";
 import { generateSecureToken, hashToken, sendEmail } from "@/lib/data/email";
+import { assertDonorboxCredentialsConfigured, assertPaymentsEnabled } from "@/lib/payments";
 import { resendEmailVerificationForAuthenticatedUser } from "@/lib/auth/email-verification-recovery";
 import {
     createTelegramConnectToken,
@@ -29,6 +30,8 @@ const getTelegramSettingsPath = (handle?: string) => (handle ? `/circles/${handl
 const getVerificationBaseUrl = () => process.env.CIRCLES_URL || "http://localhost:3000";
 
 export async function createSubscription(circleId: string, planId: string) {
+    assertPaymentsEnabled();
+
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         throw new Error("User not authenticated");
@@ -46,6 +49,7 @@ export async function createSubscription(circleId: string, planId: string) {
 }
 
 export async function getSubscription(subscriptionId: string) {
+    assertDonorboxCredentialsConfigured(process.env.DONORBOX_EMAIL, DONORBOX_API_KEY);
     const response = await fetch(`${DONORBOX_API_URL}/subscriptions/${subscriptionId}`, {
         headers: {
             Authorization: `Basic ${Buffer.from(`${process.env.DONORBOX_EMAIL}:${DONORBOX_API_KEY}`).toString("base64")}`,
@@ -60,6 +64,7 @@ export async function getSubscription(subscriptionId: string) {
 }
 
 export async function getPlans() {
+    assertDonorboxCredentialsConfigured(process.env.DONORBOX_EMAIL, DONORBOX_API_KEY);
     const response = await fetch(`${DONORBOX_API_URL}/plans`, {
         headers: {
             Authorization: `Basic ${Buffer.from(`${process.env.DONORBOX_EMAIL}:${DONORBOX_API_KEY}`).toString("base64")}`,

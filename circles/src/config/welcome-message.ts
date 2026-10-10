@@ -16,6 +16,17 @@ export const isSystemMessageSource = (source?: string | null): boolean =>
     typeof source === "string" && source.startsWith(SYSTEM_MESSAGE_SOURCE_PREFIX);
 
 const KAMOONI_SYSTEM_SENDER = getKamooniSystemSender();
+export const getWelcomeMessageOrigin = (value = process.env.CIRCLES_URL): string => {
+    try {
+        const url = new URL(value || "https://kamooni.org");
+        if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("unsupported protocol");
+        return url.origin;
+    } catch {
+        return "https://kamooni.org";
+    }
+};
+
+const CIRCLES_URL = getWelcomeMessageOrigin();
 
 export const WELCOME_MESSAGE: WelcomeMessageConfig = {
     senderHandle: KAMOONI_SYSTEM_SENDER.handle,
@@ -31,7 +42,7 @@ Kamooni is a community-owned platform for people and circles who want to build t
 
 **Start here**
 
-[Follow the Kamooni circle](https://kamooni.org/circles/kamooni)
+[Follow the Kamooni circle](${CIRCLES_URL}/circles/kamooni)
 
 Once you follow it, updates from the team will appear in your feed.
 
@@ -39,11 +50,11 @@ Once you follow it, updates from the team will appear in your feed.
 
 If you run into bugs or glitches, please report them here:
 
-[Report an issue](https://kamooni.org/circles/kamooni/issues)
+[Report an issue](${CIRCLES_URL}/circles/kamooni/issues)
 
 If you have ideas for how Kamooni could improve, please add them here:
 
-[Submit a proposal](https://kamooni.org/circles/kamooni/proposals)
+[Submit a proposal](${CIRCLES_URL}/circles/kamooni/proposals)
 
 **About the project**
 

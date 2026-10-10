@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getPrivateUserByDid } from "@/lib/data/user";
 import { getAppUrl, getStripe } from "@/lib/stripe";
+import { assertPaymentsEnabled } from "@/lib/payments";
 
 export async function POST() {
     try {
+        assertPaymentsEnabled();
+
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
