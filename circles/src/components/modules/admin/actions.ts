@@ -999,6 +999,10 @@ export async function syncAllDonorboxSubscriptions() {
         return { success: false, message: "Unauthorized: You do not have permission." };
     }
 
+    if (!process.env.DONORBOX_API_USER || !process.env.DONORBOX_API_KEY) {
+        return { success: false, message: "Donorbox credentials are not configured." };
+    }
+
     console.log("Admin triggered sync of all Donorbox subscriptions...");
 
     try {
@@ -1228,6 +1232,10 @@ export async function refreshSubscriptionStatus(userId: string) {
         const donorboxDonorId = user.subscription?.donorboxDonorId;
         if (!donorboxDonorId) {
             return { success: false, message: "User does not have a Donorbox donor ID." };
+        }
+
+        if (!process.env.DONORBOX_API_USER || !process.env.DONORBOX_API_KEY) {
+            return { success: false, message: "Donorbox credentials are not configured." };
         }
 
         const response = await fetch(`https://donorbox.org/api/v1/donors/${donorboxDonorId}/subscriptions`, {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAppUrl, getStripe } from "@/lib/stripe";
+import { assertPaymentsEnabled } from "@/lib/payments";
 
 const ALLOWED_AMOUNTS = new Set([5, 10, 25, 50, 100]);
 const MIN_DONATION_AMOUNT = 1;
@@ -7,6 +8,8 @@ const MAX_DONATION_AMOUNT = 10000;
 
 export async function POST(req: NextRequest) {
     try {
+        assertPaymentsEnabled();
+
         const body = await req.json().catch(() => ({}));
         const amount = Number(body?.amount);
         const amountSource = ALLOWED_AMOUNTS.has(amount) ? "preset" : "custom";

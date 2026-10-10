@@ -8,9 +8,12 @@ import {
     getStripePriceId,
     parseStripeMonthlyTierAmount,
 } from "@/lib/stripe";
+import { assertPaymentsEnabled } from "@/lib/payments";
 
 export async function POST(req: NextRequest) {
     try {
+        assertPaymentsEnabled();
+
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
