@@ -327,6 +327,7 @@ test("Secret Circle authorization succeeds before browser props are constructed 
     })();
     assert.equal(dtoConstructions, 1);
     assert.equal(props.homeContent.circle.dtoKind, "client-circle");
+    assert.equal(props.homeContent.circle.visibility, "secret");
     assertForbiddenDataAbsent(JSON.parse(JSON.stringify(props)));
 });
 

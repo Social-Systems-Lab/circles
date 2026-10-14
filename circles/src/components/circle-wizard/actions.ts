@@ -1,14 +1,13 @@
 "use server";
 
 import {
-    createCircle,
     updateCircle,
     getCircleById,
     ensureModuleIsEnabledOnCircle,
     getCircleByHandle,
     getCirclePath,
 } from "@/lib/data/circle";
-import { Circle, CircleLevel, CircleType, Media, FileInfo, UserPrivate } from "@/models/models";
+import type { Circle, CircleLevel, CircleType, CircleVisibility, Media, FileInfo, UserPrivate } from "@/models/models";
 import { ImageItem } from "@/components/forms/controls/multi-image-uploader";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getUser, getUserPrivate } from "@/lib/data/user"; // Corrected import for getUserPrivate
@@ -20,9 +19,9 @@ import {
     persistCircleThenCleanupMedia,
     saveCircleOwnedFile,
 } from "@/lib/data/circle-media-storage";
-import { addMember } from "@/lib/data/member";
+import { createCircleWithCanonicalCreatorMembership } from "@/lib/data/circle-creation";
 import { revalidatePath } from "next/cache";
-import { CircleData } from "./circle-wizard";
+import type { CircleData } from "./circle-wizard";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { hasContributorPerks } from "@/lib/auth/perks";
 
@@ -81,6 +80,7 @@ export async function saveBasicInfoAction(
     representsOrganization?: boolean,
     organizationName?: string,
     officialEmail?: string,
+    visibility: CircleVisibility = "public",
 ) {
     try {
         console.log("saveBasicInfoAction called with parentCircleId:", parentCircleId);
@@ -149,14 +149,13 @@ export async function saveBasicInfoAction(
                 publishStatus: "draft",
                 parentCircleId: resolvedCircleLevel === "profile_child" ? parentCircleId : undefined,
                 picture: { url: "/images/default-picture.png" }, // Default picture
+                images: [],
                 causes: [],
                 skills: [],
+                visibility,
                 ...organizationClaimData,
             };
-            const newCircle = await createCircle(initialCircleData, userDid); // Pass userDid here
-
-            // 2. Add user as admin member
-            await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
+            const { circle: newCircle } = await createCircleWithCanonicalCreatorMembership(initialCircleData, userDid);
 
             // 3. Ensure the relevant module is enabled on the parent circle (so the tab appears)
             if (resolvedCircleLevel === "profile_child" && parentCircleId) {
@@ -198,18 +197,43 @@ export async function createCircleAction(circleData: CircleData, _userDid: strin
             return { success: false, message: "You are not authorized to create new circles" };
         }
 
-        const newCircle = await createCircle(
-            {
-                ...circleData,
-                circleType: resolvedCircleType,
-                circleLevel: resolvedCircleLevel,
-                publishStatus: "draft",
-                parentCircleId: resolvedCircleLevel === "profile_child" ? circleData.parentCircleId : undefined,
-                picture: { url: circleData.picture },
-            },
-            userDid,
-        );
-        await addMember(userDid, newCircle._id!, ["admins", "moderators", "members"]);
+        const creationMedia =
+            circleData.visibility === "secret"
+                ? { picture: { url: "/images/default-picture.png" }, images: [] }
+                : { picture: { url: circleData.picture }, images: circleData.images };
+
+        const shouldStoreOrganizationClaim =
+            resolvedCircleType !== "user" &&
+            resolvedCircleLevel === "top_level" &&
+            circleData.representsOrganization === true;
+
+        // This is a server boundary: copy only fields the creation wizard owns.
+        const allowedCircleData: Circle = {
+            name: circleData.name,
+            handle: circleData.handle,
+            isPublic: circleData.isPublic,
+            visibility: circleData.visibility,
+            mission: circleData.mission,
+            description: circleData.description,
+            content: circleData.content,
+            location: circleData.location,
+            causes: circleData.selectedSdgs.map((cause) => cause.handle),
+            skills: circleData.selectedSkills.map((skill) => skill.handle),
+            circleType: resolvedCircleType,
+            circleLevel: resolvedCircleLevel,
+            parentCircleId: resolvedCircleLevel === "profile_child" ? circleData.parentCircleId : undefined,
+            websiteUrl: normalizeWebsiteUrl(circleData.websiteUrl),
+            representsOrganization: shouldStoreOrganizationClaim,
+            organizationName: shouldStoreOrganizationClaim
+                ? circleData.organizationName?.trim() || undefined
+                : undefined,
+            officialEmail: shouldStoreOrganizationClaim ? normalizeOfficialEmail(circleData.officialEmail) : undefined,
+            createdBy: userDid,
+            publishStatus: "draft",
+            ...creationMedia,
+        };
+
+        const { circle: newCircle } = await createCircleWithCanonicalCreatorMembership(allowedCircleData, userDid);
 
         if (resolvedCircleLevel === "profile_child" && circleData.parentCircleId) {
             const moduleToEnable = resolvedCircleType === "project" ? "projects" : "communities";

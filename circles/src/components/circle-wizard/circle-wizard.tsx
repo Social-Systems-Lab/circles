@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Progress } from "@/components/ui/progress";
-import { Cause, CircleLevel, CircleType, Skill } from "@/models/models";
+import { Cause, CircleLevel, CircleType, CircleVisibility, Skill } from "@/models/models";
 import { useRouter, useSearchParams } from "next/navigation";
 import BasicInfoStep from "./basic-info-step";
 import MissionStep from "./mission-step";
@@ -20,6 +20,7 @@ export type CircleData = {
     name: string;
     handle: string;
     isPublic: boolean;
+    visibility: CircleVisibility;
     mission: string;
     description: string;
     content: string;
@@ -64,6 +65,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
         name: "",
         handle: "",
         isPublic: true,
+        visibility: "public",
         mission: "",
         description: "",
         content: "",
@@ -88,6 +90,7 @@ export default function CircleWizard({ onComplete, initialParentCircleId, initia
                 name: "",
                 handle: "",
                 isPublic: true,
+                visibility: "public",
                 mission: "",
                 description: "",
                 content: "",

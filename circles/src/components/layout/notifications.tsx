@@ -503,6 +503,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "user_verification_reply_received":
                     return `/admin`;
                 case "pm_received":
+                case "circle_moderation_update":
                 case "chat_mention":
                     return notification.roomId ? `/chat/${notification.roomId}` : null;
                 case "contact_request_received":
@@ -573,6 +574,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "pm_received":
                     return "Reply";
                 case "chat_mention":
+                case "circle_moderation_update":
                     return "View";
                 case "task_assigned":
                 case "task_shift_signup":

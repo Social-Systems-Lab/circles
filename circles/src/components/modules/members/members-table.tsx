@@ -331,7 +331,7 @@ const MemberTable: React.FC<MemberTableProps> = ({ circle, members }) => {
                             onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
                         />
                     </div>
-                    <InviteButton circle={circle} />
+                    {circle.visibility !== "secret" && <InviteButton circle={circle} />}
                     <Select
                         value={(table.getColumn("userGroups")?.getFilterValue() as string) ?? ""}
                         onValueChange={(value) => {

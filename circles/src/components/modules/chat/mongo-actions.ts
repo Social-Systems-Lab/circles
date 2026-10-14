@@ -50,6 +50,13 @@ import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { authorizeCircleChatEntry } from "@/lib/chat/circle-chat-entry-orchestration";
 import { getChatActionContext, getChatActionViewerDid, observeChatActionEffect } from "@/lib/chat/chat-action-context";
+import { getCircleModerationStarterAuthor } from "@/lib/chat/moderation-presentation";
+import {
+    CIRCLE_MODERATION_SOURCE,
+    getParticipantNotificationDids,
+    isPrivateParticipantNotificationConversation,
+    PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
+} from "@/lib/chat/participant-notifications";
 
 const getAuthenticatedUserDid = () => getChatActionViewerDid(getProductionAuthenticatedUserDid);
 
@@ -238,6 +245,7 @@ const sendConversationMessageNotifications = async ({
 }) => {
     const isDirectMessage = conversation?.type === "dm";
     const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
+    const isCircleModeration = conversation?.metadata?.source === CIRCLE_MODERATION_SOURCE;
     const sender = await getCircleByDid(senderDid);
     if (!sender?.did) {
         return;
@@ -250,30 +258,23 @@ const sendConversationMessageNotifications = async ({
     });
     const mentionRecipientDids = new Set(mentionRecipients.map((recipient) => recipient.did));
 
-    if (isDirectMessage || isCircleContact) {
-        const recipientDids: string[] = Array.from(
-            new Set(
-                (conversation?.participants || []).filter(
-                    (participantDid: string) =>
-                        typeof participantDid === "string" &&
-                        participantDid !== senderDid &&
-                        !mentionRecipientDids.has(participantDid),
-                ),
-            ),
-        );
+    if (isPrivateParticipantNotificationConversation(conversation)) {
+        const recipientDids = getParticipantNotificationDids(conversation, senderDid, mentionRecipientDids);
 
         const recipients = (
             await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))
         ).filter((recipient): recipient is any => !!recipient?.did);
 
         if (recipients.length) {
-            await sendNotifications("pm_received", recipients, {
+            await sendNotifications(PARTICIPANT_MESSAGE_NOTIFICATION_TYPE, recipients, {
                 roomId: conversationId,
                 user: sender,
                 circle: isCircleContact ? circle : undefined,
                 contactType: conversation?.metadata?.contactType,
-                conversationName: conversation?.name,
-                messagePreview: messageBody,
+                conversationName: isCircleModeration ? "Circle moderation" : conversation?.name,
+                messagePreview: isCircleModeration
+                    ? "A Circle moderation message is ready for review."
+                    : messageBody,
             });
         }
     }
@@ -622,8 +623,19 @@ export const fetchRecentMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                (presentedAuthor
+                    ? presentedAuthor
+                    : shouldUseSystemTemplateAuthor
+                      ? fallbackSystemAuthor
+                      : senderByDid.get(doc.senderDid)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -634,7 +646,13 @@ export const fetchRecentMessagesAction = async (
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) || { _id: replyDoc.senderDid, name: replyDoc.senderDid }
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  }) || { _id: replyDoc.senderDid, name: replyDoc.senderDid }
                 : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
@@ -776,8 +794,15 @@ export const fetchLegacyLooseMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                (presentedAuthor || (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -788,7 +813,13 @@ export const fetchLegacyLooseMessagesAction = async (
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) ||
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  }) ||
                   (isSystemMessageSource(replyDoc.source)
                       ? fallbackSystemAuthor
                       : ({
@@ -913,8 +944,15 @@ export const fetchMongoMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                (presentedAuthor || (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -925,7 +963,13 @@ export const fetchMongoMessagesAction = async (
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) ||
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  }) ||
                   (isSystemMessageSource(replyDoc.source)
                       ? fallbackSystemAuthor
                       : ({
@@ -1855,6 +1899,7 @@ export const fetchThreadRepliesAction = async (
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) return { success: false, message: access.message };
     try {
+        const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
         const { fetchThreadReplies } = await import("@/lib/data/mongo-chat");
         const threadStarter = await findThreadStarter(threadId, conversationId);
         if (!threadStarter) return { success: false, message: "Topic not found for this conversation" };
@@ -1879,7 +1924,15 @@ export const fetchThreadRepliesAction = async (
             const fullName = circle?.name || "";
             const firstName = fullName.trim().split(" ")[0] || circle?.handle || doc.senderDid;
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
-            const replyAuthorCircle = replyDoc ? senderByDid.get(replyDoc.senderDid) : undefined;
+            const replyAuthorCircle = replyDoc
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  })
+                : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
                       ...attachment,
@@ -1977,8 +2030,15 @@ export const fetchTopicStartersAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                (presentedAuthor || (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({

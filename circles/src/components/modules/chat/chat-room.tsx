@@ -43,6 +43,7 @@ import { HiDotsVertical } from "react-icons/hi";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { generateColorFromString } from "@/lib/utils/color";
+import { selectLoadedDeepLinkTopic } from "@/lib/chat/topic-deep-link";
 import { EmojiClickData } from "emoji-picker-react";
 import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -2955,7 +2956,8 @@ export const ChatRoomComponent: React.FC<{
     circle?: Circle;
     inToolbox?: boolean;
     chatProvider?: "matrix" | "mongo";
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider }) => {
+    initialTopicId?: string;
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider, initialTopicId }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -2997,6 +2999,7 @@ export const ChatRoomComponent: React.FC<{
     const activeRoomIdRef = useRef<string | null>(roomId);
     const topicLoadRequestRef = useRef(0);
     const topicUnreadRequestRef = useRef(0);
+    const openedDeepLinkTopicRef = useRef<string | null>(null);
     const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
     const repliesDisabled =
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
@@ -3105,7 +3108,17 @@ export const ChatRoomComponent: React.FC<{
         setHasLoadedTopics(false);
         setIsLoadingTopics(false);
         setTopicUnreadCounts({});
+        openedDeepLinkTopicRef.current = null;
     }, [roomId]);
+
+    useEffect(() => {
+        if (!initialTopicId || !roomId || !hasLoadedTopics || openedDeepLinkTopicRef.current === initialTopicId) return;
+        const topicToOpen = selectLoadedDeepLinkTopic(initialTopicId, roomMessages[roomId] || []);
+        if (!topicToOpen) return;
+        openedDeepLinkTopicRef.current = topicToOpen;
+        setOpenTopicIds((previous) => new Set(previous).add(topicToOpen));
+        setTopicNavigationRequest({ topicId: topicToOpen, nonce: Date.now() });
+    }, [hasLoadedTopics, initialTopicId, roomId, roomMessages]);
 
     const refreshTopicUnreadCounts = useCallback(async () => {
         const targetRoomId = roomId;
