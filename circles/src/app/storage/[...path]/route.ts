@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client as MinioClient } from "minio";
 import { getStoredObjectAccess } from "@/lib/data/media-access";
+import { isLegacyVerificationObject } from "@/lib/data/storage";
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
     const chunks: Buffer[] = [];
@@ -25,6 +26,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pat
     const objectName = (path || []).join("/");
     if (!objectName) {
         return NextResponse.json({ error: "Missing object path" }, { status: 400 });
+    }
+    if (isLegacyVerificationObject(objectName)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     if ((await getStoredObjectAccess(objectName)) === "denied") {
         return NextResponse.json({ error: "Not found" }, { status: 404 });

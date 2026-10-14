@@ -11,6 +11,7 @@ import { notFound } from "next/navigation"; // Import notFound
 import { UserPrivate } from "@/models/models"; // Import UserPrivate
 // Removed creatableItemsList import, only keep type
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content";
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -74,7 +75,7 @@ export default async function CreateGoalPage(props: PageProps) {
             </div>
             {/* Render GoalForm, passing circle and circleHandle */}
             <GoalForm
-                user={user as UserPrivate}
+                user={toAuthenticatedClientUser(user)}
                 itemDetail={
                     {
                         // Define itemDetail for 'goal' locally

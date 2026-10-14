@@ -17,6 +17,7 @@ import { getDefaultAccessRules, defaultUserGroups, getDefaultModules } from "./c
 import { getMetrics } from "../utils/metrics";
 import { upsertVbdCircles } from "./vdb";
 import { deleteCircleAfterPublicVectorPurge } from "./derived-vector-reconciliation";
+import { applyPublicMapMetricsAndSort } from "./public-map-metrics";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
 import { createDefaultFeed } from "./feed";
 import path from "path";
@@ -41,7 +42,6 @@ import {
     getPublishedCircleQuery,
     sanitizeCircleDiscoveryResult,
 } from "@/lib/data/circle-discovery-queries";
-
 export {
     buildCircleListQuery,
     buildCommunityRelatedCirclesQuery,
@@ -443,6 +443,17 @@ export const getMetricsForCircles = async (
     // sort circles by rank
     circles.sort((a, b) => (a.metrics?.rank ?? 0) - (b.metrics?.rank ?? 0));
     return circles;
+};
+
+export const getPublicMapMetricsForCircles = async (
+    circles: WithMetric<Circle>[],
+    userDid: string | undefined,
+    sort?: SortingOptions,
+) => {
+    const user = userDid
+        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
+        : undefined;
+    return applyPublicMapMetricsAndSort(circles, user, new Date(), getMetrics, sort);
 };
 
 export const createDefaultCircle = (): Circle => {

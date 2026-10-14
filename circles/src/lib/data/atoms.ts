@@ -1,7 +1,6 @@
 import {
     Circle,
     MemberDisplay,
-    UserPrivate,
     Content,
     Media,
     ContentPreviewData,
@@ -12,11 +11,12 @@ import {
     Feed, // Added Feed
     ChatMessage,
 } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { atom } from "jotai";
 
 import { atomWithStorage } from "jotai/utils";
 
-export const userAtom = atom<UserPrivate | undefined>(undefined);
+export const userAtom = atom<AuthenticatedClientUser | undefined>(undefined);
 
 export const authInfoAtom = atom<AuthInfo>({ authStatus: "loading" });
 export const triggerMapOpenAtom = atom<boolean>(false);

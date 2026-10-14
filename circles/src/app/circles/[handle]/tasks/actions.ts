@@ -49,7 +49,8 @@ import {
     submitTaskClaim,
     reviewTaskClaim,
 } from "@/lib/data/task";
-import { getMember, getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
+import { getMember, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
+import { getAuthorizedMemberPickerResult } from "@/lib/data/member-picker";
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Import cache update function
 import { getCirclesByDids } from "@/lib/data/circle";
 import { listAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
@@ -2311,19 +2312,8 @@ export async function assignTaskAction( // Renamed function
 }
 
 export const getMembersAction = async (circleId: string) => {
-    // Get the current user
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "User not authenticated" };
-    }
-    const user = await getUserByDid(userDid); // For notifications
-    if (!user) {
-        return { success: false, message: "User data not found" };
-    }
-
-    // get members of circle
-    let members = await getMembers(circleId);
-    return members;
+    return getAuthorizedMemberPickerResult({ viewerDid: userDid, circleId, requiredFeature: features.tasks.assign });
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.

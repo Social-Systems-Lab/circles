@@ -17,9 +17,11 @@ import { Challenge, UserPrivate } from "@/models/models";
 import { getAuthCookieNamesForClearing, readAuthToken } from "@/lib/auth/cookie";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import type { AuthenticatedClientUser, GuidelineStateDto } from "@/lib/data/client-user-dto";
+import { toAuthenticatedClientUser, toGuidelineStateDto } from "@/lib/data/client-user-dto";
 
 type CheckAuthResponse = {
-    user?: UserPrivate;
+    user?: AuthenticatedClientUser;
     authenticated: boolean;
     challenge?: Challenge;
 };
@@ -34,7 +36,7 @@ export async function checkAuth(): Promise<CheckAuthResponse> {
                 // user is authenticated
                 let user = await getUserPrivate(payload.userDid as string);
 
-                return { user, authenticated: true };
+                return { user: toAuthenticatedClientUser(user), authenticated: true };
             }
         }
     } catch (error) {
@@ -64,7 +66,7 @@ export async function logOut(): Promise<void> {
 type AcceptCommunityGuidelineResponse = {
     success: boolean;
     message: string;
-    user?: UserPrivate;
+    user?: GuidelineStateDto;
 };
 
 export async function acceptCommunityGuidelineAction(
@@ -111,7 +113,7 @@ export async function acceptCommunityGuidelineAction(
         return {
             success: true,
             message: "Community rule accepted.",
-            user: updatedUser,
+            user: toGuidelineStateDto(updatedUser),
         };
     } catch (error) {
         console.error("Error in acceptCommunityGuidelineAction:", error);
@@ -158,7 +160,7 @@ export async function acceptCodeOfConductAction(): Promise<AcceptCommunityGuidel
         return {
             success: true,
             message: "Code of Conduct accepted.",
-            user: updatedUser,
+            user: toGuidelineStateDto(updatedUser),
         };
     } catch (error) {
         console.error("Error in acceptCodeOfConductAction:", error);

@@ -17,6 +17,7 @@ import { generateSecureToken, hashToken, sendEmail } from "@/lib/data/email";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 import { createNewUser, getUserPrivate } from "@/lib/data/user";
+import { completeClientAuthenticationBoundary } from "@/lib/data/client-user-boundary";
 import { createUserSession, getAuthenticatedUserDid, PUBLIC_KEY_FILENAME, USERS_DIR } from "@/lib/auth/auth";
 import type { Circle } from "@/models/models";
 
@@ -449,13 +450,15 @@ export async function readVibeIdStatus(_request: NextRequest, requestId: string)
         return NextResponse.json({ status: "failed", message: "Sign-in request is missing a user" }, { status: 500 });
     }
 
-    const privateUser = await getUserPrivate(storedRequest.userDid);
-    await createUserSession(privateUser, storedRequest.userDid);
+    const clientUser = await completeClientAuthenticationBoundary(storedRequest.userDid, {
+        getUserPrivate,
+        createUserSession,
+    });
     await collection.updateOne({ requestId }, { $set: { completedAt: new Date(Date.now() - COMPLETED_TTL_MS) } });
 
     return NextResponse.json({
         status: "approved",
-        user: privateUser,
+        user: clientUser,
     });
 }
 
@@ -570,12 +573,11 @@ export async function completeVibeIdSignup(request: NextRequest): Promise<NextRe
         },
     );
 
-    const privateUser = await getUserPrivate(user.did!);
-    await createUserSession(privateUser, user.did!);
+    const clientUser = await completeClientAuthenticationBoundary(user.did!, { getUserPrivate, createUserSession });
 
     return NextResponse.json({
         success: true,
         status: "approved",
-        user: privateUser,
+        user: clientUser,
     });
 }

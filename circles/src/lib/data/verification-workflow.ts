@@ -2,7 +2,8 @@ import { Circles, db } from "@/lib/data/db";
 import { activateUserAccount } from "@/lib/data/account-lifecycle";
 import { sendEmail } from "@/lib/data/email";
 import { sendNotifications } from "@/lib/data/notifications";
-import { saveFile } from "@/lib/data/storage";
+import { saveVerificationFile } from "@/lib/data/storage";
+import { serializeVerificationAttachment } from "@/lib/data/verification-attachment-access";
 import {
     Circle,
     FileInfo,
@@ -73,9 +74,8 @@ export const normalizeVerificationRequestStatus = (
     return status;
 };
 
-export const normalizeVerificationRequestType = (
-    requestType?: VerificationRequestType,
-): VerificationRequestType => requestType === "independent_circle" ? "independent_circle" : "profile";
+export const normalizeVerificationRequestType = (requestType?: VerificationRequestType): VerificationRequestType =>
+    requestType === "independent_circle" ? "independent_circle" : "profile";
 
 const getProfileVerificationRequestQuery = (userDid: string) => ({
     userDid,
@@ -89,20 +89,12 @@ export const getVerificationRequestUpdatedAt = (request: VerificationRequest): D
     request.updatedAt ?? request.latestMessageAt ?? getVerificationRequestSubmittedAt(request);
 
 export const isVerificationRequestActive = (request: VerificationRequest): boolean =>
-    ACTIVE_VERIFICATION_REQUEST_STATUSES.includes(
-        (request.status ?? "submitted") as ActiveVerificationRequestStatus,
-    );
+    ACTIVE_VERIFICATION_REQUEST_STATUSES.includes((request.status ?? "submitted") as ActiveVerificationRequestStatus);
 
 export const canApplicantReplyToVerificationRequest = (request: VerificationRequest): boolean => {
     const status = normalizeVerificationRequestStatus(request.status);
     return status !== "approved" && status !== "rejected";
 };
-
-const serializeFileInfo = (file: FileInfo): FileInfo => ({
-    url: file.url,
-    fileName: file.fileName,
-    originalName: file.originalName,
-});
 
 export const serializeVerificationRequest = (request: VerificationRequest) => ({
     id: request._id?.toString?.() ?? "",
@@ -130,7 +122,9 @@ export const serializeVerificationMessage = (
     senderName,
     senderPictureUrl: senderPictureUrl ?? null,
     body: message.body,
-    attachments: (message.attachments ?? []).map(serializeFileInfo),
+    attachments: (message.attachments ?? []).map((file, index) =>
+        serializeVerificationAttachment(file, message._id?.toString?.() ?? "", index),
+    ),
     createdAt: message.createdAt.toISOString(),
 });
 
@@ -160,7 +154,9 @@ const getOrganizationClaimReview = (circle?: Partial<Circle> | null) => {
     const websiteDomain = getNormalizedHostname(circle.websiteUrl);
     const emailDomain = getNormalizedEmailDomain(circle.officialEmail);
     const domainsAlign =
-        websiteDomain && emailDomain ? emailDomain === websiteDomain || emailDomain.endsWith(`.${websiteDomain}`) : null;
+        websiteDomain && emailDomain
+            ? emailDomain === websiteDomain || emailDomain.endsWith(`.${websiteDomain}`)
+            : null;
 
     return {
         representsOrganization: true,
@@ -234,10 +230,7 @@ export async function getLatestVerificationRequestForIndependentCircle(
 }
 
 export async function getVerificationMessagesForRequest(requestId: string): Promise<VerificationMessage[]> {
-    return await verificationMessagesCollection()
-        .find({ requestId })
-        .sort({ createdAt: 1, _id: 1 })
-        .toArray();
+    return await verificationMessagesCollection().find({ requestId }).sort({ createdAt: 1, _id: 1 }).toArray();
 }
 
 export async function createVerificationRequest(params: {
@@ -281,7 +274,11 @@ export async function getVerificationRequestById(requestId: string): Promise<Ver
     return await verificationRequestsCollection().findOne({ _id: new ObjectId(requestId) });
 }
 
-const saveVerificationAttachments = async (files: File[], ownerId: string): Promise<FileInfo[]> => {
+const saveVerificationAttachments = async (
+    files: File[],
+    requestId: string,
+    messageId: string,
+): Promise<FileInfo[]> => {
     const attachments: FileInfo[] = [];
 
     for (const file of files) {
@@ -289,7 +286,7 @@ const saveVerificationAttachments = async (files: File[], ownerId: string): Prom
             continue;
         }
 
-        const saved = await saveFile(file, "verification-attachment", ownerId, true);
+        const saved = await saveVerificationFile(file, requestId, messageId);
         attachments.push(saved);
     }
 
@@ -334,14 +331,19 @@ export async function addApplicantVerificationMessage(params: {
     }
 
     const trimmedBody = params.body.trim();
-    const attachments = await saveVerificationAttachments(params.files ?? [], applicant._id as string);
+    const messageId = new ObjectId();
+    const attachments = await saveVerificationAttachments(
+        params.files ?? [],
+        request._id!.toString(),
+        messageId.toString(),
+    );
     if (!trimmedBody && attachments.length === 0) {
         throw new Error("Add a message or an attachment.");
     }
 
     const now = new Date();
     const message: VerificationMessage = {
-        _id: new ObjectId(),
+        _id: messageId,
         requestId: request._id!.toString(),
         senderDid: applicant.did!,
         senderRole: "applicant",
@@ -464,10 +466,7 @@ export async function addAdminVerificationMessage(params: {
     };
 }
 
-export async function approveVerificationRequest(params: {
-    requestId: string;
-    adminDid: string;
-}): Promise<{
+export async function approveVerificationRequest(params: { requestId: string; adminDid: string }): Promise<{
     request: VerificationRequest;
     applicant: UserPrivate;
     targetCircle?: { id: string; handle?: string; name?: string } | null;
@@ -591,10 +590,7 @@ export async function rejectVerificationRequest(params: {
             throw new Error("Target circle not found.");
         }
 
-        await Circles.updateOne(
-            { _id: new ObjectId(request.targetCircleId) },
-            { $set: { publishStatus: "draft" } },
-        );
+        await Circles.updateOne({ _id: new ObjectId(request.targetCircleId) }, { $set: { publishStatus: "draft" } });
 
         targetCircle = {
             id: request.targetCircleId,
@@ -674,7 +670,8 @@ export async function listAdminVerificationRequests() {
     return requests.map((request) => {
         const applicant = applicantMap.get(request.userDid);
         const requestType = normalizeVerificationRequestType(request.requestType);
-        const targetCircle = requestType === "independent_circle" ? targetCircleMap.get(request.targetCircleId ?? "") : null;
+        const targetCircle =
+            requestType === "independent_circle" ? targetCircleMap.get(request.targetCircleId ?? "") : null;
         return {
             request: serializeVerificationRequest(request),
             applicant: applicant
@@ -732,12 +729,8 @@ export async function getAdminVerificationRequestDetail(requestId: string) {
             : null;
     const messages = await getVerificationMessagesForRequest(request._id!.toString());
 
-    const senderNames = new Map<string, string>([
-        [applicant.did!, applicant.name ?? "Applicant"],
-    ]);
-    const senderPictures = new Map<string, string | undefined>([
-        [applicant.did!, applicant.picture?.url],
-    ]);
+    const senderNames = new Map<string, string>([[applicant.did!, applicant.name ?? "Applicant"]]);
+    const senderPictures = new Map<string, string | undefined>([[applicant.did!, applicant.picture?.url]]);
 
     await Promise.all(
         messages.map(async (message) => {
@@ -880,7 +873,10 @@ export async function getIndependentCircleVerificationThread(circleId: string, u
     };
 }
 
-export async function notifyApplicantVerificationClarification(applicant: UserPrivate, admin: UserPrivate): Promise<void> {
+export async function notifyApplicantVerificationClarification(
+    applicant: UserPrivate,
+    admin: UserPrivate,
+): Promise<void> {
     if (!applicant.handle) {
         return;
     }
@@ -897,9 +893,7 @@ export async function notifyApplicantIndependentCircleClarification(params: {
     admin: UserPrivate;
     targetCircle: { handle?: string; name?: string };
 }): Promise<void> {
-    const circlePath = params.targetCircle.handle
-        ? `/circles/${params.targetCircle.handle}/settings/about`
-        : "/";
+    const circlePath = params.targetCircle.handle ? `/circles/${params.targetCircle.handle}/settings/about` : "/";
     const subject = `${params.admin.name || "An admin"} requested more information for ${params.targetCircle.name || "your circle"}.`;
 
     await sendNotifications("user_verification_clarification_requested", [params.applicant], {
@@ -936,10 +930,7 @@ export async function notifyApplicantOfVerificationApproval(applicant: UserPriva
     });
 }
 
-export async function notifyApplicantOfVerificationRejection(
-    applicant: UserPrivate,
-    reason: string,
-): Promise<void> {
+export async function notifyApplicantOfVerificationRejection(applicant: UserPrivate, reason: string): Promise<void> {
     if (!applicant.handle) {
         return;
     }
@@ -956,9 +947,7 @@ export async function notifyApplicantOfIndependentCircleApproval(params: {
     applicant: UserPrivate;
     targetCircle: { handle?: string; name?: string };
 }): Promise<void> {
-    const circlePath = params.targetCircle.handle
-        ? `/circles/${params.targetCircle.handle}/settings/about`
-        : "/";
+    const circlePath = params.targetCircle.handle ? `/circles/${params.targetCircle.handle}/settings/about` : "/";
 
     await sendNotifications("user_verified", [params.applicant], {
         user: params.applicant,
@@ -978,9 +967,7 @@ export async function notifyApplicantOfIndependentCircleRejection(params: {
     targetCircle: { handle?: string; name?: string };
     reason: string;
 }): Promise<void> {
-    const circlePath = params.targetCircle.handle
-        ? `/circles/${params.targetCircle.handle}/settings/about`
-        : "/";
+    const circlePath = params.targetCircle.handle ? `/circles/${params.targetCircle.handle}/settings/about` : "/";
     const suffix = params.reason.trim() ? ` Reason: ${params.reason.trim()}` : "";
     const messageBody = `${params.targetCircle.name || "Your circle"} was not approved yet and remains non-public. You can update it and submit again later.${suffix}`;
 

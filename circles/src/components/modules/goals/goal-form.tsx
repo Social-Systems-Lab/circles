@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added C
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Goal, Location, UserPrivate, ProposalDisplay } from "@/models/models"; // Added UserPrivate, ProposalDisplay
+import { Circle, Media, Goal, Location, ProposalDisplay } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -45,7 +46,7 @@ type GoalFormValues = Omit<z.infer<typeof goalFormSchema>, "images" | "location"
 };
 
 interface GoalFormProps {
-    user: UserPrivate;
+    user: AuthenticatedClientUser;
     itemDetail: CreatableItemDetail;
     goal?: Goal;
     goalId?: string;

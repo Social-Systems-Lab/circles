@@ -7,6 +7,7 @@ import { getUserPrivate } from "@/lib/data/user";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 import { verifyAltchaPayload } from "@/lib/auth/altcha";
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
@@ -22,13 +23,12 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
             .replace(/[\s_]+/g, "-")
             .replace(/-+/g, "-")
             .replace(/^-+|-+$/g, "");
-        const normalizedEmail = String(values._email || "").trim().toLowerCase();
+        const normalizedEmail = String(values._email || "")
+            .trim()
+            .toLowerCase();
         const derivedName =
             String(values.name || "").trim() ||
-            normalizedHandle
-                .split("-")
-                .filter(Boolean)
-                .join(" ") ||
+            normalizedHandle.split("-").filter(Boolean).join(" ") ||
             normalizedEmail.split("@")[0];
 
         const signupType = values.type === "organization" ? "organization" : "user";
@@ -120,9 +120,10 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
             success: true,
             message: "User signed up successfully",
             data: {
-                user: privateUser,
-                devVerificationToken: process.env.NODE_ENV !== "production" ? user.devVerificationToken ?? null : null,
-                devVerificationUrl: process.env.NODE_ENV !== "production" ? user.devVerificationUrl ?? null : null,
+                user: toAuthenticatedClientUser(privateUser),
+                devVerificationToken:
+                    process.env.NODE_ENV !== "production" ? (user.devVerificationToken ?? null) : null,
+                devVerificationUrl: process.env.NODE_ENV !== "production" ? (user.devVerificationUrl ?? null) : null,
             },
         };
     } catch (error) {
