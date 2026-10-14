@@ -1251,6 +1251,7 @@ export type NotificationType =
     | "user_becomes_member" // User becomes a platform member
     | "proof_of_humanity_verified" // A user received a public proof of humanity verification
     | "pm_received" // A private message has been received
+    | "circle_moderation_update" // A private Circle moderation topic is ready for review
     | "chat_mention" // A user was mentioned in a chat message
     | "contact_request_received" // A user received a contact request
     // Consolidated Summary Notification Types
@@ -1322,6 +1323,7 @@ export const notificationTypeValues = [
     "user_becomes_member",
     "proof_of_humanity_verified",
     "pm_received",
+    "circle_moderation_update",
     "chat_mention",
     "contact_request_received",
     // Summary Types (for user configuration)

@@ -50,8 +50,7 @@ async function main() {
     const originalCirclesUrl = process.env.CIRCLES_URL;
     process.env.CIRCLES_URL = "https://configured.example";
     try {
-        const [{ createCircle }, { deleteCirclePrivateFileWithDependencies }, circleMediaStorage] =
-            await productionModules;
+        const [, { deleteCirclePrivateFileWithDependencies }, circleMediaStorage] = await productionModules;
         const {
             canRetainSubmittedCircleMediaUrl,
             classifyOwnedMediaUrl,
@@ -425,20 +424,6 @@ async function main() {
         assert.equal(
             getFundingPostMutationMessage(fundingSuccess, "Funding request updated."),
             "Funding request updated.",
-        );
-
-        await assert.rejects(
-            createCircle(
-                {
-                    name: "Blocked Secret",
-                    handle: "blocked-secret",
-                    circleType: "circle",
-                    visibility: "secret",
-                    createdBy: "did:actor",
-                },
-                "did:actor",
-            ),
-            /Secret Circle creation remains disabled/,
         );
 
         console.log("circle media storage tests passed");

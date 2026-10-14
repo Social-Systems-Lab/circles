@@ -23,6 +23,9 @@ interface InviteButtonProps {
     renderCompact?: boolean;
 }
 
+export const getInviteButtonMode = (circle: Circle): "copy-link" | null =>
+    circle.visibility === "secret" ? null : "copy-link";
+
 const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact }) => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
@@ -60,6 +63,10 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact }) =>
     // if (isCompact) {
     //     return null;
     // }
+
+    if (getInviteButtonMode(circle) === null) {
+        return null;
+    }
 
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

@@ -27,6 +27,7 @@ export type ClientCircleDto = Pick<
     | "members"
     | "circleType"
     | "circleLevel"
+    | "visibility"
     | "parentCircleId"
     | "isVerified"
     | "verificationStatus"
@@ -271,6 +272,7 @@ export const buildClientCircleDto = (circle: Circle): ClientCircleDto => ({
     ...(typeof circle.members === "number" ? { members: circle.members } : {}),
     ...(circle.circleType ? { circleType: circle.circleType } : {}),
     ...(circle.circleLevel ? { circleLevel: circle.circleLevel } : {}),
+    ...(circle.visibility ? { visibility: circle.visibility } : {}),
     ...(typeof circle.parentCircleId === "string" ? { parentCircleId: circle.parentCircleId } : {}),
     ...(typeof circle.isVerified === "boolean" ? { isVerified: circle.isVerified } : {}),
     ...(circle.verificationStatus ? { verificationStatus: circle.verificationStatus } : {}),

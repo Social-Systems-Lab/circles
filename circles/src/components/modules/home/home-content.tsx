@@ -41,6 +41,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { shouldUnoptimizeCircleAvatar } from "@/lib/utils/circle-avatar-image";
 
 type HomeContentProps = {
     circle: ClientCircleDto;
@@ -166,6 +167,9 @@ export default function HomeContent({
                                                 alt="Picture"
                                                 fill
                                                 sizes="(max-width: 768px) 100px, 150px"
+                                                unoptimized={shouldUnoptimizeCircleAvatar(
+                                                    circle?.picture?.url ?? "/images/default-picture.png",
+                                                )}
                                             />
                                             <div className="absolute top-0 h-full w-full">
                                                 <GalleryTrigger
@@ -199,7 +203,7 @@ export default function HomeContent({
                                     {user && circle.circleType === "circle" && isMember && (
                                         <ChatButton circle={circle} />
                                     )}
-                                    {!isUser && <InviteButton circle={circle} />}
+                                    {!isUser && circle.visibility !== "secret" && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (
@@ -260,7 +264,7 @@ export default function HomeContent({
                                         {user && circle.circleType === "circle" && isMember && (
                                             <ChatButton circle={circle} />
                                         )}
-                                        {!isUser && <InviteButton circle={circle} />}
+                                        {!isUser && circle.visibility !== "secret" && <InviteButton circle={circle} />}
                                         {user && <FollowButton circle={circle} />}
                                         {user && <BookmarkButton circle={circle} iconOnly />}
                                         {showSettingsButton && (
@@ -295,7 +299,7 @@ export default function HomeContent({
                                     {user && circle.circleType === "circle" && isMember && (
                                         <ChatButton circle={circle} />
                                     )}
-                                    <InviteButton circle={circle} />
+                                    {circle.visibility !== "secret" && <InviteButton circle={circle} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (

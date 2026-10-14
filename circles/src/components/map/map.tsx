@@ -31,6 +31,7 @@ import { Dialog, DialogContent } from "../ui/dialog";
 import { precisionLevels } from "../forms/location-picker";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useIsMobile } from "../utils/use-is-mobile";
+import { getOptimizedImageUrl } from "./map-image-url";
 
 const isPostDisplay = (c: any): c is PostDisplay => {
     return c && (c as any).circleType === "post";
@@ -115,19 +116,6 @@ const getMarkerImageUrl = (content: Content): string | undefined => {
         return item.media?.[0]?.fileInfo?.url ?? "/images/default-post-picture.png";
     }
     return item.picture?.url ?? item.images?.[0]?.fileInfo?.url;
-};
-
-const getOptimizedImageUrl = (imageUrl: string | undefined, width: number, quality = 70): string | undefined => {
-    if (
-        !imageUrl ||
-        imageUrl.startsWith("data:") ||
-        imageUrl.startsWith("blob:") ||
-        imageUrl.startsWith("/_next/image")
-    ) {
-        return imageUrl;
-    }
-
-    return `/_next/image?url=${encodeURIComponent(imageUrl)}&w=${width}&q=${quality}`;
 };
 
 const getStableMarkerTieBreak = (id: string): number => {

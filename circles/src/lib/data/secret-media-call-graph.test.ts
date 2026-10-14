@@ -60,12 +60,29 @@ async function main() {
         "private media identity must be an exact canonical relative URL",
     );
 
+    const wizardActions = await readFile(path.join(root, "src/components/circle-wizard/actions.ts"), "utf8");
+    const createActionStart = wizardActions.indexOf("export async function createCircleAction");
+    const createActionEnd = wizardActions.indexOf("export async function saveMissionAction", createActionStart);
+    assert.ok(createActionStart >= 0 && createActionEnd > createActionStart, "createCircleAction must exist");
+    const createAction = wizardActions.slice(createActionStart, createActionEnd);
+    assert.match(createAction, /circleData\.visibility === "secret"/);
+    assert.match(createAction, /picture: \{ url: "\/images\/default-picture\.png" \}, images: \[\]/);
+    assert.match(createAction, /createCircleWithCanonicalCreatorMembership\(/);
+
     const circleData = await readFile(path.join(root, "src/lib/data/circle.ts"), "utf8");
-    const creationReject = circleData.indexOf('if (circle.visibility === "secret")');
-    const creationPersistence = circleData.indexOf("Circles.insertOne(circle)", creationReject);
-    assert.ok(
-        creationReject >= 0 && creationPersistence > creationReject,
-        "Secret creation must fail before persistence",
+    const createCircleStart = circleData.indexOf("export const createCircle = async");
+    const createCircleEnd = circleData.indexOf("export const getCircleByHandle", createCircleStart);
+    assert.ok(createCircleStart >= 0 && createCircleEnd > createCircleStart, "createCircle must exist");
+    const createCircleSource = circleData.slice(createCircleStart, createCircleEnd);
+    assert.match(createCircleSource, /circle\.visibility !== "secret" && !hasCircleImages\(circle\.images\)/);
+
+    const profileActionStart = wizardActions.indexOf("export async function saveProfileAction");
+    const profileActionEnd = wizardActions.indexOf("export async function saveLocationAction", profileActionStart);
+    assert.ok(profileActionStart >= 0 && profileActionEnd > profileActionStart, "saveProfileAction must exist");
+    assert.match(
+        wizardActions.slice(profileActionStart, profileActionEnd),
+        /saveCircleOwnedFile\(/,
+        "subsequent Circle uploads must delegate to the private-media-aware helper",
     );
 
     for (const route of ["src/app/storage/[...path]/route.ts", "src/app/uploads/[...path]/route.ts"]) {

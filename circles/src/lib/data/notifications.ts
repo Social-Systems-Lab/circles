@@ -33,6 +33,7 @@ import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 import { dispatchExternalNotifications } from "./external-notifications";
+import { getNotificationIdempotencyId } from "./notification-read";
 
 Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
 Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
@@ -191,6 +192,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
                 return `${actorName} offered help in ${circleName}`;
             }
             return `${actorName} sent you a direct message`;
+        case "circle_moderation_update":
+            return "A Circle moderation update is ready for review.";
         case "contact_request_received":
             return `${actorName} sent you a contact request`;
         default:
@@ -222,7 +225,7 @@ const isNotificationEnabledForRecipient = async (type: string, recipientDid: str
     return typeof defaultSetting?.defaultIsEnabled === "boolean" ? defaultSetting.defaultIsEnabled : true;
 };
 
-export async function sendNotifications(type: string, recipients: any[], payload: any) {
+export async function sendNotifications(type: string, recipients: any[], payload: any, options?: { idempotencyKey?: string }) {
     const uniqueRecipients = Array.from(
         new Map(
             (recipients || [])
@@ -260,8 +263,21 @@ export async function sendNotifications(type: string, recipients: any[], payload
         return;
     }
 
-    await Notifications.insertMany(docs as any[]);
-    void dispatchExternalNotifications(docs as any[]).catch((error) => {
+    const insertedDocs = [];
+    for (const doc of docs) {
+        if (!options?.idempotencyKey) {
+            insertedDocs.push(doc);
+            continue;
+        }
+        const id = getNotificationIdempotencyId(type, options.idempotencyKey, doc.userId);
+        const result = await Notifications.updateOne({ _id: id } as any, { $setOnInsert: { ...doc, _id: id } } as any, {
+            upsert: true,
+        });
+        if (result.upsertedCount === 1) insertedDocs.push({ ...doc, _id: id });
+    }
+    if (!options?.idempotencyKey && insertedDocs.length) await Notifications.insertMany(insertedDocs as any[]);
+    if (!insertedDocs.length) return;
+    void dispatchExternalNotifications(insertedDocs as any[]).catch((error) => {
         console.error("External notification dispatch failed:", error);
     });
 }

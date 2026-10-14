@@ -972,13 +972,28 @@ export const createThread = async (
     title: string,
     body: string,
     hashtags: string[],
+    metadata?: Pick<ChatMessageDoc, "source" | "version"> & { lifecycleEventId?: string },
+    messageId?: string,
+    dependencies: {
+        insertThread: (doc: any) => Promise<{ insertedId: ObjectId }>;
+        findThread: (query: any) => Promise<any>;
+        updateConversation: (conversationId: ObjectId, updatedAt: Date) => Promise<void>;
+    } = {
+        insertThread: (doc) => ChatMessageDocs.insertOne(doc),
+        findThread: (query) => ChatMessageDocs.findOne(query),
+        updateConversation: async (id, updatedAt) => {
+            await ChatConversations.updateOne({ _id: id }, { $set: { updatedAt } });
+        },
+    },
 ): Promise<ChatMessageDoc | null> => {
     const now = new Date();
-    const doc: ChatMessageDoc = {
+    const doc: ChatMessageDoc & { lifecycleEventId?: string } = {
+        ...(messageId ? { _id: new ObjectId(messageId) } : {}),
         conversationId,
         senderDid,
         body,
         createdAt: now,
+        ...metadata,
         thread: {
             title,
             hashtags,
@@ -987,12 +1002,32 @@ export const createThread = async (
             replyCount: 0,
         },
     };
-    const result = await ChatMessageDocs.insertOne(doc);
-    await ChatConversations.updateOne(
-        { _id: new (await import("mongodb")).ObjectId(conversationId) },
-        { $set: { updatedAt: now } },
-    );
-    return { ...doc, _id: result.insertedId.toString() };
+    let createdId!: ObjectId;
+    let recovered: ChatMessageDoc | null = null;
+    try {
+        const result = await dependencies.insertThread(doc);
+        createdId = result.insertedId;
+    } catch (error: any) {
+        if (!messageId || error?.code !== 11000) throw error;
+        const expectedTitle = title;
+        const existing = await dependencies.findThread({
+            _id: new ObjectId(messageId),
+            conversationId,
+            lifecycleEventId: metadata?.lifecycleEventId,
+            source: "circle_moderation",
+            version: "v1",
+            senderDid,
+            "thread.title": expectedTitle,
+            thread: { $exists: true },
+        } as any);
+        if (!existing) throw error;
+        recovered = existing as ChatMessageDoc;
+        createdId = existing._id as ObjectId;
+    }
+    await dependencies.updateConversation(new ObjectId(conversationId), now);
+    return recovered
+        ? ({ ...recovered, _id: recovered._id?.toString() } as ChatMessageDoc)
+        : { ...doc, _id: createdId.toString() };
 };
 
 export const findThreadStarter = async (threadId: string, conversationId: string): Promise<ChatMessageDoc | null> => {
