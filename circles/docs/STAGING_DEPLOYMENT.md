@@ -1,6 +1,16 @@
 # Kamooni staging deployment
 
-Kamooni staging is an isolated, test-data-only installation at `staging.kamooni.org`. It must never receive production secrets, production data, production identity material, or production external-service accounts.
+Kamooni staging is an isolated, test-data-only installation at <https://staging.kamooni.org> on a dedicated Cleura VM separate from production. It must never receive production secrets, production data, production identity material, production volumes, production deployment scripts, or production external-service accounts.
+
+## Verified environment
+
+The staging environment and its `/api/version` response were verified at commit `e742a7898395c73ea6080af4139aa1def7eb54d7`. The infrastructure checkout remains at `/home/ubuntu/kamooni` on branch `infra/kamooni-staging`; the deployment target worktree is `/home/ubuntu/kamooni-target`, detached at the exact requested SHA. The Docker Compose project is `kamooni_staging`.
+
+The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
+
+Staging MongoDB and MinIO use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. Never use production deployment scripts, credentials, data, or volumes for staging.
+
+Media upload has been verified end-to-end through staging MinIO. New media URLs are stored in staging MongoDB as relative `/storage/...` paths. A scan of staging MongoDB found no references to `https://kamooni.org`, `www.kamooni.org`, `127.0.0.1`, or `localhost`.
 
 ## Checkout architecture
 
@@ -81,10 +91,16 @@ This manual method avoids a port-80 conflict and changes no production container
 Run on the staging VM from the infrastructure checkout:
 
 ```bash
-cd /home/ubuntu/kamooni && ./circles/scripts/deploy-staging.sh BRANCH_NAME
+cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh BRANCH_NAME
 ```
 
-The script requires a clean infrastructure checkout on `infra/kamooni-staging`, fetches `origin/BRANCH_NAME`, checks both the V2 schema compatibility floor and the committed application safety baseline, and updates the separate detached target worktree. It never pushes or merges and never switches the infrastructure checkout. Every staging deployment target must descend from `3101d0eb7590f089d625d8bfc8bbace42447b8e0`, the reviewed Group 1 application safety baseline. Do not casually change this pinned value: changing it requires review because it protects payment and welcome-link staging safety.
+The script requires a clean infrastructure checkout on `infra/kamooni-staging`, fetches `origin/BRANCH_NAME`, checks both the V2 schema compatibility floor and the committed application safety baseline, and updates the separate detached target worktree to deploy that branch's exact SHA. It never pushes or merges and never switches the infrastructure checkout. Every staging deployment target must descend from `3101d0eb7590f089d625d8bfc8bbace42447b8e0`, the reviewed Group 1 application safety baseline. Do not casually change this pinned value: changing it requires review because it protects payment and welcome-link staging safety.
+
+For the normal production-equivalent staging deployment, use:
+
+```bash
+cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh main
+```
 
 Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA.
 
@@ -106,12 +122,12 @@ The only host bindings in the output must be staging NGINX on ports `80` and `44
 
 Use only artificial staging data. In the browser, sign in to `https://staging.kamooni.org`, create or use a public staging-only test circle, create an issue titled exactly `STAGING MEDIA URL TEST`, upload one artificial test image through the normal issue form, and save it. Do not use a secret circle, because its media intentionally uses the private-media path.
 
-Then run this read-only query on the staging VM to inspect the newest matching staging record and fail unless every stored image URL has the staging storage prefix:
+Then run this read-only query on the staging VM to inspect the newest matching staging record and fail unless every stored image URL is a relative storage path:
 
 ```bash
-cd /home/ubuntu/kamooni-target/circles && STAGING_INFRA_APP_DIR=/home/ubuntu/kamooni/circles STAGING_TARGET_APP_DIR=/home/ubuntu/kamooni-target/circles GIT_SHA=verify STAGING_IMAGE_TAG=verify BUILD_TIME=verify docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml exec -T db sh -lc 'mongosh "$MONGODB_URI" --quiet --eval '\''const d=db.getSiblingDB("circles"); const doc=d.issues.find({title:"STAGING MEDIA URL TEST","images.0":{$exists:true}}).sort({createdAt:-1}).limit(1).next(); if(!doc){print("No matching staging issue with an image"); quit(1)} const urls=doc.images.map(image=>image?.fileInfo?.url).filter(Boolean); printjson(urls); if(!urls.length || urls.some(url=>!url.startsWith("https://staging.kamooni.org/storage/"))){quit(1)}'\'''
+cd /home/ubuntu/kamooni-target/circles && STAGING_INFRA_APP_DIR=/home/ubuntu/kamooni/circles STAGING_TARGET_APP_DIR=/home/ubuntu/kamooni-target/circles GIT_SHA=verify STAGING_IMAGE_TAG=verify BUILD_TIME=verify docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml exec -T db sh -lc 'mongosh "$MONGODB_URI" --quiet --eval '\''const d=db.getSiblingDB("circles"); const doc=d.issues.find({title:"STAGING MEDIA URL TEST","images.0":{$exists:true}}).sort({createdAt:-1}).limit(1).next(); if(!doc){print("No matching staging issue with an image"); quit(1)} const urls=doc.images.map(image=>image?.fileInfo?.url).filter(Boolean); printjson(urls); if(!urls.length || urls.some(url=>!url.startsWith("/storage/"))){quit(1)}'\'''
 ```
 
-Success prints the stored URL array and exits zero; every URL must begin `https://staging.kamooni.org/storage/`. A nonzero result is a deployment blocker. This query reads only the isolated staging `circles` database and does not modify or delete the test record.
+Success prints the stored URL array and exits zero; every URL must begin `/storage/`. A nonzero result is a deployment blocker. This query reads only the isolated staging `circles` database and does not modify or delete the test record.
 
 The default services are exactly `circles`, `db`, `minio`, and `nginx`. Only host ports 80 and 443 are published. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.
