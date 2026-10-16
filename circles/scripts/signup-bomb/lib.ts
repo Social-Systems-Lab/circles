@@ -55,7 +55,15 @@ export type Manifest = {
     accounts: CandidateIdentity[];
 };
 
-export type Reference = { collection: string; documentId: any; paths: string[]; document: Document };
+type AutomaticConversationKind = "signup welcome" | "current platform announcement" | "legacy platform announcement" | "empty profile circle";
+export type Reference = {
+    collection: string;
+    documentId: any;
+    paths: string[];
+    document: Document;
+    account?: CandidateIdentity;
+    automaticConversationKind?: AutomaticConversationKind;
+};
 export type AccountPlan = { account: CandidateIdentity; missing: boolean; deletions: Reference[]; reconciliations: Reference[]; assets: string[] };
 export type Preflight = { plans: AccountPlan[]; missing: CandidateIdentity[]; externalAssets: string[]; policyNotes: string[] };
 
@@ -221,16 +229,21 @@ export async function scanReferencesBatch(db: Db, accounts: CandidateIdentity[])
     const accountsById = new Map(accounts.map((account) => [account._id, account]));
     const lookup = buildCandidateLookup(accounts);
     const existing = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map((item) => item.name));
+    const documentsByCollection = new Map<string, Document[]>();
     for (const name of KNOWN_COLLECTIONS) {
         if (!existing.has(name)) continue;
         for await (const document of db.collection(name).find({})) {
+            const documents = documentsByCollection.get(name) ?? [];
+            documents.push(document);
+            documentsByCollection.set(name, documents);
             for (const [candidateId, paths] of matchingCandidatePaths(document, lookup)) {
                 const account = accountsById.get(candidateId)!;
                 if (name === "circles" && document._id instanceof ObjectId && document._id.toHexString() === account._id && document.did === account.did) continue;
-                references.get(candidateId)!.push({ collection: name, documentId: document._id, paths, document });
+                references.get(candidateId)!.push({ collection: name, documentId: document._id, paths, document, account });
             }
         }
     }
+    for (const account of accounts) correlateAutomaticConversations(account, references.get(account._id)!, documentsByCollection);
     return references;
 }
 
@@ -280,6 +293,7 @@ export type InventoryDiagnostic = {
         senderDidEqualsCandidate: DiagnosticCount[];
         conversationType: DiagnosticCount[];
     };
+    conversationSignatures: Array<{ signature: string; count: number; distinctAffectedCandidateCount: number }>;
 };
 
 function boundedDiagnosticValue(value: unknown): string {
@@ -313,10 +327,12 @@ export function buildInventoryDiagnostic(accounts: CandidateIdentity[], referenc
     const systemSystemType: string[] = [];
     const senderDidEqualsCandidate: boolean[] = [];
     const conversationType: string[] = [];
+    const conversationSignatures = new Map<string, { count: number; candidates: Set<string> }>();
 
     for (const account of accounts) {
         for (const reference of referencesByAccount.get(account._id) ?? []) {
-            const policy = referencePolicy(reference);
+            const candidateReference = reference.account ? reference : { ...reference, account };
+            const policy = referencePolicy(candidateReference);
             if (policy.kind === "strong") strong.add(account._id);
             if (policy.kind === "abort") uncertain.add(account._id);
             const signature = pathSignature(reference.paths);
@@ -333,6 +349,24 @@ export function buildInventoryDiagnostic(accounts: CandidateIdentity[], referenc
             systemSystemType.push(boundedDiagnosticValue(document.system?.systemType));
             senderDidEqualsCandidate.push(typeof document.senderDid === "string" && document.senderDid === account.did);
             conversationType.push(boundedDiagnosticValue(document.type));
+            if (reference.collection === "chatConversations") {
+                const participants = Array.isArray(document.participants) ? document.participants : [];
+                const signature = JSON.stringify({
+                    type: boundedDiagnosticValue(document.type),
+                    handle: boundedDiagnosticValue(document.handle),
+                    participantShape: participants.length === 1 && participants[0] === account.did ? "candidate-only" : participants.includes(account.did) ? "candidate-and-other" : "other",
+                    circleRelation: scalarMatches(document.circleId, account) ? "candidate-profile" : document.circleId == null ? "absent" : "other",
+                    metadataSource: boundedDiagnosticValue(document.metadata?.source),
+                    metadataVersion: boundedDiagnosticValue(document.metadata?.version),
+                    metadataRepliesDisabled: document.metadata?.repliesDisabled === true,
+                    repliesDisabled: document.repliesDisabled === true,
+                    automaticClass: reference.automaticConversationKind ?? "none",
+                });
+                const group = conversationSignatures.get(signature) ?? { count: 0, candidates: new Set<string>() };
+                group.count += 1;
+                group.candidates.add(account._id);
+                conversationSignatures.set(signature, group);
+            }
         }
     }
 
@@ -359,6 +393,11 @@ export function buildInventoryDiagnostic(accounts: CandidateIdentity[], referenc
             senderDidEqualsCandidate: diagnosticCounts(senderDidEqualsCandidate),
             conversationType: diagnosticCounts(conversationType),
         },
+        conversationSignatures: [...conversationSignatures].map(([signature, group]) => ({
+            signature,
+            count: group.count,
+            distinctAffectedCandidateCount: group.candidates.size,
+        })).sort((a, b) => a.signature.localeCompare(b.signature)),
     };
 }
 
@@ -372,15 +411,112 @@ function pathsOnly(reference: Reference, fields: RegExp): boolean {
     return reference.paths.length > 0 && reference.paths.every((path) => fields.test(path));
 }
 
-function isAutomaticChatArtifact(document: Document): boolean {
-    const source = String(document.source ?? document.type ?? document.kind ?? "").toLowerCase();
-    const metadataType = String(document.metadata?.type ?? document.system?.type ?? "").toLowerCase();
-    return document.isSystem === true || document.automatic === true || document.system === true ||
-        /(?:system|automatic|welcome|onboarding)/.test(source) || /(?:system|automatic|welcome|onboarding)/.test(metadataType);
+function exactCandidateParticipants(document: Document, account: CandidateIdentity): boolean {
+    return Array.isArray(document.participants) && document.participants.length === 1 && document.participants[0] === account.did;
+}
+
+function lacksCircleId(document: Document): boolean {
+    return document.circleId === undefined || document.circleId === null || document.circleId === "";
+}
+
+function hasOnlyInfrastructureMetadata(document: Document): boolean {
+    if (!document.metadata || typeof document.metadata !== "object" || Array.isArray(document.metadata)) return false;
+    const allowed = new Set(["source", "version", "repliesDisabled", "senderHandle", "senderName", "senderAvatarUrl"]);
+    return Object.keys(document.metadata).every((key) => allowed.has(key));
+}
+
+function automaticConversationKind(document: Document, account: CandidateIdentity): AutomaticConversationKind | undefined {
+    if (document.type === "dm" && document.handle === `welcome-${account.did}` && exactCandidateParticipants(document, account) &&
+        lacksCircleId(document) && document.ownerDid == null && hasOnlyInfrastructureMetadata(document) &&
+        document.metadata?.source === "system_welcome" && document.metadata?.repliesDisabled === true) {
+        return "signup welcome";
+    }
+    if (document.type === "announcement" && document.handle === "kamooni-announcements" && exactCandidateParticipants(document, account) &&
+        lacksCircleId(document) && document.ownerDid == null && hasOnlyInfrastructureMetadata(document) && document.metadata?.source === "platform_admin" && document.metadata?.version === "v1" &&
+        document.metadata?.repliesDisabled === true && document.repliesDisabled === true) {
+        return "current platform announcement";
+    }
+    if (document.type === "dm" && document.handle === "platform-announcements" && exactCandidateParticipants(document, account) &&
+        lacksCircleId(document) && document.ownerDid == null && hasOnlyInfrastructureMetadata(document) && document.metadata?.source === "platform_admin" && document.metadata?.version === "v1" &&
+        document.metadata?.repliesDisabled === true) {
+        return "legacy platform announcement";
+    }
+    const metadata = document.metadata;
+    if (document.type === "group" && scalarMatches(document.circleId, account) &&
+        (!Array.isArray(document.participants) || document.participants.length === 0) && document.handle == null && document.name == null &&
+        (metadata == null || (typeof metadata === "object" && !Array.isArray(metadata) && Object.keys(metadata).length === 0))) {
+        return "empty profile circle";
+    }
+    return undefined;
+}
+
+function sameConversationId(value: unknown, conversationId: unknown): boolean {
+    return String(value ?? "") === String(conversationId ?? "");
+}
+
+function isExactWelcomeMessage(document: Document, account: CandidateIdentity): boolean {
+    return document.source === "system_welcome" && document.senderDid !== account.did &&
+        document.createdBy !== account.did && document.authorDid !== account.did && document.author !== account.did &&
+        !(Array.isArray(document.reactions) && document.reactions.some((reaction) => reaction?.userDid === account.did || reaction?.sender === account.did)) &&
+        document.system?.messageType === "system" && document.system?.systemType === "welcome" &&
+        document.system?.source === "signup" && document.system?.targetDid === account.did && document.system?.repliesDisabled === true;
+}
+
+function isExactAnnouncementMessage(document: Document, account: CandidateIdentity): boolean {
+    return document.senderDid !== account.did && document.source === "platform_admin" &&
+        (document.recipientDid == null || document.recipientDid === account.did) &&
+        (document.system?.targetDid == null || document.system.targetDid === account.did) &&
+        document.createdBy !== account.did && document.authorDid !== account.did && document.author !== account.did &&
+        !(Array.isArray(document.reactions) && document.reactions.some((reaction) => reaction?.userDid === account.did || reaction?.sender === account.did)) &&
+        document.system?.messageType === "system" && document.system?.systemType === "announcement" &&
+        document.system?.source === "platform_admin" && document.system?.repliesDisabled === true;
+}
+
+function isCandidateOnlyMembership(document: Document, account: CandidateIdentity): boolean {
+    const member = document.userDid ?? document.memberDid;
+    return member === account.did && ![document.actorDid, document.createdBy, document.senderDid].includes(account.did);
+}
+
+function correlateAutomaticConversations(account: CandidateIdentity, references: Reference[], documents: Map<string, Document[]>): void {
+    const seen = new Set(references.map((reference) => `${reference.collection}:${String(reference.documentId)}`));
+    for (const conversation of references.filter((reference) => reference.collection === "chatConversations")) {
+        const kind = automaticConversationKind(conversation.document, account);
+        if (!kind) continue;
+        const conversationId = conversation.documentId;
+        const messages = (documents.get("chatMessageDocs") ?? []).filter((document) => sameConversationId(document.conversationId, conversationId));
+        const memberships = (documents.get("chatRoomMembers") ?? []).filter((document) => sameConversationId(document.chatRoomId ?? document.conversationId, conversationId));
+        const readStates = ["chatReadStates", "chatTopicReadStates"].flatMap((collection) =>
+            (documents.get(collection) ?? []).filter((document) => sameConversationId(document.conversationId, conversationId)));
+        const contentIsSafe = kind === "signup welcome"
+            ? messages.length > 0 && messages.every((document) => isExactWelcomeMessage(document, account))
+            : kind === "empty profile circle"
+                ? messages.length === 0 && memberships.length === 0
+                : messages.every((document) => isExactAnnouncementMessage(document, account));
+        const membershipIsSafe = kind === "empty profile circle" || memberships.every((document) => isCandidateOnlyMembership(document, account));
+        const readStateIsSafe = readStates.every((document) => document.userDid === account.did);
+        if (!contentIsSafe || !membershipIsSafe || !readStateIsSafe) continue;
+        conversation.automaticConversationKind = kind;
+        for (const collection of ["chatMessageDocs", "chatReadStates", "chatTopicReadStates", "chatRoomMembers"] as const) {
+            const linked = (documents.get(collection) ?? []).filter((document) => sameConversationId(
+                collection === "chatRoomMembers" ? document.chatRoomId ?? document.conversationId : document.conversationId,
+                conversationId,
+            ));
+            for (const document of linked) {
+                const key = `${collection}:${String(document._id)}`;
+                const existing = references.find((reference) => `${reference.collection}:${String(reference.documentId)}` === key);
+                if (existing) existing.automaticConversationKind = kind;
+                else if (!seen.has(key)) {
+                    references.push({ collection, documentId: document._id, paths: ["conversationId"], document, account, automaticConversationKind: kind });
+                    seen.add(key);
+                }
+            }
+        }
+    }
 }
 
 export function referencePolicy(reference: Reference): ReferencePolicy {
     const { collection, document } = reference;
+    const account = reference.account;
     if (SUBSTANTIVE_COLLECTIONS.has(collection) || ALWAYS_STRONG_COLLECTIONS.has(collection)) {
         return { kind: "strong", reason: "authored or participatory platform record" };
     }
@@ -427,19 +563,22 @@ export function referencePolicy(reference: Reference): ReferencePolicy {
         return { kind: "abort", reason: "candidate is the target or has an uncertain governance/admin role" };
     }
     if (collection === "chatRoomMembers") {
+        if (reference.automaticConversationKind) return { kind: "delete", reason: `dependent state of exact ${reference.automaticConversationKind} conversation` };
         if (pathsOnly(reference, /^(?:userDid|circleId)$/) && hasPath(reference, /^userDid$/) && hasPath(reference, /^circleId$/)) return { kind: "delete", reason: "automatic own-profile chat membership" };
-        if (isAutomaticChatArtifact(document) && pathsOnly(reference, /(?:^|\.)(?:userDid|memberDid|recipientDid)$/i)) return { kind: "delete", reason: "explicitly marked automatic/system chat membership" };
         return { kind: "strong", reason: "non-automatic chat room membership" };
     }
     if (collection === "chatMessageDocs") {
         if (hasPath(reference, /(?:^|\.)(?:senderDid|createdBy|authorDid|author|reactions\[\d+\]\.(?:userDid|sender))$/i)) return { kind: "strong", reason: "authored chat message/topic/reply or reaction" };
-        if (isAutomaticChatArtifact(document)) return { kind: "delete", reason: "automatic welcome/system chat artifact" };
+        if (reference.automaticConversationKind) return { kind: "delete", reason: `dependent message of exact ${reference.automaticConversationKind} conversation` };
         return { kind: "abort", reason: "uncertain non-system chat reference" };
     }
-    if (collection === "chatConversations" || collection === "chatRooms") {
-        if (isAutomaticChatArtifact(document) && pathsOnly(reference, /(?:^|\.)(?:participants|dmParticipants)\[\d+\]$/i)) return { kind: "reconcile", reason: "participant of explicitly marked automatic/system chat" };
+    if (collection === "chatConversations") {
+        if (reference.automaticConversationKind && account && automaticConversationKind(document, account) === reference.automaticConversationKind) {
+            return { kind: "delete", reason: `exact candidate-owned ${reference.automaticConversationKind} conversation` };
+        }
         return { kind: "strong", reason: "substantive or uncertain chat participation" };
     }
+    if (collection === "chatRooms") return { kind: "strong", reason: "substantive or uncertain chat participation" };
     if (collection === "messageEmailReminders") {
         if (hasPath(reference, /(?:^|\.)senderDid$/i)) return { kind: "strong", reason: "message sender" };
         if (pathsOnly(reference, /(?:^|\.)(?:recipientDid|email)$/i)) return { kind: "delete", reason: "automatic reminder received by candidate" };
