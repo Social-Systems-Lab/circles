@@ -433,7 +433,7 @@ function automaticConversationKind(document: Document, account: CandidateIdentit
     }
     if (document.type === "announcement" && document.handle === "kamooni-announcements" && exactCandidateParticipants(document, account) &&
         lacksCircleId(document) && document.ownerDid == null && hasOnlyInfrastructureMetadata(document) && document.metadata?.source === "platform_admin" && document.metadata?.version === "v1" &&
-        document.metadata?.repliesDisabled === true && document.repliesDisabled === true) {
+        document.metadata?.repliesDisabled === true && (document.repliesDisabled === true || document.repliesDisabled === undefined)) {
         return "current platform announcement";
     }
     if (document.type === "dm" && document.handle === "platform-announcements" && exactCandidateParticipants(document, account) &&

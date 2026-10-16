@@ -353,9 +353,12 @@ test("welcome-like conversations fail closed on missing markers, another partici
 });
 
 test("exact current and reviewed legacy platform announcement conversations are deleted", async () => {
-    for (const legacy of [false, true]) {
-        const value = manifest(); const conversation = announcementConversation(value, legacy);
-        const db = new FakeDb({ circles: profiles(value), chatConversations: [conversation], chatMessageDocs: [announcementMessage(value, conversation._id)] });
+    for (const [legacy, overrides, withMessage] of [[false, {}, true], [false, { repliesDisabled: undefined }, false], [true, {}, true]] as const) {
+        const value = manifest(); const conversation = announcementConversation(value, legacy, overrides);
+        const db = new FakeDb({
+            circles: profiles(value), chatConversations: [conversation],
+            chatMessageDocs: withMessage ? [announcementMessage(value, conversation._id)] : [],
+        });
         const checked = await preflight(db as any, value);
         await executePlan(db as any, checked.plans[0]);
         assert.equal(db.data.chatConversations.length, 0);
@@ -383,6 +386,20 @@ test("announcement cleanup cascades exact per-conversation state and preserves g
 test("announcement-shaped records with arbitrary type, another participant, or candidate authorship are strong", async () => {
     const value = manifest();
     await assertConversationIsStrong({ _id: new ObjectId(), type: "group", participants: [value.accounts[0].did], metadata: { source: "platform_admin" } });
+    for (const overrides of [
+        { repliesDisabled: false },
+        { repliesDisabled: null },
+        { repliesDisabled: 0 },
+        { repliesDisabled: "" },
+        { repliesDisabled: "arbitrary" },
+        { type: "dm" },
+        { handle: "other-announcements" },
+        { metadata: { source: "platform_admin", version: "v2", repliesDisabled: true } },
+        { metadata: { source: "other", version: "v1", repliesDisabled: true } },
+        { metadata: { source: "platform_admin", version: "v1", repliesDisabled: false } },
+        { circleId: new ObjectId() },
+        { ownerDid: value.accounts[0].did },
+    ]) await assertConversationIsStrong(announcementConversation(value, false, overrides));
     const shared = announcementConversation(value, false, { participants: [value.accounts[0].did, "did:human"] });
     await assertConversationIsStrong(shared);
     const authored = announcementConversation(value);
