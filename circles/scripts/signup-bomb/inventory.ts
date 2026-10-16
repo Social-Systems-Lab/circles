@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { MongoClient, ObjectId } from "mongodb";
 import {
     ARTIFACT_DIRECTORY, ATTACK_WINDOW_START, CUTOFF, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS,
-    assertDatabaseSafety, hasStrongActivity, mongoUri, toCandidate, validateManifest,
+    assertDatabaseSafety, mongoUri, scanReferencesBatch, summarizeActivity, toCandidate, validateManifest,
     writePrivateJson, type Manifest,
 } from "./lib";
 
@@ -31,12 +31,13 @@ async function main() {
             _id: { $gte: ObjectId.createFromTime(Math.floor(ATTACK_WINDOW_START.getTime() / 1000)), $lt: ObjectId.createFromTime(Math.floor(CUTOFF.getTime() / 1000) + 1) },
         }).toArray();
         const synthetic = raw.filter(hasReviewedSyntheticSignature).filter((profile) => profile._id.getTimestamp() <= CUTOFF);
+        const syntheticCandidates = synthetic.map(toCandidate);
+        const referencesByAccount = await scanReferencesBatch(db, syntheticCandidates);
         const accounts = [];
         const excludedForActivity: unknown[] = [];
         const reportedNonActivityEvidence: unknown[] = [];
-        for (const profile of synthetic) {
-            const candidate = toCandidate(profile);
-            const activity = await hasStrongActivity(db, candidate);
+        for (const candidate of syntheticCandidates) {
+            const activity = summarizeActivity(referencesByAccount.get(candidate._id)!);
             if (activity.uncertain.length) throw new Error(`Safety stop: uncertain reference semantics for ${candidate._id}: ${activity.uncertain.join("; ")}`);
             if (activity.observations.length) reportedNonActivityEvidence.push({ _id: candidate._id, did: candidate.did, observations: activity.observations });
             if (activity.active) excludedForActivity.push({ _id: candidate._id, did: candidate.did, reasons: activity.reasons });

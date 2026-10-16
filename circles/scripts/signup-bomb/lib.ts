@@ -136,6 +136,55 @@ function scalarMatches(value: unknown, account: CandidateIdentity): boolean {
     return value === account._id || value === account.did || value.toLowerCase() === account.email.toLowerCase();
 }
 
+type CandidateLookup = {
+    byId: Map<string, Set<string>>;
+    byDid: Map<string, Set<string>>;
+    byEmail: Map<string, Set<string>>;
+};
+
+function addLookup(map: Map<string, Set<string>>, value: string, candidateId: string): void {
+    const matches = map.get(value) ?? new Set<string>();
+    matches.add(candidateId);
+    map.set(value, matches);
+}
+
+function buildCandidateLookup(accounts: CandidateIdentity[]): CandidateLookup {
+    const lookup: CandidateLookup = { byId: new Map(), byDid: new Map(), byEmail: new Map() };
+    for (const account of accounts) {
+        addLookup(lookup.byId, account._id, account._id);
+        addLookup(lookup.byDid, account.did, account._id);
+        addLookup(lookup.byEmail, account.email.toLowerCase(), account._id);
+    }
+    return lookup;
+}
+
+function matchingCandidatePaths(value: unknown, lookup: CandidateLookup, path = "", result = new Map<string, string[]>()): Map<string, string[]> {
+    let matches: Iterable<string> | undefined;
+    if (value instanceof ObjectId) matches = lookup.byId.get(value.toHexString());
+    else if (typeof value === "string") {
+        const byId = lookup.byId.get(value);
+        const byDid = lookup.byDid.get(value);
+        const byEmail = lookup.byEmail.get(value.toLowerCase());
+        if (byId || byDid || byEmail) matches = new Set([...(byId ?? []), ...(byDid ?? []), ...(byEmail ?? [])]);
+    }
+    if (matches) {
+        for (const candidateId of matches) {
+            const paths = result.get(candidateId) ?? [];
+            paths.push(path || "$");
+            result.set(candidateId, paths);
+        }
+        return result;
+    }
+    if (Array.isArray(value)) {
+        value.forEach((item, index) => matchingCandidatePaths(item, lookup, `${path}[${index}]`, result));
+    } else if (value && typeof value === "object" && !(value instanceof Date) && !(value instanceof ObjectId)) {
+        for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+            matchingCandidatePaths(child, lookup, path ? `${path}.${key}` : key, result);
+        }
+    }
+    return result;
+}
+
 export function matchingPaths(value: unknown, account: CandidateIdentity, path = ""): string[] {
     if (scalarMatches(value, account)) return [path || "$"];
     if (Array.isArray(value)) return value.flatMap((item, index) => matchingPaths(item, account, `${path}[${index}]`));
@@ -154,18 +203,27 @@ export function collectAssetReferences(value: unknown, path = ""): string[] {
     });
 }
 
-export async function scanReferences(db: Db, account: CandidateIdentity): Promise<Reference[]> {
+export async function scanReferencesBatch(db: Db, accounts: CandidateIdentity[]): Promise<Map<string, Reference[]>> {
+    const references = new Map(accounts.map((account) => [account._id, [] as Reference[]]));
+    if (!accounts.length) return references;
+    const accountsById = new Map(accounts.map((account) => [account._id, account]));
+    const lookup = buildCandidateLookup(accounts);
     const existing = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map((item) => item.name));
-    const references: Reference[] = [];
     for (const name of KNOWN_COLLECTIONS) {
         if (!existing.has(name)) continue;
         for await (const document of db.collection(name).find({})) {
-            if (name === "circles" && document._id instanceof ObjectId && document._id.toHexString() === account._id && document.did === account.did) continue;
-            const paths = matchingPaths(document, account);
-            if (paths.length) references.push({ collection: name, documentId: document._id, paths, document });
+            for (const [candidateId, paths] of matchingCandidatePaths(document, lookup)) {
+                const account = accountsById.get(candidateId)!;
+                if (name === "circles" && document._id instanceof ObjectId && document._id.toHexString() === account._id && document.did === account.did) continue;
+                references.get(candidateId)!.push({ collection: name, documentId: document._id, paths, document });
+            }
         }
     }
     return references;
+}
+
+export async function scanReferences(db: Db, account: CandidateIdentity): Promise<Reference[]> {
+    return (await scanReferencesBatch(db, [account])).get(account._id)!;
 }
 
 export function isStrongActivityReference(reference: Reference): boolean {
@@ -174,6 +232,10 @@ export function isStrongActivityReference(reference: Reference): boolean {
 
 export async function hasStrongActivity(db: Db, account: CandidateIdentity): Promise<{ active: boolean; reasons: string[]; observations: string[]; uncertain: string[] }> {
     const references = await scanReferences(db, account);
+    return summarizeActivity(references);
+}
+
+export function summarizeActivity(references: Reference[]): { active: boolean; reasons: string[]; observations: string[]; uncertain: string[] } {
     const reasons = references.filter(isStrongActivityReference).map((r) => `${r.collection}:${String(r.documentId)}:${r.paths.join(",")}`);
     const observations = references
         .filter((reference) => reference.collection === "humanityVerifications" && referencePolicy(reference).kind === "delete")
@@ -293,12 +355,13 @@ export async function preflight(db: Db, manifest: Manifest): Promise<Preflight> 
     const plans: AccountPlan[] = [];
     const externalAssets = new Set<string>();
     const policyNotes = new Set<string>();
+    const referencesByAccount = await scanReferencesBatch(db, manifest.accounts);
     for (const account of manifest.accounts) {
         const profile = await db.collection("circles").findOne({ _id: new ObjectId(account._id), did: account.did });
         if (!profile) {
             const byEither = await db.collection("circles").findOne({ $or: [{ _id: new ObjectId(account._id) }, { did: account.did }] });
             if (byEither) throw new Error(`Identity pair drift for candidate ${account._id}/${account.did}`);
-            const references = await scanReferences(db, account);
+            const references = referencesByAccount.get(account._id)!;
             const aborts = references.filter((r) => classifyReference(r) === "abort");
             if (aborts.length) throw new Error(`Ambiguous or substantive reference for missing candidate ${account._id}: ${aborts.map((r) => `${r.collection}:${String(r.documentId)}:${referencePolicy(r).reason}`).join(", ")}`);
             const assets = references.flatMap((r) => collectAssetReferences(r.document));
@@ -310,7 +373,7 @@ export async function preflight(db: Db, manifest: Manifest): Promise<Preflight> 
         }
         const drift = compareIdentity(profile, account);
         if (drift.length) throw new Error(`Candidate drift for ${account._id}: ${drift.join("; ")}`);
-        const references = await scanReferences(db, account);
+        const references = referencesByAccount.get(account._id)!;
         const strong = references.filter(isStrongActivityReference);
         if (strong.length) throw new Error(`New meaningful activity for ${account._id}: ${strong.map((r) => `${r.collection}:${String(r.documentId)}:${referencePolicy(r).reason}`).join(", ")}`);
         const aborts = references.filter((r) => classifyReference(r) === "abort");

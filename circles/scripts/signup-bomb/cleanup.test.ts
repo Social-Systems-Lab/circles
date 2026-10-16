@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { ObjectId } from "mongodb";
 import {
-    CUTOFF, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS, executePlan, hasStrongActivity, preflight, readAndVerifyManifest, sha256,
+    CUTOFF, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS, executePlan, hasStrongActivity, preflight, readAndVerifyManifest, scanReferencesBatch, sha256,
     validateManifest, type CandidateIdentity, type Manifest,
 } from "./lib";
 
@@ -21,9 +21,10 @@ function matches(row: Row, filter: Row): boolean {
 }
 
 class FakeCollection {
-    constructor(private rows: Row[], private mutations: string[]) {}
+    constructor(private rows: Row[], private mutations: string[], private name: string, private cursorOpens: Map<string, number>) {}
     async findOne(filter: Row) { return this.rows.find((row) => matches(row, filter)) ?? null; }
     find(filter: Row = {}) {
+        this.cursorOpens.set(this.name, (this.cursorOpens.get(this.name) ?? 0) + 1);
         const values = this.rows.filter((row) => matches(row, filter));
         return { toArray: async () => values, async *[Symbol.asyncIterator]() { yield* values; } };
     }
@@ -41,8 +42,9 @@ class FakeCollection {
 
 class FakeDb {
     mutations: string[] = [];
+    cursorOpens = new Map<string, number>();
     constructor(public data: Record<string, Row[]>) {}
-    collection(name: string) { this.data[name] ??= []; return new FakeCollection(this.data[name], this.mutations); }
+    collection(name: string) { this.data[name] ??= []; return new FakeCollection(this.data[name], this.mutations, name, this.cursorOpens); }
     listCollections() { return { toArray: async () => Object.keys(this.data).map((name) => ({ name })) }; }
 }
 
@@ -74,6 +76,34 @@ test("manifest tamper / SHA mismatch", async () => {
 test("preserved-account exclusion", () => {
     const value = manifest(); value.preservedAccountIds[0] = value.accounts[0]._id;
     assert.throws(() => validateManifest(value), /Preserved account/);
+});
+
+test("batch scan finds multiple candidates, nested identities, exact case-insensitive email, and multi-candidate documents", async () => {
+    const first = account(0); const second = account(1);
+    const sharedId = new ObjectId();
+    const db = new FakeDb({ notifications: [
+        { _id: new ObjectId(), nested: { recipients: [{ identity: first.did }] } },
+        { _id: new ObjectId(), email: second.email.toUpperCase() },
+        { _id: new ObjectId(), email: `${first.email}.invalid` },
+        { _id: sharedId, identities: [new ObjectId(first._id), second.did] },
+    ] });
+    const found = await scanReferencesBatch(db as any, [first, second]);
+    assert.deepEqual(found.get(first._id)!.map((reference) => reference.paths), [["nested.recipients[0].identity"], ["identities[0]"]]);
+    assert.deepEqual(found.get(second._id)!.map((reference) => reference.paths), [["email"], ["identities[1]"]]);
+    assert.equal(found.get(first._id)!.some((reference) => reference.documentId.equals(sharedId)), true);
+    assert.equal(found.get(second._id)!.some((reference) => reference.documentId.equals(sharedId)), true);
+});
+
+test("batch scan opens each collection cursor once and excludes preserved identities from candidate results", async () => {
+    const value = manifest(); const preservedDid = "did:kamooni:preserved";
+    const db = new FakeDb({
+        notifications: [{ _id: new ObjectId(), userDid: value.accounts[0].did }, { _id: new ObjectId(), userDid: preservedDid }],
+        tasks: [{ _id: new ObjectId(), watchers: [value.accounts[1]._id] }],
+    });
+    const found = await scanReferencesBatch(db as any, value.accounts);
+    assert.equal(found.get(value.accounts[0]._id)!.length, 1);
+    assert.equal([...found.values()].flat().some((reference) => reference.document.userDid === preservedDid), false);
+    assert.deepEqual(Object.fromEntries(db.cursorOpens), { notifications: 1, tasks: 1 });
 });
 
 test("candidate drift or new activity aborts whole preflight", async () => {

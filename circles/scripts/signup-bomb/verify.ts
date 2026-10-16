@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { MongoClient, ObjectId } from "mongodb";
 import {
     ARTIFACT_DIRECTORY, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS, assertDatabaseSafety, getOption,
-    mongoUri, readAndVerifyManifest, scanReferences, writePrivateJson,
+    mongoUri, readAndVerifyManifest, scanReferencesBatch, writePrivateJson,
 } from "./lib";
 
 type MutationReport = {
@@ -29,10 +29,11 @@ async function main() {
         await client.connect();
         const db = assertDatabaseSafety(client, args.includes("--allow-non-circles-local-tests"));
         const failures: string[] = [];
+        const referencesByAccount = await scanReferencesBatch(db, manifest.accounts);
         for (const account of manifest.accounts) {
             const profile = await db.collection("circles").findOne({ $or: [{ _id: new ObjectId(account._id) }, { did: account.did }] });
             if (profile) failures.push(`profile identity remains: ${account._id}/${account.did}`);
-            const references = await scanReferences(db, account);
+            const references = referencesByAccount.get(account._id)!;
             if (references.length) failures.push(`references remain for ${account._id}: ${references.map((r) => `${r.collection}:${String(r.documentId)}`).join(",")}`);
         }
         for (let index = 0; index < PRESERVED_EMAILS.length; index++) {
