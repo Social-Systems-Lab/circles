@@ -1,15 +1,68 @@
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { MongoClient, ObjectId } from "mongodb";
 import {
     ARTIFACT_DIRECTORY, ATTACK_WINDOW_START, CUTOFF, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS,
-    assertDatabaseSafety, mongoUri, scanReferencesBatch, summarizeActivity, toCandidate, validateManifest,
-    writePrivateJson, type Manifest,
+    assertDatabaseSafety, buildInventoryDiagnostic, mongoUri, scanReferencesBatch, summarizeActivity, toCandidate, validateManifest,
+    writePrivateJson, type CandidateIdentity, type Manifest, type Reference,
 } from "./lib";
 
 function hasReviewedSyntheticSignature(profile: Record<string, unknown>): boolean {
     if (!/^[a-z]{14,20}$/.test(String(profile.handle ?? ""))) return false;
     const parts = String(profile.name ?? "").trim().split(/\s+/);
     return parts.length >= 2 && parts.every((part) => part.length >= 8 && /[a-z]/.test(part) && /[A-Z]/.test(part));
+}
+
+type InventoryResultInput = {
+    database: string;
+    generatedAt: string;
+    reviewedProfiles: number;
+    syntheticCandidates: CandidateIdentity[];
+    referencesByAccount: Map<string, Reference[]>;
+    preservedAccountIds: string[];
+    artifactDirectory?: string;
+};
+
+export async function writeInventoryResult(input: InventoryResultInput): Promise<void> {
+    const accounts = [];
+    const excludedForActivity: unknown[] = [];
+    const reportedNonActivityEvidence: unknown[] = [];
+    let hasUncertain = false;
+    for (const candidate of input.syntheticCandidates) {
+        const activity = summarizeActivity(input.referencesByAccount.get(candidate._id) ?? []);
+        if (activity.uncertain.length) hasUncertain = true;
+        if (activity.observations.length) reportedNonActivityEvidence.push({ _id: candidate._id, did: candidate.did, observations: activity.observations });
+        if (activity.active) excludedForActivity.push({ _id: candidate._id, did: candidate.did, reasons: activity.reasons });
+        if (!activity.active && !activity.uncertain.length) accounts.push(candidate);
+    }
+    const manifest: Manifest = {
+        schemaVersion: 1, database: input.database, cutoff: CUTOFF.toISOString(), generatedAt: input.generatedAt,
+        candidateCount: accounts.length, preservedAccountIds: input.preservedAccountIds, accounts,
+    };
+    const stamp = input.generatedAt.replace(/[:.]/g, "-");
+    const artifactDirectory = input.artifactDirectory ?? ARTIFACT_DIRECTORY;
+    if (accounts.length !== EXPECTED_CANDIDATE_COUNT) {
+        const diagnosticResult = await writePrivateJson(resolve(artifactDirectory, `inventory-diagnostic-${stamp}.json`), {
+            schemaVersion: 1,
+            database: input.database,
+            generatedAt: input.generatedAt,
+            attackWindowStart: ATTACK_WINDOW_START.toISOString(),
+            cutoff: CUTOFF.toISOString(),
+            reviewedProfiles: input.reviewedProfiles,
+            ...buildInventoryDiagnostic(input.syntheticCandidates, input.referencesByAccount),
+        });
+        throw new Error(`Safety stop: expected exactly ${EXPECTED_CANDIDATE_COUNT} candidates, found ${accounts.length}; private diagnostic: ${diagnosticResult.path}`);
+    }
+    if (hasUncertain) throw new Error("Safety stop: uncertain reference semantics in synthetic candidate set");
+    validateManifest(manifest);
+    const manifestResult = await writePrivateJson(resolve(artifactDirectory, `manifest-${stamp}.json`), manifest);
+    const reportResult = await writePrivateJson(resolve(artifactDirectory, `inventory-report-${stamp}.json`), {
+        schemaVersion: 1, database: input.database, generatedAt: input.generatedAt, attackWindowStart: ATTACK_WINDOW_START.toISOString(),
+        cutoff: CUTOFF.toISOString(), reviewedProfiles: input.reviewedProfiles, syntheticSignatureMatches: input.syntheticCandidates.length,
+        excludedForStrongActivity: excludedForActivity, candidateCount: accounts.length, manifestPath: manifestResult.path,
+        reportedNonActivityEvidence, manifestSha256: manifestResult.sha256,
+    });
+    console.log(`Manifest: ${manifestResult.path}\nManifest SHA-256: ${manifestResult.sha256}\nReport: ${reportResult.path}\nReport SHA-256: ${reportResult.sha256}`);
 }
 
 async function main() {
@@ -33,33 +86,13 @@ async function main() {
         const synthetic = raw.filter(hasReviewedSyntheticSignature).filter((profile) => profile._id.getTimestamp() <= CUTOFF);
         const syntheticCandidates = synthetic.map(toCandidate);
         const referencesByAccount = await scanReferencesBatch(db, syntheticCandidates);
-        const accounts = [];
-        const excludedForActivity: unknown[] = [];
-        const reportedNonActivityEvidence: unknown[] = [];
-        for (const candidate of syntheticCandidates) {
-            const activity = summarizeActivity(referencesByAccount.get(candidate._id)!);
-            if (activity.uncertain.length) throw new Error(`Safety stop: uncertain reference semantics for ${candidate._id}: ${activity.uncertain.join("; ")}`);
-            if (activity.observations.length) reportedNonActivityEvidence.push({ _id: candidate._id, did: candidate.did, observations: activity.observations });
-            if (activity.active) excludedForActivity.push({ _id: candidate._id, did: candidate.did, reasons: activity.reasons });
-            else accounts.push(candidate);
-        }
-        const manifest: Manifest = {
-            schemaVersion: 1, database: db.databaseName, cutoff: CUTOFF.toISOString(), generatedAt: new Date().toISOString(),
-            candidateCount: accounts.length, preservedAccountIds: preserved, accounts,
-        };
-        if (accounts.length !== EXPECTED_CANDIDATE_COUNT) throw new Error(`Safety stop: expected exactly ${EXPECTED_CANDIDATE_COUNT} candidates, found ${accounts.length}`);
-        validateManifest(manifest);
-        const stamp = manifest.generatedAt.replace(/[:.]/g, "-");
-        const manifestResult = await writePrivateJson(resolve(ARTIFACT_DIRECTORY, `manifest-${stamp}.json`), manifest);
-        const reportResult = await writePrivateJson(resolve(ARTIFACT_DIRECTORY, `inventory-report-${stamp}.json`), {
-            schemaVersion: 1, database: db.databaseName, generatedAt: manifest.generatedAt, attackWindowStart: ATTACK_WINDOW_START.toISOString(),
-            cutoff: CUTOFF.toISOString(), reviewedProfiles: raw.length, syntheticSignatureMatches: synthetic.length,
-            excludedForStrongActivity: excludedForActivity, candidateCount: accounts.length, manifestPath: manifestResult.path,
-            reportedNonActivityEvidence,
-            manifestSha256: manifestResult.sha256,
+        await writeInventoryResult({
+            database: db.databaseName, generatedAt: new Date().toISOString(), reviewedProfiles: raw.length,
+            syntheticCandidates, referencesByAccount, preservedAccountIds: preserved,
         });
-        console.log(`Manifest: ${manifestResult.path}\nManifest SHA-256: ${manifestResult.sha256}\nReport: ${reportResult.path}\nReport SHA-256: ${reportResult.sha256}`);
     } finally { await client.close(); }
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main().catch((error) => { console.error(error); process.exitCode = 1; });
+}

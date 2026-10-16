@@ -150,10 +150,22 @@ function addLookup(map: Map<string, Set<string>>, value: string, candidateId: st
 
 function buildCandidateLookup(accounts: CandidateIdentity[]): CandidateLookup {
     const lookup: CandidateLookup = { byId: new Map(), byDid: new Map(), byEmail: new Map() };
+    const ids = new Set<string>();
+    const dids = new Set<string>();
+    const emails = new Set<string>();
     for (const account of accounts) {
+        const normalizedEmail = account.email.toLowerCase();
+        if (!account.did.trim()) throw new Error("Batch reference scan requires a non-empty candidate DID");
+        if (!account.email.trim()) throw new Error("Batch reference scan requires a non-empty candidate email");
+        if (ids.has(account._id)) throw new Error("Batch reference scan requires unique candidate _id values");
+        if (dids.has(account.did)) throw new Error("Batch reference scan requires unique candidate DID values");
+        if (emails.has(normalizedEmail)) throw new Error("Batch reference scan requires unique candidate email values (case-insensitive)");
+        ids.add(account._id);
+        dids.add(account.did);
+        emails.add(normalizedEmail);
         addLookup(lookup.byId, account._id, account._id);
         addLookup(lookup.byDid, account.did, account._id);
-        addLookup(lookup.byEmail, account.email.toLowerCase(), account._id);
+        addLookup(lookup.byEmail, normalizedEmail, account._id);
     }
     return lookup;
 }
@@ -243,6 +255,111 @@ export function summarizeActivity(references: Reference[]): { active: boolean; r
     const uncertain = references.filter((reference) => referencePolicy(reference).kind === "abort")
         .map((reference) => `${reference.collection}:${String(reference.documentId)}:${referencePolicy(reference).reason}`);
     return { active: reasons.length > 0, reasons, observations, uncertain };
+}
+
+type DiagnosticCount = { value: string | boolean; count: number };
+export type InventoryDiagnostic = {
+    syntheticCandidatesInspected: number;
+    excludedAsStrong: number;
+    withUncertainReferences: number;
+    otherwiseEligible: number;
+    collections: Array<{
+        collection: string;
+        policyKind: ReferencePolicy["kind"];
+        policyReason: string;
+        matchedPathSignature: string;
+        totalReferenceCount: number;
+        distinctAffectedCandidateCount: number;
+        prevalencePercentage: number;
+    }>;
+    structuralFlags: {
+        handleStartsWithWelcome: DiagnosticCount[];
+        topLevelSource: DiagnosticCount[];
+        metadataSource: DiagnosticCount[];
+        systemSystemType: DiagnosticCount[];
+        senderDidEqualsCandidate: DiagnosticCount[];
+        conversationType: DiagnosticCount[];
+    };
+};
+
+function boundedDiagnosticValue(value: unknown): string {
+    if (value === undefined || value === null || value === "") return "<missing>";
+    if (typeof value !== "string") return `<${typeof value}>`;
+    const normalized = value.trim().toLowerCase();
+    if (/^[a-z0-9][a-z0-9_-]{0,39}$/.test(normalized) &&
+        /(?:system|automatic|welcome|onboarding|signup|chat|message|conversation|notification|bot|dm|group|direct)/.test(normalized)) {
+        return normalized;
+    }
+    return `<other:${sha256(normalized).slice(0, 8)}>`;
+}
+
+function diagnosticCounts(values: Array<string | boolean>): DiagnosticCount[] {
+    const counts = new Map<string | boolean, number>();
+    for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+    return [...counts].map(([value, count]) => ({ value, count })).sort((a, b) => String(a.value).localeCompare(String(b.value)));
+}
+
+function pathSignature(paths: string[]): string {
+    return [...new Set(paths.map((path) => path.replace(/\[\d+\]/g, "[]")))].sort().join("|");
+}
+
+export function buildInventoryDiagnostic(accounts: CandidateIdentity[], referencesByAccount: Map<string, Reference[]>): InventoryDiagnostic {
+    const groups = new Map<string, { collection: string; policy: ReferencePolicy; signature: string; count: number; candidates: Set<string> }>();
+    const strong = new Set<string>();
+    const uncertain = new Set<string>();
+    const handleStartsWithWelcome: boolean[] = [];
+    const topLevelSource: string[] = [];
+    const metadataSource: string[] = [];
+    const systemSystemType: string[] = [];
+    const senderDidEqualsCandidate: boolean[] = [];
+    const conversationType: string[] = [];
+
+    for (const account of accounts) {
+        for (const reference of referencesByAccount.get(account._id) ?? []) {
+            const policy = referencePolicy(reference);
+            if (policy.kind === "strong") strong.add(account._id);
+            if (policy.kind === "abort") uncertain.add(account._id);
+            const signature = pathSignature(reference.paths);
+            const key = JSON.stringify([reference.collection, policy.kind, policy.reason, signature]);
+            const group = groups.get(key) ?? { collection: reference.collection, policy, signature, count: 0, candidates: new Set<string>() };
+            group.count += 1;
+            group.candidates.add(account._id);
+            groups.set(key, group);
+
+            const document = reference.document;
+            handleStartsWithWelcome.push(typeof document.handle === "string" && document.handle.toLowerCase().startsWith("welcome-"));
+            topLevelSource.push(boundedDiagnosticValue(document.source));
+            metadataSource.push(boundedDiagnosticValue(document.metadata?.source));
+            systemSystemType.push(boundedDiagnosticValue(document.system?.systemType));
+            senderDidEqualsCandidate.push(typeof document.senderDid === "string" && document.senderDid === account.did);
+            conversationType.push(boundedDiagnosticValue(document.type));
+        }
+    }
+
+    const denominator = accounts.length;
+    return {
+        syntheticCandidatesInspected: denominator,
+        excludedAsStrong: strong.size,
+        withUncertainReferences: uncertain.size,
+        otherwiseEligible: accounts.filter((account) => !strong.has(account._id) && !uncertain.has(account._id)).length,
+        collections: [...groups.values()].map((group) => ({
+            collection: group.collection,
+            policyKind: group.policy.kind,
+            policyReason: group.policy.reason,
+            matchedPathSignature: group.signature,
+            totalReferenceCount: group.count,
+            distinctAffectedCandidateCount: group.candidates.size,
+            prevalencePercentage: denominator ? Number(((group.candidates.size / denominator) * 100).toFixed(2)) : 0,
+        })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+        structuralFlags: {
+            handleStartsWithWelcome: diagnosticCounts(handleStartsWithWelcome),
+            topLevelSource: diagnosticCounts(topLevelSource),
+            metadataSource: diagnosticCounts(metadataSource),
+            systemSystemType: diagnosticCounts(systemSystemType),
+            senderDidEqualsCandidate: diagnosticCounts(senderDidEqualsCandidate),
+            conversationType: diagnosticCounts(conversationType),
+        },
+    };
 }
 
 type ReferencePolicy = { kind: "strong" | "delete" | "reconcile" | "abort"; reason: string };

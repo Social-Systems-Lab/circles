@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { ObjectId } from "mongodb";
 import {
-    CUTOFF, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS, executePlan, hasStrongActivity, preflight, readAndVerifyManifest, scanReferencesBatch, sha256,
+    CUTOFF, EXPECTED_CANDIDATE_COUNT, PRESERVED_EMAILS, executePlan, hasStrongActivity, preflight, readAndVerifyManifest, scanReferences, scanReferencesBatch, sha256,
     validateManifest, type CandidateIdentity, type Manifest,
 } from "./lib";
+import { writeInventoryResult } from "./inventory";
 
 type Row = Record<string, any>;
 
@@ -92,6 +93,92 @@ test("batch scan finds multiple candidates, nested identities, exact case-insens
     assert.deepEqual(found.get(second._id)!.map((reference) => reference.paths), [["email"], ["identities[1]"]]);
     assert.equal(found.get(first._id)!.some((reference) => reference.documentId.equals(sharedId)), true);
     assert.equal(found.get(second._id)!.some((reference) => reference.documentId.equals(sharedId)), true);
+});
+
+test("batch scanner is equivalent to single-account scans for representative identity semantics", async () => {
+    const first = account(0); const second = account(1);
+    const shared = new ObjectId();
+    const data = { notifications: [
+        { _id: new ObjectId(), nested: [{ owner: { did: first.did } }] },
+        { _id: new ObjectId(), targetId: new ObjectId(second._id) },
+        { _id: new ObjectId(), email: first.email.toUpperCase() },
+        { _id: new ObjectId(), email: `${second.email}.not-exact` },
+        { _id: shared, nested: { identities: [first._id, second.did] } },
+    ] };
+    const normalize = (references: Awaited<ReturnType<typeof scanReferences>>) => references.map((reference) => ({
+        collection: reference.collection, documentId: String(reference.documentId), paths: reference.paths,
+    }));
+    const batch = await scanReferencesBatch(new FakeDb(data) as any, [first, second]);
+    const firstSingle = await scanReferences(new FakeDb(data) as any, first);
+    const secondSingle = await scanReferences(new FakeDb(data) as any, second);
+    assert.deepEqual(normalize(batch.get(first._id)!), normalize(firstSingle));
+    assert.deepEqual(normalize(batch.get(second._id)!), normalize(secondSingle));
+    assert.equal(batch.get(first._id)!.some((reference) => reference.documentId.equals(shared)), true);
+    assert.equal(batch.get(second._id)!.some((reference) => reference.documentId.equals(shared)), true);
+});
+
+test("batch scanner rejects empty and duplicate candidate identities before opening cursors", async () => {
+    const cases: Array<[RegExp, (accounts: CandidateIdentity[]) => void]> = [
+        [/non-empty candidate DID/, (accounts) => { accounts[0].did = " "; }],
+        [/non-empty candidate email/, (accounts) => { accounts[0].email = ""; }],
+        [/unique candidate _id/, (accounts) => { accounts[1]._id = accounts[0]._id; }],
+        [/unique candidate DID/, (accounts) => { accounts[1].did = accounts[0].did; }],
+        [/unique candidate email/, (accounts) => { accounts[1].email = accounts[0].email.toUpperCase(); }],
+    ];
+    for (const [message, mutate] of cases) {
+        const accounts = [account(0), account(1)]; mutate(accounts);
+        const db = new FakeDb({ notifications: [] });
+        await assert.rejects(scanReferencesBatch(db as any, accounts), message);
+        assert.deepEqual(Object.fromEntries(db.cursorOpens), {});
+    }
+});
+
+test("inventory mismatch writes a redacted aggregate diagnostic and no manifest", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "signup-bomb-diagnostic-"));
+    const first = account(0); const second = account(1);
+    const secret = "TOP SECRET welcome body for Person Name";
+    const references = new Map([
+        [first._id, [{ collection: "chatMessageDocs", documentId: new ObjectId(), paths: ["senderDid"], document: {
+            _id: new ObjectId(), senderDid: first.did, source: "system-welcome", metadata: { source: "signup" },
+            system: { systemType: "welcome" }, body: secret, name: "Person Name", email: first.email,
+        } }]],
+        [second._id, [{ collection: "chatConversations", documentId: new ObjectId(), paths: ["participants[0]"], document: {
+            _id: new ObjectId(), type: "dm", handle: `welcome-${second.did}`, participants: [second.did],
+        } }]],
+    ] as Array<[string, any[]]>);
+    await assert.rejects(writeInventoryResult({
+        database: "circles", generatedAt: "2026-10-16T00:00:00.000Z", reviewedProfiles: 2,
+        syntheticCandidates: [first, second], referencesByAccount: references, preservedAccountIds: manifest().preservedAccountIds,
+        artifactDirectory: directory,
+    }), /expected exactly 303 candidates/);
+    const files = await readdir(directory);
+    assert.equal(files.some((file) => file.startsWith("manifest-")), false);
+    assert.equal(files.length, 1);
+    const diagnosticPath = join(directory, files[0]);
+    const serialized = await readFile(diagnosticPath, "utf8");
+    const diagnostic = JSON.parse(serialized);
+    assert.equal((await stat(diagnosticPath)).mode & 0o777, 0o600);
+    assert.equal(diagnostic.syntheticCandidatesInspected, 2);
+    assert.equal(diagnostic.excludedAsStrong, 2);
+    assert.equal(diagnostic.collections.some((item: Row) => item.collection === "chatMessageDocs" && item.policyKind === "strong" && item.matchedPathSignature === "senderDid" && item.totalReferenceCount === 1), true);
+    assert.equal(diagnostic.structuralFlags.handleStartsWithWelcome.some((item: Row) => item.value === true && item.count === 1), true);
+    for (const forbidden of [first._id, first.email, first.did, second._id, second.email, second.did, first.name, second.name, secret, "Person Name"]) {
+        assert.equal(serialized.includes(forbidden), false, `diagnostic leaked ${forbidden}`);
+    }
+});
+
+test("exact-303 inventory success still writes the manifest and normal report only", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "signup-bomb-success-"));
+    const value = manifest();
+    await writeInventoryResult({
+        database: "circles", generatedAt: "2026-10-16T00:00:00.000Z", reviewedProfiles: value.accounts.length,
+        syntheticCandidates: value.accounts, referencesByAccount: new Map(value.accounts.map((item) => [item._id, []])),
+        preservedAccountIds: value.preservedAccountIds, artifactDirectory: directory,
+    });
+    const files = await readdir(directory);
+    assert.equal(files.filter((file) => file.startsWith("manifest-")).length, 1);
+    assert.equal(files.filter((file) => file.startsWith("inventory-report-")).length, 1);
+    assert.equal(files.some((file) => file.startsWith("inventory-diagnostic-")), false);
 });
 
 test("batch scan opens each collection cursor once and excludes preserved identities from candidate results", async () => {
