@@ -279,6 +279,7 @@ export const getUserPrivateKey = (did: string, password: string): string => {
     try {
         decryptedPrivateKey = decipher.update(encryptedPrivateKeyStr, "hex", "utf8"); // Use the string variable
         decryptedPrivateKey += decipher.final("utf8");
+        crypto.createPrivateKey(decryptedPrivateKey);
     } catch (error) {
         if (process.env.NODE_ENV !== "production") {
             console.log(
