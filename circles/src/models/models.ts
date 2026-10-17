@@ -258,7 +258,13 @@ export const postSchema = z.object({
 export type Post = z.infer<typeof postSchema>;
 
 export type InternalPreviewData =
-    | { name: string; picture?: Circle["picture"]; description?: string; mission?: string; circleType?: Circle["circleType"] }
+    | {
+          name: string;
+          picture?: Circle["picture"];
+          description?: string;
+          mission?: string;
+          circleType?: Circle["circleType"];
+      }
     | { content: string; author: { name: string; picture?: Circle["picture"] } }
     | { title: string; taskType?: Task["taskType"]; stage: Task["stage"]; images?: Task["images"] }
     | { title: string; startAt: Event["startAt"]; images?: Event["images"] }
@@ -1239,6 +1245,7 @@ export type NotificationType =
     | "event_approved"
     | "event_status_changed"
     | "event_invitation"
+    | "secret_circle_invitation"
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended" // User's ranking list is past grace period
@@ -1313,6 +1320,7 @@ export const notificationTypeValues = [
     "event_approved",
     "event_status_changed",
     "event_invitation",
+    "secret_circle_invitation",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
     "user_verified",
@@ -1923,6 +1931,21 @@ export const eventInvitationSchema = z.object({
     updatedAt: z.date(),
 });
 export type EventInvitation = z.infer<typeof eventInvitationSchema>;
+
+export const secretCircleInvitationSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    recipientDid: didSchema,
+    invitedByDid: didSchema,
+    status: z.enum(["pending", "accepted", "revoked"]),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    acceptedAt: z.date().optional(),
+    revokedAt: z.date().optional(),
+    processingBy: z.string().optional(),
+    processingAt: z.date().optional(),
+});
+export type SecretCircleInvitation = z.infer<typeof secretCircleInvitationSchema>;
 
 /** A sparse invitation to one generated occurrence of a recurring event. */
 export const eventOccurrenceInvitationSchema = z.object({

@@ -170,6 +170,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `${actorName} updated ${eventName}`;
         case "event_invitation":
             return `${actorName} invited you to ${eventName}`;
+        case "secret_circle_invitation":
+            return "You have received a private Circle invitation.";
         case "ranking_stale_reminder":
             return "Your ranking needs attention";
         case "ranking_grace_period_ended":
@@ -201,7 +203,11 @@ const buildNotificationBody = (type: string, payload: any): string => {
     }
 };
 
-const isNotificationEnabledForRecipient = async (type: string, recipientDid: string, payload: any): Promise<boolean> => {
+const isNotificationEnabledForRecipient = async (
+    type: string,
+    recipientDid: string,
+    payload: any,
+): Promise<boolean> => {
     const context = getNotificationPreferenceContext(type, payload, recipientDid);
     if (!context) {
         return true;
@@ -225,7 +231,12 @@ const isNotificationEnabledForRecipient = async (type: string, recipientDid: str
     return typeof defaultSetting?.defaultIsEnabled === "boolean" ? defaultSetting.defaultIsEnabled : true;
 };
 
-export async function sendNotifications(type: string, recipients: any[], payload: any, options?: { idempotencyKey?: string }) {
+export async function sendNotifications(
+    type: string,
+    recipients: any[],
+    payload: any,
+    options?: { idempotencyKey?: string },
+) {
     const uniqueRecipients = Array.from(
         new Map(
             (recipients || [])
@@ -343,7 +354,8 @@ export async function sendVerificationRequestNotification(
             admins,
             sanitizeObjectForJSON({
                 user,
-                messageBody: options?.messageBody || `User ${user.name} (@${user.handle}) has requested account verification.`,
+                messageBody:
+                    options?.messageBody || `User ${user.name} (@${user.handle}) has requested account verification.`,
                 url: options?.url || `/admin?tab=verification-requests`,
             }),
         );
@@ -1680,9 +1692,9 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
             console.log("🔔 [NOTIFY] No recipients found to notify for task review submission:", task._id);
             return;
         }
-        const reviewerUserPrivates = (await Promise.all(Array.from(recipientDids).map((did) => getUserPrivate(did)))).filter(
-            (up): up is UserPrivate => up !== null,
-        );
+        const reviewerUserPrivates = (
+            await Promise.all(Array.from(recipientDids).map((did) => getUserPrivate(did)))
+        ).filter((up): up is UserPrivate => up !== null);
 
         if (reviewerUserPrivates.length === 0) {
             console.log("🔔 [NOTIFY] No reviewers (UserPrivate) found to notify for task:", task._id); // Updated message
@@ -1707,11 +1719,7 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
     }
 }
 
-export async function notifyTaskChangesRequested(
-    task: TaskDisplay,
-    requester: Circle,
-    note?: string,
-): Promise<void> {
+export async function notifyTaskChangesRequested(task: TaskDisplay, requester: Circle, note?: string): Promise<void> {
     try {
         if (!task.assignedTo || task.assignedTo === requester.did) {
             return;
@@ -1736,7 +1744,6 @@ export async function notifyTaskChangesRequested(
                 reviewRequestedChangesNote: note,
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskChangesRequested:", error);
     }
@@ -1822,7 +1829,6 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
                 assigneeName: assignee.name, // Add assignee name for context
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
     }
@@ -1864,7 +1870,11 @@ export async function notifyTaskClaimSubmitted(task: TaskDisplay, claimant: Circ
     }
 }
 
-export async function notifyTaskClaimApproved(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+export async function notifyTaskClaimApproved(
+    task: TaskDisplay,
+    reviewer: Circle,
+    claimant: UserPrivate,
+): Promise<void> {
     try {
         if (reviewer.did === claimant.did) {
             return;
@@ -1888,7 +1898,11 @@ export async function notifyTaskClaimApproved(task: TaskDisplay, reviewer: Circl
     }
 }
 
-export async function notifyTaskClaimDeclined(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+export async function notifyTaskClaimDeclined(
+    task: TaskDisplay,
+    reviewer: Circle,
+    claimant: UserPrivate,
+): Promise<void> {
     try {
         if (reviewer.did === claimant.did) {
             return;
@@ -2066,7 +2080,6 @@ export async function notifyTaskVerified(task: TaskDisplay, verifier: Circle): P
                 taskTitle: task.title,
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskVerified:", error);
     }
@@ -2129,7 +2142,6 @@ export async function notifyTaskStatusChanged( // Renamed function
                 taskNewStage: task.stage, // Renamed property
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
     }

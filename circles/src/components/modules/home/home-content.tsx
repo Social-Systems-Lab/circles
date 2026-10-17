@@ -50,6 +50,7 @@ type HomeContentProps = {
     parentCircle?: ClientParentCircleDto;
     proofOfHumanitySummary?: ClientHumanityVerificationSummaryDto | null;
     shouldSuppressWelcomeOnboarding?: boolean;
+    canInviteSecret?: boolean;
 };
 
 export default function HomeContent({
@@ -59,6 +60,7 @@ export default function HomeContent({
     parentCircle,
     proofOfHumanitySummary,
     shouldSuppressWelcomeOnboarding = false,
+    canInviteSecret = false,
 }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const isKamooniRootCircle = circle?.handle === "default" || circle?.handle === "kamooni";
@@ -203,7 +205,7 @@ export default function HomeContent({
                                     {user && circle.circleType === "circle" && isMember && (
                                         <ChatButton circle={circle} />
                                     )}
-                                    {!isUser && circle.visibility !== "secret" && <InviteButton circle={circle} />}
+                                    {!isUser && <InviteButton circle={circle} canInviteSecret={canInviteSecret} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (
@@ -264,7 +266,7 @@ export default function HomeContent({
                                         {user && circle.circleType === "circle" && isMember && (
                                             <ChatButton circle={circle} />
                                         )}
-                                        {!isUser && circle.visibility !== "secret" && <InviteButton circle={circle} />}
+                                        {!isUser && <InviteButton circle={circle} canInviteSecret={canInviteSecret} />}
                                         {user && <FollowButton circle={circle} />}
                                         {user && <BookmarkButton circle={circle} iconOnly />}
                                         {showSettingsButton && (
@@ -299,7 +301,7 @@ export default function HomeContent({
                                     {user && circle.circleType === "circle" && isMember && (
                                         <ChatButton circle={circle} />
                                     )}
-                                    {circle.visibility !== "secret" && <InviteButton circle={circle} />}
+                                    <InviteButton circle={circle} canInviteSecret={canInviteSecret} />
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (

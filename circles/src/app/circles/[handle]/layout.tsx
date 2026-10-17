@@ -32,6 +32,9 @@ export default async function RootLayout(props: Props) {
 
     const { circle, viewerDid: userDid } = access;
     const authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
+    const canInviteSecret =
+        circle.visibility === "secret" &&
+        (await isAuthorized(userDid, circle._id?.toString() ?? "", features.general.invite_members));
     const canViewCircle = isCirclePublished(circle) || authorizedToEdit || circle.createdBy === userDid;
     if (!canViewCircle) {
         redirect("/not-found");
@@ -58,7 +61,12 @@ export default async function RootLayout(props: Props) {
         <>
             <>
                 <HomeCover {...clientProps.homeCover} />
-                <HomeContent {...clientProps.homeContent} authorizedToEdit={authorizedToEdit} viewerDid={userDid} />
+                <HomeContent
+                    {...clientProps.homeContent}
+                    authorizedToEdit={authorizedToEdit}
+                    viewerDid={userDid}
+                    canInviteSecret={canInviteSecret}
+                />
             </>
             <CircleTabs {...clientProps.circleTabs} />
 
