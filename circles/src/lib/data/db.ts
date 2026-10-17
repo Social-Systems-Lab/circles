@@ -29,6 +29,7 @@ import {
     EventOccurrence,
     EventOccurrenceRsvp,
     EventOccurrenceInvitation,
+    SecretCircleInvitation,
     Notification,
     ExternalNotificationChannel,
     HumanityVerification,
@@ -103,6 +104,7 @@ let EventInvitations: Collection<EventInvitation>;
 let EventOccurrences: Collection<EventOccurrence>;
 let EventOccurrenceRsvps: Collection<EventOccurrenceRsvp>;
 let EventOccurrenceInvitations: Collection<EventOccurrenceInvitation>;
+let SecretCircleInvitations: Collection<SecretCircleInvitation>;
 let GoalMembers: Collection<GoalMember>; // Added GoalMembers collection
 let RankedLists: Collection<RankedList>;
 let AggregateRanks: Collection<AggregateRank>;
@@ -179,6 +181,7 @@ if (process.env.IS_BUILD !== "true") {
     ).catch((error) => {
         console.error("Failed to create event occurrence invitation unique index:", error);
     });
+    SecretCircleInvitations = db.collection<SecretCircleInvitation>("secretCircleInvitations");
     GoalMembers = db.collection<GoalMember>("goalMembers"); // Initialize GoalMembers
     RankedLists = db.collection<RankedList>("rankedLists");
     AggregateRanks = db.collection<AggregateRank>("aggregateRanks");
@@ -226,6 +229,22 @@ export async function ensureRequiredChatIndexes(): Promise<void> {
     await ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true });
 }
 
+let secretCircleInvitationIndexesReady: Promise<void> | undefined;
+
+export function ensureSecretCircleInvitationIndexes(): Promise<void> {
+    if (!client || !SecretCircleInvitations) {
+        return Promise.reject(new Error("Mongo client not initialised (IS_BUILD=true?)"));
+    }
+    secretCircleInvitationIndexesReady ??= (async () => {
+        await client.connect();
+        await SecretCircleInvitations.createIndex(
+            { circleId: 1, recipientDid: 1 },
+            { unique: true, partialFilterExpression: { status: "pending" } },
+        );
+    })();
+    return secretCircleInvitationIndexesReady;
+}
+
 export {
     client,
     db,
@@ -254,6 +273,7 @@ export {
     EventOccurrences,
     EventOccurrenceRsvps,
     EventOccurrenceInvitations,
+    SecretCircleInvitations,
     GoalMembers, // Export GoalMembers
     RankedLists,
     AggregateRanks,

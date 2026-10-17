@@ -25,11 +25,21 @@ export default async function HomeModule(props: HomeModuleProps) {
     let authorizedToEdit = false;
     let userDid = await getAuthenticatedUserDid();
     authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
+    const canInviteSecret =
+        circle.visibility === "secret" &&
+        (await isAuthorized(userDid, circle._id?.toString() ?? "", features.general.invite_members));
 
     // get all circles and members
     let circles = await getCirclesWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
     let members = await getMembersWithMetrics(userDid, circle?._id, searchParams?.sort as SortingOptions);
 
     const clientProps = buildLayoutClientProps(circle, undefined, userDid, []);
-    return <HomeContent {...clientProps.homeContent} authorizedToEdit={authorizedToEdit} viewerDid={userDid} />;
+    return (
+        <HomeContent
+            {...clientProps.homeContent}
+            authorizedToEdit={authorizedToEdit}
+            viewerDid={userDid}
+            canInviteSecret={canInviteSecret}
+        />
+    );
 }

@@ -82,6 +82,9 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
         if (!updatedCircle) {
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
         }
+        if (updatedCircle.visibility === "secret") {
+            return { success: false, message: "Circle not found" };
+        }
         await assertCircleWritesAllowed(updatedCircle._id ?? "");
 
         const existingMember = await getMember(userDid, updatedCircle._id ?? "");
