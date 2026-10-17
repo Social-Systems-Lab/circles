@@ -50,7 +50,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Install sharp into runtime node_modules (do not rely on Next standalone tracing)
-RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps sharp@0.35.4
+RUN npm install --omit=dev --no-audit --no-fund --legacy-peer-deps sharp@0.35.5
 
 ARG GIT_SHA=unknown
 ARG BUILD_TIME
