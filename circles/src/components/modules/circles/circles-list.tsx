@@ -29,6 +29,7 @@ import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { shouldUnoptimizeCircleAvatar } from "@/lib/utils/circle-avatar-image";
 import {
     buildCircleInventoryFilterUrl,
     shouldReplaceCircleInventoryFilters,
@@ -36,6 +37,19 @@ import {
 } from "./circle-list-query-params";
 
 const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
+
+const CircleCardCover = ({ circle }: { circle: Circle }) => {
+    const coverImageUrl = circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png";
+    return (
+        <Image
+            src={coverImageUrl}
+            alt="Cover"
+            className="bg-white object-cover"
+            fill
+            unoptimized={shouldUnoptimizeCircleAvatar(coverImageUrl)}
+        />
+    );
+};
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -300,13 +314,7 @@ const CirclesList = ({
                                 onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
-                                    <Image
-                                        // Use the first image from the 'images' array, fallback to default
-                                        src={circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"}
-                                        alt="Cover"
-                                        className="bg-white object-cover"
-                                        fill
-                                    />
+                                    <CircleCardCover circle={circle} />
                                 </div>
 
                                 {circle.metrics && (
