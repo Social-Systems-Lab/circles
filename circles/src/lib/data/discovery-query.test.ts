@@ -9,6 +9,7 @@ import {
     buildDiscoverableCircleIdsQuery,
     buildSwipeCircleQuery,
     composeSearchCandidateQuery,
+    getCircleRelationshipToCurrentCircle,
     sanitizeCircleDiscoveryResult,
 } from "./circle-discovery-queries";
 
@@ -188,6 +189,141 @@ assert.equal(
         .filter((circle) => matches(circle as Record<string, any>, memberRelationshipQuery))
         .some((circle) => circle._id === secretId),
     true,
+);
+
+const inventoryRootId = new ObjectId().toString();
+const createdId = new ObjectId();
+const joinedId = new ObjectId();
+const overlappingId = new ObjectId();
+const publicChildId = new ObjectId();
+const draftCreatorId = new ObjectId();
+const draftMemberId = new ObjectId();
+const personalProfileId = new ObjectId();
+const inventoryDocuments = [
+    {
+        _id: createdId,
+        circleType: "circle",
+        visibility: "public",
+        publishStatus: "published",
+        createdBy: "did:owner",
+    },
+    { _id: joinedId, circleType: "circle", visibility: "public", publishStatus: "published" },
+    {
+        _id: overlappingId,
+        circleType: "circle",
+        visibility: "public",
+        publishStatus: "published",
+        createdBy: "did:owner",
+        parentCircleId: inventoryRootId,
+        affiliatedCircleIds: [inventoryRootId],
+    },
+    {
+        _id: publicChildId,
+        circleType: "circle",
+        visibility: "public",
+        publishStatus: "published",
+        parentCircleId: inventoryRootId,
+    },
+    {
+        _id: draftCreatorId,
+        circleType: "circle",
+        visibility: "public",
+        publishStatus: "draft",
+        createdBy: "did:owner",
+    },
+    {
+        _id: draftMemberId,
+        circleType: "circle",
+        visibility: "public",
+        publishStatus: "draft",
+    },
+    {
+        _id: personalProfileId,
+        circleType: "user",
+        visibility: "public",
+        publishStatus: "published",
+        createdBy: "did:owner",
+    },
+] as Circle[];
+const inventoryQuery = buildCommunityRelatedCirclesQuery(
+    inventoryRootId,
+    buildViewerCircleDiscoveryQuery("did:owner"),
+    [],
+    "did:owner",
+    [joinedId, overlappingId, draftMemberId, personalProfileId],
+);
+const inventoryMatches = inventoryDocuments.filter((circle) => matches(circle as Record<string, any>, inventoryQuery));
+assert.deepEqual(
+    inventoryMatches.map((circle) => String(circle._id)),
+    [
+        createdId.toString(),
+        joinedId.toString(),
+        overlappingId.toString(),
+        publicChildId.toString(),
+        draftCreatorId.toString(),
+        draftMemberId.toString(),
+    ],
+    "the scoped union includes relationship and inventory candidates once while excluding personal profiles",
+);
+assert.equal(getCircleRelationshipToCurrentCircle(inventoryDocuments[0], inventoryRootId), undefined);
+assert.equal(getCircleRelationshipToCurrentCircle(inventoryDocuments[2], inventoryRootId), "child");
+
+const publishedRelationshipOnlyQuery = buildCommunityRelatedCirclesQuery(
+    inventoryRootId,
+    buildViewerCircleDiscoveryQuery("did:owner"),
+);
+assert.deepEqual(
+    inventoryDocuments
+        .filter((circle) => matches(circle as Record<string, any>, publishedRelationshipOnlyQuery))
+        .map((circle) => String(circle._id)),
+    [overlappingId.toString(), publicChildId.toString()],
+    "without personal inventory scopes only published relationships are visible",
+);
+
+const suspendedInventoryId = new ObjectId();
+const secretCreatedId = new ObjectId();
+const protectedInventoryDocuments = [
+    {
+        _id: suspendedInventoryId,
+        circleType: "circle",
+        visibility: "public",
+        moderationStatus: "suspended",
+        publishStatus: "published",
+        createdBy: "did:owner",
+    },
+    {
+        _id: secretCreatedId,
+        circleType: "circle",
+        visibility: "secret",
+        moderationStatus: "active",
+        publishStatus: "published",
+        createdBy: "did:owner",
+    },
+] as Circle[];
+const protectedInventoryQuery = buildCommunityRelatedCirclesQuery(
+    inventoryRootId,
+    buildViewerCircleDiscoveryQuery("did:owner"),
+    [],
+    "did:owner",
+);
+assert.deepEqual(
+    protectedInventoryDocuments.filter((circle) => matches(circle as Record<string, any>, protectedInventoryQuery)),
+    [],
+    "created scope does not bypass lifecycle or canonical secret membership",
+);
+const secretMemberInventoryQuery = buildCommunityRelatedCirclesQuery(
+    inventoryRootId,
+    buildViewerCircleDiscoveryQuery("did:owner", [secretCreatedId.toString()]),
+    [],
+    "did:owner",
+    [secretCreatedId],
+);
+assert.deepEqual(
+    protectedInventoryDocuments
+        .filter((circle) => matches(circle as Record<string, any>, secretMemberInventoryQuery))
+        .map((circle) => String(circle._id)),
+    [secretCreatedId.toString()],
+    "canonical membership permits an otherwise eligible secret inventory circle",
 );
 
 assert.equal(
