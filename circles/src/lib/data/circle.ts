@@ -39,6 +39,8 @@ import {
     buildCommunityRelatedCirclesQuery,
     buildDiscoverableCircleIdsQuery,
     buildSwipeCircleQuery,
+    canViewUnpublishedInventoryCircle,
+    getCircleRelationshipToCurrentCircle,
     getPublishedCircleQuery,
     sanitizeCircleDiscoveryResult,
 } from "@/lib/data/circle-discovery-queries";
@@ -339,7 +341,7 @@ export const getCirclesWithMetrics = async (
 
 export type CircleRelationshipToCurrentCircle = "child" | "affiliate";
 export type CircleWithRelationship = WithMetric<Circle> & {
-    relationshipToCurrentCircle: CircleRelationshipToCurrentCircle;
+    relationshipToCurrentCircle?: CircleRelationshipToCurrentCircle;
 };
 
 export const getCommunityCirclesWithRelationships = async (
@@ -347,9 +349,26 @@ export const getCommunityCirclesWithRelationships = async (
     circleId: string,
     sort?: SortingOptions,
     sdgHandles?: string[],
+    includeCreated?: boolean,
+    includeMember?: boolean,
 ): Promise<CircleWithRelationship[]> => {
-    const discoveryQuery = await getViewerCircleDiscoveryQuery(userDid);
-    const query = buildCommunityRelatedCirclesQuery(circleId, discoveryQuery, sdgHandles);
+    const discoveryContext = await getViewerCircleDiscoveryContext(userDid);
+    const user = userDid
+        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
+        : undefined;
+    const isOwnProfile = Boolean(user && user.circleType === "user" && user._id?.toString() === circleId);
+    const includeCreatedBy = isOwnProfile && includeCreated ? userDid : undefined;
+    const includeMemberCircleIds =
+        isOwnProfile && includeMember
+            ? discoveryContext.memberCircleIds.map((memberCircleId) => new ObjectId(memberCircleId))
+            : [];
+    const query = buildCommunityRelatedCirclesQuery(
+        circleId,
+        discoveryContext.query,
+        sdgHandles,
+        includeCreatedBy,
+        includeMemberCircleIds,
+    );
 
     const circles = (await Circles.find(query, {
         projection: SAFE_CIRCLE_PROJECTION,
@@ -366,22 +385,31 @@ export const getCommunityCirclesWithRelationships = async (
             continue;
         }
 
-        const relationshipToCurrentCircle = circle.parentCircleId === circleId ? "child" : "affiliate";
+        const relationshipToCurrentCircle = getCircleRelationshipToCurrentCircle(circle, circleId);
+
+        if (!isCirclePublished(circle)) {
+            const canViewDraft = await canViewUnpublishedInventoryCircle(circle, userDid, async (draftCircleId) => {
+                const [{ isAuthorized }, { features }] = await Promise.all([
+                    import("@/lib/auth/auth"),
+                    import("@/lib/data/constants"),
+                ]);
+                return isAuthorized(userDid, draftCircleId, features.settings.edit_about);
+            });
+            if (!canViewDraft) continue;
+        }
+
         const existing = dedupedById.get(id);
 
         if (!existing || relationshipToCurrentCircle === "child") {
             dedupedById.set(id, {
                 ...sanitizeCircleDiscoveryResult(circle),
-                relationshipToCurrentCircle,
+                ...(relationshipToCurrentCircle ? { relationshipToCurrentCircle } : {}),
             });
         }
     }
 
     const relatedCircles = Array.from(dedupedById.values());
     const currentDate = new Date();
-    const user = userDid
-        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
-        : undefined;
 
     for (const circle of relatedCircles) {
         circle.metrics = await getMetrics(user, circle, currentDate, sort);
