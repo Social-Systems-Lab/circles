@@ -25,6 +25,7 @@ test("Circle Next Image avatar renderers pass the private-media decision to unop
         "components/modules/home/home-content.tsx",
         "components/layout/content-preview.tsx",
         "components/layout/circle-menu.tsx",
+        "components/modules/circles/circles-list.tsx",
     ];
 
     for (const renderer of renderers) {
