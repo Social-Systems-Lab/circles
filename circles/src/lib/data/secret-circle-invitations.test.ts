@@ -15,6 +15,7 @@ const state = {
     invitationMutations: 0,
     authorized: true,
     circleExists: true,
+    circleType: "circle",
     circleVisibility: "secret",
     circleLifecycle: "active",
     reconcile: async (_u: string, _c: string) => {},
@@ -103,7 +104,12 @@ mock.module("./db", () => ({
                 : filter.did === "did:inviter"
                   ? { did: "did:inviter", circleType: "user", handle: "inviter" }
                   : state.circleExists && filter._id?.toString() === circle._id.toString()
-                    ? { ...circle, visibility: state.circleVisibility, moderationStatus: state.circleLifecycle }
+                    ? {
+                          ...circle,
+                          circleType: state.circleType,
+                          visibility: state.circleVisibility,
+                          moderationStatus: state.circleLifecycle,
+                      }
                     : null,
     },
     Members: { findOne: async (filter: Doc) => state.members.find((doc) => matches(doc, filter)) ?? null },
@@ -149,6 +155,7 @@ beforeEach(() => {
     state.invitationMutations = 0;
     state.authorized = true;
     state.circleExists = true;
+    state.circleType = "circle";
     state.circleVisibility = "secret";
     state.circleLifecycle = "active";
     state.reconcile = async (userDid, circleId) => {
@@ -369,7 +376,10 @@ test("authorized inviter lists only pending invitations as recipient-safe DTOs",
         ],
     });
     const serialized = JSON.stringify(result);
-    assert.doesNotMatch(serialized, /tokenHash|recipientDid|invitedByDid|did:|\/secret-invitations\//);
+    assert.doesNotMatch(
+        serialized,
+        /tokenHash|rawToken|raw token|recipientDid|invitedByDid|did:|\/secret-invitations\//i,
+    );
 });
 test("pending invitation for an existing canonical member is excluded without mutation", async () => {
     state.viewer = "did:inviter";
@@ -394,6 +404,9 @@ test("pending list fails closed for logged-out, former, and unauthorized members
 });
 test("pending list fails closed for non-secret and non-writable Circles", async () => {
     state.viewer = "did:inviter";
+    state.circleType = "user";
+    assert.deepEqual(await subject.listPendingSecretCircleInvitations(circle._id.toString()), { ok: false });
+    state.circleType = "circle";
     state.circleVisibility = "public";
     assert.deepEqual(await subject.listPendingSecretCircleInvitations(circle._id.toString()), { ok: false });
     state.circleVisibility = "secret";
