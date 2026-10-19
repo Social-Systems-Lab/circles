@@ -15,8 +15,19 @@ resolve_application_environment() {
   (cd "$APP_DIR" && docker compose run --rm --no-deps -T circles node -e '
     const required = ["MONGODB_URI", "CIRCLES_URL", "NEXT_PUBLIC_CHAT_PROVIDER", "CRON_SECRET", "CIRCLES_JWT_SECRET"];
     const missing = required.filter((name) => !process.env[name]);
-    const placeholder = /^(change_me|your(?:_|-)|replace_me|placeholder|secret)/i;
-    const unsafe = ["CRON_SECRET", "CIRCLES_JWT_SECRET"].filter((name) => placeholder.test(process.env[name] || ""));
+    const secretNames = ["CRON_SECRET", "CIRCLES_JWT_SECRET"];
+    const placeholders = new Set([
+      "your_jwt_secret",
+      "your_secret_key_for_cron_jobs",
+      "change_me",
+      "replace_me",
+      "placeholder",
+      "generate_staging_only_secret",
+    ]);
+    const unsafe = secretNames.filter((name) => placeholders.has((process.env[name] || "").toLowerCase()));
+    const warnings = secretNames
+      .filter((name) => process.env[name] && !unsafe.includes(name) && process.env[name].length < 32)
+      .map((name) => `${name} is suspiciously short; strength is unknown`);
     let uriOk = false;
     try {
       const uri = process.env.MONGODB_URI || "";
@@ -31,7 +42,7 @@ resolve_application_environment() {
       ...(process.env.CIRCLES_URL === "https://kamooni.org" ? [] : ["CIRCLES_URL is not https://kamooni.org"]),
       ...(process.env.NEXT_PUBLIC_CHAT_PROVIDER === "mongo" ? [] : ["NEXT_PUBLIC_CHAT_PROVIDER is not mongo"]),
     ];
-    process.stdout.write(JSON.stringify({ ok: errors.length === 0, errors }));
+    process.stdout.write(JSON.stringify({ ok: errors.length === 0, errors, warnings }));
     process.exit(errors.length === 0 ? 0 : 1);
   ')
 }

@@ -147,13 +147,73 @@ expect_failure "missing createIndex permission" "createIndex is not advertised" 
 
 fake_bin="$work_dir/bin"
 mkdir -p "$fake_bin"
-printf '%s\n' '#!/bin/sh' 'printf '\''{"ok":false,"errors":["MONGODB_URI is missing"]}'\''' 'exit 1' > "$fake_bin/docker"
+printf '%s\n' '#!/bin/sh' 'case "$*" in' '  *"compose run"*) while [ "$#" -gt 1 ]; do shift; done; node -e "$1" ;;' '  *"compose exec"*) cat >/dev/null ;;' '  *) exit 1 ;;' 'esac' > "$fake_bin/docker"
 chmod +x "$fake_bin/docker"
-if PATH="$fake_bin:$PATH" "$APP_DIR/scripts/preflight-messaging-stage1a.sh" >"$work_dir/env-output" 2>&1; then
-  echo "FAIL: missing environment unexpectedly passed" >&2
+
+run_environment_preflight() {
+  env -i \
+    PATH="$fake_bin:$PATH" \
+    APP_MONGODB_URI="mongodb://example.invalid/circles" \
+    MONGODB_URI="${MONGODB_URI-mongodb://example.invalid/circles}" \
+    CIRCLES_URL="${CIRCLES_URL-https://kamooni.org}" \
+    NEXT_PUBLIC_CHAT_PROVIDER="${NEXT_PUBLIC_CHAT_PROVIDER-mongo}" \
+    CRON_SECRET="${CRON_SECRET-secret-prefixed-synthetic-value-123456}" \
+    CIRCLES_JWT_SECRET="${CIRCLES_JWT_SECRET-synthetic-jwt-value-123456789012345}" \
+    "$APP_DIR/scripts/preflight-messaging-stage1a.sh"
+}
+
+expect_environment_failure() {
+  local label="$1"
+  local expected="$2"
+  if run_environment_preflight >"$work_dir/env-output" 2>&1; then
+    echo "FAIL: $label unexpectedly passed" >&2
+    exit 1
+  fi
+  grep -Fq "$expected" "$work_dir/env-output" || {
+    echo "FAIL: $label did not report $expected" >&2
+    sed -n '1,120p' "$work_dir/env-output" >&2
+    exit 1
+  }
+  echo "PASS: $label"
+}
+
+MONGODB_URI="" expect_environment_failure "missing environment" "MONGODB_URI is missing"
+CRON_SECRET="" expect_environment_failure "missing cron secret" "CRON_SECRET is missing"
+CIRCLES_JWT_SECRET="" expect_environment_failure "missing JWT secret" "CIRCLES_JWT_SECRET is missing"
+CRON_SECRET="your_secret_key_for_cron_jobs" expect_environment_failure "documented cron placeholder" "CRON_SECRET is an unsafe placeholder"
+CIRCLES_JWT_SECRET="your_jwt_secret" expect_environment_failure "documented JWT placeholder" "CIRCLES_JWT_SECRET is an unsafe placeholder"
+CRON_SECRET="ChAnGe_Me" expect_environment_failure "case-insensitive change-me placeholder" "CRON_SECRET is an unsafe placeholder"
+CRON_SECRET="RePlAcE_Me" expect_environment_failure "case-insensitive placeholder" "CRON_SECRET is an unsafe placeholder"
+CRON_SECRET="PlAcEhOlDeR" expect_environment_failure "case-insensitive literal placeholder" "CRON_SECRET is an unsafe placeholder"
+CRON_SECRET="GENERATE_STAGING_ONLY_SECRET" expect_environment_failure "staging placeholder" "CRON_SECRET is an unsafe placeholder"
+
+short_secret="short-but-custom"
+CRON_SECRET="$short_secret" run_environment_preflight >"$work_dir/env-output" 2>&1
+grep -Fq 'CRON_SECRET is suspiciously short; strength is unknown' "$work_dir/env-output"
+if grep -Fq "$short_secret" "$work_dir/env-output"; then
+  echo "FAIL: successful output exposed a secret value" >&2
   exit 1
 fi
-grep -Fq 'MONGODB_URI is missing' "$work_dir/env-output"
-echo "PASS: missing environment"
+echo "PASS: short custom secret warns without failing or leaking"
+
+secret_prefix="secret-prefixed-synthetic-value-123456"
+CRON_SECRET="$secret_prefix" run_environment_preflight >"$work_dir/env-output" 2>&1
+if grep -Fq "$secret_prefix" "$work_dir/env-output"; then
+  echo "FAIL: successful output exposed a secret-prefixed value" >&2
+  exit 1
+fi
+echo "PASS: secret-prefixed non-placeholder"
+
+failed_secret="your_jwt_secret"
+CIRCLES_JWT_SECRET="$failed_secret" expect_environment_failure "failed output redaction fixture" "CIRCLES_JWT_SECRET is an unsafe placeholder"
+if grep -Fq "$failed_secret" "$work_dir/env-output"; then
+  echo "FAIL: failed output exposed a secret value" >&2
+  exit 1
+fi
+echo "PASS: failed output does not leak secret values"
+
+MONGODB_URI="mongodb://example.invalid/not-circles" expect_environment_failure "invalid MongoDB database" "MONGODB_URI is invalid or does not select circles"
+CIRCLES_URL="https://example.invalid" expect_environment_failure "invalid CIRCLES_URL" "CIRCLES_URL is not https://kamooni.org"
+NEXT_PUBLIC_CHAT_PROVIDER="matrix" expect_environment_failure "invalid chat provider" "NEXT_PUBLIC_CHAT_PROVIDER is not mongo"
 
 echo "Messaging Stage 1A preflight tests passed"
