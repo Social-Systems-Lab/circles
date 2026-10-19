@@ -95,6 +95,24 @@ grep -Fq 'compatible (compatible_custom_name)' "$work_dir/output"
 echo "PASS: compatible custom-named index"
 
 reset_db
+mongo_eval 'db.chatConversations.insertMany([{type:"dm",handle:"welcome-user-a",participants:["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]},{type:"dm",handle:"legacy-system-thread",participants:["did:legacy:user"]}]);'
+if ! run_preflight >"$work_dir/output" 2>&1; then
+  echo "FAIL: valid single-participant DMs failed" >&2
+  sed -n '1,240p' "$work_dir/output" >&2
+  exit 1
+fi
+grep -Fq 'canonical-dm' "$work_dir/output"
+echo "PASS: valid single-participant DMs are excluded from canonical pair validation"
+
+reset_db
+mongo_eval 'db.chatConversations.insertMany([{type:"dm",participants:[]},{type:"dm",participants:[""]},{type:"dm",participants:[42]},{type:"dm",participants:["did:a","did:a"]},{type:"dm",participants:["did:a","did:b","did:c"]},{type:"dm",participants:"did:a"}]);'
+expect_failure "malformed DM conversations" "active DM has malformed participants"
+
+reset_db
+mongo_eval 'const id=new ObjectId(); db.chatConversations.insertOne({_id:id,type:"dm",participants:["did:a"]}); db.canonicalDmClaims.insertOne({pairKey:["did:a","did:b"].join(String.fromCharCode(0)),participants:["did:a","did:b"],conversationId:id.toString(),state:"ready"});'
+expect_failure "canonical claim targeting single-participant DM" "target participants are inconsistent"
+
+reset_db
 mongo_eval 'db.chatTopicDrafts.createIndex({authorDid:1,recipientDid:1},{name:"nonunique_custom_variant"});'
 if ! run_preflight >"$work_dir/output" 2>&1; then
   echo "FAIL: permitted custom-name coexistence failed preflight" >&2
