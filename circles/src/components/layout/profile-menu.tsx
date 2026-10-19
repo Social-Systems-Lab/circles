@@ -130,8 +130,8 @@ const ProfileMenuBar = () => {
     };
 
     const onLogInClick = () => {
-        let redirectTo = searchParams.get("redirectTo") ?? "/";
-        router.push("/login?redirectTo=" + redirectTo);
+        const redirectTo = searchParams.get("redirectTo");
+        router.push(redirectTo ? `/login?redirectTo=${encodeURIComponent(redirectTo)}` : "/login");
     };
 
     const onSignUpClick = () => {
