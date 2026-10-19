@@ -167,6 +167,14 @@ for (const conversation of db.chatConversations.find({ type: "dm" }).toArray()) 
     if (conversation.archived === true) continue;
     const participants = conversation.participants;
     if (
+        Array.isArray(participants) &&
+        participants.length === 1 &&
+        typeof participants[0] === "string" &&
+        participants[0].length > 0
+    ) {
+        continue;
+    }
+    if (
         !Array.isArray(participants) ||
         participants.length !== 2 ||
         participants.some((did) => typeof did !== "string" || did.length === 0) ||
