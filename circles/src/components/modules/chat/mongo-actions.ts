@@ -37,7 +37,6 @@ import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
 import { saveFile } from "@/lib/data/storage";
 import { getAuthenticatedUserDid as getProductionAuthenticatedUserDid } from "@/lib/auth/auth";
-import { extractChatMentionIds } from "@/lib/chat/mention-markup";
 import { normalizeObjectIdHex, sumConversationUnreadCounts } from "@/lib/chat/topic-read-state";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
@@ -45,7 +44,11 @@ import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { getDmEligibility } from "@/lib/data/relationships";
 import { assertCircleWritesAllowed, canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
-import { buildConversationScopedReplyFilter, CHAT_UNAVAILABLE_MESSAGE, evaluateConversationAccess } from "@/lib/chat/conversation-access-policy";
+import {
+    buildConversationScopedReplyFilter,
+    CHAT_UNAVAILABLE_MESSAGE,
+    evaluateConversationAccess,
+} from "@/lib/chat/conversation-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { authorizeCircleChatEntry } from "@/lib/chat/circle-chat-entry-orchestration";
@@ -56,6 +59,7 @@ import {
     getParticipantNotificationDids,
     isPrivateParticipantNotificationConversation,
     PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
+    resolveChatMentionRecipientDids,
 } from "@/lib/chat/participant-notifications";
 
 const getAuthenticatedUserDid = () => getChatActionViewerDid(getProductionAuthenticatedUserDid);
@@ -93,19 +97,19 @@ const ensureParticipatingMessagingUser = async (userDid: string, action: string)
     const user = getChatActionContext()?.findMessagingUser
         ? await getChatActionContext()!.findMessagingUser!(userDid)
         : await Circles.findOne(
-        { did: userDid },
-        {
-            projection: {
-                circleType: 1,
-                picture: 1,
-                description: 1,
-                content: 1,
-                communityGuidelinesAcceptance: 1,
-                isEmailVerified: 1,
-                isAdmin: 1,
-            },
-        },
-    );
+              { did: userDid },
+              {
+                  projection: {
+                      circleType: 1,
+                      picture: 1,
+                      description: 1,
+                      content: 1,
+                      communityGuidelinesAcceptance: 1,
+                      isEmailVerified: 1,
+                      isAdmin: 1,
+                  },
+              },
+          );
     if (!canParticipate(user)) {
         return getParticipationRequiredMessage(action, user);
     }
@@ -186,62 +190,26 @@ const resolveChatMentionRecipients = async ({
     senderDid: string;
     messageBody: string;
 }) => {
-    const mentionIds = extractChatMentionIds(messageBody);
-    if (!mentionIds.length) {
-        return [];
-    }
-
-    const participantDids = new Set(
-        ((conversation?.participants || []) as string[]).filter((did) => typeof did === "string" && did.length > 0),
-    );
-    if (!participantDids.size) {
-        return [];
-    }
-
-    const mentionedDids = new Set<string>();
-    await Promise.all(
-        mentionIds.map(async (mentionId) => {
-            const mentionLookupClauses: any[] = [{ handle: mentionId }, { did: mentionId }];
-            if (ObjectId.isValid(mentionId)) {
-                mentionLookupClauses.push({ _id: new ObjectId(mentionId) });
-            }
-
-            const mentionedCircle = (await Circles.findOne(
-                { $or: mentionLookupClauses },
-                { projection: { did: 1 } },
-            )) as Circle | null;
-            const mentionedDid = mentionedCircle?.did;
-            if (!mentionedDid || mentionedDid === senderDid) {
-                return;
-            }
-            if (!participantDids.has(mentionedDid)) {
-                return;
-            }
-            mentionedDids.add(mentionedDid);
-        }),
-    );
-
-    if (!mentionedDids.size) {
-        return [];
-    }
-
-    return (await Promise.all(Array.from(mentionedDids).map((recipientDid) => getUserPrivate(recipientDid)))).filter(
+    const mentionedDids = await resolveChatMentionRecipientDids(conversation, senderDid, messageBody);
+    return (await Promise.all(mentionedDids.map((recipientDid) => getUserPrivate(recipientDid)))).filter(
         (recipient): recipient is any => !!recipient?.did,
     );
 };
 
-const sendConversationMessageNotifications = async ({
+export const sendConversationMessageNotifications = async ({
     conversationId,
     conversation,
     senderDid,
     messageBody,
     messageId,
+    idempotencyKey,
 }: {
     conversationId: string;
     conversation: any;
     senderDid: string;
     messageBody: string;
     messageId?: string;
+    idempotencyKey?: string;
 }) => {
     const isDirectMessage = conversation?.type === "dm";
     const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
@@ -266,16 +234,21 @@ const sendConversationMessageNotifications = async ({
         ).filter((recipient): recipient is any => !!recipient?.did);
 
         if (recipients.length) {
-            await sendNotifications(PARTICIPANT_MESSAGE_NOTIFICATION_TYPE, recipients, {
-                roomId: conversationId,
-                user: sender,
-                circle: isCircleContact ? circle : undefined,
-                contactType: conversation?.metadata?.contactType,
-                conversationName: isCircleModeration ? "Circle moderation" : conversation?.name,
-                messagePreview: isCircleModeration
-                    ? "A Circle moderation message is ready for review."
-                    : messageBody,
-            });
+            await sendNotifications(
+                PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
+                recipients,
+                {
+                    roomId: conversationId,
+                    user: sender,
+                    circle: isCircleContact ? circle : undefined,
+                    contactType: conversation?.metadata?.contactType,
+                    conversationName: isCircleModeration ? "Circle moderation" : conversation?.name,
+                    messagePreview: isCircleModeration
+                        ? "A Circle moderation message is ready for review."
+                        : messageBody,
+                },
+                idempotencyKey ? { idempotencyKey } : undefined,
+            );
         }
     }
 
@@ -317,11 +290,12 @@ export const resolveMongoConversationAccess = async (
 
     const unauthorized = { ok: false as const, message: CHAT_UNAVAILABLE_MESSAGE };
     const circleId = typeof conversation.circleId === "string" ? conversation.circleId : undefined;
-    const ownerCircle = circleId && ObjectId.isValid(circleId)
-        ? context?.findCircle
-            ? await context.findCircle(circleId)
-            : await getCircleById(circleId)
-        : null;
+    const ownerCircle =
+        circleId && ObjectId.isValid(circleId)
+            ? context?.findCircle
+                ? await context.findCircle(circleId)
+                : await getCircleById(circleId)
+            : null;
     const canonicalMember = circleId
         ? Boolean(
               context?.findCanonicalMember
@@ -343,11 +317,12 @@ export const resolveMongoConversationAccess = async (
         delete membershipQuery.chatRoomId;
     }
 
-    const membership: any = conversation.type === "dm"
-        ? null
-        : context?.findChatMember
-          ? await context.findChatMember(userDid, chatRoomId)
-          : await ChatRoomMembers.findOne(membershipQuery);
+    const membership: any =
+        conversation.type === "dm"
+            ? null
+            : context?.findChatMember
+              ? await context.findChatMember(userDid, chatRoomId)
+              : await ChatRoomMembers.findOne(membershipQuery);
     const allowed = evaluateConversationAccess({
         conversation,
         viewerDid: userDid,
@@ -369,8 +344,14 @@ export const resolveMongoConversationAccessBatch = async (
     const uniqueIds = Array.from(new Set(conversationIds.filter(Boolean)));
     if (!uniqueIds.length) return new Set();
     if (getChatActionContext()?.findConversation) {
-        const checks = await Promise.all(uniqueIds.map(async (id) => ({ id, access: await resolveMongoConversationAccess(id, userDid, intent) })));
-        return new Set(checks.filter(({ access }) => access.ok).flatMap(({ id, access }) => [id, access.conversation?._id?.toString?.()].filter(Boolean) as string[]));
+        const checks = await Promise.all(
+            uniqueIds.map(async (id) => ({ id, access: await resolveMongoConversationAccess(id, userDid, intent) })),
+        );
+        return new Set(
+            checks
+                .filter(({ access }) => access.ok)
+                .flatMap(({ id, access }) => [id, access.conversation?._id?.toString?.()].filter(Boolean) as string[]),
+        );
     }
     const objectIds = uniqueIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
     const conversations = await ChatConversations.find({
@@ -378,7 +359,11 @@ export const resolveMongoConversationAccessBatch = async (
         $or: [{ _id: { $in: objectIds } }, { handle: { $in: uniqueIds } }],
     }).toArray();
     const circleIds = Array.from(
-        new Set(conversations.map((conversation: any) => conversation.circleId).filter((id): id is string => typeof id === "string")),
+        new Set(
+            conversations
+                .map((conversation: any) => conversation.circleId)
+                .filter((id): id is string => typeof id === "string"),
+        ),
     );
     const circleObjectIds = circleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
     const [circles, canonicalRows, chatRows] = await Promise.all([
@@ -387,32 +372,36 @@ export const resolveMongoConversationAccessBatch = async (
             ? Members.find({ userDid, circleId: { $in: circleIds } }, { projection: { circleId: 1 } }).toArray()
             : Promise.resolve([]),
         ChatRoomMembers.find(
-            ({
+            {
                 userDid,
                 $or: [
                     { chatRoomId: { $in: uniqueIds } },
                     ...(objectIds.length ? [{ chatRoomId: { $in: objectIds } }] : []),
                 ],
-            } as any),
+            } as any,
             { projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 } },
         ).toArray(),
     ]);
     const circleById = new Map(circles.map((circle: any) => [circle._id.toString(), circle]));
     const canonicalIds = new Set(canonicalRows.map((row: any) => row.circleId));
     const activeChatIds = new Set(
-        chatRows.filter(isActiveGroupMembership).map((row: any) => row.chatRoomId?.toString?.() || String(row.chatRoomId)),
+        chatRows
+            .filter(isActiveGroupMembership)
+            .map((row: any) => row.chatRoomId?.toString?.() || String(row.chatRoomId)),
     );
     const allowed = new Set<string>();
     for (const conversation of conversations) {
         const id = conversation._id.toString();
-        if (evaluateConversationAccess({
-            conversation,
-            viewerDid: userDid,
-            intent,
-            ownerCircle: typeof conversation.circleId === "string" ? circleById.get(conversation.circleId) : null,
-            canonicalMember: typeof conversation.circleId === "string" && canonicalIds.has(conversation.circleId),
-            chatMember: activeChatIds.has(id),
-        })) {
+        if (
+            evaluateConversationAccess({
+                conversation,
+                viewerDid: userDid,
+                intent,
+                ownerCircle: typeof conversation.circleId === "string" ? circleById.get(conversation.circleId) : null,
+                canonicalMember: typeof conversation.circleId === "string" && canonicalIds.has(conversation.circleId),
+                chatMember: activeChatIds.has(id),
+            })
+        ) {
             allowed.add(id);
             if (conversation.handle) allowed.add(conversation.handle);
         }
@@ -474,9 +463,10 @@ export const listChatRoomsAction = async (): Promise<{
         // A provider mismatch could hide Mongo DMs in production.
         const context = getChatActionContext();
         const batch = await loadAuthorizedConversationCandidates(userDid, {
-            findCanonicalMemberships: async (did) => context?.findCanonicalMemberships
-                ? context.findCanonicalMemberships(did)
-                : Members.find({ userDid: did }).toArray(),
+            findCanonicalMemberships: async (did) =>
+                context?.findCanonicalMemberships
+                    ? context.findCanonicalMemberships(did)
+                    : Members.find({ userDid: did }).toArray(),
             findCandidates: context?.findCandidates || listConversationCandidatesForUser,
             findOwningCircles: async (circleIds) => {
                 if (context?.findOwningCircles) return context.findOwningCircles(circleIds);
@@ -507,8 +497,10 @@ export const listChatRoomsAction = async (): Promise<{
         const authorizedConversations = batch.conversations;
         const circles = batch.ownerCircles;
         const candidateMemberships = batch.memberships;
-        authorizedConversations.sort((a, b) =>
-            (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) - (a.updatedAt ? new Date(a.updatedAt).getTime() : 0),
+        authorizedConversations.sort(
+            (a, b) =>
+                (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) -
+                (a.updatedAt ? new Date(a.updatedAt).getTime() : 0),
         );
         // Participant and Circle metadata hydration happens only after canonical authorization.
         const rooms = context?.mapConversations
@@ -603,7 +595,9 @@ export const fetchRecentMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find(buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any).toArray()) as any[])
+            ? ((await ChatMessageDocs.find(
+                  buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any,
+              ).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -774,7 +768,9 @@ export const fetchLegacyLooseMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find(buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any).toArray()) as any[])
+            ? ((await ChatMessageDocs.find(
+                  buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any,
+              ).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -802,7 +798,8 @@ export const fetchLegacyLooseMessagesAction = async (
                 realAuthor: senderByDid.get(doc.senderDid),
             });
             const author =
-                (presentedAuthor || (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined)) ||
+                presentedAuthor ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -952,7 +949,8 @@ export const fetchMongoMessagesAction = async (
                 realAuthor: senderByDid.get(doc.senderDid),
             });
             const author =
-                (presentedAuthor || (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined)) ||
+                presentedAuthor ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -1218,10 +1216,7 @@ export const editMongoMessageAction = async (
 
     const messageDoc = getChatActionContext()?.findMessage
         ? await getChatActionContext()!.findMessage!(messageId)
-        : await ChatMessageDocs.findOne(
-        { _id: new ObjectId(messageId) },
-        { projection: { conversationId: 1 } },
-    );
+        : await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } });
     if (!messageDoc?.conversationId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
@@ -1239,10 +1234,7 @@ export const deleteMongoMessageAction = async (messageId: string): Promise<{ suc
 
     const messageDoc = getChatActionContext()?.findMessage
         ? await getChatActionContext()!.findMessage!(messageId)
-        : await ChatMessageDocs.findOne(
-        { _id: new ObjectId(messageId) },
-        { projection: { conversationId: 1 } },
-    );
+        : await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } });
     if (!messageDoc?.conversationId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
@@ -1262,12 +1254,11 @@ export const toggleMongoReactionAction = async (
 
     let messageDoc: { conversationId?: string } | null = null;
     try {
-        messageDoc = (getChatActionContext()?.findMessage
-            ? await getChatActionContext()!.findMessage!(messageId)
-            : await ChatMessageDocs.findOne(
-            { _id: new ObjectId(messageId) },
-            { projection: { conversationId: 1 } },
-        )) as { conversationId?: string } | null;
+        messageDoc = (
+            getChatActionContext()?.findMessage
+                ? await getChatActionContext()!.findMessage!(messageId)
+                : await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } })
+        ) as { conversationId?: string } | null;
     } catch {
         return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     }
@@ -1303,7 +1294,6 @@ export const toggleMongoReactionAction = async (
 
 export const findOrCreateDMConversationAction = async (
     inRecipient: Circle,
-    options?: { source?: "composer" | "profile" },
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoomDisplay }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -1324,9 +1314,8 @@ export const findOrCreateDMConversationAction = async (
         return { success: false, message: "You cannot send a message to yourself" };
     }
 
-    const source = options?.source || "composer";
     const dmEligibility = await getDmEligibility(userDid, recipient.did!);
-    if (source !== "profile" && !dmEligibility.isAllowed) {
+    if (!dmEligibility.isAllowed) {
         return {
             success: false,
             message: "Messaging is only available for existing conversations and contacts right now.",
@@ -1413,7 +1402,12 @@ export const createMongoGroupChatAction = async (
             }
 
             const fileInfo = getChatActionContext()?.saveFile
-                ? await getChatActionContext()!.saveFile!(avatarFile, "chat-group-avatar", ownerCircle._id as string, true)
+                ? await getChatActionContext()!.saveFile!(
+                      avatarFile,
+                      "chat-group-avatar",
+                      ownerCircle._id as string,
+                      true,
+                  )
                 : await saveFile(avatarFile, "chat-group-avatar", ownerCircle._id as string, true);
             picture = { url: fileInfo.url };
         }
@@ -1480,14 +1474,15 @@ export const contactCircleAdminsAction = async (
     }
 
     const circle = await authorizeCircleChatEntry(userDid, circleId, "write", {
-        loadCircle: async (id) => getChatActionContext()?.findCircle
-            ? getChatActionContext()!.findCircle!(id)
-            : getCircleById(id),
-        canRead: async (did, value) => canReadCircle(did, value, {
-            getMember: async (viewerDid, ownerId) => getChatActionContext()?.findCanonicalMember
-                ? getChatActionContext()!.findCanonicalMember!(viewerDid, ownerId)
-                : Members.findOne({ userDid: viewerDid, circleId: ownerId }),
-        }),
+        loadCircle: async (id) =>
+            getChatActionContext()?.findCircle ? getChatActionContext()!.findCircle!(id) : getCircleById(id),
+        canRead: async (did, value) =>
+            canReadCircle(did, value, {
+                getMember: async (viewerDid, ownerId) =>
+                    getChatActionContext()?.findCanonicalMember
+                        ? getChatActionContext()!.findCanonicalMember!(viewerDid, ownerId)
+                        : Members.findOne({ userDid: viewerDid, circleId: ownerId }),
+            }),
         assertWritable: assertCircleWritesAllowed,
     });
     if (!circle?._id) {
@@ -2038,7 +2033,8 @@ export const fetchTopicStartersAction = async (
                 realAuthor: senderByDid.get(doc.senderDid),
             });
             const author =
-                (presentedAuthor || (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined)) ||
+                presentedAuthor ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({

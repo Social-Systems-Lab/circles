@@ -2,15 +2,9 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "./cookie";
+import { getAuthenticationSecret } from "./secret";
 
-export const JWT_SECRET = process.env.CIRCLES_JWT_SECRET || process.env.JWT_SECRET;
-
-const getJwtSecretBytes = (): Uint8Array => {
-    if (!JWT_SECRET) {
-        throw new Error("Missing JWT secret: set CIRCLES_JWT_SECRET (or JWT_SECRET for local development).");
-    }
-    return new TextEncoder().encode(JWT_SECRET);
-};
+const getJwtSecretBytes = (): Uint8Array => new TextEncoder().encode(getAuthenticationSecret());
 
 export const verifyUserToken = async (token: string): Promise<JWTPayload> => {
     const { payload } = await jwtVerify(token, getJwtSecretBytes());

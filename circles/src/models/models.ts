@@ -355,6 +355,7 @@ export const chatRoomSchema = z.object({
     handle: handleSchema,
     circleId: z.string().optional(),
     createdAt: z.date(),
+    updatedAt: z.date().optional(),
     userGroups: z.array(z.string()).default([]),
     picture: fileInfoSchema.optional(),
     isDirect: z.boolean().optional(),

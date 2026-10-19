@@ -6,12 +6,12 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { ChatList } from "@/components/modules/chat/chat-list";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
 import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
-import { SquarePen } from "lucide-react";
+import { FilePenLine, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
@@ -19,17 +19,22 @@ import { listChatRoomsAction } from "@/components/modules/chat/actions";
 import { addNotificationRefreshListener } from "@/lib/client/notification-events";
 import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
 import { buildConversationUnreadSnapshot } from "@/lib/chat/unread-counts";
+import { listDmDraftsAction } from "@/components/modules/chat/draft-actions";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
     const isMobile = useIsMobile();
     const pathname = usePathname();
+    const router = useRouter();
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [chatSearchTerm, setChatSearchTerm] = useState("");
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
     const [, setUnreadCounts] = useAtom(unreadCountsAtom);
 
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+    const [drafts, setDrafts] = useState<
+        Array<{ recipientDid: string; title: string; updatedAt: string; name: string }>
+    >([]);
     const [isChatRoomsLoading, setIsChatRoomsLoading] = useState(true);
     const [hasLoadedChatRooms, setHasLoadedChatRooms] = useState(false);
     const roomRefreshRunner = useMemo(
@@ -37,9 +42,10 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             createLatestAsyncRunner({
                 load: async () => {
                     if (!user) {
-                        return { success: true, rooms: [] as ChatRoomDisplay[] };
+                        return { success: true, rooms: [] as ChatRoomDisplay[], drafts: [] };
                     }
-                    return listChatRoomsAction();
+                    const [rooms, draftResult] = await Promise.all([listChatRoomsAction(), listDmDraftsAction()]);
+                    return { ...rooms, drafts: draftResult.success ? draftResult.drafts : [] };
                 },
                 apply: (result) => {
                     if (!result.success || !result.rooms) {
@@ -50,6 +56,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     }
 
                     setChatRooms(result.rooms);
+                    setDrafts(result.drafts || []);
                     // Sync server unread counts into the atom so Messages icon stays accurate
                     // This covers topic replies which are not in roomMessages client state
                     setUnreadCounts(buildConversationUnreadSnapshot(result.rooms));
@@ -167,6 +174,20 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     </div>
                     <ChatSearch value={chatSearchTerm} onChange={setChatSearchTerm} />
                     <div className="flex-grow overflow-y-auto">
+                        {drafts.map((draft) => (
+                            <button
+                                type="button"
+                                key={`draft-${draft.recipientDid}`}
+                                className="m-1 flex w-[calc(100%-0.5rem)] items-center gap-3 rounded-lg p-2 text-left hover:bg-gray-100"
+                                onClick={() => router.push(`/chat/new/${encodeURIComponent(draft.recipientDid)}`)}
+                            >
+                                <FilePenLine className="h-10 w-10 rounded-full bg-amber-50 p-2 text-amber-700" />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium">{draft.name}</span>
+                                    <span className="block truncate text-xs text-amber-700">Draft · {draft.title}</span>
+                                </span>
+                            </button>
+                        ))}
                         <ChatList
                             chats={filteredChatRooms}
                             isLoading={isChatRoomsLoading || !hasLoadedChatRooms}

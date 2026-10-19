@@ -246,7 +246,7 @@ export async function sendNotifications(
     );
 
     if (uniqueRecipients.length === 0) {
-        return;
+        return [];
     }
 
     const createdAt = new Date();
@@ -271,10 +271,11 @@ export async function sendNotifications(
     }
 
     if (!docs.length) {
-        return;
+        return [];
     }
 
     const insertedDocs = [];
+    const persistentIds: string[] = [];
     for (const doc of docs) {
         if (!options?.idempotencyKey) {
             insertedDocs.push(doc);
@@ -284,13 +285,16 @@ export async function sendNotifications(
         const result = await Notifications.updateOne({ _id: id } as any, { $setOnInsert: { ...doc, _id: id } } as any, {
             upsert: true,
         });
+        persistentIds.push(id);
         if (result.upsertedCount === 1) insertedDocs.push({ ...doc, _id: id });
     }
     if (!options?.idempotencyKey && insertedDocs.length) await Notifications.insertMany(insertedDocs as any[]);
-    if (!insertedDocs.length) return;
-    void dispatchExternalNotifications(insertedDocs as any[]).catch((error) => {
-        console.error("External notification dispatch failed:", error);
-    });
+    if (insertedDocs.length) {
+        void dispatchExternalNotifications(insertedDocs as any[]).catch((error) => {
+            console.error("External notification dispatch failed:", error);
+        });
+    }
+    return persistentIds;
 }
 
 type NotificationQueryOptions = {

@@ -44,6 +44,9 @@ import {
     ChatReadState,
     ChatTopicReadState,
     MessageEmailReminder,
+    ChatTopicDraft,
+    ChatTopicDraftTombstone,
+    CanonicalDmClaim,
 } from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import type { MembershipCredentialHandoff } from "@/lib/vibe-id/membership-credential-handoffs";
@@ -64,6 +67,10 @@ const MONGODB_URI =
     `mongodb://${process.env.MONGO_ROOT_USERNAME || "admin"}:${process.env.MONGO_ROOT_PASSWORD || "password"}@${process.env.MONGO_HOST || "127.0.0.1"}:${process.env.MONGO_PORT || "27017"}`;
 
 const options: MongoClientOptions = {};
+const MONGODB_DATABASE = process.env.CIRCLES_MONGODB_DATABASE || "circles";
+if (process.env.NODE_ENV === "test" && !/^circles_stage1a_test_[a-z0-9_-]+$/i.test(MONGODB_DATABASE)) {
+    throw new Error("Tests must use a disposable CIRCLES_MONGODB_DATABASE named circles_stage1a_test_*");
+}
 
 console.log(
     "DEBUG DB: process.env.MONGODB_URI =",
@@ -116,6 +123,9 @@ let ChatMessageDocs: Collection<ChatMessageDoc>;
 let ChatReadStates: Collection<ChatReadState>;
 let ChatTopicReadStates: Collection<ChatTopicReadState>;
 let MessageEmailReminders: Collection<MessageEmailReminder>;
+let ChatTopicDrafts: Collection<ChatTopicDraft>;
+let ChatTopicDraftTombstones: Collection<ChatTopicDraftTombstone>;
+let CanonicalDmClaims: Collection<CanonicalDmClaim>;
 let ExternalNotificationChannels: Collection<ExternalNotificationChannel>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 let StripeWebhookEvents: Collection<any>;
@@ -134,7 +144,7 @@ if (process.env.IS_BUILD !== "true") {
         console.error("MongoDB connection error:", err);
     });
 
-    db = client.db("circles");
+    db = client.db(MONGODB_DATABASE);
 
     Circles = db.collection<Circle>("circles");
     ServerSettingsCollection = db.collection<ServerSettings>("serverSettings");
@@ -193,6 +203,9 @@ if (process.env.IS_BUILD !== "true") {
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
     ChatTopicReadStates = db.collection<ChatTopicReadState>("chatTopicReadStates");
     MessageEmailReminders = db.collection<MessageEmailReminder>("messageEmailReminders");
+    ChatTopicDrafts = db.collection<ChatTopicDraft>("chatTopicDrafts");
+    ChatTopicDraftTombstones = db.collection<ChatTopicDraftTombstone>("chatTopicDraftTombstones");
+    CanonicalDmClaims = db.collection<CanonicalDmClaim>("canonicalDmClaims");
     ExternalNotificationChannels = db.collection<ExternalNotificationChannel>("externalNotificationChannels");
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
     StripeWebhookEvents = db.collection("stripeWebhookEvents");
@@ -220,13 +233,72 @@ export async function getDb() {
     if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
     // If not connected yet (or got reloaded), ensure connection is established
     await client.connect();
-    return client.db("circles");
+    return client.db(MONGODB_DATABASE);
 }
 
-export async function ensureRequiredChatIndexes(): Promise<void> {
-    if (!client || !ChatTopicReadStates) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
-    await client.connect();
-    await ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true });
+let requiredChatIndexesReady: Promise<void> | undefined;
+
+export function ensureRequiredChatIndexes(): Promise<void> {
+    if (!client || !ChatTopicReadStates) {
+        return Promise.reject(new Error("Mongo client not initialised (IS_BUILD=true?)"));
+    }
+    requiredChatIndexesReady ??= (async () => {
+        await client.connect();
+        const conflicts = await Promise.all([
+            ChatTopicDrafts.aggregate([
+                { $group: { _id: { authorDid: "$authorDid", recipientDid: "$recipientDid" }, count: { $sum: 1 } } },
+                { $match: { count: { $gt: 1 } } },
+                { $limit: 1 },
+            ]).hasNext(),
+            CanonicalDmClaims.aggregate([
+                { $group: { _id: "$pairKey", count: { $sum: 1 } } },
+                { $match: { count: { $gt: 1 } } },
+                { $limit: 1 },
+            ]).hasNext(),
+            ChatMessageDocs.aggregate([
+                { $match: { submissionId: { $type: "string" } } },
+                { $group: { _id: { senderDid: "$senderDid", submissionId: "$submissionId" }, count: { $sum: 1 } } },
+                { $match: { count: { $gt: 1 } } },
+                { $limit: 1 },
+            ]).hasNext(),
+            ChatTopicDraftTombstones.aggregate([
+                {
+                    $group: {
+                        _id: { authorDid: "$authorDid", recipientDid: "$recipientDid", generation: "$generation" },
+                        count: { $sum: 1 },
+                    },
+                },
+                { $match: { count: { $gt: 1 } } },
+                { $limit: 1 },
+            ]).hasNext(),
+        ]);
+        if (conflicts.some(Boolean)) {
+            throw new Error("Required chat unique indexes cannot be initialized because conflicting records exist");
+        }
+        await Promise.all([
+            ChatConversations.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 }),
+            ChatConversations.createIndex({ circleId: 1, type: 1, archived: 1 }),
+            ChatRoomMembers.createIndex({ userDid: 1, chatRoomId: 1 }),
+            ChatRoomMembers.createIndex({ chatRoomId: 1 }),
+            ChatMessageDocs.createIndex({ conversationId: 1, _id: 1 }),
+            ChatMessageDocs.createIndex({ conversationId: 1, threadId: 1, _id: 1 }),
+            ChatReadStates.createIndex({ userDid: 1, conversationId: 1 }),
+            ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true }),
+            ChatTopicDrafts.createIndex({ authorDid: 1, recipientDid: 1 }, { unique: true }),
+            ChatTopicDrafts.createIndex({ authorDid: 1, state: 1, updatedAt: -1 }),
+            ChatTopicDraftTombstones.createIndex({ authorDid: 1, recipientDid: 1, generation: 1 }, { unique: true }),
+            CanonicalDmClaims.createIndex({ pairKey: 1 }, { unique: true }),
+            ChatMessageDocs.createIndex(
+                { senderDid: 1, submissionId: 1 },
+                { unique: true, partialFilterExpression: { submissionId: { $type: "string" } } },
+            ),
+            ChatMessageDocs.createIndex({ "firstTopicNotification.state": 1, "firstTopicNotification.leaseUntil": 1 }),
+        ]);
+    })().catch((error) => {
+        requiredChatIndexesReady = undefined;
+        throw error;
+    });
+    return requiredChatIndexesReady;
 }
 
 let secretCircleInvitationIndexesReady: Promise<void> | undefined;
@@ -285,6 +357,9 @@ export {
     ChatReadStates,
     ChatTopicReadStates,
     MessageEmailReminders,
+    ChatTopicDrafts,
+    ChatTopicDraftTombstones,
+    CanonicalDmClaims,
     ExternalNotificationChannels,
     PlatformBroadcastMessages,
     StripeWebhookEvents,

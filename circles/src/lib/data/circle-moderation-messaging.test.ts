@@ -46,7 +46,8 @@ function harness(adminDids: string[] = ["did:example:admin"]): {
     let reservedConversationId: ObjectId | undefined;
     const dependencies: ModerationMessagingDependencies = {
         findAdminDids: async () => adminDids,
-        findConversation: async (handle) => conversations.find((conversation) => conversation.handle === handle) || null,
+        findConversation: async (handle) =>
+            conversations.find((conversation) => conversation.handle === handle) || null,
         reserveConversationId: async (_circleId, candidateId) => {
             reservedConversationId ||= candidateId;
             return reservedConversationId;
@@ -74,13 +75,22 @@ function harness(adminDids: string[] = ["did:example:admin"]): {
         createThread: async (conversationId, senderDid, title, body, hashtags, metadata, messageId) => {
             const existing = topics.find((item) => item._id === messageId);
             if (existing) return existing;
-            const topic = { _id: messageId || new ObjectId().toString(), conversationId, senderDid, title, body, hashtags, ...metadata };
+            const topic = {
+                _id: messageId || new ObjectId().toString(),
+                conversationId,
+                senderDid,
+                title,
+                body,
+                hashtags,
+                ...metadata,
+            };
             topics.push(topic);
             return topic as any;
         },
         sendNotifications: async (type, recipients, payload, options) => {
             const key = `${options?.idempotencyKey}:${recipients[0]?.did}`;
             if (!notifications.some((item) => item.key === key)) notifications.push({ type, recipients, payload, key });
+            return [key];
         },
     };
     return { dependencies, conversations, memberships, topics, notifications };
@@ -113,7 +123,10 @@ test("creates one correctly titled topic starter with complete lifecycle details
 test("reuses one standalone conversation and never sets circleId", async () => {
     const state = harness();
     const first = await sendCircleModerationMessage(input("paused"), state.dependencies);
-    const second = await sendCircleModerationMessage(input("active", "paused", new ObjectId().toString()), state.dependencies);
+    const second = await sendCircleModerationMessage(
+        input("active", "paused", new ObjectId().toString()),
+        state.dependencies,
+    );
     assert.equal(first.conversationId, second.conversationId);
     assert.equal(state.conversations.length, 1);
     assert.equal(state.conversations[0].handle, `circle-moderation-${circleId}`);
@@ -129,19 +142,13 @@ test("reuses one standalone conversation and never sets circleId", async () => {
 
 test("a later acting superadmin retains the previous platform moderator", async () => {
     const state = harness([]);
-    await sendCircleModerationMessage(
-        { ...input("paused"), actorDid: "did:example:superadmin-a" },
-        state.dependencies,
-    );
+    await sendCircleModerationMessage({ ...input("paused"), actorDid: "did:example:superadmin-a" }, state.dependencies);
     await sendCircleModerationMessage(
         { ...input("active", "paused", new ObjectId().toString()), actorDid: "did:example:superadmin-b" },
         state.dependencies,
     );
 
-    assert.deepEqual(state.conversations[0].participants, [
-        "did:example:superadmin-a",
-        "did:example:superadmin-b",
-    ]);
+    assert.deepEqual(state.conversations[0].participants, ["did:example:superadmin-a", "did:example:superadmin-b"]);
     assert.equal(state.memberships.get("did:example:superadmin-a").role, "admin");
     assert.equal(state.memberships.get("did:example:superadmin-b").role, "admin");
 });
@@ -166,20 +173,26 @@ test("deduplicates current admins, activates them, and reconciles former admins 
         "did:example:admin",
         "did:example:new-admin",
     ]);
-    assert.deepEqual(state.notifications.map((item) => item.recipients[0]), [
-        { did: "did:example:admin" },
-        { did: "did:example:new-admin" },
-    ]);
+    assert.deepEqual(
+        state.notifications.map((item) => item.recipients[0]),
+        [{ did: "did:example:admin" }, { did: "did:example:new-admin" }],
+    );
     const notification = state.notifications[0];
     assert.equal(notification.payload.roomId, state.conversations[0]._id.toString());
     assert.equal(notification.payload.topicId, state.topics[0]._id);
-    assert.equal(notification.payload.url, `/chat/${notification.payload.roomId}?topic=${notification.payload.topicId}`);
+    assert.equal(
+        notification.payload.url,
+        `/chat/${notification.payload.roomId}?topic=${notification.payload.topicId}`,
+    );
     assert.equal(notification.payload.messageBody, "A Circle moderation update is ready for review.");
     assert.doesNotMatch(
         JSON.stringify(notification.payload),
         /Quiet Circle|Required moderation review|paused|superadmin|Moderator/,
     );
-    assert.equal(state.notifications.some((item) => item.type === "pm_received"), false);
+    assert.equal(
+        state.notifications.some((item) => item.type === "pm_received"),
+        false,
+    );
 });
 
 test("handles a Circle with no admins while retaining the acting superadmin", async () => {
@@ -278,7 +291,7 @@ test("messaging failure is swallowed after lifecycle success", async () => {
 
 test("lifecycle invokes messaging only after the successful compare-and-set gate", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "src/lib/data/circle-lifecycle.ts"), "utf8");
-    const failedTransition = source.indexOf('if (result.modifiedCount !== 1) throw new Error');
+    const failedTransition = source.indexOf("if (result.modifiedCount !== 1) throw new Error");
     const messaging = source.indexOf("await sendCircleModerationMessageBestEffort", failedTransition);
     assert.ok(failedTransition >= 0 && messaging > failedTransition);
     assert.match(source, /lifecycleEventId: String\(successfulAuditEvent\._id\)/);
@@ -357,7 +370,10 @@ test("retry validates lifecycle audit records before looking up a Circle or repl
         ["actor DID", { ...validEvent, actorDid: "" }],
         ["previous status", { ...validEvent, details: { ...validEvent.details, previousStatus: "unknown" } }],
         ["status", { ...validEvent, details: { ...validEvent.details, status: "unknown" } }],
-        ["transition", { ...validEvent, details: { ...validEvent.details, previousStatus: "removed", status: "active" } }],
+        [
+            "transition",
+            { ...validEvent, details: { ...validEvent.details, previousStatus: "removed", status: "active" } },
+        ],
         ["date", { ...validEvent, details: { ...validEvent.details, changedAt: new Date("invalid") } }],
         ["reason", { ...validEvent, details: { ...validEvent.details, reason: "" } }],
     ] as const) {
@@ -392,7 +408,12 @@ test("retry confirms the target Circle still exists before replay", async () => 
                 targetType: "circle",
                 targetId: circleId,
                 actorDid: "did:example:superadmin",
-                details: { previousStatus: "active", status: "paused", changedAt, reason: "Required moderation review" },
+                details: {
+                    previousStatus: "active",
+                    status: "paused",
+                    changedAt,
+                    reason: "Required moderation review",
+                },
             }),
             findCircle: async () => null,
             sendMessage: async () => {

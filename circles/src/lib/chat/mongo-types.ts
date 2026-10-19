@@ -10,6 +10,7 @@ export type ChatConversationMetadata = {
     senderName?: string;
     senderAvatarUrl?: string;
     contactType?: "offer_help" | "ask_question";
+    dmProvisional?: boolean;
 };
 
 export type ChatAttachment = {
@@ -60,6 +61,53 @@ export type ChatMessageDoc = {
     system?: SystemMessageMetadata;
     thread?: ChatThreadMeta;
     threadId?: string;
+    submissionId?: string;
+    draftGeneration?: string;
+    firstTopicNotification?: {
+        state: "pending" | "processing" | "delivered";
+        attempts: number;
+        leaseUntil?: Date;
+        processingToken?: string;
+        lastAttemptAt?: Date;
+        deliveredAt?: Date;
+        lastError?: string;
+        retryAfter?: Date;
+    };
+};
+
+export type ChatTopicDraft = {
+    _id?: any;
+    authorDid: string;
+    recipientDid: string;
+    title: string;
+    body: string;
+    hashtags: string[];
+    entryKind: "composer" | "profile";
+    revision: number;
+    generation: string;
+    state: "active" | "discarded" | "consumed";
+    createdAt: Date;
+    updatedAt: Date;
+};
+
+export type ChatTopicDraftTombstone = {
+    _id?: any;
+    authorDid: string;
+    recipientDid: string;
+    generation: string;
+    reason: "discarded" | "consumed";
+    createdAt: Date;
+};
+
+export type CanonicalDmClaim = {
+    _id?: any;
+    pairKey: string;
+    participants: string[];
+    conversationId: string;
+    firstSubmissionId: string;
+    state?: "creating" | "ready";
+    readyAt?: Date;
+    createdAt: Date;
 };
 
 export type ChatReadState = {
