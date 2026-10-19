@@ -1,7 +1,14 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction, ChatReadState } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers, ChatTopicReadStates, Circles } from "./db";
+import {
+    ChatConversations,
+    ChatMessageDocs,
+    ChatReadStates,
+    ChatRoomMembers,
+    ChatTopicReadStates,
+    Circles,
+} from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-sender";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
@@ -24,15 +31,7 @@ import {
     buildReadStateV2InitializationOperation,
     resolveHistoricalReadBoundary,
 } from "@/lib/chat/chat-read-state-v2";
-
-// High-value indexes for chat list/message paths.
-ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
-ChatConversations?.createIndex({ circleId: 1, type: 1, archived: 1 });
-ChatRoomMembers?.createIndex({ userDid: 1, chatRoomId: 1 });
-ChatRoomMembers?.createIndex({ chatRoomId: 1 });
-ChatMessageDocs?.createIndex({ conversationId: 1, _id: 1 });
-ChatReadStates?.createIndex({ userDid: 1, conversationId: 1 });
-ChatMessageDocs?.createIndex({ conversationId: 1, threadId: 1, _id: 1 });
+import { resolveCanonicalDm } from "@/lib/chat/canonical-dm";
 
 const toObjectId = (value?: string | null) => {
     if (!value) return null;
@@ -196,26 +195,7 @@ export const findConversationByHandleForUser = async (
 };
 
 export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): Promise<ChatConversation> => {
-    const participants = [userA.did!, userB.did!].sort();
-    const existing = (await ChatConversations.findOne({
-        type: "dm",
-        participants: { $all: participants },
-        archived: { $ne: true },
-    })) as ChatConversation | null;
-
-    if (existing) {
-        return normalizeConversation(existing);
-    }
-
-    const handle = `dm-${participants[0]}-${participants[1]}`;
-    return createConversation({
-        type: "dm",
-        name: handle,
-        handle,
-        participants,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    });
+    return normalizeConversation(await resolveCanonicalDm(userA.did!, userB.did!, { provisional: true }));
 };
 
 export const ensureWelcomeMessageForNewUser = async (
@@ -337,9 +317,9 @@ export const mapConversationsToChatRoomDisplays = async (
     const circleIdsToLoad = Array.from(
         new Set(conversations.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
     );
-    const loadedOwnerCircles = preloadedOwnerCircles ?? (await Promise.all(circleIdsToLoad.map(getCircleById))).filter(
-        (circle): circle is Circle => !!circle,
-    );
+    const loadedOwnerCircles =
+        preloadedOwnerCircles ??
+        (await Promise.all(circleIdsToLoad.map(getCircleById))).filter((circle): circle is Circle => !!circle);
     const circleById = new Map(loadedOwnerCircles.map((circle) => [circle._id.toString(), circle]));
 
     return conversations.map((conversation) => {
@@ -386,6 +366,7 @@ export const mapConversationsToChatRoomDisplays = async (
             conversationType,
             repliesDisabled,
             metadata: conversation.metadata,
+            updatedAt: conversation.updatedAt,
         } as ChatRoomDisplay;
     });
 };
@@ -397,6 +378,7 @@ export const listConversationCandidatesForUser = async (
 ): Promise<Array<ChatConversation & { _id: ObjectId }>> => {
     const conversations = (await ChatConversations.find({
         archived: { $ne: true },
+        "metadata.dmProvisional": { $ne: true },
         $or: [
             { type: "dm", participants: userDid },
             { type: { $ne: "dm" }, participants: userDid },
@@ -404,7 +386,9 @@ export const listConversationCandidatesForUser = async (
         ],
     }).toArray()) as ChatConversation[];
     return Array.from(
-        new Map(conversations.map((conversation) => [conversation._id.toString(), normalizeConversation(conversation)])).values(),
+        new Map(
+            conversations.map((conversation) => [conversation._id.toString(), normalizeConversation(conversation)]),
+        ).values(),
     ) as Array<ChatConversation & { _id: ObjectId }>;
 };
 
@@ -528,7 +512,7 @@ export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessag
     // so new DMs never appeared active in the chat list on prod.
     await ChatConversations.updateOne(
         { _id: new ObjectId(message.conversationId) },
-        { $set: { updatedAt: new Date() } },
+        { $set: { updatedAt: new Date() }, $unset: { "metadata.dmProvisional": "" } },
     );
     return { ...message, _id: result.insertedId.toString() };
 };

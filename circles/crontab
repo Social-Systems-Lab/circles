@@ -8,6 +8,10 @@
 
 0 * * * * curl -f -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/email-reminders || echo "Cron job failed: email-reminders at $(date)" >> /var/log/cron.log
 
+# Recover interrupted Stage 1A first-topic notification delivery every minute
+
+* * * * * curl -f -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/first-topic-notifications || echo "Cron job failed: first-topic-notifications at $(date)" >> /var/log/cron.log
+
 # Example: 15 \* \* \* \* curl ...
 
 # End of file needs a newline

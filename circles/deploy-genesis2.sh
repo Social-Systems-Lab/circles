@@ -47,7 +47,7 @@ echo "Build time (UTC): $BUILD_TIME"
 echo "Running branding guard for Kamooni..."
 (cd "$APP_DIR" && ./scripts/check-branding-guard.sh kamooni)
 
-(cd "$APP_DIR" && docker compose build circles)
+(cd "$APP_DIR" && docker compose build circles cron)
 
 resolve_application_mongodb_uri() {
   # Resolve the exact environment assigned to the application service. This works even when
@@ -64,6 +64,13 @@ fi
 
 if [[ "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then
   echo "Error: resolved MONGODB_URI contains an invalid line break." >&2
+  exit 1
+fi
+
+echo "Running read-only Messaging Stage 1A production preflight..."
+if ! (cd "$APP_DIR" && APP_MONGODB_URI="$APP_MONGODB_URI" ./scripts/preflight-messaging-stage1a.sh); then
+  echo "Error: Messaging Stage 1A preflight failed." >&2
+  echo "The running circles application and cron services were not stopped or replaced." >&2
   exit 1
 fi
 
@@ -172,6 +179,17 @@ for attempt in $(seq 1 20); do
     grep -Eq "\"gitSha\"[[:space:]]*:[[:space:]]*\"$GIT_SHA\"" <<<"$VERSION_OUTPUT"; then
     echo "Version check (attempt $attempt):"
     echo "$VERSION_OUTPUT"
+    echo "Recreating the cron service with the verified application deployment..."
+    if ! (cd "$APP_DIR" && docker compose up -d --no-deps --force-recreate cron); then
+      echo "Error: application is healthy, but the cron service could not be recreated." >&2
+      exit 1
+    fi
+    if ! (cd "$APP_DIR" && docker compose exec -T cron sh -lc \
+      'grep -Fq "/api/cron/email-reminders" /etc/crontabs/root && grep -Fq "/api/cron/first-topic-notifications" /etc/crontabs/root'); then
+      echo "Error: cron schedule verification failed; expected reminder and first-topic jobs." >&2
+      exit 1
+    fi
+    echo "Verified cron schedules: hourly email reminders and minutely first-topic notification recovery."
     exit 0
   fi
   sleep 1

@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react";
 import { useAtom } from "jotai";
 import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
-import { latestMessagesAtom, unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
+import { unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
 import { Settings } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -30,7 +30,6 @@ export const ChatList: React.FC<ChatListProps> = ({
     totalChatsCount = chats.length,
     onChatClick,
 }) => {
-    const [latestMessages] = useAtom(latestMessagesAtom);
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
     const isMobile = useIsMobile();
@@ -44,17 +43,12 @@ export const ChatList: React.FC<ChatListProps> = ({
         const chatsCopy = [...chats];
 
         chatsCopy.sort((a, b) => {
-            const keyA = getConversationId(a);
-            const keyB = getConversationId(b);
-            const messageA = Object.entries(latestMessages).find(([key]) => key.startsWith(keyA))?.[1];
-            const messageB = Object.entries(latestMessages).find(([key]) => key.startsWith(keyB))?.[1];
-
-            const latestA = messageA?.origin_server_ts || 0;
-            const latestB = messageB?.origin_server_ts || 0;
+            const latestA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const latestB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
             return latestB - latestA; // Sort descending by timestamp
         });
         return chatsCopy;
-    }, [chats, latestMessages]);
+    }, [chats]);
 
     const handleChatClick = async (chat: ChatRoomDisplay) => {
         const path = `/chat/${getConversationId(chat)}`;

@@ -6,7 +6,7 @@ import { userAtom } from "@/lib/data/atoms";
 import { Circle } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { useRouter } from "next/navigation";
-import { getChatContactsAction, createMongoGroupChatAction, findOrCreateDMConversationAction } from "./actions";
+import { getChatContactsAction, createMongoGroupChatAction } from "./actions";
 import { getUserPrivateAction } from "../home/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Users, ArrowLeft, X, Check, Search, Camera } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { openNewDmComposerAction } from "./draft-actions";
 
 interface CreateChatModalProps {
     isOpen: boolean;
@@ -37,7 +38,6 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
     const [groupAvatar, setGroupAvatar] = useState<File | null>(null);
     const [groupAvatarPreview, setGroupAvatarPreview] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
-
 
     useEffect(() => {
         if (isOpen && allUsers.length === 0) {
@@ -83,21 +83,23 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
         });
     }, [allUsers, searchTerm, user?._id]);
 
-    const handleUserClick = (clickedUser: Circle) => {
+    const handleUserClick = async (clickedUser: Circle) => {
         if (step === "select-type") {
+            const result = await openNewDmComposerAction(clickedUser.did || "");
+            if (!result.success) {
+                toast({
+                    title: "Could not start chat",
+                    description: result.message || "Failed to open the direct message",
+                    variant: "destructive",
+                });
+                return;
+            }
             onClose();
-            setTimeout(async () => {
-                const result = await findOrCreateDMConversationAction(clickedUser);
-                if (result.success && result.chatRoom?._id) {
-                    router.push("/chat/" + result.chatRoom._id);
-                } else {
-                    toast({
-                        title: "Could not start chat",
-                        description: result.message || "Failed to start the direct message",
-                        variant: "destructive",
-                    });
-                }
-            }, 0);
+            router.push(
+                result.destination === "conversation"
+                    ? `/chat/${result.conversationId}`
+                    : `/chat/new/${encodeURIComponent(clickedUser.did || "")}`,
+            );
             return;
         }
 
@@ -134,7 +136,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
         try {
             const formData = new FormData();
             formData.append("name", groupName);
-            formData.append("participants", JSON.stringify(selectedMembers.map(m => m.did)));
+            formData.append("participants", JSON.stringify(selectedMembers.map((m) => m.did)));
             if (groupAvatar) {
                 formData.append("avatar", groupAvatar);
             }
@@ -176,11 +178,16 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[425px] p-0 gap-0 overflow-hidden">
-                <DialogHeader className="p-4 border-b">
+            <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[425px]">
+                <DialogHeader className="border-b p-4">
                     <div className="flex items-center gap-2">
                         {step !== "select-type" && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setStep(step === "group-details" ? "select-members" : "select-type")}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setStep(step === "group-details" ? "select-members" : "select-type")}
+                            >
                                 <ArrowLeft className="h-4 w-4" />
                             </Button>
                         )}
@@ -193,10 +200,10 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                 </DialogHeader>
 
                 {step === "group-details" ? (
-                    <div className="p-6 flex flex-col gap-6">
+                    <div className="flex flex-col gap-6 p-6">
                         <div className="flex justify-center">
                             <div className="relative">
-                                <Avatar className="h-24 w-24 cursor-pointer hover:opacity-90 transition-opacity">
+                                <Avatar className="h-24 w-24 cursor-pointer transition-opacity hover:opacity-90">
                                     <AvatarImage src={groupAvatarPreview || ""} />
                                     <AvatarFallback className="bg-muted">
                                         <Camera className="h-8 w-8 text-muted-foreground" />
@@ -204,7 +211,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                                     <input
                                         type="file"
                                         accept="image/*"
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        className="absolute inset-0 cursor-pointer opacity-0"
                                         onChange={handleAvatarChange}
                                     />
                                 </Avatar>
@@ -219,8 +226,8 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                             />
                         </div>
                         <div className="flex justify-end">
-                            <Button 
-                                onClick={handleCreateGroup} 
+                            <Button
+                                onClick={handleCreateGroup}
                                 disabled={!groupName.trim() || isCreating}
                                 className="w-full"
                             >
@@ -236,15 +243,15 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col h-[400px]">
-                        <div className="p-2 border-b">
+                    <div className="flex h-[400px] flex-col">
+                        <div className="border-b p-2">
                             <div className="relative">
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search people..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-8 border-none bg-muted/50 focus-visible:ring-0"
+                                    className="border-none bg-muted/50 pl-8 focus-visible:ring-0"
                                 />
                             </div>
                         </div>
@@ -254,7 +261,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                                 {step === "select-type" && !searchTerm && (
                                     <Button
                                         variant="ghost"
-                                        className="w-full justify-start gap-3 p-3 h-auto font-normal"
+                                        className="h-auto w-full justify-start gap-3 p-3 font-normal"
                                         onClick={() => setStep("select-members")}
                                     >
                                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -267,13 +274,16 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                                 )}
 
                                 {step === "select-members" && selectedMembers.length > 0 && (
-                                    <div className="flex gap-2 overflow-x-auto p-2 mb-2">
+                                    <div className="mb-2 flex gap-2 overflow-x-auto p-2">
                                         {selectedMembers.map((member) => (
-                                            <div key={member._id} className="relative flex flex-col items-center min-w-[60px]">
+                                            <div
+                                                key={member._id}
+                                                className="relative flex min-w-[60px] flex-col items-center"
+                                            >
                                                 <div className="relative">
                                                     <CirclePicture circle={member} size="40px" />
                                                     <button
-                                                        className="absolute -top-1 -right-1 bg-gray-500 text-white rounded-full p-0.5 hover:bg-gray-600"
+                                                        className="absolute -right-1 -top-1 rounded-full bg-gray-500 p-0.5 text-white hover:bg-gray-600"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             toggleMemberSelection(member);
@@ -282,13 +292,15 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                                                         <X className="h-3 w-3" />
                                                     </button>
                                                 </div>
-                                                <span className="text-xs truncate max-w-[60px] mt-1">{member.name?.split(" ")[0]}</span>
+                                                <span className="mt-1 max-w-[60px] truncate text-xs">
+                                                    {member.name?.split(" ")[0]}
+                                                </span>
                                             </div>
                                         ))}
                                     </div>
                                 )}
 
-                                <div className="space-y-1 mt-2">
+                                <div className="mt-2 space-y-1">
                                     {isLoadingUsers ? (
                                         <div className="flex justify-center p-4">
                                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -299,18 +311,22 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                                         </div>
                                     ) : (
                                         filteredUsers.map((u) => {
-                                            const isSelected = selectedMembers.some(m => m._id === u._id);
+                                            const isSelected = selectedMembers.some((m) => m._id === u._id);
                                             return (
                                                 <Button
                                                     key={u._id}
                                                     variant="ghost"
-                                                    className="w-full justify-start gap-3 p-2 h-auto font-normal relative"
-                                                    onClick={() => handleUserClick(u)}
+                                                    className="relative h-auto w-full justify-start gap-3 p-2 font-normal"
+                                                    onClick={() => void handleUserClick(u)}
                                                 >
                                                     <CirclePicture circle={u} size="40px" />
                                                     <div className="flex flex-col items-start overflow-hidden">
-                                                        <span className="font-medium truncate w-full text-left">{u.name}</span>
-                                                        <span className="text-xs text-muted-foreground truncate w-full text-left">@{u.handle}</span>
+                                                        <span className="w-full truncate text-left font-medium">
+                                                            {u.name}
+                                                        </span>
+                                                        <span className="w-full truncate text-left text-xs text-muted-foreground">
+                                                            @{u.handle}
+                                                        </span>
                                                     </div>
                                                     {step === "select-members" && isSelected && (
                                                         <div className="absolute right-4 text-primary">
@@ -326,9 +342,9 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                         </ScrollArea>
 
                         {step === "select-members" && (
-                            <div className="p-4 border-t bg-background">
-                                <Button 
-                                    className="w-full" 
+                            <div className="border-t bg-background p-4">
+                                <Button
+                                    className="w-full"
                                     disabled={selectedMembers.length === 0}
                                     onClick={() => setStep("group-details")}
                                 >

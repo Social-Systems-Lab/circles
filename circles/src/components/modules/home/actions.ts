@@ -3,7 +3,7 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { readAuthToken } from "@/lib/auth/cookie";
 import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
-import { ChatRoom, Circle, UserPrivate } from "@/models/models";
+import { Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import {
@@ -33,7 +33,6 @@ import {
     unpinCircle,
 } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
-import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 import {
     getDmEligibility,
     getProfileRelationshipState,
@@ -411,7 +410,7 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
     }
 };
 
-export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | null> {
+export async function canInviteToProjectByMessageAction(recipientDid: string): Promise<boolean> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
@@ -423,25 +422,22 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
             throw new Error("User not found");
         }
 
-        if (!recipient?.did) {
+        if (!recipientDid || recipientDid === userDid) {
             throw new Error("Recipient not found");
         }
 
+        const recipient = await getCircleByDid(recipientDid);
+        if (!recipient || recipient.circleType !== "user") return false;
+
         if (!canParticipate(user)) {
             console.warn(getParticipationRequiredMessage("start direct messages", user));
-            return null;
+            return false;
         }
 
-        const dmEligibility = await getDmEligibility(userDid, recipient.did);
-        if (!dmEligibility.isAllowed) {
-            return null;
-        }
-
-        const room = await findOrCreateDMRoomData(user, recipient);
-        return room;
+        return (await getDmEligibility(userDid, recipientDid)).isAllowed;
     } catch (error) {
         console.error("Error finding or creating DM room:", error);
-        return null;
+        return false;
     }
 }
 

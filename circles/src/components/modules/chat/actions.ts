@@ -49,11 +49,13 @@ const circleChatEntryDependencies = {
         if (context?.findCircle) return context.findCircle(circleId);
         return ObjectId.isValid(circleId) ? Circles.findOne({ _id: new ObjectId(circleId) }) : null;
     },
-    canRead: async (viewerDid: string, circle: Circle) => canReadCircle(viewerDid, circle, {
-        getMember: async (did, circleId) => getChatActionContext()?.findCanonicalMember
-            ? getChatActionContext()!.findCanonicalMember!(did, circleId)
-            : Members.findOne({ userDid: did, circleId }),
-    }),
+    canRead: async (viewerDid: string, circle: Circle) =>
+        canReadCircle(viewerDid, circle, {
+            getMember: async (did, circleId) =>
+                getChatActionContext()?.findCanonicalMember
+                    ? getChatActionContext()!.findCanonicalMember!(did, circleId)
+                    : Members.findOne({ userDid: did, circleId }),
+        }),
     assertWritable: assertCircleWritesAllowed,
 };
 
@@ -200,7 +202,12 @@ export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success
         }
         if (chatRoom.circleId) {
             if (!ObjectId.isValid(chatRoom.circleId)) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
-            const circle = await authorizeCircleChatEntry(userDid, chatRoom.circleId, "write", circleChatEntryDependencies);
+            const circle = await authorizeCircleChatEntry(
+                userDid,
+                chatRoom.circleId,
+                "write",
+                circleChatEntryDependencies,
+            );
             if (!circle) {
                 return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
             }
@@ -311,11 +318,8 @@ export const toggleMongoReactionAction = async (messageId: string, emoji: string
     return await toggleMongoReactionActionInternal(messageId, emoji);
 };
 
-export const findOrCreateDMConversationAction = async (
-    inRecipient: Circle,
-    options?: { source?: "composer" | "profile" },
-) => {
-    return await findOrCreateDMConversationActionInternal(inRecipient, options);
+export const findOrCreateDMConversationAction = async (inRecipient: Circle) => {
+    return await findOrCreateDMConversationActionInternal(inRecipient);
 };
 
 export const createMongoGroupChatAction = async (formData: FormData) => {
@@ -682,7 +686,9 @@ export const updateGroupAvatarAction = async (
         observeChatActionEffect("avatar-storage-write");
         const fileInfo = getChatActionContext()?.saveFile
             ? await getChatActionContext()!.saveFile!(file, "chat-group-avatar", ownerCircle._id as string, true)
-            : await (await import("@/lib/data/storage")).saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
+            : await (
+                  await import("@/lib/data/storage")
+              ).saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
         observeChatActionEffect("conversation-mutation");
         await ChatConversations.updateOne(
             { _id: new ObjectId(chatRoomId) },
@@ -749,7 +755,12 @@ export const getChatRoomMembersAction = async (
                 try {
                     const repairFilter = { _id: earliestMemberId };
                     const repairUpdate = {
-                        $set: { role: "admin" as const, status: "active" as const, active: true as const, isActive: true as const },
+                        $set: {
+                            role: "admin" as const,
+                            status: "active" as const,
+                            active: true as const,
+                            isActive: true as const,
+                        },
                     };
                     const repairResult = getChatActionContext()?.updateChatMemberRole
                         ? await getChatActionContext()!.updateChatMemberRole!(repairFilter, repairUpdate)
@@ -762,7 +773,9 @@ export const getChatRoomMembersAction = async (
                 }
                 if (repairMatched) {
                     members = members.map((member) =>
-                        member._id?.toString?.() === earliestMemberId.toString() ? { ...member, role: "admin" } : member,
+                        member._id?.toString?.() === earliestMemberId.toString()
+                            ? { ...member, role: "admin" }
+                            : member,
                     );
                 }
             }
