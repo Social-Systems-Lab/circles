@@ -4,14 +4,14 @@
 import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { useClientMediaQuery } from "@/components/utils/use-is-mobile";
 import { ChatList } from "@/components/modules/chat/chat-list";
 import { usePathname, useRouter } from "next/navigation";
 import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
 import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
-import { Archive, ArrowLeft, FilePenLine, SquarePen } from "lucide-react";
+import { Archive, FilePenLine, MessageCircle, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
@@ -23,7 +23,9 @@ import { listDmDraftsAction } from "@/components/modules/chat/draft-actions";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
-    const isMobile = useIsMobile();
+    // Tailwind's md breakpoint starts at 768px, so chat must stop using the
+    // bottom-navigation layout one pixel earlier than the shared mobile hook.
+    const isChatMobile = useClientMediaQuery("(max-width: 767px)");
     const pathname = usePathname();
     const router = useRouter();
     const isArchivedRoute = pathname.startsWith("/chat/archived");
@@ -148,7 +150,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     // Gather all chat rooms
     const segments = pathname.split("/").filter(Boolean); // e.g. ["chat"] or ["chat", "xyz-handle"]
     const isDetailRoute = segments.length > (isArchivedRoute ? 2 : 1);
-    const showChatList = !isMobile || !isDetailRoute;
+    const showChatList = !isChatMobile || !isDetailRoute;
 
     // Find the chat room for the settings modal
     const selectedChat = chatSettingsModal.chatRoomId
@@ -171,27 +173,21 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             {showChatList && (
                 <aside
                     className={`${
-                        isMobile ? "w-full" : "fixed left-0 top-0 h-screen w-80 border-r border-gray-200 md:left-[72px]"
-                    } flex flex-col bg-white p-2`}
+                        isChatMobile
+                            ? "w-full"
+                            : "fixed left-0 top-0 h-screen w-80 border-r border-gray-200 md:left-[72px]"
+                    } flex flex-col bg-white p-2 ${isChatMobile ? "pt-16" : ""}`}
+                    style={
+                        isChatMobile ? { height: "calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))" } : undefined
+                    }
                 >
                     <div className="mb-4 mt-2 flex items-center justify-between pl-2 pt-0">
-                        <div className="flex items-center gap-1">
-                            {isArchivedRoute && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => router.push("/chat")}
-                                    aria-label="Back to Messages"
-                                >
-                                    <ArrowLeft className="h-5 w-5" />
-                                </Button>
-                            )}
-                            <h2 className="text-xl font-semibold">{isArchivedRoute ? "Archived" : "Messages"}</h2>
-                        </div>
+                        <h2 className="text-xl font-semibold">{isArchivedRoute ? "Archived" : "Messages"}</h2>
                         {!isArchivedRoute && (
                             <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-11 w-11"
                                 onClick={() => setIsCreateModalOpen(true)}
                                 aria-label="New message"
                             >
@@ -199,16 +195,30 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             </Button>
                         )}
                     </div>
-                    {!isArchivedRoute && (
+                    <nav className="mb-2 grid grid-cols-2 gap-1" aria-label="Message views">
                         <Button
                             variant="ghost"
-                            className="mb-2 justify-start gap-2"
-                            onClick={() => router.push("/chat/archived")}
+                            className={`h-11 justify-start gap-2 ${
+                                !isArchivedRoute ? "bg-[#F1F6DF] text-[#2d6a45] hover:bg-[#e8f0cf]" : ""
+                            }`}
+                            onClick={() => router.push("/chat")}
+                            aria-current={!isArchivedRoute ? "page" : undefined}
                         >
-                            <Archive className="h-4 w-4" aria-hidden="true" />
-                            Archived conversations
+                            <MessageCircle className="h-5 w-5" aria-hidden="true" />
+                            Messages
                         </Button>
-                    )}
+                        <Button
+                            variant="ghost"
+                            className={`h-11 justify-start gap-2 ${
+                                isArchivedRoute ? "bg-[#F1F6DF] text-[#2d6a45] hover:bg-[#e8f0cf]" : ""
+                            }`}
+                            onClick={() => router.push("/chat/archived")}
+                            aria-current={isArchivedRoute ? "page" : undefined}
+                        >
+                            <Archive className="h-5 w-5" aria-hidden="true" />
+                            Archived
+                        </Button>
+                    </nav>
                     <ChatSearch value={chatSearchTerm} onChange={setChatSearchTerm} />
                     <div className="flex-grow overflow-y-auto">
                         {drafts.map((draft) => (
@@ -252,7 +262,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             )}
 
             {/* main content: either the 'no chat selected' or the chosen chat */}
-            <main className={`${!isMobile ? "ml-[372px]" : ""}`}>{children}</main>
+            <main className={`${!isChatMobile ? "ml-[372px]" : ""}`}>{children}</main>
 
             <CreateChatModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
 

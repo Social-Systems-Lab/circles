@@ -7,7 +7,7 @@ import { replyToMessageAtom, roomMessagesAtom, unreadCountsAtom, userAtom } from
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { useClientMediaQuery, useIsMobile } from "@/components/utils/use-is-mobile";
 import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
@@ -23,7 +23,6 @@ import {
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-    IoArrowBack,
     IoArrowDown,
     IoClose,
     IoChevronDown,
@@ -65,7 +64,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { getInitialTopicTitle, getTopicCreationTime, getTopicIndexMessages } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
 import { selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
-import { ArchiveRestore } from "lucide-react";
+import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
@@ -2987,6 +2986,7 @@ export const ChatRoomComponent: React.FC<{
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
     const isMobile = useIsMobile();
+    const isChatMobile = useClientMediaQuery("(max-width: 767px)");
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [user] = useAtom(userAtom);
@@ -3544,7 +3544,7 @@ export const ChatRoomComponent: React.FC<{
     }, [messages]);
 
     const handleMessagesRendered = () => {};
-    const scrollBottomPadding = isMobile ? 96 : 16;
+    const scrollBottomPadding = isChatMobile ? 96 : 16;
 
     return (
         <>
@@ -3553,10 +3553,18 @@ export const ChatRoomComponent: React.FC<{
                 style={{
                     flexGrow: isCompact || inToolbox ? "1" : "3",
                     maxWidth: isCompact || inToolbox ? "none" : "700px",
+                    minHeight:
+                        isChatMobile && !inToolbox
+                            ? "calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))"
+                            : undefined,
+                    height:
+                        isChatMobile && !inToolbox
+                            ? "calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))"
+                            : undefined,
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && (
+                    {!inToolbox && !isChatMobile && (
                         <div className="fixed top-4 z-[20] flex items-center gap-2" style={pillStyle}>
                             {circle && (
                                 <Link href={`/circles/${circle.handle}`} className="cursor-pointer">
@@ -3653,7 +3661,7 @@ export const ChatRoomComponent: React.FC<{
                             className="flex-grow overflow-y-auto p-4"
                             style={{
                                 overflowAnchor: "auto",
-                                paddingTop: isMobile ? 16 : 64,
+                                paddingTop: isChatMobile ? 120 : 64,
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
@@ -3712,7 +3720,7 @@ export const ChatRoomComponent: React.FC<{
                             className="fixed z-20 h-10 w-10 rounded-full border border-[hsl(var(--task-priority-low-bg))] bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--task-link))] shadow-lg hover:bg-[hsl(var(--task-priority-low-bg))]"
                             style={{
                                 right: `${jumpButtonRight}px`,
-                                bottom: `${isMobile ? 84 : 20}px`,
+                                bottom: `${isChatMobile ? 84 : 20}px`,
                             }}
                             title="Jump to latest"
                             aria-label="Jump to latest"
@@ -3722,21 +3730,21 @@ export const ChatRoomComponent: React.FC<{
                     )}
                 </div>
             </div>
-            {isMobile && !inToolbox && (
-                <div className="fixed left-4 top-4 z-20 flex items-center gap-2">
+            {isChatMobile && !inToolbox && (
+                <div className="fixed left-4 top-[4.5rem] z-20 flex items-center gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                        className="h-11 w-11 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
                         onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
                         aria-label="Back to conversations"
                     >
-                        <IoArrowBack className="h-5 w-5" />
+                        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
                     </Button>
                     {archivedReadOnly ? (
                         <Button
                             type="button"
-                            className="h-9 rounded-full bg-white px-3 text-sm text-gray-800 shadow-sm hover:bg-gray-100"
+                            className="h-11 rounded-full bg-white px-3 text-sm text-gray-800 shadow-sm hover:bg-gray-100"
                             onClick={() => void handleUnarchive()}
                             disabled={isUnarchiving}
                         >
@@ -3747,7 +3755,7 @@ export const ChatRoomComponent: React.FC<{
                         !isAnnouncementConversation && (
                             <Button
                                 type="button"
-                                className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
+                                className="h-11 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
                                 onClick={openTopicComposerFromMobile}
                                 title="New topic"
                             >

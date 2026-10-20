@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
+import { Archive, Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
 import { HiLightBulb } from "react-icons/hi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1052,8 +1052,9 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
                     type="button"
                     onClick={handleArchiveConversation}
                     disabled={isArchiving}
-                    className="w-full p-3 text-left rounded-lg hover:bg-amber-50 text-amber-700 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-lg p-3 text-left font-medium text-amber-700 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
                 >
+                    <Archive className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
                     {isArchiving ? "Archiving..." : "Archive conversation"}
                 </button>
             ) : (
