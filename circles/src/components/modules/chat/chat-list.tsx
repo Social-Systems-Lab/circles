@@ -7,7 +7,7 @@ import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
-import { Settings } from "lucide-react";
+import { ArchiveRestore, Settings } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
 import clsx from "clsx";
@@ -21,6 +21,8 @@ interface ChatListProps {
     searchTerm?: string;
     totalChatsCount?: number;
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
+    archivedView?: boolean;
+    onUnarchive?: (chat: ChatRoomDisplay) => void | Promise<void>;
 }
 
 export const ChatList: React.FC<ChatListProps> = ({
@@ -29,6 +31,8 @@ export const ChatList: React.FC<ChatListProps> = ({
     searchTerm,
     totalChatsCount = chats.length,
     onChatClick,
+    archivedView = false,
+    onUnarchive,
 }) => {
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
@@ -51,7 +55,7 @@ export const ChatList: React.FC<ChatListProps> = ({
     }, [chats]);
 
     const handleChatClick = async (chat: ChatRoomDisplay) => {
-        const path = `/chat/${getConversationId(chat)}`;
+        const path = archivedView ? `/chat/archived/${getConversationId(chat)}` : `/chat/${getConversationId(chat)}`;
         router.push(path);
         if (onChatClick) {
             await onChatClick(chat);
@@ -91,7 +95,8 @@ export const ChatList: React.FC<ChatListProps> = ({
                         <div
                             key={chat._id}
                             className={clsx(
-                                "group m-1 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-100",
+                                "group m-1 flex items-center gap-3 rounded-lg p-2 hover:bg-gray-100",
+                                "cursor-pointer",
                                 {
                                     "bg-gray-200 dark:bg-gray-700":
                                         activeChatHandle === getConversationId(chat) ||
@@ -128,26 +133,42 @@ export const ChatList: React.FC<ChatListProps> = ({
                                     )}
                                 </p>
                             </div>
-                            {/* Settings Icon - shows on hover */}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation(); // Prevent chat click
-                                    setChatSettingsModal({
-                                        chatRoomId: chat._id,
-                                        isOpen: true,
-                                    });
-                                }}
-                                className="flex-shrink-0 rounded-full p-2 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
-                                aria-label="Chat settings"
-                            >
-                                <Settings className="h-4 w-4 text-gray-600" />
-                            </button>
+                            {archivedView ? (
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void onUnarchive?.(chat);
+                                    }}
+                                    className="flex-shrink-0 rounded-md p-2 text-sm text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    aria-label={`Unarchive conversation with ${chat.name}`}
+                                >
+                                    <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setChatSettingsModal({
+                                            chatRoomId: chat._id,
+                                            isOpen: true,
+                                        });
+                                    }}
+                                    className="flex-shrink-0 rounded-full p-2 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    aria-label={`Conversation settings for ${chat.name}`}
+                                >
+                                    <Settings className="h-4 w-4 text-gray-600" aria-hidden="true" />
+                                </button>
+                            )}
                         </div>
                     );
                 })
             ) : (
                 <div className="flex h-full items-center justify-center pt-4 text-sm text-gray-500">
-                    {isLoadingRooms ? (
+                    {archivedView && !isLoadingRooms ? (
+                        <p className="p-4 text-center">No archived conversations</p>
+                    ) : isLoadingRooms ? (
                         <p className="flex animate-pulse items-center" aria-live="polite">
                             <span>Messages loading</span>
                             <LoadingEllipsis />

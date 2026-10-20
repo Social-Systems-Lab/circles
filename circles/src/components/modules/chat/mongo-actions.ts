@@ -35,7 +35,8 @@ import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
-import { saveFile } from "@/lib/data/storage";
+import { deleteFile, saveFile } from "@/lib/data/storage";
+import { cleanupUploadedFiles } from "@/lib/data/post-upload-rollback";
 import { getAuthenticatedUserDid as getProductionAuthenticatedUserDid } from "@/lib/auth/auth";
 import { normalizeObjectIdHex, sumConversationUnreadCounts } from "@/lib/chat/topic-read-state";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
@@ -448,7 +449,9 @@ const validateReplyTargetForConversation = async (
     return { ok: true };
 };
 
-export const listChatRoomsAction = async (): Promise<{
+export const listChatRoomsAction = async (
+    view: "active" | "archived" = "active",
+): Promise<{
     success: boolean;
     rooms?: ChatRoomDisplay[];
     message?: string;
@@ -467,7 +470,9 @@ export const listChatRoomsAction = async (): Promise<{
                 context?.findCanonicalMemberships
                     ? context.findCanonicalMemberships(did)
                     : Members.find({ userDid: did }).toArray(),
-            findCandidates: context?.findCandidates || listConversationCandidatesForUser,
+            findCandidates: context?.findCandidates
+                ? context.findCandidates
+                : (did, circleIds) => listConversationCandidatesForUser(did, circleIds, view),
             findOwningCircles: async (circleIds) => {
                 if (context?.findOwningCircles) return context.findOwningCircles(circleIds);
                 const ids = circleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
@@ -555,6 +560,43 @@ export const listChatRoomsAction = async (): Promise<{
         return { success: false, message: error instanceof Error ? error.message : "Failed to load chats" };
     }
 };
+
+const setDmArchivedForCurrentUser = async (
+    conversationId: string,
+    archived: boolean,
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (!ObjectId.isValid(conversationId)) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+
+    try {
+        observeChatActionEffect("conversation-archive");
+        const context = getChatActionContext();
+        const result = context?.updateConversationArchive
+            ? await context.updateConversationArchive(conversationId, userDid, archived)
+            : await ChatConversations.updateOne(
+                  {
+                      _id: new ObjectId(conversationId),
+                      type: "dm",
+                      participants: userDid,
+                      archived: { $ne: true },
+                      "metadata.dmProvisional": { $ne: true },
+                  },
+                  archived ? { $addToSet: { archivedBy: userDid } } : { $pull: { archivedBy: userDid } },
+              );
+        if (result.matchedCount !== 1) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to ${archived ? "archive" : "unarchive"} direct message:`, error);
+        return { success: false, message: `Failed to ${archived ? "archive" : "unarchive"} conversation` };
+    }
+};
+
+export const archiveDmConversationAction = async (conversationId: string) =>
+    setDmArchivedForCurrentUser(conversationId, true);
+
+export const unarchiveDmConversationAction = async (conversationId: string) =>
+    setDmArchivedForCurrentUser(conversationId, false);
 
 export const fetchRecentMessagesAction = async (
     conversationId: string,
@@ -1168,20 +1210,37 @@ export const sendMongoAttachmentAction = async (
         };
 
         observeChatActionEffect("message-persistence");
-        const doc = threadId
-            ? await createThreadReply(threadId, conversationId, userDid, {
-                  body: file.name,
-                  attachments: [attachment],
-                  replyToMessageId,
-              })
-            : await createMessage({
-                  conversationId,
-                  senderDid: userDid,
-                  body: file.name,
-                  createdAt: new Date(),
-                  replyToMessageId,
-                  attachments: [attachment],
-              });
+        let doc;
+        try {
+            doc = threadId
+                ? await createThreadReply(threadId, conversationId, userDid, {
+                      body: file.name,
+                      attachments: [attachment],
+                      replyToMessageId,
+                  })
+                : getChatActionContext()?.createMessage
+                  ? await getChatActionContext()!.createMessage!({
+                        conversationId,
+                        senderDid: userDid,
+                        body: file.name,
+                        createdAt: new Date(),
+                        replyToMessageId,
+                        attachments: [attachment],
+                    })
+                  : await createMessage({
+                        conversationId,
+                        senderDid: userDid,
+                        body: file.name,
+                        createdAt: new Date(),
+                        replyToMessageId,
+                        attachments: [attachment],
+                    });
+        } catch (error) {
+            const cleanup = await cleanupUploadedFiles([attachment], getChatActionContext()?.deleteFile || deleteFile);
+            if (cleanup.failedDeletes.length)
+                console.error("Failed to clean up rejected chat attachment", cleanup.failedDeletes);
+            throw error;
+        }
         if (!doc?._id) {
             return {
                 success: false,
@@ -1699,7 +1758,7 @@ export const markConversationReadAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "You need to be logged in." };
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
     if (!access.ok) return { success: false, message: access.message };
 
     let effectiveLastSeen = lastSeenMessageId;
@@ -1751,7 +1810,7 @@ export const markTopicReadAction = async (
 ): Promise<{ success: boolean; lastReadMessageId?: string | null; message?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
-    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
     if (!access.ok) return { success: false, message: access.message };
     const normalizedTopicId = normalizeObjectIdHex(topicId);
     if (!normalizedTopicId) return { success: false, message: "Invalid topic" };

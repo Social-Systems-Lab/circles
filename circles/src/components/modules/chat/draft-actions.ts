@@ -241,6 +241,17 @@ export async function submitDmFirstTopicAction(input: {
         generation: input.generation,
         state: "active",
     });
+    const archivedConversation = await ChatConversations.findOne(
+        {
+            type: "dm",
+            participants: { $all: [authorDid, resolvedRecipientDid], $size: 2 },
+            archived: { $ne: true },
+            "metadata.dmProvisional": { $ne: true },
+            archivedBy: authorDid,
+        },
+        { projection: { _id: 1 } },
+    );
+    if (archivedConversation) return { success: false, message: "Unarchive this conversation before posting." };
     const eligibility = await getDmEligibility(authorDid, resolvedRecipientDid);
     if (
         !isDmComposeAuthorized(

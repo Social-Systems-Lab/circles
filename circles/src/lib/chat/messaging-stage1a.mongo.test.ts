@@ -13,6 +13,15 @@ if (!["27028", "27029"].includes(mongoUrl.port)) throw new Error("Refusing non-d
 async function main() {
     const dbModule = await import("@/lib/data/db");
     const { resolveCanonicalDm } = await import("./canonical-dm");
+    const { runWithChatActionContext } = await import("./chat-action-context");
+    const mongoActions = await import("@/components/modules/chat/mongo-actions");
+    const {
+        createMessage,
+        createThread,
+        createThreadReply,
+        listConversationCandidatesForUser,
+        mapConversationToChatRoomDisplay,
+    } = await import("@/lib/data/mongo-chat");
     const { discardDmDraftRecord, publishDmFirstTopic, reconcilePublishedDmDraft, saveDmDraftRecord } = await import(
         "./dm-draft-persistence"
     );
@@ -21,6 +30,8 @@ async function main() {
         CanonicalDmClaims,
         ChatConversations,
         ChatMessageDocs,
+        ChatReadStates,
+        ChatTopicReadStates,
         ChatTopicDrafts,
         Circles,
         Notifications,
@@ -284,6 +295,287 @@ async function main() {
         assert.equal(
             await ChatConversations.countDocuments({ _id: phantom._id, "metadata.dmProvisional": { $ne: true } }),
             0,
+        );
+
+        const archiveConversationId = new ObjectId();
+        const archiveUpdatedAt = new Date("2026-01-02T03:04:05.000Z");
+        await ChatConversations.insertOne({
+            _id: archiveConversationId,
+            type: "dm",
+            participants: ["did:archive-alice", "did:archive-bob"],
+            createdAt: archiveUpdatedAt,
+            updatedAt: archiveUpdatedAt,
+        });
+        await ChatMessageDocs.insertOne({
+            conversationId: archiveConversationId.toString(),
+            senderDid: "did:archive-alice",
+            body: "history",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            attachments: [{ url: "/storage/history.png", name: "history.png" }],
+        });
+        await ChatReadStates.insertOne({
+            conversationId: archiveConversationId.toString(),
+            userDid: "did:archive-alice",
+            lastReadMessageId: null,
+            updatedAt: archiveUpdatedAt,
+        });
+        await ChatTopicReadStates.insertOne({
+            conversationId: archiveConversationId.toString(),
+            topicId: new ObjectId().toString(),
+            userDid: "did:archive-alice",
+            lastReadMessageId: null,
+            updatedAt: archiveUpdatedAt,
+        });
+        await ChatTopicDrafts.insertOne({
+            authorDid: "did:archive-alice",
+            recipientDid: "did:archive-bob",
+            title: "Preserved draft",
+            body: "draft",
+            hashtags: [],
+            entryKind: "composer",
+            revision: 1,
+            generation: "archive-preserved-draft",
+            state: "active",
+            createdAt: archiveUpdatedAt,
+            updatedAt: archiveUpdatedAt,
+        });
+        const preservedNotificationCount = await Notifications.countDocuments({});
+        const preservedClaimCount = await CanonicalDmClaims.countDocuments({});
+
+        await runWithChatActionContext({ viewerDid: "did:archive-alice" }, async () => {
+            assert.equal(
+                (await mongoActions.archiveDmConversationAction(archiveConversationId.toString())).success,
+                true,
+            );
+            assert.equal(
+                (await mongoActions.archiveDmConversationAction(archiveConversationId.toString())).success,
+                true,
+            );
+        });
+        let archivedConversation = await ChatConversations.findOne({ _id: archiveConversationId });
+        assert.deepEqual(archivedConversation?.archivedBy, ["did:archive-alice"]);
+        const clientRoom = await mapConversationToChatRoomDisplay("did:archive-alice", archivedConversation as any);
+        assert.equal(Object.prototype.hasOwnProperty.call(clientRoom || {}, "archivedBy"), false);
+        assert.equal(archivedConversation?.updatedAt?.getTime(), archiveUpdatedAt.getTime());
+        assert.equal((await listConversationCandidatesForUser("did:archive-alice", [], "active")).length, 0);
+        assert.equal((await listConversationCandidatesForUser("did:archive-alice", [], "archived")).length, 1);
+        assert.equal((await listConversationCandidatesForUser("did:archive-bob", [], "active")).length, 1);
+        assert.equal((await listConversationCandidatesForUser("did:archive-bob", [], "archived")).length, 0);
+        await runWithChatActionContext({ viewerDid: "did:outsider" }, async () => {
+            assert.equal(
+                (await mongoActions.archiveDmConversationAction(archiveConversationId.toString())).success,
+                false,
+            );
+            assert.equal(
+                (await mongoActions.unarchiveDmConversationAction(archiveConversationId.toString())).success,
+                false,
+            );
+        });
+        await runWithChatActionContext({ viewerDid: "did:archive-alice" }, async () => {
+            assert.equal(
+                (await mongoActions.unarchiveDmConversationAction(archiveConversationId.toString())).success,
+                true,
+            );
+            assert.equal(
+                (await mongoActions.unarchiveDmConversationAction(archiveConversationId.toString())).success,
+                true,
+            );
+        });
+        archivedConversation = await ChatConversations.findOne({ _id: archiveConversationId });
+        assert.deepEqual(archivedConversation?.archivedBy, []);
+        assert.equal(archivedConversation?.updatedAt?.getTime(), archiveUpdatedAt.getTime());
+        assert.equal(await ChatMessageDocs.countDocuments({ conversationId: archiveConversationId.toString() }), 1);
+        assert.equal(await ChatReadStates.countDocuments({ conversationId: archiveConversationId.toString() }), 1);
+        assert.equal(await ChatTopicReadStates.countDocuments({ conversationId: archiveConversationId.toString() }), 1);
+        assert.equal(await ChatTopicDrafts.countDocuments({ generation: "archive-preserved-draft" }), 1);
+        assert.equal(await Notifications.countDocuments({}), preservedNotificationCount);
+        assert.equal(await CanonicalDmClaims.countDocuments({}), preservedClaimCount);
+
+        await Circles.insertOne({
+            _id: new ObjectId(),
+            did: "did:attachment-cleanup",
+            circleType: "user",
+        } as any);
+        const cleanupConversationId = new ObjectId();
+        await ChatConversations.insertOne({
+            _id: cleanupConversationId,
+            type: "dm",
+            participants: ["did:attachment-cleanup", "did:attachment-recipient"],
+            createdAt: new Date(),
+        });
+        const deletedUploads: string[] = [];
+        const attachmentForm = new FormData();
+        attachmentForm.set("roomId", cleanupConversationId.toString());
+        attachmentForm.set("file", new File(["content"], "cleanup.txt", { type: "text/plain" }));
+        const attachmentResult = await runWithChatActionContext(
+            {
+                viewerDid: "did:attachment-cleanup",
+                findConversation: async () => ChatConversations.findOne({ _id: cleanupConversationId }),
+                findMessagingUser: async () => ({
+                    did: "did:attachment-cleanup",
+                    circleType: "user",
+                    picture: { url: "/cleanup.png" },
+                    description: "complete",
+                    isAdmin: true,
+                    isEmailVerified: true,
+                }),
+                saveFile: async () => ({
+                    url: "/storage/cleanup/rejected.txt",
+                    fileName: "rejected.txt",
+                    originalName: "cleanup.txt",
+                }),
+                createMessage: async () => {
+                    throw new Error("simulated persistence failure");
+                },
+                deleteFile: async (url) => {
+                    deletedUploads.push(url);
+                },
+            },
+            () => mongoActions.sendMongoAttachmentAction(attachmentForm),
+        );
+        assert.equal(attachmentResult.success, false);
+        assert.deepEqual(deletedUploads, ["/storage/cleanup/rejected.txt"]);
+        assert.equal(await ChatMessageDocs.countDocuments({ conversationId: cleanupConversationId.toString() }), 0);
+
+        await ChatConversations.updateOne(
+            { _id: archiveConversationId },
+            { $set: { archivedBy: ["did:archive-bob"] } },
+        );
+        await createMessage({
+            conversationId: archiveConversationId.toString(),
+            senderDid: "did:archive-alice",
+            body: "ordinary",
+            createdAt: new Date(),
+        });
+        assert.deepEqual((await ChatConversations.findOne({ _id: archiveConversationId }))?.archivedBy, []);
+
+        await createMessage({
+            conversationId: archiveConversationId.toString(),
+            senderDid: "did:archive-alice",
+            body: "incoming before manual archive",
+            createdAt: new Date(),
+        });
+        await runWithChatActionContext({ viewerDid: "did:archive-bob" }, async () => {
+            assert.equal(
+                (await mongoActions.archiveDmConversationAction(archiveConversationId.toString())).success,
+                true,
+            );
+        });
+        assert.deepEqual((await ChatConversations.findOne({ _id: archiveConversationId }))?.archivedBy, [
+            "did:archive-bob",
+        ]);
+
+        await ChatConversations.updateOne(
+            { _id: archiveConversationId },
+            { $addToSet: { archivedBy: "did:archive-bob" } },
+        );
+        await createMessage({
+            conversationId: archiveConversationId.toString(),
+            senderDid: "did:archive-alice",
+            body: "attachment",
+            createdAt: new Date(),
+            attachments: [{ url: "/storage/new.png", name: "new.png" }],
+        });
+        assert.deepEqual((await ChatConversations.findOne({ _id: archiveConversationId }))?.archivedBy, []);
+
+        await ChatConversations.updateOne(
+            { _id: archiveConversationId },
+            { $addToSet: { archivedBy: "did:archive-bob" } },
+        );
+        const archiveTopic = await createThread(
+            archiveConversationId.toString(),
+            "did:archive-alice",
+            "Topic",
+            "Body",
+            [],
+        );
+        assert.ok(archiveTopic?._id);
+        assert.deepEqual((await ChatConversations.findOne({ _id: archiveConversationId }))?.archivedBy, []);
+
+        await ChatConversations.updateOne(
+            { _id: archiveConversationId },
+            { $addToSet: { archivedBy: "did:archive-bob" } },
+        );
+        await createThreadReply(String(archiveTopic!._id), archiveConversationId.toString(), "did:archive-alice", {
+            body: "Reply",
+            attachments: [{ url: "/storage/reply.png", name: "reply.png" }],
+        });
+        assert.deepEqual((await ChatConversations.findOne({ _id: archiveConversationId }))?.archivedBy, []);
+
+        const firstTopic = await publishDmFirstTopic({
+            authorDid: "did:first-topic-sender",
+            recipientDid: "did:first-topic-recipient",
+            title: "First",
+            body: "First body",
+            hashtags: [],
+            generation: "archive-first-topic",
+            submissionId: "5123456789abcdef01234567",
+            processNotifications: false,
+        });
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(firstTopic.conversationId) },
+            { $set: { archivedBy: ["did:first-topic-sender", "did:first-topic-recipient"] } },
+        );
+        await publishDmFirstTopic({
+            authorDid: "did:first-topic-sender",
+            recipientDid: "did:first-topic-recipient",
+            title: "First",
+            body: "First body",
+            hashtags: [],
+            generation: "archive-first-topic",
+            submissionId: "5123456789abcdef01234567",
+            processNotifications: false,
+        });
+        assert.deepEqual(
+            (await ChatConversations.findOne({ _id: new ObjectId(firstTopic.conversationId) }))?.archivedBy,
+            ["did:first-topic-sender"],
+        );
+
+        const singletonId = new ObjectId();
+        await ChatConversations.insertOne({
+            _id: singletonId,
+            type: "dm",
+            participants: ["did:welcome-user"],
+            archivedBy: ["did:welcome-user"],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+        await createMessage({
+            conversationId: singletonId.toString(),
+            senderDid: "system:kamooni",
+            body: "Welcome",
+            createdAt: new Date(),
+        });
+        assert.deepEqual((await ChatConversations.findOne({ _id: singletonId }))?.archivedBy, []);
+
+        const globallyArchivedId = new ObjectId();
+        const provisionalId = new ObjectId();
+        await ChatConversations.insertMany([
+            {
+                _id: globallyArchivedId,
+                type: "dm",
+                participants: ["did:archive-alice", "did:global"],
+                archived: true,
+                archivedBy: ["did:archive-alice"],
+                createdAt: new Date(),
+            },
+            {
+                _id: provisionalId,
+                type: "dm",
+                participants: ["did:archive-alice", "did:provisional"],
+                archivedBy: ["did:archive-alice"],
+                metadata: { dmProvisional: true },
+                createdAt: new Date(),
+            },
+        ]);
+        const archivedCandidates = await listConversationCandidatesForUser("did:archive-alice", [], "archived");
+        assert.equal(
+            archivedCandidates.some((item) => item._id.toString() === globallyArchivedId.toString()),
+            false,
+        );
+        assert.equal(
+            archivedCandidates.some((item) => item._id.toString() === provisionalId.toString()),
+            false,
         );
 
         console.log("Messaging Stage 1A Mongo regression tests passed (production persistence helpers)");

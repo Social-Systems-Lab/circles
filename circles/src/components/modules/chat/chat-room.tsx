@@ -65,6 +65,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { getInitialTopicTitle, getTopicCreationTime, getTopicIndexMessages } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
 import { selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
+import { ArchiveRestore } from "lucide-react";
 import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
@@ -1118,6 +1119,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             serverUnreadCount={topicUnreadCounts[message.id] || 0}
                             onTopicRead={onTopicRead}
                             mentionCandidates={mentionCandidates}
+                            canReply={canReply}
                         />,
                     );
                     return acc;
@@ -1235,7 +1237,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                             ? "border-gray-200"
                                                             : "border-gray-200"
                                                     }`}
-                                                    onClick={() => handleReaction(message, reaction)}
+                                                    onClick={
+                                                        canReply ? () => handleReaction(message, reaction) : undefined
+                                                    }
                                                 >
                                                     <span>{reaction}</span>
                                                     {reactions.length > 1 && (
@@ -1246,67 +1250,68 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         </div>
                                     )}
 
-                                    {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                        <div
-                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {isOwnMessage && (
-                                                <>
-                                                    {canEditMessage && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6"
-                                                            onClick={() => handleEdit(message)}
-                                                        >
-                                                            <GrEdit className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    {canDeleteMessage && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6"
-                                                            onClick={() => handleDelete(message)}
-                                                        >
-                                                            <GrTrash className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </>
-                                            )}
-                                            {canReply && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => handleReply(message)}
-                                                >
-                                                    <MdReply className="h-4 w-4" />
-                                                </Button>
-                                            )}
-                                            <Popover
-                                                open={pickerOpenForMessage === message.id}
-                                                onOpenChange={(isOpen) =>
-                                                    setPickerOpenForMessage(isOpen ? message.id : null)
-                                                }
+                                    {canReply &&
+                                        (hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
+                                            <div
+                                                className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
+                                                onClick={(e) => e.stopPropagation()}
                                             >
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                {isOwnMessage && (
+                                                    <>
+                                                        {canEditMessage && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6"
+                                                                onClick={() => handleEdit(message)}
+                                                            >
+                                                                <GrEdit className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                        {canDeleteMessage && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6"
+                                                                onClick={() => handleDelete(message)}
+                                                            >
+                                                                <GrTrash className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {canReply && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleReply(message)}
+                                                    >
+                                                        <MdReply className="h-4 w-4" />
                                                     </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                    <LazyEmojiPicker
-                                                        onEmojiClick={(emojiData: EmojiClickData) => {
-                                                            handleReaction(message, emojiData.emoji);
-                                                            setPickerOpenForMessage(null);
-                                                        }}
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                    )}
+                                                )}
+                                                <Popover
+                                                    open={pickerOpenForMessage === message.id}
+                                                    onOpenChange={(isOpen) =>
+                                                        setPickerOpenForMessage(isOpen ? message.id : null)
+                                                    }
+                                                >
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                            <BsEmojiSmile className="h-4 w-4" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                        <LazyEmojiPicker
+                                                            onEmojiClick={(emojiData: EmojiClickData) => {
+                                                                handleReaction(message, emojiData.emoji);
+                                                                setPickerOpenForMessage(null);
+                                                            }}
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                        )}
                                 </div>
                             )}
 
@@ -1908,6 +1913,7 @@ const TopicCard: React.FC<{
     serverUnreadCount: number;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     mentionCandidates?: Circle[];
+    canReply?: boolean;
 }> = ({
     message,
     conversationId,
@@ -1921,6 +1927,7 @@ const TopicCard: React.FC<{
     serverUnreadCount,
     onTopicRead,
     mentionCandidates = [],
+    canReply = true,
 }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
@@ -2409,7 +2416,7 @@ const TopicCard: React.FC<{
                         <span>
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
-                        {isOwnStarter && (
+                        {canReply && isOwnStarter && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -2538,7 +2545,8 @@ const TopicCard: React.FC<{
                                             ) : (
                                                 <MessageRenderer message={reply} />
                                             )}
-                                            {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
+                                            {canReply &&
+                                                (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
                                                 !isEditing && (
                                                     <div
                                                         className="absolute -bottom-3 right-2 z-10"
@@ -2617,10 +2625,14 @@ const TopicCard: React.FC<{
                                                         return (
                                                             <button
                                                                 key={emoji}
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    void handleReaction(reply.id, emoji);
-                                                                }}
+                                                                onClick={
+                                                                    canReply
+                                                                        ? (event) => {
+                                                                              event.stopPropagation();
+                                                                              void handleReaction(reply.id, emoji);
+                                                                          }
+                                                                        : undefined
+                                                                }
                                                                 className="flex min-h-6 items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none"
                                                             >
                                                                 {emoji}{" "}
@@ -2642,110 +2654,51 @@ const TopicCard: React.FC<{
                     </div>
 
                     {/* Reply input */}
-                    <div className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-                        <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
-                            <div className="flex items-center gap-1 sm:contents">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={isUploading}
-                                    title="Attach file"
-                                    aria-label="Attach file"
-                                >
-                                    {isUploading ? (
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                                    ) : (
-                                        <IoAttach className="h-4 w-4" />
-                                    )}
-                                </Button>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
-                                            title="Add emoji"
-                                            aria-label="Add emoji"
-                                        >
-                                            <BsEmojiSmile className="h-4 w-4" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                        <LazyEmojiPicker
-                                            onEmojiClick={(data: EmojiClickData) =>
-                                                setTopicReplyText((prev) => prev + data.emoji)
-                                            }
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
-                                onClick={() => void handleSendReply()}
-                                disabled={!replyText.trim() || isSending}
-                                title="Send reply"
-                                aria-label="Send reply"
-                            >
-                                <IoSend className="h-4 w-4" />
-                            </Button>
-                        </div>
-                        <div className="order-1 min-w-0 flex-1 sm:order-2">
-                            {replyToMessage && (
-                                <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="font-semibold text-gray-700">
-                                                Replying to {replyToMessage.author?.name || "message"}
-                                            </div>
-                                            <div className="truncate">
-                                                {renderMentionsAsDisplayText(
-                                                    (replyToMessage.content?.body as string) || "",
-                                                )}
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="text-gray-400 hover:text-gray-600"
-                                            onClick={() => setReplyToMessage(null)}
-                                        >
-                                            <IoClose className="h-4 w-4" />
-                                        </button>
-                                    </div>
+                    {canReply && (
+                        <div className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                            <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
+                                <div className="flex items-center gap-1 sm:contents">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isUploading}
+                                        title="Attach file"
+                                        aria-label="Attach file"
+                                    >
+                                        {isUploading ? (
+                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                                        ) : (
+                                            <IoAttach className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
+                                                title="Add emoji"
+                                                aria-label="Add emoji"
+                                            >
+                                                <BsEmojiSmile className="h-4 w-4" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                            <LazyEmojiPicker
+                                                onEmojiClick={(data: EmojiClickData) =>
+                                                    setTopicReplyText((prev) => prev + data.emoji)
+                                                }
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
-                            )}
-                            <div className="flex items-end gap-1">
-                                <MentionsInput
-                                    inputRef={replyTextareaRef}
-                                    value={replyText}
-                                    onChange={(_event, newValue) => {
-                                        setTopicReplyText(newValue);
-                                        autoGrowReplyTextarea();
-                                    }}
-                                    placeholder={`Reply to ${thread.title}. Use return for a new line.`}
-                                    aria-label={`Reply to ${thread.title}`}
-                                    className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
-                                    style={topicReplyMentionsInputStyle}
-                                    allowSuggestionsAboveCursor={true}
-                                    forceSuggestionsAboveCursor={true}
-                                >
-                                    <Mention
-                                        trigger="@"
-                                        data={handleTopicMentionQuery}
-                                        style={defaultMentionStyle}
-                                        displayTransform={(id, display) => `${display}`}
-                                        renderSuggestion={renderCircleSuggestion}
-                                        markup="[__display__](/circles/__id__)"
-                                    />
-                                </MentionsInput>
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
+                                    className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
                                     onClick={() => void handleSendReply()}
                                     disabled={!replyText.trim() || isSending}
                                     title="Send reply"
@@ -2754,8 +2707,69 @@ const TopicCard: React.FC<{
                                     <IoSend className="h-4 w-4" />
                                 </Button>
                             </div>
+                            <div className="order-1 min-w-0 flex-1 sm:order-2">
+                                {replyToMessage && (
+                                    <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-gray-700">
+                                                    Replying to {replyToMessage.author?.name || "message"}
+                                                </div>
+                                                <div className="truncate">
+                                                    {renderMentionsAsDisplayText(
+                                                        (replyToMessage.content?.body as string) || "",
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="text-gray-400 hover:text-gray-600"
+                                                onClick={() => setReplyToMessage(null)}
+                                            >
+                                                <IoClose className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex items-end gap-1">
+                                    <MentionsInput
+                                        inputRef={replyTextareaRef}
+                                        value={replyText}
+                                        onChange={(_event, newValue) => {
+                                            setTopicReplyText(newValue);
+                                            autoGrowReplyTextarea();
+                                        }}
+                                        placeholder={`Reply to ${thread.title}. Use return for a new line.`}
+                                        aria-label={`Reply to ${thread.title}`}
+                                        className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
+                                        style={topicReplyMentionsInputStyle}
+                                        allowSuggestionsAboveCursor={true}
+                                        forceSuggestionsAboveCursor={true}
+                                    >
+                                        <Mention
+                                            trigger="@"
+                                            data={handleTopicMentionQuery}
+                                            style={defaultMentionStyle}
+                                            displayTransform={(id, display) => `${display}`}
+                                            renderSuggestion={renderCircleSuggestion}
+                                            markup="[__display__](/circles/__id__)"
+                                        />
+                                    </MentionsInput>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
+                                        onClick={() => void handleSendReply()}
+                                        disabled={!replyText.trim() || isSending}
+                                        title="Send reply"
+                                        aria-label="Send reply"
+                                    >
+                                        <IoSend className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
             {isEditingTopic && (
@@ -2957,7 +2971,8 @@ export const ChatRoomComponent: React.FC<{
     inToolbox?: boolean;
     chatProvider?: "matrix" | "mongo";
     initialTopicId?: string;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider, initialTopicId }) => {
+    archivedReadOnly?: boolean;
+}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider, initialTopicId, archivedReadOnly = false }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -2994,6 +3009,7 @@ export const ChatRoomComponent: React.FC<{
     const routeHandleParam = params?.handle;
     const routeHandle = Array.isArray(routeHandleParam) ? routeHandleParam[0] : routeHandleParam;
     const provider: "mongo" = "mongo";
+    const [isUnarchiving, setIsUnarchiving] = useState(false);
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
     const activeRoomIdRef = useRef<string | null>(roomId);
@@ -3004,6 +3020,38 @@ export const ChatRoomComponent: React.FC<{
     const repliesDisabled =
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
     const isAnnouncementConversation = conversationType === "announcement" || repliesDisabled;
+    const canChangeContent = !isAnnouncementConversation && !archivedReadOnly;
+
+    const handleUnarchive = useCallback(async () => {
+        if (!roomId || isUnarchiving) return;
+        setIsUnarchiving(true);
+        try {
+            const { unarchiveDmConversationAction } = await import("./actions");
+            const result = await unarchiveDmConversationAction(roomId);
+            if (!result.success) {
+                alert(result.message || "Failed to unarchive conversation");
+                return;
+            }
+            router.replace(`/chat/${roomId}`);
+            router.refresh();
+        } finally {
+            setIsUnarchiving(false);
+        }
+    }, [isUnarchiving, roomId, router]);
+
+    useEffect(() => {
+        if (!archivedReadOnly || !roomId) return;
+        const checkArchivedState = async () => {
+            const { listArchivedChatRoomsAction } = await import("./actions");
+            const result = await listArchivedChatRoomsAction();
+            if (result.success && !(result.rooms || []).some((room) => String(room._id) === roomId)) {
+                router.replace(`/chat/${roomId}`);
+                router.refresh();
+            }
+        };
+        const interval = window.setInterval(() => void checkArchivedState(), 5000);
+        return () => window.clearInterval(interval);
+    }, [archivedReadOnly, roomId, router]);
 
     useEffect(() => {
         if (!replyToMessage) return;
@@ -3518,7 +3566,20 @@ export const ChatRoomComponent: React.FC<{
                                     </div>
                                 </Link>
                             )}
-                            {!isMobile && !isAnnouncementConversation && (
+                            {archivedReadOnly && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 rounded-full bg-white px-3 text-sm shadow-sm"
+                                    onClick={() => void handleUnarchive()}
+                                    disabled={isUnarchiving}
+                                >
+                                    <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                                    {isUnarchiving ? "Unarchiving..." : "Unarchive conversation"}
+                                </Button>
+                            )}
+                            {!isMobile && canChangeContent && (
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -3544,7 +3605,7 @@ export const ChatRoomComponent: React.FC<{
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3566,7 +3627,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    canReply={!isAnnouncementConversation}
+                                    canReply={canChangeContent}
                                     chatProvider={provider}
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
@@ -3596,7 +3657,7 @@ export const ChatRoomComponent: React.FC<{
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3618,7 +3679,7 @@ export const ChatRoomComponent: React.FC<{
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    canReply={!isAnnouncementConversation}
+                                    canReply={canChangeContent}
                                     chatProvider={provider}
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
@@ -3667,25 +3728,37 @@ export const ChatRoomComponent: React.FC<{
                         variant="ghost"
                         size="icon"
                         className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                        onClick={() => router.push("/chat")}
+                        onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
                         aria-label="Back to conversations"
                     >
                         <IoArrowBack className="h-5 w-5" />
                     </Button>
-                    {!isAnnouncementConversation && (
+                    {archivedReadOnly ? (
                         <Button
                             type="button"
-                            className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                            onClick={openTopicComposerFromMobile}
-                            title="New topic"
+                            className="h-9 rounded-full bg-white px-3 text-sm text-gray-800 shadow-sm hover:bg-gray-100"
+                            onClick={() => void handleUnarchive()}
+                            disabled={isUnarchiving}
                         >
-                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                            <span className="max-w-[6.5rem] truncate">New topic</span>
+                            <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                            {isUnarchiving ? "Unarchiving..." : "Unarchive"}
                         </Button>
+                    ) : (
+                        !isAnnouncementConversation && (
+                            <Button
+                                type="button"
+                                className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
+                                onClick={openTopicComposerFromMobile}
+                                title="New topic"
+                            >
+                                <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+                                <span className="max-w-[6.5rem] truncate">New topic</span>
+                            </Button>
+                        )
                     )}
                 </div>
             )}
-            {showNewThreadModal && roomId && (
+            {showNewThreadModal && roomId && canChangeContent && (
                 <NewThreadModal
                     conversationId={roomId}
                     initialTitle={newThreadInitialTitle}

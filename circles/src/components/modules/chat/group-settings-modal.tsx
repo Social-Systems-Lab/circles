@@ -18,7 +18,6 @@ interface GroupSettingsModalProps {
     chatRoom: ChatRoomDisplay;
     isAdmin: boolean;
 }
-
 const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: GroupSettingsModalProps) {
@@ -130,7 +129,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                         </TabsContent>
 
                         <TabsContent value="settings" className="mt-0">
-                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
+                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} onOpenChange={onOpenChange} />
                         </TabsContent>
                     </div>
                 </Tabs>
@@ -408,7 +407,6 @@ function InfoTab({
         </div>
     );
 }
-
 // Members Tab Component
 function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
     const user = useAtomValue(userAtom);
@@ -895,7 +893,9 @@ function MediaTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive:
 }
 
 // Settings Tab Component
-function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
+function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDisplay; isAdmin: boolean; onOpenChange: (open: boolean) => void }) {
+    const router = useRouter();
+    const [isArchiving, setIsArchiving] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [announcementBody, setAnnouncementBody] = useState("");
@@ -984,6 +984,27 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
         }
     };
 
+    const handleArchiveConversation = async () => {
+        if (!chatRoom.isDirect || !chatRoom._id) return;
+        setIsArchiving(true);
+        try {
+            const { archiveDmConversationAction } = await import("./actions");
+            const result = await archiveDmConversationAction(String(chatRoom._id));
+            if (!result.success) {
+                alert(result.message || "Failed to archive conversation");
+                return;
+            }
+            onOpenChange(false);
+            router.push("/chat");
+            router.refresh();
+        } catch (error) {
+            console.error("Error archiving conversation:", error);
+            alert("Failed to archive conversation");
+        } finally {
+            setIsArchiving(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
             {isAdmin && !chatRoom.isDirect && (
@@ -1026,14 +1047,25 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
                 </label>
             </div>
 
-            {/* Leave Group */}
-            <button 
-                onClick={handleLeaveGroup}
-                disabled={isLeaving}
-                className="w-full p-3 text-left rounded-lg hover:bg-red-50 text-red-600 font-medium transition-colors disabled:opacity-50"
-            >
-                {isLeaving ? "Leaving..." : `Leave ${chatRoom.isDirect ? "Chat" : "Group"}`}
-            </button>
+            {chatRoom.isDirect ? (
+                <button
+                    type="button"
+                    onClick={handleArchiveConversation}
+                    disabled={isArchiving}
+                    className="w-full p-3 text-left rounded-lg hover:bg-amber-50 text-amber-700 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                >
+                    {isArchiving ? "Archiving..." : "Archive conversation"}
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    onClick={handleLeaveGroup}
+                    disabled={isLeaving}
+                    className="w-full p-3 text-left rounded-lg hover:bg-red-50 text-red-600 font-medium transition-colors disabled:opacity-50"
+                >
+                    {isLeaving ? "Leaving..." : "Leave Group"}
+                </button>
+            )}
 
             {/* Delete Group (Admin Only) */}
             {isAdmin && !chatRoom.isDirect && (

@@ -375,15 +375,20 @@ export const mapConversationsToChatRoomDisplays = async (
 export const listConversationCandidatesForUser = async (
     userDid: string,
     canonicalCircleIds: string[],
+    view: "active" | "archived" = "active",
 ): Promise<Array<ChatConversation & { _id: ObjectId }>> => {
     const conversations = (await ChatConversations.find({
         archived: { $ne: true },
         "metadata.dmProvisional": { $ne: true },
-        $or: [
-            { type: "dm", participants: userDid },
-            { type: { $ne: "dm" }, participants: userDid },
-            { type: { $ne: "dm" }, circleId: { $in: canonicalCircleIds } },
-        ],
+        ...(view === "archived"
+            ? { type: "dm", participants: userDid, archivedBy: userDid }
+            : {
+                  $or: [
+                      { type: "dm", participants: userDid, archivedBy: { $ne: userDid } },
+                      { type: { $ne: "dm" }, participants: userDid },
+                      { type: { $ne: "dm" }, circleId: { $in: canonicalCircleIds } },
+                  ],
+              }),
     }).toArray()) as ChatConversation[];
     return Array.from(
         new Map(
@@ -512,7 +517,11 @@ export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessag
     // so new DMs never appeared active in the chat list on prod.
     await ChatConversations.updateOne(
         { _id: new ObjectId(message.conversationId) },
-        { $set: { updatedAt: new Date() }, $unset: { "metadata.dmProvisional": "" } },
+        {
+            $set: { updatedAt: new Date() },
+            $unset: { "metadata.dmProvisional": "" },
+            $pull: { archivedBy: { $ne: message.senderDid } },
+        },
     );
     return { ...message, _id: result.insertedId.toString() };
 };
@@ -966,7 +975,10 @@ export const createThread = async (
         insertThread: (doc) => ChatMessageDocs.insertOne(doc),
         findThread: (query) => ChatMessageDocs.findOne(query),
         updateConversation: async (id, updatedAt) => {
-            await ChatConversations.updateOne({ _id: id }, { $set: { updatedAt } });
+            await ChatConversations.updateOne(
+                { _id: id },
+                { $set: { updatedAt }, $pull: { archivedBy: { $ne: senderDid } } },
+            );
         },
     },
 ): Promise<ChatMessageDoc | null> => {
@@ -1069,7 +1081,10 @@ export const createThreadReply = async (
         await ChatMessageDocs.deleteOne({ _id: result.insertedId, conversationId, threadId });
         return null;
     }
-    await ChatConversations.updateOne({ _id: new ObjectId(conversationId) }, { $set: { updatedAt: now } });
+    await ChatConversations.updateOne(
+        { _id: new ObjectId(conversationId) },
+        { $set: { updatedAt: now }, $pull: { archivedBy: { $ne: senderDid } } },
+    );
     return { ...doc, _id: result.insertedId.toString() };
 };
 
