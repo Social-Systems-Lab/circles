@@ -185,10 +185,11 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-11 w-11"
                                 onClick={() => setStep(step === "group-details" ? "select-members" : "select-type")}
+                                aria-label="Back"
                             >
-                                <ArrowLeft className="h-4 w-4" />
+                                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
                             </Button>
                         )}
                         <DialogTitle>

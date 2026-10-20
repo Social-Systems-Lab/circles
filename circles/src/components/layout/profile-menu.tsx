@@ -176,8 +176,9 @@ const ProfileMenuBar = () => {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                        className={`relative rounded-full bg-[#f1f1f1] hover:bg-[#cecece] ${isMobile ? "h-11 w-11" : "h-9 w-9"}`}
                                         onClick={() => router.push("/chat")}
+                                        aria-label="Messages"
                                     >
                                         <LuMail className="h-5 w-5" />
                                         {messageUnreadCount > 0 && (
@@ -189,8 +190,9 @@ const ProfileMenuBar = () => {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                        className={`relative rounded-full bg-[#f1f1f1] hover:bg-[#cecece] ${isMobile ? "h-11 w-11" : "h-9 w-9"}`}
                                         onClick={() => openUserToolbox("events")}
+                                        aria-label="Open Toolbox"
                                     >
                                         <LuClipboardCheck className="h-5 w-5" />
                                     </Button>
@@ -198,8 +200,9 @@ const ProfileMenuBar = () => {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="relative h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                                        className={`relative rounded-full bg-[#f1f1f1] hover:bg-[#cecece] ${isMobile ? "h-11 w-11" : "h-9 w-9"}`}
                                         onClick={() => openUserToolbox("notifications")}
+                                        aria-label="Notifications"
                                     >
                                         <Bell className="h-5 w-5" />
                                         {notificationUnreadCount > 0 && (
@@ -215,6 +218,7 @@ const ProfileMenuBar = () => {
                                 className="relative h-auto w-auto rounded-full p-0"
                                 variant="ghost"
                                 onClick={() => router.push(getCircleDefaultPath(user))}
+                                aria-label="View profile"
                             >
                                 <UserPicture
                                     name={user?.name}

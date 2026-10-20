@@ -140,10 +140,10 @@ export const ChatList: React.FC<ChatListProps> = ({
                                         event.stopPropagation();
                                         void onUnarchive?.(chat);
                                     }}
-                                    className="flex-shrink-0 rounded-md p-2 text-sm text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                     aria-label={`Unarchive conversation with ${chat.name}`}
                                 >
-                                    <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                                    <ArchiveRestore className="h-5 w-5" aria-hidden="true" />
                                 </button>
                             ) : (
                                 <button
@@ -155,10 +155,10 @@ export const ChatList: React.FC<ChatListProps> = ({
                                             isOpen: true,
                                         });
                                     }}
-                                    className="flex-shrink-0 rounded-full p-2 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                     aria-label={`Conversation settings for ${chat.name}`}
                                 >
-                                    <Settings className="h-4 w-4 text-gray-600" aria-hidden="true" />
+                                    <Settings className="h-5 w-5 text-gray-600" aria-hidden="true" />
                                 </button>
                             )}
                         </div>
