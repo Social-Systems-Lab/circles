@@ -11,7 +11,7 @@ import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
 import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
-import { FilePenLine, SquarePen } from "lucide-react";
+import { Archive, ArrowLeft, FilePenLine, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
@@ -26,6 +26,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const isMobile = useIsMobile();
     const pathname = usePathname();
     const router = useRouter();
+    const isArchivedRoute = pathname.startsWith("/chat/archived");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [chatSearchTerm, setChatSearchTerm] = useState("");
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
@@ -44,7 +45,14 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     if (!user) {
                         return { success: true, rooms: [] as ChatRoomDisplay[], drafts: [] };
                     }
-                    const [rooms, draftResult] = await Promise.all([listChatRoomsAction(), listDmDraftsAction()]);
+                    const [rooms, draftResult] = await Promise.all([
+                        isArchivedRoute
+                            ? import("@/components/modules/chat/actions").then(({ listArchivedChatRoomsAction }) =>
+                                  listArchivedChatRoomsAction(),
+                              )
+                            : listChatRoomsAction(),
+                        isArchivedRoute ? Promise.resolve({ success: true, drafts: [] }) : listDmDraftsAction(),
+                    ]);
                     return { ...rooms, drafts: draftResult.success ? draftResult.drafts : [] };
                 },
                 apply: (result) => {
@@ -69,7 +77,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     setHasLoadedChatRooms(true);
                 },
             }),
-        [setUnreadCounts, user],
+        [isArchivedRoute, setUnreadCounts, user],
     );
 
     const loadRooms = useCallback(async () => {
@@ -139,7 +147,7 @@ export default function ChatLayout({ children }: PropsWithChildren) {
 
     // Gather all chat rooms
     const segments = pathname.split("/").filter(Boolean); // e.g. ["chat"] or ["chat", "xyz-handle"]
-    const isDetailRoute = segments.length > 1; // true if /chat/[handle]
+    const isDetailRoute = segments.length > (isArchivedRoute ? 2 : 1);
     const showChatList = !isMobile || !isDetailRoute;
 
     // Find the chat room for the settings modal
@@ -167,11 +175,40 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     } flex flex-col bg-white p-2`}
                 >
                     <div className="mb-4 mt-2 flex items-center justify-between pl-2 pt-0">
-                        <h2 className="text-xl font-semibold">Messages</h2>
-                        <Button variant="ghost" size="icon" onClick={() => setIsCreateModalOpen(true)}>
-                            <SquarePen className="h-5 w-5" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                            {isArchivedRoute && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => router.push("/chat")}
+                                    aria-label="Back to Messages"
+                                >
+                                    <ArrowLeft className="h-5 w-5" />
+                                </Button>
+                            )}
+                            <h2 className="text-xl font-semibold">{isArchivedRoute ? "Archived" : "Messages"}</h2>
+                        </div>
+                        {!isArchivedRoute && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsCreateModalOpen(true)}
+                                aria-label="New message"
+                            >
+                                <SquarePen className="h-5 w-5" />
+                            </Button>
+                        )}
                     </div>
+                    {!isArchivedRoute && (
+                        <Button
+                            variant="ghost"
+                            className="mb-2 justify-start gap-2"
+                            onClick={() => router.push("/chat/archived")}
+                        >
+                            <Archive className="h-4 w-4" aria-hidden="true" />
+                            Archived conversations
+                        </Button>
+                    )}
                     <ChatSearch value={chatSearchTerm} onChange={setChatSearchTerm} />
                     <div className="flex-grow overflow-y-auto">
                         {drafts.map((draft) => (
@@ -193,6 +230,18 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             isLoading={isChatRoomsLoading || !hasLoadedChatRooms}
                             searchTerm={chatSearchTerm}
                             totalChatsCount={chatRooms.length}
+                            archivedView={isArchivedRoute}
+                            onUnarchive={async (chat) => {
+                                const { unarchiveDmConversationAction } = await import(
+                                    "@/components/modules/chat/actions"
+                                );
+                                const result = await unarchiveDmConversationAction(String(chat._id));
+                                if (result.success) {
+                                    router.push(`/chat/${String(chat._id)}`);
+                                } else {
+                                    alert(result.message || "Failed to unarchive conversation");
+                                }
+                            }}
                             onChatClick={(chat) => {
                                 // Topic replies remain unread until their topic is opened.
                                 // useMongoChat advances only the legacy loose-message cursor.

@@ -19,6 +19,11 @@ export type ChatActionContext = {
     fetchRecentMessages?: (conversationId: string, limit: number) => Promise<any[]>;
     createMessage?: (input: any) => Promise<any>;
     notifyMessage?: (input: any) => Promise<void>;
+    updateConversationArchive?: (
+        conversationId: string,
+        userDid: string,
+        archived: boolean,
+    ) => Promise<{ matchedCount: number; modifiedCount?: number }>;
     listChatMembers?: (conversationId: string) => Promise<any[]>;
     updateChatMemberRole?: (
         filter: { _id: unknown },
@@ -32,6 +37,7 @@ export type ChatActionContext = {
     contactCircleAdminsEffect?: (input: any) => Promise<any>;
     sendSystemMessageEffect?: (input: any) => Promise<{ created: boolean; messageId: string }>;
     saveFile?: (...args: any[]) => Promise<any>;
+    deleteFile?: (url: string) => Promise<void>;
     observeEffect?: (effect: ChatActionEffect) => void;
 };
 
@@ -41,6 +47,7 @@ export type ChatActionEffect =
     | "system-message"
     | "membership-mutation"
     | "conversation-mutation"
+    | "conversation-archive"
     | "conversation-read-state"
     | "topic-read-state"
     | "role-repair"

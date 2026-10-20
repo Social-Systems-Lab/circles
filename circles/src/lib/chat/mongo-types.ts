@@ -41,6 +41,7 @@ export type ChatConversation = {
     createdAt: Date;
     updatedAt?: Date;
     archived?: boolean;
+    archivedBy?: string[];
     lastMessageAt?: Date;
     metadata?: ChatConversationMetadata;
 };

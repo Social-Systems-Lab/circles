@@ -228,6 +228,11 @@ async function main() {
     );
     assert.match(actions, /authorDid, recipientDid/, "draft reads and writes are author scoped");
     assert.match(actions, /getDmEligibility\(authorDid, resolvedRecipientDid\)/, "eligibility is rechecked at send");
+    assert.match(submitAction, /archivedBy: authorDid/, "first-topic publication checks the author's archive state");
+    assert.ok(
+        submitAction.indexOf("archivedBy: authorDid") < submitAction.indexOf("publishDmFirstTopic"),
+        "a newly initiated first-topic publication is rejected before persistence when the author archived the DM",
+    );
     assert.match(
         newMessage,
         /openNewDmComposerAction\(clickedUser\.did \|\| ""\)/,

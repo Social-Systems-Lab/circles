@@ -144,7 +144,11 @@ export async function publishDmFirstTopic(input: {
         throw new Error("Submission conflict");
     await ChatConversations.updateOne(
         { _id: new ObjectId(conversationId) },
-        { $max: { updatedAt: topic.createdAt }, $unset: { "metadata.dmProvisional": "" } },
+        {
+            $max: { updatedAt: topic.createdAt },
+            $unset: { "metadata.dmProvisional": "" },
+            $pull: { archivedBy: { $ne: input.authorDid } },
+        },
     );
     await reconcilePublishedDmDraft(input.authorDid, input.recipientDid, input.generation);
     if (input.processNotifications !== false) await processFirstTopicNotifications(1, topic._id?.toString());

@@ -285,6 +285,22 @@ export const listChatRoomsAction = async (): Promise<{
     return await listMongoChatRoomsAction();
 };
 
+export const listArchivedChatRoomsAction = async (): Promise<{
+    success: boolean;
+    rooms?: ChatRoomDisplay[];
+    message?: string;
+}> => listMongoChatRoomsAction("archived");
+
+export const archiveDmConversationAction = async (conversationId: string) => {
+    const { archiveDmConversationAction: archive } = await import("./mongo-actions");
+    return archive(conversationId);
+};
+
+export const unarchiveDmConversationAction = async (conversationId: string) => {
+    const { unarchiveDmConversationAction: unarchive } = await import("./mongo-actions");
+    return unarchive(conversationId);
+};
+
 export const fetchMongoMessagesAction = async (conversationId: string, sinceId?: string, limit: number = 50) => {
     return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
 };
