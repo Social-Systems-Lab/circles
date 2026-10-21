@@ -1,5 +1,6 @@
 import { ServerClient, TemplatedMessage } from "postmark";
 import crypto from "crypto";
+import { checkEmailCaptureMode } from "@/lib/email/capture-mode";
 
 const POSTMARK_API_TOKEN = process.env.POSTMARK_API_TOKEN;
 const POSTMARK_SENDER_EMAIL = process.env.POSTMARK_SENDER_EMAIL;
@@ -14,7 +15,8 @@ if (!POSTMARK_SENDER_EMAIL) {
 
 // Initialize Postmark client
 // It's okay if token is undefined here; checks below will prevent API calls.
-const client = POSTMARK_API_TOKEN ? new ServerClient(POSTMARK_API_TOKEN) : null;
+const CAPTURE_ON_AT_LOAD = checkEmailCaptureMode().mode === "on";
+const client = !CAPTURE_ON_AT_LOAD && POSTMARK_API_TOKEN ? new ServerClient(POSTMARK_API_TOKEN) : null;
 
 interface EmailOptions {
     to: string;
@@ -80,6 +82,26 @@ export const applyEmailTemplateDefaults = (templateModel: Record<string, any>): 
  * @throws Error if Postmark client is not configured or if email sending fails.
  */
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
+    const captureCheck = checkEmailCaptureMode();
+    if (captureCheck.mode === "refused") {
+        console.error("Email was neither captured nor sent because capture mode configuration is unsafe.");
+        throw new Error("Unsafe email capture configuration.");
+    }
+    if (captureCheck.mode === "on") {
+        try {
+            const { storeCapturedEmail } = await import("@/lib/email/captured-emails");
+            await storeCapturedEmail({
+                to: options.to,
+                templateAlias: options.templateAlias,
+                templateModel: applyEmailTemplateDefaults(options.templateModel),
+            });
+            console.log(`Email captured using template ${options.templateAlias}.`);
+            return;
+        } catch {
+            console.error(`Email capture failed using template ${options.templateAlias}.`);
+            throw new Error("Failed to capture email.");
+        }
+    }
     if (!client) {
         console.error("Postmark client is not initialized. POSTMARK_API_TOKEN might be missing.");
         // In a real app, you might want to throw an error or handle this more gracefully

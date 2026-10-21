@@ -133,6 +133,7 @@ env = default_services.get("circles", {}).get("environment", {})
 for key in ("PAYMENTS_ENABLED", "VDB_ENABLED"):
     if str(env.get(key, "")).lower() != "false": errors.append(f"{key} is not forced false")
 forced_empty = ("CIRCLES_REGISTRY_URL","OPENAI_API_KEY","MAPBOX_API_KEY","NEXT_PUBLIC_MAPBOX_TOKEN","POSTMARK_API_TOKEN","POSTMARK_SENDER_EMAIL","TELEGRAM_BOT_TOKEN","TELEGRAM_BOT_USERNAME","DONORBOX_EMAIL","DONORBOX_API_USER","DONORBOX_API_KEY","DONORBOX_WEBHOOK_SECRET","STRIPE_SECRET_KEY","STRIPE_WEBHOOK_SECRET","STRIPE_PRICE_MONTHLY","STRIPE_PRICE_YEARLY","STRIPE_PRICE_MONTHLY_1","STRIPE_PRICE_MONTHLY_2","STRIPE_PRICE_MONTHLY_5","STRIPE_PRICE_MONTHLY_10","VIBE_ID_CREDENTIAL_ISSUER_PRIVATE_JWK","KAMOONI_VIBE_ID_ISSUER_PRIVATE_JWK","VIBE_ID_CREDENTIAL_ISSUER_DID")
+if env.get("EMAIL_CAPTURE_MODE") != "on": errors.append('EMAIL_CAPTURE_MODE is not exactly "on"')
 for key in forced_empty:
     if env.get(key) not in (None, ""): errors.append(f"{key} is not forced empty")
 for name, volume in all_config.get("volumes", {}).items():

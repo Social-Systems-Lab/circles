@@ -111,6 +111,8 @@ def validate_mongodb_uri(uri: str, username: str, password: str) -> list[str]:
 
 def validate(values: dict[str, str], *, require_forced_empty: bool = False) -> None:
     errors: list[str] = []
+    if values.get("EMAIL_CAPTURE_MODE") != "on":
+        errors.append('EMAIL_CAPTURE_MODE must be exactly "on"')
     for key in REQUIRED:
         value = values.get(key, "")
         if not value:

@@ -47,6 +47,16 @@ echo "Build time (UTC): $BUILD_TIME"
 echo "Running branding guard for Kamooni..."
 (cd "$APP_DIR" && ./scripts/check-branding-guard.sh kamooni)
 
+CAPTURE_MODE_LENGTH="$(cd "$APP_DIR" && docker compose config --format json | node -e '
+let input=""; process.stdin.on("data", chunk => input += chunk); process.stdin.on("end", () => {
+  const value = JSON.parse(input).services?.circles?.environment?.EMAIL_CAPTURE_MODE ?? "";
+  if (value !== "" && value !== "off") process.stdout.write(String(String(value).length));
+});')"
+if [[ -n "$CAPTURE_MODE_LENGTH" ]]; then
+  echo "Error: production EMAIL_CAPTURE_MODE has an unsafe value ($CAPTURE_MODE_LENGTH characters). Use empty or off." >&2
+  exit 1
+fi
+
 (cd "$APP_DIR" && docker compose build circles cron)
 
 resolve_application_mongodb_uri() {

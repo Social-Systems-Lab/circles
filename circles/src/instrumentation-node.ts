@@ -1,6 +1,8 @@
 import { ensureRequiredChatIndexes } from "@/lib/data/db";
+import { enforceEmailCaptureModeAtBoot } from "@/lib/email/capture-mode";
 
 export async function registerNodeInstrumentation(): Promise<void> {
+    enforceEmailCaptureModeAtBoot();
     try {
         await ensureRequiredChatIndexes();
     } catch (error) {
