@@ -2500,12 +2500,25 @@ const TopicCard: React.FC<{
             <div
                 className={`flex cursor-pointer flex-col gap-2 px-3 text-left sm:flex-row sm:items-start sm:justify-between ${isTopicOpen ? "py-3" : "py-4"}`}
                 onClick={handleToggle}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isTopicOpen}
+                aria-label={`${isTopicOpen ? "Close" : "Open"} topic: ${thread.title}`}
+                onKeyDown={(event) => {
+                    if (event.currentTarget === event.target && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        handleToggle();
+                    }
+                }}
             >
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-gray-900">{thread.title}</p>
                         {isTopicOpen && unreadIndicator && (
-                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                            <span
+                                className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white"
+                                aria-label={`${unreadIndicator.unreadCount} unread ${unreadIndicator.unreadCount === 1 ? "message" : "messages"} in this topic`}
+                            >
                                 {unreadIndicator.unreadCount} new{" "}
                                 {unreadIndicator.unreadCount === 1 ? "message" : "messages"}
                             </span>
@@ -2542,14 +2555,21 @@ const TopicCard: React.FC<{
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                         <div className="relative">
-                            <HiLightBulb className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`} />
+                            {isTopicOpen ? (
+                                <IoChevronDown className="h-5 w-5 text-gray-600" aria-hidden="true" />
+                            ) : (
+                                <IoChevronForward className="h-5 w-5 text-gray-500" aria-hidden="true" />
+                            )}
                             {!isTopicOpen && unreadCount > 0 && (
-                                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
+                                <span
+                                    className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white"
+                                    aria-label={`${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"} in this topic`}
+                                >
                                     {unreadCount}
                                 </span>
                             )}
                         </div>
-                        <span>
+                        <span className="border-l border-gray-300 pl-2">
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
                         {canReply && isOwnStarter && (
@@ -3135,10 +3155,8 @@ export const ChatRoomComponent: React.FC<{
         latestCreatedAt: null,
     });
     const isCompact = useIsCompact();
-    const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-    const isMobile = useIsMobile();
     const isChatMobile = useClientMediaQuery("(max-width: 767px)");
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
@@ -3800,10 +3818,6 @@ export const ChatRoomComponent: React.FC<{
             const container = inputRef.current;
             if (container) {
                 const rect = container.getBoundingClientRect();
-                setPillStyle({
-                    left: `${rect.left + rect.width / 2}px`,
-                    transform: "translateX(-50%)",
-                });
                 setJumpButtonRight(Math.max(16, window.innerWidth - rect.right + 16));
             }
         };
@@ -3817,7 +3831,7 @@ export const ChatRoomComponent: React.FC<{
     const scrollBottomPadding = isChatMobile ? 96 : 16;
     const nextUnreadTopicControl =
         remainingUnreadTopicIds.length > 0 ? (
-            <div className="sticky top-2 z-10 flex justify-center pb-2">
+            <div className={`sticky z-10 flex justify-center pb-2 ${inToolbox ? "top-2" : "top-[4.5rem]"}`}>
                 <Button
                     type="button"
                     variant="outline"
@@ -3830,6 +3844,58 @@ export const ChatRoomComponent: React.FC<{
                 </Button>
             </div>
         ) : null;
+    const conversationToolbar = !inToolbox ? (
+        <div className="sticky top-0 z-20 -mx-4 mb-3 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-sm">
+            {isChatMobile && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                    onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
+                    aria-label="Back to conversations"
+                >
+                    <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+                </Button>
+            )}
+            {!isChatMobile && circle && (
+                <Link href={`/circles/${circle.handle}`} className="min-w-0 cursor-pointer">
+                    <div className="flex items-center gap-2 rounded-full bg-white p-2 hover:bg-gray-100">
+                        <CirclePicture circle={circle} size="24px" />
+                        <span className="truncate text-sm font-semibold">{circle.name}</span>
+                    </div>
+                </Link>
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+                {archivedReadOnly ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-10 rounded-full bg-white px-3 text-sm"
+                        onClick={() => void handleUnarchive()}
+                        disabled={isUnarchiving}
+                    >
+                        <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                        {isUnarchiving ? "Unarchiving..." : isChatMobile ? "Unarchive" : "Unarchive conversation"}
+                    </Button>
+                ) : (
+                    !isAnnouncementConversation &&
+                    canChangeContent && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white hover:bg-[hsl(var(--task-link-hover))]"
+                            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
+                            title="New topic"
+                        >
+                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+                            <span className="max-w-[6.5rem] truncate">New topic</span>
+                        </Button>
+                    )
+                )}
+            </div>
+        </div>
+    ) : null;
 
     return (
         <>
@@ -3849,44 +3915,6 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && !isChatMobile && (
-                        <div className="fixed top-4 z-[20] flex items-center gap-2" style={pillStyle}>
-                            {circle && (
-                                <Link href={`/circles/${circle.handle}`} className="cursor-pointer">
-                                    <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
-                                        <CirclePicture circle={circle} size="24px" />
-                                        <span className="text-sm font-semibold">{circle.name}</span>
-                                    </div>
-                                </Link>
-                            )}
-                            {archivedReadOnly && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 rounded-full bg-white px-3 text-sm shadow-sm"
-                                    onClick={() => void handleUnarchive()}
-                                    disabled={isUnarchiving}
-                                >
-                                    <ArchiveRestore className="mr-1.5 h-4 w-4" />
-                                    {isUnarchiving ? "Unarchiving..." : "Unarchive conversation"}
-                                </Button>
-                            )}
-                            {!isMobile && canChangeContent && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                                    onClick={() => openNewTopicModal(false)}
-                                    title="New topic"
-                                >
-                                    <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                                    New topic
-                                </Button>
-                            )}
-                        </div>
-                    )}
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
@@ -3951,10 +3979,10 @@ export const ChatRoomComponent: React.FC<{
                             className="flex-grow overflow-y-auto p-4"
                             style={{
                                 overflowAnchor: "auto",
-                                paddingTop: isChatMobile ? 120 : 64,
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
+                            {conversationToolbar}
                             {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
@@ -4025,42 +4053,6 @@ export const ChatRoomComponent: React.FC<{
                     )}
                 </div>
             </div>
-            {isChatMobile && !inToolbox && (
-                <div className="fixed left-4 top-[4.5rem] z-20 flex items-center gap-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-11 w-11 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                        onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
-                        aria-label="Back to conversations"
-                    >
-                        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-                    </Button>
-                    {archivedReadOnly ? (
-                        <Button
-                            type="button"
-                            className="h-11 rounded-full bg-white px-3 text-sm text-gray-800 shadow-sm hover:bg-gray-100"
-                            onClick={() => void handleUnarchive()}
-                            disabled={isUnarchiving}
-                        >
-                            <ArchiveRestore className="mr-1.5 h-4 w-4" />
-                            {isUnarchiving ? "Unarchiving..." : "Unarchive"}
-                        </Button>
-                    ) : (
-                        !isAnnouncementConversation && (
-                            <Button
-                                type="button"
-                                className="h-11 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                                onClick={openTopicComposerFromMobile}
-                                title="New topic"
-                            >
-                                <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                                <span className="max-w-[6.5rem] truncate">New topic</span>
-                            </Button>
-                        )
-                    )}
-                </div>
-            )}
             {showNewThreadModal && roomId && canChangeContent && (
                 <NewThreadModal
                     conversationId={roomId}

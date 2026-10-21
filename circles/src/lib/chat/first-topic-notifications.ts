@@ -8,6 +8,7 @@ import {
     getParticipantNotificationDids,
     resolveChatMentionRecipientDids,
 } from "./participant-notifications";
+import { buildChatMentionNotificationMessage } from "./notification-presentation";
 
 const LEASE_MS = 60_000;
 const RETRY_DELAY_MS = 30_000;
@@ -81,11 +82,13 @@ export async function processFirstTopicNotifications(limit = 25, topicId?: strin
             const sender = await getCircleByDid(claimed.senderDid);
             if (!sender?.did) throw new Error("Notification sender is unavailable");
             const notificationTopicId = claimed._id.toString();
+            const topicTitle = claimed.thread.title?.trim() || undefined;
             const idempotencyKey = `first-topic:${notificationTopicId}`;
             const commonPayload = {
                 ...getChatNotificationLocation(claimed.conversationId, notificationTopicId),
                 user: sender,
                 conversationName: conversation.name,
+                topicTitle,
                 messagePreview,
             };
             const persistentNotificationIds = (
@@ -101,7 +104,7 @@ export async function processFirstTopicNotifications(limit = 25, topicId?: strin
                         mentionRecipientDids.map((did) => ({ did })),
                         {
                             ...commonPayload,
-                            messageBody: `${sender.name || "Someone"} mentioned you in ${conversation.name || "chat"}`,
+                            messageBody: buildChatMentionNotificationMessage(sender.name, topicTitle),
                         },
                         { idempotencyKey },
                     ),

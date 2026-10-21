@@ -234,8 +234,33 @@ async function main() {
             userId: "did:mention-receiver",
             type: "chat_mention",
         });
+        assert.equal(mentionNotification?.content?.body, "MS mentioned you in “Mention”");
+        assert.equal(mentionNotification?.content?.topicTitle, "Mention");
+        assert.equal(mentionNotification?.content?.roomId, mention.conversationId);
         assert.equal(mentionNotification?.content?.topicId, mention.topicId);
         assert.equal(mentionNotification?.content?.url, `/chat/${mention.conversationId}?topic=${mention.topicId}`);
+        await Notifications.deleteMany({ userId: "did:mention-receiver", type: "chat_mention" });
+        const mentionConversation = await ChatConversations.findOne({ _id: new ObjectId(mention.conversationId) });
+        await mongoActions.sendConversationMessageNotifications({
+            conversationId: mention.conversationId,
+            conversation: mentionConversation,
+            senderDid: "did:mention-sender",
+            messageBody: "Reply for [Receiver](/circles/mention-receiver)",
+            messageId: new ObjectId().toString(),
+            topicId: mention.topicId,
+        });
+        const replyMentionNotification = await Notifications.findOne({
+            userId: "did:mention-receiver",
+            type: "chat_mention",
+        });
+        assert.equal(replyMentionNotification?.content?.body, "MS mentioned you in “Mention”");
+        assert.equal(replyMentionNotification?.content?.topicTitle, "Mention");
+        assert.equal(replyMentionNotification?.content?.roomId, mention.conversationId);
+        assert.equal(replyMentionNotification?.content?.topicId, mention.topicId);
+        assert.equal(
+            replyMentionNotification?.content?.url,
+            `/chat/${mention.conversationId}?topic=${mention.topicId}`,
+        );
         await ChatMessageDocs.updateOne(
             { _id: new ObjectId(mention.topicId) },
             {

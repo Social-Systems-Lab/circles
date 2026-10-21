@@ -63,6 +63,7 @@ import {
     PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
     resolveChatMentionRecipientDids,
 } from "@/lib/chat/participant-notifications";
+import { buildChatMentionNotificationMessage } from "@/lib/chat/notification-presentation";
 
 const getAuthenticatedUserDid = () => getChatActionViewerDid(getProductionAuthenticatedUserDid);
 
@@ -257,12 +258,15 @@ export const sendConversationMessageNotifications = async ({
     }
 
     if (mentionRecipients.length) {
+        const topic = topicId ? await findThreadStarter(topicId, conversationId) : null;
+        const topicTitle = topic?.thread?.title?.trim() || undefined;
         await sendNotifications("chat_mention", mentionRecipients, {
             ...getChatNotificationLocation(conversationId, topicId),
             user: sender,
             circle,
             conversationName: conversation?.name,
-            messageBody: `${sender.name || "Someone"} mentioned you in ${conversation?.name || "chat"}`,
+            topicTitle,
+            messageBody: buildChatMentionNotificationMessage(sender.name, topicTitle),
             messagePreview: messageBody,
         });
     }
