@@ -1,6 +1,11 @@
 export const CIRCLE_MODERATION_SOURCE = "circle_moderation";
 export const PARTICIPANT_MESSAGE_NOTIFICATION_TYPE = "pm_received" as const;
 
+export const getChatNotificationLocation = (conversationId: string, topicId?: string) => ({
+    roomId: conversationId,
+    ...(topicId ? { topicId, url: `/chat/${conversationId}?topic=${topicId}` } : {}),
+});
+
 export function isPrivateParticipantNotificationConversation(conversation: any): boolean {
     return (
         conversation?.type === "dm" ||

@@ -183,6 +183,9 @@ async function main() {
         assert.equal(await Notifications.countDocuments({}), 0);
         assert.equal((await processFirstTopicNotifications(1, publication.topicId)).delivered, 1);
         assert.equal(await Notifications.countDocuments({ userId: "did:receiver", type: "pm_received" }), 1);
+        const pmNotification = await Notifications.findOne({ userId: "did:receiver", type: "pm_received" });
+        assert.equal(pmNotification?.content?.topicId, publication.topicId);
+        assert.equal(pmNotification?.content?.url, `/chat/${publication.conversationId}?topic=${publication.topicId}`);
         await Notifications.updateOne({ userId: "did:receiver", type: "pm_received" }, { $set: { isRead: true } });
         await ChatMessageDocs.updateOne(
             { _id: new ObjectId(publication.topicId) },
@@ -227,6 +230,12 @@ async function main() {
         ]);
         assert.equal(await Notifications.countDocuments({ userId: "did:mention-receiver", type: "chat_mention" }), 1);
         assert.equal(await Notifications.countDocuments({ userId: "did:mention-receiver", type: "pm_received" }), 0);
+        const mentionNotification = await Notifications.findOne({
+            userId: "did:mention-receiver",
+            type: "chat_mention",
+        });
+        assert.equal(mentionNotification?.content?.topicId, mention.topicId);
+        assert.equal(mentionNotification?.content?.url, `/chat/${mention.conversationId}?topic=${mention.topicId}`);
         await ChatMessageDocs.updateOne(
             { _id: new ObjectId(mention.topicId) },
             {

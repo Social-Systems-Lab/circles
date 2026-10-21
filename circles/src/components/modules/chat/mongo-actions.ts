@@ -57,6 +57,7 @@ import { getChatActionContext, getChatActionViewerDid, observeChatActionEffect }
 import { getCircleModerationStarterAuthor } from "@/lib/chat/moderation-presentation";
 import {
     CIRCLE_MODERATION_SOURCE,
+    getChatNotificationLocation,
     getParticipantNotificationDids,
     isPrivateParticipantNotificationConversation,
     PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
@@ -203,6 +204,7 @@ export const sendConversationMessageNotifications = async ({
     senderDid,
     messageBody,
     messageId,
+    topicId,
     idempotencyKey,
 }: {
     conversationId: string;
@@ -210,6 +212,7 @@ export const sendConversationMessageNotifications = async ({
     senderDid: string;
     messageBody: string;
     messageId?: string;
+    topicId?: string;
     idempotencyKey?: string;
 }) => {
     const isDirectMessage = conversation?.type === "dm";
@@ -239,7 +242,7 @@ export const sendConversationMessageNotifications = async ({
                 PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
                 recipients,
                 {
-                    roomId: conversationId,
+                    ...getChatNotificationLocation(conversationId, topicId),
                     user: sender,
                     circle: isCircleContact ? circle : undefined,
                     contactType: conversation?.metadata?.contactType,
@@ -255,7 +258,7 @@ export const sendConversationMessageNotifications = async ({
 
     if (mentionRecipients.length) {
         await sendNotifications("chat_mention", mentionRecipients, {
-            roomId: conversationId,
+            ...getChatNotificationLocation(conversationId, topicId),
             user: sender,
             circle,
             conversationName: conversation?.name,
@@ -1254,6 +1257,7 @@ export const sendMongoAttachmentAction = async (
             senderDid: userDid,
             messageBody: file.name,
             messageId: doc._id as string,
+            topicId: threadId,
         });
 
         return { success: true, messageId: doc._id as string };
@@ -1933,6 +1937,7 @@ export const sendThreadReplyAction = async (
                 senderDid: userDid,
                 messageBody: body.trim(),
                 messageId: doc._id.toString(),
+                topicId: threadId,
             });
         } catch (notifError) {
             console.error("sendThreadReplyAction notification error:", notifError);
