@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMongoMessagesAction, markConversationReadAction } from "./actions";
 import { ChatMessage } from "@/models/models";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
+import { getTopicReplyChangeSignals } from "./chat-topic-utils";
 
 type UseMongoChatOptions = {
     roomId?: string;
@@ -13,6 +14,7 @@ type UseMongoChatOptions = {
 
 export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatOptions) => {
     const [isLoading, setIsLoading] = useState(false);
+    const [polledTopicReplySignals, setPolledTopicReplySignals] = useState<Record<string, string>>({});
     const sinceIdRef = useRef<string | null>(null);
     const hasLoadedRef = useRef(false);
     const lastMarkedIdRef = useRef<string | null>(null);
@@ -34,6 +36,7 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
         sinceIdRef.current = null;
         hasLoadedRef.current = false;
         lastMarkedIdRef.current = null;
+        setPolledTopicReplySignals({});
 
         const initialLoad = async () => {
             setIsLoading(true);
@@ -72,6 +75,7 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
             try {
                 const result = await fetchMongoMessagesAction(roomId, sinceIdRef.current || undefined, 50);
                 if (result.success && result.messages && result.messages.length > 0) {
+                    const topicReplySignals = getTopicReplyChangeSignals(result.messages);
                     sinceIdRef.current = result.nextSinceId || sinceIdRef.current;
                     const latestId = result.nextSinceId || result.messages[result.messages.length - 1]?.id;
                     if (latestId) {
@@ -87,6 +91,9 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
                             [roomId]: merged,
                         };
                     });
+                    if (Object.keys(topicReplySignals).length > 0) {
+                        setPolledTopicReplySignals((current) => ({ ...current, ...topicReplySignals }));
+                    }
                 }
             } catch (error) {
                 console.error("Failed to poll mongo messages:", error);
@@ -102,5 +109,5 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
         };
     }, [enabled, markCurrentConversationRead, roomId, setRoomMessages]);
 
-    return { isLoading };
+    return { isLoading, polledTopicReplySignals };
 };

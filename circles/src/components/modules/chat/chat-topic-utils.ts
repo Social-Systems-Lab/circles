@@ -22,4 +22,123 @@ export const getTopicIndexMessages = (messages: ChatMessage[]): ChatMessage[] =>
         })
         .map(({ message }) => message);
 
+export const getTopicViewportSnapshot = (
+    messages: ChatMessage[],
+): { count: number; latestCreatedAt: number | null } => {
+    const topics = getTopicIndexMessages(messages);
+    const latestTopic = topics[topics.length - 1];
+    return {
+        count: topics.length,
+        latestCreatedAt: latestTopic ? getTopicCreationTime(latestTopic as any) : null,
+    };
+};
+
+export const mergeRefreshedTopicStarters = (
+    existingMessages: ChatMessage[],
+    refreshedStarters: ChatMessage[],
+): ChatMessage[] =>
+    [
+        ...existingMessages.filter((message) => !(message as ChatMessage & Record<string, any>).thread),
+        ...refreshedStarters,
+    ].sort((left, right) => getTopicCreationTime(left as any) - getTopicCreationTime(right as any));
+
+export const getTopicReplyChangeSignals = (messages: ChatMessage[]): Record<string, string> => {
+    const signals: Record<string, string> = {};
+    for (const message of messages) {
+        const threadId = (message as ChatMessage & { threadId?: string }).threadId;
+        if (threadId) signals[threadId] = message.id;
+    }
+    return signals;
+};
+
+export const canApplyTopicReplyLoad = ({
+    requestId,
+    currentRequestId,
+    loadScope,
+    currentLoadScope,
+    isTopicOpen,
+}: {
+    requestId: number;
+    currentRequestId: number;
+    loadScope: number;
+    currentLoadScope: number;
+    isTopicOpen: boolean;
+}): boolean => requestId === currentRequestId && loadScope === currentLoadScope && isTopicOpen;
+
+export const selectFollowUpTopicReplySignal = ({
+    pendingSignal,
+    appliedSignal,
+    isTopicOpen,
+}: {
+    pendingSignal: string | null;
+    appliedSignal: string | null;
+    isTopicOpen: boolean;
+}): string | undefined => (isTopicOpen && pendingSignal && pendingSignal !== appliedSignal ? pendingSignal : undefined);
+
+export const selectOldestUnreadTopicId = (
+    messages: ChatMessage[],
+    unreadCounts: Record<string, number>,
+): string | undefined => getTopicIndexMessages(messages).find((message) => (unreadCounts[message.id] || 0) > 0)?.id;
+
+export const selectInitialTopicId = ({
+    explicitTopicId,
+    initialEntryHandled,
+    messages,
+    unreadCounts,
+}: {
+    explicitTopicId?: string;
+    initialEntryHandled: boolean;
+    messages: ChatMessage[];
+    unreadCounts: Record<string, number>;
+}): string | undefined => {
+    if (explicitTopicId) return explicitTopicId;
+    if (initialEntryHandled) return undefined;
+    return selectOldestUnreadTopicId(messages, unreadCounts);
+};
+
+export type TopicUnreadIndicator = {
+    unreadCount: number;
+    firstUnreadReplyId?: string;
+};
+
+export const createTopicUnreadIndicator = (unreadCount: number): TopicUnreadIndicator | undefined =>
+    unreadCount > 0 ? { unreadCount } : undefined;
+
+export const findFirstUnreadReplyId = (
+    replies: Array<{ id: string; createdBy?: string }>,
+    unreadCount: number,
+    currentUserDid?: string,
+): string | undefined => {
+    let remainingUnread = unreadCount;
+    for (let index = replies.length - 1; index >= 0; index -= 1) {
+        if (!currentUserDid || replies[index].createdBy !== currentUserDid) {
+            remainingUnread -= 1;
+            if (remainingUnread <= 0) return replies[index].id;
+        }
+    }
+    return replies[0]?.id;
+};
+
+export const shouldAcknowledgeTopicIndicatorFromDraft = (draft: string): boolean => draft.trim().length > 0;
+
+export const acknowledgeTopicUnreadIndicator = (
+    indicators: Record<string, TopicUnreadIndicator>,
+    topicId: string,
+): Record<string, TopicUnreadIndicator> => {
+    if (!indicators[topicId]) return indicators;
+    const next = { ...indicators };
+    delete next[topicId];
+    return next;
+};
+
+export const recordTopicUnreadIndicatorBoundary = (
+    indicators: Record<string, TopicUnreadIndicator>,
+    topicId: string,
+    firstUnreadReplyId: string,
+): Record<string, TopicUnreadIndicator> => {
+    const indicator = indicators[topicId];
+    if (!indicator || indicator.firstUnreadReplyId === firstUnreadReplyId) return indicators;
+    return { ...indicators, [topicId]: { ...indicator, firstUnreadReplyId } };
+};
+
 export const getInitialTopicTitle = (topicCount: number): string => (topicCount <= 0 ? FIRST_TOPIC_DEFAULT_TITLE : "");
