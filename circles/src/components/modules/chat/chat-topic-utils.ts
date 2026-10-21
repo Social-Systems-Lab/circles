@@ -65,6 +65,24 @@ export const canApplyTopicReplyLoad = ({
     isTopicOpen: boolean;
 }): boolean => requestId === currentRequestId && loadScope === currentLoadScope && isTopicOpen;
 
+export const planTopicReplyLoad = ({
+    isTopicOpen,
+    isInFlight,
+    pendingSignal,
+    requestedSignal,
+}: {
+    isTopicOpen: boolean;
+    isInFlight: boolean;
+    pendingSignal: string | null;
+    requestedSignal?: string;
+}): { shouldStart: boolean; activeSignal?: string; pendingSignal: string | null } => {
+    const nextPendingSignal = requestedSignal || pendingSignal;
+    if (!isTopicOpen || isInFlight) {
+        return { shouldStart: false, pendingSignal: nextPendingSignal };
+    }
+    return { shouldStart: true, activeSignal: nextPendingSignal || undefined, pendingSignal: null };
+};
+
 export const selectFollowUpTopicReplySignal = ({
     pendingSignal,
     appliedSignal,
