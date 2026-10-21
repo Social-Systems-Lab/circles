@@ -67,6 +67,7 @@ import {
     getTopicIndexMessages,
     getTopicViewportSnapshot,
     mergeRefreshedTopicStarters,
+    planTopicReplyLoad,
     createTopicUnreadIndicator,
     findFirstUnreadReplyId,
     acknowledgeTopicUnreadIndicator as removeTopicUnreadIndicator,
@@ -2100,15 +2101,6 @@ const TopicCard: React.FC<{
         textarea.style.height = `${Math.min(textarea.scrollHeight, isMobile ? 260 : 224)}px`;
     }, [isMobile]);
 
-    // Load replies on mount if topic starts open
-    useEffect(() => {
-        if (isTopicOpen) {
-            void loadReplies(replyChangeSignal);
-            onTopicOpen?.();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     useEffect(() => {
         if (!isTopicOpen) return;
         setIsOpen(true);
@@ -2141,12 +2133,15 @@ const TopicCard: React.FC<{
     }, [replyToMessage?.id]);
 
     const loadReplies = async (backgroundSignal?: string) => {
-        if (backgroundSignal) {
-            pendingReplyRefreshSignalRef.current = backgroundSignal;
-            if (!isTopicOpenRef.current || replyLoadInFlightRef.current) return;
-            backgroundSignal = pendingReplyRefreshSignalRef.current;
-            pendingReplyRefreshSignalRef.current = null;
-        }
+        const loadPlan = planTopicReplyLoad({
+            isTopicOpen: isTopicOpenRef.current,
+            isInFlight: replyLoadInFlightRef.current,
+            pendingSignal: pendingReplyRefreshSignalRef.current,
+            requestedSignal: backgroundSignal,
+        });
+        pendingReplyRefreshSignalRef.current = loadPlan.pendingSignal;
+        if (!loadPlan.shouldStart) return;
+        backgroundSignal = loadPlan.activeSignal;
 
         const readRequestId = ++readRequestRef.current;
         const loadScope = replyLoadScopeRef.current;
@@ -2205,6 +2200,7 @@ const TopicCard: React.FC<{
                     if (firstUnreadReplyId) onUnreadIndicatorBoundary?.(messageId, firstUnreadReplyId);
                 }
                 setReplies(mapped);
+                setIsLoading(false);
                 const greatestVisibleMessageId = selectGreatestObjectIdHex([
                     messageId,
                     ...result.replies.map((reply: any) => reply._id?.toString()),
@@ -2212,7 +2208,14 @@ const TopicCard: React.FC<{
                 if (!greatestVisibleMessageId) throw new Error("Topic returned no valid message boundary");
                 const { markTopicReadAction } = await import("./actions");
                 const markResult = await markTopicReadAction(conversationId, messageId, greatestVisibleMessageId);
-                if (markResult.success && readRequestRef.current === readRequestId) {
+                const canCompleteRead = canApplyTopicReplyLoad({
+                    requestId: readRequestId,
+                    currentRequestId: readRequestRef.current,
+                    loadScope,
+                    currentLoadScope: replyLoadScopeRef.current,
+                    isTopicOpen: isTopicOpenRef.current,
+                });
+                if (markResult.success && canCompleteRead) {
                     persistedRead = true;
                     if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
                     await onTopicRead?.(messageId);
@@ -2277,7 +2280,6 @@ const TopicCard: React.FC<{
             openIds.add(messageId);
             setOpenTopicIds(conversationId, openIds);
             setUnreadCount(0);
-            void loadReplies(replyChangeSignal);
             onTopicOpen?.();
             return;
         }

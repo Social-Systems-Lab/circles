@@ -11,6 +11,7 @@ import {
     getTopicReplyChangeSignals,
     getTopicViewportSnapshot,
     mergeRefreshedTopicStarters,
+    planTopicReplyLoad,
     selectInitialTopicId,
     selectFollowUpTopicReplySignal,
     selectOldestUnreadTopicId,
@@ -112,6 +113,34 @@ assert.equal(
     false,
     "a closed topic cannot apply a reply response or advance its read boundary",
 );
+assert.deepEqual(
+    planTopicReplyLoad({
+        isTopicOpen: true,
+        isInFlight: true,
+        pendingSignal: null,
+    }),
+    { shouldStart: false, pendingSignal: null },
+    "an overlapping initial load does not start a duplicate fetch",
+);
+assert.deepEqual(
+    planTopicReplyLoad({
+        isTopicOpen: true,
+        isInFlight: true,
+        pendingSignal: null,
+        requestedSignal: "reply-3",
+    }),
+    { shouldStart: false, pendingSignal: "reply-3" },
+    "a live reply signal is retained while a request is in flight",
+);
+assert.deepEqual(
+    planTopicReplyLoad({
+        isTopicOpen: true,
+        isInFlight: false,
+        pendingSignal: "reply-3",
+    }),
+    { shouldStart: true, activeSignal: "reply-3", pendingSignal: null },
+    "the queued live reply signal is consumed by the follow-up load",
+);
 assert.equal(
     selectFollowUpTopicReplySignal({
         pendingSignal: "reply-3",
@@ -147,7 +176,12 @@ assert.deepEqual(
 );
 assert.deepEqual(
     getTopicViewportSnapshot([activeTopic, olderTopic]),
-    getTopicViewportSnapshot([activeTopic, topicReply, olderTopic, makeMessage("new-reply", { threadId: "older-topic" })]),
+    getTopicViewportSnapshot([
+        activeTopic,
+        topicReply,
+        olderTopic,
+        makeMessage("new-reply", { threadId: "older-topic" }),
+    ]),
     "incoming replies do not look like new topic cards and cannot trigger an outer viewport jump",
 );
 
