@@ -88,6 +88,26 @@ The script requires a clean infrastructure checkout on `infra/kamooni-staging`, 
 
 Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA.
 
+Deployment and Docker maintenance share an exclusive lock at `/run/lock/kamooni-staging-docker.lock`. A successful deployment atomically records its full Git SHA, immutable image ID, tag, and build time in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv` after version verification.
+
+## Docker image maintenance
+
+Preview maintenance on the staging VM:
+
+```bash
+cd /home/ubuntu/kamooni && ./circles/scripts/maintain-staging-docker.sh --dry-run
+```
+
+The script fails closed unless the running container, public version endpoint, Docker images, and ledger agree. It preserves the current and two preceding verified deployment images. Until three verified deployment records exist, it preserves every staging application image. It removes only individually checked, ledger-verified, unreferenced obsolete `kamooni-staging-circles` images, then prunes unused dangling images older than seven days. It never removes containers, networks, or volumes.
+
+Install and enable the weekly timer on the staging VM. The installer runs validation as the `ubuntu` service user and refuses to change systemd state unless its own maintenance dry run succeeds first:
+
+```bash
+cd /home/ubuntu/kamooni && sudo ./circles/scripts/manage-staging-docker-maintenance.sh install
+```
+
+Use the same script with `status` to inspect the timer or `remove` to disable it and remove only its two unit files. Removing the timer does not remove the image ledger or any Docker object.
+
 Manual version verification, run anywhere with network access:
 
 ```bash

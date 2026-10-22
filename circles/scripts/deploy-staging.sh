@@ -8,6 +8,9 @@ EXPECTED_INFRA_BRANCH="infra/kamooni-staging"
 MINIMUM_CHAT_V2_COMMIT="fcbc9e3e9d7895efd7d9fd8a13356da457b60f54"
 STAGING_SAFETY_BASELINE_COMMIT="3101d0eb7590f089d625d8bfc8bbace42447b8e0"
 PROJECT_NAME="kamooni_staging"
+MAINTENANCE_LOCK="${KAMOONI_STAGING_LOCK_FILE:-/run/lock/kamooni-staging-docker.lock}"
+IMAGE_LEDGER="${KAMOONI_STAGING_IMAGE_LEDGER:-/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv}"
+IMAGE_LEDGER_DIR="$(dirname -- "$IMAGE_LEDGER")"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 STAGING_INFRA_APP_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
@@ -24,6 +27,10 @@ if ! git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || [[ "$BRANCH" == 
     echo "Error: invalid branch name: $BRANCH" >&2
     exit 1
 fi
+
+# Docker maintenance and deployment must never inspect or mutate staging concurrently.
+exec 9>"$MAINTENANCE_LOCK"
+flock -x 9
 [[ "$INFRA_REPO_DIR" == "$EXPECTED_INFRA_REPO_DIR" ]] || { echo "Error: staging infrastructure must be at $EXPECTED_INFRA_REPO_DIR." >&2; exit 1; }
 [[ "$(git -C "$INFRA_REPO_DIR" rev-parse --show-toplevel 2>/dev/null || true)" == "$INFRA_REPO_DIR" ]] || { echo "Error: invalid infrastructure checkout." >&2; exit 1; }
 [[ "$(git -C "$INFRA_REPO_DIR" branch --show-current)" == "$EXPECTED_INFRA_BRANCH" ]] || { echo "Error: infrastructure checkout must remain on $EXPECTED_INFRA_BRANCH." >&2; exit 1; }
@@ -86,7 +93,12 @@ compose() {
 
 RENDERED_CONFIG="$(mktemp /tmp/kamooni-staging-compose.XXXXXX.json)"
 RENDERED_ALL_CONFIG="$(mktemp /tmp/kamooni-staging-compose-all.XXXXXX.json)"
-trap 'rm -f "$RENDERED_CONFIG" "$RENDERED_ALL_CONFIG"' EXIT
+LEDGER_TMP=""
+cleanup() {
+    rm -f "$RENDERED_CONFIG" "$RENDERED_ALL_CONFIG"
+    [[ -z "$LEDGER_TMP" ]] || rm -f "$LEDGER_TMP"
+}
+trap cleanup EXIT
 compose config --format json >"$RENDERED_CONFIG"
 compose --profile "*" config --format json >"$RENDERED_ALL_CONFIG"
 # Validate the actual environment Docker will provide before any service starts.
@@ -222,6 +234,48 @@ PY
     then
         echo "Version check passed for exact target $DEPLOY_SHA."
         printf '%s\n' "$VERSION_OUTPUT"
+        DEPLOY_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "kamooni-staging-circles:$STAGING_IMAGE_TAG")" || fail_public_services "could not resolve the verified deployment image"
+        [[ "$DEPLOY_IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]] || fail_public_services "verified deployment returned an invalid image ID"
+        DEPLOY_CONTAINER_ID="$(compose ps -q circles)" || fail_public_services "could not resolve the verified deployment container"
+        [[ -n "$DEPLOY_CONTAINER_ID" ]] || fail_public_services "verified deployment container is missing"
+        DEPLOY_CONTAINER_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$DEPLOY_CONTAINER_ID")" || fail_public_services "could not inspect the verified deployment container"
+        [[ "$DEPLOY_CONTAINER_IMAGE_ID" == "$DEPLOY_IMAGE_ID" ]] || fail_public_services "running container does not use the verified deployment image"
+        mkdir -p "$IMAGE_LEDGER_DIR"
+        chmod 700 "$IMAGE_LEDGER_DIR"
+        LEDGER_TMP="$(mktemp "$IMAGE_LEDGER_DIR/verified-images.tsv.XXXXXX")" || fail_public_services "could not create the image ledger"
+        python3 - "$IMAGE_LEDGER" "$LEDGER_TMP" "$DEPLOY_SHA" "$DEPLOY_IMAGE_ID" "kamooni-staging-circles:$STAGING_IMAGE_TAG" "$BUILD_TIME" <<'PY' || fail_public_services "could not validate and update the image ledger"
+import os, re, sys
+source, target, new_sha, new_id, new_tag, new_time = sys.argv[1:]
+lines = []
+seen_shas, seen_ids = set(), set()
+if os.path.lexists(source):
+    if os.path.islink(source):
+        raise SystemExit("ledger must not be a symlink")
+    with open(source, encoding="utf-8") as handle:
+        for raw in handle:
+            fields = raw.rstrip("\n").split("\t")
+            if len(fields) != 4:
+                raise SystemExit("malformed ledger")
+            sha, image_id, tag, timestamp = fields
+            if not re.fullmatch(r"[0-9a-f]{40}", sha) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
+                raise SystemExit("malformed ledger identity")
+            if tag != f"kamooni-staging-circles:{sha[:8]}" or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", timestamp):
+                raise SystemExit("malformed ledger metadata")
+            if sha in seen_shas or image_id in seen_ids:
+                raise SystemExit("duplicate ledger identity")
+            seen_shas.add(sha)
+            seen_ids.add(image_id)
+            if sha != new_sha and image_id != new_id:
+                lines.append(fields)
+lines.append([new_sha, new_id, new_tag, new_time])
+with open(target, "w", encoding="utf-8", newline="\n") as handle:
+    for fields in lines:
+        handle.write("\t".join(fields) + "\n")
+PY
+        chmod 600 "$LEDGER_TMP"
+        mv -f "$LEDGER_TMP" "$IMAGE_LEDGER" || fail_public_services "could not atomically update the image ledger"
+        LEDGER_TMP=""
+        echo "Recorded verified deployment in $IMAGE_LEDGER."
         exit 0
     fi
     sleep 2

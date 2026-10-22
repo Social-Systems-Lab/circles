@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Kamooni staging Docker image maintenance
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=30m
+Unit=kamooni-staging-docker-maintenance.service
+
+[Install]
+WantedBy=timers.target
