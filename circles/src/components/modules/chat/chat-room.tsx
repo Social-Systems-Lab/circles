@@ -214,7 +214,7 @@ const queryChatMentionSuggestions = (
     );
 };
 
-type DmConnectBannerState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
+type DmConnectControlState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
 
 const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
     message.system?.messageType === "system" &&
@@ -417,9 +417,13 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     }
 };
 
-const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | null }> = ({ chatRoom, user }) => {
+const DmConnectControl: React.FC<{
+    chatRoom: ChatRoomDisplay;
+    user?: Circle | null;
+    showActions?: boolean;
+}> = ({ chatRoom, user, showActions = true }) => {
     const { toast } = useToast();
-    const [state, setState] = useState<DmConnectBannerState>(null);
+    const [state, setState] = useState<DmConnectControlState>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isActing, setIsActing] = useState(false);
 
@@ -435,7 +439,7 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
     }, [chatRoom, user?.did]);
 
     const loadState = useCallback(async () => {
-        if (!otherParticipant?.did) {
+        if (!otherParticipant?.did || !showActions) {
             setState(null);
             return;
         }
@@ -449,13 +453,13 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
         } finally {
             setIsLoading(false);
         }
-    }, [otherParticipant?.did]);
+    }, [otherParticipant?.did, showActions]);
 
     useEffect(() => {
         void loadState();
     }, [loadState]);
 
-    if (!otherParticipant?.did || !state || state.connectStatus === "accepted") {
+    if (!otherParticipant?.did) {
         return null;
     }
 
@@ -482,61 +486,74 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
     };
 
     const contactName = otherParticipant.name || "this person";
+    const participant = (
+        <div className="flex min-w-0 items-center gap-2">
+            <CirclePicture circle={otherParticipant} size="28px" />
+            <span className="truncate text-sm font-semibold text-gray-900">{contactName}</span>
+        </div>
+    );
 
     return (
-        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                    {state.connectStatus === "pending_sent"
-                        ? `Contact request sent to ${contactName}.`
-                        : state.connectStatus === "pending_received"
-                          ? `${contactName} sent you a contact request.`
-                          : `You can message ${contactName}. Connect to add them as a contact.`}
-                </span>
-                {state.connectStatus === "pending_received" ? (
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            className="rounded-full"
-                            disabled={isActing || isLoading}
-                            onClick={() =>
-                                void runContactAction(
-                                    () => acceptConnectRequestAction(otherParticipant.did!),
-                                    "Accept contact request",
-                                )
-                            }
-                        >
-                            Accept
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="rounded-full"
-                            disabled={isActing || isLoading}
-                            onClick={() =>
-                                void runContactAction(
-                                    () => declineConnectRequestAction(otherParticipant.did!),
-                                    "Decline contact request",
-                                )
-                            }
-                        >
-                            Decline
-                        </Button>
-                    </div>
-                ) : (
-                    <Button
-                        size="sm"
-                        variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
-                        className="rounded-full"
-                        disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
-                        onClick={() =>
-                            void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
-                        }
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+                {otherParticipant.handle ? (
+                    <Link
+                        href={`/circles/${otherParticipant.handle}`}
+                        className="block min-w-0 rounded-full hover:bg-gray-100"
                     >
-                        {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
-                    </Button>
+                        {participant}
+                    </Link>
+                ) : (
+                    participant
                 )}
             </div>
+            {showActions && state && state.connectStatus !== "accepted" && (
+                <div className="flex shrink-0 items-center gap-1" aria-label={`Connection controls for ${contactName}`}>
+                    {state.connectStatus === "pending_received" ? (
+                        <>
+                            <Button
+                                size="sm"
+                                className="h-8 rounded-full px-2.5 text-xs"
+                                disabled={isActing || isLoading}
+                                onClick={() =>
+                                    void runContactAction(
+                                        () => acceptConnectRequestAction(otherParticipant.did!),
+                                        "Accept contact request",
+                                    )
+                                }
+                            >
+                                Accept
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-full bg-white px-2.5 text-xs"
+                                disabled={isActing || isLoading}
+                                onClick={() =>
+                                    void runContactAction(
+                                        () => declineConnectRequestAction(otherParticipant.did!),
+                                        "Decline contact request",
+                                    )
+                                }
+                            >
+                                Decline
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
+                            className="h-8 rounded-full px-2.5 text-xs"
+                            disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
+                            onClick={() =>
+                                void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
+                            }
+                        >
+                            {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -1995,6 +2012,7 @@ const TopicCard: React.FC<{
     const thread = message.thread;
     const messageId = message.id || message._id;
     const cardRef = useRef<HTMLDivElement>(null);
+    const topicToggleRef = useRef<HTMLDivElement>(null);
 
     const [isOpen, setIsOpen] = useState<boolean>(() => {
         if (isSelected) return true;
@@ -2319,6 +2337,17 @@ const TopicCard: React.FC<{
         setOpenTopicIds(conversationId, openIds);
     };
 
+    const handleCloseFromEnd = () => {
+        if (!isTopicOpen) return;
+        handleToggle();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                topicToggleRef.current?.focus({ preventScroll: true });
+            });
+        });
+    };
+
     const handleSendReply = async () => {
         const trimmed = replyTextRef.current.trim();
         if (!trimmed || isSending) return;
@@ -2494,10 +2523,11 @@ const TopicCard: React.FC<{
             ref={cardRef}
             id={getMessageElementId(messageId)}
             data-message-id={messageId}
-            className={`my-3 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
+            className={`my-3 w-full scroll-mt-36 rounded-xl shadow-sm transition-all sm:scroll-mt-24 ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
         >
             {/* Header row — always visible, click to toggle */}
             <div
+                ref={topicToggleRef}
                 className={`flex cursor-pointer flex-col gap-2 px-3 text-left sm:flex-row sm:items-start sm:justify-between ${isTopicOpen ? "py-3" : "py-4"}`}
                 onClick={handleToggle}
                 role="button"
@@ -2942,6 +2972,19 @@ const TopicCard: React.FC<{
                             </div>
                         </div>
                     )}
+                    <div className="flex justify-center border-t border-[#DDEBB8] px-3 py-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full bg-white px-4"
+                            onClick={handleCloseFromEnd}
+                            aria-label={`Close topic: ${thread.title}`}
+                        >
+                            <IoChevronDown className="mr-1.5 h-4 w-4 rotate-180" aria-hidden="true" />
+                            Close topic
+                        </Button>
+                    </div>
                 </div>
             )}
             {isEditingTopic && (
@@ -3198,6 +3241,7 @@ export const ChatRoomComponent: React.FC<{
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
     const isAnnouncementConversation = conversationType === "announcement" || repliesDisabled;
     const canChangeContent = !isAnnouncementConversation && !archivedReadOnly;
+    const showFloatingNewTopic = !inToolbox && canChangeContent;
 
     const handleUnarchive = useCallback(async () => {
         if (!roomId || isUnarchiving) return;
@@ -3831,7 +3875,9 @@ export const ChatRoomComponent: React.FC<{
     const scrollBottomPadding = isChatMobile ? 96 : 16;
     const nextUnreadTopicControl =
         remainingUnreadTopicIds.length > 0 ? (
-            <div className={`sticky z-10 flex justify-center pb-2 ${inToolbox ? "top-2" : "top-[4.5rem]"}`}>
+            <div
+                className={`sticky z-10 flex justify-center pb-2 ${inToolbox ? "top-2" : showFloatingNewTopic ? "top-[8rem]" : "top-[4.5rem]"}`}
+            >
                 <Button
                     type="button"
                     variant="outline"
@@ -3857,13 +3903,18 @@ export const ChatRoomComponent: React.FC<{
                     <ArrowLeft className="h-5 w-5" aria-hidden="true" />
                 </Button>
             )}
-            {!isChatMobile && circle && (
-                <Link href={`/circles/${circle.handle}`} className="min-w-0 cursor-pointer">
-                    <div className="flex items-center gap-2 rounded-full bg-white p-2 hover:bg-gray-100">
-                        <CirclePicture circle={circle} size="24px" />
-                        <span className="truncate text-sm font-semibold">{circle.name}</span>
-                    </div>
-                </Link>
+            {(chatRoom as any)?.isDirect ? (
+                <DmConnectControl chatRoom={chatRoom} user={user} showActions={!archivedReadOnly} />
+            ) : (
+                !isChatMobile &&
+                circle && (
+                    <Link href={`/circles/${circle.handle}`} className="min-w-0 cursor-pointer">
+                        <div className="flex items-center gap-2 rounded-full bg-white p-2 hover:bg-gray-100">
+                            <CirclePicture circle={circle} size="24px" />
+                            <span className="truncate text-sm font-semibold">{circle.name}</span>
+                        </div>
+                    </Link>
+                )
             )}
             <div className="ml-auto flex shrink-0 items-center gap-2">
                 {archivedReadOnly ? (
@@ -3878,21 +3929,7 @@ export const ChatRoomComponent: React.FC<{
                         <ArchiveRestore className="mr-1.5 h-4 w-4" />
                         {isUnarchiving ? "Unarchiving..." : isChatMobile ? "Unarchive" : "Unarchive conversation"}
                     </Button>
-                ) : (
-                    !isAnnouncementConversation &&
-                    canChangeContent && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            className="h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white hover:bg-[hsl(var(--task-link-hover))]"
-                            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
-                            title="New topic"
-                        >
-                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                            <span className="max-w-[6.5rem] truncate">New topic</span>
-                        </Button>
-                    )
-                )}
+                ) : null}
             </div>
         </div>
     ) : null;
@@ -3926,7 +3963,11 @@ export const ChatRoomComponent: React.FC<{
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
+                            {!archivedReadOnly && (chatRoom as any)?.isDirect && (
+                                <div className="mb-3 flex rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                                    <DmConnectControl chatRoom={chatRoom} user={user} />
+                                </div>
+                            )}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3983,7 +4024,6 @@ export const ChatRoomComponent: React.FC<{
                             }}
                         >
                             {conversationToolbar}
-                            {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -4029,6 +4069,21 @@ export const ChatRoomComponent: React.FC<{
                                 />
                             )}
                         </div>
+                    )}
+
+                    {showFloatingNewTopic && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="fixed top-[4.5rem] z-30 h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+                            style={{ right: `${jumpButtonRight}px` }}
+                            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
+                            title="New topic"
+                            aria-label="New topic"
+                        >
+                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+                            <span className="max-w-[6.5rem] truncate">New topic</span>
+                        </Button>
                     )}
 
                     {showJumpToLatest && (
