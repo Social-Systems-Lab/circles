@@ -3878,7 +3878,7 @@ export const ChatRoomComponent: React.FC<{
         remainingUnreadTopicIds.length > 0 ? (
             <div
                 className={`sticky z-10 flex justify-center pb-2 ${
-                    inToolbox ? "top-2" : isChatMobile ? "top-2" : showFloatingNewTopic ? "top-[8rem]" : "top-[4.5rem]"
+                    inToolbox ? "top-2" : isChatMobile ? "top-8" : showFloatingNewTopic ? "top-[8rem]" : "top-[4.5rem]"
                 }`}
             >
                 <Button
@@ -3982,7 +3982,11 @@ export const ChatRoomComponent: React.FC<{
                     {!inToolbox && isChatMobile && (
                         <div className="relative z-30 shrink-0 pt-16">
                             {conversationToolbar}
-                            {newTopicControl && <div className="flex justify-center py-2">{newTopicControl}</div>}
+                            {newTopicControl && (
+                                <div className="absolute left-1/2 top-full z-30 -translate-x-1/2 -translate-y-1/2">
+                                    {newTopicControl}
+                                </div>
+                            )}
                         </div>
                     )}
                     {inToolbox ? (
@@ -4050,7 +4054,7 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
-                            className="min-h-0 flex-grow overflow-y-auto p-4"
+                            className="min-h-0 flex-grow overflow-y-auto px-4 pb-4 pt-7 md:p-4"
                             style={{
                                 overflowAnchor: "auto",
                                 paddingBottom: scrollBottomPadding,
