@@ -2585,11 +2585,10 @@ const TopicCard: React.FC<{
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                         <div className="relative">
-                            {isTopicOpen ? (
-                                <IoChevronDown className="h-5 w-5 text-gray-600" aria-hidden="true" />
-                            ) : (
-                                <IoChevronForward className="h-5 w-5 text-gray-500" aria-hidden="true" />
-                            )}
+                            <HiLightBulb
+                                className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`}
+                                aria-hidden="true"
+                            />
                             {!isTopicOpen && unreadCount > 0 && (
                                 <span
                                     className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white"
@@ -3199,6 +3198,7 @@ export const ChatRoomComponent: React.FC<{
     });
     const isCompact = useIsCompact();
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
+    const [newTopicButtonLeft, setNewTopicButtonLeft] = useState<number | null>(null);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
     const isChatMobile = useClientMediaQuery("(max-width: 767px)");
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
@@ -3863,6 +3863,7 @@ export const ChatRoomComponent: React.FC<{
             if (container) {
                 const rect = container.getBoundingClientRect();
                 setJumpButtonRight(Math.max(16, window.innerWidth - rect.right + 16));
+                setNewTopicButtonLeft(rect.left + rect.width / 2);
             }
         };
 
@@ -4075,8 +4076,8 @@ export const ChatRoomComponent: React.FC<{
                         <Button
                             type="button"
                             size="sm"
-                            className="fixed top-[4.5rem] z-30 h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
-                            style={{ right: `${jumpButtonRight}px` }}
+                            className="fixed top-[4.5rem] z-30 h-10 -translate-x-1/2 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+                            style={{ left: newTopicButtonLeft === null ? "50%" : `${newTopicButtonLeft}px` }}
                             onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
                             title="New topic"
                             aria-label="New topic"
