@@ -6,6 +6,9 @@ import {
     canPersistVisibleTopicRead,
     clearPersistedTopicReadBoundary,
     hasSufficientTopicReplyVisibility,
+    hasCurrentTopicReplyGeometry,
+    canUseTopicReadVisibilityTarget,
+    consumePendingTopicScrollRequest,
     canApplyTopicReplyLoad,
     createTopicUnreadIndicator,
     findFirstUnreadReplyId,
@@ -153,6 +156,63 @@ assert.equal(
     hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 24, replyHeight: 24 }),
     true,
     "a short newest reply advances only when its full height is visible",
+);
+const scrollRootRect = { top: 100, right: 500, bottom: 500, left: 100, height: 400 };
+assert.equal(
+    hasCurrentTopicReplyGeometry({
+        targetRect: { top: 450, right: 400, bottom: 650, left: 200, height: 200 },
+        scrollRootRect,
+    }),
+    true,
+    "final geometry accepts 50 visible pixels inside the explicit scroll root",
+);
+assert.equal(
+    hasCurrentTopicReplyGeometry({
+        targetRect: { top: 499, right: 400, bottom: 699, left: 200, height: 200 },
+        scrollRootRect,
+    }),
+    false,
+    "final geometry rejects stale one-pixel visibility",
+);
+assert.equal(
+    hasCurrentTopicReplyGeometry({
+        targetRect: { top: 200, right: 400, bottom: 250, left: 200, height: 50 },
+        scrollRootRect: null,
+    }),
+    false,
+    "missing explicit scroll roots fail closed",
+);
+assert.equal(
+    canUseTopicReadVisibilityTarget({
+        hasScrollRoot: true,
+        isTargetAttached: true,
+        isCurrentTarget: false,
+        pendingBoundaryMatches: true,
+    }),
+    false,
+    "stale observer targets cannot persist read state",
+);
+const pendingTopicScroll = { current: true };
+assert.equal(
+    consumePendingTopicScrollRequest(pendingTopicScroll),
+    true,
+    "direct navigation consumes its scroll request",
+);
+assert.equal(pendingTopicScroll.current, false, "direct navigation clears the pending scroll flag immediately");
+assert.equal(
+    consumePendingTopicScrollRequest(pendingTopicScroll),
+    false,
+    "a later polling refresh cannot reuse a stale automatic-scroll request",
+);
+assert.equal(
+    canUseTopicReadVisibilityTarget({
+        hasScrollRoot: true,
+        isTargetAttached: true,
+        isCurrentTarget: true,
+        pendingBoundaryMatches: false,
+    }),
+    false,
+    "changed pending boundaries invalidate older visibility candidates",
 );
 assert.equal(
     clearPersistedTopicReadBoundary("reply-4", "reply-3"),

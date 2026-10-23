@@ -79,6 +79,9 @@ import {
     canPersistVisibleTopicRead,
     clearPersistedTopicReadBoundary,
     hasSufficientTopicReplyVisibility,
+    hasCurrentTopicReplyGeometry,
+    canUseTopicReadVisibilityTarget,
+    consumePendingTopicScrollRequest,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
@@ -681,6 +684,7 @@ const renderSystemMessage = (content: string) => content;
 type ChatMessagesProps = {
     messages: ChatMessage[];
     messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+    scrollViewportRef: React.RefObject<HTMLDivElement | null>;
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
@@ -973,6 +977,7 @@ const EarlierMessagesSection: React.FC<{
 const ChatMessages: React.FC<ChatMessagesProps> = ({
     messages,
     messagesEndRef,
+    scrollViewportRef,
     onMessagesRendered,
     handleDelete,
     handleEdit,
@@ -1167,6 +1172,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             onTopicRead={onTopicRead}
                             mentionCandidates={mentionCandidates}
                             canReply={canReply}
+                            scrollViewportRef={scrollViewportRef}
                         />,
                     );
                     return acc;
@@ -1994,6 +2000,7 @@ const TopicCard: React.FC<{
     onTopicRead?: (topicId: string) => Promise<void> | void;
     mentionCandidates?: Circle[];
     canReply?: boolean;
+    scrollViewportRef: React.RefObject<HTMLDivElement | null>;
 }> = ({
     message,
     conversationId,
@@ -2012,6 +2019,7 @@ const TopicCard: React.FC<{
     onTopicRead,
     mentionCandidates = [],
     canReply = true,
+    scrollViewportRef,
 }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
@@ -2246,8 +2254,7 @@ const TopicCard: React.FC<{
                 replyLoadInFlightRef.current = false;
             }
             if (isCurrentLoad) setIsLoading(false);
-            if (isCurrentLoad && pendingScrollIntoViewRef.current) {
-                pendingScrollIntoViewRef.current = false;
+            if (isCurrentLoad && consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) {
                 requestAnimationFrame(() => {
                     cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
                 });
@@ -2268,12 +2275,44 @@ const TopicCard: React.FC<{
     useEffect(() => {
         if (!pendingReadBoundary || !isTopicOpen) return;
         const target = pendingReadBoundary === messageId ? cardRef.current : newestReplyRef.current;
-        if (!target) return;
+        const scrollRoot = scrollViewportRef.current;
+        if (!target || !scrollRoot) return;
         const expectedConversationId = conversationId;
         const expectedTopicId = messageId;
         const expectedLoadScope = replyLoadScopeRef.current;
+        let stableVisibilityTimer: ReturnType<typeof setTimeout> | null = null;
 
-        const persistIfEligible = async (isLatestReplyVisible: boolean) => {
+        const clearStableVisibilityTimer = () => {
+            if (stableVisibilityTimer !== null) clearTimeout(stableVisibilityTimer);
+            stableVisibilityTimer = null;
+        };
+
+        const persistIfEligible = async () => {
+            const currentTarget = pendingReadBoundary === messageId ? cardRef.current : newestReplyRef.current;
+            const currentScrollRoot = scrollViewportRef.current;
+            const targetIsCurrent = currentTarget === target;
+            const pendingBoundaryMatches = pendingReadBoundaryRef.current === pendingReadBoundary;
+            if (
+                !canUseTopicReadVisibilityTarget({
+                    hasScrollRoot: currentScrollRoot === scrollRoot,
+                    isTargetAttached: target.isConnected && scrollRoot.isConnected && scrollRoot.contains(target),
+                    isCurrentTarget: targetIsCurrent,
+                    pendingBoundaryMatches,
+                })
+            )
+                return;
+
+            const targetRect = target.getBoundingClientRect();
+            const rootRect = scrollRoot.getBoundingClientRect();
+            const isLatestReplyVisible = hasCurrentTopicReplyGeometry({ targetRect, scrollRootRect: rootRect });
+            const visibleTop = Math.max(targetRect.top, rootRect.top);
+            const visibleBottom = Math.min(targetRect.bottom, rootRect.bottom);
+            const visibleLeft = Math.max(targetRect.left, rootRect.left);
+            const visibleRight = Math.min(targetRect.right, rootRect.right);
+            const sampleX = visibleLeft + (visibleRight - visibleLeft) / 2;
+            const sampleY = visibleTop + (visibleBottom - visibleTop) / 2;
+            const topElement = isLatestReplyVisible ? document.elementFromPoint(sampleX, sampleY) : null;
+            const isUnobscured = !!topElement && (topElement === target || target.contains(topElement));
             if (
                 !canPersistVisibleTopicRead({
                     expectedConversationId,
@@ -2283,7 +2322,7 @@ const TopicCard: React.FC<{
                     expectedLoadScope,
                     currentLoadScope: replyLoadScopeRef.current,
                     isTopicOpen: isTopicOpenRef.current,
-                    isLatestReplyVisible,
+                    isLatestReplyVisible: isLatestReplyVisible && isUnobscured,
                     isDocumentVisible: document.visibilityState === "visible",
                     isDocumentFocused: document.hasFocus(),
                     isRequestInFlight: readPersistenceInFlightRef.current,
@@ -2321,32 +2360,43 @@ const TopicCard: React.FC<{
 
         const observer = new IntersectionObserver(
             ([entry]) => {
-                void persistIfEligible(
-                    hasSufficientTopicReplyVisibility({
-                        isIntersecting: !!entry?.isIntersecting,
-                        visibleHeight: entry?.intersectionRect.height || 0,
-                        replyHeight: entry?.boundingClientRect.height || 0,
-                    }),
-                );
+                const isCandidateVisible = hasSufficientTopicReplyVisibility({
+                    isIntersecting: !!entry?.isIntersecting,
+                    visibleHeight: entry?.intersectionRect.height || 0,
+                    replyHeight: entry?.boundingClientRect.height || 0,
+                });
+                clearStableVisibilityTimer();
+                if (!isCandidateVisible) return;
+                stableVisibilityTimer = setTimeout(() => void persistIfEligible(), 200);
             },
             {
-                root: cardRef.current?.closest('[data-chat-scroll-viewport="true"]') || null,
+                root: scrollRoot,
                 threshold: [0, 0.25, 0.5, 1],
             },
         );
         observer.observe(target);
         const recheckVisibility = () => {
+            clearStableVisibilityTimer();
             observer.unobserve(target);
             observer.observe(target);
         };
         document.addEventListener("visibilitychange", recheckVisibility);
         window.addEventListener("focus", recheckVisibility);
         return () => {
+            clearStableVisibilityTimer();
             document.removeEventListener("visibilitychange", recheckVisibility);
             window.removeEventListener("focus", recheckVisibility);
             observer.disconnect();
         };
-    }, [conversationId, isTopicOpen, messageId, onTopicRead, pendingReadBoundary, readPersistenceCycle]);
+    }, [
+        conversationId,
+        isTopicOpen,
+        messageId,
+        onTopicRead,
+        pendingReadBoundary,
+        readPersistenceCycle,
+        scrollViewportRef,
+    ]);
 
     useEffect(() => {
         if (!replyChangeSignal || !isTopicOpen) return;
@@ -2389,6 +2439,7 @@ const TopicCard: React.FC<{
             return;
         }
 
+        consumePendingTopicScrollRequest(pendingScrollIntoViewRef);
         requestAnimationFrame(() => {
             cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         });
@@ -4104,6 +4155,7 @@ export const ChatRoomComponent: React.FC<{
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
+                                    scrollViewportRef={scrollContainerRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
@@ -4161,6 +4213,7 @@ export const ChatRoomComponent: React.FC<{
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
+                                    scrollViewportRef={scrollContainerRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
