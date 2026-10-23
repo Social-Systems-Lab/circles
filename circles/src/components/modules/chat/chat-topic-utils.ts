@@ -152,6 +152,48 @@ export const hasSufficientTopicReplyVisibility = ({
     replyHeight: number;
 }): boolean => isIntersecting && visibleHeight >= Math.min(replyHeight, 48);
 
+type TopicVisibilityRect = { top: number; right: number; bottom: number; left: number; height: number };
+
+export const hasCurrentTopicReplyGeometry = ({
+    targetRect,
+    scrollRootRect,
+}: {
+    targetRect: TopicVisibilityRect;
+    scrollRootRect: TopicVisibilityRect | null;
+}): boolean => {
+    if (!scrollRootRect) return false;
+    const visibleTop = Math.max(targetRect.top, scrollRootRect.top);
+    const visibleBottom = Math.min(targetRect.bottom, scrollRootRect.bottom);
+    const visibleLeft = Math.max(targetRect.left, scrollRootRect.left);
+    const visibleRight = Math.min(targetRect.right, scrollRootRect.right);
+    return (
+        visibleRight > visibleLeft &&
+        hasSufficientTopicReplyVisibility({
+            isIntersecting: visibleBottom > visibleTop,
+            visibleHeight: Math.max(0, visibleBottom - visibleTop),
+            replyHeight: targetRect.height,
+        })
+    );
+};
+
+export const canUseTopicReadVisibilityTarget = ({
+    hasScrollRoot,
+    isTargetAttached,
+    isCurrentTarget,
+    pendingBoundaryMatches,
+}: {
+    hasScrollRoot: boolean;
+    isTargetAttached: boolean;
+    isCurrentTarget: boolean;
+    pendingBoundaryMatches: boolean;
+}): boolean => hasScrollRoot && isTargetAttached && isCurrentTarget && pendingBoundaryMatches;
+
+export const consumePendingTopicScrollRequest = (pending: { current: boolean }): boolean => {
+    const shouldScroll = pending.current;
+    pending.current = false;
+    return shouldScroll;
+};
+
 export const selectInitialTopicId = ({
     explicitTopicId,
     initialEntryHandled,
