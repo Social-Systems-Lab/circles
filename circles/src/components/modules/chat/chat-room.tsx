@@ -3878,15 +3878,7 @@ export const ChatRoomComponent: React.FC<{
         remainingUnreadTopicIds.length > 0 ? (
             <div
                 className={`sticky z-10 flex justify-center pb-2 ${
-                    inToolbox
-                        ? "top-2"
-                        : isChatMobile
-                          ? showFloatingNewTopic
-                              ? "top-[11.5rem]"
-                              : "top-32"
-                          : showFloatingNewTopic
-                            ? "top-[8rem]"
-                            : "top-[4.5rem]"
+                    inToolbox ? "top-2" : isChatMobile ? "top-2" : showFloatingNewTopic ? "top-[8rem]" : "top-[4.5rem]"
                 }`}
             >
                 <Button
@@ -3902,7 +3894,13 @@ export const ChatRoomComponent: React.FC<{
             </div>
         ) : null;
     const conversationToolbar = !inToolbox ? (
-        <div className="sticky top-16 z-20 -mx-4 mb-3 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-sm md:top-0">
+        <div
+            className={
+                isChatMobile
+                    ? "relative z-20 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white px-4 py-2 shadow-sm"
+                    : "sticky top-0 z-20 -mx-4 mb-3 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-sm"
+            }
+        >
             {isChatMobile && (
                 <Button
                     variant="ghost"
@@ -3944,6 +3942,24 @@ export const ChatRoomComponent: React.FC<{
             </div>
         </div>
     ) : null;
+    const newTopicControl = showFloatingNewTopic ? (
+        <Button
+            type="button"
+            size="sm"
+            className={
+                isChatMobile
+                    ? "h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+                    : "fixed top-[4.5rem] z-30 h-10 -translate-x-1/2 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+            }
+            style={isChatMobile ? undefined : { left: newTopicButtonLeft === null ? "50%" : `${newTopicButtonLeft}px` }}
+            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
+            title="New topic"
+            aria-label="New topic"
+        >
+            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+            <span className="max-w-[6.5rem] truncate">New topic</span>
+        </Button>
+    ) : null;
 
     return (
         <>
@@ -3963,6 +3979,12 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
+                    {!inToolbox && isChatMobile && (
+                        <div className="relative z-30 shrink-0 bg-white pt-16">
+                            {conversationToolbar}
+                            {newTopicControl && <div className="flex justify-center py-2">{newTopicControl}</div>}
+                        </div>
+                    )}
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
@@ -4028,14 +4050,13 @@ export const ChatRoomComponent: React.FC<{
                         <div
                             ref={scrollContainerRef}
                             onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto px-4 pb-4 pt-16 md:p-4"
+                            className="min-h-0 flex-grow overflow-y-auto p-4"
                             style={{
                                 overflowAnchor: "auto",
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            {conversationToolbar}
-                            {showFloatingNewTopic && <div className="h-12 md:hidden" aria-hidden="true" />}
+                            {!isChatMobile && conversationToolbar}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -4083,20 +4104,7 @@ export const ChatRoomComponent: React.FC<{
                         </div>
                     )}
 
-                    {showFloatingNewTopic && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            className="fixed top-32 z-30 h-10 -translate-x-1/2 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))] md:top-[4.5rem]"
-                            style={{ left: newTopicButtonLeft === null ? "50%" : `${newTopicButtonLeft}px` }}
-                            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
-                            title="New topic"
-                            aria-label="New topic"
-                        >
-                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                            <span className="max-w-[6.5rem] truncate">New topic</span>
-                        </Button>
-                    )}
+                    {!isChatMobile && newTopicControl}
 
                     {showJumpToLatest && (
                         <Button
