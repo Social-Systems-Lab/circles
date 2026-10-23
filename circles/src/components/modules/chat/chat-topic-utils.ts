@@ -98,6 +98,60 @@ export const selectOldestUnreadTopicId = (
     unreadCounts: Record<string, number>,
 ): string | undefined => getTopicIndexMessages(messages).find((message) => (unreadCounts[message.id] || 0) > 0)?.id;
 
+export const selectUnreadTopicIds = (messages: ChatMessage[], unreadCounts: Record<string, number>): string[] =>
+    getTopicIndexMessages(messages)
+        .map((message) => message.id)
+        .filter((topicId) => (unreadCounts[topicId] || 0) > 0);
+
+export const canPersistVisibleTopicRead = ({
+    expectedConversationId,
+    currentConversationId,
+    expectedTopicId,
+    currentTopicId,
+    expectedLoadScope,
+    currentLoadScope,
+    isTopicOpen,
+    isLatestReplyVisible,
+    isDocumentVisible,
+    isDocumentFocused,
+    isRequestInFlight,
+}: {
+    expectedConversationId: string;
+    currentConversationId: string;
+    expectedTopicId: string;
+    currentTopicId: string;
+    expectedLoadScope: number;
+    currentLoadScope: number;
+    isTopicOpen: boolean;
+    isLatestReplyVisible: boolean;
+    isDocumentVisible: boolean;
+    isDocumentFocused: boolean;
+    isRequestInFlight: boolean;
+}): boolean =>
+    expectedConversationId === currentConversationId &&
+    expectedTopicId === currentTopicId &&
+    expectedLoadScope === currentLoadScope &&
+    isTopicOpen &&
+    isLatestReplyVisible &&
+    isDocumentVisible &&
+    isDocumentFocused &&
+    !isRequestInFlight;
+
+export const clearPersistedTopicReadBoundary = (
+    pendingBoundary: string | null,
+    persistedBoundary: string,
+): string | null => (pendingBoundary === persistedBoundary ? null : pendingBoundary);
+
+export const hasSufficientTopicReplyVisibility = ({
+    isIntersecting,
+    visibleHeight,
+    replyHeight,
+}: {
+    isIntersecting: boolean;
+    visibleHeight: number;
+    replyHeight: number;
+}): boolean => isIntersecting && visibleHeight >= Math.min(replyHeight, 48);
+
 export const selectInitialTopicId = ({
     explicitTopicId,
     initialEntryHandled,
