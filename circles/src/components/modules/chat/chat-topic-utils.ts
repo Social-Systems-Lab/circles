@@ -233,6 +233,43 @@ export const findFirstUnreadReplyId = (
     return replies[0]?.id;
 };
 
+export type TopicUnreadBoundary = {
+    isComplete: boolean;
+    firstUnreadMessageId?: string;
+};
+
+export const resolveTopicUnreadBoundary = ({
+    starter,
+    replies,
+    unreadCount,
+    currentUserDid,
+    expectedReplyCount,
+}: {
+    starter: { id: string; createdBy?: string };
+    replies: Array<{ id: string; createdBy?: string }>;
+    unreadCount: number;
+    currentUserDid?: string;
+    expectedReplyCount: number;
+}): TopicUnreadBoundary => {
+    if (!Number.isSafeInteger(expectedReplyCount) || expectedReplyCount < 0 || replies.length !== expectedReplyCount) {
+        return { isComplete: false };
+    }
+    if (!Number.isFinite(unreadCount) || unreadCount <= 0) return { isComplete: true };
+
+    let remainingUnread = Math.floor(unreadCount);
+    const messages = [starter, ...replies];
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (!currentUserDid || messages[index].createdBy !== currentUserDid) {
+            remainingUnread -= 1;
+            if (remainingUnread === 0) {
+                return { isComplete: true, firstUnreadMessageId: messages[index].id };
+            }
+        }
+    }
+
+    return { isComplete: false };
+};
+
 export const shouldAcknowledgeTopicIndicatorFromDraft = (draft: string): boolean => draft.trim().length > 0;
 
 export const acknowledgeTopicUnreadIndicator = (

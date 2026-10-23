@@ -69,12 +69,9 @@ import {
     mergeRefreshedTopicStarters,
     planTopicReplyLoad,
     createTopicUnreadIndicator,
-    findFirstUnreadReplyId,
-    acknowledgeTopicUnreadIndicator as removeTopicUnreadIndicator,
-    recordTopicUnreadIndicatorBoundary as addTopicUnreadIndicatorBoundary,
     selectInitialTopicId,
     selectUnreadTopicIds,
-    shouldAcknowledgeTopicIndicatorFromDraft,
+    resolveTopicUnreadBoundary,
     selectFollowUpTopicReplySignal,
     canPersistVisibleTopicRead,
     clearPersistedTopicReadBoundary,
@@ -85,7 +82,6 @@ import {
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
-import { selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import {
     getLegacyLooseMessages,
@@ -702,9 +698,6 @@ type ChatMessagesProps = {
     onTopicActivity?: () => Promise<void> | void;
     topicUnreadCounts?: Record<string, number>;
     topicReplyChangeSignals?: Record<string, string>;
-    topicUnreadIndicators?: Record<string, TopicUnreadIndicator>;
-    onTopicUnreadIndicatorBoundary?: (topicId: string, firstUnreadReplyId: string) => void;
-    onTopicUnreadIndicatorAcknowledged?: (topicId: string) => void;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     topicsLoaded?: boolean;
     mentionCandidates?: Circle[];
@@ -994,9 +987,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onTopicActivity,
     topicUnreadCounts = {},
     topicReplyChangeSignals = {},
-    topicUnreadIndicators = {},
-    onTopicUnreadIndicatorBoundary,
-    onTopicUnreadIndicatorAcknowledged,
     onTopicRead,
     topicsLoaded = true,
     mentionCandidates = [],
@@ -1166,9 +1156,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             onTopicActivity={onTopicActivity}
                             serverUnreadCount={topicUnreadCounts[message.id] || 0}
                             replyChangeSignal={topicReplyChangeSignals[message.id]}
-                            unreadIndicator={topicUnreadIndicators[message.id]}
-                            onUnreadIndicatorBoundary={onTopicUnreadIndicatorBoundary}
-                            onUnreadIndicatorAcknowledged={onTopicUnreadIndicatorAcknowledged}
                             onTopicRead={onTopicRead}
                             mentionCandidates={mentionCandidates}
                             canReply={canReply}
@@ -1994,9 +1981,6 @@ const TopicCard: React.FC<{
     onTopicActivity?: () => Promise<void> | void;
     serverUnreadCount: number;
     replyChangeSignal?: string;
-    unreadIndicator?: TopicUnreadIndicator;
-    onUnreadIndicatorBoundary?: (topicId: string, firstUnreadReplyId: string) => void;
-    onUnreadIndicatorAcknowledged?: (topicId: string) => void;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     mentionCandidates?: Circle[];
     canReply?: boolean;
@@ -2013,9 +1997,6 @@ const TopicCard: React.FC<{
     onTopicActivity,
     serverUnreadCount,
     replyChangeSignal,
-    unreadIndicator,
-    onUnreadIndicatorBoundary,
-    onUnreadIndicatorAcknowledged,
     onTopicRead,
     mentionCandidates = [],
     canReply = true,
@@ -2060,7 +2041,7 @@ const TopicCard: React.FC<{
     const replyLoadScopeRef = useRef(0);
     const currentConversationIdRef = useRef(conversationId);
     const currentTopicIdRef = useRef(messageId);
-    const newestReplyRef = useRef<HTMLDivElement>(null);
+    const observedUnreadReplyRef = useRef<HTMLDivElement>(null);
     const readPersistenceInFlightRef = useRef(false);
     const readPersistenceRequestRef = useRef(0);
     const [pendingReadBoundary, setPendingReadBoundary] = useState<string | null>(null);
@@ -2072,6 +2053,19 @@ const TopicCard: React.FC<{
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
     isTopicOpenRef.current = isTopicOpen;
+    const expectedReplyCount = Number(thread?.replyCount);
+    const unreadBoundary = useMemo(
+        () =>
+            resolveTopicUnreadBoundary({
+                starter: { id: messageId, createdBy: message.createdBy },
+                replies,
+                unreadCount,
+                currentUserDid: user?.did,
+                expectedReplyCount,
+            }),
+        [expectedReplyCount, message.createdBy, messageId, replies, unreadCount, user?.did],
+    );
+    const firstUnreadMessageId = unreadBoundary.firstUnreadMessageId;
     const mentionSuggestions = useMemo(() => getChatMentionSuggestions(mentionCandidates), [mentionCandidates]);
     const topicReplyMentionsInputStyle = useMemo(() => {
         const minHeight = isMobile ? "96px" : "44px";
@@ -2122,17 +2116,11 @@ const TopicCard: React.FC<{
         },
         [mentionSuggestions],
     );
-    const setTopicReplyText = useCallback(
-        (value: string | ((currentValue: string) => string)) => {
-            const nextValue = typeof value === "function" ? value(replyTextRef.current) : value;
-            replyTextRef.current = nextValue;
-            setReplyText(nextValue);
-            if (shouldAcknowledgeTopicIndicatorFromDraft(nextValue)) {
-                onUnreadIndicatorAcknowledged?.(messageId);
-            }
-        },
-        [messageId, onUnreadIndicatorAcknowledged],
-    );
+    const setTopicReplyText = useCallback((value: string | ((currentValue: string) => string)) => {
+        const nextValue = typeof value === "function" ? value(replyTextRef.current) : value;
+        replyTextRef.current = nextValue;
+        setReplyText(nextValue);
+    }, []);
 
     const autoGrowReplyTextarea = useCallback(() => {
         const textarea = replyTextareaRef.current;
@@ -2232,18 +2220,8 @@ const TopicCard: React.FC<{
                         replyTo: r.replyTo,
                     };
                 });
-                if (unreadIndicator && !unreadIndicator.firstUnreadReplyId) {
-                    const firstUnreadReplyId = findFirstUnreadReplyId(mapped, unreadIndicator.unreadCount, user?.did);
-                    if (firstUnreadReplyId) onUnreadIndicatorBoundary?.(messageId, firstUnreadReplyId);
-                }
                 setReplies(mapped);
                 setIsLoading(false);
-                const greatestVisibleMessageId = selectGreatestObjectIdHex([
-                    messageId,
-                    ...result.replies.map((reply: any) => reply._id?.toString()),
-                ]);
-                if (!greatestVisibleMessageId) throw new Error("Topic returned no valid message boundary");
-                setPendingReadBoundary(greatestVisibleMessageId);
                 if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
             }
         } catch (e) {
@@ -2254,11 +2232,6 @@ const TopicCard: React.FC<{
                 replyLoadInFlightRef.current = false;
             }
             if (isCurrentLoad) setIsLoading(false);
-            if (isCurrentLoad && consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) {
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                });
-            }
             if (isCurrentLoad) onTopicLoaded?.();
 
             const followUpSignal = selectFollowUpTopicReplySignal({
@@ -2273,8 +2246,16 @@ const TopicCard: React.FC<{
     };
 
     useEffect(() => {
+        if (!isTopicOpen || unreadCount <= 0 || !unreadBoundary.isComplete || !firstUnreadMessageId) {
+            setPendingReadBoundary(null);
+            return;
+        }
+        setPendingReadBoundary(firstUnreadMessageId);
+    }, [firstUnreadMessageId, isTopicOpen, unreadBoundary.isComplete, unreadCount]);
+
+    useEffect(() => {
         if (!pendingReadBoundary || !isTopicOpen) return;
-        const target = pendingReadBoundary === messageId ? cardRef.current : newestReplyRef.current;
+        const target = pendingReadBoundary === messageId ? topicToggleRef.current : observedUnreadReplyRef.current;
         const scrollRoot = scrollViewportRef.current;
         if (!target || !scrollRoot) return;
         const expectedConversationId = conversationId;
@@ -2288,7 +2269,8 @@ const TopicCard: React.FC<{
         };
 
         const persistIfEligible = async () => {
-            const currentTarget = pendingReadBoundary === messageId ? cardRef.current : newestReplyRef.current;
+            const currentTarget =
+                pendingReadBoundary === messageId ? topicToggleRef.current : observedUnreadReplyRef.current;
             const currentScrollRoot = scrollViewportRef.current;
             const targetIsCurrent = currentTarget === target;
             const pendingBoundaryMatches = pendingReadBoundaryRef.current === pendingReadBoundary;
@@ -2344,6 +2326,7 @@ const TopicCard: React.FC<{
                     isTopicOpenRef.current;
                 if (result.success && isCurrentRequest) {
                     setPendingReadBoundary((current) => clearPersistedTopicReadBoundary(current, boundary));
+                    setUnreadCount((current) => Math.max(0, current - 1));
                     await onTopicRead?.(expectedTopicId);
                 }
             } catch (error) {
@@ -2438,19 +2421,43 @@ const TopicCard: React.FC<{
             void loadReplies(replyChangeSignal);
             return;
         }
-
-        consumePendingTopicScrollRequest(pendingScrollIntoViewRef);
-        requestAnimationFrame(() => {
-            cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigationRequest?.nonce]);
+
+    useEffect(() => {
+        if (navigationRequest?.topicId !== messageId || !isTopicOpen || isLoading) return;
+        if (!pendingScrollIntoViewRef.current) return;
+        if (Number.isSafeInteger(expectedReplyCount) && expectedReplyCount > replies.length) return;
+
+        const boundaryElementId = firstUnreadMessageId ? `topic-unread-boundary-${firstUnreadMessageId}` : undefined;
+        const boundaryTarget =
+            unreadBoundary.isComplete && firstUnreadMessageId
+                ? document.getElementById(boundaryElementId || getMessageElementId(firstUnreadMessageId) || "")
+                : null;
+        const scrollRoot = scrollViewportRef.current;
+        const target = boundaryTarget && scrollRoot?.contains(boundaryTarget) ? boundaryTarget : cardRef.current;
+        if (!target || !consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) return;
+
+        requestAnimationFrame(() => {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    }, [
+        firstUnreadMessageId,
+        isLoading,
+        isTopicOpen,
+        messageId,
+        navigationRequest?.nonce,
+        navigationRequest?.topicId,
+        expectedReplyCount,
+        replies.length,
+        scrollViewportRef,
+        unreadBoundary.isComplete,
+    ]);
 
     if (!thread) return null;
 
     const handleToggle = () => {
         if (onToggleTopic) {
-            if (isTopicOpen) onUnreadIndicatorAcknowledged?.(messageId);
             onToggleTopic(messageId);
             return;
         }
@@ -2488,7 +2495,6 @@ const TopicCard: React.FC<{
             const { sendThreadReplyAction } = await import("./mongo-actions");
             const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
             if (result.success) {
-                onUnreadIndicatorAcknowledged?.(messageId);
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
                 setTopicReplyText("");
                 setReplyToMessage(null);
@@ -2625,7 +2631,6 @@ const TopicCard: React.FC<{
             }
             const result = await sendAttachmentAction(formData);
             if (result.success) {
-                onUnreadIndicatorAcknowledged?.(messageId);
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
                 setReplyToMessage(null);
                 await onTopicActivity?.();
@@ -2676,13 +2681,12 @@ const TopicCard: React.FC<{
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-gray-900">{thread.title}</p>
-                        {isTopicOpen && unreadIndicator && (
+                        {isTopicOpen && unreadCount > 0 && (
                             <span
                                 className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white"
-                                aria-label={`${unreadIndicator.unreadCount} unread ${unreadIndicator.unreadCount === 1 ? "message" : "messages"} in this topic`}
+                                aria-label={`${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"} in this topic`}
                             >
-                                {unreadIndicator.unreadCount} new{" "}
-                                {unreadIndicator.unreadCount === 1 ? "message" : "messages"}
+                                {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
                             </span>
                         )}
                     </div>
@@ -2702,12 +2706,24 @@ const TopicCard: React.FC<{
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
                     )}
                     {isTopicOpen && effectiveStarterBody && (
-                        <div className="mt-2 text-sm leading-relaxed text-gray-700">
-                            {renderFormattedChatBody(effectiveStarterBody, {
-                                format: (message as any)?.format,
-                                markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
-                            })}
-                        </div>
+                        <>
+                            {firstUnreadMessageId === messageId && (
+                                <div
+                                    id={`topic-unread-boundary-${messageId}`}
+                                    className="mt-2 flex items-center gap-2 py-1 text-xs font-medium text-red-600"
+                                >
+                                    <span className="h-px flex-1 bg-red-200" />
+                                    <span>New messages</span>
+                                    <span className="h-px flex-1 bg-red-200" />
+                                </div>
+                            )}
+                            <div className="mt-2 text-sm leading-relaxed text-gray-700">
+                                {renderFormattedChatBody(effectiveStarterBody, {
+                                    format: (message as any)?.format,
+                                    markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
+                                })}
+                            </div>
+                        </>
                     )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-gray-500 sm:max-w-[16rem] sm:justify-end sm:text-right">
@@ -2802,15 +2818,18 @@ const TopicCard: React.FC<{
                                     5 * 60 * 1000;
                             return (
                                 <Fragment key={reply.id}>
-                                    {unreadIndicator?.firstUnreadReplyId === reply.id && (
-                                        <div className="flex items-center gap-2 py-1 text-xs font-medium text-red-600">
+                                    {firstUnreadMessageId === reply.id && (
+                                        <div
+                                            id={`topic-unread-boundary-${reply.id}`}
+                                            className="flex items-center gap-2 py-1 text-xs font-medium text-red-600"
+                                        >
                                             <span className="h-px flex-1 bg-red-200" />
-                                            <span>New replies below</span>
+                                            <span>New messages</span>
                                             <span className="h-px flex-1 bg-red-200" />
                                         </div>
                                     )}
                                     <div
-                                        ref={reply.id === pendingReadBoundary ? newestReplyRef : undefined}
+                                        ref={reply.id === pendingReadBoundary ? observedUnreadReplyRef : undefined}
                                         id={getMessageElementId(reply.id)}
                                         data-message-id={reply.id}
                                         className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
@@ -3349,7 +3368,7 @@ export const ChatRoomComponent: React.FC<{
     const [isLoadingTopics, setIsLoadingTopics] = useState(false);
     const [topicUnreadCounts, setTopicUnreadCounts] = useState<Record<string, number>>({});
     const [hasLoadedTopicUnreadCounts, setHasLoadedTopicUnreadCounts] = useState(false);
-    const [topicUnreadIndicators, setTopicUnreadIndicatorsState] = useState<Record<string, TopicUnreadIndicator>>({});
+    const [, setTopicUnreadIndicatorsState] = useState<Record<string, TopicUnreadIndicator>>({});
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -3548,24 +3567,6 @@ export const ChatRoomComponent: React.FC<{
         [topicUnreadCounts, updateTopicUnreadIndicators],
     );
 
-    const acknowledgeTopicUnreadIndicator = useCallback(
-        (topicId: string) => {
-            updateTopicUnreadIndicators((current) => {
-                return removeTopicUnreadIndicator(current, topicId);
-            });
-        },
-        [updateTopicUnreadIndicators],
-    );
-
-    const recordTopicUnreadIndicatorBoundary = useCallback(
-        (topicId: string, firstUnreadReplyId: string) => {
-            updateTopicUnreadIndicators((current) => {
-                return addTopicUnreadIndicatorBoundary(current, topicId, firstUnreadReplyId);
-            });
-        },
-        [updateTopicUnreadIndicators],
-    );
-
     useEffect(() => {
         if (
             !initialTopicId ||
@@ -3618,15 +3619,11 @@ export const ChatRoomComponent: React.FC<{
         )
             return;
 
-        const entryUnreadCounts = { ...topicUnreadCounts };
-        for (const [topicId, indicator] of Object.entries(topicUnreadIndicators)) {
-            entryUnreadCounts[topicId] = Math.max(entryUnreadCounts[topicId] || 0, indicator.unreadCount);
-        }
         const topicId = selectInitialTopicId({
             explicitTopicId: initialTopicId,
             initialEntryHandled: initialTopicEntryHandledRef.current,
             messages: roomMessages[roomId] || [],
-            unreadCounts: entryUnreadCounts,
+            unreadCounts: topicUnreadCounts,
         });
 
         if (initialTopicId) return;
@@ -3644,15 +3641,24 @@ export const ChatRoomComponent: React.FC<{
         roomId,
         roomMessages,
         topicUnreadCounts,
-        topicUnreadIndicators,
     ]);
 
     const handleTopicRead = useCallback(
-        async (_topicId: string) => {
+        async (topicId: string) => {
+            setTopicUnreadCounts((current) => ({
+                ...current,
+                [topicId]: Math.max(0, (current[topicId] || 0) - 1),
+            }));
+            if (roomId) {
+                setUnreadCounts((current) => ({
+                    ...current,
+                    [roomId]: Math.max(0, (current[roomId] || 0) - 1),
+                }));
+            }
             await refreshTopicUnreadCounts();
             dispatchNotificationRefresh({ reason: "chat-read", roomId: roomId || undefined });
         },
-        [refreshTopicUnreadCounts, roomId],
+        [refreshTopicUnreadCounts, roomId, setUnreadCounts],
     );
 
     const refreshTopicStarters = useCallback(
@@ -4173,9 +4179,6 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicActivity={refreshTopicStarters}
                                     topicUnreadCounts={topicUnreadCounts}
                                     topicReplyChangeSignals={polledTopicReplySignals}
-                                    topicUnreadIndicators={topicUnreadIndicators}
-                                    onTopicUnreadIndicatorBoundary={recordTopicUnreadIndicatorBoundary}
-                                    onTopicUnreadIndicatorAcknowledged={acknowledgeTopicUnreadIndicator}
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
@@ -4231,9 +4234,6 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicActivity={refreshTopicStarters}
                                     topicUnreadCounts={topicUnreadCounts}
                                     topicReplyChangeSignals={polledTopicReplySignals}
-                                    topicUnreadIndicators={topicUnreadIndicators}
-                                    onTopicUnreadIndicatorBoundary={recordTopicUnreadIndicatorBoundary}
-                                    onTopicUnreadIndicatorAcknowledged={acknowledgeTopicUnreadIndicator}
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}

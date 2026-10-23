@@ -23,6 +23,7 @@ import {
     selectOldestUnreadTopicId,
     selectUnreadTopicIds,
     recordTopicUnreadIndicatorBoundary,
+    resolveTopicUnreadBoundary,
     shouldAcknowledgeTopicIndicatorFromDraft,
 } from "./chat-topic-utils";
 
@@ -470,6 +471,88 @@ assert.equal(
     ),
     "reply-3",
     "the separator starts at the first unread reply and ignores the current user's replies",
+);
+assert.deepEqual(
+    resolveTopicUnreadBoundary({
+        starter: { id: "topic", createdBy: "did:other" },
+        replies: [
+            { id: "reply-a", createdBy: "did:other" },
+            { id: "reply-own", createdBy: "did:me" },
+            { id: "reply-b", createdBy: "did:other" },
+            { id: "reply-c", createdBy: "did:other" },
+        ],
+        unreadCount: 3,
+        currentUserDid: "did:me",
+        expectedReplyCount: 4,
+    }),
+    { isComplete: true, firstUnreadMessageId: "reply-a" },
+    "the authoritative boundary starts at the first unread external reply",
+);
+assert.deepEqual(
+    resolveTopicUnreadBoundary({
+        starter: { id: "topic", createdBy: "did:other" },
+        replies: [
+            { id: "reply-a", createdBy: "did:other" },
+            { id: "reply-b", createdBy: "did:other" },
+            { id: "reply-c", createdBy: "did:other" },
+        ],
+        unreadCount: 2,
+        currentUserDid: "did:me",
+        expectedReplyCount: 3,
+    }),
+    { isComplete: true, firstUnreadMessageId: "reply-b" },
+    "a confirmed read advances the boundary from A to B while C remains unread",
+);
+assert.deepEqual(
+    resolveTopicUnreadBoundary({
+        starter: { id: "topic", createdBy: "did:other" },
+        replies: [
+            { id: "reply-a", createdBy: "did:other" },
+            { id: "reply-b", createdBy: "did:other" },
+            { id: "reply-c", createdBy: "did:other" },
+        ],
+        unreadCount: 1,
+        currentUserDid: "did:me",
+        expectedReplyCount: 3,
+    }),
+    { isComplete: true, firstUnreadMessageId: "reply-c" },
+    "progressive acknowledgement advances the boundary from B to C",
+);
+assert.deepEqual(
+    resolveTopicUnreadBoundary({
+        starter: { id: "topic", createdBy: "did:other" },
+        replies: [{ id: "reply-a", createdBy: "did:other" }],
+        unreadCount: 0,
+        currentUserDid: "did:me",
+        expectedReplyCount: 1,
+    }),
+    { isComplete: true },
+    "the boundary disappears only when the authoritative unread count reaches zero",
+);
+assert.deepEqual(
+    resolveTopicUnreadBoundary({
+        starter: { id: "topic", createdBy: "did:other" },
+        replies: [{ id: "reply-a", createdBy: "did:other" }],
+        unreadCount: 2,
+        currentUserDid: "did:me",
+        expectedReplyCount: 2,
+    }),
+    { isComplete: false },
+    "an incomplete loaded reply list fails closed",
+);
+assert.deepEqual(
+    resolveTopicUnreadBoundary({
+        starter: { id: "topic", createdBy: "did:me" },
+        replies: [
+            { id: "reply-own", createdBy: "did:me" },
+            { id: "reply-external", createdBy: "did:other" },
+        ],
+        unreadCount: 1,
+        currentUserDid: "did:me",
+        expectedReplyCount: 2,
+    }),
+    { isComplete: true, firstUnreadMessageId: "reply-external" },
+    "current-user messages do not corrupt the authoritative boundary",
 );
 assert.equal(shouldAcknowledgeTopicIndicatorFromDraft(""), false, "empty focus does not acknowledge the indicator");
 assert.equal(shouldAcknowledgeTopicIndicatorFromDraft("   "), false, "whitespace does not acknowledge the indicator");
