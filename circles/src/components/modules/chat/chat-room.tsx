@@ -73,8 +73,12 @@ import {
     acknowledgeTopicUnreadIndicator as removeTopicUnreadIndicator,
     recordTopicUnreadIndicatorBoundary as addTopicUnreadIndicatorBoundary,
     selectInitialTopicId,
+    selectUnreadTopicIds,
     shouldAcknowledgeTopicIndicatorFromDraft,
     selectFollowUpTopicReplySignal,
+    canPersistVisibleTopicRead,
+    clearPersistedTopicReadBoundary,
+    hasSufficientTopicReplyVisibility,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
@@ -2026,7 +2030,6 @@ const TopicCard: React.FC<{
     const [isSending, setIsSending] = useState(false);
     const [unreadCount, setUnreadCount] = useState<number>(serverUnreadCount);
     const readRequestRef = useRef(0);
-    const suppressServerUnreadRef = useRef(false);
     const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
@@ -2047,6 +2050,17 @@ const TopicCard: React.FC<{
     const pendingReplyRefreshSignalRef = useRef<string | null>(null);
     const appliedReplyRefreshSignalRef = useRef<string | null>(null);
     const replyLoadScopeRef = useRef(0);
+    const currentConversationIdRef = useRef(conversationId);
+    const currentTopicIdRef = useRef(messageId);
+    const newestReplyRef = useRef<HTMLDivElement>(null);
+    const readPersistenceInFlightRef = useRef(false);
+    const readPersistenceRequestRef = useRef(0);
+    const [pendingReadBoundary, setPendingReadBoundary] = useState<string | null>(null);
+    const pendingReadBoundaryRef = useRef<string | null>(null);
+    const [readPersistenceCycle, setReadPersistenceCycle] = useState(0);
+    currentConversationIdRef.current = conversationId;
+    currentTopicIdRef.current = messageId;
+    pendingReadBoundaryRef.current = pendingReadBoundary;
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
     isTopicOpenRef.current = isTopicOpen;
@@ -2128,7 +2142,7 @@ const TopicCard: React.FC<{
     }, [isTopicOpen, messageId]);
 
     useEffect(() => {
-        if (!suppressServerUnreadRef.current) setUnreadCount(serverUnreadCount);
+        setUnreadCount(serverUnreadCount);
     }, [serverUnreadCount]);
 
     useEffect(() => {
@@ -2163,10 +2177,7 @@ const TopicCard: React.FC<{
 
         const readRequestId = ++readRequestRef.current;
         const loadScope = replyLoadScopeRef.current;
-        let persistedRead = false;
         replyLoadInFlightRef.current = true;
-        suppressServerUnreadRef.current = true;
-        setUnreadCount(0);
         setIsLoading(true);
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
@@ -2224,28 +2235,14 @@ const TopicCard: React.FC<{
                     ...result.replies.map((reply: any) => reply._id?.toString()),
                 ]);
                 if (!greatestVisibleMessageId) throw new Error("Topic returned no valid message boundary");
-                const { markTopicReadAction } = await import("./actions");
-                const markResult = await markTopicReadAction(conversationId, messageId, greatestVisibleMessageId);
-                const canCompleteRead = canApplyTopicReplyLoad({
-                    requestId: readRequestId,
-                    currentRequestId: readRequestRef.current,
-                    loadScope,
-                    currentLoadScope: replyLoadScopeRef.current,
-                    isTopicOpen: isTopicOpenRef.current,
-                });
-                if (markResult.success && canCompleteRead) {
-                    persistedRead = true;
-                    if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
-                    await onTopicRead?.(messageId);
-                }
+                setPendingReadBoundary(greatestVisibleMessageId);
+                if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
             }
         } catch (e) {
             console.error("Failed to load topic replies:", e);
         } finally {
             const isCurrentLoad = replyLoadScopeRef.current === loadScope && readRequestRef.current === readRequestId;
             if (isCurrentLoad) {
-                suppressServerUnreadRef.current = false;
-                if (!persistedRead) setUnreadCount(serverUnreadCount);
                 replyLoadInFlightRef.current = false;
             }
             if (isCurrentLoad) setIsLoading(false);
@@ -2269,6 +2266,89 @@ const TopicCard: React.FC<{
     };
 
     useEffect(() => {
+        if (!pendingReadBoundary || !isTopicOpen) return;
+        const target = pendingReadBoundary === messageId ? cardRef.current : newestReplyRef.current;
+        if (!target) return;
+        const expectedConversationId = conversationId;
+        const expectedTopicId = messageId;
+        const expectedLoadScope = replyLoadScopeRef.current;
+
+        const persistIfEligible = async (isLatestReplyVisible: boolean) => {
+            if (
+                !canPersistVisibleTopicRead({
+                    expectedConversationId,
+                    currentConversationId: currentConversationIdRef.current,
+                    expectedTopicId,
+                    currentTopicId: currentTopicIdRef.current,
+                    expectedLoadScope,
+                    currentLoadScope: replyLoadScopeRef.current,
+                    isTopicOpen: isTopicOpenRef.current,
+                    isLatestReplyVisible,
+                    isDocumentVisible: document.visibilityState === "visible",
+                    isDocumentFocused: document.hasFocus(),
+                    isRequestInFlight: readPersistenceInFlightRef.current,
+                })
+            )
+                return;
+
+            const boundary = pendingReadBoundary;
+            const persistenceRequestId = ++readPersistenceRequestRef.current;
+            readPersistenceInFlightRef.current = true;
+            try {
+                const { markTopicReadAction } = await import("./actions");
+                const result = await markTopicReadAction(expectedConversationId, expectedTopicId, boundary);
+                const isCurrentRequest =
+                    persistenceRequestId === readPersistenceRequestRef.current &&
+                    expectedConversationId === currentConversationIdRef.current &&
+                    expectedTopicId === currentTopicIdRef.current &&
+                    expectedLoadScope === replyLoadScopeRef.current &&
+                    isTopicOpenRef.current;
+                if (result.success && isCurrentRequest) {
+                    setPendingReadBoundary((current) => clearPersistedTopicReadBoundary(current, boundary));
+                    await onTopicRead?.(expectedTopicId);
+                }
+            } catch (error) {
+                console.error("Failed to persist visible topic read state:", error);
+            } finally {
+                if (persistenceRequestId === readPersistenceRequestRef.current) {
+                    readPersistenceInFlightRef.current = false;
+                    if (pendingReadBoundaryRef.current !== boundary) {
+                        setReadPersistenceCycle((current) => current + 1);
+                    }
+                }
+            }
+        };
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                void persistIfEligible(
+                    hasSufficientTopicReplyVisibility({
+                        isIntersecting: !!entry?.isIntersecting,
+                        visibleHeight: entry?.intersectionRect.height || 0,
+                        replyHeight: entry?.boundingClientRect.height || 0,
+                    }),
+                );
+            },
+            {
+                root: cardRef.current?.closest('[data-chat-scroll-viewport="true"]') || null,
+                threshold: [0, 0.25, 0.5, 1],
+            },
+        );
+        observer.observe(target);
+        const recheckVisibility = () => {
+            observer.unobserve(target);
+            observer.observe(target);
+        };
+        document.addEventListener("visibilitychange", recheckVisibility);
+        window.addEventListener("focus", recheckVisibility);
+        return () => {
+            document.removeEventListener("visibilitychange", recheckVisibility);
+            window.removeEventListener("focus", recheckVisibility);
+            observer.disconnect();
+        };
+    }, [conversationId, isTopicOpen, messageId, onTopicRead, pendingReadBoundary, readPersistenceCycle]);
+
+    useEffect(() => {
         if (!replyChangeSignal || !isTopicOpen) return;
         if (replyChangeSignal === appliedReplyRefreshSignalRef.current) return;
         void loadReplies(replyChangeSignal);
@@ -2282,6 +2362,9 @@ const TopicCard: React.FC<{
             readRequestRef.current += 1;
             replyLoadInFlightRef.current = false;
             pendingReplyRefreshSignalRef.current = null;
+            readPersistenceRequestRef.current += 1;
+            readPersistenceInFlightRef.current = false;
+            setPendingReadBoundary(null);
         };
     }, [conversationId, messageId]);
 
@@ -2297,7 +2380,6 @@ const TopicCard: React.FC<{
             const openIds = getOpenTopicIds(conversationId);
             openIds.add(messageId);
             setOpenTopicIds(conversationId, openIds);
-            setUnreadCount(0);
             onTopicOpen?.();
             return;
         }
@@ -2330,7 +2412,6 @@ const TopicCard: React.FC<{
         const openIds = getOpenTopicIds(conversationId);
         if (next) {
             openIds.add(messageId);
-            setUnreadCount(0);
         } else {
             openIds.delete(messageId);
         }
@@ -2678,6 +2759,7 @@ const TopicCard: React.FC<{
                                         </div>
                                     )}
                                     <div
+                                        ref={reply.id === pendingReadBoundary ? newestReplyRef : undefined}
                                         id={getMessageElementId(reply.id)}
                                         data-message-id={reply.id}
                                         className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
@@ -3802,11 +3884,8 @@ export const ChatRoomComponent: React.FC<{
 
     const topicCount = useMemo(() => getTopicIndexMessages(messages).length, [messages]);
     const remainingUnreadTopicIds = useMemo(
-        () =>
-            getTopicIndexMessages(messages)
-                .map((message) => message.id)
-                .filter((topicId) => (topicUnreadCounts[topicId] || 0) > 0 && !openTopicIds.has(topicId)),
-        [messages, openTopicIds, topicUnreadCounts],
+        () => selectUnreadTopicIds(messages, topicUnreadCounts),
+        [messages, topicUnreadCounts],
     );
 
     const navigateToNextUnreadTopic = useCallback(() => {
@@ -3992,6 +4071,7 @@ export const ChatRoomComponent: React.FC<{
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
+                            data-chat-scroll-viewport="true"
                             onScroll={handleScroll}
                             className="overflow-y-auto p-4"
                             style={{
@@ -4053,6 +4133,7 @@ export const ChatRoomComponent: React.FC<{
                     ) : (
                         <div
                             ref={scrollContainerRef}
+                            data-chat-scroll-viewport="true"
                             onScroll={handleScroll}
                             className="min-h-0 flex-grow overflow-y-auto px-4 pb-4 pt-7 md:p-4"
                             style={{

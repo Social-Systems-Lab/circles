@@ -3,6 +3,9 @@ import type { ChatMessage } from "@/models/models";
 import {
     FIRST_TOPIC_DEFAULT_TITLE,
     acknowledgeTopicUnreadIndicator,
+    canPersistVisibleTopicRead,
+    clearPersistedTopicReadBoundary,
+    hasSufficientTopicReplyVisibility,
     canApplyTopicReplyLoad,
     createTopicUnreadIndicator,
     findFirstUnreadReplyId,
@@ -15,6 +18,7 @@ import {
     selectInitialTopicId,
     selectFollowUpTopicReplySignal,
     selectOldestUnreadTopicId,
+    selectUnreadTopicIds,
     recordTopicUnreadIndicatorBoundary,
     shouldAcknowledgeTopicIndicatorFromDraft,
 } from "./chat-topic-utils";
@@ -79,6 +83,91 @@ assert.equal(
     }),
     true,
     "the current reply response applies to an open topic",
+);
+
+const visibleReadContext = {
+    expectedConversationId: "conversation-1",
+    currentConversationId: "conversation-1",
+    expectedTopicId: "active-topic",
+    currentTopicId: "active-topic",
+    expectedLoadScope: 4,
+    currentLoadScope: 4,
+    isTopicOpen: true,
+    isLatestReplyVisible: true,
+    isDocumentVisible: true,
+    isDocumentFocused: true,
+    isRequestInFlight: false,
+};
+assert.equal(canPersistVisibleTopicRead(visibleReadContext), true, "a visible newest reply can advance read state");
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, isLatestReplyVisible: false }),
+    false,
+    "an expanded off-screen newest reply remains unread",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, isDocumentVisible: false }),
+    false,
+    "a hidden document cannot advance topic read state",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, isDocumentFocused: false }),
+    false,
+    "an unfocused document cannot advance topic read state",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, isTopicOpen: false }),
+    false,
+    "a collapsed topic cannot advance topic read state",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, isRequestInFlight: true }),
+    false,
+    "repeated visibility callbacks cannot overlap read persistence",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, currentLoadScope: 5 }),
+    false,
+    "a stale conversation load cannot advance topic read state",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, currentConversationId: "conversation-2" }),
+    false,
+    "a response from a previous conversation cannot advance topic read state",
+);
+assert.equal(
+    canPersistVisibleTopicRead({ ...visibleReadContext, currentTopicId: "older-topic" }),
+    false,
+    "a response from a previous topic cannot advance topic read state",
+);
+assert.equal(
+    hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 1, replyHeight: 200 }),
+    false,
+    "an obscured newest reply with only one visible pixel remains unread",
+);
+assert.equal(
+    hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 48, replyHeight: 200 }),
+    true,
+    "a meaningfully visible newest reply can advance read state",
+);
+assert.equal(
+    hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 24, replyHeight: 24 }),
+    true,
+    "a short newest reply advances only when its full height is visible",
+);
+assert.equal(
+    clearPersistedTopicReadBoundary("reply-4", "reply-3"),
+    "reply-4",
+    "a newer pending boundary survives completion of an older in-flight request",
+);
+assert.equal(
+    clearPersistedTopicReadBoundary("reply-3", "reply-3"),
+    null,
+    "the persisted boundary is cleared after a successful request",
+);
+assert.deepEqual(
+    selectUnreadTopicIds([activeTopic, olderTopic], { "active-topic": 1, "older-topic": 2 }),
+    ["active-topic", "older-topic"],
+    "expanded topics remain eligible for Next unread navigation",
 );
 assert.equal(
     canApplyTopicReplyLoad({
