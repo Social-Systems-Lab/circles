@@ -3980,7 +3980,7 @@ export const ChatRoomComponent: React.FC<{
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
                     {!inToolbox && isChatMobile && (
-                        <div className="relative z-30 shrink-0 bg-white pt-16">
+                        <div className="relative z-30 shrink-0 pt-16">
                             {conversationToolbar}
                             {newTopicControl && <div className="flex justify-center py-2">{newTopicControl}</div>}
                         </div>
