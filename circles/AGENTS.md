@@ -9,6 +9,7 @@ Last updated: March 2026
 This file defines how AI agents (Codex, ChatGPT) must operate when working on the Circles / Kamooni codebase.
 
 Goals:
+
 - Safe changes
 - Fast iteration
 - Minimal breakage
@@ -27,11 +28,13 @@ Always ask:
 > What is the smallest possible fix?
 
 Avoid:
+
 - large refactors
 - renaming files unnecessarily
 - changing unrelated code
 
 Prefer:
+
 - 1–10 line patches
 - surgical edits
 - minimal surface area
@@ -44,11 +47,14 @@ Preferred workflow:
 
 1. Investigate (read code first)
 2. Implement using Codex
-3. Test locally
-4. Stop for human local browser check
-5. Only after explicit approval: commit, merge, push, deploy
+3. Run lightweight automated checks locally
+4. Push the feature branch to GitHub and deploy it to staging
+5. Run full Docker, integration, and desktop/mobile browser validation on staging
+6. Only after explicit approval: merge to `main` and deploy production
 
-Codex must NOT merge, push, or deploy after local checks until the human has completed a local browser test and explicitly approved proceeding.
+Local Mac remains the primary environment for Codex development, Git operations, code review, lightweight automated tests, TypeScript, and lint. Local Docker builds are optional and are required only when a specific local test genuinely needs one.
+
+Codex must NOT merge to `main` or deploy production until the human has completed staging validation and explicitly approved proceeding.
 
 Avoid manual editing unless absolutely necessary.
 
@@ -57,11 +63,13 @@ Avoid manual editing unless absolutely necessary.
 ## 3. One Step at a Time
 
 Human operator:
+
 - copy-pastes commands
 - runs them
 - returns output
 
 Therefore:
+
 - NEVER give multiple steps at once
 - ALWAYS wait for output
 
@@ -70,11 +78,13 @@ Therefore:
 ## 4. Boring > Clever
 
 Prefer:
+
 - explicit code
 - predictable logic
 - simple patterns
 
 Avoid:
+
 - abstractions
 - overengineering
 - premature optimization
@@ -96,6 +106,7 @@ Before finishing ANY task:
 
 ```bash
 git status --short
+```
 
 Must be clean and correct.
 
@@ -119,17 +130,19 @@ Push
 
 Merge into main ONLY after validation
 
-Local Testing (MANDATORY)
+Testing
 
-Before pushing:
+Before staging:
 
-run build
+run relevant lightweight automated checks locally
 
-test in browser (localhost)
+run TypeScript and lint where relevant
 
-verify feature works
+review the diff
 
-verify nothing broke
+Push feature branches to GitHub and use staging for full Docker builds, integration testing, and desktop/mobile browser validation. Never routinely hot-edit staging. Tests requiring disposable databases must use isolated test instances; never run destructive integration tests against staging's persistent database.
+
+Never automatically delete Docker volumes, databases, or persistent storage. For local disk maintenance, prefer conservative pruning of unused Docker build cache. Never recommend `docker system prune --volumes` or `docker volume prune`.
 
 DEPLOYMENT RULES (CLEURA)
 
@@ -184,6 +197,10 @@ deploy from origin/main
 verify /api/version
 
 sync fixes back to GitHub
+
+require an approved release and successful checks
+
+keep staging-only email capture out of production release branches
 
 DATABASE RULES (CRITICAL)
 Mongo is the source of truth

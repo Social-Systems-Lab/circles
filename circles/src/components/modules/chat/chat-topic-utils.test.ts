@@ -16,6 +16,8 @@ import {
     planTopicReplyLoad,
     selectInitialTopicId,
     selectFollowUpTopicReplySignal,
+    shouldReconcileTopicReplies,
+    shouldScheduleTopicReplyRetry,
     selectOldestUnreadTopicId,
     selectUnreadTopicIds,
     recordTopicUnreadIndicatorBoundary,
@@ -286,6 +288,64 @@ assert.equal(
     }),
     undefined,
     "an already-applied signal does not cause a duplicate reply load",
+);
+assert.equal(
+    shouldReconcileTopicReplies({ isTopicOpen: true, expectedReplyCount: 3, loadedReplyCount: 1 }),
+    true,
+    "an expanded topic reconciles when authoritative replies are missing",
+);
+assert.equal(
+    shouldReconcileTopicReplies({ isTopicOpen: false, expectedReplyCount: 3, loadedReplyCount: 1 }),
+    false,
+    "a collapsed topic does not fetch replies in the background",
+);
+assert.equal(
+    shouldReconcileTopicReplies({ isTopicOpen: true, expectedReplyCount: 2, loadedReplyCount: 2 }),
+    false,
+    "a complete topic does not schedule a duplicate reply fetch",
+);
+assert.deepEqual(
+    planTopicReplyLoad({
+        isTopicOpen: true,
+        isInFlight: true,
+        pendingSignal: "incoming-reply",
+        requestedSignal: "own-reply",
+    }),
+    { shouldStart: false, pendingSignal: "own-reply" },
+    "an own reply sent during an active incoming refresh schedules the follow-up load",
+);
+assert.equal(
+    shouldScheduleTopicReplyRetry({
+        signal: "reply-count:3",
+        lastRetriedSignal: null,
+        isTopicOpen: true,
+        loadScope: 2,
+        currentLoadScope: 2,
+    }),
+    true,
+    "a failed expanded-topic reconciliation remains retryable once",
+);
+assert.equal(
+    shouldScheduleTopicReplyRetry({
+        signal: "reply-count:3",
+        lastRetriedSignal: "reply-count:3",
+        isTopicOpen: true,
+        loadScope: 2,
+        currentLoadScope: 2,
+    }),
+    false,
+    "the same failed reconciliation cannot create an infinite retry loop",
+);
+assert.equal(
+    shouldScheduleTopicReplyRetry({
+        signal: "reply-count:3",
+        lastRetriedSignal: null,
+        isTopicOpen: true,
+        loadScope: 2,
+        currentLoadScope: 3,
+    }),
+    false,
+    "a failed request from the previous conversation cannot schedule a retry",
 );
 
 assert.deepEqual(

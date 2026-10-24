@@ -5,7 +5,7 @@ import { fetchMongoMessagesAction, markConversationReadAction } from "./actions"
 import { ChatMessage } from "@/models/models";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { getTopicReplyChangeSignals } from "./chat-topic-utils";
-import { runSingleFlight } from "./async-request-utils";
+import { deliverAcceptedPollPage, runSingleFlight } from "./async-request-utils";
 
 type UseMongoChatOptions = {
     roomId?: string;
@@ -55,9 +55,23 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
                     // Set sinceId to the latest message so polling only picks up new ones
                     const latestId = result.messages[result.messages.length - 1]?.id;
                     if (latestId) {
-                        sinceIdRef.current = latestId;
-                        await markCurrentConversationRead(latestId, () => cancelled);
-                        if (cancelled) return;
+                        await deliverAcceptedPollPage({
+                            isStale: () => cancelled,
+                            publish: () => {
+                                setRoomMessages((prev) => {
+                                    const existingIds = new Set((prev[roomId] || []).map((msg) => msg.id));
+                                    const newMessages = result.messages!.filter((msg) => !existingIds.has(msg.id));
+                                    return { ...prev, [roomId]: [...(prev[roomId] || []), ...newMessages] };
+                                });
+                            },
+                            advanceCursor: () => {
+                                sinceIdRef.current = latestId;
+                            },
+                            acknowledge: () => markCurrentConversationRead(latestId, () => cancelled),
+                            onAcknowledgementError: (error) =>
+                                console.error("Failed to mark initial mongo messages read:", error),
+                        });
+                        return;
                     }
                     setRoomMessages((prev) => {
                         const existingIds = new Set((prev[roomId] || []).map((msg) => msg.id));
@@ -88,25 +102,32 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
                     if (cancelled) return;
                     if (result.success && result.messages && result.messages.length > 0) {
                         const topicReplySignals = getTopicReplyChangeSignals(result.messages);
-                        sinceIdRef.current = result.nextSinceId || sinceIdRef.current;
                         const latestId = result.nextSinceId || result.messages[result.messages.length - 1]?.id;
-                        if (latestId) {
-                            sinceIdRef.current = latestId;
-                            await markCurrentConversationRead(latestId, () => cancelled);
-                            if (cancelled) return;
-                        }
-                        setRoomMessages((prev) => {
-                            const current = prev[roomId] || [];
-                            const existingIds = new Set(current.map((msg) => msg.id));
-                            const merged = [...current, ...result.messages!.filter((msg) => !existingIds.has(msg.id))];
-                            return {
-                                ...prev,
-                                [roomId]: merged,
-                            };
+                        if (!latestId) return;
+
+                        await deliverAcceptedPollPage({
+                            isStale: () => cancelled,
+                            publish: () => {
+                                setRoomMessages((prev) => {
+                                    const current = prev[roomId] || [];
+                                    const existingIds = new Set(current.map((msg) => msg.id));
+                                    const merged = [
+                                        ...current,
+                                        ...result.messages!.filter((msg) => !existingIds.has(msg.id)),
+                                    ];
+                                    return { ...prev, [roomId]: merged };
+                                });
+                                if (Object.keys(topicReplySignals).length > 0) {
+                                    setPolledTopicReplySignals((current) => ({ ...current, ...topicReplySignals }));
+                                }
+                            },
+                            advanceCursor: () => {
+                                sinceIdRef.current = latestId;
+                            },
+                            acknowledge: () => markCurrentConversationRead(latestId, () => cancelled),
+                            onAcknowledgementError: (error) =>
+                                console.error("Failed to mark polled mongo messages read:", error),
                         });
-                        if (Object.keys(topicReplySignals).length > 0) {
-                            setPolledTopicReplySignals((current) => ({ ...current, ...topicReplySignals }));
-                        }
                     }
                 } catch (error) {
                     console.error("Failed to poll mongo messages:", error);

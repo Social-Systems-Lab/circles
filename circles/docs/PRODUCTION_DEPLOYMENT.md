@@ -17,6 +17,8 @@ Use this workflow for normal Kamooni production deployments on the Cleura host `
 
 Do not use ad-hoc `docker compose build` or `docker compose up` commands for normal deployments. The deployment script performs the required build, container recreation, and version check.
 
+Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Staging-only email-capture configuration must not be present in the production release branch.
+
 ## Production layout
 
 - Server: Cleura host `kamooniorg`
@@ -45,6 +47,8 @@ Confirm:
 - `pwd` is `/root/circles/circles`
 - the working tree is clean
 - the commit intended for deployment is on `origin/main`
+- the release has been approved after all required checks passed
+- staging-only email-capture configuration is absent from the release
 - production has not been hot-edited
 - required CI checks have not been bypassed
 
@@ -127,6 +131,8 @@ curl -sS https://kamooni.org/api/version && echo
 ```
 
 The returned `gitSha` must match the deployed commit.
+
+This check is independent and mandatory even though the deployment script also verifies the endpoint.
 
 You can confirm the deployed commit on `kamooniorg` with:
 
