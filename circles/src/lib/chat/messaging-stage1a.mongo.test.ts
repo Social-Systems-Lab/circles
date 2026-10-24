@@ -35,8 +35,13 @@ async function main() {
         createMessage,
         createThread,
         createThreadReply,
+        fetchMessagesSince,
+        getLegacyUnreadCountForUser,
+        getTopicUnreadCountsForUser,
         listConversationCandidatesForUser,
         mapConversationToChatRoomDisplay,
+        markConversationRead,
+        markTopicRead,
     } = await import("@/lib/data/mongo-chat");
     const { discardDmDraftRecord, publishDmFirstTopic, reconcilePublishedDmDraft, saveDmDraftRecord } = await import(
         "./dm-draft-persistence"
@@ -642,6 +647,147 @@ async function main() {
         assert.equal(
             archivedCandidates.some((item) => item._id.toString() === provisionalId.toString()),
             false,
+        );
+
+        const chronologicalConversationId = new ObjectId().toString();
+        const highStarterId = new ObjectId("64afffffffffffffffffffff");
+        const replyId = (offset: number) => new ObjectId(`64a00000000000000000${offset.toString(16).padStart(4, "0")}`);
+        const chronologicalReplies = [
+            ...Array.from({ length: 11 }, (_, index) => ({ senderDid: "did:chrono-p2", offset: index + 1 })),
+            ...Array.from({ length: 6 }, (_, index) => ({ senderDid: "did:chrono-p1", offset: index + 100 })),
+        ];
+        await ChatMessageDocs.insertOne({
+            _id: highStarterId,
+            conversationId: chronologicalConversationId,
+            senderDid: "did:chrono-p1",
+            body: "fixture starter",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            thread: { title: "fixture", createdAt: new Date("2026-01-01T00:00:00.000Z"), replyCount: 17 },
+        } as any);
+        await ChatMessageDocs.insertMany(
+            chronologicalReplies.map(({ senderDid, offset }, index) => ({
+                _id: replyId(offset),
+                conversationId: chronologicalConversationId,
+                senderDid,
+                body: "fixture reply",
+                createdAt: new Date(Date.UTC(2026, 0, 2, 0, index)),
+                threadId: highStarterId.toString(),
+            })) as any[],
+        );
+        await ChatReadStates.insertMany([
+            {
+                userDid: "did:chrono-p1",
+                conversationId: chronologicalConversationId,
+                lastReadMessageId: null,
+                legacyLastReadMessageId: highStarterId.toString(),
+                topicFallbackMessageId: highStarterId.toString(),
+                readStateVersion: 2,
+                readStateMigratedAt: new Date(),
+                updatedAt: new Date(),
+            },
+            {
+                userDid: "did:chrono-p2",
+                conversationId: chronologicalConversationId,
+                lastReadMessageId: null,
+                legacyLastReadMessageId: highStarterId.toString(),
+                topicFallbackMessageId: highStarterId.toString(),
+                readStateVersion: 2,
+                readStateMigratedAt: new Date(),
+                updatedAt: new Date(),
+            },
+        ] as any[]);
+        assert.equal(
+            (await getTopicUnreadCountsForUser("did:chrono-p1", chronologicalConversationId))[highStarterId.toString()],
+            11,
+        );
+        assert.equal(
+            (await getTopicUnreadCountsForUser("did:chrono-p2", chronologicalConversationId))[highStarterId.toString()],
+            6,
+        );
+        assert.equal(
+            (await fetchMessagesSince(chronologicalConversationId, highStarterId.toString(), 50)).length,
+            17,
+            "polling retrieves replies whose ObjectIds sort below the older starter",
+        );
+        const newestReplyId = replyId(11).toString();
+        await Promise.all([
+            markTopicRead("did:chrono-p1", chronologicalConversationId, highStarterId.toString(), newestReplyId),
+            markTopicRead(
+                "did:chrono-p1",
+                chronologicalConversationId,
+                highStarterId.toString(),
+                highStarterId.toString(),
+            ),
+        ]);
+        assert.equal(
+            (
+                await ChatTopicReadStates.findOne({
+                    userDid: "did:chrono-p1",
+                    conversationId: chronologicalConversationId,
+                    topicId: highStarterId.toString(),
+                })
+            )?.lastReadMessageId,
+            newestReplyId,
+            "concurrent acknowledgement cannot move the topic cursor backward",
+        );
+        await ChatTopicReadStates.updateOne(
+            {
+                userDid: "did:chrono-p2",
+                conversationId: chronologicalConversationId,
+                topicId: highStarterId.toString(),
+            },
+            { $set: { lastReadMessageId: null } },
+            { upsert: true },
+        );
+        assert.equal(
+            (await getTopicUnreadCountsForUser("did:chrono-p2", chronologicalConversationId))[highStarterId.toString()],
+            7,
+            "an explicit-null topic cursor remains authoritative over the frozen fallback",
+        );
+
+        const legacyConversationId = new ObjectId().toString();
+        const legacyOldHighId = new ObjectId("64bfffffffffffffffffffff");
+        const legacyNewLowId = new ObjectId("64b000000000000000000001");
+        await ChatMessageDocs.insertMany([
+            {
+                _id: legacyOldHighId,
+                conversationId: legacyConversationId,
+                senderDid: "did:legacy-self",
+                body: "old fixture",
+                createdAt: new Date("2026-02-01T00:00:00.000Z"),
+            },
+            {
+                _id: legacyNewLowId,
+                conversationId: legacyConversationId,
+                senderDid: "did:legacy-other",
+                body: "new fixture",
+                createdAt: new Date("2026-02-02T00:00:00.000Z"),
+            },
+        ] as any[]);
+        await ChatReadStates.insertOne({
+            userDid: "did:legacy-self",
+            conversationId: legacyConversationId,
+            lastReadMessageId: null,
+            legacyLastReadMessageId: legacyOldHighId.toString(),
+            topicFallbackMessageId: legacyOldHighId.toString(),
+            readStateVersion: 2,
+            readStateMigratedAt: new Date(),
+            updatedAt: new Date(),
+        } as any);
+        assert.equal(await getLegacyUnreadCountForUser("did:legacy-self", legacyConversationId), 1);
+        await Promise.all([
+            markConversationRead("did:legacy-self", legacyConversationId, legacyNewLowId.toString()),
+            markConversationRead("did:legacy-self", legacyConversationId, legacyOldHighId.toString()),
+        ]);
+        assert.equal(
+            (
+                await ChatReadStates.findOne({
+                    userDid: "did:legacy-self",
+                    conversationId: legacyConversationId,
+                })
+            )?.legacyLastReadMessageId,
+            legacyNewLowId.toString(),
+            "concurrent acknowledgement cannot move the legacy cursor backward",
         );
 
         console.log("Messaging Stage 1A Mongo regression tests passed (production persistence helpers)");

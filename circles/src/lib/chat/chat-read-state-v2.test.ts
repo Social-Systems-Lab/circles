@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import {
-    buildMonotonicLegacyCursorUpdate,
-    buildReadStateV2InitializationOperation,
-    resolveHistoricalReadBoundary,
-} from "./chat-read-state-v2";
+import { buildReadStateV2InitializationOperation, resolveHistoricalReadBoundary } from "./chat-read-state-v2";
 import { resolveTopicMigrationFallback } from "./topic-read-state";
 
 const historicalId = "64a000000000000000000010";
@@ -41,16 +37,6 @@ const run = async () => {
         "an old writer cannot drift an initialized V2 topic fallback",
     );
 
-    const newerLegacy = buildMonotonicLegacyCursorUpdate(postBoundaryId, new Date("2026-08-12"));
-    const olderLegacy = buildMonotonicLegacyCursorUpdate(historicalId, new Date("2026-08-13"));
-    let legacyCursor: string | null = null;
-    const applyMax = (operation: ReturnType<typeof buildMonotonicLegacyCursorUpdate>) => {
-        const candidate = (operation as any).$max?.legacyLastReadMessageId || null;
-        if (candidate && (!legacyCursor || candidate > legacyCursor)) legacyCursor = candidate;
-    };
-    applyMax(newerLegacy);
-    applyMax(olderLegacy);
-    assert.equal(legacyCursor, postBoundaryId, "a stale legacy write cannot regress a newer cursor");
     assert.equal(
         stored.topicFallbackMessageId,
         historicalId,

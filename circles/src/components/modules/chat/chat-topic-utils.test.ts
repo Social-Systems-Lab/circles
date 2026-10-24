@@ -107,14 +107,32 @@ for (const interaction of ["scroll", "expand", "close", "navigate", "draft-state
     assert.equal(shouldAcknowledgeTopicInteraction(interaction), false, `${interaction} does not acknowledge`);
 }
 assert.equal(
-    selectTopicAcknowledgementBoundary({ topicId, replyIds: [replyA, replyB], expectedReplyCount: 2 }),
+    selectTopicAcknowledgementBoundary({
+        topicId,
+        topicCreatedAt: new Date("2026-01-01T00:00:00Z"),
+        replies: [
+            { id: replyA, createdAt: new Date("2026-01-01T00:01:00Z") },
+            { id: replyB, createdAt: new Date("2026-01-01T00:02:00Z") },
+        ],
+        expectedReplyCount: 2,
+    }),
     replyB,
-    "an interaction freezes the greatest ObjectId in the complete loaded topic",
+    "an interaction freezes the chronologically latest message in the complete loaded topic",
 );
 assert.equal(
-    selectTopicAcknowledgementBoundary({ topicId, replyIds: [replyA], expectedReplyCount: 2 }),
+    selectTopicAcknowledgementBoundary({ topicId, replies: [{ id: replyA }], expectedReplyCount: 2 }),
     null,
     "an incomplete loaded reply set fails closed",
+);
+assert.equal(
+    selectTopicAcknowledgementBoundary({
+        topicId: "64afffffffffffffffffffff",
+        topicCreatedAt: new Date("2026-01-01T00:00:00Z"),
+        replies: [{ id: replyA, createdAt: new Date("2026-01-02T00:00:00Z") }],
+        expectedReplyCount: 1,
+    }),
+    replyA,
+    "a newer reply with a lower ObjectId is the acknowledgement boundary",
 );
 assert.deepEqual(
     selectQueuedTopicAcknowledgementBoundary({

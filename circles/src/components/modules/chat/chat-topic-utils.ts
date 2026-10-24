@@ -1,5 +1,6 @@
 import type { ChatMessage } from "@/models/models";
-import { normalizeObjectIdHex, selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
+import { normalizeObjectIdHex } from "@/lib/chat/topic-read-state";
+import { selectLatestMessagePosition } from "@/lib/chat/message-position";
 
 export const FIRST_TOPIC_DEFAULT_TITLE = "Hello";
 
@@ -158,17 +159,24 @@ export const shouldAcknowledgeTopicInteraction = (
 
 export const selectTopicAcknowledgementBoundary = ({
     topicId,
-    replyIds,
+    topicCreatedAt,
+    replies,
     expectedReplyCount,
 }: {
     topicId: string;
-    replyIds: string[];
+    topicCreatedAt?: Date | string | null;
+    replies: Array<{ id: string; createdAt?: Date | string | null }>;
     expectedReplyCount: number;
 }): string | null => {
     if (!Number.isSafeInteger(expectedReplyCount) || expectedReplyCount < 0) return null;
-    if (replyIds.length !== expectedReplyCount) return null;
-    if (!normalizeObjectIdHex(topicId) || replyIds.some((replyId) => !normalizeObjectIdHex(replyId))) return null;
-    return selectGreatestObjectIdHex([topicId, ...replyIds]);
+    if (replies.length !== expectedReplyCount) return null;
+    if (!normalizeObjectIdHex(topicId) || replies.some((reply) => !normalizeObjectIdHex(reply.id))) return null;
+    return (
+        selectLatestMessagePosition([
+            { id: topicId, createdAt: topicCreatedAt },
+            ...replies.map((reply) => ({ id: reply.id, createdAt: reply.createdAt })),
+        ])?.id || null
+    );
 };
 
 export const selectQueuedTopicAcknowledgementBoundary = ({
@@ -183,11 +191,11 @@ export const selectQueuedTopicAcknowledgementBoundary = ({
     persistedBoundary: string | null;
 }): { shouldStart: boolean; queuedBoundary: string | null } => {
     const captured = normalizeObjectIdHex(capturedBoundary);
-    if (!captured || (persistedBoundary && captured <= persistedBoundary)) {
+    if (!captured || persistedBoundary === captured || queuedBoundary === captured) {
         return { shouldStart: false, queuedBoundary };
     }
     if (!inFlightBoundary) return { shouldStart: true, queuedBoundary };
-    if (captured <= inFlightBoundary || (queuedBoundary && captured <= queuedBoundary)) {
+    if (captured === inFlightBoundary) {
         return { shouldStart: false, queuedBoundary };
     }
     return { shouldStart: false, queuedBoundary: captured };

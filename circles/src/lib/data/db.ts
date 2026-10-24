@@ -282,6 +282,8 @@ export function ensureRequiredChatIndexes(): Promise<void> {
             ChatRoomMembers.createIndex({ chatRoomId: 1 }),
             ChatMessageDocs.createIndex({ conversationId: 1, _id: 1 }),
             ChatMessageDocs.createIndex({ conversationId: 1, threadId: 1, _id: 1 }),
+            ChatMessageDocs.createIndex({ conversationId: 1, createdAt: 1, _id: 1 }),
+            ChatMessageDocs.createIndex({ conversationId: 1, threadId: 1, createdAt: 1, _id: 1 }),
             ChatReadStates.createIndex({ userDid: 1, conversationId: 1 }),
             ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true }),
             ChatTopicDrafts.createIndex({ authorDid: 1, recipientDid: 1 }, { unique: true }),

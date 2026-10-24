@@ -16,12 +16,14 @@ function historicalBoundary(state) {
         .find(
             {
                 conversationId: state.conversationId,
-                _id: { $lt: nextSecond },
-                $or: [{ createdAt: { $lte: state.updatedAt } }, { createdAt: { $exists: false } }],
+                $or: [
+                    { createdAt: { $lte: state.updatedAt } },
+                    { createdAt: { $exists: false }, _id: { $lt: nextSecond } },
+                ],
             },
             { _id: 1 },
         )
-        .sort({ _id: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .limit(1)
         .next();
     return message?._id ? message._id.toString() : null;

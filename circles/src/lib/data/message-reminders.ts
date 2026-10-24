@@ -4,6 +4,10 @@ import { ChatConversations, ChatMessageDocs, ChatTopicReadStates, Circles, Messa
 import { resolveTopicMigrationFallback, resolveTopicReadBoundary } from "@/lib/chat/topic-read-state";
 import { sendEmail } from "./email";
 import { ensureChatReadStateV2 } from "./mongo-chat";
+import {
+    buildMessagesAfterPositionQuery,
+    buildMessagesAtOrBeforePositionQuery,
+} from "@/lib/chat/message-position-query";
 
 export const MESSAGE_REMINDER_DELAY_MS = 60 * 60 * 1000;
 const DEFAULT_PROCESS_LIMIT = 100;
@@ -121,17 +125,23 @@ const hasReadConversationAfterMessage = async ({
         return false;
     }
 
-    // Use the same ObjectId boundary model as chat unread counting:
+    const cursorMessage = (await ChatMessageDocs.findOne(
+        { _id: lastReadObjectId, conversationId },
+        { projection: { _id: 1, createdAt: 1 } },
+    )) as ChatMessageDoc | null;
+    if (!cursorMessage) return false;
+
+    // Use the same chronological boundary model as chat unread counting:
     // if there are no incoming messages between the last-read marker and this message,
     // then this message has already been read by the recipient.
     const unreadMessageAtOrBeforeTarget = await ChatMessageDocs.findOne({
         conversationId,
         ...messageScope,
         senderDid: { $ne: recipientDid },
-        _id: {
-            $gt: lastReadObjectId,
-            $lte: messageObjectId,
-        },
+        $and: [
+            buildMessagesAfterPositionQuery({ id: lastReadMessageId, createdAt: cursorMessage.createdAt }),
+            buildMessagesAtOrBeforePositionQuery({ id: messageId, createdAt: message.createdAt }),
+        ],
     });
 
     return !unreadMessageAtOrBeforeTarget;

@@ -15,7 +15,8 @@ import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message"
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
-import { buildUnreadMessagesQuery } from "@/lib/chat/unread-counts";
+import { compareMessagePositions, type MessagePosition } from "@/lib/chat/message-position";
+import { buildMessagesAfterPositionQuery } from "@/lib/chat/message-position-query";
 import {
     CHAT_READ_STATE_VERSION,
     normalizeObjectIdHex,
@@ -26,11 +27,7 @@ import {
 } from "@/lib/chat/topic-read-state";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 import { buildConversationUpdatedAtCompareAndSetFilter } from "@/lib/chat/topic-mutations";
-import {
-    buildMonotonicLegacyCursorUpdate,
-    buildReadStateV2InitializationOperation,
-    resolveHistoricalReadBoundary,
-} from "@/lib/chat/chat-read-state-v2";
+import { buildReadStateV2InitializationOperation, resolveHistoricalReadBoundary } from "@/lib/chat/chat-read-state-v2";
 import { resolveCanonicalDm } from "@/lib/chat/canonical-dm";
 
 const toObjectId = (value?: string | null) => {
@@ -437,7 +434,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
 export const fetchRecentMessages = async (conversationId: string, limit: number = 50): Promise<ChatMessageDoc[]> => {
     // Fetch the most recent messages by sorting descending, then reverse for display order
     const messages = (await ChatMessageDocs.find({ conversationId, threadId: { $exists: false } })
-        .sort({ _id: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .limit(limit)
         .toArray()) as ChatMessageDoc[];
 
@@ -454,7 +451,7 @@ export const fetchRecentMessages = async (conversationId: string, limit: number 
 
 export const fetchTopicStarters = async (conversationId: string): Promise<ChatMessageDoc[]> => {
     const docs = (await ChatMessageDocs.find({ conversationId, thread: { $exists: true } })
-        .sort({ createdAt: 1 })
+        .sort({ createdAt: 1, _id: 1 })
         .toArray()) as ChatMessageDoc[];
     return docs.map((message) => {
         if (message._id) {
@@ -486,13 +483,30 @@ export const fetchMessagesSince = async (
     sinceId?: string,
     limit: number = 50,
 ): Promise<ChatMessageDoc[]> => {
-    const query: any = { conversationId };
+    let query: any = { conversationId };
     const sinceObjectId = toObjectId(sinceId);
     if (sinceObjectId) {
-        query._id = { $gt: sinceObjectId };
+        const cursor = await ChatMessageDocs.findOne(
+            { _id: sinceObjectId, conversationId },
+            { projection: { _id: 1, createdAt: 1 } },
+        );
+        if (!cursor) {
+            const recent = (await ChatMessageDocs.find({ conversationId })
+                .sort({ createdAt: -1, _id: -1 })
+                .limit(limit)
+                .toArray()) as ChatMessageDoc[];
+            return recent.reverse().map((message) => ({ ...message, _id: message._id?.toString() }));
+        }
+        query = {
+            conversationId,
+            ...buildMessagesAfterPositionQuery({ id: cursor._id.toString(), createdAt: cursor.createdAt }),
+        };
     }
 
-    const messages = (await ChatMessageDocs.find(query).sort({ _id: 1 }).limit(limit).toArray()) as ChatMessageDoc[];
+    const messages = (await ChatMessageDocs.find(query)
+        .sort({ createdAt: 1, _id: 1 })
+        .limit(limit)
+        .toArray()) as ChatMessageDoc[];
 
     return messages.map((message) => {
         if (message._id) {
@@ -702,6 +716,64 @@ export const toggleReaction = async (
     return reactions;
 };
 
+const advanceCursorChronologically = async ({
+    identity,
+    cursorField,
+    proposedCursor,
+    collection,
+}: {
+    identity: { conversationId: string; userDid: string; topicId?: string };
+    cursorField: "lastReadMessageId" | "legacyLastReadMessageId";
+    proposedCursor: string;
+    collection: typeof ChatReadStates | typeof ChatTopicReadStates;
+}): Promise<void> => {
+    const proposedObjectId = toObjectId(proposedCursor);
+    if (!proposedObjectId) throw new Error("Invalid chat read cursor");
+    const proposedMessage = await ChatMessageDocs.findOne(
+        { _id: proposedObjectId, conversationId: identity.conversationId },
+        { projection: { _id: 1, createdAt: 1 } },
+    );
+    if (!proposedMessage) throw new Error("Chat read cursor message not found");
+    const proposedPosition: MessagePosition = {
+        id: proposedMessage._id.toString(),
+        createdAt: proposedMessage.createdAt,
+    };
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const state = (await collection.findOne(identity)) as Record<string, any> | null;
+        if (!state) throw new Error("Chat read state not found");
+        const currentCursor = normalizeObjectIdHex(state[cursorField]);
+        if (currentCursor === proposedPosition.id) return;
+        if (currentCursor) {
+            const currentMessage = await ChatMessageDocs.findOne(
+                { _id: new ObjectId(currentCursor), conversationId: identity.conversationId },
+                { projection: { _id: 1, createdAt: 1 } },
+            );
+            if (!currentMessage) {
+                console.warn("Chat read cursor message is missing; refusing to advance an unresolved boundary", {
+                    conversationId: identity.conversationId,
+                    topicId: identity.topicId,
+                });
+                return;
+            }
+            if (
+                compareMessagePositions(proposedPosition, {
+                    id: currentMessage._id.toString(),
+                    createdAt: currentMessage.createdAt,
+                }) <= 0
+            ) {
+                return;
+            }
+        }
+        const result = await collection.updateOne(
+            { ...identity, [cursorField]: state[cursorField] ?? null } as any,
+            { $set: { [cursorField]: proposedPosition.id, updatedAt: new Date() } } as any,
+        );
+        if (result.modifiedCount === 1) return;
+    }
+    throw new Error("Chat read cursor advancement did not stabilize");
+};
+
 export const markConversationRead = async (
     userDid: string,
     conversationId: string,
@@ -710,18 +782,31 @@ export const markConversationRead = async (
     await ensureChatReadStateV2(userDid, conversationId);
     const identity = { conversationId, userDid };
     const now = new Date();
-    const cursorUpdate = buildMonotonicLegacyCursorUpdate(lastReadMessageId, now);
-    const update: Record<string, any> = {
-        ...cursorUpdate,
-        $setOnInsert: {
-            ...identity,
-            lastReadMessageId: null,
-            topicFallbackMessageId: null,
-            readStateVersion: CHAT_READ_STATE_VERSION,
-            readStateMigratedAt: now,
+    await ChatReadStates.updateOne(
+        identity,
+        {
+            $setOnInsert: {
+                ...identity,
+                lastReadMessageId: null,
+                legacyLastReadMessageId: null,
+                topicFallbackMessageId: null,
+                readStateVersion: CHAT_READ_STATE_VERSION,
+                readStateMigratedAt: now,
+                updatedAt: now,
+            },
         },
-    };
-    await ChatReadStates.updateOne(identity, update, { upsert: true });
+        { upsert: true },
+    );
+    if (!lastReadMessageId) {
+        await ChatReadStates.updateOne(identity, { $set: { updatedAt: now } });
+        return;
+    }
+    await advanceCursorChronologically({
+        identity,
+        cursorField: "legacyLastReadMessageId",
+        proposedCursor: lastReadMessageId,
+        collection: ChatReadStates,
+    });
 };
 
 const getHistoricalReadBoundary = async (conversationId: string, readState: ChatReadState): Promise<string | null> => {
@@ -730,10 +815,9 @@ const getHistoricalReadBoundary = async (conversationId: string, readState: Chat
         const latestAtHistoricalRead = await ChatMessageDocs.findOne(
             {
                 conversationId,
-                _id: { $lt: nextSecond },
-                $or: [{ createdAt: { $lte: updatedAt } }, { createdAt: { $exists: false } }],
+                $or: [{ createdAt: { $lte: updatedAt } }, { createdAt: { $exists: false }, _id: { $lt: nextSecond } }],
             },
-            { sort: { _id: -1 }, projection: { _id: 1 } },
+            { sort: { createdAt: -1, _id: -1 }, projection: { _id: 1 } },
         );
         return latestAtHistoricalRead?._id ? latestAtHistoricalRead._id.toString() : null;
     });
@@ -765,7 +849,7 @@ export const ensureChatReadStateV2 = async (userDid: string, conversationId: str
 export const getLatestLegacyMessageIdForConversation = async (conversationId: string): Promise<string | null> => {
     const latest = await ChatMessageDocs.findOne(
         { conversationId, threadId: { $exists: false }, thread: { $exists: false } },
-        { sort: { _id: -1 }, projection: { _id: 1 } },
+        { sort: { createdAt: -1, _id: -1 }, projection: { _id: 1 } },
     );
     return latest?._id ? latest._id.toString() : null;
 };
@@ -827,12 +911,16 @@ export const markTopicRead = async (
     await ChatTopicReadStates.updateOne(
         identity,
         {
-            $max: { lastReadMessageId: normalizedCursor },
-            $set: { updatedAt: new Date() },
-            $setOnInsert: identity,
+            $setOnInsert: { ...identity, lastReadMessageId: null, updatedAt: new Date() },
         },
         { upsert: true },
     );
+    await advanceCursorChronologically({
+        identity,
+        cursorField: "lastReadMessageId",
+        proposedCursor: normalizedCursor,
+        collection: ChatTopicReadStates,
+    });
 };
 
 export const getTopicUnreadCountsForUser = async (
@@ -857,6 +945,28 @@ export const getTopicUnreadCountsForUser = async (
     const explicitByTopic = new Map(topicReadStates.map((state) => [state.topicId, state.lastReadMessageId]));
 
     const migrationFallback = resolveTopicMigrationFallback(conversationReadState);
+    const boundaryIds = Array.from(
+        new Set(
+            normalizedTopicIds
+                .map((topicId) =>
+                    resolveTopicReadBoundary({
+                        topicId,
+                        explicitLastReadMessageId: explicitByTopic.has(topicId)
+                            ? explicitByTopic.get(topicId)
+                            : undefined,
+                        conversationFallbackMessageId: migrationFallback,
+                    }),
+                )
+                .filter((value): value is string => !!normalizeObjectIdHex(value)),
+        ),
+    );
+    const boundaryMessages = boundaryIds.length
+        ? await ChatMessageDocs.find(
+              { conversationId, _id: { $in: boundaryIds.map((id) => new ObjectId(id)) } },
+              { projection: { _id: 1, createdAt: 1 } },
+          ).toArray()
+        : [];
+    const boundaryById = new Map(boundaryMessages.map((message) => [message._id.toString(), message]));
     const topicClauses = normalizedTopicIds.map((topicId) => {
         const boundary = resolveTopicReadBoundary({
             topicId,
@@ -866,8 +976,14 @@ export const getTopicUnreadCountsForUser = async (
         const scope = includeStarters
             ? { $or: [{ _id: toObjectId(topicId), thread: { $exists: true } }, { threadId: topicId }] }
             : { threadId: topicId };
-        const boundaryObjectId = toObjectId(boundary);
-        return boundaryObjectId ? { $and: [scope, { _id: { $gt: boundaryObjectId } }] } : scope;
+        const normalizedBoundary = normalizeObjectIdHex(boundary);
+        if (!normalizedBoundary) return scope;
+        const boundaryMessage = boundaryById.get(normalizedBoundary);
+        const afterBoundary = buildMessagesAfterPositionQuery({
+            id: normalizedBoundary,
+            createdAt: boundaryMessage?.createdAt,
+        });
+        return { $and: [scope, afterBoundary] };
     });
     const rows = await ChatMessageDocs.aggregate<{ _id: string; count: number }>([
         { $match: { conversationId, senderDid: { $ne: userDid }, $or: topicClauses } },
@@ -881,10 +997,22 @@ export const getTopicUnreadCountsForUser = async (
 
 export const getLegacyUnreadCountForUser = async (userDid: string, conversationId: string): Promise<number> => {
     const readState = await ensureChatReadStateV2(userDid, conversationId);
-    const lastReadObjectId = toObjectId(readState?.legacyLastReadMessageId);
-    const legacyQuery = buildUnreadMessagesQuery(userDid, conversationId, lastReadObjectId || undefined);
-    legacyQuery.threadId = { $exists: false };
-    legacyQuery.thread = { $exists: false };
+    const normalizedBoundary = normalizeObjectIdHex(readState?.legacyLastReadMessageId);
+    const boundaryMessage = normalizedBoundary
+        ? await ChatMessageDocs.findOne(
+              { conversationId, _id: new ObjectId(normalizedBoundary) },
+              { projection: { _id: 1, createdAt: 1 } },
+          )
+        : null;
+    const legacyQuery: Record<string, any> = {
+        conversationId,
+        senderDid: { $ne: userDid },
+        threadId: { $exists: false },
+        thread: { $exists: false },
+        ...(normalizedBoundary
+            ? buildMessagesAfterPositionQuery({ id: normalizedBoundary, createdAt: boundaryMessage?.createdAt })
+            : {}),
+    };
     return ChatMessageDocs.countDocuments(legacyQuery);
 };
 
@@ -1099,7 +1227,7 @@ export const sendThreadReply = async (
 };
 
 export const fetchThreadReplies = async (threadId: string, conversationId: string): Promise<ChatMessageDoc[]> => {
-    const docs = await ChatMessageDocs.find({ threadId, conversationId }).sort({ createdAt: 1 }).toArray();
+    const docs = await ChatMessageDocs.find({ threadId, conversationId }).sort({ createdAt: 1, _id: 1 }).toArray();
     return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
 };
 
@@ -1108,7 +1236,7 @@ export const listThreadsForConversation = async (conversationId: string): Promis
         conversationId,
         thread: { $exists: true },
     })
-        .sort({ "thread.createdAt": 1, createdAt: 1 })
+        .sort({ "thread.createdAt": 1, createdAt: 1, _id: 1 })
         .toArray();
     return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
 };

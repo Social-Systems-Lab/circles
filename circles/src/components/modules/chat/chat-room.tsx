@@ -2341,7 +2341,8 @@ const TopicCard: React.FC<{
         if (!isTopicOpenRef.current || unreadCount <= 0 || !unreadBoundary.isComplete) return;
         const boundary = selectTopicAcknowledgementBoundary({
             topicId: messageId,
-            replyIds: replies.map((reply) => reply.id),
+            topicCreatedAt: message.createdAt,
+            replies: replies.map((reply) => ({ id: reply.id, createdAt: reply.createdAt })),
             expectedReplyCount,
         });
         if (!boundary) return;
