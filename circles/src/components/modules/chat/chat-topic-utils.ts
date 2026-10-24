@@ -94,6 +94,34 @@ export const selectFollowUpTopicReplySignal = ({
     isTopicOpen: boolean;
 }): string | undefined => (isTopicOpen && pendingSignal && pendingSignal !== appliedSignal ? pendingSignal : undefined);
 
+export const shouldReconcileTopicReplies = ({
+    isTopicOpen,
+    expectedReplyCount,
+    loadedReplyCount,
+}: {
+    isTopicOpen: boolean;
+    expectedReplyCount: number;
+    loadedReplyCount: number;
+}): boolean =>
+    isTopicOpen &&
+    Number.isSafeInteger(expectedReplyCount) &&
+    expectedReplyCount >= 0 &&
+    expectedReplyCount > loadedReplyCount;
+
+export const shouldScheduleTopicReplyRetry = ({
+    signal,
+    lastRetriedSignal,
+    isTopicOpen,
+    loadScope,
+    currentLoadScope,
+}: {
+    signal?: string;
+    lastRetriedSignal: string | null;
+    isTopicOpen: boolean;
+    loadScope: number;
+    currentLoadScope: number;
+}): boolean => !!signal && isTopicOpen && loadScope === currentLoadScope && signal !== lastRetriedSignal;
+
 export const selectOldestUnreadTopicId = (
     messages: ChatMessage[],
     unreadCounts: Record<string, number>,

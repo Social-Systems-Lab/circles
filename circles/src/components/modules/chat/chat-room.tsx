@@ -73,6 +73,8 @@ import {
     selectUnreadTopicIds,
     resolveTopicUnreadBoundary,
     selectFollowUpTopicReplySignal,
+    shouldReconcileTopicReplies,
+    shouldScheduleTopicReplyRetry,
     selectQueuedTopicAcknowledgementBoundary,
     selectTopicAcknowledgementBoundary,
     shouldAcknowledgeTopicInteraction,
@@ -2037,6 +2039,8 @@ const TopicCard: React.FC<{
     const replyLoadInFlightRef = useRef(false);
     const pendingReplyRefreshSignalRef = useRef<string | null>(null);
     const appliedReplyRefreshSignalRef = useRef<string | null>(null);
+    const replyRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const replyRetryKeyRef = useRef<string | null>(null);
     const replyLoadScopeRef = useRef(0);
     const currentConversationIdRef = useRef(conversationId);
     const currentTopicIdRef = useRef(messageId);
@@ -2177,6 +2181,25 @@ const TopicCard: React.FC<{
         const loadScope = replyLoadScopeRef.current;
         replyLoadInFlightRef.current = true;
         setIsLoading(true);
+        const scheduleRetry = () => {
+            if (
+                !shouldScheduleTopicReplyRetry({
+                    signal: backgroundSignal,
+                    lastRetriedSignal: replyRetryKeyRef.current,
+                    isTopicOpen: isTopicOpenRef.current,
+                    loadScope,
+                    currentLoadScope: replyLoadScopeRef.current,
+                })
+            )
+                return;
+
+            replyRetryKeyRef.current = backgroundSignal!;
+            if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
+            replyRetryTimerRef.current = setTimeout(() => {
+                replyRetryTimerRef.current = null;
+                if (isTopicOpenRef.current) void loadReplies(backgroundSignal);
+            }, 1000);
+        };
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
             const result = await fetchThreadRepliesAction(messageId, conversationId);
@@ -2224,10 +2247,14 @@ const TopicCard: React.FC<{
                 });
                 setReplies(mapped);
                 setIsLoading(false);
+                if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
+                replyRetryTimerRef.current = null;
+                replyRetryKeyRef.current = null;
                 if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
-            }
+            } else if (canApply) scheduleRetry();
         } catch (e) {
             console.error("Failed to load topic replies:", e);
+            scheduleRetry();
         } finally {
             const isCurrentLoad = replyLoadScopeRef.current === loadScope && readRequestRef.current === readRequestId;
             if (isCurrentLoad) {
@@ -2330,11 +2357,20 @@ const TopicCard: React.FC<{
     }, [isTopicOpen, replyChangeSignal]);
 
     useEffect(() => {
+        if (!shouldReconcileTopicReplies({ isTopicOpen, expectedReplyCount, loadedReplyCount: replies.length })) return;
+        void loadReplies(`reply-count:${expectedReplyCount}`);
+        // loadReplies uses refs to serialize this reconciliation with signal-driven and local refreshes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [expectedReplyCount, isTopicOpen, replies.length]);
+
+    useEffect(() => {
         return () => {
             replyLoadScopeRef.current += 1;
             readRequestRef.current += 1;
             replyLoadInFlightRef.current = false;
             pendingReplyRefreshSignalRef.current = null;
+            if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
+            replyRetryTimerRef.current = null;
             acknowledgementRequestRef.current += 1;
             acknowledgementInFlightRef.current = null;
             queuedAcknowledgementRef.current = null;
@@ -2441,7 +2477,7 @@ const TopicCard: React.FC<{
                 setTopicReplyText("");
                 setReplyToMessage(null);
                 await onTopicActivity?.();
-                await loadReplies();
+                await loadReplies(result.messageId || `local-reply:${Date.now()}`);
                 requestAnimationFrame(() => {
                     cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                 });
@@ -2577,7 +2613,7 @@ const TopicCard: React.FC<{
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
                 setReplyToMessage(null);
                 await onTopicActivity?.();
-                await loadReplies();
+                await loadReplies(result.eventId || `local-attachment:${Date.now()}`);
                 requestAnimationFrame(() => {
                     cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                 });

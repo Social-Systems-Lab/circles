@@ -10,3 +10,29 @@ export const runSingleFlight = async (gate: AsyncRequestGate, request: () => Pro
         gate.inFlight = false;
     }
 };
+
+export const deliverAcceptedPollPage = async ({
+    isStale,
+    publish,
+    advanceCursor,
+    acknowledge,
+    onAcknowledgementError,
+}: {
+    isStale: () => boolean;
+    publish: () => void;
+    advanceCursor: () => void;
+    acknowledge: () => Promise<void>;
+    onAcknowledgementError?: (error: unknown) => void;
+}): Promise<boolean> => {
+    if (isStale()) return false;
+
+    publish();
+    advanceCursor();
+
+    try {
+        await acknowledge();
+    } catch (error) {
+        onAcknowledgementError?.(error);
+    }
+    return true;
+};
