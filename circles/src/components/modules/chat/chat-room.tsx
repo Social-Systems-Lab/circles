@@ -1,7 +1,7 @@
 //chat-room.tsx - chat room component, shows chat messages and input
 "use client";
 
-import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
+import { Dispatch, Fragment, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
 import { replyToMessageAtom, roomMessagesAtom, unreadCountsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -61,9 +61,26 @@ import {
     sendConnectRequestAction,
 } from "@/components/modules/home/actions";
 import { useToast } from "@/components/ui/use-toast";
-import { getInitialTopicTitle, getTopicCreationTime, getTopicIndexMessages } from "./chat-topic-utils";
+import {
+    getInitialTopicTitle,
+    canApplyTopicReplyLoad,
+    getTopicIndexMessages,
+    getTopicViewportSnapshot,
+    mergeRefreshedTopicStarters,
+    planTopicReplyLoad,
+    createTopicUnreadIndicator,
+    selectInitialTopicId,
+    selectUnreadTopicIds,
+    resolveTopicUnreadBoundary,
+    selectFollowUpTopicReplySignal,
+    selectQueuedTopicAcknowledgementBoundary,
+    selectTopicAcknowledgementBoundary,
+    shouldAcknowledgeTopicInteraction,
+    canApplyTopicAcknowledgementResult,
+    consumePendingTopicScrollRequest,
+    type TopicUnreadIndicator,
+} from "./chat-topic-utils";
 import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
-import { selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import {
     getLegacyLooseMessages,
@@ -199,7 +216,7 @@ const queryChatMentionSuggestions = (
     );
 };
 
-type DmConnectBannerState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
+type DmConnectControlState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
 
 const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
     message.system?.messageType === "system" &&
@@ -402,9 +419,13 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     }
 };
 
-const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | null }> = ({ chatRoom, user }) => {
+const DmConnectControl: React.FC<{
+    chatRoom: ChatRoomDisplay;
+    user?: Circle | null;
+    showActions?: boolean;
+}> = ({ chatRoom, user, showActions = true }) => {
     const { toast } = useToast();
-    const [state, setState] = useState<DmConnectBannerState>(null);
+    const [state, setState] = useState<DmConnectControlState>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isActing, setIsActing] = useState(false);
 
@@ -420,7 +441,7 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
     }, [chatRoom, user?.did]);
 
     const loadState = useCallback(async () => {
-        if (!otherParticipant?.did) {
+        if (!otherParticipant?.did || !showActions) {
             setState(null);
             return;
         }
@@ -434,13 +455,13 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
         } finally {
             setIsLoading(false);
         }
-    }, [otherParticipant?.did]);
+    }, [otherParticipant?.did, showActions]);
 
     useEffect(() => {
         void loadState();
     }, [loadState]);
 
-    if (!otherParticipant?.did || !state || state.connectStatus === "accepted") {
+    if (!otherParticipant?.did) {
         return null;
     }
 
@@ -467,61 +488,74 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
     };
 
     const contactName = otherParticipant.name || "this person";
+    const participant = (
+        <div className="flex min-w-0 items-center gap-2">
+            <CirclePicture circle={otherParticipant} size="28px" />
+            <span className="truncate text-sm font-semibold text-gray-900">{contactName}</span>
+        </div>
+    );
 
     return (
-        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                    {state.connectStatus === "pending_sent"
-                        ? `Contact request sent to ${contactName}.`
-                        : state.connectStatus === "pending_received"
-                          ? `${contactName} sent you a contact request.`
-                          : `You can message ${contactName}. Connect to add them as a contact.`}
-                </span>
-                {state.connectStatus === "pending_received" ? (
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            className="rounded-full"
-                            disabled={isActing || isLoading}
-                            onClick={() =>
-                                void runContactAction(
-                                    () => acceptConnectRequestAction(otherParticipant.did!),
-                                    "Accept contact request",
-                                )
-                            }
-                        >
-                            Accept
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="rounded-full"
-                            disabled={isActing || isLoading}
-                            onClick={() =>
-                                void runContactAction(
-                                    () => declineConnectRequestAction(otherParticipant.did!),
-                                    "Decline contact request",
-                                )
-                            }
-                        >
-                            Decline
-                        </Button>
-                    </div>
-                ) : (
-                    <Button
-                        size="sm"
-                        variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
-                        className="rounded-full"
-                        disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
-                        onClick={() =>
-                            void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
-                        }
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+                {otherParticipant.handle ? (
+                    <Link
+                        href={`/circles/${otherParticipant.handle}`}
+                        className="block min-w-0 rounded-full hover:bg-gray-100"
                     >
-                        {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
-                    </Button>
+                        {participant}
+                    </Link>
+                ) : (
+                    participant
                 )}
             </div>
+            {showActions && state && state.connectStatus !== "accepted" && (
+                <div className="flex shrink-0 items-center gap-1" aria-label={`Connection controls for ${contactName}`}>
+                    {state.connectStatus === "pending_received" ? (
+                        <>
+                            <Button
+                                size="sm"
+                                className="h-8 rounded-full px-2.5 text-xs"
+                                disabled={isActing || isLoading}
+                                onClick={() =>
+                                    void runContactAction(
+                                        () => acceptConnectRequestAction(otherParticipant.did!),
+                                        "Accept contact request",
+                                    )
+                                }
+                            >
+                                Accept
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-full bg-white px-2.5 text-xs"
+                                disabled={isActing || isLoading}
+                                onClick={() =>
+                                    void runContactAction(
+                                        () => declineConnectRequestAction(otherParticipant.did!),
+                                        "Decline contact request",
+                                    )
+                                }
+                            >
+                                Decline
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
+                            className="h-8 rounded-full px-2.5 text-xs"
+                            disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
+                            onClick={() =>
+                                void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
+                            }
+                        >
+                            {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -645,6 +679,7 @@ const renderSystemMessage = (content: string) => content;
 type ChatMessagesProps = {
     messages: ChatMessage[];
     messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+    scrollViewportRef: React.RefObject<HTMLDivElement | null>;
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
@@ -661,6 +696,7 @@ type ChatMessagesProps = {
     onCreateTopic?: () => void;
     onTopicActivity?: () => Promise<void> | void;
     topicUnreadCounts?: Record<string, number>;
+    topicReplyChangeSignals?: Record<string, string>;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     topicsLoaded?: boolean;
     mentionCandidates?: Circle[];
@@ -933,6 +969,7 @@ const EarlierMessagesSection: React.FC<{
 const ChatMessages: React.FC<ChatMessagesProps> = ({
     messages,
     messagesEndRef,
+    scrollViewportRef,
     onMessagesRendered,
     handleDelete,
     handleEdit,
@@ -948,6 +985,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onCreateTopic,
     onTopicActivity,
     topicUnreadCounts = {},
+    topicReplyChangeSignals = {},
     onTopicRead,
     topicsLoaded = true,
     mentionCandidates = [],
@@ -1116,9 +1154,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             onToggleTopic={onToggleTopic}
                             onTopicActivity={onTopicActivity}
                             serverUnreadCount={topicUnreadCounts[message.id] || 0}
+                            replyChangeSignal={topicReplyChangeSignals[message.id]}
                             onTopicRead={onTopicRead}
                             mentionCandidates={mentionCandidates}
                             canReply={canReply}
+                            scrollViewportRef={scrollViewportRef}
                         />,
                     );
                     return acc;
@@ -1875,6 +1915,8 @@ const ChatInput = ({
 // ─── Topic inline card (self-contained, expands in place) ──────────────────
 
 const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
+const getTopicUnreadIndicatorStorageKey = (conversationId: string) =>
+    `kamooni_topic_unread_indicators_${conversationId}`;
 const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 type TopicNavigationRequest = {
@@ -1899,6 +1941,33 @@ const setOpenTopicIds = (conversationId: string, ids: Set<string>) => {
     }
 };
 
+const getTopicUnreadIndicators = (conversationId: string): Record<string, TopicUnreadIndicator> => {
+    try {
+        const raw = sessionStorage.getItem(getTopicUnreadIndicatorStorageKey(conversationId));
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as Record<string, TopicUnreadIndicator>;
+        return Object.fromEntries(
+            Object.entries(parsed).filter(
+                ([, indicator]) => Number.isFinite(indicator?.unreadCount) && indicator.unreadCount > 0,
+            ),
+        );
+    } catch {
+        return {};
+    }
+};
+
+const setTopicUnreadIndicators = (conversationId: string, indicators: Record<string, TopicUnreadIndicator>) => {
+    try {
+        if (Object.keys(indicators).length === 0) {
+            sessionStorage.removeItem(getTopicUnreadIndicatorStorageKey(conversationId));
+            return;
+        }
+        sessionStorage.setItem(getTopicUnreadIndicatorStorageKey(conversationId), JSON.stringify(indicators));
+    } catch {
+        // sessionStorage unavailable — keep the in-memory indicator for this mount
+    }
+};
+
 const TopicCard: React.FC<{
     message: any;
     conversationId: string;
@@ -1910,9 +1979,11 @@ const TopicCard: React.FC<{
     onToggleTopic?: (topicId: string) => void;
     onTopicActivity?: () => Promise<void> | void;
     serverUnreadCount: number;
+    replyChangeSignal?: string;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     mentionCandidates?: Circle[];
     canReply?: boolean;
+    scrollViewportRef: React.RefObject<HTMLDivElement | null>;
 }> = ({
     message,
     conversationId,
@@ -1924,13 +1995,16 @@ const TopicCard: React.FC<{
     onToggleTopic,
     onTopicActivity,
     serverUnreadCount,
+    replyChangeSignal,
     onTopicRead,
     mentionCandidates = [],
     canReply = true,
+    scrollViewportRef,
 }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
     const cardRef = useRef<HTMLDivElement>(null);
+    const topicToggleRef = useRef<HTMLDivElement>(null);
 
     const [isOpen, setIsOpen] = useState<boolean>(() => {
         if (isSelected) return true;
@@ -1944,7 +2018,6 @@ const TopicCard: React.FC<{
     const [isSending, setIsSending] = useState(false);
     const [unreadCount, setUnreadCount] = useState<number>(serverUnreadCount);
     const readRequestRef = useRef(0);
-    const suppressServerUnreadRef = useRef(false);
     const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
@@ -1960,8 +2033,37 @@ const TopicCard: React.FC<{
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
     const replyTextRef = useRef("");
     const pendingScrollIntoViewRef = useRef(false);
+    const isTopicOpenRef = useRef(false);
+    const replyLoadInFlightRef = useRef(false);
+    const pendingReplyRefreshSignalRef = useRef<string | null>(null);
+    const appliedReplyRefreshSignalRef = useRef<string | null>(null);
+    const replyLoadScopeRef = useRef(0);
+    const currentConversationIdRef = useRef(conversationId);
+    const currentTopicIdRef = useRef(messageId);
+    const acknowledgementInFlightRef = useRef<string | null>(null);
+    const queuedAcknowledgementRef = useRef<string | null>(null);
+    const persistedAcknowledgementRef = useRef<string | null>(null);
+    const acknowledgementRequestRef = useRef(0);
+    const suppressProgrammaticFocusRef = useRef(false);
+    const [acknowledgementInFlight, setAcknowledgementInFlight] = useState(false);
+    currentConversationIdRef.current = conversationId;
+    currentTopicIdRef.current = messageId;
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
+    isTopicOpenRef.current = isTopicOpen;
+    const expectedReplyCount = Number(thread?.replyCount);
+    const unreadBoundary = useMemo(
+        () =>
+            resolveTopicUnreadBoundary({
+                starter: { id: messageId, createdBy: message.createdBy },
+                replies,
+                unreadCount,
+                currentUserDid: user?.did,
+                expectedReplyCount,
+            }),
+        [expectedReplyCount, message.createdBy, messageId, replies, unreadCount, user?.did],
+    );
+    const firstUnreadMessageId = unreadBoundary.firstUnreadMessageId;
     const mentionSuggestions = useMemo(() => getChatMentionSuggestions(mentionCandidates), [mentionCandidates]);
     const topicReplyMentionsInputStyle = useMemo(() => {
         const minHeight = isMobile ? "96px" : "44px";
@@ -2025,25 +2127,16 @@ const TopicCard: React.FC<{
         textarea.style.height = `${Math.min(textarea.scrollHeight, isMobile ? 260 : 224)}px`;
     }, [isMobile]);
 
-    // Load replies on mount if topic starts open
-    useEffect(() => {
-        if (isTopicOpen) {
-            void loadReplies();
-            onTopicOpen?.();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     useEffect(() => {
         if (!isTopicOpen) return;
         setIsOpen(true);
-        void loadReplies();
+        void loadReplies(replyChangeSignal);
         onTopicOpen?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isTopicOpen, messageId]);
 
     useEffect(() => {
-        if (!suppressServerUnreadRef.current) setUnreadCount(serverUnreadCount);
+        setUnreadCount(serverUnreadCount);
     }, [serverUnreadCount]);
 
     useEffect(() => {
@@ -2055,26 +2148,46 @@ const TopicCard: React.FC<{
         const textarea = replyTextareaRef.current;
         if (!textarea) return;
 
+        suppressProgrammaticFocusRef.current = true;
         try {
             textarea.focus({ preventScroll: true });
         } catch {
             textarea.focus();
         }
+        queueMicrotask(() => {
+            suppressProgrammaticFocusRef.current = false;
+        });
 
         const caretPosition = textarea.value.length;
         textarea.setSelectionRange(caretPosition, caretPosition);
     }, [replyToMessage?.id]);
 
-    const loadReplies = async () => {
+    const loadReplies = async (backgroundSignal?: string) => {
+        const loadPlan = planTopicReplyLoad({
+            isTopicOpen: isTopicOpenRef.current,
+            isInFlight: replyLoadInFlightRef.current,
+            pendingSignal: pendingReplyRefreshSignalRef.current,
+            requestedSignal: backgroundSignal,
+        });
+        pendingReplyRefreshSignalRef.current = loadPlan.pendingSignal;
+        if (!loadPlan.shouldStart) return;
+        backgroundSignal = loadPlan.activeSignal;
+
         const readRequestId = ++readRequestRef.current;
-        let persistedRead = false;
-        suppressServerUnreadRef.current = true;
-        setUnreadCount(0);
+        const loadScope = replyLoadScopeRef.current;
+        replyLoadInFlightRef.current = true;
         setIsLoading(true);
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
             const result = await fetchThreadRepliesAction(messageId, conversationId);
-            if (result.success && result.replies) {
+            const canApply = canApplyTopicReplyLoad({
+                requestId: readRequestId,
+                currentRequestId: readRequestRef.current,
+                loadScope,
+                currentLoadScope: replyLoadScopeRef.current,
+                isTopicOpen: isTopicOpenRef.current,
+            });
+            if (canApply && result.success && result.replies) {
                 const mapped = result.replies.map((r: any) => {
                     // Convert raw reactions array [{emoji, userDid}] to keyed map {emoji: [{sender, eventId}]}
                     const rawReactions = Array.isArray(r.reactions) ? r.reactions : [];
@@ -2110,35 +2223,124 @@ const TopicCard: React.FC<{
                     };
                 });
                 setReplies(mapped);
-                const greatestVisibleMessageId = selectGreatestObjectIdHex([
-                    messageId,
-                    ...result.replies.map((reply: any) => reply._id?.toString()),
-                ]);
-                if (!greatestVisibleMessageId) throw new Error("Topic returned no valid message boundary");
-                const { markTopicReadAction } = await import("./actions");
-                const markResult = await markTopicReadAction(conversationId, messageId, greatestVisibleMessageId);
-                if (markResult.success && readRequestRef.current === readRequestId) {
-                    persistedRead = true;
-                    await onTopicRead?.(messageId);
-                }
+                setIsLoading(false);
+                if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
             }
         } catch (e) {
             console.error("Failed to load topic replies:", e);
         } finally {
-            if (readRequestRef.current === readRequestId) {
-                suppressServerUnreadRef.current = false;
-                if (!persistedRead) setUnreadCount(serverUnreadCount);
+            const isCurrentLoad = replyLoadScopeRef.current === loadScope && readRequestRef.current === readRequestId;
+            if (isCurrentLoad) {
+                replyLoadInFlightRef.current = false;
             }
-            setIsLoading(false);
-            if (pendingScrollIntoViewRef.current) {
-                pendingScrollIntoViewRef.current = false;
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                });
+            if (isCurrentLoad) setIsLoading(false);
+            if (isCurrentLoad) onTopicLoaded?.();
+
+            const followUpSignal = selectFollowUpTopicReplySignal({
+                pendingSignal: pendingReplyRefreshSignalRef.current,
+                appliedSignal: appliedReplyRefreshSignalRef.current,
+                isTopicOpen: isCurrentLoad && isTopicOpenRef.current,
+            });
+            if (followUpSignal) {
+                void loadReplies(followUpSignal);
             }
-            onTopicLoaded?.();
         }
     };
+
+    const persistCapturedAcknowledgement = async (
+        boundary: string,
+        expectedConversationId: string,
+        expectedTopicId: string,
+        expectedLoadScope: number,
+    ) => {
+        const plan = selectQueuedTopicAcknowledgementBoundary({
+            capturedBoundary: boundary,
+            inFlightBoundary: acknowledgementInFlightRef.current,
+            queuedBoundary: queuedAcknowledgementRef.current,
+            persistedBoundary: persistedAcknowledgementRef.current,
+        });
+        queuedAcknowledgementRef.current = plan.queuedBoundary;
+        if (!plan.shouldStart) return;
+
+        const requestId = ++acknowledgementRequestRef.current;
+        acknowledgementInFlightRef.current = boundary;
+        setAcknowledgementInFlight(true);
+        try {
+            const { markTopicReadAction } = await import("./actions");
+            const result = await markTopicReadAction(expectedConversationId, expectedTopicId, boundary);
+            const isCurrentRequest = canApplyTopicAcknowledgementResult({
+                requestId,
+                currentRequestId: acknowledgementRequestRef.current,
+                expectedConversationId,
+                currentConversationId: currentConversationIdRef.current,
+                expectedTopicId,
+                currentTopicId: currentTopicIdRef.current,
+                expectedLoadScope,
+                currentLoadScope: replyLoadScopeRef.current,
+            });
+            if (result.success && isCurrentRequest) {
+                persistedAcknowledgementRef.current = boundary;
+                await onTopicRead?.(expectedTopicId);
+            }
+        } catch (error) {
+            console.error("Failed to acknowledge topic:", error);
+        } finally {
+            if (requestId !== acknowledgementRequestRef.current) return;
+            acknowledgementInFlightRef.current = null;
+            setAcknowledgementInFlight(false);
+            const queuedBoundary = queuedAcknowledgementRef.current;
+            queuedAcknowledgementRef.current = null;
+            if (
+                queuedBoundary &&
+                expectedConversationId === currentConversationIdRef.current &&
+                expectedTopicId === currentTopicIdRef.current &&
+                expectedLoadScope === replyLoadScopeRef.current
+            ) {
+                void persistCapturedAcknowledgement(
+                    queuedBoundary,
+                    expectedConversationId,
+                    expectedTopicId,
+                    expectedLoadScope,
+                );
+            }
+        }
+    };
+
+    const acknowledgeLoadedTopic = (
+        interaction: Parameters<typeof shouldAcknowledgeTopicInteraction>[0],
+        isProgrammaticFocus = false,
+    ) => {
+        if (!shouldAcknowledgeTopicInteraction(interaction, isProgrammaticFocus)) return;
+        if (!isTopicOpenRef.current || unreadCount <= 0 || !unreadBoundary.isComplete) return;
+        const boundary = selectTopicAcknowledgementBoundary({
+            topicId: messageId,
+            replyIds: replies.map((reply) => reply.id),
+            expectedReplyCount,
+        });
+        if (!boundary) return;
+        void persistCapturedAcknowledgement(boundary, conversationId, messageId, replyLoadScopeRef.current);
+    };
+
+    useEffect(() => {
+        if (!replyChangeSignal || !isTopicOpen) return;
+        if (replyChangeSignal === appliedReplyRefreshSignalRef.current) return;
+        void loadReplies(replyChangeSignal);
+        // loadReplies intentionally reads the latest open/load refs to serialize background refreshes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isTopicOpen, replyChangeSignal]);
+
+    useEffect(() => {
+        return () => {
+            replyLoadScopeRef.current += 1;
+            readRequestRef.current += 1;
+            replyLoadInFlightRef.current = false;
+            pendingReplyRefreshSignalRef.current = null;
+            acknowledgementRequestRef.current += 1;
+            acknowledgementInFlightRef.current = null;
+            queuedAcknowledgementRef.current = null;
+            persistedAcknowledgementRef.current = null;
+        };
+    }, [conversationId, messageId]);
 
     useEffect(() => {
         if (navigationRequest?.topicId !== messageId) {
@@ -2152,22 +2354,46 @@ const TopicCard: React.FC<{
             const openIds = getOpenTopicIds(conversationId);
             openIds.add(messageId);
             setOpenTopicIds(conversationId, openIds);
-            setUnreadCount(0);
-            void loadReplies();
             onTopicOpen?.();
             return;
         }
 
         if (replies.length === 0 && !isLoading) {
-            void loadReplies();
+            void loadReplies(replyChangeSignal);
             return;
         }
-
-        requestAnimationFrame(() => {
-            cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigationRequest?.nonce]);
+
+    useEffect(() => {
+        if (navigationRequest?.topicId !== messageId || !isTopicOpen || isLoading) return;
+        if (!pendingScrollIntoViewRef.current) return;
+        if (Number.isSafeInteger(expectedReplyCount) && expectedReplyCount > replies.length) return;
+
+        const boundaryElementId = firstUnreadMessageId ? `topic-unread-boundary-${firstUnreadMessageId}` : undefined;
+        const boundaryTarget =
+            unreadBoundary.isComplete && firstUnreadMessageId
+                ? document.getElementById(boundaryElementId || getMessageElementId(firstUnreadMessageId) || "")
+                : null;
+        const scrollRoot = scrollViewportRef.current;
+        const target = boundaryTarget && scrollRoot?.contains(boundaryTarget) ? boundaryTarget : cardRef.current;
+        if (!target || !consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) return;
+
+        requestAnimationFrame(() => {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    }, [
+        firstUnreadMessageId,
+        isLoading,
+        isTopicOpen,
+        messageId,
+        navigationRequest?.nonce,
+        navigationRequest?.topicId,
+        expectedReplyCount,
+        replies.length,
+        scrollViewportRef,
+        unreadBoundary.isComplete,
+    ]);
 
     if (!thread) return null;
 
@@ -2178,23 +2404,34 @@ const TopicCard: React.FC<{
         }
         const next = !isOpen;
         if (next) {
-            void loadReplies();
+            void loadReplies(replyChangeSignal);
             onTopicOpen?.();
         }
         setIsOpen(next);
         const openIds = getOpenTopicIds(conversationId);
         if (next) {
             openIds.add(messageId);
-            setUnreadCount(0);
         } else {
             openIds.delete(messageId);
         }
         setOpenTopicIds(conversationId, openIds);
     };
 
+    const handleCloseFromEnd = () => {
+        if (!isTopicOpen) return;
+        handleToggle();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                topicToggleRef.current?.focus({ preventScroll: true });
+            });
+        });
+    };
+
     const handleSendReply = async () => {
         const trimmed = replyTextRef.current.trim();
         if (!trimmed || isSending) return;
+        acknowledgeLoadedTopic("send");
         setIsSending(true);
         try {
             const { sendThreadReplyAction } = await import("./mongo-actions");
@@ -2323,6 +2560,7 @@ const TopicCard: React.FC<{
             alert("File size exceeds 5MB limit.");
             return;
         }
+        acknowledgeLoadedTopic("attachment");
         setIsUploading(true);
         try {
             const { sendAttachmentAction } = await import("./actions");
@@ -2359,21 +2597,64 @@ const TopicCard: React.FC<{
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
     const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
     const starterCreatedAt = new Date(message.createdAt);
+    const renderUnreadBoundary = (boundaryMessageId: string) =>
+        firstUnreadMessageId === boundaryMessageId ? (
+            <div
+                id={`topic-unread-boundary-${boundaryMessageId}`}
+                className="flex items-center gap-2 py-1 text-xs font-medium text-red-600"
+            >
+                <span className="h-px flex-1 bg-red-200" />
+                <span>New messages</span>
+                <button
+                    type="button"
+                    className="rounded px-1.5 py-0.5 font-semibold underline underline-offset-2 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-wait disabled:opacity-60"
+                    disabled={acknowledgementInFlight}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        acknowledgeLoadedTopic("mark-read");
+                    }}
+                >
+                    Mark as read
+                </button>
+                <span className="h-px flex-1 bg-red-200" />
+            </div>
+        ) : null;
 
     return (
         <div
             ref={cardRef}
             id={getMessageElementId(messageId)}
             data-message-id={messageId}
-            className={`my-3 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
+            className={`my-3 w-full scroll-mt-36 rounded-xl shadow-sm transition-all sm:scroll-mt-24 ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
         >
             {/* Header row — always visible, click to toggle */}
             <div
+                ref={topicToggleRef}
                 className={`flex cursor-pointer flex-col gap-2 px-3 text-left sm:flex-row sm:items-start sm:justify-between ${isTopicOpen ? "py-3" : "py-4"}`}
                 onClick={handleToggle}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isTopicOpen}
+                aria-label={`${isTopicOpen ? "Close" : "Open"} topic: ${thread.title}`}
+                onKeyDown={(event) => {
+                    if (event.currentTarget === event.target && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        handleToggle();
+                    }
+                }}
             >
                 <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900">{thread.title}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-gray-900">{thread.title}</p>
+                        {isTopicOpen && unreadCount > 0 && (
+                            <span
+                                className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white"
+                                aria-label={`${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"} in this topic`}
+                            >
+                                {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
+                            </span>
+                        )}
+                    </div>
                     {thread.hashtags && thread.hashtags.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                             {thread.hashtags.map((tag: string) => (
@@ -2388,6 +2669,9 @@ const TopicCard: React.FC<{
                     )}
                     {!isTopicOpen && effectiveStarterBody && (
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
+                    )}
+                    {isTopicOpen && firstUnreadMessageId === messageId && (
+                        <div className="mt-2">{renderUnreadBoundary(messageId)}</div>
                     )}
                     {isTopicOpen && effectiveStarterBody && (
                         <div className="mt-2 text-sm leading-relaxed text-gray-700">
@@ -2405,14 +2689,20 @@ const TopicCard: React.FC<{
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
                         <div className="relative">
-                            <HiLightBulb className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`} />
+                            <HiLightBulb
+                                className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`}
+                                aria-hidden="true"
+                            />
                             {!isTopicOpen && unreadCount > 0 && (
-                                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
+                                <span
+                                    className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white"
+                                    aria-label={`${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"} in this topic`}
+                                >
                                     {unreadCount}
                                 </span>
                             )}
                         </div>
-                        <span>
+                        <span className="border-l border-gray-300 pl-2">
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
                         {canReply && isOwnStarter && (
@@ -2483,171 +2773,181 @@ const TopicCard: React.FC<{
                                     new Date(replies[replyIndex - 1].createdAt).getTime() >
                                     5 * 60 * 1000;
                             return (
-                                <div
-                                    key={reply.id}
-                                    id={getMessageElementId(reply.id)}
-                                    data-message-id={reply.id}
-                                    className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
-                                    onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
-                                    onMouseLeave={() => {
-                                        if (!isMobile) {
-                                            setHoveredReplyId(null);
-                                        }
-                                    }}
-                                    onClick={() => {
-                                        if (isMobile && !isEditing) {
-                                            setHoveredReplyId((current) => (current === reply.id ? null : reply.id));
-                                            setPickerOpenForReply((current) => (current === reply.id ? current : null));
-                                        }
-                                    }}
-                                >
+                                <Fragment key={reply.id}>
+                                    {renderUnreadBoundary(reply.id)}
                                     <div
-                                        className={`relative flex w-[96%] flex-col overflow-visible shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
-                                        style={{ borderRadius: "12px" }}
+                                        id={getMessageElementId(reply.id)}
+                                        data-message-id={reply.id}
+                                        className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
+                                        onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
+                                        onMouseLeave={() => {
+                                            if (!isMobile) setHoveredReplyId(null);
+                                        }}
+                                        onClick={() => {
+                                            if (isMobile && !isEditing) {
+                                                setHoveredReplyId((current) =>
+                                                    current === reply.id ? null : reply.id,
+                                                );
+                                                setPickerOpenForReply((current) =>
+                                                    current === reply.id ? current : null,
+                                                );
+                                            }
+                                        }}
                                     >
-                                        <div className="px-3 py-1.5">
-                                            <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
-                                                {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
-                                            </div>
-                                            {isEditing ? (
-                                                <div className="flex flex-col gap-1">
-                                                    <textarea
-                                                        value={editingReplyText}
-                                                        onChange={(e) => setEditingReplyText(e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Escape") {
-                                                                setEditingReplyId(null);
-                                                                setEditingReplyText("");
-                                                            }
-                                                        }}
-                                                        rows={5}
-                                                        className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
-                                                    />
-                                                    <div className="flex justify-end gap-1">
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingReplyId(null);
-                                                                setEditingReplyText("");
-                                                            }}
-                                                            className="text-xs text-gray-500 hover:text-gray-700"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                        <button
-                                                            onClick={() => void handleEditSubmit(reply.id)}
-                                                            className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
-                                                        >
-                                                            Save
-                                                        </button>
-                                                    </div>
+                                        <div
+                                            className={`relative flex w-[96%] flex-col overflow-visible shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
+                                            style={{ borderRadius: "12px" }}
+                                        >
+                                            <div className="px-3 py-1.5">
+                                                <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
+                                                    {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
                                                 </div>
-                                            ) : (
-                                                <MessageRenderer message={reply} />
-                                            )}
-                                            {canReply &&
-                                                (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
-                                                !isEditing && (
-                                                    <div
-                                                        className="absolute -bottom-3 right-2 z-10"
-                                                        onClick={(event) => event.stopPropagation()}
-                                                    >
-                                                        <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                                            {isOwn && (
-                                                                <>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                        onClick={() => {
-                                                                            setEditingReplyId(reply.id);
-                                                                            setEditingReplyText(
-                                                                                (reply.content?.body as string) || "",
-                                                                            );
-                                                                        }}
-                                                                    >
-                                                                        <GrEdit className="h-4 w-4" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                        onClick={() => void handleDeleteReply(reply.id)}
-                                                                    >
-                                                                        <GrTrash className="h-4 w-4" />
-                                                                    </Button>
-                                                                </>
-                                                            )}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8"
-                                                                onClick={() => setReplyToMessage(reply)}
-                                                            >
-                                                                <MdReply className="h-4 w-4" />
-                                                            </Button>
-                                                            <Popover
-                                                                open={pickerOpenForReply === reply.id}
-                                                                onOpenChange={(open) =>
-                                                                    setPickerOpenForReply(open ? reply.id : null)
+                                                {isEditing ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <textarea
+                                                            value={editingReplyText}
+                                                            onChange={(e) => setEditingReplyText(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Escape") {
+                                                                    setEditingReplyId(null);
+                                                                    setEditingReplyText("");
                                                                 }
+                                                            }}
+                                                            rows={5}
+                                                            className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                                        />
+                                                        <div className="flex justify-end gap-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingReplyId(null);
+                                                                    setEditingReplyText("");
+                                                                }}
+                                                                className="text-xs text-gray-500 hover:text-gray-700"
                                                             >
-                                                                <PopoverTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                    >
-                                                                        <BsEmojiSmile className="h-4 w-4" />
-                                                                    </Button>
-                                                                </PopoverTrigger>
-                                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                                    <LazyEmojiPicker
-                                                                        onEmojiClick={(data: EmojiClickData) => {
-                                                                            void handleReaction(reply.id, data.emoji);
-                                                                            setPickerOpenForReply(null);
-                                                                        }}
-                                                                    />
-                                                                </PopoverContent>
-                                                            </Popover>
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => void handleEditSubmit(reply.id)}
+                                                                className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
+                                                            >
+                                                                Save
+                                                            </button>
                                                         </div>
                                                     </div>
+                                                ) : (
+                                                    <MessageRenderer message={reply} />
                                                 )}
-                                            <div className="mt-2 text-right text-xs font-medium text-gray-500">
-                                                {formatCompactDisplayName(reply.author?.name, reply.createdBy)}
-                                            </div>
-                                        </div>
-                                        {reply.reactions && Object.keys(reply.reactions).length > 0 && (
-                                            <div className="-mb-1 flex flex-wrap justify-end gap-1 px-2 pb-1">
-                                                {Object.entries(reply.reactions as Record<string, any>).map(
-                                                    ([emoji, reactors]) => {
-                                                        const reactorList = Array.isArray(reactors) ? reactors : [];
-                                                        return (
-                                                            <button
-                                                                key={emoji}
-                                                                onClick={
-                                                                    canReply
-                                                                        ? (event) => {
-                                                                              event.stopPropagation();
-                                                                              void handleReaction(reply.id, emoji);
-                                                                          }
-                                                                        : undefined
-                                                                }
-                                                                className="flex min-h-6 items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none"
-                                                            >
-                                                                {emoji}{" "}
-                                                                {reactorList.length > 1 && (
-                                                                    <span className="ml-0.5 text-gray-500">
-                                                                        {reactorList.length}
-                                                                    </span>
+                                                {canReply &&
+                                                    (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
+                                                    !isEditing && (
+                                                        <div
+                                                            className="absolute -bottom-3 right-2 z-10"
+                                                            onClick={(event) => event.stopPropagation()}
+                                                        >
+                                                            <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                                                {isOwn && (
+                                                                    <>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                            onClick={() => {
+                                                                                setEditingReplyId(reply.id);
+                                                                                setEditingReplyText(
+                                                                                    (reply.content?.body as string) ||
+                                                                                        "",
+                                                                                );
+                                                                            }}
+                                                                        >
+                                                                            <GrEdit className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                            onClick={() =>
+                                                                                void handleDeleteReply(reply.id)
+                                                                            }
+                                                                        >
+                                                                            <GrTrash className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </>
                                                                 )}
-                                                            </button>
-                                                        );
-                                                    },
-                                                )}
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8"
+                                                                    onClick={() => setReplyToMessage(reply)}
+                                                                >
+                                                                    <MdReply className="h-4 w-4" />
+                                                                </Button>
+                                                                <Popover
+                                                                    open={pickerOpenForReply === reply.id}
+                                                                    onOpenChange={(open) =>
+                                                                        setPickerOpenForReply(open ? reply.id : null)
+                                                                    }
+                                                                >
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                        >
+                                                                            <BsEmojiSmile className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                                        <LazyEmojiPicker
+                                                                            onEmojiClick={(data: EmojiClickData) => {
+                                                                                void handleReaction(
+                                                                                    reply.id,
+                                                                                    data.emoji,
+                                                                                );
+                                                                                setPickerOpenForReply(null);
+                                                                            }}
+                                                                        />
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                <div className="mt-2 text-right text-xs font-medium text-gray-500">
+                                                    {formatCompactDisplayName(reply.author?.name, reply.createdBy)}
+                                                </div>
                                             </div>
-                                        )}
+                                            {reply.reactions && Object.keys(reply.reactions).length > 0 && (
+                                                <div className="-mb-1 flex flex-wrap justify-end gap-1 px-2 pb-1">
+                                                    {Object.entries(reply.reactions as Record<string, any>).map(
+                                                        ([emoji, reactors]) => {
+                                                            const reactorList = Array.isArray(reactors) ? reactors : [];
+                                                            return (
+                                                                <button
+                                                                    key={emoji}
+                                                                    onClick={
+                                                                        canReply
+                                                                            ? (event) => {
+                                                                                  event.stopPropagation();
+                                                                                  void handleReaction(reply.id, emoji);
+                                                                              }
+                                                                            : undefined
+                                                                    }
+                                                                    className="flex min-h-6 items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none"
+                                                                >
+                                                                    {emoji}{" "}
+                                                                    {reactorList.length > 1 && (
+                                                                        <span className="ml-0.5 text-gray-500">
+                                                                            {reactorList.length}
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        },
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
+                                </Fragment>
                             );
                         })}
                     </div>
@@ -2687,9 +2987,10 @@ const TopicCard: React.FC<{
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto border-none bg-transparent p-0">
                                             <LazyEmojiPicker
-                                                onEmojiClick={(data: EmojiClickData) =>
-                                                    setTopicReplyText((prev) => prev + data.emoji)
-                                                }
+                                                onEmojiClick={(data: EmojiClickData) => {
+                                                    acknowledgeLoadedTopic("emoji");
+                                                    setTopicReplyText((prev) => prev + data.emoji);
+                                                }}
                                             />
                                         </PopoverContent>
                                     </Popover>
@@ -2735,9 +3036,14 @@ const TopicCard: React.FC<{
                                         inputRef={replyTextareaRef}
                                         value={replyText}
                                         onChange={(_event, newValue) => {
+                                            acknowledgeLoadedTopic("typing");
                                             setTopicReplyText(newValue);
                                             autoGrowReplyTextarea();
                                         }}
+                                        onFocus={() =>
+                                            acknowledgeLoadedTopic("focus", suppressProgrammaticFocusRef.current)
+                                        }
+                                        onPointerDown={() => acknowledgeLoadedTopic("focus")}
                                         placeholder={`Reply to ${thread.title}. Use return for a new line.`}
                                         aria-label={`Reply to ${thread.title}`}
                                         className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
@@ -2769,6 +3075,19 @@ const TopicCard: React.FC<{
                             </div>
                         </div>
                     )}
+                    <div className="flex justify-center border-t border-[#DDEBB8] px-3 py-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full bg-white px-4"
+                            onClick={handleCloseFromEnd}
+                            aria-label={`Close topic: ${thread.title}`}
+                        >
+                            <IoChevronDown className="mr-1.5 h-4 w-4 rotate-180" aria-hidden="true" />
+                            Close topic
+                        </Button>
+                    </div>
                 </div>
             )}
             {isEditingTopic && (
@@ -2982,10 +3301,9 @@ export const ChatRoomComponent: React.FC<{
         latestCreatedAt: null,
     });
     const isCompact = useIsCompact();
-    const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
+    const [newTopicButtonLeft, setNewTopicButtonLeft] = useState<number | null>(null);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-    const isMobile = useIsMobile();
     const isChatMobile = useClientMediaQuery("(max-width: 767px)");
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
@@ -3001,6 +3319,8 @@ export const ChatRoomComponent: React.FC<{
     const [hasLoadedTopics, setHasLoadedTopics] = useState(false);
     const [isLoadingTopics, setIsLoadingTopics] = useState(false);
     const [topicUnreadCounts, setTopicUnreadCounts] = useState<Record<string, number>>({});
+    const [hasLoadedTopicUnreadCounts, setHasLoadedTopicUnreadCounts] = useState(false);
+    const [, setTopicUnreadIndicatorsState] = useState<Record<string, TopicUnreadIndicator>>({});
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -3015,12 +3335,17 @@ export const ChatRoomComponent: React.FC<{
     const activeRoomIdRef = useRef<string | null>(roomId);
     const topicLoadRequestRef = useRef(0);
     const topicUnreadRequestRef = useRef(0);
+    const topicsLoadedRoomRef = useRef<string | null>(null);
+    const topicUnreadCountsLoadedRoomRef = useRef<string | null>(null);
+    const topicUnreadIndicatorsLoadedRoomRef = useRef<string | null>(null);
     const openedDeepLinkTopicRef = useRef<string | null>(null);
+    const initialTopicEntryHandledRef = useRef(false);
     const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
     const repliesDisabled =
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
     const isAnnouncementConversation = conversationType === "announcement" || repliesDisabled;
     const canChangeContent = !isAnnouncementConversation && !archivedReadOnly;
+    const showFloatingNewTopic = !inToolbox && canChangeContent;
 
     const handleUnarchive = useCallback(async () => {
         if (!roomId || isUnarchiving) return;
@@ -3140,7 +3465,7 @@ export const ChatRoomComponent: React.FC<{
         console.log("CHAT DEBUG roomMessages keys:", Object.keys(roomMessages));
     }, [provider, routeHandle, roomId, roomMessages]);
 
-    const { isLoading: isLoadingMongo } = useMongoChat({
+    const { isLoading: isLoadingMongo, polledTopicReplySignals } = useMongoChat({
         roomId,
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
@@ -3156,17 +3481,59 @@ export const ChatRoomComponent: React.FC<{
         setHasLoadedTopics(false);
         setIsLoadingTopics(false);
         setTopicUnreadCounts({});
+        setHasLoadedTopicUnreadCounts(false);
+        topicsLoadedRoomRef.current = null;
+        topicUnreadCountsLoadedRoomRef.current = null;
+        const restoredIndicators = roomId ? getTopicUnreadIndicators(roomId) : {};
+        topicUnreadIndicatorsLoadedRoomRef.current = roomId;
+        setTopicUnreadIndicatorsState(restoredIndicators);
         openedDeepLinkTopicRef.current = null;
+        initialTopicEntryHandledRef.current = false;
     }, [roomId]);
 
+    const navigateToTopic = useCallback((topicId: string) => {
+        setOpenTopicIds((previous) => new Set(previous).add(topicId));
+        setTopicNavigationRequest({ topicId, nonce: Date.now() });
+    }, []);
+
+    const updateTopicUnreadIndicators = useCallback(
+        (update: (current: Record<string, TopicUnreadIndicator>) => Record<string, TopicUnreadIndicator>) => {
+            if (!roomId) return;
+            setTopicUnreadIndicatorsState((current) => {
+                const next = update(current);
+                setTopicUnreadIndicators(roomId, next);
+                return next;
+            });
+        },
+        [roomId],
+    );
+
+    const captureTopicUnreadIndicator = useCallback(
+        (topicId: string) => {
+            const indicator = createTopicUnreadIndicator(topicUnreadCounts[topicId] || 0);
+            if (!indicator) return;
+            updateTopicUnreadIndicators((current) =>
+                current[topicId] ? current : { ...current, [topicId]: indicator },
+            );
+        },
+        [topicUnreadCounts, updateTopicUnreadIndicators],
+    );
+
     useEffect(() => {
-        if (!initialTopicId || !roomId || !hasLoadedTopics || openedDeepLinkTopicRef.current === initialTopicId) return;
+        if (
+            !initialTopicId ||
+            !roomId ||
+            !hasLoadedTopics ||
+            topicsLoadedRoomRef.current !== roomId ||
+            openedDeepLinkTopicRef.current === initialTopicId
+        )
+            return;
         const topicToOpen = selectLoadedDeepLinkTopic(initialTopicId, roomMessages[roomId] || []);
         if (!topicToOpen) return;
         openedDeepLinkTopicRef.current = topicToOpen;
-        setOpenTopicIds((previous) => new Set(previous).add(topicToOpen));
-        setTopicNavigationRequest({ topicId: topicToOpen, nonce: Date.now() });
-    }, [hasLoadedTopics, initialTopicId, roomId, roomMessages]);
+        initialTopicEntryHandledRef.current = true;
+        navigateToTopic(topicToOpen);
+    }, [hasLoadedTopics, initialTopicId, navigateToTopic, roomId, roomMessages]);
 
     const refreshTopicUnreadCounts = useCallback(async () => {
         const targetRoomId = roomId;
@@ -3178,6 +3545,8 @@ export const ChatRoomComponent: React.FC<{
             if (activeRoomIdRef.current !== targetRoomId || topicUnreadRequestRef.current !== requestId) return;
             if (result.success && result.counts) {
                 setTopicUnreadCounts(result.counts);
+                topicUnreadCountsLoadedRoomRef.current = targetRoomId;
+                setHasLoadedTopicUnreadCounts(true);
                 if (typeof result.conversationUnreadCount === "number") {
                     setUnreadCounts((previous) => ({
                         ...previous,
@@ -3190,6 +3559,42 @@ export const ChatRoomComponent: React.FC<{
         }
     }, [roomId, setUnreadCounts]);
 
+    useEffect(() => {
+        if (
+            !roomId ||
+            !hasLoadedTopics ||
+            !hasLoadedTopicUnreadCounts ||
+            topicsLoadedRoomRef.current !== roomId ||
+            topicUnreadCountsLoadedRoomRef.current !== roomId ||
+            topicUnreadIndicatorsLoadedRoomRef.current !== roomId ||
+            initialTopicEntryHandledRef.current
+        )
+            return;
+
+        const topicId = selectInitialTopicId({
+            explicitTopicId: initialTopicId,
+            initialEntryHandled: initialTopicEntryHandledRef.current,
+            messages: roomMessages[roomId] || [],
+            unreadCounts: topicUnreadCounts,
+        });
+
+        if (initialTopicId) return;
+        initialTopicEntryHandledRef.current = true;
+        if (topicId) {
+            captureTopicUnreadIndicator(topicId);
+            navigateToTopic(topicId);
+        }
+    }, [
+        hasLoadedTopicUnreadCounts,
+        hasLoadedTopics,
+        initialTopicId,
+        captureTopicUnreadIndicator,
+        navigateToTopic,
+        roomId,
+        roomMessages,
+        topicUnreadCounts,
+    ]);
+
     const handleTopicRead = useCallback(
         async (_topicId: string) => {
             await refreshTopicUnreadCounts();
@@ -3198,40 +3603,46 @@ export const ChatRoomComponent: React.FC<{
         [refreshTopicUnreadCounts, roomId],
     );
 
-    const refreshTopicStarters = useCallback(async () => {
-        const targetRoomId = roomId;
-        if (!targetRoomId) return;
+    const refreshTopicStarters = useCallback(
+        async (refreshUnreadCounts = true) => {
+            const targetRoomId = roomId;
+            if (!targetRoomId) return;
 
-        const requestId = ++topicLoadRequestRef.current;
-        setIsLoadingTopics(true);
+            const requestId = ++topicLoadRequestRef.current;
+            setIsLoadingTopics(true);
 
-        try {
-            const { fetchTopicStartersAction } = await import("./mongo-actions");
-            const result = await fetchTopicStartersAction(targetRoomId);
-            if (activeRoomIdRef.current !== targetRoomId || topicLoadRequestRef.current !== requestId) {
-                return;
-            }
-            if (!result.success || !result.messages) {
-                return;
-            }
+            try {
+                const { fetchTopicStartersAction } = await import("./mongo-actions");
+                const result = await fetchTopicStartersAction(targetRoomId);
+                if (activeRoomIdRef.current !== targetRoomId || topicLoadRequestRef.current !== requestId) {
+                    return;
+                }
+                if (!result.success || !result.messages) {
+                    return;
+                }
 
-            setRoomMessages((prev) => {
-                const existingLooseMessages = (prev[targetRoomId] || []).filter((message) => !(message as any).thread);
-                const merged = [...existingLooseMessages, ...result.messages!].sort(
-                    (a, b) => getTopicCreationTime(a as any) - getTopicCreationTime(b as any),
-                );
-                return { ...prev, [targetRoomId]: merged };
-            });
-            setHasLoadedTopics(true);
-            void refreshTopicUnreadCounts();
-        } catch (error) {
-            console.error("Failed to refresh topic starters:", error);
-        } finally {
-            if (activeRoomIdRef.current === targetRoomId && topicLoadRequestRef.current === requestId) {
-                setIsLoadingTopics(false);
+                setRoomMessages((prev) => {
+                    const merged = mergeRefreshedTopicStarters(prev[targetRoomId] || [], result.messages!);
+                    return { ...prev, [targetRoomId]: merged };
+                });
+                topicsLoadedRoomRef.current = targetRoomId;
+                setHasLoadedTopics(true);
+                if (refreshUnreadCounts) void refreshTopicUnreadCounts();
+            } catch (error) {
+                console.error("Failed to refresh topic starters:", error);
+            } finally {
+                if (activeRoomIdRef.current === targetRoomId && topicLoadRequestRef.current === requestId) {
+                    setIsLoadingTopics(false);
+                }
             }
-        }
-    }, [refreshTopicUnreadCounts, roomId, setRoomMessages]);
+        },
+        [refreshTopicUnreadCounts, roomId, setRoomMessages],
+    );
+
+    useEffect(() => {
+        if (!roomId || !hasLoadedTopics || Object.keys(polledTopicReplySignals).length === 0) return;
+        void refreshTopicStarters(false);
+    }, [hasLoadedTopics, polledTopicReplySignals, refreshTopicStarters, roomId]);
 
     const latestRoomMessageId = roomId ? roomMessages[roomId]?.[roomMessages[roomId].length - 1]?.id : undefined;
     useEffect(() => {
@@ -3248,22 +3659,14 @@ export const ChatRoomComponent: React.FC<{
                 return;
             }
 
-            setOpenTopicIds((prev) => {
-                const next = new Set(prev);
-                next.add(topicId);
-                return next;
-            });
-            setTopicNavigationRequest({
-                topicId,
-                nonce: Date.now(),
-            });
+            navigateToTopic(topicId);
         };
 
         window.addEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
         return () => {
             window.removeEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
         };
-    }, [roomId]);
+    }, [navigateToTopic, roomId]);
 
     useEffect(() => {
         if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
@@ -3421,18 +3824,16 @@ export const ChatRoomComponent: React.FC<{
     };
 
     useEffect(() => {
-        if (messages.length === 0) return;
+        const nextSnapshot = getTopicViewportSnapshot(messages);
+        if (nextSnapshot.count === 0) return;
 
-        const latestMessage = messages[messages.length - 1];
-        const latestCreatedAt =
-            latestMessage.createdAt instanceof Date
-                ? latestMessage.createdAt.getTime()
-                : new Date(latestMessage.createdAt).getTime();
         const previousSnapshot = lastRenderedMessageRef.current;
         const hasNewLatestMessage =
             previousSnapshot.count > 0 &&
-            (messages.length > previousSnapshot.count ||
-                (previousSnapshot.latestCreatedAt !== null && latestCreatedAt > previousSnapshot.latestCreatedAt));
+            (nextSnapshot.count > previousSnapshot.count ||
+                (previousSnapshot.latestCreatedAt !== null &&
+                    nextSnapshot.latestCreatedAt !== null &&
+                    nextSnapshot.latestCreatedAt > previousSnapshot.latestCreatedAt));
 
         if (!hasInitiallyScrolledRef.current) {
             hasInitiallyScrolledRef.current = true;
@@ -3445,10 +3846,7 @@ export const ChatRoomComponent: React.FC<{
             scrollToBottom("smooth");
         }
 
-        lastRenderedMessageRef.current = {
-            count: messages.length,
-            latestCreatedAt,
-        };
+        lastRenderedMessageRef.current = nextSnapshot;
     }, [messages]);
 
     useEffect(() => {
@@ -3484,6 +3882,18 @@ export const ChatRoomComponent: React.FC<{
     }, []);
 
     const topicCount = useMemo(() => getTopicIndexMessages(messages).length, [messages]);
+    const remainingUnreadTopicIds = useMemo(
+        () => selectUnreadTopicIds(messages, topicUnreadCounts),
+        [messages, topicUnreadCounts],
+    );
+
+    const navigateToNextUnreadTopic = useCallback(() => {
+        const nextTopicId = remainingUnreadTopicIds[0];
+        if (nextTopicId) {
+            captureTopicUnreadIndicator(nextTopicId);
+            navigateToTopic(nextTopicId);
+        }
+    }, [captureTopicUnreadIndicator, navigateToTopic, remainingUnreadTopicIds]);
 
     const openNewTopicModal = useCallback(
         (useFirstTopicDefault = false) => {
@@ -3530,11 +3940,8 @@ export const ChatRoomComponent: React.FC<{
             const container = inputRef.current;
             if (container) {
                 const rect = container.getBoundingClientRect();
-                setPillStyle({
-                    left: `${rect.left + rect.width / 2}px`,
-                    transform: "translateX(-50%)",
-                });
                 setJumpButtonRight(Math.max(16, window.innerWidth - rect.right + 16));
+                setNewTopicButtonLeft(rect.left + rect.width / 2);
             }
         };
 
@@ -3545,6 +3952,92 @@ export const ChatRoomComponent: React.FC<{
 
     const handleMessagesRendered = () => {};
     const scrollBottomPadding = isChatMobile ? 96 : 16;
+    const nextUnreadTopicControl =
+        remainingUnreadTopicIds.length > 0 ? (
+            <div
+                className={`sticky z-10 flex justify-center pb-2 ${
+                    inToolbox ? "top-2" : isChatMobile ? "top-8" : showFloatingNewTopic ? "top-[8rem]" : "top-[4.5rem]"
+                }`}
+            >
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full bg-white shadow-sm"
+                    onClick={navigateToNextUnreadTopic}
+                >
+                    Next unread topic
+                    {remainingUnreadTopicIds.length > 1 ? ` (${remainingUnreadTopicIds.length})` : ""}
+                </Button>
+            </div>
+        ) : null;
+    const conversationToolbar = !inToolbox ? (
+        <div
+            className={
+                isChatMobile
+                    ? "relative z-20 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white px-4 py-2 shadow-sm"
+                    : "sticky top-0 z-20 -mx-4 mb-3 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-sm"
+            }
+        >
+            {isChatMobile && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                    onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
+                    aria-label="Back to conversations"
+                >
+                    <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+                </Button>
+            )}
+            {(chatRoom as any)?.isDirect ? (
+                <DmConnectControl chatRoom={chatRoom} user={user} showActions={!archivedReadOnly} />
+            ) : (
+                !isChatMobile &&
+                circle && (
+                    <Link href={`/circles/${circle.handle}`} className="min-w-0 cursor-pointer">
+                        <div className="flex items-center gap-2 rounded-full bg-white p-2 hover:bg-gray-100">
+                            <CirclePicture circle={circle} size="24px" />
+                            <span className="truncate text-sm font-semibold">{circle.name}</span>
+                        </div>
+                    </Link>
+                )
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+                {archivedReadOnly ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-10 rounded-full bg-white px-3 text-sm"
+                        onClick={() => void handleUnarchive()}
+                        disabled={isUnarchiving}
+                    >
+                        <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                        {isUnarchiving ? "Unarchiving..." : isChatMobile ? "Unarchive" : "Unarchive conversation"}
+                    </Button>
+                ) : null}
+            </div>
+        </div>
+    ) : null;
+    const newTopicControl = showFloatingNewTopic ? (
+        <Button
+            type="button"
+            size="sm"
+            className={
+                isChatMobile
+                    ? "h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+                    : "fixed top-[4.5rem] z-30 h-10 -translate-x-1/2 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+            }
+            style={isChatMobile ? undefined : { left: newTopicButtonLeft === null ? "50%" : `${newTopicButtonLeft}px` }}
+            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
+            title="New topic"
+            aria-label="New topic"
+        >
+            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+            <span className="max-w-[6.5rem] truncate">New topic</span>
+        </Button>
+    ) : null;
 
     return (
         <>
@@ -3564,47 +4057,20 @@ export const ChatRoomComponent: React.FC<{
                 }}
             >
                 <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && !isChatMobile && (
-                        <div className="fixed top-4 z-[20] flex items-center gap-2" style={pillStyle}>
-                            {circle && (
-                                <Link href={`/circles/${circle.handle}`} className="cursor-pointer">
-                                    <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
-                                        <CirclePicture circle={circle} size="24px" />
-                                        <span className="text-sm font-semibold">{circle.name}</span>
-                                    </div>
-                                </Link>
-                            )}
-                            {archivedReadOnly && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 rounded-full bg-white px-3 text-sm shadow-sm"
-                                    onClick={() => void handleUnarchive()}
-                                    disabled={isUnarchiving}
-                                >
-                                    <ArchiveRestore className="mr-1.5 h-4 w-4" />
-                                    {isUnarchiving ? "Unarchiving..." : "Unarchive conversation"}
-                                </Button>
-                            )}
-                            {!isMobile && canChangeContent && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                                    onClick={() => openNewTopicModal(false)}
-                                    title="New topic"
-                                >
-                                    <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                                    New topic
-                                </Button>
+                    {!inToolbox && isChatMobile && (
+                        <div className="relative z-30 shrink-0 pt-16">
+                            {conversationToolbar}
+                            {newTopicControl && (
+                                <div className="absolute left-1/2 top-full z-30 -translate-x-1/2 -translate-y-1/2">
+                                    {newTopicControl}
+                                </div>
                             )}
                         </div>
                     )}
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
+                            data-chat-scroll-viewport="true"
                             onScroll={handleScroll}
                             className="overflow-y-auto p-4"
                             style={{
@@ -3613,7 +4079,11 @@ export const ChatRoomComponent: React.FC<{
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
+                            {!archivedReadOnly && (chatRoom as any)?.isDirect && (
+                                <div className="mb-3 flex rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                                    <DmConnectControl chatRoom={chatRoom} user={user} />
+                                </div>
+                            )}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3628,10 +4098,12 @@ export const ChatRoomComponent: React.FC<{
                             {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
+                            {nextUnreadTopicControl}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
+                                    scrollViewportRef={scrollContainerRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
@@ -3648,6 +4120,7 @@ export const ChatRoomComponent: React.FC<{
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
                                     topicUnreadCounts={topicUnreadCounts}
+                                    topicReplyChangeSignals={polledTopicReplySignals}
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
@@ -3657,15 +4130,15 @@ export const ChatRoomComponent: React.FC<{
                     ) : (
                         <div
                             ref={scrollContainerRef}
+                            data-chat-scroll-viewport="true"
                             onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto p-4"
+                            className="min-h-0 flex-grow overflow-y-auto px-4 pb-4 pt-7 md:p-4"
                             style={{
                                 overflowAnchor: "auto",
-                                paddingTop: isChatMobile ? 120 : 64,
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            {!archivedReadOnly && <DmConnectBanner chatRoom={chatRoom} user={user} />}
+                            {!isChatMobile && conversationToolbar}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3680,10 +4153,12 @@ export const ChatRoomComponent: React.FC<{
                             {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
+                            {nextUnreadTopicControl}
                             {!isLoadingMessages && (
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
+                                    scrollViewportRef={scrollContainerRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
@@ -3700,6 +4175,7 @@ export const ChatRoomComponent: React.FC<{
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
                                     topicUnreadCounts={topicUnreadCounts}
+                                    topicReplyChangeSignals={polledTopicReplySignals}
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
@@ -3707,6 +4183,8 @@ export const ChatRoomComponent: React.FC<{
                             )}
                         </div>
                     )}
+
+                    {!isChatMobile && newTopicControl}
 
                     {showJumpToLatest && (
                         <Button
@@ -3730,42 +4208,6 @@ export const ChatRoomComponent: React.FC<{
                     )}
                 </div>
             </div>
-            {isChatMobile && !inToolbox && (
-                <div className="fixed left-4 top-[4.5rem] z-20 flex items-center gap-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-11 w-11 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                        onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
-                        aria-label="Back to conversations"
-                    >
-                        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-                    </Button>
-                    {archivedReadOnly ? (
-                        <Button
-                            type="button"
-                            className="h-11 rounded-full bg-white px-3 text-sm text-gray-800 shadow-sm hover:bg-gray-100"
-                            onClick={() => void handleUnarchive()}
-                            disabled={isUnarchiving}
-                        >
-                            <ArchiveRestore className="mr-1.5 h-4 w-4" />
-                            {isUnarchiving ? "Unarchiving..." : "Unarchive"}
-                        </Button>
-                    ) : (
-                        !isAnnouncementConversation && (
-                            <Button
-                                type="button"
-                                className="h-11 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                                onClick={openTopicComposerFromMobile}
-                                title="New topic"
-                            >
-                                <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                                <span className="max-w-[6.5rem] truncate">New topic</span>
-                            </Button>
-                        )
-                    )}
-                </div>
-            )}
             {showNewThreadModal && roomId && canChangeContent && (
                 <NewThreadModal
                     conversationId={roomId}
