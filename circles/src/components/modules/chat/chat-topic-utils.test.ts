@@ -3,11 +3,7 @@ import type { ChatMessage } from "@/models/models";
 import {
     FIRST_TOPIC_DEFAULT_TITLE,
     acknowledgeTopicUnreadIndicator,
-    canPersistVisibleTopicRead,
-    clearPersistedTopicReadBoundary,
-    hasSufficientTopicReplyVisibility,
-    hasCurrentTopicReplyGeometry,
-    canUseTopicReadVisibilityTarget,
+    canApplyTopicAcknowledgementResult,
     consumePendingTopicScrollRequest,
     canApplyTopicReplyLoad,
     createTopicUnreadIndicator,
@@ -24,6 +20,9 @@ import {
     selectUnreadTopicIds,
     recordTopicUnreadIndicatorBoundary,
     resolveTopicUnreadBoundary,
+    selectQueuedTopicAcknowledgementBoundary,
+    selectTopicAcknowledgementBoundary,
+    shouldAcknowledgeTopicInteraction,
     shouldAcknowledgeTopicIndicatorFromDraft,
 } from "./chat-topic-utils";
 
@@ -89,109 +88,99 @@ assert.equal(
     "the current reply response applies to an open topic",
 );
 
-const visibleReadContext = {
+const topicId = "64a000000000000000000001";
+const replyA = "64a000000000000000000002";
+const replyB = "64a000000000000000000003";
+const replyC = "64a000000000000000000004";
+assert.equal(shouldAcknowledgeTopicInteraction("focus"), true, "deliberate pointer or keyboard focus acknowledges");
+assert.equal(shouldAcknowledgeTopicInteraction("focus", true), false, "known programmatic focus does not acknowledge");
+for (const interaction of ["typing", "emoji", "send", "attachment", "mark-read"] as const) {
+    assert.equal(
+        shouldAcknowledgeTopicInteraction(interaction),
+        true,
+        `${interaction} is a deliberate acknowledgement`,
+    );
+}
+for (const interaction of ["scroll", "expand", "close", "navigate", "draft-state"] as const) {
+    assert.equal(shouldAcknowledgeTopicInteraction(interaction), false, `${interaction} does not acknowledge`);
+}
+assert.equal(
+    selectTopicAcknowledgementBoundary({ topicId, replyIds: [replyA, replyB], expectedReplyCount: 2 }),
+    replyB,
+    "an interaction freezes the greatest ObjectId in the complete loaded topic",
+);
+assert.equal(
+    selectTopicAcknowledgementBoundary({ topicId, replyIds: [replyA], expectedReplyCount: 2 }),
+    null,
+    "an incomplete loaded reply set fails closed",
+);
+assert.deepEqual(
+    selectQueuedTopicAcknowledgementBoundary({
+        capturedBoundary: replyB,
+        inFlightBoundary: null,
+        queuedBoundary: null,
+        persistedBoundary: null,
+    }),
+    { shouldStart: true, queuedBoundary: null },
+    "the first explicitly captured boundary starts persistence",
+);
+assert.deepEqual(
+    selectQueuedTopicAcknowledgementBoundary({
+        capturedBoundary: replyB,
+        inFlightBoundary: replyB,
+        queuedBoundary: null,
+        persistedBoundary: null,
+    }),
+    { shouldStart: false, queuedBoundary: null },
+    "repeated actions at the in-flight boundary do not duplicate writes",
+);
+assert.deepEqual(
+    selectQueuedTopicAcknowledgementBoundary({
+        capturedBoundary: replyC,
+        inFlightBoundary: replyB,
+        queuedBoundary: null,
+        persistedBoundary: null,
+    }),
+    { shouldStart: false, queuedBoundary: replyC },
+    "a later deliberate interaction queues its newer frozen boundary",
+);
+assert.deepEqual(
+    selectQueuedTopicAcknowledgementBoundary({
+        capturedBoundary: replyB,
+        inFlightBoundary: null,
+        queuedBoundary: null,
+        persistedBoundary: replyB,
+    }),
+    { shouldStart: false, queuedBoundary: null },
+    "an already persisted boundary is not written again while counts refresh",
+);
+const currentAcknowledgementResult = {
+    requestId: 4,
+    currentRequestId: 4,
     expectedConversationId: "conversation-1",
     currentConversationId: "conversation-1",
-    expectedTopicId: "active-topic",
-    currentTopicId: "active-topic",
-    expectedLoadScope: 4,
-    currentLoadScope: 4,
-    isTopicOpen: true,
-    isLatestReplyVisible: true,
-    isDocumentVisible: true,
-    isDocumentFocused: true,
-    isRequestInFlight: false,
+    expectedTopicId: topicId,
+    currentTopicId: topicId,
+    expectedLoadScope: 7,
+    currentLoadScope: 7,
 };
-assert.equal(canPersistVisibleTopicRead(visibleReadContext), true, "a visible newest reply can advance read state");
 assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, isLatestReplyVisible: false }),
-    false,
-    "an expanded off-screen newest reply remains unread",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, isDocumentVisible: false }),
-    false,
-    "a hidden document cannot advance topic read state",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, isDocumentFocused: false }),
-    false,
-    "an unfocused document cannot advance topic read state",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, isTopicOpen: false }),
-    false,
-    "a collapsed topic cannot advance topic read state",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, isRequestInFlight: true }),
-    false,
-    "repeated visibility callbacks cannot overlap read persistence",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, currentLoadScope: 5 }),
-    false,
-    "a stale conversation load cannot advance topic read state",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, currentConversationId: "conversation-2" }),
-    false,
-    "a response from a previous conversation cannot advance topic read state",
-);
-assert.equal(
-    canPersistVisibleTopicRead({ ...visibleReadContext, currentTopicId: "older-topic" }),
-    false,
-    "a response from a previous topic cannot advance topic read state",
-);
-assert.equal(
-    hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 1, replyHeight: 200 }),
-    false,
-    "an obscured newest reply with only one visible pixel remains unread",
-);
-assert.equal(
-    hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 48, replyHeight: 200 }),
+    canApplyTopicAcknowledgementResult(currentAcknowledgementResult),
     true,
-    "a meaningfully visible newest reply can advance read state",
+    "a successful current acknowledgement may refresh authoritative counts",
 );
 assert.equal(
-    hasSufficientTopicReplyVisibility({ isIntersecting: true, visibleHeight: 24, replyHeight: 24 }),
-    true,
-    "a short newest reply advances only when its full height is visible",
-);
-const scrollRootRect = { top: 100, right: 500, bottom: 500, left: 100, height: 400 };
-assert.equal(
-    hasCurrentTopicReplyGeometry({
-        targetRect: { top: 450, right: 400, bottom: 650, left: 200, height: 200 },
-        scrollRootRect,
-    }),
-    true,
-    "final geometry accepts 50 visible pixels inside the explicit scroll root",
-);
-assert.equal(
-    hasCurrentTopicReplyGeometry({
-        targetRect: { top: 499, right: 400, bottom: 699, left: 200, height: 200 },
-        scrollRootRect,
+    canApplyTopicAcknowledgementResult({
+        ...currentAcknowledgementResult,
+        currentConversationId: "conversation-2",
     }),
     false,
-    "final geometry rejects stale one-pixel visibility",
+    "switching conversations invalidates a stale acknowledgement completion",
 );
 assert.equal(
-    hasCurrentTopicReplyGeometry({
-        targetRect: { top: 200, right: 400, bottom: 250, left: 200, height: 50 },
-        scrollRootRect: null,
-    }),
+    canApplyTopicAcknowledgementResult({ ...currentAcknowledgementResult, currentLoadScope: 8 }),
     false,
-    "missing explicit scroll roots fail closed",
-);
-assert.equal(
-    canUseTopicReadVisibilityTarget({
-        hasScrollRoot: true,
-        isTargetAttached: true,
-        isCurrentTarget: false,
-        pendingBoundaryMatches: true,
-    }),
-    false,
-    "stale observer targets cannot persist read state",
+    "a changed topic load scope invalidates a stale acknowledgement completion",
 );
 const pendingTopicScroll = { current: true };
 assert.equal(
@@ -204,26 +193,6 @@ assert.equal(
     consumePendingTopicScrollRequest(pendingTopicScroll),
     false,
     "a later polling refresh cannot reuse a stale automatic-scroll request",
-);
-assert.equal(
-    canUseTopicReadVisibilityTarget({
-        hasScrollRoot: true,
-        isTargetAttached: true,
-        isCurrentTarget: true,
-        pendingBoundaryMatches: false,
-    }),
-    false,
-    "changed pending boundaries invalidate older visibility candidates",
-);
-assert.equal(
-    clearPersistedTopicReadBoundary("reply-4", "reply-3"),
-    "reply-4",
-    "a newer pending boundary survives completion of an older in-flight request",
-);
-assert.equal(
-    clearPersistedTopicReadBoundary("reply-3", "reply-3"),
-    null,
-    "the persisted boundary is cleared after a successful request",
 );
 assert.deepEqual(
     selectUnreadTopicIds([activeTopic, olderTopic], { "active-topic": 1, "older-topic": 2 }),

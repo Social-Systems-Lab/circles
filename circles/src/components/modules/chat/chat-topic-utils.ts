@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/models/models";
+import { normalizeObjectIdHex, selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
 
 export const FIRST_TOPIC_DEFAULT_TITLE = "Hello";
 
@@ -103,90 +104,90 @@ export const selectUnreadTopicIds = (messages: ChatMessage[], unreadCounts: Reco
         .map((message) => message.id)
         .filter((topicId) => (unreadCounts[topicId] || 0) > 0);
 
-export const canPersistVisibleTopicRead = ({
+export type TopicAcknowledgementInteraction =
+    | "focus"
+    | "typing"
+    | "emoji"
+    | "send"
+    | "attachment"
+    | "mark-read"
+    | "scroll"
+    | "expand"
+    | "close"
+    | "navigate"
+    | "draft-state";
+
+export const shouldAcknowledgeTopicInteraction = (
+    interaction: TopicAcknowledgementInteraction,
+    isProgrammaticFocus = false,
+): boolean =>
+    interaction === "typing" ||
+    interaction === "emoji" ||
+    interaction === "send" ||
+    interaction === "attachment" ||
+    interaction === "mark-read" ||
+    (interaction === "focus" && !isProgrammaticFocus);
+
+export const selectTopicAcknowledgementBoundary = ({
+    topicId,
+    replyIds,
+    expectedReplyCount,
+}: {
+    topicId: string;
+    replyIds: string[];
+    expectedReplyCount: number;
+}): string | null => {
+    if (!Number.isSafeInteger(expectedReplyCount) || expectedReplyCount < 0) return null;
+    if (replyIds.length !== expectedReplyCount) return null;
+    if (!normalizeObjectIdHex(topicId) || replyIds.some((replyId) => !normalizeObjectIdHex(replyId))) return null;
+    return selectGreatestObjectIdHex([topicId, ...replyIds]);
+};
+
+export const selectQueuedTopicAcknowledgementBoundary = ({
+    capturedBoundary,
+    inFlightBoundary,
+    queuedBoundary,
+    persistedBoundary,
+}: {
+    capturedBoundary: string;
+    inFlightBoundary: string | null;
+    queuedBoundary: string | null;
+    persistedBoundary: string | null;
+}): { shouldStart: boolean; queuedBoundary: string | null } => {
+    const captured = normalizeObjectIdHex(capturedBoundary);
+    if (!captured || (persistedBoundary && captured <= persistedBoundary)) {
+        return { shouldStart: false, queuedBoundary };
+    }
+    if (!inFlightBoundary) return { shouldStart: true, queuedBoundary };
+    if (captured <= inFlightBoundary || (queuedBoundary && captured <= queuedBoundary)) {
+        return { shouldStart: false, queuedBoundary };
+    }
+    return { shouldStart: false, queuedBoundary: captured };
+};
+
+export const canApplyTopicAcknowledgementResult = ({
+    requestId,
+    currentRequestId,
     expectedConversationId,
     currentConversationId,
     expectedTopicId,
     currentTopicId,
     expectedLoadScope,
     currentLoadScope,
-    isTopicOpen,
-    isLatestReplyVisible,
-    isDocumentVisible,
-    isDocumentFocused,
-    isRequestInFlight,
 }: {
+    requestId: number;
+    currentRequestId: number;
     expectedConversationId: string;
     currentConversationId: string;
     expectedTopicId: string;
     currentTopicId: string;
     expectedLoadScope: number;
     currentLoadScope: number;
-    isTopicOpen: boolean;
-    isLatestReplyVisible: boolean;
-    isDocumentVisible: boolean;
-    isDocumentFocused: boolean;
-    isRequestInFlight: boolean;
 }): boolean =>
+    requestId === currentRequestId &&
     expectedConversationId === currentConversationId &&
     expectedTopicId === currentTopicId &&
-    expectedLoadScope === currentLoadScope &&
-    isTopicOpen &&
-    isLatestReplyVisible &&
-    isDocumentVisible &&
-    isDocumentFocused &&
-    !isRequestInFlight;
-
-export const clearPersistedTopicReadBoundary = (
-    pendingBoundary: string | null,
-    persistedBoundary: string,
-): string | null => (pendingBoundary === persistedBoundary ? null : pendingBoundary);
-
-export const hasSufficientTopicReplyVisibility = ({
-    isIntersecting,
-    visibleHeight,
-    replyHeight,
-}: {
-    isIntersecting: boolean;
-    visibleHeight: number;
-    replyHeight: number;
-}): boolean => isIntersecting && visibleHeight >= Math.min(replyHeight, 48);
-
-type TopicVisibilityRect = { top: number; right: number; bottom: number; left: number; height: number };
-
-export const hasCurrentTopicReplyGeometry = ({
-    targetRect,
-    scrollRootRect,
-}: {
-    targetRect: TopicVisibilityRect;
-    scrollRootRect: TopicVisibilityRect | null;
-}): boolean => {
-    if (!scrollRootRect) return false;
-    const visibleTop = Math.max(targetRect.top, scrollRootRect.top);
-    const visibleBottom = Math.min(targetRect.bottom, scrollRootRect.bottom);
-    const visibleLeft = Math.max(targetRect.left, scrollRootRect.left);
-    const visibleRight = Math.min(targetRect.right, scrollRootRect.right);
-    return (
-        visibleRight > visibleLeft &&
-        hasSufficientTopicReplyVisibility({
-            isIntersecting: visibleBottom > visibleTop,
-            visibleHeight: Math.max(0, visibleBottom - visibleTop),
-            replyHeight: targetRect.height,
-        })
-    );
-};
-
-export const canUseTopicReadVisibilityTarget = ({
-    hasScrollRoot,
-    isTargetAttached,
-    isCurrentTarget,
-    pendingBoundaryMatches,
-}: {
-    hasScrollRoot: boolean;
-    isTargetAttached: boolean;
-    isCurrentTarget: boolean;
-    pendingBoundaryMatches: boolean;
-}): boolean => hasScrollRoot && isTargetAttached && isCurrentTarget && pendingBoundaryMatches;
+    expectedLoadScope === currentLoadScope;
 
 export const consumePendingTopicScrollRequest = (pending: { current: boolean }): boolean => {
     const shouldScroll = pending.current;

@@ -73,11 +73,10 @@ import {
     selectUnreadTopicIds,
     resolveTopicUnreadBoundary,
     selectFollowUpTopicReplySignal,
-    canPersistVisibleTopicRead,
-    clearPersistedTopicReadBoundary,
-    hasSufficientTopicReplyVisibility,
-    hasCurrentTopicReplyGeometry,
-    canUseTopicReadVisibilityTarget,
+    selectQueuedTopicAcknowledgementBoundary,
+    selectTopicAcknowledgementBoundary,
+    shouldAcknowledgeTopicInteraction,
+    canApplyTopicAcknowledgementResult,
     consumePendingTopicScrollRequest,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
@@ -2041,15 +2040,14 @@ const TopicCard: React.FC<{
     const replyLoadScopeRef = useRef(0);
     const currentConversationIdRef = useRef(conversationId);
     const currentTopicIdRef = useRef(messageId);
-    const observedUnreadReplyRef = useRef<HTMLDivElement>(null);
-    const readPersistenceInFlightRef = useRef(false);
-    const readPersistenceRequestRef = useRef(0);
-    const [pendingReadBoundary, setPendingReadBoundary] = useState<string | null>(null);
-    const pendingReadBoundaryRef = useRef<string | null>(null);
-    const [readPersistenceCycle, setReadPersistenceCycle] = useState(0);
+    const acknowledgementInFlightRef = useRef<string | null>(null);
+    const queuedAcknowledgementRef = useRef<string | null>(null);
+    const persistedAcknowledgementRef = useRef<string | null>(null);
+    const acknowledgementRequestRef = useRef(0);
+    const suppressProgrammaticFocusRef = useRef(false);
+    const [acknowledgementInFlight, setAcknowledgementInFlight] = useState(false);
     currentConversationIdRef.current = conversationId;
     currentTopicIdRef.current = messageId;
-    pendingReadBoundaryRef.current = pendingReadBoundary;
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
     isTopicOpenRef.current = isTopicOpen;
@@ -2150,11 +2148,15 @@ const TopicCard: React.FC<{
         const textarea = replyTextareaRef.current;
         if (!textarea) return;
 
+        suppressProgrammaticFocusRef.current = true;
         try {
             textarea.focus({ preventScroll: true });
         } catch {
             textarea.focus();
         }
+        queueMicrotask(() => {
+            suppressProgrammaticFocusRef.current = false;
+        });
 
         const caretPosition = textarea.value.length;
         textarea.setSelectionRange(caretPosition, caretPosition);
@@ -2245,141 +2247,79 @@ const TopicCard: React.FC<{
         }
     };
 
-    useEffect(() => {
-        if (!isTopicOpen || unreadCount <= 0 || !unreadBoundary.isComplete || !firstUnreadMessageId) {
-            setPendingReadBoundary(null);
-            return;
-        }
-        setPendingReadBoundary(firstUnreadMessageId);
-    }, [firstUnreadMessageId, isTopicOpen, unreadBoundary.isComplete, unreadCount]);
+    const persistCapturedAcknowledgement = async (
+        boundary: string,
+        expectedConversationId: string,
+        expectedTopicId: string,
+        expectedLoadScope: number,
+    ) => {
+        const plan = selectQueuedTopicAcknowledgementBoundary({
+            capturedBoundary: boundary,
+            inFlightBoundary: acknowledgementInFlightRef.current,
+            queuedBoundary: queuedAcknowledgementRef.current,
+            persistedBoundary: persistedAcknowledgementRef.current,
+        });
+        queuedAcknowledgementRef.current = plan.queuedBoundary;
+        if (!plan.shouldStart) return;
 
-    useEffect(() => {
-        if (!pendingReadBoundary || !isTopicOpen) return;
-        const target = pendingReadBoundary === messageId ? topicToggleRef.current : observedUnreadReplyRef.current;
-        const scrollRoot = scrollViewportRef.current;
-        if (!target || !scrollRoot) return;
-        const expectedConversationId = conversationId;
-        const expectedTopicId = messageId;
-        const expectedLoadScope = replyLoadScopeRef.current;
-        let stableVisibilityTimer: ReturnType<typeof setTimeout> | null = null;
-
-        const clearStableVisibilityTimer = () => {
-            if (stableVisibilityTimer !== null) clearTimeout(stableVisibilityTimer);
-            stableVisibilityTimer = null;
-        };
-
-        const persistIfEligible = async () => {
-            const currentTarget =
-                pendingReadBoundary === messageId ? topicToggleRef.current : observedUnreadReplyRef.current;
-            const currentScrollRoot = scrollViewportRef.current;
-            const targetIsCurrent = currentTarget === target;
-            const pendingBoundaryMatches = pendingReadBoundaryRef.current === pendingReadBoundary;
-            if (
-                !canUseTopicReadVisibilityTarget({
-                    hasScrollRoot: currentScrollRoot === scrollRoot,
-                    isTargetAttached: target.isConnected && scrollRoot.isConnected && scrollRoot.contains(target),
-                    isCurrentTarget: targetIsCurrent,
-                    pendingBoundaryMatches,
-                })
-            )
-                return;
-
-            const targetRect = target.getBoundingClientRect();
-            const rootRect = scrollRoot.getBoundingClientRect();
-            const isLatestReplyVisible = hasCurrentTopicReplyGeometry({ targetRect, scrollRootRect: rootRect });
-            const visibleTop = Math.max(targetRect.top, rootRect.top);
-            const visibleBottom = Math.min(targetRect.bottom, rootRect.bottom);
-            const visibleLeft = Math.max(targetRect.left, rootRect.left);
-            const visibleRight = Math.min(targetRect.right, rootRect.right);
-            const sampleX = visibleLeft + (visibleRight - visibleLeft) / 2;
-            const sampleY = visibleTop + (visibleBottom - visibleTop) / 2;
-            const topElement = isLatestReplyVisible ? document.elementFromPoint(sampleX, sampleY) : null;
-            const isUnobscured = !!topElement && (topElement === target || target.contains(topElement));
-            if (
-                !canPersistVisibleTopicRead({
-                    expectedConversationId,
-                    currentConversationId: currentConversationIdRef.current,
-                    expectedTopicId,
-                    currentTopicId: currentTopicIdRef.current,
-                    expectedLoadScope,
-                    currentLoadScope: replyLoadScopeRef.current,
-                    isTopicOpen: isTopicOpenRef.current,
-                    isLatestReplyVisible: isLatestReplyVisible && isUnobscured,
-                    isDocumentVisible: document.visibilityState === "visible",
-                    isDocumentFocused: document.hasFocus(),
-                    isRequestInFlight: readPersistenceInFlightRef.current,
-                })
-            )
-                return;
-
-            const boundary = pendingReadBoundary;
-            const persistenceRequestId = ++readPersistenceRequestRef.current;
-            readPersistenceInFlightRef.current = true;
-            try {
-                const { markTopicReadAction } = await import("./actions");
-                const result = await markTopicReadAction(expectedConversationId, expectedTopicId, boundary);
-                const isCurrentRequest =
-                    persistenceRequestId === readPersistenceRequestRef.current &&
-                    expectedConversationId === currentConversationIdRef.current &&
-                    expectedTopicId === currentTopicIdRef.current &&
-                    expectedLoadScope === replyLoadScopeRef.current &&
-                    isTopicOpenRef.current;
-                if (result.success && isCurrentRequest) {
-                    setPendingReadBoundary((current) => clearPersistedTopicReadBoundary(current, boundary));
-                    setUnreadCount((current) => Math.max(0, current - 1));
-                    await onTopicRead?.(expectedTopicId);
-                }
-            } catch (error) {
-                console.error("Failed to persist visible topic read state:", error);
-            } finally {
-                if (persistenceRequestId === readPersistenceRequestRef.current) {
-                    readPersistenceInFlightRef.current = false;
-                    if (pendingReadBoundaryRef.current !== boundary) {
-                        setReadPersistenceCycle((current) => current + 1);
-                    }
-                }
+        const requestId = ++acknowledgementRequestRef.current;
+        acknowledgementInFlightRef.current = boundary;
+        setAcknowledgementInFlight(true);
+        try {
+            const { markTopicReadAction } = await import("./actions");
+            const result = await markTopicReadAction(expectedConversationId, expectedTopicId, boundary);
+            const isCurrentRequest = canApplyTopicAcknowledgementResult({
+                requestId,
+                currentRequestId: acknowledgementRequestRef.current,
+                expectedConversationId,
+                currentConversationId: currentConversationIdRef.current,
+                expectedTopicId,
+                currentTopicId: currentTopicIdRef.current,
+                expectedLoadScope,
+                currentLoadScope: replyLoadScopeRef.current,
+            });
+            if (result.success && isCurrentRequest) {
+                persistedAcknowledgementRef.current = boundary;
+                await onTopicRead?.(expectedTopicId);
             }
-        };
+        } catch (error) {
+            console.error("Failed to acknowledge topic:", error);
+        } finally {
+            if (requestId !== acknowledgementRequestRef.current) return;
+            acknowledgementInFlightRef.current = null;
+            setAcknowledgementInFlight(false);
+            const queuedBoundary = queuedAcknowledgementRef.current;
+            queuedAcknowledgementRef.current = null;
+            if (
+                queuedBoundary &&
+                expectedConversationId === currentConversationIdRef.current &&
+                expectedTopicId === currentTopicIdRef.current &&
+                expectedLoadScope === replyLoadScopeRef.current
+            ) {
+                void persistCapturedAcknowledgement(
+                    queuedBoundary,
+                    expectedConversationId,
+                    expectedTopicId,
+                    expectedLoadScope,
+                );
+            }
+        }
+    };
 
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                const isCandidateVisible = hasSufficientTopicReplyVisibility({
-                    isIntersecting: !!entry?.isIntersecting,
-                    visibleHeight: entry?.intersectionRect.height || 0,
-                    replyHeight: entry?.boundingClientRect.height || 0,
-                });
-                clearStableVisibilityTimer();
-                if (!isCandidateVisible) return;
-                stableVisibilityTimer = setTimeout(() => void persistIfEligible(), 200);
-            },
-            {
-                root: scrollRoot,
-                threshold: [0, 0.25, 0.5, 1],
-            },
-        );
-        observer.observe(target);
-        const recheckVisibility = () => {
-            clearStableVisibilityTimer();
-            observer.unobserve(target);
-            observer.observe(target);
-        };
-        document.addEventListener("visibilitychange", recheckVisibility);
-        window.addEventListener("focus", recheckVisibility);
-        return () => {
-            clearStableVisibilityTimer();
-            document.removeEventListener("visibilitychange", recheckVisibility);
-            window.removeEventListener("focus", recheckVisibility);
-            observer.disconnect();
-        };
-    }, [
-        conversationId,
-        isTopicOpen,
-        messageId,
-        onTopicRead,
-        pendingReadBoundary,
-        readPersistenceCycle,
-        scrollViewportRef,
-    ]);
+    const acknowledgeLoadedTopic = (
+        interaction: Parameters<typeof shouldAcknowledgeTopicInteraction>[0],
+        isProgrammaticFocus = false,
+    ) => {
+        if (!shouldAcknowledgeTopicInteraction(interaction, isProgrammaticFocus)) return;
+        if (!isTopicOpenRef.current || unreadCount <= 0 || !unreadBoundary.isComplete) return;
+        const boundary = selectTopicAcknowledgementBoundary({
+            topicId: messageId,
+            replyIds: replies.map((reply) => reply.id),
+            expectedReplyCount,
+        });
+        if (!boundary) return;
+        void persistCapturedAcknowledgement(boundary, conversationId, messageId, replyLoadScopeRef.current);
+    };
 
     useEffect(() => {
         if (!replyChangeSignal || !isTopicOpen) return;
@@ -2395,9 +2335,10 @@ const TopicCard: React.FC<{
             readRequestRef.current += 1;
             replyLoadInFlightRef.current = false;
             pendingReplyRefreshSignalRef.current = null;
-            readPersistenceRequestRef.current += 1;
-            readPersistenceInFlightRef.current = false;
-            setPendingReadBoundary(null);
+            acknowledgementRequestRef.current += 1;
+            acknowledgementInFlightRef.current = null;
+            queuedAcknowledgementRef.current = null;
+            persistedAcknowledgementRef.current = null;
         };
     }, [conversationId, messageId]);
 
@@ -2490,6 +2431,7 @@ const TopicCard: React.FC<{
     const handleSendReply = async () => {
         const trimmed = replyTextRef.current.trim();
         if (!trimmed || isSending) return;
+        acknowledgeLoadedTopic("send");
         setIsSending(true);
         try {
             const { sendThreadReplyAction } = await import("./mongo-actions");
@@ -2618,6 +2560,7 @@ const TopicCard: React.FC<{
             alert("File size exceeds 5MB limit.");
             return;
         }
+        acknowledgeLoadedTopic("attachment");
         setIsUploading(true);
         try {
             const { sendAttachmentAction } = await import("./actions");
@@ -2654,6 +2597,28 @@ const TopicCard: React.FC<{
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
     const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
     const starterCreatedAt = new Date(message.createdAt);
+    const renderUnreadBoundary = (boundaryMessageId: string) =>
+        firstUnreadMessageId === boundaryMessageId ? (
+            <div
+                id={`topic-unread-boundary-${boundaryMessageId}`}
+                className="flex items-center gap-2 py-1 text-xs font-medium text-red-600"
+            >
+                <span className="h-px flex-1 bg-red-200" />
+                <span>New messages</span>
+                <button
+                    type="button"
+                    className="rounded px-1.5 py-0.5 font-semibold underline underline-offset-2 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-wait disabled:opacity-60"
+                    disabled={acknowledgementInFlight}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        acknowledgeLoadedTopic("mark-read");
+                    }}
+                >
+                    Mark as read
+                </button>
+                <span className="h-px flex-1 bg-red-200" />
+            </div>
+        ) : null;
 
     return (
         <div
@@ -2705,25 +2670,16 @@ const TopicCard: React.FC<{
                     {!isTopicOpen && effectiveStarterBody && (
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
                     )}
+                    {isTopicOpen && firstUnreadMessageId === messageId && (
+                        <div className="mt-2">{renderUnreadBoundary(messageId)}</div>
+                    )}
                     {isTopicOpen && effectiveStarterBody && (
-                        <>
-                            {firstUnreadMessageId === messageId && (
-                                <div
-                                    id={`topic-unread-boundary-${messageId}`}
-                                    className="mt-2 flex items-center gap-2 py-1 text-xs font-medium text-red-600"
-                                >
-                                    <span className="h-px flex-1 bg-red-200" />
-                                    <span>New messages</span>
-                                    <span className="h-px flex-1 bg-red-200" />
-                                </div>
-                            )}
-                            <div className="mt-2 text-sm leading-relaxed text-gray-700">
-                                {renderFormattedChatBody(effectiveStarterBody, {
-                                    format: (message as any)?.format,
-                                    markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
-                                })}
-                            </div>
-                        </>
+                        <div className="mt-2 text-sm leading-relaxed text-gray-700">
+                            {renderFormattedChatBody(effectiveStarterBody, {
+                                format: (message as any)?.format,
+                                markdownClassName: "formatted max-w-none text-sm leading-relaxed text-gray-700",
+                            })}
+                        </div>
                     )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-gray-500 sm:max-w-[16rem] sm:justify-end sm:text-right">
@@ -2818,18 +2774,8 @@ const TopicCard: React.FC<{
                                     5 * 60 * 1000;
                             return (
                                 <Fragment key={reply.id}>
-                                    {firstUnreadMessageId === reply.id && (
-                                        <div
-                                            id={`topic-unread-boundary-${reply.id}`}
-                                            className="flex items-center gap-2 py-1 text-xs font-medium text-red-600"
-                                        >
-                                            <span className="h-px flex-1 bg-red-200" />
-                                            <span>New messages</span>
-                                            <span className="h-px flex-1 bg-red-200" />
-                                        </div>
-                                    )}
+                                    {renderUnreadBoundary(reply.id)}
                                     <div
-                                        ref={reply.id === pendingReadBoundary ? observedUnreadReplyRef : undefined}
                                         id={getMessageElementId(reply.id)}
                                         data-message-id={reply.id}
                                         className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
@@ -3041,9 +2987,10 @@ const TopicCard: React.FC<{
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto border-none bg-transparent p-0">
                                             <LazyEmojiPicker
-                                                onEmojiClick={(data: EmojiClickData) =>
-                                                    setTopicReplyText((prev) => prev + data.emoji)
-                                                }
+                                                onEmojiClick={(data: EmojiClickData) => {
+                                                    acknowledgeLoadedTopic("emoji");
+                                                    setTopicReplyText((prev) => prev + data.emoji);
+                                                }}
                                             />
                                         </PopoverContent>
                                     </Popover>
@@ -3089,9 +3036,14 @@ const TopicCard: React.FC<{
                                         inputRef={replyTextareaRef}
                                         value={replyText}
                                         onChange={(_event, newValue) => {
+                                            acknowledgeLoadedTopic("typing");
                                             setTopicReplyText(newValue);
                                             autoGrowReplyTextarea();
                                         }}
+                                        onFocus={() =>
+                                            acknowledgeLoadedTopic("focus", suppressProgrammaticFocusRef.current)
+                                        }
+                                        onPointerDown={() => acknowledgeLoadedTopic("focus")}
                                         placeholder={`Reply to ${thread.title}. Use return for a new line.`}
                                         aria-label={`Reply to ${thread.title}`}
                                         className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
@@ -3644,21 +3596,11 @@ export const ChatRoomComponent: React.FC<{
     ]);
 
     const handleTopicRead = useCallback(
-        async (topicId: string) => {
-            setTopicUnreadCounts((current) => ({
-                ...current,
-                [topicId]: Math.max(0, (current[topicId] || 0) - 1),
-            }));
-            if (roomId) {
-                setUnreadCounts((current) => ({
-                    ...current,
-                    [roomId]: Math.max(0, (current[roomId] || 0) - 1),
-                }));
-            }
+        async (_topicId: string) => {
             await refreshTopicUnreadCounts();
             dispatchNotificationRefresh({ reason: "chat-read", roomId: roomId || undefined });
         },
-        [refreshTopicUnreadCounts, roomId, setUnreadCounts],
+        [refreshTopicUnreadCounts, roomId],
     );
 
     const refreshTopicStarters = useCallback(
