@@ -2,13 +2,17 @@
 
 Kamooni staging is an isolated, test-data-only installation at <https://staging.kamooni.org> on a dedicated Cleura VM separate from production. It must never receive production secrets, production data, production identity material, production volumes, production deployment scripts, or production external-service accounts.
 
+Staging is the preferred environment for full Docker builds, integration testing, and desktop/mobile browser validation. Every change must originate on a Git branch, be pushed to GitHub, and be deployed from the remote branch with the existing script. Never routinely hot-edit staging.
+
 ## Verified environment
 
 The staging environment and its `/api/version` response were verified at commit `e742a7898395c73ea6080af4139aa1def7eb54d7`. The infrastructure checkout remains at `/home/ubuntu/kamooni` on branch `infra/kamooni-staging`; the deployment target worktree is `/home/ubuntu/kamooni-target`, detached at the exact requested SHA. The Docker Compose project is `kamooni_staging`.
 
 The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
 
-Staging MongoDB and MinIO use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. Never use production deployment scripts, credentials, data, or volumes for staging.
+Staging MongoDB, MinIO, and email-capture configuration use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. Never use production deployment scripts, credentials, data, or volumes for staging. Staging-only email capture must never enter a production release branch.
+
+Treat the staging database and object storage as persistent. Tests requiring disposable databases must use separate isolated test instances; never run destructive integration tests against staging's persistent database. Never automatically delete Docker volumes, databases, or persistent storage.
 
 Media upload has been verified end-to-end through staging MinIO. New media URLs are stored in staging MongoDB as relative `/storage/...` paths. A scan of staging MongoDB found no references to `https://kamooni.org`, `www.kamooni.org`, `127.0.0.1`, or `localhost`.
 
@@ -102,7 +106,7 @@ For the normal production-equivalent staging deployment, use:
 cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh main
 ```
 
-Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA.
+Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA. Use the script rather than ad-hoc deployment commands so the verified-image rollback ledger is maintained.
 
 Manual version verification, run anywhere with network access:
 
