@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { formatTelegramNotification } from "@/lib/integrations/telegram";
 
 const chatRoomSource = readFileSync(new URL("../../components/modules/chat/chat-room.tsx", import.meta.url), "utf8");
 const actionSource = readFileSync(new URL("../../components/modules/chat/mongo-actions.ts", import.meta.url), "utf8");
+const legacyEndpoint = new URL("../../app/api/notifications/mark-pms-as-read/route.ts", import.meta.url);
+
+assert.equal(
+    existsSync(legacyEndpoint),
+    false,
+    "the obsolete client-authorized PM acknowledgement endpoint is removed",
+);
 
 assert.doesNotMatch(
     chatRoomSource,
@@ -19,6 +26,11 @@ assert.match(
     actionSource,
     /await markTopicRead\([\s\S]*?await acknowledgeTopicPmNotifications\(/,
     "PM acknowledgement runs only after the topic read-state write succeeds",
+);
+assert.doesNotMatch(
+    chatRoomSource,
+    /unreadCount <= 0/,
+    "a later deliberate interaction can retry notification acknowledgement after read state already advanced",
 );
 assert.match(
     formatTelegramNotification(

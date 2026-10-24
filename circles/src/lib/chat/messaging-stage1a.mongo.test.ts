@@ -47,6 +47,7 @@ async function main() {
         "./dm-draft-persistence"
     );
     const { processFirstTopicNotifications } = await import("./first-topic-notifications");
+    const { hasReadConversationAfterMessage } = await import("@/lib/data/message-reminders");
     const {
         CanonicalDmClaims,
         ChatConversations,
@@ -338,6 +339,116 @@ async function main() {
             )?.isRead,
             false,
             "historical room-only PM notifications remain unread",
+        );
+
+        const retryReply = await createThreadReply(publication.topicId, publication.conversationId, "did:sender", {
+            body: "Retryable notification reply",
+        });
+        assert.ok(retryReply?._id);
+        await Notifications.insertOne({
+            userId: "did:receiver",
+            type: "pm_received",
+            content: {
+                roomId: publication.conversationId,
+                topicId: publication.topicId,
+                messageId: retryReply!._id,
+            },
+            isRead: false,
+            createdAt: new Date(),
+        } as any);
+        const originalUpdateMany = Notifications.updateMany;
+        (Notifications as any).updateMany = async () => {
+            throw new Error("simulated notification persistence failure");
+        };
+        let partialTopicRead;
+        try {
+            partialTopicRead = await runWithAuthenticatedRequest("did:receiver", () =>
+                mongoActions.markTopicReadAction(
+                    publication.conversationId,
+                    publication.topicId,
+                    retryReply!._id!.toString(),
+                ),
+            );
+        } finally {
+            (Notifications as any).updateMany = originalUpdateMany;
+        }
+        assert.equal(partialTopicRead?.success, false);
+        assert.equal(partialTopicRead?.readStatePersisted, true);
+        assert.equal(
+            (
+                await ChatTopicReadStates.findOne({
+                    userDid: "did:receiver",
+                    conversationId: publication.conversationId,
+                    topicId: publication.topicId,
+                })
+            )?.lastReadMessageId,
+            retryReply!._id,
+            "notification failure does not roll back the successfully advanced read cursor",
+        );
+        assert.equal(
+            (await Notifications.findOne({ userId: "did:receiver", "content.messageId": retryReply!._id }))?.isRead,
+            false,
+        );
+        const retriedTopicRead = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.markTopicReadAction(
+                publication.conversationId,
+                publication.topicId,
+                retryReply!._id!.toString(),
+            ),
+        );
+        assert.equal(retriedTopicRead.success, true);
+        assert.equal(
+            (await Notifications.findOne({ userId: "did:receiver", "content.messageId": retryReply!._id }))?.isRead,
+            true,
+            "a later valid interaction retries notification acknowledgement without advancing the cursor",
+        );
+
+        const deletedCursor = new ObjectId().toString();
+        const afterDeletedCursorReply = await createThreadReply(
+            publication.topicId,
+            publication.conversationId,
+            "did:sender",
+            { body: "Reply after deleted cursor" },
+        );
+        assert.ok(afterDeletedCursorReply?._id);
+        await ChatTopicReadStates.updateOne(
+            {
+                userDid: "did:receiver",
+                conversationId: publication.conversationId,
+                topicId: publication.topicId,
+            },
+            { $set: { lastReadMessageId: deletedCursor } },
+        );
+        await Notifications.insertOne({
+            userId: "did:receiver",
+            type: "pm_received",
+            content: {
+                roomId: publication.conversationId,
+                topicId: publication.topicId,
+                messageId: afterDeletedCursorReply!._id,
+            },
+            isRead: false,
+            createdAt: new Date(),
+        } as any);
+        await assert.rejects(
+            runWithAuthenticatedRequest("did:receiver", () =>
+                mongoActions.markTopicReadAction(
+                    publication.conversationId,
+                    publication.topicId,
+                    afterDeletedCursorReply!._id!.toString(),
+                ),
+            ),
+            /unresolved chat read cursor/,
+        );
+        assert.equal(
+            (
+                await Notifications.findOne({
+                    userId: "did:receiver",
+                    "content.messageId": afterDeletedCursorReply!._id,
+                })
+            )?.isRead,
+            false,
+            "an unresolved existing cursor clears zero notifications",
         );
 
         await Circles.insertMany([
@@ -822,6 +933,23 @@ async function main() {
             17,
             "polling retrieves replies whose ObjectIds sort below the older starter",
         );
+        const reminderTarget = await ChatMessageDocs.findOne({ _id: replyId(1) });
+        const chronologicalReadState = await ChatReadStates.findOne({
+            userDid: "did:chrono-p1",
+            conversationId: chronologicalConversationId,
+        });
+        assert.ok(reminderTarget);
+        assert.equal(
+            await hasReadConversationAfterMessage({
+                conversationId: chronologicalConversationId,
+                recipientDid: "did:chrono-p1",
+                messageId: replyId(1).toString(),
+                message: reminderTarget,
+                readState: chronologicalReadState,
+            }),
+            false,
+            "reminder comparisons treat a chronologically later lower-ObjectId reply as unread",
+        );
         const newestReplyId = replyId(11).toString();
         await Promise.all([
             markTopicRead("did:chrono-p1", chronologicalConversationId, highStarterId.toString(), newestReplyId),
@@ -901,6 +1029,44 @@ async function main() {
             )?.legacyLastReadMessageId,
             legacyNewLowId.toString(),
             "concurrent acknowledgement cannot move the legacy cursor backward",
+        );
+
+        const missingTimestampConversationId = new ObjectId().toString();
+        const missingTimestampCursorId = new ObjectId("64c000000000000000000001");
+        const missingTimestampTargetId = new ObjectId("64c000000000000000000002");
+        await ChatMessageDocs.insertMany([
+            {
+                _id: missingTimestampCursorId,
+                conversationId: missingTimestampConversationId,
+                senderDid: "did:missing-timestamp-self",
+                body: "cursor fixture",
+            },
+            {
+                _id: missingTimestampTargetId,
+                conversationId: missingTimestampConversationId,
+                senderDid: "did:missing-timestamp-other",
+                body: "target fixture",
+            },
+        ] as any[]);
+        const missingTimestampTarget = await ChatMessageDocs.findOne({ _id: missingTimestampTargetId });
+        assert.ok(missingTimestampTarget);
+        assert.equal(
+            await hasReadConversationAfterMessage({
+                conversationId: missingTimestampConversationId,
+                recipientDid: "did:missing-timestamp-self",
+                messageId: missingTimestampTargetId.toString(),
+                message: missingTimestampTarget,
+                readState: {
+                    userDid: "did:missing-timestamp-self",
+                    conversationId: missingTimestampConversationId,
+                    lastReadMessageId: null,
+                    legacyLastReadMessageId: missingTimestampCursorId.toString(),
+                    topicFallbackMessageId: missingTimestampCursorId.toString(),
+                    readStateVersion: 2,
+                } as any,
+            }),
+            false,
+            "missing historical timestamps conservatively fall back to ObjectId ordering",
         );
 
         console.log("Messaging Stage 1A Mongo regression tests passed (production persistence helpers)");

@@ -1817,7 +1817,12 @@ export const markTopicReadAction = async (
     conversationId: string,
     topicId: string,
     lastSeenMessageId: string,
-): Promise<{ success: boolean; lastReadMessageId?: string | null; message?: string }> => {
+): Promise<{
+    success: boolean;
+    lastReadMessageId?: string | null;
+    readStatePersisted?: boolean;
+    message?: string;
+}> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
@@ -1831,12 +1836,22 @@ export const markTopicReadAction = async (
     if (!validatedCursor) return { success: false, message: "Invalid topic read boundary" };
     observeChatActionEffect("topic-read-state");
     await markTopicRead(userDid, conversationId, normalizedTopicId, validatedCursor);
-    await acknowledgeTopicPmNotifications({
-        userDid,
-        conversationId,
-        topicId: normalizedTopicId,
-        lastReadMessageId: validatedCursor,
-    });
+    try {
+        await acknowledgeTopicPmNotifications({
+            userDid,
+            conversationId,
+            topicId: normalizedTopicId,
+            lastReadMessageId: validatedCursor,
+        });
+    } catch (error) {
+        console.error("Failed to acknowledge topic PM notifications:", error);
+        return {
+            success: false,
+            lastReadMessageId: validatedCursor,
+            readStatePersisted: true,
+            message: "Topic read state was saved, but notification acknowledgement must be retried.",
+        };
+    }
     return { success: true, lastReadMessageId: validatedCursor };
 };
 

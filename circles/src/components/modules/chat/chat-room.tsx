@@ -2338,7 +2338,7 @@ const TopicCard: React.FC<{
         isProgrammaticFocus = false,
     ) => {
         if (!shouldAcknowledgeTopicInteraction(interaction, isProgrammaticFocus)) return;
-        if (!isTopicOpenRef.current || unreadCount <= 0 || !unreadBoundary.isComplete) return;
+        if (!isTopicOpenRef.current || !unreadBoundary.isComplete) return;
         const boundary = selectTopicAcknowledgementBoundary({
             topicId: messageId,
             topicCreatedAt: message.createdAt,

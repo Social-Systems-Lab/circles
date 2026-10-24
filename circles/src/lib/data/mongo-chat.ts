@@ -754,7 +754,7 @@ const advanceCursorChronologically = async ({
                     conversationId: identity.conversationId,
                     topicId: identity.topicId,
                 });
-                return;
+                throw new Error("Cannot advance an unresolved chat read cursor");
             }
             if (
                 compareMessagePositions(proposedPosition, {

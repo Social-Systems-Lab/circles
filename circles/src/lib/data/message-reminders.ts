@@ -78,7 +78,7 @@ const resolveMessageReminderBaseUrl = (): string => {
     return firstValidCandidate || "http://localhost:3000";
 };
 
-const hasReadConversationAfterMessage = async ({
+export const hasReadConversationAfterMessage = async ({
     conversationId,
     recipientDid,
     messageId,
