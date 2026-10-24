@@ -86,6 +86,7 @@ export async function processFirstTopicNotifications(limit = 25, topicId?: strin
             const idempotencyKey = `first-topic:${notificationTopicId}`;
             const commonPayload = {
                 ...getChatNotificationLocation(claimed.conversationId, notificationTopicId),
+                messageId: notificationTopicId,
                 user: sender,
                 conversationName: conversation.name,
                 topicTitle,

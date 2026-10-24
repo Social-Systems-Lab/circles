@@ -214,6 +214,7 @@ async function main() {
         assert.equal(await Notifications.countDocuments({ userId: "did:receiver", type: "pm_received" }), 1);
         const pmNotification = await Notifications.findOne({ userId: "did:receiver", type: "pm_received" });
         assert.equal(pmNotification?.content?.topicId, publication.topicId);
+        assert.equal(pmNotification?.content?.messageId, publication.topicId);
         assert.equal(pmNotification?.content?.url, `/chat/${publication.conversationId}?topic=${publication.topicId}`);
         await Notifications.updateOne({ userId: "did:receiver", type: "pm_received" }, { $set: { isRead: true } });
         await ChatMessageDocs.updateOne(
@@ -226,6 +227,118 @@ async function main() {
         await processFirstTopicNotifications(1, publication.topicId);
         assert.equal(await Notifications.countDocuments({ userId: "did:receiver", type: "pm_received" }), 1);
         assert.equal((await Notifications.findOne({ userId: "did:receiver", type: "pm_received" }))?.isRead, true);
+
+        const topicAReply = await createThreadReply(publication.topicId, publication.conversationId, "did:sender", {
+            body: "Topic A reply",
+        });
+        const topicAFutureReply = await createThreadReply(
+            publication.topicId,
+            publication.conversationId,
+            "did:sender",
+            { body: "Topic A future reply" },
+        );
+        const topicB = await createThread(publication.conversationId, "did:sender", "Topic B", "Topic B body", []);
+        assert.ok(topicAReply?._id && topicAFutureReply?._id && topicB?._id);
+        await Notifications.insertMany([
+            {
+                userId: "did:receiver",
+                type: "pm_received",
+                content: {
+                    roomId: publication.conversationId,
+                    topicId: publication.topicId,
+                    messageId: topicAReply!._id,
+                },
+                isRead: false,
+                createdAt: new Date(),
+            },
+            {
+                userId: "did:receiver",
+                type: "pm_received",
+                content: {
+                    roomId: publication.conversationId,
+                    topicId: publication.topicId,
+                    messageId: topicAFutureReply!._id,
+                },
+                isRead: false,
+                createdAt: new Date(),
+            },
+            {
+                userId: "did:receiver",
+                type: "pm_received",
+                content: {
+                    roomId: publication.conversationId,
+                    topicId: topicB!._id,
+                    messageId: topicB!._id,
+                },
+                isRead: false,
+                createdAt: new Date(),
+            },
+            {
+                userId: "did:receiver",
+                type: "pm_received",
+                content: { roomId: publication.conversationId },
+                isRead: false,
+                createdAt: new Date(),
+            },
+        ] as any[]);
+        const failedTopicRead = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.markTopicReadAction(publication.conversationId, publication.topicId, topicB!._id!.toString()),
+        );
+        assert.equal(failedTopicRead.success, false);
+        assert.equal(
+            await Notifications.countDocuments({
+                userId: "did:receiver",
+                type: "pm_received",
+                isRead: false,
+                "content.messageId": { $in: [topicAReply!._id, topicAFutureReply!._id, topicB!._id] },
+            }),
+            3,
+            "a failed topic acknowledgement clears nothing",
+        );
+        const successfulTopicRead = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.markTopicReadAction(
+                publication.conversationId,
+                publication.topicId,
+                topicAReply!._id!.toString(),
+            ),
+        );
+        assert.equal(successfulTopicRead.success, true);
+        assert.equal(
+            (
+                await Notifications.findOne({
+                    userId: "did:receiver",
+                    "content.messageId": topicAReply!._id,
+                })
+            )?.isRead,
+            true,
+            "successful topic acknowledgement clears the eligible Topic A notification",
+        );
+        assert.equal(
+            (
+                await Notifications.findOne({
+                    userId: "did:receiver",
+                    "content.messageId": topicAFutureReply!._id,
+                })
+            )?.isRead,
+            false,
+            "a Topic A notification after the boundary remains unread",
+        );
+        assert.equal(
+            (await Notifications.findOne({ userId: "did:receiver", "content.messageId": topicB!._id }))?.isRead,
+            false,
+            "reading Topic A does not clear Topic B",
+        );
+        assert.equal(
+            (
+                await Notifications.findOne({
+                    userId: "did:receiver",
+                    "content.roomId": publication.conversationId,
+                    "content.topicId": { $exists: false },
+                })
+            )?.isRead,
+            false,
+            "historical room-only PM notifications remain unread",
+        );
 
         await Circles.insertMany([
             {

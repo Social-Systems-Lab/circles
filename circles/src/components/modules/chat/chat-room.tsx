@@ -82,7 +82,7 @@ import {
     consumePendingTopicScrollRequest,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
-import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import {
     getLegacyLooseMessages,
@@ -3806,31 +3806,6 @@ export const ChatRoomComponent: React.FC<{
         setReplyToMessage(null); // Clear reply when editing
     };
 
-    const lastReadMessageIdRef = useRef<string | null>(null);
-
-    const markLatestMessageAsRead = useCallback(async () => {
-        if (!roomId || messages.length === 0) {
-            return;
-        }
-
-        const latestMessage = messages[messages.length - 1];
-        if (lastReadMessageIdRef.current === latestMessage.id) {
-            return;
-        }
-
-        lastReadMessageIdRef.current = latestMessage.id;
-        try {
-            const response = await fetch("/api/notifications/mark-pms-as-read", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ roomId }),
-            });
-            dispatchNotificationRefreshIfOk(response, { reason: "pm-notifications-read", roomId });
-        } catch (error) {
-            console.error("Failed to mark PM notifications as read:", error);
-        }
-    }, [messages, roomId]);
-
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior });
@@ -3967,10 +3942,6 @@ export const ChatRoomComponent: React.FC<{
     useEffect(() => {
         messagesRef.current = messages;
     }, [messages]);
-
-    useEffect(() => {
-        markLatestMessageAsRead(); // Mark the latest message as read when messages update
-    }, [messages, markLatestMessageAsRead]);
 
     useEffect(() => {
         const calculatePillPosition = () => {

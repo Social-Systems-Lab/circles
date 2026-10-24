@@ -64,6 +64,7 @@ import {
     resolveChatMentionRecipientDids,
 } from "@/lib/chat/participant-notifications";
 import { buildChatMentionNotificationMessage } from "@/lib/chat/notification-presentation";
+import { acknowledgeTopicPmNotifications } from "@/lib/chat/pm-notification-read";
 
 const getAuthenticatedUserDid = () => getChatActionViewerDid(getProductionAuthenticatedUserDid);
 
@@ -244,6 +245,7 @@ export const sendConversationMessageNotifications = async ({
                 recipients,
                 {
                     ...getChatNotificationLocation(conversationId, topicId),
+                    ...(messageId ? { messageId } : {}),
                     user: sender,
                     circle: isCircleContact ? circle : undefined,
                     contactType: conversation?.metadata?.contactType,
@@ -1829,6 +1831,12 @@ export const markTopicReadAction = async (
     if (!validatedCursor) return { success: false, message: "Invalid topic read boundary" };
     observeChatActionEffect("topic-read-state");
     await markTopicRead(userDid, conversationId, normalizedTopicId, validatedCursor);
+    await acknowledgeTopicPmNotifications({
+        userDid,
+        conversationId,
+        topicId: normalizedTopicId,
+        lastReadMessageId: validatedCursor,
+    });
     return { success: true, lastReadMessageId: validatedCursor };
 };
 
