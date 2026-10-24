@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { ObjectId } from "mongodb";
 
 const databaseName = process.env.CIRCLES_MONGODB_DATABASE || "";
@@ -11,6 +12,21 @@ if (!["127.0.0.1", "localhost"].includes(mongoUrl.hostname)) throw new Error("Re
 if (!["27028", "27029"].includes(mongoUrl.port)) throw new Error("Refusing non-disposable MongoDB port");
 
 async function main() {
+    process.env.CIRCLES_JWT_SECRET ||= "stage1a-mongo-regression-test-secret";
+
+    const require = createRequire(import.meta.url);
+    const nextHeaders = require("next/headers") as typeof import("next/headers");
+    const productionCookies = nextHeaders.cookies;
+    let authenticatedRequestToken: string | undefined;
+    nextHeaders.cookies = async () =>
+        ({
+            get: (name: string) =>
+                name === AUTH_COOKIE_NAME && authenticatedRequestToken
+                    ? { name, value: authenticatedRequestToken }
+                    : undefined,
+        }) as Awaited<ReturnType<typeof nextHeaders.cookies>>;
+    const { AUTH_COOKIE_NAME } = await import("@/lib/auth/cookie");
+    const { generateUserToken } = await import("@/lib/auth/jwt");
     const dbModule = await import("@/lib/data/db");
     const { resolveCanonicalDm } = await import("./canonical-dm");
     const { runWithChatActionContext } = await import("./chat-action-context");
@@ -38,6 +54,14 @@ async function main() {
         db,
         ensureRequiredChatIndexes,
     } = dbModule;
+    const runWithAuthenticatedRequest = async <T>(viewerDid: string, callback: () => Promise<T>): Promise<T> => {
+        authenticatedRequestToken = await generateUserToken(viewerDid);
+        try {
+            return await callback();
+        } finally {
+            authenticatedRequestToken = undefined;
+        }
+    };
 
     try {
         await db.dropDatabase();
@@ -241,14 +265,18 @@ async function main() {
         assert.equal(mentionNotification?.content?.url, `/chat/${mention.conversationId}?topic=${mention.topicId}`);
         await Notifications.deleteMany({ userId: "did:mention-receiver", type: "chat_mention" });
         const mentionConversation = await ChatConversations.findOne({ _id: new ObjectId(mention.conversationId) });
-        await mongoActions.sendConversationMessageNotifications({
-            conversationId: mention.conversationId,
-            conversation: mentionConversation,
-            senderDid: "did:mention-sender",
-            messageBody: "Reply for [Receiver](/circles/mention-receiver)",
-            messageId: new ObjectId().toString(),
-            topicId: mention.topicId,
-        });
+        await runWithAuthenticatedRequest("did:mention-sender", () =>
+            runWithChatActionContext({ viewerDid: "did:mention-sender" }, () =>
+                mongoActions.sendConversationMessageNotifications({
+                    conversationId: mention.conversationId,
+                    conversation: mentionConversation,
+                    senderDid: "did:mention-sender",
+                    messageBody: "Reply for [Receiver](/circles/mention-receiver)",
+                    messageId: new ObjectId().toString(),
+                    topicId: mention.topicId,
+                }),
+            ),
+        );
         const replyMentionNotification = await Notifications.findOne({
             userId: "did:mention-receiver",
             type: "chat_mention",
@@ -274,7 +302,11 @@ async function main() {
             processFirstTopicNotifications(1, mention.topicId),
             processFirstTopicNotifications(1, mention.topicId),
         ]);
-        assert.equal(await Notifications.countDocuments({ userId: "did:mention-receiver", type: "chat_mention" }), 1);
+        assert.equal(
+            await Notifications.countDocuments({ userId: "did:mention-receiver", type: "chat_mention" }),
+            2,
+            "the reply mention and reprocessed first-topic mention are distinct notification events",
+        );
         assert.equal(
             (await ChatMessageDocs.findOne({ _id: new ObjectId(mention.topicId) }))?.firstTopicNotification?.state,
             "delivered",
@@ -614,6 +646,7 @@ async function main() {
 
         console.log("Messaging Stage 1A Mongo regression tests passed (production persistence helpers)");
     } finally {
+        nextHeaders.cookies = productionCookies;
         await db.dropDatabase();
         await dbModule.client.close();
     }
