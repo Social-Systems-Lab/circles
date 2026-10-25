@@ -3706,10 +3706,10 @@ export const ChatRoomComponent: React.FC<{
     }, [navigateToTopic, roomId]);
 
     useEffect(() => {
-        if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
+        if (!roomId || hasLoadedTopicsRef.current) return;
         hasLoadedTopicsRef.current = true;
         void refreshTopicStarters();
-    }, [isLoadingMongo, roomId, refreshTopicStarters]);
+    }, [roomId, refreshTopicStarters]);
 
     const loadOlderMessages = async () => {
         if (!roomId || isLoadingOlder || !hasOlderMessages) return;

@@ -570,6 +570,41 @@ export const listChatRoomsAction = async (
     }
 };
 
+export const getChatRoomAction = async (
+    conversationId: string,
+    view: "active" | "archived" = "active",
+): Promise<{ success: boolean; room?: ChatRoomDisplay; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "You need to be logged in to view chats" };
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
+    if (!access.ok || !access.conversation) return { success: false, message: access.message };
+
+    const conversation = access.conversation as any;
+    const archivedByViewer = Array.isArray(conversation.archivedBy) && conversation.archivedBy.includes(userDid);
+    const isUnavailable =
+        conversation.archived === true ||
+        conversation.metadata?.dmProvisional === true ||
+        (view === "archived"
+            ? conversation.type !== "dm" || !archivedByViewer
+            : conversation.type === "dm" && archivedByViewer);
+    if (isUnavailable) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+
+    try {
+        const context = getChatActionContext();
+        const rooms = context?.mapConversations
+            ? await context.mapConversations(userDid, [conversation], [])
+            : [await mapConversationToChatRoomDisplay(userDid, conversation)].filter(
+                  (room): room is ChatRoomDisplay => !!room,
+              );
+        const room = rooms[0];
+        return room ? { success: true, room } : { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    } catch (error) {
+        console.error("Failed to load chat room:", error);
+        return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    }
+};
+
 const setDmArchivedForCurrentUser = async (
     conversationId: string,
     archived: boolean,

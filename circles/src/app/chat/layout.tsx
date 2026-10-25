@@ -20,6 +20,7 @@ import { addNotificationRefreshListener } from "@/lib/client/notification-events
 import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
 import { buildConversationUnreadSnapshot } from "@/lib/chat/unread-counts";
 import { listDmDraftsAction } from "@/components/modules/chat/draft-actions";
+import { ChatLayoutProvider } from "@/components/modules/chat/chat-layout-context";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -262,7 +263,9 @@ export default function ChatLayout({ children }: PropsWithChildren) {
             )}
 
             {/* main content: either the 'no chat selected' or the chosen chat */}
-            <main className={`${!isChatMobile ? "ml-[372px]" : ""}`}>{children}</main>
+            <main className={`${!isChatMobile ? "ml-[372px]" : ""}`}>
+                <ChatLayoutProvider value={{ chatRooms, hasLoadedChatRooms }}>{children}</ChatLayoutProvider>
+            </main>
 
             <CreateChatModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
 

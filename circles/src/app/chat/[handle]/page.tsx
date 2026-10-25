@@ -18,27 +18,16 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
         redirect("/welcome");
     }
 
-    const { resolveMongoConversationAccess } = await import("@/components/modules/chat/mongo-actions");
-    const { listChatRoomsAction } = await import("@/components/modules/chat/mongo-actions");
+    const { getChatRoomAction } = await import("@/components/modules/chat/mongo-actions");
 
     const slug = params.handle;
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(slug);
-    const listResult = await listChatRoomsAction();
-    const chats = listResult.success ? listResult.rooms || [] : [];
+    const roomResult = await getChatRoomAction(slug);
+    const chatRoom = roomResult.success ? roomResult.room : undefined;
+    if (!chatRoom?._id) notFound();
 
     // 1) If slug is an ObjectId, treat it as conversationId.
     if (isObjectId) {
-        const access = await resolveMongoConversationAccess(slug, userDid);
-        if (!access.ok || !access.conversation) {
-            notFound();
-        }
-
-        const chatRoom = chats.find((room) => String(room._id) === slug);
-
-        if (!chatRoom) {
-            notFound();
-        }
-
         const { findThreadStarter } = await import("@/lib/data/mongo-chat");
         const initialTopicId = await validateTopicDeepLink(searchParams.topic, slug, findThreadStarter);
 
@@ -46,10 +35,5 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
     }
 
     // 2) Otherwise treat slug as handle and redirect to canonical /chat/<conversationId>.
-    const match = chats.find((c) => c.handle === slug || c.circle?.handle === slug);
-    if (!match?._id) {
-        notFound();
-    }
-
-    redirect(buildCanonicalChatRedirectPath(String(match._id), searchParams.topic));
+    redirect(buildCanonicalChatRedirectPath(String(chatRoom._id), searchParams.topic));
 }

@@ -14,17 +14,10 @@ export default async function ArchivedChatRoomPage(props: ArchivedChatRoomPagePr
     if (!userDid) redirect("/welcome");
     if (!/^[0-9a-fA-F]{24}$/.test(handle)) notFound();
 
-    const { listChatRoomsAction, resolveMongoConversationAccess } = await import(
-        "@/components/modules/chat/mongo-actions"
-    );
-    const [access, listResult] = await Promise.all([
-        resolveMongoConversationAccess(handle, userDid, "read"),
-        listChatRoomsAction("archived"),
-    ]);
-    const chatRoom = listResult.success
-        ? (listResult.rooms || []).find((room) => String(room._id) === handle)
-        : undefined;
-    if (!access.ok || !chatRoom || access.conversation?.type !== "dm") notFound();
+    const { getChatRoomAction } = await import("@/components/modules/chat/mongo-actions");
+    const roomResult = await getChatRoomAction(handle, "archived");
+    const chatRoom = roomResult.success ? roomResult.room : undefined;
+    if (!chatRoom) notFound();
 
     const { findThreadStarter } = await import("@/lib/data/mongo-chat");
     const initialTopicId = await validateTopicDeepLink(searchParams.topic, handle, findThreadStarter);

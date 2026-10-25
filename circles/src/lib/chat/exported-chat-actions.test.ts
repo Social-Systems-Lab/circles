@@ -69,7 +69,17 @@ const staleContext = (effects: Record<string, number>): ChatActionContext => ({
 const denied = (result: any, label: string) => {
     assert.equal(result?.success, false, label);
     assert.equal(result?.message, "Chat unavailable", label);
-    for (const key of ["messages", "threads", "replies", "media", "members", "memberCount", "counts", "isAdmin"]) {
+    for (const key of [
+        "room",
+        "messages",
+        "threads",
+        "replies",
+        "media",
+        "members",
+        "memberCount",
+        "counts",
+        "isAdmin",
+    ]) {
         assert.equal(result?.[key], undefined, `${label} exposes no ${key}`);
     }
 };
@@ -108,6 +118,7 @@ test("actual exported read actions deny a former Secret member with stale chat m
         denied(await mongoActions.fetchMongoMessagesAction(conversationId), "fetchMongoMessagesAction");
         denied(await mongoActions.fetchTopicStartersAction(conversationId), "fetchTopicStartersAction");
         denied(await mongoActions.fetchThreadRepliesAction(topicId, conversationId), "fetchThreadRepliesAction");
+        denied(await mongoActions.getChatRoomAction(conversationId), "getChatRoomAction");
         const unread = await mongoActions.getUnreadCountsAction([conversationId]);
         assert.deepEqual(unread, { success: true, counts: {} });
         denied(await mongoActions.getTopicUnreadCountsAction(conversationId), "getTopicUnreadCountsAction");
@@ -122,6 +133,55 @@ test("actual exported read actions deny a former Secret member with stale chat m
         assert.deepEqual(sidebar, { success: true, rooms: [] });
     });
     assert.deepEqual(effects, { hydration: 0, unread: 0 }, "unauthorized sidebar candidates never reach enrichment");
+});
+
+test("authorized direct conversation loading hydrates one room without calculating sidebar unread counts", async () => {
+    const effects = { hydration: 0, unread: 0 };
+    const directConversation = {
+        ...conversation,
+        type: "dm",
+        circleId: undefined,
+        participants: [alice, "did:bob"],
+    };
+    await runWithChatActionContext(
+        {
+            ...staleContext(effects),
+            findConversation: async () => directConversation,
+            mapConversations: async (_viewer, rooms) => {
+                effects.hydration += rooms.length;
+                return rooms.map((room) => ({ _id: room._id.toString(), name: "Authorized room" })) as any;
+            },
+        },
+        async () => {
+            const result = await mongoActions.getChatRoomAction(conversationId);
+            assert.equal(result.success, true);
+            assert.equal(result.room?._id, conversationId);
+        },
+    );
+    assert.deepEqual(effects, { hydration: 1, unread: 0 });
+});
+
+test("single-conversation loading preserves per-user active and archived DM visibility", async () => {
+    const effects = { hydration: 0, unread: 0 };
+    const archivedConversation = {
+        ...conversation,
+        type: "dm",
+        circleId: undefined,
+        participants: [alice, "did:bob"],
+        archivedBy: [alice],
+    };
+    await runWithChatActionContext(
+        {
+            ...staleContext(effects),
+            findConversation: async () => archivedConversation,
+            mapConversations: async (_viewer, rooms) =>
+                rooms.map((room) => ({ _id: room._id.toString(), name: "Archived room" })) as any,
+        },
+        async () => {
+            denied(await mongoActions.getChatRoomAction(conversationId), "active archived DM");
+            assert.equal((await mongoActions.getChatRoomAction(conversationId, "archived")).success, true);
+        },
+    );
 });
 
 test("actual exported write actions deny before mutation, upload, read state, repair or system events", async () => {
