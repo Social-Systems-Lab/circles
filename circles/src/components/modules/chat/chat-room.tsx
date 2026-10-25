@@ -2040,6 +2040,7 @@ const TopicCard: React.FC<{
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
     const repliesEndRef = useRef<HTMLDivElement>(null);
     const replyComposerRef = useRef<HTMLDivElement>(null);
+    const topicEndRef = useRef<HTMLDivElement>(null);
     const replyTextRef = useRef("");
     const pendingScrollIntoViewRef = useRef(false);
     const pendingScrollToLatestRef = useRef(false);
@@ -2464,10 +2465,11 @@ const TopicCard: React.FC<{
 
     useEffect(() => {
         if (!isTopicOpen || isLoading || (!hasLoadedRepliesRef.current && !pendingOutgoingScrollRef.current)) return;
-        const revealComposer = pendingScrollToLatestRef.current || pendingOutgoingScrollRef.current;
+        const openedNormally = pendingScrollToLatestRef.current;
+        const sentReply = pendingOutgoingScrollRef.current;
         const shouldScroll = shouldAutoScrollTopicReplies({
-            openedNormally: pendingScrollToLatestRef.current,
-            sentReply: pendingOutgoingScrollRef.current,
+            openedNormally,
+            sentReply,
             incomingWasNearBottom: pendingIncomingAutoScrollRef.current,
             incomingCapturedScrollTop: incomingAutoScrollTopRef.current,
             currentScrollTop: scrollViewportRef.current?.scrollTop || 0,
@@ -2483,7 +2485,9 @@ const TopicCard: React.FC<{
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 selectTopicReplyScrollTarget({
-                    revealComposer,
+                    openedNormally,
+                    sentReply,
+                    topicEnd: topicEndRef.current,
                     composer: replyComposerRef.current,
                     repliesEnd: repliesEndRef.current,
                 })?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -3289,6 +3293,7 @@ const TopicCard: React.FC<{
                             Close topic
                         </Button>
                     </div>
+                    <div ref={topicEndRef} aria-hidden="true" />
                 </div>
             )}
             {isEditingTopic && (

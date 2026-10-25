@@ -741,18 +741,34 @@ assert.equal(
 );
 const composerTarget = { id: "composer" };
 const repliesEndTarget = { id: "replies-end" };
+const topicEndTarget = { id: "topic-end" };
 assert.equal(
     selectTopicReplyScrollTarget({
-        revealComposer: true,
+        openedNormally: true,
+        sentReply: false,
+        topicEnd: topicEndTarget,
+        composer: composerTarget,
+        repliesEnd: repliesEndTarget,
+    }),
+    topicEndTarget,
+    "normal opening targets the actual bottom after the Close topic control",
+);
+assert.equal(
+    selectTopicReplyScrollTarget({
+        openedNormally: false,
+        sentReply: true,
+        topicEnd: topicEndTarget,
         composer: composerTarget,
         repliesEnd: repliesEndTarget,
     }),
     composerTarget,
-    "normal opening and sending target the composer below the latest reply",
+    "sending continues to target the composer below the outgoing reply",
 );
 assert.equal(
     selectTopicReplyScrollTarget({
-        revealComposer: false,
+        openedNormally: false,
+        sentReply: false,
+        topicEnd: topicEndTarget,
         composer: composerTarget,
         repliesEnd: repliesEndTarget,
     }),
@@ -760,9 +776,15 @@ assert.equal(
     "incoming replies retain the near-bottom reply-list target",
 );
 assert.equal(
-    selectTopicReplyScrollTarget({ revealComposer: true, composer: null, repliesEnd: repliesEndTarget }),
-    repliesEndTarget,
-    "read-only topics fall back to the final reply target when no composer exists",
+    selectTopicReplyScrollTarget({
+        openedNormally: true,
+        sentReply: false,
+        topicEnd: null,
+        composer: composerTarget,
+        repliesEnd: repliesEndTarget,
+    }),
+    composerTarget,
+    "normal opening falls back safely if the expanded-topic end is unavailable",
 );
 assert.equal(shouldAcknowledgeTopicInteraction("scroll"), false, "automatic scrolling cannot acknowledge a topic");
 

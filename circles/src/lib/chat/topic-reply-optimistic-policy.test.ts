@@ -28,11 +28,12 @@ test("topic scrolling stays separate from acknowledgement", () => {
     assert.match(chatRoomSource, /pendingScrollToLatestRef\.current = true/);
     assert.match(chatRoomSource, /isTopicViewportNearBottom/);
     assert.match(chatRoomSource, /ref=\{replyComposerRef\}/);
+    assert.match(chatRoomSource, /Close topic[\s\S]*?ref=\{topicEndRef\}/);
     assert.match(chatRoomSource, /selectTopicReplyScrollTarget\(\{/);
     assert.match(
         chatRoomSource,
-        /const revealComposer = pendingScrollToLatestRef\.current \|\| pendingOutgoingScrollRef\.current/,
-        "normal opening and outgoing sends both reveal the composer",
+        /const openedNormally = pendingScrollToLatestRef\.current;[\s\S]*?const sentReply = pendingOutgoingScrollRef\.current/,
+        "normal opening and outgoing sends retain independent scroll targets",
     );
     assert.doesNotMatch(
         chatRoomSource,
