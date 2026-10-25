@@ -120,6 +120,16 @@ export const shouldAutoScrollTopicReplies = ({
 }): boolean =>
     openedNormally || sentReply || (incomingWasNearBottom && currentScrollTop >= incomingCapturedScrollTop - 8);
 
+export const selectTopicReplyScrollTarget = <T>({
+    revealComposer,
+    composer,
+    repliesEnd,
+}: {
+    revealComposer: boolean;
+    composer: T | null;
+    repliesEnd: T | null;
+}): T | null => (revealComposer ? composer || repliesEnd : repliesEnd);
+
 export const canApplyTopicReplyLoad = ({
     requestId,
     currentRequestId,

@@ -27,10 +27,21 @@ test("retry reuses a stable submission id and persistence recovers duplicate req
 test("topic scrolling stays separate from acknowledgement", () => {
     assert.match(chatRoomSource, /pendingScrollToLatestRef\.current = true/);
     assert.match(chatRoomSource, /isTopicViewportNearBottom/);
-    assert.match(chatRoomSource, /repliesEndRef\.current\?\.scrollIntoView/);
+    assert.match(chatRoomSource, /ref=\{replyComposerRef\}/);
+    assert.match(chatRoomSource, /selectTopicReplyScrollTarget\(\{/);
+    assert.match(
+        chatRoomSource,
+        /const revealComposer = pendingScrollToLatestRef\.current \|\| pendingOutgoingScrollRef\.current/,
+        "normal opening and outgoing sends both reveal the composer",
+    );
     assert.doesNotMatch(
         chatRoomSource,
         /scrollIntoView[\s\S]{0,200}acknowledgeLoadedTopic/,
         "scroll effects do not acknowledge topic reads",
     );
+});
+
+test("deep-link and next-unread positioning remains independent from composer scrolling", () => {
+    assert.match(chatRoomSource, /target\.scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+    assert.match(chatRoomSource, /navigationRequest\?\.topicId !== messageId/);
 });

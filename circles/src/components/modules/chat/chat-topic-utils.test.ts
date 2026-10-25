@@ -17,6 +17,7 @@ import {
     mergeAuthoritativeTopicReplies,
     mergeRefreshedTopicStarters,
     planTopicReplyLoad,
+    selectTopicReplyScrollTarget,
     selectInitialTopicId,
     selectFollowUpTopicReplySignal,
     shouldReconcileTopicReplies,
@@ -737,6 +738,31 @@ assert.equal(
     }),
     false,
     "incoming replies do not pull a reader who moved to older replies",
+);
+const composerTarget = { id: "composer" };
+const repliesEndTarget = { id: "replies-end" };
+assert.equal(
+    selectTopicReplyScrollTarget({
+        revealComposer: true,
+        composer: composerTarget,
+        repliesEnd: repliesEndTarget,
+    }),
+    composerTarget,
+    "normal opening and sending target the composer below the latest reply",
+);
+assert.equal(
+    selectTopicReplyScrollTarget({
+        revealComposer: false,
+        composer: composerTarget,
+        repliesEnd: repliesEndTarget,
+    }),
+    repliesEndTarget,
+    "incoming replies retain the near-bottom reply-list target",
+);
+assert.equal(
+    selectTopicReplyScrollTarget({ revealComposer: true, composer: null, repliesEnd: repliesEndTarget }),
+    repliesEndTarget,
+    "read-only topics fall back to the final reply target when no composer exists",
 );
 assert.equal(shouldAcknowledgeTopicInteraction("scroll"), false, "automatic scrolling cannot acknowledge a topic");
 

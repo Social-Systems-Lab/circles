@@ -83,6 +83,7 @@ import {
     confirmOptimisticTopicReply,
     isTopicViewportNearBottom,
     mergeAuthoritativeTopicReplies,
+    selectTopicReplyScrollTarget,
     shouldAutoScrollTopicReplies,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
@@ -2038,12 +2039,14 @@ const TopicCard: React.FC<{
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
     const repliesEndRef = useRef<HTMLDivElement>(null);
+    const replyComposerRef = useRef<HTMLDivElement>(null);
     const replyTextRef = useRef("");
     const pendingScrollIntoViewRef = useRef(false);
     const pendingScrollToLatestRef = useRef(false);
     const pendingIncomingAutoScrollRef = useRef(false);
     const incomingAutoScrollTopRef = useRef(0);
     const pendingOutgoingScrollRef = useRef(false);
+    const hasLoadedRepliesRef = useRef(false);
     const isTopicOpenRef = useRef(false);
     const replyLoadInFlightRef = useRef(false);
     const pendingReplyRefreshSignalRef = useRef<string | null>(null);
@@ -2263,6 +2266,7 @@ const TopicCard: React.FC<{
                     };
                 });
                 setReplies((current) => mergeAuthoritativeTopicReplies(current, mapped));
+                hasLoadedRepliesRef.current = true;
                 if (shouldAutoScrollIncoming) pendingIncomingAutoScrollRef.current = true;
                 setIsLoading(false);
                 if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
@@ -2401,6 +2405,7 @@ const TopicCard: React.FC<{
             acknowledgementInFlightRef.current = null;
             queuedAcknowledgementRef.current = null;
             persistedAcknowledgementRef.current = null;
+            hasLoadedRepliesRef.current = false;
         };
     }, [conversationId, messageId]);
 
@@ -2458,7 +2463,8 @@ const TopicCard: React.FC<{
     ]);
 
     useEffect(() => {
-        if (!isTopicOpen || isLoading || replies.length === 0) return;
+        if (!isTopicOpen || isLoading || (!hasLoadedRepliesRef.current && !pendingOutgoingScrollRef.current)) return;
+        const revealComposer = pendingScrollToLatestRef.current || pendingOutgoingScrollRef.current;
         const shouldScroll = shouldAutoScrollTopicReplies({
             openedNormally: pendingScrollToLatestRef.current,
             sentReply: pendingOutgoingScrollRef.current,
@@ -2476,7 +2482,11 @@ const TopicCard: React.FC<{
         pendingIncomingAutoScrollRef.current = false;
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                repliesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                selectTopicReplyScrollTarget({
+                    revealComposer,
+                    composer: replyComposerRef.current,
+                    repliesEnd: repliesEndRef.current,
+                })?.scrollIntoView({ behavior: "smooth", block: "nearest" });
             });
         });
     }, [isLoading, isTopicOpen, replies, scrollViewportRef]);
@@ -3145,7 +3155,7 @@ const TopicCard: React.FC<{
 
                     {/* Reply input */}
                     {canReply && (
-                        <div className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
+                        <div ref={replyComposerRef} className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
                             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
                             <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
                                 <div className="flex items-center gap-1 sm:contents">
