@@ -53,6 +53,73 @@ export const getTopicReplyChangeSignals = (messages: ChatMessage[]): Record<stri
     return signals;
 };
 
+export const mergeAuthoritativeTopicReplies = (
+    currentReplies: ChatMessage[],
+    authoritativeReplies: ChatMessage[],
+): ChatMessage[] => {
+    const authoritativeIds = new Set(authoritativeReplies.map((reply) => reply.id));
+    const authoritativeSubmissionIds = new Set(
+        authoritativeReplies.map((reply) => reply.submissionId).filter((value): value is string => !!value),
+    );
+    const localOnly = currentReplies.filter(
+        (reply) =>
+            (reply.status === "pending" || reply.status === "sent" || reply.status === "failed") &&
+            !authoritativeIds.has(reply.id) &&
+            (!reply.submissionId || !authoritativeSubmissionIds.has(reply.submissionId)),
+    );
+    return [...authoritativeReplies, ...localOnly].sort((left, right) => {
+        const timeDelta = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+        return timeDelta || left.id.localeCompare(right.id);
+    });
+};
+
+export const confirmOptimisticTopicReply = (
+    replies: ChatMessage[],
+    tempId: string,
+    submissionId: string,
+    messageId: string,
+    createdAt?: Date | string,
+): ChatMessage[] => {
+    const authoritativeExists = replies.some(
+        (reply) =>
+            reply.id === messageId ||
+            (!!reply.submissionId && reply.submissionId === submissionId && reply.id !== tempId),
+    );
+    if (authoritativeExists) return replies.filter((reply) => reply.id !== tempId);
+    return replies.map((reply) =>
+        reply.id === tempId
+            ? {
+                  ...reply,
+                  id: messageId,
+                  createdAt: createdAt ? new Date(createdAt) : reply.createdAt,
+                  status: "sent",
+                  errorMessage: undefined,
+              }
+            : reply,
+    );
+};
+
+export const isTopicViewportNearBottom = (
+    viewport: Pick<HTMLElement, "scrollHeight" | "scrollTop" | "clientHeight"> | null,
+    threshold = 150,
+): boolean =>
+    !!viewport && Math.max(0, viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight) <= threshold;
+
+export const shouldAutoScrollTopicReplies = ({
+    openedNormally,
+    sentReply,
+    incomingWasNearBottom,
+    incomingCapturedScrollTop,
+    currentScrollTop,
+}: {
+    openedNormally: boolean;
+    sentReply: boolean;
+    incomingWasNearBottom: boolean;
+    incomingCapturedScrollTop: number;
+    currentScrollTop: number;
+}): boolean =>
+    openedNormally || sentReply || (incomingWasNearBottom && currentScrollTop >= incomingCapturedScrollTop - 8);
+
 export const canApplyTopicReplyLoad = ({
     requestId,
     currentRequestId,

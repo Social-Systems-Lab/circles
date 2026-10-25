@@ -408,6 +408,7 @@ export interface ChatMessage {
     isRedacted?: boolean;
     status?: "pending" | "sent" | "failed";
     errorMessage?: string;
+    submissionId?: string;
     system?: SystemMessageMetadata;
 }
 

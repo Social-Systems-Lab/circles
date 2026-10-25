@@ -1177,8 +1177,29 @@ export const createThreadReply = async (
         body: string;
         attachments?: ChatAttachment[];
         replyToMessageId?: string;
+        submissionId?: string;
     },
 ): Promise<ChatMessageDoc | null> => {
+    const matchesSubmission = (message: ChatMessageDoc): boolean =>
+        message.conversationId === conversationId &&
+        message.threadId === threadId &&
+        message.senderDid === senderDid &&
+        message.body === payload.body &&
+        message.replyToMessageId === payload.replyToMessageId;
+    const findExistingSubmission = async (): Promise<ChatMessageDoc | null> => {
+        if (!payload.submissionId) return null;
+        const existing = (await ChatMessageDocs.findOne({
+            senderDid,
+            submissionId: payload.submissionId,
+        })) as ChatMessageDoc | null;
+        if (!existing) return null;
+        if (!matchesSubmission(existing)) throw new Error("Reply submission id was already used for another message");
+        return { ...existing, _id: existing._id?.toString() };
+    };
+
+    const existingSubmission = await findExistingSubmission();
+    if (existingSubmission) return existingSubmission;
+
     const threadStarter = await findThreadStarter(threadId, conversationId);
     if (!threadStarter) return null;
 
@@ -1189,10 +1210,19 @@ export const createThreadReply = async (
         body: payload.body,
         createdAt: now,
         threadId,
+        ...(payload.submissionId ? { submissionId: payload.submissionId } : {}),
         ...(payload.attachments ? { attachments: payload.attachments } : {}),
         ...(payload.replyToMessageId ? { replyToMessageId: payload.replyToMessageId } : {}),
     };
-    const result = await ChatMessageDocs.insertOne(doc);
+    let result;
+    try {
+        result = await ChatMessageDocs.insertOne(doc);
+    } catch (error: any) {
+        if (error?.code !== 11000 || !payload.submissionId) throw error;
+        const recovered = await findExistingSubmission();
+        if (!recovered) throw error;
+        return recovered;
+    }
     const threadUpdate = await ChatMessageDocs.updateOne(
         {
             _id: new ObjectId(threadId),
@@ -1222,8 +1252,9 @@ export const sendThreadReply = async (
     senderDid: string,
     body: string,
     replyToMessageId?: string,
+    submissionId?: string,
 ): Promise<ChatMessageDoc | null> => {
-    return createThreadReply(threadId, conversationId, senderDid, { body, replyToMessageId });
+    return createThreadReply(threadId, conversationId, senderDid, { body, replyToMessageId, submissionId });
 };
 
 export const fetchThreadReplies = async (threadId: string, conversationId: string): Promise<ChatMessageDoc[]> => {

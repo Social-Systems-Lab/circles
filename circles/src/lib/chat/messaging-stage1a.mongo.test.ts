@@ -238,6 +238,35 @@ async function main() {
             "did:sender",
             { body: "Topic A future reply" },
         );
+        const starterBeforeIdempotentReply = await ChatMessageDocs.findOne({
+            _id: new ObjectId(publication.topicId),
+        });
+        const idempotentSubmissionId = "topic-reply-idempotency-test";
+        const idempotentReply = await createThreadReply(publication.topicId, publication.conversationId, "did:sender", {
+            body: "Idempotent topic reply",
+            submissionId: idempotentSubmissionId,
+        });
+        const recoveredIdempotentReply = await createThreadReply(
+            publication.topicId,
+            publication.conversationId,
+            "did:sender",
+            { body: "Idempotent topic reply", submissionId: idempotentSubmissionId },
+        );
+        assert.equal(recoveredIdempotentReply?._id, idempotentReply?._id, "retry returns the committed topic reply");
+        assert.equal(
+            await ChatMessageDocs.countDocuments({ senderDid: "did:sender", submissionId: idempotentSubmissionId }),
+            1,
+            "retry cannot create a duplicate topic reply",
+        );
+        assert.equal(
+            (
+                await ChatMessageDocs.findOne({
+                    _id: new ObjectId(publication.topicId),
+                })
+            )?.thread?.replyCount,
+            (starterBeforeIdempotentReply?.thread?.replyCount || 0) + 1,
+            "retry increments the topic reply count only once",
+        );
         const topicB = await createThread(publication.conversationId, "did:sender", "Topic B", "Topic B body", []);
         assert.ok(topicAReply?._id && topicAFutureReply?._id && topicB?._id);
         await Notifications.insertMany([

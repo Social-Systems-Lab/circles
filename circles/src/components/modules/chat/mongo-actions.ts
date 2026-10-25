@@ -262,15 +262,20 @@ export const sendConversationMessageNotifications = async ({
     if (mentionRecipients.length) {
         const topic = topicId ? await findThreadStarter(topicId, conversationId) : null;
         const topicTitle = topic?.thread?.title?.trim() || undefined;
-        await sendNotifications("chat_mention", mentionRecipients, {
-            ...getChatNotificationLocation(conversationId, topicId),
-            user: sender,
-            circle,
-            conversationName: conversation?.name,
-            topicTitle,
-            messageBody: buildChatMentionNotificationMessage(sender.name, topicTitle),
-            messagePreview: messageBody,
-        });
+        await sendNotifications(
+            "chat_mention",
+            mentionRecipients,
+            {
+                ...getChatNotificationLocation(conversationId, topicId),
+                user: sender,
+                circle,
+                conversationName: conversation?.name,
+                topicTitle,
+                messageBody: buildChatMentionNotificationMessage(sender.name, topicTitle),
+                messagePreview: messageBody,
+            },
+            idempotencyKey ? { idempotencyKey } : undefined,
+        );
     }
 
     if (!isDirectMessage || !messageId) {
@@ -1972,10 +1977,14 @@ export const sendThreadReplyAction = async (
     conversationId: string,
     body: string,
     replyToMessageId?: string,
-): Promise<{ success: boolean; message?: string; messageId?: string }> => {
+    submissionId?: string,
+): Promise<{ success: boolean; message?: string; messageId?: string; createdAt?: Date; submissionId?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!body.trim()) return { success: false, message: "Reply cannot be empty" };
+    if (submissionId && (submissionId.length < 8 || submissionId.length > 128)) {
+        return { success: false, message: "Invalid reply submission" };
+    }
     const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
     if (access.conversation?.type === "announcement") {
@@ -1988,7 +1997,14 @@ export const sendThreadReplyAction = async (
     try {
         const { sendThreadReply } = await import("@/lib/data/mongo-chat");
         observeChatActionEffect("reply-create");
-        const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim(), replyToMessageId);
+        const doc = await sendThreadReply(
+            threadId,
+            conversationId,
+            userDid,
+            body.trim(),
+            replyToMessageId,
+            submissionId,
+        );
         if (!doc?._id) return { success: false, message: "Topic not found for this conversation" };
         // Fire notifications (DM and circle-contact conversations only for now)
         try {
@@ -2000,11 +2016,17 @@ export const sendThreadReplyAction = async (
                 messageBody: body.trim(),
                 messageId: doc._id.toString(),
                 topicId: threadId,
+                idempotencyKey: submissionId ? `topic-reply:${submissionId}` : undefined,
             });
         } catch (notifError) {
             console.error("sendThreadReplyAction notification error:", notifError);
         }
-        return { success: true, messageId: doc._id.toString() };
+        return {
+            success: true,
+            messageId: doc._id.toString(),
+            createdAt: doc.createdAt,
+            submissionId: doc.submissionId,
+        };
     } catch (error) {
         console.error("sendThreadReplyAction error:", error);
         return { success: false, message: "Failed to send reply" };
@@ -2077,6 +2099,7 @@ export const fetchThreadRepliesAction = async (
                           attachments: normalizedReplyAttachments,
                       }
                     : undefined,
+                submissionId: doc.submissionId,
             };
         });
 

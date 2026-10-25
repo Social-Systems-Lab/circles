@@ -80,6 +80,10 @@ import {
     shouldAcknowledgeTopicInteraction,
     canApplyTopicAcknowledgementResult,
     consumePendingTopicScrollRequest,
+    confirmOptimisticTopicReply,
+    isTopicViewportNearBottom,
+    mergeAuthoritativeTopicReplies,
+    shouldAutoScrollTopicReplies,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
@@ -2033,8 +2037,13 @@ const TopicCard: React.FC<{
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+    const repliesEndRef = useRef<HTMLDivElement>(null);
     const replyTextRef = useRef("");
     const pendingScrollIntoViewRef = useRef(false);
+    const pendingScrollToLatestRef = useRef(false);
+    const pendingIncomingAutoScrollRef = useRef(false);
+    const incomingAutoScrollTopRef = useRef(0);
+    const pendingOutgoingScrollRef = useRef(false);
     const isTopicOpenRef = useRef(false);
     const replyLoadInFlightRef = useRef(false);
     const pendingReplyRefreshSignalRef = useRef<string | null>(null);
@@ -2056,16 +2065,20 @@ const TopicCard: React.FC<{
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
     isTopicOpenRef.current = isTopicOpen;
     const expectedReplyCount = Number(thread?.replyCount);
+    const persistedReplies = useMemo(
+        () => replies.filter((reply) => reply.status !== "pending" && reply.status !== "failed"),
+        [replies],
+    );
     const unreadBoundary = useMemo(
         () =>
             resolveTopicUnreadBoundary({
                 starter: { id: messageId, createdBy: message.createdBy },
-                replies,
+                replies: persistedReplies,
                 unreadCount,
                 currentUserDid: user?.did,
                 expectedReplyCount,
             }),
-        [expectedReplyCount, message.createdBy, messageId, replies, unreadCount, user?.did],
+        [expectedReplyCount, message.createdBy, messageId, persistedReplies, unreadCount, user?.did],
     );
     const firstUnreadMessageId = unreadBoundary.firstUnreadMessageId;
     const mentionSuggestions = useMemo(() => getChatMentionSuggestions(mentionCandidates), [mentionCandidates]);
@@ -2176,6 +2189,9 @@ const TopicCard: React.FC<{
         pendingReplyRefreshSignalRef.current = loadPlan.pendingSignal;
         if (!loadPlan.shouldStart) return;
         backgroundSignal = loadPlan.activeSignal;
+        const shouldAutoScrollIncoming =
+            !!backgroundSignal && isTopicViewportNearBottom(scrollViewportRef.current, CHAT_BOTTOM_THRESHOLD_PX);
+        if (shouldAutoScrollIncoming) incomingAutoScrollTopRef.current = scrollViewportRef.current?.scrollTop || 0;
 
         const readRequestId = ++readRequestRef.current;
         const loadScope = replyLoadScopeRef.current;
@@ -2243,9 +2259,11 @@ const TopicCard: React.FC<{
                             picture: r.authorPicture ? { url: r.authorPicture } : { url: "/placeholder.svg" },
                         } as Circle,
                         replyTo: r.replyTo,
+                        submissionId: r.submissionId,
                     };
                 });
-                setReplies(mapped);
+                setReplies((current) => mergeAuthoritativeTopicReplies(current, mapped));
+                if (shouldAutoScrollIncoming) pendingIncomingAutoScrollRef.current = true;
                 setIsLoading(false);
                 if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
                 replyRetryTimerRef.current = null;
@@ -2342,7 +2360,7 @@ const TopicCard: React.FC<{
         const boundary = selectTopicAcknowledgementBoundary({
             topicId: messageId,
             topicCreatedAt: message.createdAt,
-            replies: replies.map((reply) => ({ id: reply.id, createdAt: reply.createdAt })),
+            replies: persistedReplies.map((reply) => ({ id: reply.id, createdAt: reply.createdAt })),
             expectedReplyCount,
         });
         if (!boundary) return;
@@ -2358,11 +2376,18 @@ const TopicCard: React.FC<{
     }, [isTopicOpen, replyChangeSignal]);
 
     useEffect(() => {
-        if (!shouldReconcileTopicReplies({ isTopicOpen, expectedReplyCount, loadedReplyCount: replies.length })) return;
+        if (
+            !shouldReconcileTopicReplies({
+                isTopicOpen,
+                expectedReplyCount,
+                loadedReplyCount: persistedReplies.length,
+            })
+        )
+            return;
         void loadReplies(`reply-count:${expectedReplyCount}`);
         // loadReplies uses refs to serialize this reconciliation with signal-driven and local refreshes.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [expectedReplyCount, isTopicOpen, replies.length]);
+    }, [expectedReplyCount, isTopicOpen, persistedReplies.length]);
 
     useEffect(() => {
         return () => {
@@ -2432,15 +2457,41 @@ const TopicCard: React.FC<{
         unreadBoundary.isComplete,
     ]);
 
+    useEffect(() => {
+        if (!isTopicOpen || isLoading || replies.length === 0) return;
+        const shouldScroll = shouldAutoScrollTopicReplies({
+            openedNormally: pendingScrollToLatestRef.current,
+            sentReply: pendingOutgoingScrollRef.current,
+            incomingWasNearBottom: pendingIncomingAutoScrollRef.current,
+            incomingCapturedScrollTop: incomingAutoScrollTopRef.current,
+            currentScrollTop: scrollViewportRef.current?.scrollTop || 0,
+        });
+        if (!shouldScroll) {
+            pendingIncomingAutoScrollRef.current = false;
+            return;
+        }
+
+        pendingOutgoingScrollRef.current = false;
+        pendingScrollToLatestRef.current = false;
+        pendingIncomingAutoScrollRef.current = false;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                repliesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
+        });
+    }, [isLoading, isTopicOpen, replies, scrollViewportRef]);
+
     if (!thread) return null;
 
     const handleToggle = () => {
         if (onToggleTopic) {
+            if (!isTopicOpen) pendingScrollToLatestRef.current = true;
             onToggleTopic(messageId);
             return;
         }
         const next = !isOpen;
         if (next) {
+            pendingScrollToLatestRef.current = true;
             void loadReplies(replyChangeSignal);
             onTopicOpen?.();
         }
@@ -2465,29 +2516,100 @@ const TopicCard: React.FC<{
         });
     };
 
-    const handleSendReply = async () => {
-        const trimmed = replyTextRef.current.trim();
-        if (!trimmed || isSending) return;
-        acknowledgeLoadedTopic("send");
+    const submitTopicReply = async (optimisticReply: ChatMessage) => {
+        if (isSending || !optimisticReply.submissionId) return;
         setIsSending(true);
+        setReplies((current) =>
+            current.map((reply) =>
+                reply.id === optimisticReply.id ? { ...reply, status: "pending", errorMessage: undefined } : reply,
+            ),
+        );
+        pendingOutgoingScrollRef.current = true;
         try {
             const { sendThreadReplyAction } = await import("./mongo-actions");
-            const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
+            const result = await sendThreadReplyAction(
+                messageId,
+                conversationId,
+                optimisticReply.content.body as string,
+                optimisticReply.replyTo?.id,
+                optimisticReply.submissionId,
+            );
             if (result.success) {
+                if (!result.messageId) throw new Error("Reply confirmation did not include a message ID");
+                setReplies((current) =>
+                    confirmOptimisticTopicReply(
+                        current,
+                        optimisticReply.id,
+                        optimisticReply.submissionId!,
+                        result.messageId!,
+                        result.createdAt,
+                    ),
+                );
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
-                setTopicReplyText("");
-                setReplyToMessage(null);
-                await onTopicActivity?.();
-                await loadReplies(result.messageId || `local-reply:${Date.now()}`);
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                });
+                void onTopicActivity?.();
+                void loadReplies(result.messageId);
+            } else {
+                setReplies((current) =>
+                    current.map((reply) =>
+                        reply.id === optimisticReply.id
+                            ? { ...reply, status: "failed", errorMessage: result.message || "Failed to send" }
+                            : reply,
+                    ),
+                );
             }
         } catch (e) {
             console.error("Failed to send topic reply:", e);
+            setReplies((current) =>
+                current.map((reply) =>
+                    reply.id === optimisticReply.id
+                        ? {
+                              ...reply,
+                              status: "failed",
+                              errorMessage: e instanceof Error ? e.message : "Failed to send",
+                          }
+                        : reply,
+                ),
+            );
         } finally {
             setIsSending(false);
         }
+    };
+
+    const handleSendReply = () => {
+        const trimmed = replyTextRef.current.trim();
+        if (!trimmed || isSending || !user) return;
+        acknowledgeLoadedTopic("send");
+
+        const submissionId =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const optimisticReply: ChatMessage = {
+            id: `temp-${submissionId}`,
+            roomId: conversationId,
+            type: "m.room.message",
+            content: { msgtype: "m.text", body: trimmed },
+            createdBy: user.did,
+            createdAt: new Date(),
+            author: user,
+            reactions: {},
+            replyTo: replyToMessage
+                ? {
+                      id: replyToMessage.id,
+                      author: replyToMessage.author,
+                      content: replyToMessage.content,
+                      attachments: replyToMessage.attachments,
+                  }
+                : undefined,
+            submissionId,
+            status: "pending",
+        };
+
+        setReplies((current) => [...current, optimisticReply]);
+        pendingOutgoingScrollRef.current = true;
+        setTopicReplyText("");
+        setReplyToMessage(null);
+        void submitTopicReply(optimisticReply);
     };
 
     const handleEditSubmit = async (replyId: string) => {
@@ -2876,7 +2998,8 @@ const TopicCard: React.FC<{
                                                 )}
                                                 {canReply &&
                                                     (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
-                                                    !isEditing && (
+                                                    !isEditing &&
+                                                    !reply.status && (
                                                         <div
                                                             className="absolute -bottom-3 right-2 z-10"
                                                             onClick={(event) => event.stopPropagation()}
@@ -2951,6 +3074,36 @@ const TopicCard: React.FC<{
                                                 <div className="mt-2 text-right text-xs font-medium text-gray-500">
                                                     {formatCompactDisplayName(reply.author?.name, reply.createdBy)}
                                                 </div>
+                                                {isOwn && reply.status === "pending" && (
+                                                    <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-400">
+                                                        <IoTimeOutline className="h-3 w-3" aria-hidden="true" />
+                                                        Sending…
+                                                    </div>
+                                                )}
+                                                {isOwn && reply.status === "sent" && (
+                                                    <div className="mt-1 text-right text-[11px] text-gray-400">
+                                                        Sent
+                                                    </div>
+                                                )}
+                                                {isOwn && reply.status === "failed" && (
+                                                    <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-red-600">
+                                                        <span className="flex items-center gap-1">
+                                                            <IoWarningOutline className="h-3 w-3" aria-hidden="true" />
+                                                            {reply.errorMessage || "Failed to send"}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className="font-semibold underline underline-offset-2 disabled:opacity-50"
+                                                            disabled={isSending}
+                                                            onClick={() => {
+                                                                acknowledgeLoadedTopic("send");
+                                                                void submitTopicReply(reply);
+                                                            }}
+                                                        >
+                                                            Retry
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                             {reply.reactions && Object.keys(reply.reactions).length > 0 && (
                                                 <div className="-mb-1 flex flex-wrap justify-end gap-1 px-2 pb-1">
@@ -2987,6 +3140,7 @@ const TopicCard: React.FC<{
                                 </Fragment>
                             );
                         })}
+                        <div ref={repliesEndRef} aria-hidden="true" />
                     </div>
 
                     {/* Reply input */}

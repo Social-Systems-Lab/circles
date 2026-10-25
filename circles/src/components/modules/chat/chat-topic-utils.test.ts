@@ -12,6 +12,9 @@ import {
     getTopicIndexMessages,
     getTopicReplyChangeSignals,
     getTopicViewportSnapshot,
+    confirmOptimisticTopicReply,
+    isTopicViewportNearBottom,
+    mergeAuthoritativeTopicReplies,
     mergeRefreshedTopicStarters,
     planTopicReplyLoad,
     selectInitialTopicId,
@@ -26,6 +29,7 @@ import {
     selectTopicAcknowledgementBoundary,
     shouldAcknowledgeTopicInteraction,
     shouldAcknowledgeTopicIndicatorFromDraft,
+    shouldAutoScrollTopicReplies,
 } from "./chat-topic-utils";
 
 const makeMessage = (id: string, overrides: Partial<ChatMessage> & Record<string, any> = {}): ChatMessage =>
@@ -631,5 +635,109 @@ assert.deepEqual(
     withBoundary,
     "the indicator snapshot can be restored after conversation re-entry within the browser session",
 );
+
+const pendingReply = makeMessage("temp-submission-1", {
+    createdBy: "did:me",
+    submissionId: "submission-1",
+    status: "pending",
+});
+const failedReply = makeMessage("temp-submission-2", {
+    createdBy: "did:me",
+    submissionId: "submission-2",
+    status: "failed",
+    errorMessage: "Network response was lost",
+});
+assert.deepEqual(
+    mergeAuthoritativeTopicReplies([], [pendingReply]).map((reply) => reply.id),
+    [pendingReply.id],
+    "pending replies remain visible before the server response",
+);
+assert.deepEqual(
+    mergeAuthoritativeTopicReplies([pendingReply, failedReply], []).map((reply) => reply.id),
+    [pendingReply.id, failedReply.id],
+    "failed and pending replies survive an authoritative refresh that has not observed them yet",
+);
+const authoritativeReply = makeMessage("server-reply-1", {
+    createdBy: "did:me",
+    submissionId: "submission-1",
+    attachments: [{ url: "/storage/reply.png", name: "reply.png", mimeType: "image/png", size: 10 }],
+});
+assert.deepEqual(
+    mergeAuthoritativeTopicReplies([pendingReply], [authoritativeReply]),
+    [authoritativeReply],
+    "poll-before-response replaces a matching pending reply with the authoritative reply without duplication",
+);
+const confirmedReply = confirmOptimisticTopicReply(
+    [pendingReply],
+    pendingReply.id,
+    pendingReply.submissionId!,
+    authoritativeReply.id,
+    authoritativeReply.createdAt,
+);
+assert.equal(confirmedReply.length, 1, "response-before-poll keeps exactly one reply");
+assert.equal(confirmedReply[0].id, authoritativeReply.id, "confirmation replaces the temporary id in place");
+assert.equal(confirmedReply[0].status, "sent", "confirmation replaces pending state without removing the reply");
+assert.deepEqual(
+    mergeAuthoritativeTopicReplies(confirmedReply, []),
+    confirmedReply,
+    "a stale refetch cannot temporarily remove a locally confirmed reply",
+);
+assert.deepEqual(
+    confirmOptimisticTopicReply(
+        [authoritativeReply, pendingReply],
+        pendingReply.id,
+        pendingReply.submissionId!,
+        authoritativeReply.id,
+    ),
+    [authoritativeReply],
+    "a late response after polling removes only the temporary duplicate",
+);
+assert.equal(isTopicViewportNearBottom({ scrollHeight: 1000, scrollTop: 760, clientHeight: 200 }), true);
+assert.equal(isTopicViewportNearBottom({ scrollHeight: 1000, scrollTop: 400, clientHeight: 200 }), false);
+assert.equal(
+    shouldAutoScrollTopicReplies({
+        openedNormally: true,
+        sentReply: false,
+        incomingWasNearBottom: false,
+        incomingCapturedScrollTop: 0,
+        currentScrollTop: 0,
+    }),
+    true,
+    "normal topic opening scrolls to the latest reply",
+);
+assert.equal(
+    shouldAutoScrollTopicReplies({
+        openedNormally: false,
+        sentReply: true,
+        incomingWasNearBottom: false,
+        incomingCapturedScrollTop: 0,
+        currentScrollTop: 0,
+    }),
+    true,
+    "sending always reveals the outgoing reply",
+);
+assert.equal(
+    shouldAutoScrollTopicReplies({
+        openedNormally: false,
+        sentReply: false,
+        incomingWasNearBottom: true,
+        incomingCapturedScrollTop: 700,
+        currentScrollTop: 700,
+    }),
+    true,
+    "incoming replies scroll when the reader stayed near the bottom",
+);
+assert.equal(
+    shouldAutoScrollTopicReplies({
+        openedNormally: false,
+        sentReply: false,
+        incomingWasNearBottom: true,
+        incomingCapturedScrollTop: 700,
+        currentScrollTop: 500,
+    }),
+    false,
+    "incoming replies do not pull a reader who moved to older replies",
+);
+assert.equal(shouldAcknowledgeTopicInteraction("scroll"), false, "automatic scrolling cannot acknowledge a topic");
 
 console.log("chat-topic-utils tests passed");
