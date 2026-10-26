@@ -12,6 +12,16 @@ import { useAtom, useAtomValue } from "jotai";
 import { useRouter } from "next/navigation";
 import { useIsCompact } from "@/components/utils/use-is-compact";
 import { TOPIC_SORT_PREFERENCE_EVENT, type TopicSortOrder } from "./chat-topic-utils";
+import {
+    beginConversationMuteMutation,
+    CONVERSATION_MUTE_PENDING_EVENT,
+    CONVERSATION_MUTE_PREFERENCE_EVENT,
+    createLatestPreferenceRequest,
+    dispatchConversationMutePreference,
+    finishConversationMuteMutation,
+    isConversationMuteMutationPending,
+} from "@/lib/client/chat-preference-events";
+import { useToast } from "@/components/ui/use-toast";
 
 interface GroupSettingsModalProps {
     open: boolean;
@@ -896,6 +906,7 @@ function MediaTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive:
 // Settings Tab Component
 function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDisplay; isAdmin: boolean; onOpenChange: (open: boolean) => void }) {
     const router = useRouter();
+    const { toast } = useToast();
     const [isArchiving, setIsArchiving] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -905,6 +916,13 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
     const [announcementError, setAnnouncementError] = useState<string | null>(null);
     const [topicSortOrder, setTopicSortOrder] = useState<TopicSortOrder>("latest_activity");
     const [isSavingTopicSort, setIsSavingTopicSort] = useState(false);
+    const [notificationsMuted, setNotificationsMuted] = useState<boolean | null>(null);
+    const [isSavingMute, setIsSavingMute] = useState(false);
+    const [muteLoadState, setMuteLoadState] = useState<"loading" | "loaded" | "error">("loading");
+    const [muteLoadAttempt, setMuteLoadAttempt] = useState(0);
+    const muteLoadRequestRef = useRef(createLatestPreferenceRequest());
+    const currentConversationIdRef = useRef(String(chatRoom._id));
+    currentConversationIdRef.current = String(chatRoom._id);
 
     useEffect(() => {
         let cancelled = false;
@@ -918,6 +936,86 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
             cancelled = true;
         };
     }, [chatRoom._id]);
+
+    useEffect(() => {
+        const requestTracker = muteLoadRequestRef.current;
+        const requestId = requestTracker.next();
+        const loadMutePreference = async () => {
+            setNotificationsMuted(null);
+            setMuteLoadState("loading");
+            try {
+                const { getConversationMutePreferenceAction } = await import("./actions");
+                const result = await getConversationMutePreferenceAction(String(chatRoom._id));
+                if (!result.success) throw new Error(result.message || "Failed to load notification preference");
+                if (!requestTracker.isCurrent(requestId)) return;
+                setNotificationsMuted(result.muted === true);
+                setMuteLoadState("loaded");
+            } catch (error) {
+                console.error("Failed to load notification preference:", error);
+                if (!requestTracker.isCurrent(requestId)) return;
+                setNotificationsMuted(null);
+                setMuteLoadState("error");
+            }
+        };
+        void loadMutePreference();
+        return () => {
+            if (requestTracker.isCurrent(requestId)) requestTracker.invalidate();
+        };
+    }, [chatRoom._id, muteLoadAttempt]);
+
+    useEffect(() => {
+        const handlePreference = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; muted?: boolean }>).detail;
+            if (detail?.conversationId === String(chatRoom._id) && typeof detail.muted === "boolean") {
+                muteLoadRequestRef.current.invalidate();
+                setNotificationsMuted(detail.muted);
+                setMuteLoadState("loaded");
+            }
+        };
+        const handlePending = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; pending?: boolean }>).detail;
+            if (detail?.conversationId === String(chatRoom._id) && typeof detail.pending === "boolean") {
+                setIsSavingMute(detail.pending);
+            }
+        };
+        setIsSavingMute(isConversationMuteMutationPending(String(chatRoom._id)));
+        window.addEventListener(CONVERSATION_MUTE_PREFERENCE_EVENT, handlePreference);
+        window.addEventListener(CONVERSATION_MUTE_PENDING_EVENT, handlePending);
+        return () => {
+            window.removeEventListener(CONVERSATION_MUTE_PREFERENCE_EVENT, handlePreference);
+            window.removeEventListener(CONVERSATION_MUTE_PENDING_EVENT, handlePending);
+        };
+    }, [chatRoom._id]);
+
+    const handleMuteChange = async (muted: boolean) => {
+        if (muteLoadState !== "loaded" || notificationsMuted === null) return;
+        const conversationId = String(chatRoom._id);
+        if (!beginConversationMuteMutation(conversationId)) return;
+        const previous = notificationsMuted;
+        setNotificationsMuted(muted);
+        setIsSavingMute(true);
+        try {
+            const { setConversationMutePreferenceAction } = await import("./actions");
+            const result = await setConversationMutePreferenceAction(conversationId, muted);
+            if (!result.success) {
+                if (currentConversationIdRef.current === conversationId) setNotificationsMuted(previous);
+                throw new Error(result.message || "Failed to save notification preference");
+            }
+            dispatchConversationMutePreference(conversationId, muted);
+        } catch (error) {
+            console.error("Failed to save notification preference:", error);
+            if (currentConversationIdRef.current === conversationId) {
+                setNotificationsMuted(previous);
+                toast({
+                    title: "Couldn’t update notifications",
+                    description: error instanceof Error ? error.message : "Please try again.",
+                    variant: "destructive",
+                });
+            }
+        } finally {
+            finishConversationMuteMutation(conversationId);
+        }
+    };
 
     const handleTopicSortChange = async (sortOrder: TopicSortOrder) => {
         const previous = topicSortOrder;
@@ -1102,10 +1200,32 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
             <div className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
                 <div>
                     <p className="font-medium">Mute Notifications</p>
-                    <p className="text-sm text-gray-500">Silence notifications from this chat</p>
+                    {muteLoadState === "error" ? (
+                        <p className="text-sm text-amber-700">
+                            Couldn’t load this setting.{" "}
+                            <button
+                                type="button"
+                                className="underline underline-offset-2"
+                                onClick={() => setMuteLoadAttempt((attempt) => attempt + 1)}
+                            >
+                                Retry
+                            </button>
+                        </p>
+                    ) : (
+                        <p className="text-sm text-gray-500">
+                            {muteLoadState === "loading" ? "Loading notification setting…" : "Silence notifications from this chat"}
+                        </p>
+                    )}
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={notificationsMuted === true}
+                        disabled={isSavingMute || muteLoadState !== "loaded"}
+                        onChange={(event) => void handleMuteChange(event.target.checked)}
+                        aria-label="Mute notifications for this conversation"
+                    />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
             </div>

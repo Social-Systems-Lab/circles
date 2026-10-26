@@ -1,6 +1,13 @@
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
-import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction, ChatReadState } from "@/lib/chat/mongo-types";
+import {
+    ChatAttachment,
+    ChatConversation,
+    ChatConversationPreference,
+    ChatMessageDoc,
+    ChatReaction,
+    ChatReadState,
+} from "@/lib/chat/mongo-types";
 import {
     ChatConversations,
     ChatConversationPreferences,
@@ -730,20 +737,70 @@ export const getTopicSortOrder = async (
     return preference?.topicSortOrder === "date_created" ? "date_created" : "latest_activity";
 };
 
+const setConversationPreferenceFields = async (
+    userDid: string,
+    conversationId: string,
+    fields: Partial<Pick<ChatConversationPreference, "topicSortOrder" | "notificationsMuted">>,
+): Promise<void> => {
+    const now = new Date();
+    try {
+        await ChatConversationPreferences.updateOne(
+            { userDid, conversationId },
+            {
+                $set: { ...fields, updatedAt: now },
+                $setOnInsert: { userDid, conversationId, createdAt: now },
+            },
+            { upsert: true },
+        );
+    } catch (error: any) {
+        if (error?.code !== 11000) throw error;
+        await ChatConversationPreferences.updateOne(
+            { userDid, conversationId },
+            { $set: { ...fields, updatedAt: now } },
+        );
+    }
+};
+
 export const setTopicSortOrder = async (
     userDid: string,
     conversationId: string,
     topicSortOrder: "latest_activity" | "date_created",
 ): Promise<void> => {
-    const now = new Date();
-    await ChatConversationPreferences.updateOne(
+    await setConversationPreferenceFields(userDid, conversationId, { topicSortOrder });
+};
+
+export const getConversationNotificationsMuted = async (
+    userDid: string,
+    conversationId: string,
+): Promise<boolean> =>
+    (await ChatConversationPreferences.findOne(
         { userDid, conversationId },
+        { projection: { notificationsMuted: 1 } },
+    ))?.notificationsMuted === true;
+
+export const getConversationNotificationMutePreferences = async (
+    userDid: string,
+    conversationIds: string[],
+): Promise<Record<string, boolean>> => {
+    const uniqueConversationIds = Array.from(new Set(conversationIds.filter(Boolean)));
+    if (!uniqueConversationIds.length) return {};
+    const preferences = await ChatConversationPreferences.find(
         {
-            $set: { topicSortOrder, updatedAt: now },
-            $setOnInsert: { userDid, conversationId, createdAt: now },
+            userDid,
+            conversationId: { $in: uniqueConversationIds },
+            notificationsMuted: true,
         },
-        { upsert: true },
-    );
+        { projection: { conversationId: 1 } },
+    ).toArray();
+    return Object.fromEntries(preferences.map((preference) => [preference.conversationId, true]));
+};
+
+export const setConversationNotificationsMuted = async (
+    userDid: string,
+    conversationId: string,
+    notificationsMuted: boolean,
+): Promise<void> => {
+    await setConversationPreferenceFields(userDid, conversationId, { notificationsMuted });
 };
 
 export const toggleReaction = async (

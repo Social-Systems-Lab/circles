@@ -772,7 +772,20 @@ export const UserToolbox = () => {
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        <ChatList chats={chatRooms} onChatClick={closeToolbox} />
+                        <ChatList
+                            chats={chatRooms}
+                            onChatClick={closeToolbox}
+                            onRetryMutePreferences={() => chatRoomsRefreshRunner.run()}
+                            onArchive={async (chat) => {
+                                const { archiveDmConversationAction } = await import("../modules/chat/actions");
+                                const result = await archiveDmConversationAction(String(chat._id));
+                                if (result.success) {
+                                    await chatRoomsRefreshRunner.run();
+                                } else {
+                                    alert(result.message || "Failed to archive conversation");
+                                }
+                            }}
+                        />
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         <Notifications onNavigate={closeToolbox} />

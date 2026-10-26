@@ -242,6 +242,19 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             searchTerm={chatSearchTerm}
                             totalChatsCount={chatRooms.length}
                             archivedView={isArchivedRoute}
+                            onRetryMutePreferences={loadRooms}
+                            onArchive={async (chat) => {
+                                const { archiveDmConversationAction } = await import(
+                                    "@/components/modules/chat/actions"
+                                );
+                                const result = await archiveDmConversationAction(String(chat._id));
+                                if (result.success) {
+                                    router.push("/chat");
+                                    await loadRooms();
+                                } else {
+                                    alert(result.message || "Failed to archive conversation");
+                                }
+                            }}
                             onUnarchive={async (chat) => {
                                 const { unarchiveDmConversationAction } = await import(
                                     "@/components/modules/chat/actions"

@@ -129,7 +129,8 @@ export type ChatConversationPreference = {
     _id?: any;
     conversationId: string;
     userDid: string;
-    topicSortOrder: "latest_activity" | "date_created";
+    topicSortOrder?: "latest_activity" | "date_created";
+    notificationsMuted?: boolean;
     createdAt: Date;
     updatedAt: Date;
 };

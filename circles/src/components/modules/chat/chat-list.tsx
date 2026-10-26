@@ -1,19 +1,29 @@
 // chat-list.tsx - Displays chat rooms in a list
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAtom } from "jotai";
 import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams } from "next/navigation";
-import { ArchiveRestore, Settings } from "lucide-react";
+import { Archive, ArchiveRestore, Bell, BellOff, Info, Settings } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { resolveConversationUnreadCount } from "@/lib/chat/unread-counts";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+    beginConversationMuteMutation,
+    CONVERSATION_MUTE_PENDING_EVENT,
+    CONVERSATION_MUTE_PREFERENCE_EVENT,
+    dispatchConversationMutePreference,
+    finishConversationMuteMutation,
+    isConversationMuteMutationPending,
+} from "@/lib/client/chat-preference-events";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
@@ -23,6 +33,8 @@ interface ChatListProps {
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
     archivedView?: boolean;
     onUnarchive?: (chat: ChatRoomDisplay) => void | Promise<void>;
+    onArchive?: (chat: ChatRoomDisplay) => void | Promise<void>;
+    onRetryMutePreferences?: () => void | Promise<void>;
 }
 
 export const ChatList: React.FC<ChatListProps> = ({
@@ -33,15 +45,84 @@ export const ChatList: React.FC<ChatListProps> = ({
     onChatClick,
     archivedView = false,
     onUnarchive,
+    onArchive,
+    onRetryMutePreferences,
 }) => {
     const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
+    const { toast } = useToast();
     const isMobile = useIsMobile();
     const router = useRouter();
     const params = useParams();
     const activeChatHandle = params.handle as string;
     const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || "");
     const isLoadingRooms = isLoading && totalChatsCount === 0;
+    const [mutePreferences, setMutePreferences] = useState<Record<string, boolean>>({});
+    const [pendingMuteMutations, setPendingMuteMutations] = useState<Set<string>>(() => new Set());
+    const isConversationMuted = (chat: ChatRoomDisplay) =>
+        mutePreferences[getConversationId(chat)] ?? chat.notificationsMuted === true;
+
+    useEffect(() => {
+        const handlePreference = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; muted?: boolean }>).detail;
+            if (detail?.conversationId && typeof detail.muted === "boolean") {
+                setMutePreferences((current) => ({ ...current, [detail.conversationId!]: detail.muted! }));
+            }
+        };
+        window.addEventListener(CONVERSATION_MUTE_PREFERENCE_EVENT, handlePreference);
+        return () => window.removeEventListener(CONVERSATION_MUTE_PREFERENCE_EVENT, handlePreference);
+    }, []);
+
+    useEffect(() => {
+        const handlePending = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; pending?: boolean }>).detail;
+            if (!detail?.conversationId || typeof detail.pending !== "boolean") return;
+            setPendingMuteMutations((current) => {
+                const next = new Set(current);
+                detail.pending ? next.add(detail.conversationId!) : next.delete(detail.conversationId!);
+                return next;
+            });
+        };
+        window.addEventListener(CONVERSATION_MUTE_PENDING_EVENT, handlePending);
+        return () => window.removeEventListener(CONVERSATION_MUTE_PENDING_EVENT, handlePending);
+    }, []);
+
+    const handleMuteChange = async (chat: ChatRoomDisplay) => {
+        const conversationId = getConversationId(chat);
+        if (!beginConversationMuteMutation(conversationId)) return;
+        const previous = isConversationMuted(chat);
+        const muted = !previous;
+        setMutePreferences((current) => ({ ...current, [conversationId]: muted }));
+        try {
+            const { setConversationMutePreferenceAction } = await import("./actions");
+            const result = await setConversationMutePreferenceAction(conversationId, muted);
+            if (!result.success) throw new Error(result.message || "Failed to save notification preference");
+            dispatchConversationMutePreference(conversationId, muted);
+        } catch (error) {
+            setMutePreferences((current) => ({ ...current, [conversationId]: previous }));
+            toast({
+                title: "Couldn’t update notifications",
+                description: error instanceof Error ? error.message : "Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            finishConversationMuteMutation(conversationId);
+        }
+    };
+
+    const handleArchive = async (chat: ChatRoomDisplay) => {
+        if (onArchive) {
+            await onArchive(chat);
+            return;
+        }
+        const { archiveDmConversationAction } = await import("./actions");
+        const result = await archiveDmConversationAction(getConversationId(chat));
+        if (result.success) {
+            router.push("/chat");
+        } else {
+            alert(result.message || "Failed to archive conversation");
+        }
+    };
 
     const sortedChats = useMemo(() => {
         const chatsCopy = [...chats];
@@ -146,20 +227,62 @@ export const ChatList: React.FC<ChatListProps> = ({
                                     <ArchiveRestore className="h-5 w-5" aria-hidden="true" />
                                 </button>
                             ) : (
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setChatSettingsModal({
-                                            chatRoomId: chat._id,
-                                            isOpen: true,
-                                        });
-                                    }}
-                                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                    aria-label={`Conversation settings for ${chat.name}`}
-                                >
-                                    <Settings className="h-5 w-5 text-gray-600" aria-hidden="true" />
-                                </button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button
+                                            type="button"
+                                            onClick={(event) => event.stopPropagation()}
+                                            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                            aria-label={`Conversation menu for ${chat.name}`}
+                                        >
+                                            <Settings className="h-5 w-5 text-gray-600" aria-hidden="true" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        align="end"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        <DropdownMenuItem
+                                            onSelect={() =>
+                                                setChatSettingsModal({ chatRoomId: chat._id, isOpen: true })
+                                            }
+                                        >
+                                            <Info className="mr-2 h-4 w-4" aria-hidden="true" />
+                                            {chat.isDirect ? "Chat Info" : "Group Info"}
+                                        </DropdownMenuItem>
+                                        {chat.notificationsMutePreferenceAvailable === false ? (
+                                            <DropdownMenuItem onSelect={() => void onRetryMutePreferences?.()}>
+                                                <BellOff className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                Retry notification setting
+                                            </DropdownMenuItem>
+                                        ) : (
+                                            <DropdownMenuItem
+                                                disabled={
+                                                    pendingMuteMutations.has(getConversationId(chat)) ||
+                                                    isConversationMuteMutationPending(getConversationId(chat))
+                                                }
+                                                onSelect={() => void handleMuteChange(chat)}
+                                            >
+                                                {isConversationMuted(chat) ? (
+                                                    <Bell className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                ) : (
+                                                    <BellOff className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                )}
+                                                {pendingMuteMutations.has(getConversationId(chat))
+                                                    ? "Saving notification setting…"
+                                                    : isConversationMuted(chat)
+                                                      ? "Unmute notifications"
+                                                      : "Mute notifications"}
+                                            </DropdownMenuItem>
+                                        )}
+                                        {chat.isDirect && (
+                                            <DropdownMenuItem onSelect={() => void handleArchive(chat)}>
+                                                <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                Archive conversation
+                                            </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             )}
                         </div>
                     );

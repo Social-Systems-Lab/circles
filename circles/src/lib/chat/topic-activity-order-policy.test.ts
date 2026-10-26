@@ -30,7 +30,7 @@ test("topic sort preference actions authorize both reads and writes", () => {
 
 test("preference persistence is isolated from chat read state and topic activity", () => {
     const setter = persistence.slice(
-        persistence.indexOf("export const setTopicSortOrder"),
+        persistence.indexOf("const setConversationPreferenceFields"),
         persistence.indexOf("export const toggleReaction"),
     );
     assert.doesNotMatch(setter, /thread\.updatedAt/);

@@ -15,6 +15,10 @@ export type ChatActionContext = {
     findChatMemberships?: (conversationIds: string[]) => Promise<any[]>;
     mapConversations?: (viewerDid: string, conversations: any[], circles: any[]) => Promise<any[]>;
     getUnreadCounts?: (viewerDid: string, conversationIds: string[]) => Promise<Record<string, number>>;
+    getConversationMutePreferences?: (
+        viewerDid: string,
+        conversationIds: string[],
+    ) => Promise<Record<string, boolean>>;
     findMessagingUser?: (viewerDid: string) => Promise<any | null>;
     fetchRecentMessages?: (conversationId: string, limit: number) => Promise<any[]>;
     createMessage?: (input: any) => Promise<any>;
@@ -24,6 +28,8 @@ export type ChatActionContext = {
         userDid: string,
         archived: boolean,
     ) => Promise<{ matchedCount: number; modifiedCount?: number }>;
+    getConversationNotificationsMuted?: (userDid: string, conversationId: string) => Promise<boolean>;
+    setConversationNotificationsMuted?: (userDid: string, conversationId: string, muted: boolean) => Promise<void>;
     listChatMembers?: (conversationId: string) => Promise<any[]>;
     updateChatMemberRole?: (
         filter: { _id: unknown },

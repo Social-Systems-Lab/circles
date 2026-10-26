@@ -19,7 +19,13 @@ import {
     GoalStage,
     Event,
 } from "@/models/models";
-import { DefaultNotificationSettings, Notifications, UserNotificationSettings } from "./db";
+import {
+    ChatConversationPreferences,
+    DefaultNotificationSettings,
+    Notifications,
+    UserNotificationSettings,
+} from "./db";
+import { filterMutedConversationRecipients } from "@/lib/chat/conversation-notification-mute";
 import { sanitizeObjectForJSON } from "../utils/sanitize";
 import { getUser, getUserPrivate } from "./user";
 import { getFeed, getPost } from "./feed";
@@ -237,7 +243,7 @@ export async function sendNotifications(
     payload: any,
     options?: { idempotencyKey?: string },
 ) {
-    const uniqueRecipients = Array.from(
+    let uniqueRecipients = Array.from(
         new Map(
             (recipients || [])
                 .filter((recipient) => typeof recipient?.did === "string" && recipient.did.length > 0)
@@ -248,6 +254,25 @@ export async function sendNotifications(
     if (uniqueRecipients.length === 0) {
         return [];
     }
+
+    const roomId = typeof payload?.roomId === "string" ? payload.roomId : "";
+    uniqueRecipients = await filterMutedConversationRecipients(
+        type,
+        roomId,
+        uniqueRecipients,
+        async (conversationId, recipientDids) =>
+            (
+                await ChatConversationPreferences.find(
+                    {
+                        conversationId,
+                        userDid: { $in: recipientDids },
+                        notificationsMuted: true,
+                    },
+                    { projection: { userDid: 1 } },
+                ).toArray()
+            ).map((preference) => preference.userDid),
+    );
+    if (uniqueRecipients.length === 0) return [];
 
     const createdAt = new Date();
     const notificationContent = sanitizeObjectForJSON({

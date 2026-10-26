@@ -301,6 +301,16 @@ export const unarchiveDmConversationAction = async (conversationId: string) => {
     return unarchive(conversationId);
 };
 
+export const getConversationMutePreferenceAction = async (conversationId: string) => {
+    const { getConversationMutePreferenceAction: getPreference } = await import("./mongo-actions");
+    return getPreference(conversationId);
+};
+
+export const setConversationMutePreferenceAction = async (conversationId: string, muted: boolean) => {
+    const { setConversationMutePreferenceAction: setPreference } = await import("./mongo-actions");
+    return setPreference(conversationId, muted);
+};
+
 export const fetchMongoMessagesAction = async (conversationId: string, sinceId?: string, limit: number = 50) => {
     return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
 };

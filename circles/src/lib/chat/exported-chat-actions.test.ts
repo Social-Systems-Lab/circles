@@ -958,6 +958,87 @@ test("real listChatRoomsAction performs no ensure, creation, backfill or other w
     assert.deepEqual(effectCalls, zeroEffectCounters());
 });
 
+test("conversation list batches mute preferences only for authorized rooms and the authenticated user", async () => {
+    const authorizedId = new ObjectId();
+    const unauthorizedId = new ObjectId();
+    const preferenceCalls: Array<{ userDid: string; conversationIds: string[] }> = [];
+    const result = await runWithChatActionContext(
+        {
+            viewerDid: alice,
+            findCanonicalMemberships: async () => [],
+            findCandidates: async () => [
+                { _id: authorizedId, type: "dm", participants: [alice, "did:bob"], updatedAt: new Date() },
+                { _id: unauthorizedId, type: "dm", participants: ["did:other", "did:bob"], updatedAt: new Date() },
+            ],
+            findOwningCircles: async () => [],
+            findChatMemberships: async () => [],
+            mapConversations: async (_viewer, conversations) =>
+                conversations.map((item) => ({
+                    _id: item._id.toString(),
+                    name: "Authorized room",
+                    handle: `dm-${item._id.toString()}`,
+                    createdAt: new Date(),
+                    isDirect: true,
+                })) as any,
+            getUnreadCounts: async () => ({}),
+            getConversationMutePreferences: async (userDid, conversationIds) => {
+                preferenceCalls.push({ userDid, conversationIds });
+                return { [authorizedId.toString()]: true };
+            },
+        },
+        () => mongoActions.listChatRoomsAction(),
+    );
+    assert.equal(result.success, true);
+    assert.deepEqual(preferenceCalls, [{ userDid: alice, conversationIds: [authorizedId.toString()] }]);
+    assert.equal(result.rooms?.length, 1);
+    assert.equal(result.rooms?.[0].notificationsMuted, true);
+});
+
+test("conversation list keeps authorized rooms and unread counts when batched mute preferences fail, then recovers", async () => {
+    const authorizedId = new ObjectId();
+    let preferenceLookupFails = true;
+    const context = {
+        viewerDid: alice,
+        findCanonicalMemberships: async () => [],
+        findCandidates: async () => [
+            { _id: authorizedId, type: "dm", participants: [alice, "did:bob"], updatedAt: new Date() },
+        ],
+        findOwningCircles: async () => [],
+        findChatMemberships: async () => [],
+        mapConversations: async (_viewer: string, conversations: any[]) =>
+            conversations.map((item) => ({
+                _id: item._id.toString(),
+                name: "Authorized room",
+                handle: `dm-${item._id.toString()}`,
+                createdAt: new Date(),
+                isDirect: true,
+            })) as any,
+        getUnreadCounts: async () => ({ [authorizedId.toString()]: 4 }),
+        getConversationMutePreferences: async () => {
+            if (preferenceLookupFails) throw new Error("simulated preference lookup failure");
+            return { [authorizedId.toString()]: true };
+        },
+    };
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+        const unavailable = await runWithChatActionContext(context, () => mongoActions.listChatRoomsAction());
+        assert.equal(unavailable.success, true);
+        assert.equal(unavailable.rooms?.[0].unreadCount, 4);
+        assert.equal(unavailable.rooms?.[0].notificationsMuted, undefined);
+        assert.equal(unavailable.rooms?.[0].notificationsMutePreferenceAvailable, false);
+
+        preferenceLookupFails = false;
+        const recovered = await runWithChatActionContext(context, () => mongoActions.listChatRoomsAction());
+        assert.equal(recovered.success, true);
+        assert.equal(recovered.rooms?.[0].unreadCount, 4);
+        assert.equal(recovered.rooms?.[0].notificationsMuted, true);
+        assert.equal(recovered.rooms?.[0].notificationsMutePreferenceAvailable, true);
+    } finally {
+        console.error = originalConsoleError;
+    }
+});
+
 test("DM archive actions use the authenticated user and remain idempotent", async () => {
     const dmId = new ObjectId().toHexString();
     const archivedBy = new Set<string>();
@@ -1004,6 +1085,54 @@ test("DM archive actions neutrally reject unauthenticated and unmatched requests
             denied(await mongoActions.archiveDmConversationAction(dmId), "archive unauthorized DM");
             denied(await mongoActions.unarchiveDmConversationAction(dmId), "unarchive unauthorized DM");
         },
+    );
+});
+
+test("conversation mute actions authorize access and isolate the authenticated user", async () => {
+    const dmId = new ObjectId().toHexString();
+    let muted = false;
+    const preferenceWrites: Array<{ userDid: string; conversationId: string; muted: boolean }> = [];
+    const context: ChatActionContext = {
+        viewerDid: alice,
+        findConversation: async () => ({ _id: new ObjectId(dmId), type: "dm", participants: [alice, "did:bob"] }),
+        getConversationNotificationsMuted: async (userDid, requestedId) => {
+            assert.equal(userDid, alice);
+            assert.equal(requestedId, dmId);
+            return muted;
+        },
+        setConversationNotificationsMuted: async (userDid, requestedId, nextMuted) => {
+            preferenceWrites.push({ userDid, conversationId: requestedId, muted: nextMuted });
+            muted = nextMuted;
+        },
+    };
+    await runWithChatActionContext(context, async () => {
+        assert.deepEqual(await mongoActions.getConversationMutePreferenceAction(dmId), {
+            success: true,
+            muted: false,
+        });
+        assert.deepEqual(await mongoActions.setConversationMutePreferenceAction(dmId, true), { success: true });
+        assert.deepEqual(await mongoActions.getConversationMutePreferenceAction(dmId), {
+            success: true,
+            muted: true,
+        });
+    });
+    assert.deepEqual(preferenceWrites, [{ userDid: alice, conversationId: dmId, muted: true }]);
+
+    assert.deepEqual(
+        await runWithChatActionContext({ viewerDid: null }, () =>
+            mongoActions.setConversationMutePreferenceAction(dmId, true),
+        ),
+        { success: false, message: "Not authenticated" },
+    );
+    await runWithChatActionContext(
+        {
+            viewerDid: "did:outsider",
+            findConversation: context.findConversation,
+            setConversationNotificationsMuted: async () => {
+                throw new Error("unauthorized preference write");
+            },
+        },
+        async () => denied(await mongoActions.setConversationMutePreferenceAction(dmId, true), "mute unauthorized DM"),
     );
 });
 

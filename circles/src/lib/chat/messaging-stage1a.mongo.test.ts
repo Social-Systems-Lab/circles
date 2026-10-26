@@ -40,12 +40,16 @@ async function main() {
         getLegacyUnreadCountForUser,
         getTopicUnreadCountsForUser,
         getTopicSortOrder,
+        getConversationNotificationsMuted,
+        getConversationNotificationMutePreferences,
         listConversationCandidatesForUser,
         mapConversationToChatRoomDisplay,
         markConversationRead,
         markTopicRead,
         setTopicSortOrder,
+        setConversationNotificationsMuted,
     } = await import("@/lib/data/mongo-chat");
+    const { sendNotifications } = await import("@/lib/data/notifications");
     const { discardDmDraftRecord, publishDmFirstTopic, reconcilePublishedDmDraft, saveDmDraftRecord } = await import(
         "./dm-draft-persistence"
     );
@@ -311,6 +315,207 @@ async function main() {
             }),
             1,
             "repeated preference writes retain one logical preference record",
+        );
+
+        const concurrentPreferenceDid = "did:concurrent-preference";
+        const readStateCountBeforeConcurrentPreference = await ChatReadStates.countDocuments({});
+        const topicReadStateCountBeforeConcurrentPreference = await ChatTopicReadStates.countDocuments({});
+        const conversationBeforeConcurrentPreference = await ChatConversations.findOne({
+            _id: new ObjectId(publication.conversationId),
+        });
+        await Promise.all([
+            setTopicSortOrder(concurrentPreferenceDid, publication.conversationId, "date_created"),
+            setConversationNotificationsMuted(concurrentPreferenceDid, publication.conversationId, true),
+        ]);
+        assert.deepEqual(
+            await ChatConversationPreferences.findOne(
+                { userDid: concurrentPreferenceDid, conversationId: publication.conversationId },
+                { projection: { _id: 0, topicSortOrder: 1, notificationsMuted: 1 } },
+            ),
+            { topicSortOrder: "date_created", notificationsMuted: true },
+            "concurrent first-time preference writes preserve both fields",
+        );
+        assert.equal(
+            await ChatConversationPreferences.countDocuments({
+                userDid: concurrentPreferenceDid,
+                conversationId: publication.conversationId,
+            }),
+            1,
+        );
+        assert.equal(await getConversationNotificationsMuted("did:receiver", publication.conversationId), false);
+        assert.equal(await ChatReadStates.countDocuments({}), readStateCountBeforeConcurrentPreference);
+        assert.equal(await ChatTopicReadStates.countDocuments({}), topicReadStateCountBeforeConcurrentPreference);
+        assert.equal(
+            (await ChatConversations.findOne({ _id: new ObjectId(publication.conversationId) }))?.updatedAt?.getTime(),
+            conversationBeforeConcurrentPreference?.updatedAt?.getTime(),
+            "preference writes do not change conversation activity",
+        );
+
+        await setConversationNotificationsMuted("did:receiver", publication.conversationId, true);
+        assert.deepEqual(
+            await getConversationNotificationMutePreferences("did:receiver", [
+                publication.conversationId,
+                new ObjectId().toString(),
+                publication.conversationId,
+            ]),
+            { [publication.conversationId]: true },
+            "batched mute preferences are deduplicated and scoped to the requested user",
+        );
+        assert.deepEqual(
+            await getConversationNotificationMutePreferences("did:sender", [publication.conversationId]),
+            {},
+            "another user's batch does not expose the recipient's preference",
+        );
+        const mutedNotificationCount = await Notifications.countDocuments({ userId: "did:receiver" });
+        await sendNotifications(
+            "pm_received",
+            [{ did: "did:receiver" }, { did: "did:unmuted-participant" }],
+            { roomId: publication.conversationId, user: { name: "Sender" } },
+        );
+        assert.equal(await Notifications.countDocuments({ userId: "did:receiver" }), mutedNotificationCount);
+        assert.equal(
+            await Notifications.countDocuments({ userId: "did:unmuted-participant", type: "pm_received" }),
+            1,
+            "one participant's mute does not suppress another participant",
+        );
+        const productionPreferenceFind = ChatConversationPreferences.find;
+        const productionConsoleError = console.error;
+        const preferenceLookupErrors: unknown[][] = [];
+        (ChatConversationPreferences as any).find = () => ({
+            toArray: async () => {
+                throw new Error("simulated mute lookup failure with private body: do not log me");
+            },
+        });
+        console.error = (...args: unknown[]) => preferenceLookupErrors.push(args);
+        try {
+            await sendNotifications(
+                "pm_received",
+                [{ did: "did:lookup-fallback-recipient" }],
+                { roomId: publication.conversationId, messageBody: "private fallback message" },
+            );
+        } finally {
+            (ChatConversationPreferences as any).find = productionPreferenceFind;
+            console.error = productionConsoleError;
+        }
+        assert.equal(
+            await Notifications.countDocuments({ userId: "did:lookup-fallback-recipient", type: "pm_received" }),
+            1,
+            "mute lookup failure fails open and still persists the legitimate notification",
+        );
+        assert.equal(preferenceLookupErrors.length, 1);
+        assert.equal(JSON.stringify(preferenceLookupErrors).includes("private fallback message"), false);
+        assert.equal(JSON.stringify(preferenceLookupErrors).includes("private body"), false);
+        const publicationConversation = await ChatConversations.findOne({
+            _id: new ObjectId(publication.conversationId),
+        });
+        await mongoActions.sendConversationMessageNotifications({
+            conversationId: publication.conversationId,
+            conversation: publicationConversation,
+            senderDid: "did:sender",
+            messageBody: "Muted ordinary message",
+            messageId: new ObjectId().toString(),
+        });
+        await mongoActions.sendConversationMessageNotifications({
+            conversationId: publication.conversationId,
+            conversation: publicationConversation,
+            senderDid: "did:sender",
+            messageBody: "Muted topic reply",
+            messageId: new ObjectId().toString(),
+            topicId: publication.topicId,
+        });
+        await mongoActions.sendConversationMessageNotifications({
+            conversationId: publication.conversationId,
+            conversation: publicationConversation,
+            senderDid: "did:sender",
+            messageBody: "Muted [Receiver](/circles/receiver) mention",
+            messageId: new ObjectId().toString(),
+            topicId: publication.topicId,
+        });
+        const mutedAttachment = new FormData();
+        mutedAttachment.set("roomId", publication.conversationId);
+        mutedAttachment.set("file", new File(["muted"], "muted.txt", { type: "text/plain" }));
+        const mutedAttachmentResult = await runWithChatActionContext(
+            {
+                viewerDid: "did:sender",
+                findMessagingUser: async () => ({ isAdmin: true }),
+                saveFile: async (file: File) => ({
+                    url: "/storage/muted.txt",
+                    fileName: "muted.txt",
+                    originalName: file.name,
+                }),
+                createMessage: async (input) => ({ ...input, _id: new ObjectId().toString() }),
+            },
+            () => mongoActions.sendMongoAttachmentAction(mutedAttachment),
+        );
+        assert.equal(mutedAttachmentResult.success, true);
+        assert.equal(
+            await Notifications.countDocuments({ userId: "did:receiver" }),
+            mutedNotificationCount,
+            "muted ordinary messages, attachments using the same delivery path, and replies create no notification",
+        );
+        await sendNotifications(
+            "new_follower",
+            [{ did: "did:receiver" }],
+            { roomId: publication.conversationId, user: { name: "Sender" } },
+        );
+        assert.equal(
+            await Notifications.countDocuments({ userId: "did:receiver" }),
+            mutedNotificationCount + 1,
+            "unrelated notification types are not suppressed by conversation mute",
+        );
+        await setConversationNotificationsMuted("did:receiver", publication.conversationId, false);
+        await mongoActions.sendConversationMessageNotifications({
+            conversationId: publication.conversationId,
+            conversation: publicationConversation,
+            senderDid: "did:sender",
+            messageBody: "Unmuted message",
+            messageId: new ObjectId().toString(),
+        });
+        assert.equal(
+            await Notifications.countDocuments({ userId: "did:receiver", type: "pm_received" }),
+            2,
+            "unmuting restores future notification delivery",
+        );
+
+        await Circles.insertMany([
+            {
+                _id: new ObjectId(),
+                did: "did:muted-topic-sender",
+                name: "Muted Sender",
+                handle: "muted-topic-sender",
+                circleType: "user",
+            },
+            {
+                _id: new ObjectId(),
+                did: "did:muted-topic-receiver",
+                name: "Muted Receiver",
+                handle: "muted-topic-receiver",
+                circleType: "user",
+            },
+        ] as any[]);
+        const mutedFirstTopic = await publishDmFirstTopic({
+            authorDid: "did:muted-topic-sender",
+            recipientDid: "did:muted-topic-receiver",
+            title: "Muted first topic",
+            body: "Muted first topic body",
+            hashtags: [],
+            generation: "muted-first-topic-generation",
+            submissionId: "9123456789abcdef01234567",
+            processNotifications: false,
+        });
+        await setConversationNotificationsMuted(
+            "did:muted-topic-receiver",
+            mutedFirstTopic.conversationId,
+            true,
+        );
+        assert.equal((await processFirstTopicNotifications(1, mutedFirstTopic.topicId)).delivered, 1);
+        assert.equal(
+            await Notifications.countDocuments({
+                userId: "did:muted-topic-receiver",
+                "content.roomId": mutedFirstTopic.conversationId,
+            }),
+            0,
+            "muted first topics are acknowledged without persisting notifications",
         );
 
         const concurrentTopic = await createThread(

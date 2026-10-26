@@ -369,6 +369,8 @@ export type ChatRoom = z.infer<typeof chatRoomSchema>;
 export type ChatRoomDisplay = ChatRoom & {
     circle?: Circle;
     unreadCount?: number;
+    notificationsMuted?: boolean;
+    notificationsMutePreferenceAvailable?: boolean;
 };
 
 export type MatrixMessageContent =

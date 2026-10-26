@@ -21,6 +21,8 @@ import {
     getUnreadCountsForUser,
     getTopicUnreadCountsForUser,
     getTopicSortOrder,
+    getConversationNotificationsMuted,
+    getConversationNotificationMutePreferences,
     getLegacyUnreadCountForUser,
     listConversationCandidatesForUser,
     mapConversationsToChatRoomDisplays,
@@ -28,6 +30,7 @@ import {
     markConversationRead,
     markTopicRead,
     setTopicSortOrder,
+    setConversationNotificationsMuted,
     toggleReaction,
     updateMessage,
     updateTopic,
@@ -559,6 +562,20 @@ export const listChatRoomsAction = async (
         const unreadCounts = context?.getUnreadCounts
             ? await context.getUnreadCounts(userDid, conversationIds)
             : await getUnreadCountsForUser(userDid, conversationIds);
+        let mutePreferences: Record<string, boolean> = {};
+        let mutePreferencesAvailable = true;
+        try {
+            mutePreferences = context?.getConversationMutePreferences
+                ? await context.getConversationMutePreferences(userDid, conversationIds)
+                : await getConversationNotificationMutePreferences(userDid, conversationIds);
+        } catch (error) {
+            mutePreferencesAvailable = false;
+            console.error("Failed to load conversation mute preferences", {
+                event: "chat_mute_preference_batch_lookup_failed",
+                conversationCount: conversationIds.length,
+                errorName: error instanceof Error ? error.name : "UnknownError",
+            });
+        }
         const roomsWithUnread = rooms.map((room) => ({
             ...room,
             picture:
@@ -569,6 +586,9 @@ export const listChatRoomsAction = async (
             memberCount:
                 !room.isDirect && typeof room._id === "string" ? groupMemberCounts.get(room._id) || 0 : undefined,
             unreadCount: room._id || room.handle ? unreadCounts[(room._id || room.handle) as string] || 0 : 0,
+            notificationsMuted:
+                mutePreferencesAvailable && typeof room._id === "string" ? mutePreferences[room._id] === true : undefined,
+            notificationsMutePreferenceAvailable: mutePreferencesAvailable,
         }));
         return { success: true, rooms: roomsWithUnread };
     } catch (error) {
@@ -648,6 +668,36 @@ export const archiveDmConversationAction = async (conversationId: string) =>
 
 export const unarchiveDmConversationAction = async (conversationId: string) =>
     setDmArchivedForCurrentUser(conversationId, false);
+
+export const getConversationMutePreferenceAction = async (
+    conversationId: string,
+): Promise<{ success: boolean; muted?: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
+    if (!access.ok) return { success: false, message: access.message };
+    const muted = getChatActionContext()?.getConversationNotificationsMuted
+        ? await getChatActionContext()!.getConversationNotificationsMuted!(userDid, conversationId)
+        : await getConversationNotificationsMuted(userDid, conversationId);
+    return { success: true, muted };
+};
+
+export const setConversationMutePreferenceAction = async (
+    conversationId: string,
+    muted: boolean,
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (typeof muted !== "boolean") return { success: false, message: "Invalid mute preference" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
+    if (!access.ok) return { success: false, message: access.message };
+    if (getChatActionContext()?.setConversationNotificationsMuted) {
+        await getChatActionContext()!.setConversationNotificationsMuted!(userDid, conversationId, muted);
+    } else {
+        await setConversationNotificationsMuted(userDid, conversationId, muted);
+    }
+    return { success: true };
+};
 
 export const fetchRecentMessagesAction = async (
     conversationId: string,
