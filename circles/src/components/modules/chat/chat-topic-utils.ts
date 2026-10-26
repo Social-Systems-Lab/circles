@@ -24,6 +24,48 @@ export const getTopicIndexMessages = (messages: ChatMessage[]): ChatMessage[] =>
         })
         .map(({ message }) => message);
 
+export type TopicSortOrder = "latest_activity" | "date_created";
+export const TOPIC_SORT_PREFERENCE_EVENT = "kamooni:topic-sort-preference";
+
+export const getTopicActivityTime = (message: Record<string, any>): number => {
+    const rawTimestamp = message.thread?.updatedAt || message.thread?.createdAt || message.createdAt;
+    const timestamp = new Date(rawTimestamp).getTime();
+    return Number.isNaN(timestamp) ? getTopicCreationTime(message) : timestamp;
+};
+
+export const getMainFeedTopicMessages = (
+    messages: ChatMessage[],
+    sortOrder: TopicSortOrder = "latest_activity",
+): ChatMessage[] => {
+    const topics = getTopicIndexMessages(messages);
+    if (sortOrder === "date_created") return topics;
+    return topics
+        .map((message, index) => ({ message, index }))
+        .sort((left, right) => {
+            const activityDelta =
+                getTopicActivityTime(left.message as any) - getTopicActivityTime(right.message as any);
+            const creationDelta =
+                getTopicCreationTime(left.message as any) - getTopicCreationTime(right.message as any);
+            return activityDelta || creationDelta || left.index - right.index;
+        })
+        .map(({ message }) => message);
+};
+
+export const reconcileDeferredTopicOrder = (
+    currentIds: string[],
+    desiredIds: string[],
+    deferReordering: boolean,
+): string[] => {
+    if (!deferReordering || currentIds.length === 0) return desiredIds;
+    const desiredSet = new Set(desiredIds);
+    const retained = currentIds.filter((id) => desiredSet.has(id));
+    const retainedSet = new Set(retained);
+    return [...retained, ...desiredIds.filter((id) => !retainedSet.has(id))];
+};
+
+export const shouldRenderTopicFeed = (hasLoadedTopicSortOrder: boolean, isLoadingMessages: boolean): boolean =>
+    hasLoadedTopicSortOrder && !isLoadingMessages;
+
 export const getTopicViewportSnapshot = (
     messages: ChatMessage[],
 ): { count: number; latestCreatedAt: number | null } => {

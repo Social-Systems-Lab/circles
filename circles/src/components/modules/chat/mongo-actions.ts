@@ -20,12 +20,14 @@ import {
     findOrCreateDmConversation,
     getUnreadCountsForUser,
     getTopicUnreadCountsForUser,
+    getTopicSortOrder,
     getLegacyUnreadCountForUser,
     listConversationCandidatesForUser,
     mapConversationsToChatRoomDisplays,
     mapConversationToChatRoomDisplay,
     markConversationRead,
     markTopicRead,
+    setTopicSortOrder,
     toggleReaction,
     updateMessage,
     updateTopic,
@@ -2125,6 +2127,31 @@ export const listThreadsAction = async (
         console.error("listThreadsAction error:", error);
         return { success: false, message: "Failed to list threads" };
     }
+};
+
+export const getTopicSortPreferenceAction = async (
+    conversationId: string,
+): Promise<{ success: boolean; sortOrder?: "latest_activity" | "date_created"; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    return { success: true, sortOrder: await getTopicSortOrder(userDid, conversationId) };
+};
+
+export const setTopicSortPreferenceAction = async (
+    conversationId: string,
+    sortOrder: "latest_activity" | "date_created",
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (sortOrder !== "latest_activity" && sortOrder !== "date_created") {
+        return { success: false, message: "Invalid topic sort preference" };
+    }
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    await setTopicSortOrder(userDid, conversationId, sortOrder);
+    return { success: true };
 };
 
 export const fetchTopicStartersAction = async (

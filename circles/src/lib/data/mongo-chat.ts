@@ -3,6 +3,7 @@ import { ChatRoomDisplay, Circle } from "@/models/models";
 import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction, ChatReadState } from "@/lib/chat/mongo-types";
 import {
     ChatConversations,
+    ChatConversationPreferences,
     ChatMessageDocs,
     ChatReadStates,
     ChatRoomMembers,
@@ -16,6 +17,7 @@ import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
 import { compareMessagePositions, type MessagePosition } from "@/lib/chat/message-position";
+import { buildThreadActivityCompareAndSetFilter } from "@/lib/chat/topic-mutations";
 import { buildMessagesAfterPositionQuery } from "@/lib/chat/message-position-query";
 import {
     CHAT_READ_STATE_VERSION,
@@ -674,23 +676,74 @@ export const deleteMessage = async (messageId: string, userDid: string): Promise
 
     const result = await ChatMessageDocs.deleteOne({ _id: objectId, senderDid: userDid });
     if (result.deletedCount > 0 && message.threadId && message.conversationId) {
-        const threadStarter = (await ChatMessageDocs.findOne(
-            { _id: new ObjectId(message.threadId), conversationId: message.conversationId, thread: { $exists: true } },
-            { projection: { thread: 1 } },
-        )) as ChatMessageDoc | null;
-        const nextReplyCount = Math.max(((threadStarter?.thread?.replyCount as number | undefined) || 0) - 1, 0);
-
+        const topicObjectId = new ObjectId(message.threadId);
         await ChatMessageDocs.updateOne(
-            { _id: new ObjectId(message.threadId), conversationId: message.conversationId, thread: { $exists: true } },
-            {
-                $set: {
-                    "thread.updatedAt": new Date(),
-                    "thread.replyCount": nextReplyCount,
+            { _id: topicObjectId, conversationId: message.conversationId, thread: { $exists: true } },
+            [
+                {
+                    $set: {
+                        "thread.replyCount": {
+                            $max: [{ $subtract: [{ $ifNull: ["$thread.replyCount", 0] }, 1] }, 0],
+                        },
+                    },
                 },
-            },
+            ],
         );
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            const threadStarter = (await ChatMessageDocs.findOne(
+                { _id: topicObjectId, conversationId: message.conversationId, thread: { $exists: true } },
+                { projection: { thread: 1 } },
+            )) as ChatMessageDoc | null;
+            if (!threadStarter?.thread) break;
+
+            const latestRemainingReply = (await ChatMessageDocs.findOne(
+                { conversationId: message.conversationId, threadId: message.threadId },
+                { sort: { createdAt: -1, _id: -1 }, projection: { createdAt: 1 } },
+            )) as Pick<ChatMessageDoc, "createdAt"> | null;
+            const update = await ChatMessageDocs.updateOne(
+                buildThreadActivityCompareAndSetFilter(
+                    topicObjectId,
+                    message.conversationId,
+                    threadStarter.thread.updatedAt,
+                ),
+                {
+                    $set: {
+                        "thread.updatedAt": latestRemainingReply?.createdAt || threadStarter.thread.createdAt,
+                    },
+                },
+            );
+            if (update.modifiedCount === 1 || update.matchedCount === 1) return true;
+        }
+        return true;
     }
     return result.deletedCount > 0;
+};
+
+export const getTopicSortOrder = async (
+    userDid: string,
+    conversationId: string,
+): Promise<"latest_activity" | "date_created"> => {
+    const preference = await ChatConversationPreferences.findOne(
+        { userDid, conversationId },
+        { projection: { topicSortOrder: 1 } },
+    );
+    return preference?.topicSortOrder === "date_created" ? "date_created" : "latest_activity";
+};
+
+export const setTopicSortOrder = async (
+    userDid: string,
+    conversationId: string,
+    topicSortOrder: "latest_activity" | "date_created",
+): Promise<void> => {
+    const now = new Date();
+    await ChatConversationPreferences.updateOne(
+        { userDid, conversationId },
+        {
+            $set: { topicSortOrder, updatedAt: now },
+            $setOnInsert: { userDid, conversationId, createdAt: now },
+        },
+        { upsert: true },
+    );
 };
 
 export const toggleReaction = async (

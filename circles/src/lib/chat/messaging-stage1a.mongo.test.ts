@@ -35,13 +35,16 @@ async function main() {
         createMessage,
         createThread,
         createThreadReply,
+        deleteMessage,
         fetchMessagesSince,
         getLegacyUnreadCountForUser,
         getTopicUnreadCountsForUser,
+        getTopicSortOrder,
         listConversationCandidatesForUser,
         mapConversationToChatRoomDisplay,
         markConversationRead,
         markTopicRead,
+        setTopicSortOrder,
     } = await import("@/lib/data/mongo-chat");
     const { discardDmDraftRecord, publishDmFirstTopic, reconcilePublishedDmDraft, saveDmDraftRecord } = await import(
         "./dm-draft-persistence"
@@ -51,6 +54,7 @@ async function main() {
     const {
         CanonicalDmClaims,
         ChatConversations,
+        ChatConversationPreferences,
         ChatMessageDocs,
         ChatReadStates,
         ChatTopicReadStates,
@@ -266,6 +270,106 @@ async function main() {
             )?.thread?.replyCount,
             (starterBeforeIdempotentReply?.thread?.replyCount || 0) + 1,
             "retry increments the topic reply count only once",
+        );
+        assert.equal(await deleteMessage(idempotentReply!._id!.toString(), "did:sender"), true);
+        const starterAfterReplyDeletion = await ChatMessageDocs.findOne({
+            _id: new ObjectId(publication.topicId),
+        });
+        assert.equal(
+            starterAfterReplyDeletion?.thread?.replyCount,
+            starterBeforeIdempotentReply?.thread?.replyCount,
+            "reply deletion restores the previous reply count",
+        );
+        assert.equal(
+            starterAfterReplyDeletion?.thread?.updatedAt?.toISOString(),
+            topicAFutureReply?.createdAt.toISOString(),
+            "reply deletion restores activity from the latest remaining reply",
+        );
+
+        assert.equal(await getTopicSortOrder("did:sender", publication.conversationId), "latest_activity");
+        await setTopicSortOrder("did:sender", publication.conversationId, "date_created");
+        assert.equal(await getTopicSortOrder("did:sender", publication.conversationId), "date_created");
+        assert.equal(
+            await getTopicSortOrder("did:receiver", publication.conversationId),
+            "latest_activity",
+            "topic ordering preferences are isolated per user",
+        );
+        const readStateBeforePreference = await ChatReadStates.findOne({
+            userDid: "did:sender",
+            conversationId: publication.conversationId,
+        });
+        await setTopicSortOrder("did:sender", publication.conversationId, "latest_activity");
+        assert.deepEqual(
+            await ChatReadStates.findOne({ userDid: "did:sender", conversationId: publication.conversationId }),
+            readStateBeforePreference,
+            "saving a topic preference does not create, migrate, or modify chat read state",
+        );
+        assert.equal(
+            await ChatConversationPreferences.countDocuments({
+                userDid: "did:sender",
+                conversationId: publication.conversationId,
+            }),
+            1,
+            "repeated preference writes retain one logical preference record",
+        );
+
+        const concurrentTopic = await createThread(
+            publication.conversationId,
+            "did:sender",
+            "Concurrent topic",
+            "Concurrent body",
+            [],
+        );
+        assert.ok(concurrentTopic?._id);
+        const concurrentReplyA = await createThreadReply(
+            concurrentTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "Concurrent A" },
+        );
+        const concurrentReplyB = await createThreadReply(
+            concurrentTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "Concurrent B" },
+        );
+        assert.ok(concurrentReplyA?._id && concurrentReplyB?._id);
+        await Promise.all([
+            deleteMessage(concurrentReplyA!._id!.toString(), "did:sender"),
+            deleteMessage(concurrentReplyB!._id!.toString(), "did:sender"),
+        ]);
+        const afterConcurrentDeletes = await ChatMessageDocs.findOne({
+            _id: new ObjectId(concurrentTopic!._id!.toString()),
+        });
+        assert.equal(afterConcurrentDeletes?.thread?.replyCount, 0, "concurrent deletions decrement independently");
+        assert.equal(
+            afterConcurrentDeletes?.thread?.updatedAt?.toISOString(),
+            concurrentTopic?.thread?.createdAt.toISOString(),
+            "concurrent deletions restore topic creation activity",
+        );
+
+        const replyToDeleteDuringInsert = await createThreadReply(
+            concurrentTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "Delete while inserting" },
+        );
+        assert.ok(replyToDeleteDuringInsert?._id);
+        const [, insertedDuringDelete] = await Promise.all([
+            deleteMessage(replyToDeleteDuringInsert!._id!.toString(), "did:sender"),
+            createThreadReply(concurrentTopic!._id!.toString(), publication.conversationId, "did:sender", {
+                body: "Inserted during deletion",
+            }),
+        ]);
+        assert.ok(insertedDuringDelete?._id);
+        const afterConcurrentInsertDelete = await ChatMessageDocs.findOne({
+            _id: new ObjectId(concurrentTopic!._id!.toString()),
+        });
+        assert.equal(afterConcurrentInsertDelete?.thread?.replyCount, 1);
+        assert.equal(
+            afterConcurrentInsertDelete?.thread?.updatedAt?.toISOString(),
+            insertedDuringDelete?.createdAt.toISOString(),
+            "deletion cannot overwrite newer reply activity",
         );
         const topicB = await createThread(publication.conversationId, "did:sender", "Topic B", "Topic B body", []);
         assert.ok(topicAReply?._id && topicAFutureReply?._id && topicB?._id);

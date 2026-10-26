@@ -11,6 +11,7 @@ import { CirclePicture } from "../circles/circle-picture";
 import { useAtom, useAtomValue } from "jotai";
 import { useRouter } from "next/navigation";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { TOPIC_SORT_PREFERENCE_EVENT, type TopicSortOrder } from "./chat-topic-utils";
 
 interface GroupSettingsModalProps {
     open: boolean;
@@ -902,6 +903,47 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
     const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
     const [announcementNotice, setAnnouncementNotice] = useState<string | null>(null);
     const [announcementError, setAnnouncementError] = useState<string | null>(null);
+    const [topicSortOrder, setTopicSortOrder] = useState<TopicSortOrder>("latest_activity");
+    const [isSavingTopicSort, setIsSavingTopicSort] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadTopicSortOrder = async () => {
+            const { getTopicSortPreferenceAction } = await import("./mongo-actions");
+            const result = await getTopicSortPreferenceAction(String(chatRoom._id));
+            if (!cancelled && result.success && result.sortOrder) setTopicSortOrder(result.sortOrder);
+        };
+        void loadTopicSortOrder();
+        return () => {
+            cancelled = true;
+        };
+    }, [chatRoom._id]);
+
+    const handleTopicSortChange = async (sortOrder: TopicSortOrder) => {
+        const previous = topicSortOrder;
+        setTopicSortOrder(sortOrder);
+        setIsSavingTopicSort(true);
+        try {
+            const { setTopicSortPreferenceAction } = await import("./mongo-actions");
+            const result = await setTopicSortPreferenceAction(String(chatRoom._id), sortOrder);
+            if (!result.success) {
+                setTopicSortOrder(previous);
+                alert(result.message || "Failed to save topic order");
+                return;
+            }
+            window.dispatchEvent(
+                new CustomEvent(TOPIC_SORT_PREFERENCE_EVENT, {
+                    detail: { conversationId: String(chatRoom._id), sortOrder },
+                }),
+            );
+        } catch (error) {
+            console.error("Failed to save topic order:", error);
+            setTopicSortOrder(previous);
+            alert("Failed to save topic order");
+        } finally {
+            setIsSavingTopicSort(false);
+        }
+    };
 
     const handleSendAnnouncement = async () => {
         if (!isAdmin || chatRoom.isDirect) {
@@ -1007,6 +1049,27 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
 
     return (
         <div className="space-y-4">
+            <fieldset className="rounded-lg border border-gray-200 p-3" disabled={isSavingTopicSort}>
+                <legend className="px-1 font-medium">Topic order</legend>
+                <p className="mb-3 text-sm text-gray-500">This setting applies only to you.</p>
+                <div className="space-y-2">
+                    {([
+                        ["latest_activity", "Latest activity"],
+                        ["date_created", "Date created"],
+                    ] as const).map(([value, label]) => (
+                        <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                            <input
+                                type="radio"
+                                name={`topic-sort-${chatRoom._id}`}
+                                value={value}
+                                checked={topicSortOrder === value}
+                                onChange={() => void handleTopicSortChange(value)}
+                            />
+                            {label}
+                        </label>
+                    ))}
+                </div>
+            </fieldset>
             {isAdmin && !chatRoom.isDirect && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="font-medium text-slate-900">Send Announcement</p>
@@ -1152,7 +1215,7 @@ function ThreadsTab({
                             ) : null}
                             <p className="mt-2 text-xs text-gray-400">
                                 {thread.thread?.replyCount || 0} {thread.thread?.replyCount === 1 ? "reply" : "replies"} ·{" "}
-                                {new Date(thread.thread?.updatedAt || thread.createdAt).toLocaleDateString()}
+                                {new Date(thread.thread?.createdAt || thread.createdAt).toLocaleDateString()}
                             </p>
                         </div>
                         <span className="shrink-0 text-xs font-medium text-blue-600">Open</span>

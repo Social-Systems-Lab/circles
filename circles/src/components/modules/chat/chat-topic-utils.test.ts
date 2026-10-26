@@ -9,6 +9,7 @@ import {
     createTopicUnreadIndicator,
     findFirstUnreadReplyId,
     getInitialTopicTitle,
+    getMainFeedTopicMessages,
     getTopicIndexMessages,
     getTopicReplyChangeSignals,
     getTopicViewportSnapshot,
@@ -25,12 +26,14 @@ import {
     selectOldestUnreadTopicId,
     selectUnreadTopicIds,
     recordTopicUnreadIndicatorBoundary,
+    reconcileDeferredTopicOrder,
     resolveTopicUnreadBoundary,
     selectQueuedTopicAcknowledgementBoundary,
     selectTopicAcknowledgementBoundary,
     shouldAcknowledgeTopicInteraction,
     shouldAcknowledgeTopicIndicatorFromDraft,
     shouldAutoScrollTopicReplies,
+    shouldRenderTopicFeed,
 } from "./chat-topic-utils";
 
 const makeMessage = (id: string, overrides: Partial<ChatMessage> & Record<string, any> = {}): ChatMessage =>
@@ -413,6 +416,34 @@ assert.deepEqual(
     ["active-topic", "older-topic"],
     "reply activity does not reorder topic cards",
 );
+assert.deepEqual(
+    getMainFeedTopicMessages([olderTopic, activeTopic]).map((message) => message.id),
+    ["older-topic", "active-topic"],
+    "the main feed defaults to oldest activity first so the latest activity is at the bottom",
+);
+assert.deepEqual(
+    getMainFeedTopicMessages([olderTopic, activeTopic], "date_created").map((message) => message.id),
+    ["active-topic", "older-topic"],
+    "the personal date-created preference retains chronological topic order",
+);
+assert.deepEqual(
+    reconcileDeferredTopicOrder(["active-topic", "older-topic"], ["older-topic", "active-topic"], true),
+    ["active-topic", "older-topic"],
+    "activity reordering is deferred while the topic viewport is locked",
+);
+assert.deepEqual(
+    reconcileDeferredTopicOrder(["active-topic", "older-topic"], ["older-topic", "active-topic"], false),
+    ["older-topic", "active-topic"],
+    "the deferred activity order applies once the viewport is safe",
+);
+assert.deepEqual(
+    reconcileDeferredTopicOrder(["active-topic"], ["older-topic", "active-topic", "new-topic"], true),
+    ["active-topic", "older-topic", "new-topic"],
+    "new topics are appended without moving an existing topic while ordering is locked",
+);
+assert.equal(shouldRenderTopicFeed(false, false), false, "topics wait for the persisted order before first render");
+assert.equal(shouldRenderTopicFeed(true, true), false, "topics remain hidden while messages are loading");
+assert.equal(shouldRenderTopicFeed(true, false), true, "topics render once messages and preference are ready");
 
 const equalCreationTopicA = makeMessage("equal-creation-a", {
     createdAt: new Date("2026-07-17T12:00:00.000Z"),

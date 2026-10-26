@@ -47,6 +47,7 @@ import {
     ChatTopicDraft,
     ChatTopicDraftTombstone,
     CanonicalDmClaim,
+    ChatConversationPreference,
 } from "@/lib/chat/mongo-types";
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import type { MembershipCredentialHandoff } from "@/lib/vibe-id/membership-credential-handoffs";
@@ -126,6 +127,7 @@ let MessageEmailReminders: Collection<MessageEmailReminder>;
 let ChatTopicDrafts: Collection<ChatTopicDraft>;
 let ChatTopicDraftTombstones: Collection<ChatTopicDraftTombstone>;
 let CanonicalDmClaims: Collection<CanonicalDmClaim>;
+let ChatConversationPreferences: Collection<ChatConversationPreference>;
 let ExternalNotificationChannels: Collection<ExternalNotificationChannel>;
 let PlatformBroadcastMessages: Collection<PlatformBroadcastMessage>;
 let StripeWebhookEvents: Collection<any>;
@@ -206,6 +208,7 @@ if (process.env.IS_BUILD !== "true") {
     ChatTopicDrafts = db.collection<ChatTopicDraft>("chatTopicDrafts");
     ChatTopicDraftTombstones = db.collection<ChatTopicDraftTombstone>("chatTopicDraftTombstones");
     CanonicalDmClaims = db.collection<CanonicalDmClaim>("canonicalDmClaims");
+    ChatConversationPreferences = db.collection<ChatConversationPreference>("chatConversationPreferences");
     ExternalNotificationChannels = db.collection<ExternalNotificationChannel>("externalNotificationChannels");
     PlatformBroadcastMessages = db.collection<PlatformBroadcastMessage>("platformBroadcastMessages");
     StripeWebhookEvents = db.collection("stripeWebhookEvents");
@@ -286,6 +289,7 @@ export function ensureRequiredChatIndexes(): Promise<void> {
             ChatMessageDocs.createIndex({ conversationId: 1, threadId: 1, createdAt: 1, _id: 1 }),
             ChatReadStates.createIndex({ userDid: 1, conversationId: 1 }),
             ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true }),
+            ChatConversationPreferences.createIndex({ userDid: 1, conversationId: 1 }, { unique: true }),
             ChatTopicDrafts.createIndex({ authorDid: 1, recipientDid: 1 }, { unique: true }),
             ChatTopicDrafts.createIndex({ authorDid: 1, state: 1, updatedAt: -1 }),
             ChatTopicDraftTombstones.createIndex({ authorDid: 1, recipientDid: 1, generation: 1 }, { unique: true }),
@@ -362,6 +366,7 @@ export {
     ChatTopicDrafts,
     ChatTopicDraftTombstones,
     CanonicalDmClaims,
+    ChatConversationPreferences,
     ExternalNotificationChannels,
     PlatformBroadcastMessages,
     StripeWebhookEvents,

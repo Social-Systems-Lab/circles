@@ -125,6 +125,15 @@ export type ChatReadState = {
     updatedAt: Date;
 };
 
+export type ChatConversationPreference = {
+    _id?: any;
+    conversationId: string;
+    userDid: string;
+    topicSortOrder: "latest_activity" | "date_created";
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export type ChatTopicReadState = {
     _id?: any;
     conversationId: string;

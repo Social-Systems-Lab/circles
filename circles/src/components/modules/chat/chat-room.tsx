@@ -65,6 +65,7 @@ import {
     getInitialTopicTitle,
     canApplyTopicReplyLoad,
     getTopicIndexMessages,
+    getMainFeedTopicMessages,
     getTopicViewportSnapshot,
     mergeRefreshedTopicStarters,
     planTopicReplyLoad,
@@ -85,6 +86,10 @@ import {
     mergeAuthoritativeTopicReplies,
     selectTopicReplyScrollTarget,
     shouldAutoScrollTopicReplies,
+    shouldRenderTopicFeed,
+    reconcileDeferredTopicOrder,
+    TOPIC_SORT_PREFERENCE_EVENT,
+    type TopicSortOrder,
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
@@ -707,6 +712,8 @@ type ChatMessagesProps = {
     onTopicRead?: (topicId: string) => Promise<void> | void;
     topicsLoaded?: boolean;
     mentionCandidates?: Circle[];
+    topicSortOrder?: TopicSortOrder;
+    deferTopicReordering?: boolean;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -996,6 +1003,8 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onTopicRead,
     topicsLoaded = true,
     mentionCandidates = [],
+    topicSortOrder = "latest_activity",
+    deferTopicReordering = false,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -1115,7 +1124,21 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     };
 
     const topicMessages = getTopicIndexMessages(messages);
-    const orderedMessages = topicMessages;
+    const desiredMessages = useMemo(
+        () => getMainFeedTopicMessages(messages, topicSortOrder),
+        [messages, topicSortOrder],
+    );
+    const desiredTopicIds = useMemo(() => desiredMessages.map((message) => message.id), [desiredMessages]);
+    const [displayedTopicIds, setDisplayedTopicIds] = useState<string[]>(() => desiredTopicIds);
+
+    useEffect(() => {
+        setDisplayedTopicIds((current) => reconcileDeferredTopicOrder(current, desiredTopicIds, deferTopicReordering));
+    }, [deferTopicReordering, desiredTopicIds]);
+
+    const topicById = new Map(desiredMessages.map((message) => [message.id, message]));
+    const orderedMessages = displayedTopicIds
+        .map((topicId) => topicById.get(topicId))
+        .filter((message): message is ChatMessage => !!message);
 
     const emptyTopicState =
         topicsLoaded && topicMessages.length === 0 ? (
@@ -2714,6 +2737,7 @@ const TopicCard: React.FC<{
                 if (replyToMessage?.id === replyId) {
                     setReplyToMessage(null);
                 }
+                await onTopicActivity?.();
                 await loadReplies();
                 return;
             }
@@ -3525,6 +3549,8 @@ export const ChatRoomComponent: React.FC<{
     const [hasLoadedTopics, setHasLoadedTopics] = useState(false);
     const [isLoadingTopics, setIsLoadingTopics] = useState(false);
     const [topicUnreadCounts, setTopicUnreadCounts] = useState<Record<string, number>>({});
+    const [topicSortOrder, setTopicSortOrder] = useState<TopicSortOrder>("latest_activity");
+    const [hasLoadedTopicSortOrder, setHasLoadedTopicSortOrder] = useState(false);
     const [hasLoadedTopicUnreadCounts, setHasLoadedTopicUnreadCounts] = useState(false);
     const [, setTopicUnreadIndicatorsState] = useState<Record<string, TopicUnreadIndicator>>({});
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
@@ -3695,6 +3721,40 @@ export const ChatRoomComponent: React.FC<{
         setTopicUnreadIndicatorsState(restoredIndicators);
         openedDeepLinkTopicRef.current = null;
         initialTopicEntryHandledRef.current = false;
+        setTopicSortOrder("latest_activity");
+        setHasLoadedTopicSortOrder(false);
+    }, [roomId]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        let cancelled = false;
+        const loadTopicSortOrder = async () => {
+            try {
+                const { getTopicSortPreferenceAction } = await import("./mongo-actions");
+                const result = await getTopicSortPreferenceAction(roomId);
+                if (!cancelled && result.success && result.sortOrder) setTopicSortOrder(result.sortOrder);
+            } catch (error) {
+                console.error("Failed to load topic sort preference:", error);
+            } finally {
+                if (!cancelled) setHasLoadedTopicSortOrder(true);
+            }
+        };
+        void loadTopicSortOrder();
+        return () => {
+            cancelled = true;
+        };
+    }, [roomId]);
+
+    useEffect(() => {
+        const handlePreference = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; sortOrder?: TopicSortOrder }>).detail;
+            if (detail?.conversationId === roomId && detail.sortOrder) {
+                setTopicSortOrder(detail.sortOrder);
+                setHasLoadedTopicSortOrder(true);
+            }
+        };
+        window.addEventListener(TOPIC_SORT_PREFERENCE_EVENT, handlePreference);
+        return () => window.removeEventListener(TOPIC_SORT_PREFERENCE_EVENT, handlePreference);
     }, [roomId]);
 
     const navigateToTopic = useCallback((topicId: string) => {
@@ -4005,6 +4065,7 @@ export const ChatRoomComponent: React.FC<{
     };
 
     useEffect(() => {
+        if (!hasLoadedTopicSortOrder) return;
         const nextSnapshot = getTopicViewportSnapshot(messages);
         if (nextSnapshot.count === 0) return;
 
@@ -4028,7 +4089,7 @@ export const ChatRoomComponent: React.FC<{
         }
 
         lastRenderedMessageRef.current = nextSnapshot;
-    }, [messages]);
+    }, [hasLoadedTopicSortOrder, messages]);
 
     useEffect(() => {
         hasInitiallyScrolledRef.current = false;
@@ -4272,11 +4333,11 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
+                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics || !hasLoadedTopicSortOrder) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
                             {nextUnreadTopicControl}
-                            {!isLoadingMessages && (
+                            {shouldRenderTopicFeed(hasLoadedTopicSortOrder, isLoadingMessages) && (
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
@@ -4301,6 +4362,8 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
+                                    topicSortOrder={topicSortOrder}
+                                    deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
                                 />
                             )}
                         </div>
@@ -4327,11 +4390,11 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
+                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics || !hasLoadedTopicSortOrder) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
                             {nextUnreadTopicControl}
-                            {!isLoadingMessages && (
+                            {shouldRenderTopicFeed(hasLoadedTopicSortOrder, isLoadingMessages) && (
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
@@ -4356,6 +4419,8 @@ export const ChatRoomComponent: React.FC<{
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
+                                    topicSortOrder={topicSortOrder}
+                                    deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
                                 />
                             )}
                         </div>
