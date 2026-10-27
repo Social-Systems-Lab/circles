@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
 
 const chatList = read("src/components/modules/chat/chat-list.tsx");
+const chatLayout = read("src/app/chat/layout.tsx");
+const userToolbox = read("src/components/layout/user-toolbox.tsx");
 const settings = read("src/components/modules/chat/group-settings-modal.tsx");
 const actions = read("src/components/modules/chat/mongo-actions.ts");
 const notifications = read("src/lib/data/notifications.ts");
@@ -17,12 +19,17 @@ assert.match(chatList, /Mute notifications/);
 assert.match(chatList, /Unmute notifications/);
 assert.match(chatList, /chat\.isDirect[\s\S]*Archive conversation/);
 assert.match(chatList, /archivedView[\s\S]*onUnarchive/);
+assert.match(chatList, /getPostArchiveNavigationTarget/);
+assert.match(chatLayout, /getPostArchiveNavigationTarget\(pathname, conversationId\)/);
+assert.match(userToolbox, /getPostArchiveNavigationTarget\(pathname, conversationId\)/);
+assert.match(chatLayout, /router\.push\(`\/chat\/\$\{String\(chat\._id\)\}`\)/);
 
 assert.match(settings, /checked=\{notificationsMuted === true\}/);
 assert.match(settings, /setConversationMutePreferenceAction/);
 assert.match(settings, /CONVERSATION_MUTE_PREFERENCE_EVENT/);
 assert.match(settings, /muteLoadState === "error"/);
 assert.match(settings, /Retry/);
+assert.match(settings, /router\.replace\("\/chat\/archived"\)/);
 assert.match(chatList, /CONVERSATION_MUTE_PREFERENCE_EVENT/);
 assert.match(chatList, /notificationsMutePreferenceAvailable === false/);
 assert.match(chatList, /Retry notification setting/);

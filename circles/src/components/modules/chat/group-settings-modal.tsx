@@ -1135,8 +1135,7 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
                 return;
             }
             onOpenChange(false);
-            router.push("/chat");
-            router.refresh();
+            router.replace("/chat/archived");
         } catch (error) {
             console.error("Error archiving conversation:", error);
             alert("Failed to archive conversation");

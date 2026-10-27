@@ -21,6 +21,7 @@ import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
 import { buildConversationUnreadSnapshot } from "@/lib/chat/unread-counts";
 import { listDmDraftsAction } from "@/components/modules/chat/draft-actions";
 import { ChatLayoutProvider } from "@/components/modules/chat/chat-layout-context";
+import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
 
 export default function ChatLayout({ children }: PropsWithChildren) {
     const [user] = useAtom(userAtom);
@@ -244,12 +245,14 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             archivedView={isArchivedRoute}
                             onRetryMutePreferences={loadRooms}
                             onArchive={async (chat) => {
+                                const conversationId = String(chat._id);
                                 const { archiveDmConversationAction } = await import(
                                     "@/components/modules/chat/actions"
                                 );
-                                const result = await archiveDmConversationAction(String(chat._id));
+                                const result = await archiveDmConversationAction(conversationId);
                                 if (result.success) {
-                                    router.push("/chat");
+                                    const navigationTarget = getPostArchiveNavigationTarget(pathname, conversationId);
+                                    if (navigationTarget) router.replace(navigationTarget);
                                     await loadRooms();
                                 } else {
                                     alert(result.message || "Failed to archive conversation");

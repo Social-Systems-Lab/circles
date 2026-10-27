@@ -6,7 +6,7 @@ import { useAtom } from "jotai";
 import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
 import { unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, usePathname } from "next/navigation";
 import { Archive, ArchiveRestore, Bell, BellOff, Info, Settings } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import Image from "next/image";
@@ -24,6 +24,7 @@ import {
     isConversationMuteMutationPending,
 } from "@/lib/client/chat-preference-events";
 import { useToast } from "@/components/ui/use-toast";
+import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
@@ -54,6 +55,7 @@ export const ChatList: React.FC<ChatListProps> = ({
     const isMobile = useIsMobile();
     const router = useRouter();
     const params = useParams();
+    const pathname = usePathname();
     const activeChatHandle = params.handle as string;
     const getConversationId = (chat: ChatRoomDisplay) => String(chat._id || "");
     const isLoadingRooms = isLoading && totalChatsCount === 0;
@@ -118,7 +120,8 @@ export const ChatList: React.FC<ChatListProps> = ({
         const { archiveDmConversationAction } = await import("./actions");
         const result = await archiveDmConversationAction(getConversationId(chat));
         if (result.success) {
-            router.push("/chat");
+            const navigationTarget = getPostArchiveNavigationTarget(pathname, getConversationId(chat));
+            if (navigationTarget) router.replace(navigationTarget);
         } else {
             alert(result.message || "Failed to archive conversation");
         }

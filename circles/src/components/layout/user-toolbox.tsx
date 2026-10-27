@@ -45,6 +45,7 @@ import { useToast } from "../ui/use-toast";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
+import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
 
 type Milestone = {
     id: string;
@@ -777,9 +778,15 @@ export const UserToolbox = () => {
                             onChatClick={closeToolbox}
                             onRetryMutePreferences={() => chatRoomsRefreshRunner.run()}
                             onArchive={async (chat) => {
+                                const conversationId = String(chat._id);
                                 const { archiveDmConversationAction } = await import("../modules/chat/actions");
-                                const result = await archiveDmConversationAction(String(chat._id));
+                                const result = await archiveDmConversationAction(conversationId);
                                 if (result.success) {
+                                    const navigationTarget = getPostArchiveNavigationTarget(pathname, conversationId);
+                                    if (navigationTarget) {
+                                        closeToolbox();
+                                        router.replace(navigationTarget);
+                                    }
                                     await chatRoomsRefreshRunner.run();
                                 } else {
                                     alert(result.message || "Failed to archive conversation");
