@@ -534,19 +534,105 @@ export const getLatestMessageIdForConversation = async (conversationId: string):
     return latest?._id ? latest._id.toString() : null;
 };
 
-export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessageDoc> => {
-    const result = await ChatMessageDocs.insertOne(message);
-    // Why this broke: conversation.updatedAt was never bumped on message send,
-    // so new DMs never appeared active in the chat list on prod.
+export class PersistedChatMessageActivityError extends Error {
+    constructor(public readonly persistedMessage: ChatMessageDoc, cause: unknown) {
+        super("Message was saved, but chat activity could not be updated");
+        this.name = "PersistedChatMessageActivityError";
+        (this as Error & { cause?: unknown }).cause = cause;
+    }
+}
+
+export const refreshPersistedMessageActivity = async (message: ChatMessageDoc): Promise<void> => {
+    if (message.threadId) {
+        const persistedReplyCount = await ChatMessageDocs.countDocuments({
+            conversationId: message.conversationId,
+            threadId: message.threadId,
+        });
+        await ChatMessageDocs.updateOne(
+            {
+                _id: new ObjectId(message.threadId),
+                conversationId: message.conversationId,
+                thread: { $exists: true },
+                "thread.deletingAt": { $exists: false },
+            },
+            {
+                $max: {
+                    "thread.updatedAt": message.createdAt,
+                    "thread.replyCount": persistedReplyCount,
+                },
+            },
+        );
+    }
     await ChatConversations.updateOne(
-        { _id: new ObjectId(message.conversationId) },
         {
-            $set: { updatedAt: new Date() },
+            _id: new ObjectId(message.conversationId),
+            $or: [
+                { updatedAt: { $exists: false } },
+                { updatedAt: { $lt: message.createdAt } },
+            ],
+        },
+        {
+            $max: { updatedAt: message.createdAt },
             $unset: { "metadata.dmProvisional": "" },
             $pull: { archivedBy: { $ne: message.senderDid } },
         },
     );
-    return { ...message, _id: result.insertedId.toString() };
+};
+
+export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessageDoc> => {
+    const result = await ChatMessageDocs.insertOne(message);
+    const persistedMessage = { ...message, _id: result.insertedId.toString() };
+    // Why this broke: conversation.updatedAt was never bumped on message send,
+    // so new DMs never appeared active in the chat list on prod.
+    try {
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(message.conversationId) },
+            {
+                $set: { updatedAt: new Date() },
+                $unset: { "metadata.dmProvisional": "" },
+                $pull: { archivedBy: { $ne: message.senderDid } },
+            },
+        );
+    } catch (error) {
+        throw new PersistedChatMessageActivityError(persistedMessage, error);
+    }
+    return persistedMessage;
+};
+
+export const createIdempotentMessage = async (
+    message: ChatMessageDoc & { submissionId: string },
+): Promise<{ message: ChatMessageDoc; created: boolean }> => {
+    const matchesSubmission = (existing: ChatMessageDoc): boolean =>
+        existing.conversationId === message.conversationId &&
+        existing.senderDid === message.senderDid &&
+        existing.body === message.body &&
+        (existing.replyToMessageId || undefined) === (message.replyToMessageId || undefined) &&
+        !existing.threadId;
+    const findExisting = async (): Promise<ChatMessageDoc | null> => {
+        const existing = (await ChatMessageDocs.findOne({
+            senderDid: message.senderDid,
+            submissionId: message.submissionId,
+        })) as ChatMessageDoc | null;
+        if (!existing) return null;
+        if (!matchesSubmission(existing)) throw new Error("Message submission id was already used for another message");
+        return { ...existing, _id: existing._id?.toString() };
+    };
+
+    const existing = await findExisting();
+    if (existing) {
+        await refreshPersistedMessageActivity(existing);
+        return { message: existing, created: false };
+    }
+
+    try {
+        return { message: await createMessage(message), created: true };
+    } catch (error: any) {
+        if (error?.code !== 11000) throw error;
+        const recovered = await findExisting();
+        if (!recovered) throw error;
+        await refreshPersistedMessageActivity(recovered);
+        return { message: recovered, created: false };
+    }
 };
 
 export const updateMessage = async (messageId: string, userDid: string, body: string): Promise<boolean> => {
@@ -769,14 +855,9 @@ export const setTopicSortOrder = async (
     await setConversationPreferenceFields(userDid, conversationId, { topicSortOrder });
 };
 
-export const getConversationNotificationsMuted = async (
-    userDid: string,
-    conversationId: string,
-): Promise<boolean> =>
-    (await ChatConversationPreferences.findOne(
-        { userDid, conversationId },
-        { projection: { notificationsMuted: 1 } },
-    ))?.notificationsMuted === true;
+export const getConversationNotificationsMuted = async (userDid: string, conversationId: string): Promise<boolean> =>
+    (await ChatConversationPreferences.findOne({ userDid, conversationId }, { projection: { notificationsMuted: 1 } }))
+        ?.notificationsMuted === true;
 
 export const getConversationNotificationMutePreferences = async (
     userDid: string,
@@ -1308,7 +1389,10 @@ export const createThreadReply = async (
     };
 
     const existingSubmission = await findExistingSubmission();
-    if (existingSubmission) return existingSubmission;
+    if (existingSubmission) {
+        await refreshPersistedMessageActivity(existingSubmission);
+        return existingSubmission;
+    }
 
     const threadStarter = await findThreadStarter(threadId, conversationId);
     if (!threadStarter) return null;
@@ -1331,28 +1415,33 @@ export const createThreadReply = async (
         if (error?.code !== 11000 || !payload.submissionId) throw error;
         const recovered = await findExistingSubmission();
         if (!recovered) throw error;
+        await refreshPersistedMessageActivity(recovered);
         return recovered;
     }
-    const threadUpdate = await ChatMessageDocs.updateOne(
-        {
-            _id: new ObjectId(threadId),
-            conversationId,
-            thread: { $exists: true },
-            "thread.deletingAt": { $exists: false },
-        },
-        {
-            $set: { "thread.updatedAt": now },
-            $inc: { "thread.replyCount": 1 },
-        },
-    );
-    if (threadUpdate.matchedCount === 0) {
-        await ChatMessageDocs.deleteOne({ _id: result.insertedId, conversationId, threadId });
-        return null;
+    try {
+        const threadUpdate = await ChatMessageDocs.updateOne(
+            {
+                _id: new ObjectId(threadId),
+                conversationId,
+                thread: { $exists: true },
+                "thread.deletingAt": { $exists: false },
+            },
+            {
+                $set: { "thread.updatedAt": now },
+                $inc: { "thread.replyCount": 1 },
+            },
+        );
+        if (threadUpdate.matchedCount === 0) {
+            await ChatMessageDocs.deleteOne({ _id: result.insertedId, conversationId, threadId });
+            return null;
+        }
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(conversationId) },
+            { $set: { updatedAt: now }, $pull: { archivedBy: { $ne: senderDid } } },
+        );
+    } catch (error) {
+        throw new PersistedChatMessageActivityError({ ...doc, _id: result.insertedId.toString() }, error);
     }
-    await ChatConversations.updateOne(
-        { _id: new ObjectId(conversationId) },
-        { $set: { updatedAt: now }, $pull: { archivedBy: { $ne: senderDid } } },
-    );
     return { ...doc, _id: result.insertedId.toString() };
 };
 

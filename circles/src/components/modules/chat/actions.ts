@@ -332,6 +332,11 @@ export const sendMongoAttachmentAction = async (formData: FormData) => {
     return await sendMongoAttachmentActionInternal(formData);
 };
 
+export const sendComposedMessageAction = async (formData: FormData) => {
+    const { sendComposedMessageAction: sendComposed } = await import("./mongo-actions");
+    return await sendComposed(formData);
+};
+
 export const editMongoMessageAction = async (messageId: string, content: string) => {
     return await editMongoMessageActionInternal(messageId, content);
 };

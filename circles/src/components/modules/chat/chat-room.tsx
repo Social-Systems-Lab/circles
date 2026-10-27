@@ -17,7 +17,7 @@ import {
     deleteMongoMessageAction,
     editMessageAction,
     getChatRoomMembersAction,
-    sendAttachmentAction,
+    sendComposedMessageAction,
     sendMessageAction,
     toggleMongoReactionAction,
 } from "./actions";
@@ -41,6 +41,7 @@ import { GrEdit, GrTrash } from "react-icons/gr";
 import { HiDotsVertical } from "react-icons/hi";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { generateColorFromString } from "@/lib/utils/color";
 import { selectLoadedDeepLinkTopic } from "@/lib/chat/topic-deep-link";
 import { EmojiClickData } from "emoji-picker-react";
@@ -100,6 +101,15 @@ import {
     shouldFetchLegacyLooseMessagesOnExpand,
     shouldShowLegacyLooseMessageSection,
 } from "@/lib/chat/legacy-messages";
+import {
+    buildComposedMessageSignature,
+    buildComposedMessageFormData,
+    buildComposerScopeKey,
+    getStableSubmissionId,
+    removeQueuedAttachment,
+    validateFilesForQueue,
+    type QueuedChatAttachment,
+} from "./chat-attachment-queue";
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -1442,6 +1452,64 @@ type ChatInputProps = {
     onMobileComposerExpandedChange?: (expanded: boolean) => void;
 };
 
+const formatAttachmentSize = (size: number): string =>
+    size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.ceil(size / 1024))} KB`;
+
+const QueuedAttachmentPreviews = ({
+    attachments,
+    disabled,
+    onRemove,
+}: {
+    attachments: QueuedChatAttachment[];
+    disabled: boolean;
+    onRemove: (attachmentId: string) => void;
+}) => {
+    if (!attachments.length) return null;
+    return (
+        <div className="mb-2 flex max-w-full flex-wrap gap-2" aria-label="Queued attachments">
+            {attachments.map((attachment) => (
+                <div
+                    key={attachment.id}
+                    className="flex max-w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm"
+                >
+                    {attachment.previewUrl ? (
+                        <Image
+                            src={attachment.previewUrl}
+                            alt=""
+                            width={40}
+                            height={40}
+                            unoptimized
+                            className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                    ) : (
+                        <IoDocumentText className="h-5 w-5 shrink-0 text-gray-500" aria-hidden="true" />
+                    )}
+                    <span className="min-w-0">
+                        <span className="block max-w-40 truncate font-medium text-gray-700">
+                            {attachment.file.name}
+                        </span>
+                        <span className="text-gray-500">{formatAttachmentSize(attachment.file.size)}</span>
+                    </span>
+                    <button
+                        type="button"
+                        className="rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
+                        onClick={() => onRemove(attachment.id)}
+                        disabled={disabled}
+                        aria-label={`Remove ${attachment.file.name}`}
+                    >
+                        <IoClose className="h-4 w-4" />
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const createComposerSubmissionId = (): string =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const ChatInput = ({
     roomId,
     editingMessage,
@@ -1457,7 +1525,43 @@ const ChatInput = ({
     const isMobile = useIsMobile();
     const [isComposerFocused, setIsComposerFocused] = useState(false);
     const [isMobileActionMenuOpen, setIsMobileActionMenuOpen] = useState(false);
+    const [queuedAttachments, setQueuedAttachments] = useState<QueuedChatAttachment[]>([]);
+    const [isSendingComposed, setIsSendingComposed] = useState(false);
+    const queuedAttachmentsRef = useRef<QueuedChatAttachment[]>([]);
+    const composedSubmissionRef = useRef<{ signature: string; submissionId: string } | null>(null);
+    const currentRoomIdRef = useRef(roomId);
+    const composerRoomRef = useRef(roomId);
+    const newMessageRef = useRef(newMessage);
+    const replyToMessageRef = useRef(replyToMessage);
+    newMessageRef.current = newMessage;
+    replyToMessageRef.current = replyToMessage;
+    currentRoomIdRef.current = roomId;
     const isExpandedMobileComposer = !!isMobile && (isComposerFocused || isMobileActionMenuOpen);
+
+    useEffect(() => {
+        queuedAttachmentsRef.current = queuedAttachments;
+    }, [queuedAttachments]);
+
+    useEffect(() => {
+        if (composerRoomRef.current === roomId) return;
+        for (const attachment of queuedAttachmentsRef.current) {
+            if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        }
+        queuedAttachmentsRef.current = [];
+        setQueuedAttachments([]);
+        setNewMessage("");
+        composedSubmissionRef.current = null;
+        composerRoomRef.current = roomId;
+    }, [roomId]);
+
+    useEffect(
+        () => () => {
+            for (const attachment of queuedAttachmentsRef.current) {
+                if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+            }
+        },
+        [],
+    );
 
     const chatMentionsInputStyle = useMemo(() => {
         if (!isMobile) {
@@ -1531,7 +1635,7 @@ const ChatInput = ({
             return;
         }
 
-        if (!trimmedMessage) {
+        if (!trimmedMessage && queuedAttachments.length === 0) {
             return;
         }
 
@@ -1539,6 +1643,65 @@ const ChatInput = ({
         if (editingMessage) {
             console.log("📤 [Send] Routing to handleEditSubmit...");
             await handleEditSubmit();
+            return;
+        }
+
+        if (queuedAttachments.length > 0) {
+            if (isSendingComposed) return;
+            const sendRoomId = roomId;
+            const replyTarget = replyToMessage;
+            const attachmentsSnapshot = queuedAttachments;
+            const signature = buildComposedMessageSignature({
+                scopeKey: buildComposerScopeKey(sendRoomId),
+                body: trimmedMessage,
+                replyToMessageId: replyTarget?.id,
+                attachments: attachmentsSnapshot,
+            });
+            const submission = getStableSubmissionId(
+                composedSubmissionRef.current,
+                signature,
+                createComposerSubmissionId,
+            );
+            composedSubmissionRef.current = submission;
+            const formData = buildComposedMessageFormData({
+                conversationId: sendRoomId,
+                body: trimmedMessage,
+                replyToMessageId: replyTarget?.id,
+                submissionId: submission.submissionId,
+                attachments: attachmentsSnapshot,
+            });
+
+            setIsSendingComposed(true);
+            try {
+                const result = await sendComposedMessageAction(formData);
+                if (!result.success) {
+                    alert(`Failed to send message: ${result.message || "Please try again."}`);
+                    return;
+                }
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: sendRoomId });
+                const currentSignature = buildComposedMessageSignature({
+                    scopeKey: buildComposerScopeKey(sendRoomId),
+                    body: newMessageRef.current.trim(),
+                    replyToMessageId: replyToMessageRef.current?.id,
+                    attachments: queuedAttachmentsRef.current,
+                });
+                if (currentRoomIdRef.current === sendRoomId && currentSignature === signature) {
+                    for (const attachment of attachmentsSnapshot) {
+                        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+                    }
+                    queuedAttachmentsRef.current = [];
+                    setQueuedAttachments([]);
+                    setNewMessage("");
+                    setReplyToMessage(null);
+                    composedSubmissionRef.current = null;
+                    onMessageSent?.();
+                }
+            } catch (error) {
+                console.error("Failed to send composed message:", error);
+                alert("Failed to send message. Please try again.");
+            } finally {
+                setIsSendingComposed(false);
+            }
             return;
         }
 
@@ -1715,53 +1878,35 @@ const ChatInput = ({
     };
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [isUploading, setIsUploading] = useState(false);
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        // Reset input so the same file can be selected again
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = Array.from(e.target.files || []);
         e.target.value = "";
+        if (!selectedFiles.length || isSendingComposed) return;
+        const validation = validateFilesForQueue(
+            queuedAttachmentsRef.current.map((attachment) => attachment.file),
+            selectedFiles,
+        );
+        if (validation.error) return alert(validation.error);
+        const additions = validation.accepted.map((file) => ({
+            id: createComposerSubmissionId(),
+            file,
+            previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        }));
+        setQueuedAttachments((current) => {
+            const next = [...current, ...additions];
+            queuedAttachmentsRef.current = next;
+            return next;
+        });
+    };
 
-        if (!user) return;
-
-        // Check size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            alert("File size exceeds 5MB limit.");
-            return;
-        }
-
-        setIsUploading(true);
-        try {
-            const formData = new FormData();
-            if (!roomId) {
-                console.error("Chat room does not have a room ID");
-                return;
-            }
-            formData.append("roomId", roomId);
-            formData.append("file", file);
-
-            if (replyToMessage) {
-                formData.append("replyToEventId", replyToMessage.id);
-            }
-
-            const result = await sendAttachmentAction(formData);
-
-            if (result.success) {
-                dispatchNotificationRefresh({ reason: "chat-sent", roomId });
-                setReplyToMessage(null);
-                onMessageSent?.();
-            } else {
-                console.error("Failed to send attachment:", result.message);
-                alert(`Failed to send attachment: ${result.message}`);
-            }
-        } catch (error) {
-            console.error("Failed to send attachment:", error);
-            alert("An error occurred while uploading the file.");
-        } finally {
-            setIsUploading(false);
-        }
+    const handleRemoveAttachment = (attachmentId: string) => {
+        if (isSendingComposed) return;
+        setQueuedAttachments((current) => {
+            const result = removeQueuedAttachment(current, attachmentId);
+            if (result.removed?.previewUrl) URL.revokeObjectURL(result.removed.previewUrl);
+            queuedAttachmentsRef.current = result.attachments;
+            return result.attachments;
+        });
     };
 
     const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -1774,15 +1919,15 @@ const ChatInput = ({
     return (
         <div className="flex w-full flex-col">
             <div className={`flex w-full items-end gap-2 ${isMobile ? "gap-1.5" : ""}`}>
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                <input type="file" multiple ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
                 <Button
                     variant="ghost"
                     size="icon"
                     className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
+                    disabled={isSendingComposed || !!editingMessage}
                 >
-                    {isUploading ? (
+                    {isSendingComposed ? (
                         <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
                     ) : (
                         <IoAttach className="h-6 w-6" />
@@ -1795,6 +1940,7 @@ const ChatInput = ({
                             variant="ghost"
                             size="icon"
                             className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
+                            disabled={isSendingComposed}
                         >
                             <BsEmojiSmile className="h-5 w-5" />
                         </Button>
@@ -1807,6 +1953,11 @@ const ChatInput = ({
                 </Popover>
 
                 <div className="min-w-0 flex-1">
+                    <QueuedAttachmentPreviews
+                        attachments={queuedAttachments}
+                        disabled={isSendingComposed}
+                        onRemove={handleRemoveAttachment}
+                    />
                     {editingMessage && (
                         <div className="mb-2 rounded-lg bg-blue-100 p-2">
                             <div className="flex items-start justify-between gap-2">
@@ -1852,13 +2003,19 @@ const ChatInput = ({
                                     {replyToMessage.content.body as string}
                                 </p>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setReplyToMessage(null)}
+                                disabled={isSendingComposed}
+                            >
                                 <IoClose className="h-5 w-5" />
                             </Button>
                         </div>
                     )}
                     <MentionsInput
                         value={newMessage}
+                        disabled={isSendingComposed}
                         onChange={(e) => setNewMessage(e.target.value)}
                         onKeyDown={handleCommentKeyDown}
                         onFocus={() => setIsComposerFocused(true)}
@@ -1889,6 +2046,7 @@ const ChatInput = ({
                                 className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
                                 title="More actions"
                                 aria-label="More actions"
+                                disabled={isSendingComposed}
                             >
                                 <IoAddCircleOutline className="h-6 w-6" />
                             </Button>
@@ -1903,7 +2061,7 @@ const ChatInput = ({
                                         setIsMobileActionMenuOpen(false);
                                         fileInputRef.current?.click();
                                     }}
-                                    disabled={isUploading}
+                                    disabled={isSendingComposed || !!editingMessage}
                                 >
                                     <IoAttach className="mr-2 h-4 w-4" />
                                     Attach file
@@ -1923,7 +2081,7 @@ const ChatInput = ({
                     size="icon"
                     className="hidden h-10 w-10 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] md:inline-flex"
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim()}
+                    disabled={(!newMessage.trim() && queuedAttachments.length === 0) || isSendingComposed}
                     title={editingMessage ? "Save edit" : "Send message"}
                     aria-label={editingMessage ? "Save edit" : "Send message"}
                 >
@@ -1932,6 +2090,7 @@ const ChatInput = ({
                 {isMobile && (
                     <Button
                         onClick={handleSendMessage}
+                        disabled={(!newMessage.trim() && queuedAttachments.length === 0) || isSendingComposed}
                         className="ml-1 shrink-0 rounded-full text-white"
                         aria-label={editingMessage ? "Save edit" : "Send message"}
                     >
@@ -2059,7 +2218,7 @@ const TopicCard: React.FC<{
     const [topicMutationError, setTopicMutationError] = useState("");
     const [isMutatingTopic, setIsMutatingTopic] = useState(false);
     const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
+    const [queuedAttachments, setQueuedAttachments] = useState<QueuedChatAttachment[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
     const repliesEndRef = useRef<HTMLDivElement>(null);
@@ -2086,12 +2245,45 @@ const TopicCard: React.FC<{
     const persistedAcknowledgementRef = useRef<string | null>(null);
     const acknowledgementRequestRef = useRef(0);
     const suppressProgrammaticFocusRef = useRef(false);
+    const queuedAttachmentsRef = useRef<QueuedChatAttachment[]>([]);
+    const composedSubmissionRef = useRef<{ signature: string; submissionId: string } | null>(null);
+    const replyToMessageRef = useRef(replyToMessage);
+    const composerScopeRef = useRef(buildComposerScopeKey(conversationId, messageId));
     const [acknowledgementInFlight, setAcknowledgementInFlight] = useState(false);
+    replyToMessageRef.current = replyToMessage;
     currentConversationIdRef.current = conversationId;
     currentTopicIdRef.current = messageId;
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
     isTopicOpenRef.current = isTopicOpen;
+
+    useEffect(() => {
+        queuedAttachmentsRef.current = queuedAttachments;
+    }, [queuedAttachments]);
+
+    useEffect(() => {
+        const scopeKey = buildComposerScopeKey(conversationId, messageId);
+        if (composerScopeRef.current === scopeKey) return;
+        for (const attachment of queuedAttachmentsRef.current) {
+            if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        }
+        queuedAttachmentsRef.current = [];
+        setQueuedAttachments([]);
+        replyTextRef.current = "";
+        setReplyText("");
+        setReplyToMessage(null);
+        composedSubmissionRef.current = null;
+        composerScopeRef.current = scopeKey;
+    }, [conversationId, messageId]);
+
+    useEffect(
+        () => () => {
+            for (const attachment of queuedAttachmentsRef.current) {
+                if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+            }
+        },
+        [],
+    );
     const expectedReplyCount = Number(thread?.replyCount);
     const persistedReplies = useMemo(
         () => replies.filter((reply) => reply.status !== "pending" && reply.status !== "failed"),
@@ -2613,10 +2805,79 @@ const TopicCard: React.FC<{
         }
     };
 
-    const handleSendReply = () => {
+    const handleSendReply = async () => {
         const trimmed = replyTextRef.current.trim();
-        if (!trimmed || isSending || !user) return;
+        if ((!trimmed && queuedAttachments.length === 0) || isSending || !user) return;
         acknowledgeLoadedTopic("send");
+
+        if (queuedAttachments.length > 0) {
+            const sendConversationId = conversationId;
+            const sendTopicId = messageId;
+            const replyTarget = replyToMessage;
+            const attachmentsSnapshot = queuedAttachments;
+            const signature = buildComposedMessageSignature({
+                scopeKey: buildComposerScopeKey(sendConversationId, sendTopicId),
+                body: trimmed,
+                replyToMessageId: replyTarget?.id,
+                attachments: attachmentsSnapshot,
+            });
+            const submission = getStableSubmissionId(
+                composedSubmissionRef.current,
+                signature,
+                createComposerSubmissionId,
+            );
+            composedSubmissionRef.current = submission;
+            const formData = buildComposedMessageFormData({
+                conversationId: sendConversationId,
+                topicId: sendTopicId,
+                body: trimmed,
+                replyToMessageId: replyTarget?.id,
+                submissionId: submission.submissionId,
+                attachments: attachmentsSnapshot,
+            });
+
+            setIsSending(true);
+            pendingOutgoingScrollRef.current = true;
+            try {
+                const result = await sendComposedMessageAction(formData);
+                if (!result.success) {
+                    alert(`Failed to send reply: ${result.message || "Please try again."}`);
+                    return;
+                }
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: sendConversationId });
+                const currentSignature = buildComposedMessageSignature({
+                    scopeKey: buildComposerScopeKey(sendConversationId, sendTopicId),
+                    body: replyTextRef.current.trim(),
+                    replyToMessageId: replyToMessageRef.current?.id,
+                    attachments: queuedAttachmentsRef.current,
+                });
+                if (
+                    currentConversationIdRef.current === sendConversationId &&
+                    currentTopicIdRef.current === sendTopicId &&
+                    currentSignature === signature
+                ) {
+                    for (const attachment of attachmentsSnapshot) {
+                        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+                    }
+                    queuedAttachmentsRef.current = [];
+                    setQueuedAttachments([]);
+                    setTopicReplyText("");
+                    setReplyToMessage(null);
+                    composedSubmissionRef.current = null;
+                }
+                await onTopicActivity?.();
+                await loadReplies(result.messageId);
+                requestAnimationFrame(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            } catch (error) {
+                console.error("Failed to send composed topic reply:", error);
+                alert("Failed to send reply. Please try again.");
+            } finally {
+                setIsSending(false);
+            }
+            return;
+        }
 
         const submissionId =
             typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -2750,44 +3011,36 @@ const TopicCard: React.FC<{
         }
     };
 
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = Array.from(e.target.files || []);
         e.target.value = "";
-        if (file.size > 5 * 1024 * 1024) {
-            alert("File size exceeds 5MB limit.");
-            return;
-        }
+        if (!selectedFiles.length || isSending) return;
         acknowledgeLoadedTopic("attachment");
-        setIsUploading(true);
-        try {
-            const { sendAttachmentAction } = await import("./actions");
-            const formData = new FormData();
-            formData.append("roomId", conversationId);
-            formData.append("file", file);
-            // Pass threadId so the attachment reply is linked to this topic
-            formData.append("threadId", messageId);
-            if (replyToMessage?.id) {
-                formData.append("replyToMessageId", replyToMessage.id);
-            }
-            const result = await sendAttachmentAction(formData);
-            if (result.success) {
-                dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
-                setReplyToMessage(null);
-                await onTopicActivity?.();
-                await loadReplies(result.eventId || `local-attachment:${Date.now()}`);
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                });
-            } else {
-                alert(`Failed to send attachment: ${result.message}`);
-            }
-        } catch (e) {
-            console.error("Failed to send attachment:", e);
-            alert("An error occurred while uploading the file.");
-        } finally {
-            setIsUploading(false);
-        }
+        const validation = validateFilesForQueue(
+            queuedAttachmentsRef.current.map((attachment) => attachment.file),
+            selectedFiles,
+        );
+        if (validation.error) return alert(validation.error);
+        const additions = validation.accepted.map((file) => ({
+            id: createComposerSubmissionId(),
+            file,
+            previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        }));
+        setQueuedAttachments((current) => {
+            const next = [...current, ...additions];
+            queuedAttachmentsRef.current = next;
+            return next;
+        });
+    };
+
+    const handleRemoveAttachment = (attachmentId: string) => {
+        if (isSending) return;
+        setQueuedAttachments((current) => {
+            const result = removeQueuedAttachment(current, attachmentId);
+            if (result.removed?.previewUrl) URL.revokeObjectURL(result.removed.previewUrl);
+            queuedAttachmentsRef.current = result.attachments;
+            return result.attachments;
+        });
     };
 
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
@@ -3185,7 +3438,13 @@ const TopicCard: React.FC<{
                     {/* Reply input */}
                     {canReply && (
                         <div ref={replyComposerRef} className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
-                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                            <input
+                                type="file"
+                                multiple
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleFileSelect}
+                            />
                             <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
                                 <div className="flex items-center gap-1 sm:contents">
                                     <Button
@@ -3193,11 +3452,11 @@ const TopicCard: React.FC<{
                                         size="icon"
                                         className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
                                         onClick={() => fileInputRef.current?.click()}
-                                        disabled={isUploading}
+                                        disabled={isSending}
                                         title="Attach file"
                                         aria-label="Attach file"
                                     >
-                                        {isUploading ? (
+                                        {isSending ? (
                                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
                                         ) : (
                                             <IoAttach className="h-4 w-4" />
@@ -3230,7 +3489,7 @@ const TopicCard: React.FC<{
                                     size="icon"
                                     className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
                                     onClick={() => void handleSendReply()}
-                                    disabled={!replyText.trim() || isSending}
+                                    disabled={(!replyText.trim() && queuedAttachments.length === 0) || isSending}
                                     title="Send reply"
                                     aria-label="Send reply"
                                 >
@@ -3238,6 +3497,11 @@ const TopicCard: React.FC<{
                                 </Button>
                             </div>
                             <div className="order-1 min-w-0 flex-1 sm:order-2">
+                                <QueuedAttachmentPreviews
+                                    attachments={queuedAttachments}
+                                    disabled={isSending}
+                                    onRemove={handleRemoveAttachment}
+                                />
                                 {replyToMessage && (
                                     <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
                                         <div className="flex items-start justify-between gap-2">
@@ -3255,6 +3519,7 @@ const TopicCard: React.FC<{
                                                 type="button"
                                                 className="text-gray-400 hover:text-gray-600"
                                                 onClick={() => setReplyToMessage(null)}
+                                                disabled={isSending}
                                             >
                                                 <IoClose className="h-4 w-4" />
                                             </button>
@@ -3265,6 +3530,7 @@ const TopicCard: React.FC<{
                                     <MentionsInput
                                         inputRef={replyTextareaRef}
                                         value={replyText}
+                                        disabled={isSending}
                                         onChange={(_event, newValue) => {
                                             acknowledgeLoadedTopic("typing");
                                             setTopicReplyText(newValue);
@@ -3295,7 +3561,7 @@ const TopicCard: React.FC<{
                                         size="icon"
                                         className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
                                         onClick={() => void handleSendReply()}
-                                        disabled={!replyText.trim() || isSending}
+                                        disabled={(!replyText.trim() && queuedAttachments.length === 0) || isSending}
                                         title="Send reply"
                                         aria-label="Send reply"
                                     >

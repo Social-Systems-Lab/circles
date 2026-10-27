@@ -9,19 +9,20 @@ export type ChatActionContext = {
     findLegacyChatMember?: (viewerDid: string, chatRoomId: string) => Promise<any | null>;
     findLegacyChatRoom?: (chatRoomId: string) => Promise<any | null>;
     findMessage?: (messageId: string) => Promise<any | null>;
+    findMessageBySubmissionId?: (senderDid: string, submissionId: string) => Promise<any | null>;
+    findThreadStarter?: (threadId: string, conversationId: string) => Promise<any | null>;
+    refreshMessageActivity?: (message: any) => Promise<void>;
     findCanonicalMemberships?: (viewerDid: string) => Promise<any[]>;
     findCandidates?: (viewerDid: string, canonicalCircleIds: string[]) => Promise<any[]>;
     findOwningCircles?: (circleIds: string[]) => Promise<any[]>;
     findChatMemberships?: (conversationIds: string[]) => Promise<any[]>;
     mapConversations?: (viewerDid: string, conversations: any[], circles: any[]) => Promise<any[]>;
     getUnreadCounts?: (viewerDid: string, conversationIds: string[]) => Promise<Record<string, number>>;
-    getConversationMutePreferences?: (
-        viewerDid: string,
-        conversationIds: string[],
-    ) => Promise<Record<string, boolean>>;
+    getConversationMutePreferences?: (viewerDid: string, conversationIds: string[]) => Promise<Record<string, boolean>>;
     findMessagingUser?: (viewerDid: string) => Promise<any | null>;
     fetchRecentMessages?: (conversationId: string, limit: number) => Promise<any[]>;
     createMessage?: (input: any) => Promise<any>;
+    createThreadReply?: (threadId: string, conversationId: string, senderDid: string, input: any) => Promise<any>;
     notifyMessage?: (input: any) => Promise<void>;
     updateConversationArchive?: (
         conversationId: string,

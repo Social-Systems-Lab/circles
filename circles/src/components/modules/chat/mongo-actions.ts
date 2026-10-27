@@ -1,10 +1,11 @@
 "use server";
 
 import { ObjectId } from "mongodb";
-import type { ChatAttachment } from "@/lib/chat/mongo-types";
+import type { ChatAttachment, ChatMessageDoc } from "@/lib/chat/mongo-types";
 import { ChatMessage, ChatRoomDisplay, Circle } from "@/models/models";
 import {
     createConversation,
+    createIdempotentMessage,
     createMessage,
     createThreadReply,
     countLegacyLooseMessages,
@@ -16,6 +17,8 @@ import {
     fetchTopicStarters,
     findConversationById,
     findThreadStarter,
+    PersistedChatMessageActivityError,
+    refreshPersistedMessageActivity,
     getLatestLegacyMessageIdForConversation,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
@@ -441,17 +444,19 @@ const validateReplyTargetForConversation = async (
         return { ok: true };
     }
 
-    const replyTargetDoc = await ChatMessageDocs.findOne(
-        {
-            _id: new ObjectId(replyToMessageId),
-            conversationId,
-        },
-        {
-            projection: { source: 1, version: 1, system: 1 },
-        },
-    );
+    const replyTargetDoc = getChatActionContext()?.findMessage
+        ? await getChatActionContext()!.findMessage!(replyToMessageId)
+        : await ChatMessageDocs.findOne(
+              {
+                  _id: new ObjectId(replyToMessageId),
+                  conversationId,
+              },
+              {
+                  projection: { conversationId: 1, source: 1, version: 1, system: 1 },
+              },
+          );
 
-    if (!replyTargetDoc) {
+    if (!replyTargetDoc || replyTargetDoc.conversationId !== conversationId) {
         return { ok: false, message: "Reply target not found" };
     }
 
@@ -587,7 +592,9 @@ export const listChatRoomsAction = async (
                 !room.isDirect && typeof room._id === "string" ? groupMemberCounts.get(room._id) || 0 : undefined,
             unreadCount: room._id || room.handle ? unreadCounts[(room._id || room.handle) as string] || 0 : 0,
             notificationsMuted:
-                mutePreferencesAvailable && typeof room._id === "string" ? mutePreferences[room._id] === true : undefined,
+                mutePreferencesAvailable && typeof room._id === "string"
+                    ? mutePreferences[room._id] === true
+                    : undefined,
             notificationsMutePreferenceAvailable: mutePreferencesAvailable,
         }));
         return { success: true, rooms: roomsWithUnread };
@@ -1337,9 +1344,11 @@ export const sendMongoAttachmentAction = async (
                         attachments: [attachment],
                     });
         } catch (error) {
-            const cleanup = await cleanupUploadedFiles([attachment], getChatActionContext()?.deleteFile || deleteFile);
-            if (cleanup.failedDeletes.length)
-                console.error("Failed to clean up rejected chat attachment", cleanup.failedDeletes);
+            if (!(error instanceof PersistedChatMessageActivityError)) {
+                const cleanup = await cleanupUploadedFiles([attachment], getChatActionContext()?.deleteFile || deleteFile);
+                if (cleanup.failedDeletes.length)
+                    console.error("Failed to clean up rejected chat attachment", cleanup.failedDeletes);
+            }
             throw error;
         }
         if (!doc?._id) {
@@ -1362,6 +1371,319 @@ export const sendMongoAttachmentAction = async (
     } catch (error) {
         console.error("❌ Error sending mongo attachment:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to send attachment" };
+    }
+};
+
+const COMPOSED_MESSAGE_MAX_ATTACHMENTS = 10;
+const COMPOSED_MESSAGE_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const COMPOSED_MESSAGE_MAX_TOTAL_SIZE = 25 * 1024 * 1024;
+
+const getComposedMessageFiles = (formData: FormData): FormDataEntryValue[] => {
+    const files = formData.getAll("files");
+    if (files.length) return files;
+    const compatibleFiles = formData.getAll("file");
+    return compatibleFiles;
+};
+
+export const sendComposedMessageAction = async (
+    formData: FormData,
+): Promise<{ success: boolean; messageId?: string; message?: string; createdAt?: Date; submissionId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "You need to be logged in to send messages" };
+
+    const verificationMessage = await ensureInteractiveMessagingUser(userDid, "send messages");
+    if (verificationMessage) return { success: false, message: verificationMessage };
+
+    const conversationId = String(formData.get("roomId") || "");
+    const requestedBody = String(formData.get("body") || formData.get("content") || "").trim();
+    const replyToMessageId =
+        String(formData.get("replyToMessageId") || formData.get("replyToEventId") || "") || undefined;
+    const threadId = String(formData.get("threadId") || "") || undefined;
+    const submissionId = String(formData.get("submissionId") || "") || undefined;
+    const fileEntries = getComposedMessageFiles(formData);
+
+    if (!conversationId) return { success: false, message: "Missing room ID" };
+    if (!requestedBody && fileEntries.length === 0) return { success: false, message: "Message cannot be empty" };
+    if (fileEntries.length > COMPOSED_MESSAGE_MAX_ATTACHMENTS) {
+        return { success: false, message: "A message can include at most 10 attachments" };
+    }
+    if (submissionId && (submissionId.length < 8 || submissionId.length > 128)) {
+        return { success: false, message: "Invalid message submission" };
+    }
+    if (fileEntries.some((entry) => !isUploadedFileLike(entry))) {
+        return { success: false, message: "Invalid attachment" };
+    }
+    const files = fileEntries as File[];
+    if (files.some((file) => file.size > COMPOSED_MESSAGE_MAX_FILE_SIZE)) {
+        return { success: false, message: "File size exceeds 5MB limit" };
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > COMPOSED_MESSAGE_MAX_TOTAL_SIZE) {
+        return { success: false, message: "Combined attachment size exceeds 25MB limit" };
+    }
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
+    if (!access.ok) return { success: false, message: access.message };
+    if (access.conversation?.type === "announcement") {
+        return { success: false, message: "Replies are disabled for this conversation." };
+    }
+    const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
+    if (!replyValidation.ok) return { success: false, message: replyValidation.message };
+    if (threadId) {
+        const topic = getChatActionContext()?.findThreadStarter
+            ? await getChatActionContext()!.findThreadStarter!(threadId, conversationId)
+            : await findThreadStarter(threadId, conversationId);
+        if (!topic || topic.conversationId !== conversationId) {
+            return { success: false, message: "Topic not found for this conversation" };
+        }
+    }
+
+    const body = requestedBody || files[0]?.name || "";
+    const findExistingSubmission = async () => {
+        if (!submissionId) return null;
+        const existing = getChatActionContext()?.findMessageBySubmissionId
+            ? await getChatActionContext()!.findMessageBySubmissionId!(userDid, submissionId)
+            : await ChatMessageDocs.findOne({ senderDid: userDid, submissionId });
+        if (!existing) return null;
+        const matches =
+            existing.conversationId === conversationId &&
+            existing.senderDid === userDid &&
+            existing.body === body &&
+            (existing.replyToMessageId || undefined) === replyToMessageId &&
+            (existing.threadId || undefined) === threadId;
+        if (!matches) return { conflict: true as const };
+        return { conflict: false as const, message: existing };
+    };
+
+    const existingSubmission = await findExistingSubmission();
+    if (existingSubmission?.conflict) {
+        return { success: false, message: "Message submission id was already used for another message" };
+    }
+    if (existingSubmission?.message) {
+        try {
+            if (getChatActionContext()?.refreshMessageActivity) {
+                await getChatActionContext()!.refreshMessageActivity!(existingSubmission.message);
+            } else {
+                await refreshPersistedMessageActivity(existingSubmission.message);
+            }
+        } catch (error) {
+            console.error("sendComposedMessageAction activity recovery error:", error);
+            return {
+                success: false,
+                message: "Message was saved, but chat activity could not be updated. Retry to confirm.",
+            };
+        }
+        return {
+            success: true,
+            messageId: existingSubmission.message._id.toString(),
+            createdAt: existingSubmission.message.createdAt,
+            submissionId,
+        };
+    }
+
+    const uploadedAttachments: ChatAttachment[] = [];
+    let persistenceAttempted = false;
+    const cleanupUploads = async (attachments = uploadedAttachments) => {
+        const cleanup = await cleanupUploadedFiles(
+            attachments,
+            getChatActionContext()?.deleteFile || deleteFile,
+        );
+        if (cleanup.failedDeletes.length) {
+            console.error("Failed to clean up composed message attachments", cleanup.failedDeletes);
+        }
+    };
+
+    try {
+        const ownerCircle = files.length
+            ? access.conversation?.circleId
+                ? getChatActionContext()?.findCircle
+                    ? await getChatActionContext()!.findCircle!(access.conversation.circleId)
+                    : await getCircleById(access.conversation.circleId)
+                : await getCircleByDid(userDid)
+            : undefined;
+        if (files.length && !ownerCircle?._id) return { success: false, message: "Could not resolve storage owner" };
+
+        for (const file of files) {
+            observeChatActionEffect("storage-write");
+            const fileInfo = getChatActionContext()?.saveFile
+                ? await getChatActionContext()!.saveFile!(file, "chat-attachment", ownerCircle!._id as string, true)
+                : await saveFile(file, "chat-attachment", ownerCircle!._id as string, true);
+            uploadedAttachments.push({
+                url: fileInfo.url,
+                key: fileInfo.fileName,
+                name: fileInfo.originalName || file.name,
+                mimeType: file.type,
+                size: file.size,
+            });
+        }
+
+        persistenceAttempted = true;
+        observeChatActionEffect(threadId ? "reply-create" : "message-persistence");
+        let doc: ChatMessageDoc | null;
+        let created = true;
+        if (threadId) {
+            const replyInput = {
+                body,
+                attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                replyToMessageId,
+                submissionId,
+            };
+            doc = getChatActionContext()?.createThreadReply
+                ? await getChatActionContext()!.createThreadReply!(threadId, conversationId, userDid, replyInput)
+                : await createThreadReply(threadId, conversationId, userDid, replyInput);
+            created =
+                !submissionId ||
+                uploadedAttachments.length === 0 ||
+                (doc?.attachments?.length === uploadedAttachments.length &&
+                    uploadedAttachments.every((uploaded, index) => doc?.attachments?.[index]?.url === uploaded.url));
+        } else if (submissionId && !getChatActionContext()?.createMessage) {
+            const result = await createIdempotentMessage({
+                conversationId,
+                senderDid: userDid,
+                body,
+                createdAt: new Date(),
+                replyToMessageId,
+                attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                submissionId,
+            });
+            doc = result.message;
+            created = result.created;
+        } else {
+            doc = getChatActionContext()?.createMessage
+                ? await getChatActionContext()!.createMessage!({
+                      conversationId,
+                      senderDid: userDid,
+                      body,
+                      createdAt: new Date(),
+                      replyToMessageId,
+                      attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                      submissionId,
+                  })
+                : await createMessage({
+                      conversationId,
+                      senderDid: userDid,
+                      body,
+                      createdAt: new Date(),
+                      replyToMessageId,
+                      attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                      submissionId,
+                  });
+        }
+
+        if (!doc?._id) throw new Error(threadId ? "Topic not found for this conversation" : "Failed to send message");
+        if (!created) await cleanupUploads();
+
+        try {
+            observeChatActionEffect("notification");
+            const notificationInput = {
+                conversationId,
+                conversation: access.conversation,
+                senderDid: userDid,
+                messageBody: body,
+                messageId: doc._id.toString(),
+                topicId: threadId,
+                idempotencyKey: submissionId ? `composed-message:${submissionId}` : undefined,
+            };
+            if (getChatActionContext()?.notifyMessage) {
+                await getChatActionContext()!.notifyMessage!(notificationInput);
+            } else {
+                await sendConversationMessageNotifications(notificationInput);
+            }
+        } catch (notificationError) {
+            console.error("sendComposedMessageAction notification error:", notificationError);
+        }
+
+        return {
+            success: true,
+            messageId: doc._id.toString(),
+            createdAt: doc.createdAt,
+            submissionId: doc.submissionId,
+        };
+    } catch (error) {
+        if (error instanceof PersistedChatMessageActivityError) {
+            console.error("sendComposedMessageAction persisted message activity error:", error);
+            return {
+                success: false,
+                message: "Message was saved, but chat activity could not be updated. Retry to confirm.",
+            };
+        }
+        if (persistenceAttempted && uploadedAttachments.length) {
+            let persistedMessage: ChatMessageDoc | null;
+            let referencedUploadUrls = new Set<string>();
+            try {
+                if (submissionId) {
+                    const candidate = getChatActionContext()?.findMessageBySubmissionId
+                        ? await getChatActionContext()!.findMessageBySubmissionId!(userDid, submissionId)
+                        : await ChatMessageDocs.findOne({ senderDid: userDid, submissionId });
+                    if (candidate?.attachments) {
+                        referencedUploadUrls = new Set(candidate.attachments.map((attachment: ChatAttachment) => attachment.url));
+                    }
+                    const candidateMatchesSubmission =
+                        candidate?.conversationId === conversationId &&
+                        candidate?.senderDid === userDid &&
+                        candidate?.body === body &&
+                        (candidate?.replyToMessageId || undefined) === replyToMessageId &&
+                        (candidate?.threadId || undefined) === threadId;
+                    persistedMessage =
+                        candidateMatchesSubmission &&
+                        candidate?.attachments?.length === uploadedAttachments.length &&
+                        uploadedAttachments.every(
+                            (attachment, index) => candidate.attachments?.[index]?.url === attachment.url,
+                        )
+                            ? (candidate as ChatMessageDoc)
+                            : null;
+                } else {
+                    persistedMessage = (await ChatMessageDocs.findOne({
+                        conversationId,
+                        senderDid: userDid,
+                        body,
+                        ...(threadId ? { threadId } : { threadId: { $exists: false } }),
+                        ...(replyToMessageId ? { replyToMessageId } : { replyToMessageId: { $exists: false } }),
+                        "attachments.url": { $all: uploadedAttachments.map((attachment) => attachment.url) },
+                    })) as ChatMessageDoc | null;
+                    if (persistedMessage?.attachments) {
+                        referencedUploadUrls = new Set(
+                            persistedMessage.attachments.map((attachment) => attachment.url),
+                        );
+                    }
+                }
+            } catch (recoveryError) {
+                console.error("sendComposedMessageAction persistence recovery lookup error:", recoveryError);
+                return {
+                    success: false,
+                    message: "Could not confirm whether the message was saved. Retry with the same submission.",
+                };
+            }
+            if (persistedMessage?._id) {
+                try {
+                    if (getChatActionContext()?.refreshMessageActivity) {
+                        await getChatActionContext()!.refreshMessageActivity!(persistedMessage);
+                    } else {
+                        await refreshPersistedMessageActivity(persistedMessage);
+                    }
+                } catch (recoveryError) {
+                    console.error("sendComposedMessageAction activity recovery error:", recoveryError);
+                    return {
+                        success: false,
+                        message: "Message was saved, but chat activity could not be updated. Retry to confirm.",
+                    };
+                }
+                return {
+                    success: true,
+                    messageId: persistedMessage._id.toString(),
+                    createdAt: persistedMessage.createdAt,
+                    submissionId: persistedMessage.submissionId,
+                };
+            }
+            if (referencedUploadUrls.size) {
+                await cleanupUploads(
+                    uploadedAttachments.filter((attachment) => !referencedUploadUrls.has(attachment.url)),
+                );
+                return { success: false, message: "Submission id was already used for another message" };
+            }
+        }
+        await cleanupUploads();
+        console.error("sendComposedMessageAction error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send message" };
     }
 };
 
