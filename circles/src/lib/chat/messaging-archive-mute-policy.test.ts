@@ -31,9 +31,14 @@ assert.match(settings, /muteLoadState === "error"/);
 assert.match(settings, /Retry/);
 assert.match(settings, /router\.replace\("\/chat\/archived"\)/);
 assert.match(chatList, /CONVERSATION_MUTE_PREFERENCE_EVENT/);
-assert.match(chatList, /notificationsMutePreferenceAvailable === false/);
+assert.match(chatList, /notificationsMutePreferenceAvailable !== false/);
 assert.match(chatList, /Retry notification setting/);
 assert.match(chatList, /beginConversationMuteMutation/);
+assert.match(chatList, /isMutePreferenceKnown\(chat\) && isConversationMuted\(chat\)/);
+assert.match(chatList, /aria-label="Notifications muted"/);
+assert.match(chatList, /title="Notifications muted"/);
+assert.match(chatList, /<BellOff className="h-4 w-4" aria-hidden="true"/);
+assert.match(chatList, /h-11 w-11 flex-shrink-0/);
 
 assert.match(actions, /resolveMongoConversationAccess\(conversationId, userDid, "read"\)/);
 assert.match(actions, /getConversationNotificationsMuted/);

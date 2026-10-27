@@ -61,8 +61,12 @@ export const ChatList: React.FC<ChatListProps> = ({
     const isLoadingRooms = isLoading && totalChatsCount === 0;
     const [mutePreferences, setMutePreferences] = useState<Record<string, boolean>>({});
     const [pendingMuteMutations, setPendingMuteMutations] = useState<Set<string>>(() => new Set());
+    const hasLocalMutePreference = (chat: ChatRoomDisplay) =>
+        Object.prototype.hasOwnProperty.call(mutePreferences, getConversationId(chat));
     const isConversationMuted = (chat: ChatRoomDisplay) =>
         mutePreferences[getConversationId(chat)] ?? chat.notificationsMuted === true;
+    const isMutePreferenceKnown = (chat: ChatRoomDisplay) =>
+        hasLocalMutePreference(chat) || chat.notificationsMutePreferenceAvailable !== false;
 
     useEffect(() => {
         const handlePreference = (event: Event) => {
@@ -230,62 +234,73 @@ export const ChatList: React.FC<ChatListProps> = ({
                                     <ArchiveRestore className="h-5 w-5" aria-hidden="true" />
                                 </button>
                             ) : (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <button
-                                            type="button"
-                                            onClick={(event) => event.stopPropagation()}
-                                            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                                            aria-label={`Conversation menu for ${chat.name}`}
+                                <>
+                                    {isMutePreferenceKnown(chat) && isConversationMuted(chat) && (
+                                        <span
+                                            className="flex flex-shrink-0 text-gray-400 dark:text-gray-500"
+                                            aria-label="Notifications muted"
+                                            title="Notifications muted"
                                         >
-                                            <Settings className="h-5 w-5 text-gray-600" aria-hidden="true" />
-                                        </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent
-                                        align="end"
-                                        onClick={(event) => event.stopPropagation()}
-                                    >
-                                        <DropdownMenuItem
-                                            onSelect={() =>
-                                                setChatSettingsModal({ chatRoomId: chat._id, isOpen: true })
-                                            }
-                                        >
-                                            <Info className="mr-2 h-4 w-4" aria-hidden="true" />
-                                            {chat.isDirect ? "Chat Info" : "Group Info"}
-                                        </DropdownMenuItem>
-                                        {chat.notificationsMutePreferenceAvailable === false ? (
-                                            <DropdownMenuItem onSelect={() => void onRetryMutePreferences?.()}>
-                                                <BellOff className="mr-2 h-4 w-4" aria-hidden="true" />
-                                                Retry notification setting
-                                            </DropdownMenuItem>
-                                        ) : (
-                                            <DropdownMenuItem
-                                                disabled={
-                                                    pendingMuteMutations.has(getConversationId(chat)) ||
-                                                    isConversationMuteMutationPending(getConversationId(chat))
-                                                }
-                                                onSelect={() => void handleMuteChange(chat)}
+                                            <BellOff className="h-4 w-4" aria-hidden="true" />
+                                        </span>
+                                    )}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <button
+                                                type="button"
+                                                onClick={(event) => event.stopPropagation()}
+                                                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                                aria-label={`Conversation menu for ${chat.name}`}
                                             >
-                                                {isConversationMuted(chat) ? (
-                                                    <Bell className="mr-2 h-4 w-4" aria-hidden="true" />
-                                                ) : (
+                                                <Settings className="h-5 w-5 text-gray-600" aria-hidden="true" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            align="end"
+                                            onClick={(event) => event.stopPropagation()}
+                                        >
+                                            <DropdownMenuItem
+                                                onSelect={() =>
+                                                    setChatSettingsModal({ chatRoomId: chat._id, isOpen: true })
+                                                }
+                                            >
+                                                <Info className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                {chat.isDirect ? "Chat Info" : "Group Info"}
+                                            </DropdownMenuItem>
+                                            {!isMutePreferenceKnown(chat) ? (
+                                                <DropdownMenuItem onSelect={() => void onRetryMutePreferences?.()}>
                                                     <BellOff className="mr-2 h-4 w-4" aria-hidden="true" />
-                                                )}
-                                                {pendingMuteMutations.has(getConversationId(chat))
-                                                    ? "Saving notification setting…"
-                                                    : isConversationMuted(chat)
-                                                      ? "Unmute notifications"
-                                                      : "Mute notifications"}
-                                            </DropdownMenuItem>
-                                        )}
-                                        {chat.isDirect && (
-                                            <DropdownMenuItem onSelect={() => void handleArchive(chat)}>
-                                                <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
-                                                Archive conversation
-                                            </DropdownMenuItem>
-                                        )}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                                    Retry notification setting
+                                                </DropdownMenuItem>
+                                            ) : (
+                                                <DropdownMenuItem
+                                                    disabled={
+                                                        pendingMuteMutations.has(getConversationId(chat)) ||
+                                                        isConversationMuteMutationPending(getConversationId(chat))
+                                                    }
+                                                    onSelect={() => void handleMuteChange(chat)}
+                                                >
+                                                    {isConversationMuted(chat) ? (
+                                                        <Bell className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                    ) : (
+                                                        <BellOff className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                    )}
+                                                    {pendingMuteMutations.has(getConversationId(chat))
+                                                        ? "Saving notification setting…"
+                                                        : isConversationMuted(chat)
+                                                          ? "Unmute notifications"
+                                                          : "Mute notifications"}
+                                                </DropdownMenuItem>
+                                            )}
+                                            {chat.isDirect && (
+                                                <DropdownMenuItem onSelect={() => void handleArchive(chat)}>
+                                                    <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+                                                    Archive conversation
+                                                </DropdownMenuItem>
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </>
                             )}
                         </div>
                     );
