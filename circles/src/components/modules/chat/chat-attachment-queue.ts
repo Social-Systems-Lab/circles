@@ -13,6 +13,16 @@ export type QueueFilesResult = {
     error?: string;
 };
 
+export const isFileDrag = (dataTransfer: Pick<DataTransfer, "types" | "items">): boolean =>
+    Array.from(dataTransfer.types || []).includes("Files") ||
+    Array.from(dataTransfer.items || []).some((item) => item.kind === "file");
+
+export const updateFileDragDepth = (depth: number, event: "enter" | "leave" | "drop"): number => {
+    if (event === "enter") return depth + 1;
+    if (event === "leave") return Math.max(0, depth - 1);
+    return 0;
+};
+
 export const validateFilesForQueue = (currentFiles: File[], selectedFiles: File[]): QueueFilesResult => {
     if (currentFiles.length + selectedFiles.length > CHAT_ATTACHMENT_MAX_COUNT) {
         return { accepted: [], error: "A message can include at most 10 attachments." };
@@ -25,6 +35,30 @@ export const validateFilesForQueue = (currentFiles: File[], selectedFiles: File[
         return { accepted: [], error: "Combined attachment size must be 25MB or smaller." };
     }
     return { accepted: selectedFiles };
+};
+
+export const appendFilesToQueue = (
+    currentAttachments: QueuedChatAttachment[],
+    selectedFiles: File[],
+    createId: () => string,
+    createPreviewUrl: (file: File) => string,
+): { attachments: QueuedChatAttachment[]; error?: string } => {
+    const validation = validateFilesForQueue(
+        currentAttachments.map((attachment) => attachment.file),
+        selectedFiles,
+    );
+    if (validation.error) return { attachments: currentAttachments, error: validation.error };
+
+    return {
+        attachments: [
+            ...currentAttachments,
+            ...validation.accepted.map((file) => ({
+                id: createId(),
+                file,
+                previewUrl: file.type.startsWith("image/") ? createPreviewUrl(file) : undefined,
+            })),
+        ],
+    };
 };
 
 export const removeQueuedAttachment = (

@@ -1,7 +1,16 @@
 //chat-room.tsx - chat room component, shows chat messages and input
 "use client";
 
-import { Dispatch, Fragment, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
+import {
+    Dispatch,
+    DragEvent as ReactDragEvent,
+    Fragment,
+    KeyboardEvent,
+    SetStateAction,
+    useCallback,
+    useMemo,
+    useTransition,
+} from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
 import { replyToMessageAtom, roomMessagesAtom, unreadCountsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
@@ -102,13 +111,15 @@ import {
     shouldShowLegacyLooseMessageSection,
 } from "@/lib/chat/legacy-messages";
 import {
+    appendFilesToQueue,
     buildComposedMessageSignature,
     buildComposedMessageFormData,
     buildComposerScopeKey,
     getStableSubmissionId,
+    isFileDrag,
     removeQueuedAttachment,
-    validateFilesForQueue,
     type QueuedChatAttachment,
+    updateFileDragDepth,
 } from "./chat-attachment-queue";
 
 export const renderCircleSuggestion = (
@@ -626,7 +637,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 transition-colors hover:bg-gray-200"
                                     >
-                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#315C3D]/10 text-[#315C3D]">
                                             <IoDocumentText className="h-6 w-6" />
                                         </div>
                                         <div className="flex flex-col overflow-hidden">
@@ -1482,7 +1493,7 @@ const QueuedAttachmentPreviews = ({
                             className="h-10 w-10 shrink-0 rounded object-cover"
                         />
                     ) : (
-                        <IoDocumentText className="h-5 w-5 shrink-0 text-gray-500" aria-hidden="true" />
+                        <IoDocumentText className="h-5 w-5 shrink-0 text-[#315C3D]" aria-hidden="true" />
                     )}
                     <span className="min-w-0">
                         <span className="block max-w-40 truncate font-medium text-gray-700">
@@ -1509,6 +1520,62 @@ const createComposerSubmissionId = (): string =>
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const enqueueChatFiles = (
+    selectedFiles: File[],
+    queueRef: { current: QueuedChatAttachment[] },
+    setQueue: Dispatch<SetStateAction<QueuedChatAttachment[]>>,
+    disabled: boolean,
+) => {
+    if (!selectedFiles.length || disabled) return;
+    const result = appendFilesToQueue(queueRef.current, selectedFiles, createComposerSubmissionId, (file) =>
+        URL.createObjectURL(file),
+    );
+    if (result.error) {
+        alert(result.error);
+        return;
+    }
+    queueRef.current = result.attachments;
+    setQueue(result.attachments);
+};
+
+const useChatFileDrop = (onFiles: (files: File[]) => void, disabled: boolean) => {
+    const [isFileDragActive, setIsFileDragActive] = useState(false);
+    const dragDepthRef = useRef(0);
+
+    const onDragEnter = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer)) return;
+        event.preventDefault();
+        if (disabled) return;
+        dragDepthRef.current = updateFileDragDepth(dragDepthRef.current, "enter");
+        setIsFileDragActive(true);
+    };
+    const onDragOver = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = disabled ? "none" : "copy";
+    };
+    const onDragLeave = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer) && dragDepthRef.current === 0) return;
+        event.preventDefault();
+        dragDepthRef.current = updateFileDragDepth(dragDepthRef.current, "leave");
+        if (dragDepthRef.current === 0) setIsFileDragActive(false);
+    };
+    const onDrop = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer) && dragDepthRef.current === 0 && event.dataTransfer.files.length === 0)
+            return;
+        event.preventDefault();
+        dragDepthRef.current = updateFileDragDepth(dragDepthRef.current, "drop");
+        setIsFileDragActive(false);
+        if (!disabled) onFiles(Array.from(event.dataTransfer.files));
+    };
+
+    return { isFileDragActive, onDragEnter, onDragOver, onDragLeave, onDrop };
+};
+
+const preventFileDropNavigation = (event: ReactDragEvent<HTMLElement>) => {
+    if (isFileDrag(event.dataTransfer) || event.dataTransfer.files.length > 0) event.preventDefault();
+};
 
 const ChatInput = ({
     roomId,
@@ -1881,22 +1948,7 @@ const ChatInput = ({
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = Array.from(e.target.files || []);
         e.target.value = "";
-        if (!selectedFiles.length || isSendingComposed) return;
-        const validation = validateFilesForQueue(
-            queuedAttachmentsRef.current.map((attachment) => attachment.file),
-            selectedFiles,
-        );
-        if (validation.error) return alert(validation.error);
-        const additions = validation.accepted.map((file) => ({
-            id: createComposerSubmissionId(),
-            file,
-            previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-        }));
-        setQueuedAttachments((current) => {
-            const next = [...current, ...additions];
-            queuedAttachmentsRef.current = next;
-            return next;
-        });
+        enqueueChatFiles(selectedFiles, queuedAttachmentsRef, setQueuedAttachments, isSendingComposed);
     };
 
     const handleRemoveAttachment = (attachmentId: string) => {
@@ -2588,6 +2640,13 @@ const TopicCard: React.FC<{
         void persistCapturedAcknowledgement(boundary, conversationId, messageId, replyLoadScopeRef.current);
     };
 
+    const handleFilesDropped = (files: File[]) => {
+        if (!files.length || isSending) return;
+        acknowledgeLoadedTopic("attachment");
+        enqueueChatFiles(files, queuedAttachmentsRef, setQueuedAttachments, isSending);
+    };
+    const topicFileDrop = useChatFileDrop(handleFilesDropped, isSending);
+
     useEffect(() => {
         if (!replyChangeSignal || !isTopicOpen) return;
         if (replyChangeSignal === appliedReplyRefreshSignalRef.current) return;
@@ -3016,21 +3075,7 @@ const TopicCard: React.FC<{
         e.target.value = "";
         if (!selectedFiles.length || isSending) return;
         acknowledgeLoadedTopic("attachment");
-        const validation = validateFilesForQueue(
-            queuedAttachmentsRef.current.map((attachment) => attachment.file),
-            selectedFiles,
-        );
-        if (validation.error) return alert(validation.error);
-        const additions = validation.accepted.map((file) => ({
-            id: createComposerSubmissionId(),
-            file,
-            previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-        }));
-        setQueuedAttachments((current) => {
-            const next = [...current, ...additions];
-            queuedAttachmentsRef.current = next;
-            return next;
-        });
+        enqueueChatFiles(selectedFiles, queuedAttachmentsRef, setQueuedAttachments, isSending);
     };
 
     const handleRemoveAttachment = (attachmentId: string) => {
@@ -3437,7 +3482,14 @@ const TopicCard: React.FC<{
 
                     {/* Reply input */}
                     {canReply && (
-                        <div ref={replyComposerRef} className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
+                        <div
+                            ref={replyComposerRef}
+                            className={`flex flex-col gap-1 rounded-lg px-3 pb-3 transition-colors sm:flex-row sm:items-end ${topicFileDrop.isFileDragActive ? "bg-[#315C3D]/[0.04] ring-2 ring-[#315C3D]/25" : ""}`}
+                            onDragEnter={topicFileDrop.onDragEnter}
+                            onDragOver={topicFileDrop.onDragOver}
+                            onDragLeave={topicFileDrop.onDragLeave}
+                            onDrop={topicFileDrop.onDrop}
+                        >
                             <input
                                 type="file"
                                 multiple
@@ -4561,7 +4613,12 @@ export const ChatRoomComponent: React.FC<{
                             : undefined,
                 }}
             >
-                <div ref={inputRef} className="relative flex h-full w-full flex-col">
+                <div
+                    ref={inputRef}
+                    className="relative flex h-full w-full flex-col"
+                    onDragOverCapture={preventFileDropNavigation}
+                    onDropCapture={preventFileDropNavigation}
+                >
                     {!inToolbox && isChatMobile && (
                         <div className="relative z-30 shrink-0 pt-16">
                             {conversationToolbar}
