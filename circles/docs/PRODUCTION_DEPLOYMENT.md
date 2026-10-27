@@ -15,13 +15,15 @@ Never run this migration while an old application process can still write `chatR
 
 Use this workflow for normal Kamooni production deployments on the Cleura host `kamooniorg`.
 
+Production SSH access is `root@kamooniorg`. This is the production server, not the dedicated staging VM. Staging uses the `ubuntu` account at `188.95.227.109`, a separate SSH identity, separate checkouts, separate data, and a separate deployment script. See [Staging deployment](STAGING_DEPLOYMENT.md) before performing any staging operation.
+
 Do not use ad-hoc `docker compose build` or `docker compose up` commands for normal deployments. The deployment script performs the required build, container recreation, and version check.
 
 Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Staging-only email-capture configuration must not be present in the production release branch.
 
 ## Production layout
 
-- Server: Cleura host `kamooniorg`
+- Server and SSH target: `root@kamooniorg`
 - Repository root and deployment start directory: `/root/circles/circles`
 - Application and Docker Compose directory: `/root/circles/circles/circles`
 - Compose service rebuilt by the script: `circles`

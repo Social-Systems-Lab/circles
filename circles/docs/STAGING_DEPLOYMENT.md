@@ -16,6 +16,24 @@ Treat the staging database and object storage as persistent. Tests requiring dis
 
 Media upload has been verified end-to-end through staging MinIO. New media URLs are stored in staging MongoDB as relative `/storage/...` paths. A scan of staging MongoDB found no references to `https://kamooni.org`, `www.kamooni.org`, `127.0.0.1`, or `localhost`.
 
+## Staging access
+
+The staging host and SSH access verified on October 27, 2026 are:
+
+- Public hostname: `staging.kamooni.org`
+- Public IP: `188.95.227.109`
+- SSH user: `ubuntu`
+- Local SSH identity: `~/.ssh/kamooni_staging`
+- Infrastructure checkout: `/home/ubuntu/kamooni`
+
+Connect from the local Mac terminal with:
+
+```bash
+ssh -i ~/.ssh/kamooni_staging -o IdentitiesOnly=yes ubuntu@188.95.227.109
+```
+
+This access is only for the dedicated staging VM. Production uses `root@kamooniorg` and the production checkout under `/root/circles/circles`; it does not use the staging IP, `ubuntu` account, identity file, checkout, deployment script, data, or volumes. See [Production deployment](PRODUCTION_DEPLOYMENT.md) for the separate production workflow.
+
 ## Checkout architecture
 
 The existing infrastructure checkout is `/home/ubuntu/kamooni` and must stay on `infra/kamooni-staging`. It owns `docker-compose.staging.yml`, `nginx/nginx.staging.conf`, `.env.staging`, this document, validation, and the deployment script. Never check a feature branch out there.
@@ -121,6 +139,30 @@ docker ps --filter label=com.docker.compose.project=kamooni_staging --format 'ta
 ```
 
 The only host bindings in the output must be staging NGINX on ports `80` and `443`. Entries such as `3000/tcp`, `27017/tcp`, or `9000/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other `0.0.0.0:PORT->...` or `[::]:PORT->...` bindings may appear.
+
+## Conservative disk maintenance
+
+Inspect disk use before changing anything. Run on the staging VM:
+
+```bash
+df -h /
+```
+
+Then inspect Docker's accounting:
+
+```bash
+docker system df
+```
+
+If unused build cache is consuming substantial space, remove only unused builder cache:
+
+```bash
+docker builder prune -f
+```
+
+On October 27, 2026, this conservative cache cleanup reclaimed approximately 55 GB on staging. It did not require deleting persistent application data.
+
+Preserve all staging volumes, persistent MongoDB data, uploaded MinIO media, and images retained by the verified rollback ledger. Never use `docker volume prune`, `docker system prune --volumes`, or an indiscriminate image-deletion command. Do not delete rollback images merely because Docker reports them as reclaimable; use the deployment script's verified-image retention policy.
 
 ## Verify media URL storage
 
