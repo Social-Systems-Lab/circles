@@ -121,6 +121,9 @@ import {
     type QueuedChatAttachment,
     updateFileDragDepth,
 } from "./chat-attachment-queue";
+import { createDebouncedTopicDraftWriter, getTopicTextDraftKey, readTopicTextDraft } from "./topic-text-drafts";
+
+const getBrowserTopicDraftStorage = () => (typeof window === "undefined" ? null : window.localStorage);
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -2256,7 +2259,13 @@ const TopicCard: React.FC<{
 
     const [replies, setReplies] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [replyText, setReplyText] = useState("");
+    const topicTextDraftKey = getTopicTextDraftKey(user?.did, conversationId, messageId);
+    const [replyDraftState, setReplyDraftState] = useState<{ key: string | null; text: string }>({
+        key: null,
+        text: "",
+    });
+    const replyText = replyDraftState.key === topicTextDraftKey ? replyDraftState.text : "";
+    const isTopicDraftReady = !!topicTextDraftKey && replyDraftState.key === topicTextDraftKey;
     const [isSending, setIsSending] = useState(false);
     const [unreadCount, setUnreadCount] = useState<number>(serverUnreadCount);
     const readRequestRef = useRef(0);
@@ -2276,7 +2285,23 @@ const TopicCard: React.FC<{
     const repliesEndRef = useRef<HTMLDivElement>(null);
     const replyComposerRef = useRef<HTMLDivElement>(null);
     const topicEndRef = useRef<HTMLDivElement>(null);
-    const replyTextRef = useRef("");
+    const replyTextRef = useRef(replyText);
+    const replyDraftStateRef = useRef(replyDraftState);
+    const topicTextDraftWriterRef = useRef<ReturnType<typeof createDebouncedTopicDraftWriter> | null>(null);
+    const currentTopicTextDraftKeyRef = useRef(topicTextDraftKey);
+    const latestTopicDraftRef = useRef<{ key: string | null; text: string }>({ key: null, text: "" });
+    const pendingTextOnlyDraftRef = useRef<{ key: string; text: string } | null>(null);
+    const isSendingRef = useRef(isSending);
+    if (!topicTextDraftWriterRef.current) {
+        topicTextDraftWriterRef.current = createDebouncedTopicDraftWriter(getBrowserTopicDraftStorage);
+    }
+    if (replyDraftState.key === topicTextDraftKey) {
+        replyTextRef.current = replyText;
+        latestTopicDraftRef.current = { key: topicTextDraftKey, text: replyText };
+    }
+    replyDraftStateRef.current = replyDraftState;
+    currentTopicTextDraftKeyRef.current = topicTextDraftKey;
+    isSendingRef.current = isSending;
     const pendingScrollIntoViewRef = useRef(false);
     const pendingScrollToLatestRef = useRef(false);
     const pendingIncomingAutoScrollRef = useRef(false);
@@ -2321,12 +2346,59 @@ const TopicCard: React.FC<{
         }
         queuedAttachmentsRef.current = [];
         setQueuedAttachments([]);
-        replyTextRef.current = "";
-        setReplyText("");
         setReplyToMessage(null);
         composedSubmissionRef.current = null;
         composerScopeRef.current = scopeKey;
     }, [conversationId, messageId]);
+
+    useEffect(() => {
+        const pendingTextOnlyDraft = pendingTextOnlyDraftRef.current;
+        if (pendingTextOnlyDraft && pendingTextOnlyDraft.key !== topicTextDraftKey) {
+            topicTextDraftWriterRef.current?.schedule(pendingTextOnlyDraft.key, pendingTextOnlyDraft.text);
+        } else {
+            const latestDraft = latestTopicDraftRef.current;
+            if (latestDraft.key && latestDraft.key !== topicTextDraftKey) {
+                topicTextDraftWriterRef.current?.schedule(latestDraft.key, latestDraft.text);
+            }
+        }
+        topicTextDraftWriterRef.current?.flush();
+        if (!topicTextDraftKey) {
+            replyTextRef.current = "";
+            latestTopicDraftRef.current = { key: null, text: "" };
+            setReplyDraftState({ key: null, text: "" });
+            return;
+        }
+
+        const currentDraft = replyDraftStateRef.current;
+        if (currentDraft.key === topicTextDraftKey && currentDraft.text) return;
+        const text = readTopicTextDraft(getBrowserTopicDraftStorage, topicTextDraftKey);
+        const restoredDraft = { key: topicTextDraftKey, text };
+        replyTextRef.current = text;
+        latestTopicDraftRef.current = restoredDraft;
+        replyDraftStateRef.current = restoredDraft;
+        setReplyDraftState(restoredDraft);
+    }, [topicTextDraftKey]);
+
+    useEffect(() => {
+        if (isSending || !topicTextDraftKey || replyDraftState.key !== topicTextDraftKey) return;
+        topicTextDraftWriterRef.current?.schedule(topicTextDraftKey, replyText);
+    }, [isSending, replyDraftState.key, replyText, topicTextDraftKey]);
+
+    useEffect(
+        () => () => {
+            const pendingTextOnlyDraft = pendingTextOnlyDraftRef.current;
+            if (pendingTextOnlyDraft) {
+                topicTextDraftWriterRef.current?.schedule(pendingTextOnlyDraft.key, pendingTextOnlyDraft.text);
+            } else {
+                const latestDraft = latestTopicDraftRef.current;
+                if (latestDraft.key && (!isSendingRef.current || latestDraft.text)) {
+                    topicTextDraftWriterRef.current?.schedule(latestDraft.key, latestDraft.text);
+                }
+            }
+            topicTextDraftWriterRef.current?.dispose();
+        },
+        [],
+    );
 
     useEffect(
         () => () => {
@@ -2403,11 +2475,37 @@ const TopicCard: React.FC<{
         },
         [mentionSuggestions],
     );
-    const setTopicReplyText = useCallback((value: string | ((currentValue: string) => string)) => {
-        const nextValue = typeof value === "function" ? value(replyTextRef.current) : value;
-        replyTextRef.current = nextValue;
-        setReplyText(nextValue);
-    }, []);
+    const setTopicReplyText = useCallback(
+        (value: string | ((currentValue: string) => string)) => {
+            const currentValue = replyDraftStateRef.current.key === topicTextDraftKey ? replyTextRef.current : "";
+            const nextValue = typeof value === "function" ? value(currentValue) : value;
+            const nextDraft = { key: topicTextDraftKey, text: nextValue };
+            replyTextRef.current = nextValue;
+            latestTopicDraftRef.current = nextDraft;
+            replyDraftStateRef.current = nextDraft;
+            setReplyDraftState(nextDraft);
+        },
+        [topicTextDraftKey],
+    );
+
+    const clearSentTopicTextDraft = (draftKey: string | null, sentText: string) => {
+        if (!draftKey) return;
+        const pendingTextOnlyDraft = pendingTextOnlyDraftRef.current;
+        const pendingDraftMatches =
+            pendingTextOnlyDraft?.key === draftKey && pendingTextOnlyDraft.text.trim() === sentText.trim();
+        const currentDraftMatches =
+            currentTopicTextDraftKeyRef.current === draftKey && replyTextRef.current.trim() === sentText.trim();
+        if (!pendingDraftMatches && !currentDraftMatches && currentTopicTextDraftKeyRef.current === draftKey) return;
+        if (pendingTextOnlyDraft?.key === draftKey) {
+            topicTextDraftWriterRef.current?.schedule(draftKey, pendingTextOnlyDraft.text);
+        }
+        topicTextDraftWriterRef.current?.flush();
+        const savedText = readTopicTextDraft(getBrowserTopicDraftStorage, draftKey);
+        if (savedText.trim() === sentText.trim()) {
+            topicTextDraftWriterRef.current?.clear(draftKey);
+            if (pendingTextOnlyDraftRef.current?.key === draftKey) pendingTextOnlyDraftRef.current = null;
+        }
+    };
 
     const autoGrowReplyTextarea = useCallback(() => {
         const textarea = replyTextareaRef.current;
@@ -2805,7 +2903,11 @@ const TopicCard: React.FC<{
         });
     };
 
-    const submitTopicReply = async (optimisticReply: ChatMessage) => {
+    const submitTopicReply = async (
+        optimisticReply: ChatMessage,
+        outgoingDraftKey: string | null = topicTextDraftKey,
+        textToRestoreOnFailure?: string,
+    ) => {
         if (isSending || !optimisticReply.submissionId) return;
         setIsSending(true);
         setReplies((current) =>
@@ -2825,6 +2927,12 @@ const TopicCard: React.FC<{
             );
             if (result.success) {
                 if (!result.messageId) throw new Error("Reply confirmation did not include a message ID");
+                const sentText = optimisticReply.content.body as string;
+                const shouldClearCurrentDraft =
+                    currentTopicTextDraftKeyRef.current === outgoingDraftKey &&
+                    replyTextRef.current.trim() === sentText.trim();
+                clearSentTopicTextDraft(outgoingDraftKey, sentText);
+                if (shouldClearCurrentDraft) setTopicReplyText("");
                 setReplies((current) =>
                     confirmOptimisticTopicReply(
                         current,
@@ -2845,6 +2953,9 @@ const TopicCard: React.FC<{
                             : reply,
                     ),
                 );
+                if (textToRestoreOnFailure && currentTopicTextDraftKeyRef.current === outgoingDraftKey) {
+                    setTopicReplyText(textToRestoreOnFailure);
+                }
             }
         } catch (e) {
             console.error("Failed to send topic reply:", e);
@@ -2859,7 +2970,13 @@ const TopicCard: React.FC<{
                         : reply,
                 ),
             );
+            if (textToRestoreOnFailure && currentTopicTextDraftKeyRef.current === outgoingDraftKey) {
+                setTopicReplyText(textToRestoreOnFailure);
+            }
         } finally {
+            if (textToRestoreOnFailure && pendingTextOnlyDraftRef.current?.key === outgoingDraftKey) {
+                pendingTextOnlyDraftRef.current = null;
+            }
             setIsSending(false);
         }
     };
@@ -2872,6 +2989,7 @@ const TopicCard: React.FC<{
         if (queuedAttachments.length > 0) {
             const sendConversationId = conversationId;
             const sendTopicId = messageId;
+            const sendDraftKey = topicTextDraftKey;
             const replyTarget = replyToMessage;
             const attachmentsSnapshot = queuedAttachments;
             const signature = buildComposedMessageSignature({
@@ -2903,6 +3021,7 @@ const TopicCard: React.FC<{
                     alert(`Failed to send reply: ${result.message || "Please try again."}`);
                     return;
                 }
+                clearSentTopicTextDraft(sendDraftKey, trimmed);
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: sendConversationId });
                 const currentSignature = buildComposedMessageSignature({
                     scopeKey: buildComposerScopeKey(sendConversationId, sendTopicId),
@@ -2963,11 +3082,16 @@ const TopicCard: React.FC<{
             status: "pending",
         };
 
+        const outgoingDraftText = replyTextRef.current;
+        const outgoingDraftKey = topicTextDraftKey;
+        if (outgoingDraftKey) {
+            pendingTextOnlyDraftRef.current = { key: outgoingDraftKey, text: outgoingDraftText };
+        }
         setReplies((current) => [...current, optimisticReply]);
         pendingOutgoingScrollRef.current = true;
         setTopicReplyText("");
         setReplyToMessage(null);
-        void submitTopicReply(optimisticReply);
+        void submitTopicReply(optimisticReply, outgoingDraftKey, outgoingDraftText);
     };
 
     const handleEditSubmit = async (replyId: string) => {
@@ -3541,7 +3665,11 @@ const TopicCard: React.FC<{
                                     size="icon"
                                     className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
                                     onClick={() => void handleSendReply()}
-                                    disabled={(!replyText.trim() && queuedAttachments.length === 0) || isSending}
+                                    disabled={
+                                        !isTopicDraftReady ||
+                                        (!replyText.trim() && queuedAttachments.length === 0) ||
+                                        isSending
+                                    }
                                     title="Send reply"
                                     aria-label="Send reply"
                                 >
@@ -3582,7 +3710,7 @@ const TopicCard: React.FC<{
                                     <MentionsInput
                                         inputRef={replyTextareaRef}
                                         value={replyText}
-                                        disabled={isSending}
+                                        disabled={!isTopicDraftReady || isSending}
                                         onChange={(_event, newValue) => {
                                             acknowledgeLoadedTopic("typing");
                                             setTopicReplyText(newValue);
@@ -3613,7 +3741,11 @@ const TopicCard: React.FC<{
                                         size="icon"
                                         className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
                                         onClick={() => void handleSendReply()}
-                                        disabled={(!replyText.trim() && queuedAttachments.length === 0) || isSending}
+                                        disabled={
+                                            !isTopicDraftReady ||
+                                            (!replyText.trim() && queuedAttachments.length === 0) ||
+                                            isSending
+                                        }
                                         title="Send reply"
                                         aria-label="Send reply"
                                     >
