@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useChatLayout } from "@/components/modules/chat/chat-layout-context";
+import { getChatIndexAutoSelectionPath } from "@/lib/chat/chat-index-navigation";
 
 export default function ChatPage() {
     const isMobile = useIsMobile();
@@ -26,30 +27,27 @@ export default function ChatPage() {
     }, []);
 
     useEffect(() => {
-        if (!user || isMobile || !hasLoadedChatRooms || hasRedirectedRef.current || chatRooms.length <= 0) {
-            return;
-        }
+        if (!user) return;
 
         const explicitSelectionKeys = ["conversationId", "conversation", "roomId", "room", "handle"];
         const hasExplicitSelection = explicitSelectionKeys.some((key) => {
             const value = searchParams.get(key);
             return typeof value === "string" && value.trim().length > 0;
         });
-        if (hasExplicitSelection) {
-            return;
-        }
-
-        const targetRoom = chatRooms.find((room) => ((room as any).unreadCount || 0) > 0) || chatRooms[0];
-        const targetConversationId = String(targetRoom?._id || targetRoom?.handle || "");
-        if (!targetConversationId) {
-            return;
-        }
+        const targetPath = getChatIndexAutoSelectionPath({
+            isMobile,
+            hasLoadedChatRooms,
+            hasRedirected: hasRedirectedRef.current,
+            hasExplicitSelection,
+            chatRooms,
+        });
+        if (!targetPath) return;
 
         hasRedirectedRef.current = true;
-        router.replace(`/chat/${targetConversationId}`);
+        router.replace(targetPath);
     }, [chatRooms, hasLoadedChatRooms, isMobile, router, searchParams, user]);
 
-    if (isMobile) {
+    if (isMobile !== false) {
         return null;
     }
 
