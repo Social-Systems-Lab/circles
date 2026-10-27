@@ -49,6 +49,14 @@ import {
     CanonicalDmClaim,
     ChatConversationPreference,
 } from "@/lib/chat/mongo-types";
+
+export type CapturedEmailDoc = {
+    to: string;
+    templateAlias: string;
+    templateModel: Record<string, unknown>;
+    createdAt: Date;
+    expiresAt: Date;
+};
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import type { MembershipCredentialHandoff } from "@/lib/vibe-id/membership-credential-handoffs";
 import type { MembershipCredentialStatus } from "@/lib/vibe-id/membership-credential-statuses";
@@ -137,6 +145,7 @@ let PlatformAuditEvents: Collection<PlatformAuditEvent>;
 let PrivateMediaCollection: Collection<PrivateMedia>;
 let MembershipCredentialHandoffs: Collection<MembershipCredentialHandoff>;
 let MembershipCredentialStatuses: Collection<MembershipCredentialStatus>;
+let CapturedEmails: Collection<CapturedEmailDoc>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -218,6 +227,7 @@ if (process.env.IS_BUILD !== "true") {
     PlatformAuditEvents = db.collection<PlatformAuditEvent>("platformAuditEvents");
     PrivateMediaCollection = db.collection<PrivateMedia>("privateMedia");
     MembershipCredentialHandoffs = db.collection<MembershipCredentialHandoff>("membershipCredentialHandoffs");
+    CapturedEmails = db.collection<CapturedEmailDoc>("capturedEmails");
     MembershipCredentialHandoffs.createIndex({ tokenHash: 1 }, { unique: true }).catch((error) => {
         console.error("Failed to create membership credential handoff token index:", error);
     });
@@ -377,4 +387,5 @@ export {
     PrivateMediaCollection,
     MembershipCredentialHandoffs,
     MembershipCredentialStatuses,
+    CapturedEmails,
 };

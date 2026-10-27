@@ -32,6 +32,7 @@ interface AdminDashboardProps {
     onboardingMcpStats: OnboardingMcpStats;
     initialTab?: string;
     initialVerificationCircleId?: string;
+    showCapturedEmails?: boolean;
 }
 
 const ADMIN_TABS = new Set([
@@ -44,15 +45,18 @@ const ADMIN_TABS = new Set([
     "system-messages",
 ]);
 
-const normalizeAdminTab = (tab?: string) => (tab && ADMIN_TABS.has(tab) ? tab : "server-settings");
+const CAPTURED_EMAILS_TAB = "captured-emails";
+const normalizeAdminTab = (tab: string | undefined, showCapturedEmails: boolean) =>
+    tab && (ADMIN_TABS.has(tab) || (showCapturedEmails && tab === CAPTURED_EMAILS_TAB)) ? tab : "server-settings";
 
 export default function AdminDashboard({
     serverSettings,
     onboardingMcpStats,
     initialTab,
     initialVerificationCircleId,
+    showCapturedEmails = false,
 }: AdminDashboardProps) {
-    const [activeTab, setActiveTab] = useState(() => normalizeAdminTab(initialTab));
+    const [activeTab, setActiveTab] = useState(() => normalizeAdminTab(initialTab, showCapturedEmails));
     const [isReindexing, setIsReindexing] = useState(false);
     const [reindexStatusMessage, setReindexStatusMessage] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -167,7 +171,24 @@ export default function AdminDashboard({
                 <TabsTrigger value="verification-requests">Verification Requests</TabsTrigger>
                 <TabsTrigger value="super-admins">Super Admins</TabsTrigger>
                 <TabsTrigger value="system-messages">System Messages</TabsTrigger>
+                {showCapturedEmails ? <TabsTrigger value={CAPTURED_EMAILS_TAB}>Captured Emails</TabsTrigger> : null}
             </TabsList>
+
+            {showCapturedEmails ? (
+                <TabsContent value={CAPTURED_EMAILS_TAB} className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Captured Emails</CardTitle>
+                            <CardDescription>Review staging emails retained for approximately 24 hours.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Button asChild>
+                                <a href="/admin/emails">Open captured emails</a>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            ) : null}
 
             <TabsContent value="server-settings" className="space-y-4">
                 <div className="mb-8">

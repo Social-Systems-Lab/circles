@@ -4,6 +4,7 @@ import AdminDashboard from "@/components/modules/admin/admin-dashboard";
 import { getOnboardingMcpStats } from "@/lib/data/user";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { redirect } from "next/navigation";
+import { isEmailCaptureOn } from "@/lib/email/capture-mode";
 
 type AdminPageProps = {
     searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -35,6 +36,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     onboardingMcpStats={onboardingMcpStats}
                     initialTab={initialTab}
                     initialVerificationCircleId={initialVerificationCircleId}
+                    showCapturedEmails={isEmailCaptureOn()}
                 />
             </Suspense>
         </div>
