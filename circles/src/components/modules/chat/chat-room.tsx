@@ -94,6 +94,7 @@ import {
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
+import { getConversationListPath } from "@/lib/chat/chat-index-navigation";
 import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
@@ -4222,7 +4223,7 @@ export const ChatRoomComponent: React.FC<{
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 shrink-0 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                    onClick={() => router.push(archivedReadOnly ? "/chat/archived" : "/chat")}
+                    onClick={() => router.push(getConversationListPath(archivedReadOnly))}
                     aria-label="Back to conversations"
                 >
                     <ArrowLeft className="h-5 w-5" aria-hidden="true" />
