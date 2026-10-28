@@ -41,6 +41,7 @@ import { AggregateRank } from "./ranking";
 import {
     ChatConversation,
     ChatMessageDoc,
+    ChatMessageFollowUp,
     ChatReadState,
     ChatTopicReadState,
     MessageEmailReminder,
@@ -121,6 +122,7 @@ let DefaultNotificationSettings: Collection<DefaultNotificationSetting>; // Adde
 let Notifications: Collection<Notification>;
 let ChatConversations: Collection<ChatConversation>;
 let ChatMessageDocs: Collection<ChatMessageDoc>;
+let ChatMessageFollowUps: Collection<ChatMessageFollowUp>;
 let ChatReadStates: Collection<ChatReadState>;
 let ChatTopicReadStates: Collection<ChatTopicReadState>;
 let MessageEmailReminders: Collection<MessageEmailReminder>;
@@ -202,6 +204,7 @@ if (process.env.IS_BUILD !== "true") {
     Notifications = db.collection<Notification>("notifications");
     ChatConversations = db.collection<ChatConversation>("chatConversations");
     ChatMessageDocs = db.collection<ChatMessageDoc>("chatMessageDocs");
+    ChatMessageFollowUps = db.collection<ChatMessageFollowUp>("chatMessageFollowUps");
     ChatReadStates = db.collection<ChatReadState>("chatReadStates");
     ChatTopicReadStates = db.collection<ChatTopicReadState>("chatTopicReadStates");
     MessageEmailReminders = db.collection<MessageEmailReminder>("messageEmailReminders");
@@ -287,6 +290,8 @@ export function ensureRequiredChatIndexes(): Promise<void> {
             ChatMessageDocs.createIndex({ conversationId: 1, threadId: 1, _id: 1 }),
             ChatMessageDocs.createIndex({ conversationId: 1, createdAt: 1, _id: 1 }),
             ChatMessageDocs.createIndex({ conversationId: 1, threadId: 1, createdAt: 1, _id: 1 }),
+            ChatMessageFollowUps.createIndex({ ownerDid: 1, messageId: 1 }, { unique: true }),
+            ChatMessageFollowUps.createIndex({ ownerDid: 1, completedAt: 1, updatedAt: -1, _id: -1 }),
             ChatReadStates.createIndex({ userDid: 1, conversationId: 1 }),
             ChatTopicReadStates.createIndex({ userDid: 1, conversationId: 1, topicId: 1 }, { unique: true }),
             ChatConversationPreferences.createIndex({ userDid: 1, conversationId: 1 }, { unique: true }),
@@ -360,6 +365,7 @@ export {
     Notifications,
     ChatConversations,
     ChatMessageDocs,
+    ChatMessageFollowUps,
     ChatReadStates,
     ChatTopicReadStates,
     MessageEmailReminders,

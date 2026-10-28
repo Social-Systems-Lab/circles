@@ -144,6 +144,18 @@ export type ChatTopicReadState = {
     updatedAt: Date;
 };
 
+export type ChatMessageFollowUp = {
+    _id?: any;
+    ownerDid: string;
+    messageId: string;
+    conversationId: string;
+    topicId?: string;
+    note?: string;
+    createdAt: Date;
+    updatedAt: Date;
+    completedAt?: Date;
+};
+
 export type MessageEmailReminderStatus = "pending" | "processing" | "sent" | "skipped" | "failed";
 
 export type MessageEmailReminder = {
