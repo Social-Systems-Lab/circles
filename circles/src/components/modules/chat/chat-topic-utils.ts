@@ -284,6 +284,30 @@ export const shouldAcknowledgeTopicInteraction = (
     interaction === "mark-read" ||
     (interaction === "focus" && !isProgrammaticFocus);
 
+export const shouldRefreshUnreadAfterReaction = (result: {
+    success: boolean;
+    reactionAdded?: boolean;
+    readStatePersisted?: boolean;
+}): boolean => result.success && result.reactionAdded === true && result.readStatePersisted === true;
+
+export class KeyedTaskQueue {
+    private readonly tails = new Map<string, Promise<void>>();
+
+    enqueue<T>(key: string, task: () => Promise<T>): Promise<T> {
+        const previous = this.tails.get(key) || Promise.resolve();
+        const result = previous.catch(() => undefined).then(task);
+        const tail = result.then(
+            () => undefined,
+            () => undefined,
+        );
+        this.tails.set(key, tail);
+        void tail.then(() => {
+            if (this.tails.get(key) === tail) this.tails.delete(key);
+        });
+        return result;
+    }
+}
+
 export const selectTopicAcknowledgementBoundary = ({
     topicId,
     topicCreatedAt,

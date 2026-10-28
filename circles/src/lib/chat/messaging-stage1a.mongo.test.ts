@@ -48,6 +48,7 @@ async function main() {
         markTopicRead,
         setTopicSortOrder,
         setConversationNotificationsMuted,
+        toggleReaction,
     } = await import("@/lib/data/mongo-chat");
     const { sendNotifications } = await import("@/lib/data/notifications");
     const { discardDmDraftRecord, publishDmFirstTopic, reconcilePublishedDmDraft, saveDmDraftRecord } = await import(
@@ -367,11 +368,10 @@ async function main() {
             "another user's batch does not expose the recipient's preference",
         );
         const mutedNotificationCount = await Notifications.countDocuments({ userId: "did:receiver" });
-        await sendNotifications(
-            "pm_received",
-            [{ did: "did:receiver" }, { did: "did:unmuted-participant" }],
-            { roomId: publication.conversationId, user: { name: "Sender" } },
-        );
+        await sendNotifications("pm_received", [{ did: "did:receiver" }, { did: "did:unmuted-participant" }], {
+            roomId: publication.conversationId,
+            user: { name: "Sender" },
+        });
         assert.equal(await Notifications.countDocuments({ userId: "did:receiver" }), mutedNotificationCount);
         assert.equal(
             await Notifications.countDocuments({ userId: "did:unmuted-participant", type: "pm_received" }),
@@ -388,11 +388,10 @@ async function main() {
         });
         console.error = (...args: unknown[]) => preferenceLookupErrors.push(args);
         try {
-            await sendNotifications(
-                "pm_received",
-                [{ did: "did:lookup-fallback-recipient" }],
-                { roomId: publication.conversationId, messageBody: "private fallback message" },
-            );
+            await sendNotifications("pm_received", [{ did: "did:lookup-fallback-recipient" }], {
+                roomId: publication.conversationId,
+                messageBody: "private fallback message",
+            });
         } finally {
             (ChatConversationPreferences as any).find = productionPreferenceFind;
             console.error = productionConsoleError;
@@ -453,11 +452,10 @@ async function main() {
             mutedNotificationCount,
             "muted ordinary messages, attachments using the same delivery path, and replies create no notification",
         );
-        await sendNotifications(
-            "new_follower",
-            [{ did: "did:receiver" }],
-            { roomId: publication.conversationId, user: { name: "Sender" } },
-        );
+        await sendNotifications("new_follower", [{ did: "did:receiver" }], {
+            roomId: publication.conversationId,
+            user: { name: "Sender" },
+        });
         assert.equal(
             await Notifications.countDocuments({ userId: "did:receiver" }),
             mutedNotificationCount + 1,
@@ -503,11 +501,7 @@ async function main() {
             submissionId: "9123456789abcdef01234567",
             processNotifications: false,
         });
-        await setConversationNotificationsMuted(
-            "did:muted-topic-receiver",
-            mutedFirstTopic.conversationId,
-            true,
-        );
+        await setConversationNotificationsMuted("did:muted-topic-receiver", mutedFirstTopic.conversationId, true);
         assert.equal((await processFirstTopicNotifications(1, mutedFirstTopic.topicId)).delivered, 1);
         assert.equal(
             await Notifications.countDocuments({
@@ -677,6 +671,400 @@ async function main() {
             )?.isRead,
             false,
             "historical room-only PM notifications remain unread",
+        );
+
+        const reactionTopic = await createThread(
+            publication.conversationId,
+            "did:sender",
+            "Reaction read topic",
+            "Starter",
+            [],
+        );
+        assert.ok(reactionTopic?._id);
+        const reactionReply = await createThreadReply(
+            reactionTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "React here" },
+        );
+        const newerReactionReply = await createThreadReply(
+            reactionTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "Newer unread reply" },
+        );
+        assert.ok(reactionReply?._id && newerReactionReply?._id);
+        const concurrentReactionMessage = await createMessage({
+            conversationId: publication.conversationId,
+            senderDid: "did:sender",
+            body: "Concurrent reaction target",
+            createdAt: new Date(),
+        });
+        const sameEmojiResults = await Promise.all([
+            toggleReaction(concurrentReactionMessage._id!.toString(), "did:receiver", "👍"),
+            toggleReaction(concurrentReactionMessage._id!.toString(), "did:receiver", "👍"),
+        ]);
+        assert.deepEqual(
+            sameEmojiResults.map((result) => result?.added).sort(),
+            [false, true],
+            "concurrent same-emoji toggles serialize as one addition and one removal",
+        );
+        assert.equal(
+            (await ChatMessageDocs.findOne({ _id: new ObjectId(concurrentReactionMessage._id!) }))?.reactions?.length,
+            0,
+        );
+        const differentEmojiResults = await Promise.all([
+            toggleReaction(concurrentReactionMessage._id!.toString(), "did:receiver", "👍"),
+            toggleReaction(concurrentReactionMessage._id!.toString(), "did:receiver", "❤️"),
+        ]);
+        assert.equal(
+            differentEmojiResults.every((result) => result?.added === true),
+            true,
+        );
+        assert.deepEqual(
+            (await ChatMessageDocs.findOne({ _id: new ObjectId(concurrentReactionMessage._id!) }))?.reactions
+                ?.map((reaction) => reaction.emoji)
+                .sort(),
+            ["❤️", "👍"].sort(),
+            "concurrent different-emoji toggles preserve both reactions",
+        );
+        await Notifications.insertMany([
+            {
+                userId: "did:receiver",
+                type: "pm_received",
+                content: {
+                    roomId: publication.conversationId,
+                    topicId: reactionTopic!._id,
+                    messageId: reactionReply!._id,
+                },
+                isRead: false,
+                createdAt: new Date(),
+            },
+            {
+                userId: "did:receiver",
+                type: "pm_received",
+                content: {
+                    roomId: publication.conversationId,
+                    topicId: reactionTopic!._id,
+                    messageId: newerReactionReply!._id,
+                },
+                isRead: false,
+                createdAt: new Date(),
+            },
+        ] as any[]);
+        const conversationActivityBeforeReaction = (
+            await ChatConversations.findOne({ _id: new ObjectId(publication.conversationId) })
+        )?.updatedAt;
+        const starterReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(reactionTopic!._id!.toString(), "🌱"),
+        );
+        assert.equal(starterReaction.success, true);
+        assert.equal(starterReaction.reactionAdded, true);
+        assert.equal(starterReaction.readStatePersisted, true);
+        assert.deepEqual(
+            (await ChatConversations.findOne({ _id: new ObjectId(publication.conversationId) }))?.updatedAt,
+            conversationActivityBeforeReaction,
+            "reactions and reaction read-state updates do not reorder conversations",
+        );
+        assert.equal(
+            (
+                await ChatTopicReadStates.findOne({
+                    userDid: "did:receiver",
+                    conversationId: publication.conversationId,
+                    topicId: reactionTopic!._id,
+                })
+            )?.lastReadMessageId,
+            reactionTopic!._id,
+            "reacting to a starter advances only through the starter",
+        );
+        const replyReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(reactionReply!._id!.toString(), "👍"),
+        );
+        assert.equal(replyReaction.success, true);
+        assert.equal(replyReaction.reactionAdded, true);
+        assert.equal(
+            (
+                await ChatTopicReadStates.findOne({
+                    userDid: "did:receiver",
+                    conversationId: publication.conversationId,
+                    topicId: reactionTopic!._id,
+                })
+            )?.lastReadMessageId,
+            reactionReply!._id,
+        );
+        assert.equal(
+            (
+                await getTopicUnreadCountsForUser("did:receiver", publication.conversationId, [
+                    reactionTopic!._id!.toString(),
+                ])
+            )[reactionTopic!._id!.toString()],
+            1,
+            "a newer reply remains unread after reacting to a historical reply",
+        );
+        assert.equal(
+            (await Notifications.findOne({ userId: "did:receiver", "content.messageId": reactionReply!._id }))?.isRead,
+            true,
+            "reaction acknowledgement includes the reacted reply",
+        );
+        assert.equal(
+            (
+                await Notifications.findOne({
+                    userId: "did:receiver",
+                    "content.messageId": newerReactionReply!._id,
+                })
+            )?.isRead,
+            false,
+            "reaction acknowledgement excludes newer replies",
+        );
+        assert.equal(
+            await ChatTopicReadStates.countDocuments({
+                userDid: "did:receiver",
+                conversationId: publication.conversationId,
+                topicId: topicB!._id,
+            }),
+            0,
+            "reacting in one topic does not create or change another topic cursor",
+        );
+        const removedReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(reactionReply!._id!.toString(), "👍"),
+        );
+        assert.equal(removedReaction.reactionAdded, false);
+        assert.equal(
+            (
+                await ChatTopicReadStates.findOne({
+                    userDid: "did:receiver",
+                    conversationId: publication.conversationId,
+                    topicId: reactionTopic!._id,
+                })
+            )?.lastReadMessageId,
+            reactionReply!._id,
+            "reaction removal leaves the read cursor unchanged",
+        );
+        await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(newerReactionReply!._id!.toString(), "✅"),
+        );
+        await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(reactionReply!._id!.toString(), "❤️"),
+        );
+        assert.equal(
+            (
+                await ChatTopicReadStates.findOne({
+                    userDid: "did:receiver",
+                    conversationId: publication.conversationId,
+                    topicId: reactionTopic!._id,
+                })
+            )?.lastReadMessageId,
+            newerReactionReply!._id,
+            "a later reaction to an older reply cannot move the cursor backward",
+        );
+
+        const looseReactionMessage = await createMessage({
+            conversationId: publication.conversationId,
+            senderDid: "did:sender",
+            body: "Legacy loose reaction",
+            createdAt: new Date(),
+        });
+        const topicReadStateCountBeforeLooseReaction = await ChatTopicReadStates.countDocuments({
+            userDid: "did:receiver",
+            conversationId: publication.conversationId,
+        });
+        const looseReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(looseReactionMessage._id!.toString(), "👍"),
+        );
+        assert.equal(looseReaction.reactionAdded, true);
+        assert.equal(
+            (
+                await ChatReadStates.findOne({
+                    userDid: "did:receiver",
+                    conversationId: publication.conversationId,
+                })
+            )?.legacyLastReadMessageId,
+            looseReactionMessage._id,
+            "a loose-message reaction advances only the legacy cursor",
+        );
+        assert.equal(
+            await ChatTopicReadStates.countDocuments({
+                userDid: "did:receiver",
+                conversationId: publication.conversationId,
+            }),
+            topicReadStateCountBeforeLooseReaction,
+            "a loose-message reaction does not create or update a topic cursor",
+        );
+
+        const missingTopicId = new ObjectId();
+        const orphanReplyId = new ObjectId();
+        await ChatMessageDocs.insertOne({
+            _id: orphanReplyId,
+            conversationId: publication.conversationId,
+            senderDid: "did:sender",
+            body: "Orphan reply",
+            threadId: missingTopicId.toString(),
+            createdAt: new Date(),
+        });
+        const orphanReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(orphanReplyId.toString(), "👍"),
+        );
+        assert.equal(orphanReaction.success, false);
+        assert.equal((await ChatMessageDocs.findOne({ _id: orphanReplyId }))?.reactions, undefined);
+
+        const deletingReactionTopic = await createThread(
+            publication.conversationId,
+            "did:sender",
+            "Deleting reaction topic",
+            "Starter",
+            [],
+        );
+        assert.ok(deletingReactionTopic?._id);
+        await ChatMessageDocs.updateOne(
+            { _id: new ObjectId(deletingReactionTopic!._id!) },
+            { $set: { "thread.deletingAt": new Date() } },
+        );
+        const deletingTopicReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(deletingReactionTopic!._id!.toString(), "👍"),
+        );
+        assert.equal(deletingTopicReaction.success, false);
+        assert.equal(
+            (await ChatMessageDocs.findOne({ _id: new ObjectId(deletingReactionTopic!._id!) }))?.reactions,
+            undefined,
+        );
+
+        const partialReadTopic = await createThread(
+            publication.conversationId,
+            "did:sender",
+            "Partial reaction read",
+            "Starter",
+            [],
+        );
+        const partialReadReply = await createThreadReply(
+            partialReadTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "Reaction survives read failure" },
+        );
+        assert.ok(partialReadTopic?._id && partialReadReply?._id);
+        await ChatTopicReadStates.insertOne({
+            userDid: "did:receiver",
+            conversationId: publication.conversationId,
+            topicId: partialReadTopic!._id!.toString(),
+            lastReadMessageId: new ObjectId().toString(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        } as any);
+        const partialReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+            mongoActions.toggleMongoReactionAction(partialReadReply!._id!.toString(), "👍"),
+        );
+        assert.equal(partialReaction.success, true);
+        assert.equal(partialReaction.reactionAdded, true);
+        assert.equal(partialReaction.readStatePersisted, false);
+        assert.ok(partialReaction.readStateWarning);
+        assert.equal(
+            (await ChatMessageDocs.findOne({ _id: new ObjectId(partialReadReply!._id!) }))?.reactions?.length,
+            1,
+        );
+
+        const notificationFailureTopic = await createThread(
+            publication.conversationId,
+            "did:sender",
+            "Reaction notification failure",
+            "Starter",
+            [],
+        );
+        const notificationFailureReply = await createThreadReply(
+            notificationFailureTopic!._id!.toString(),
+            publication.conversationId,
+            "did:sender",
+            { body: "Notification failure reaction" },
+        );
+        assert.ok(notificationFailureTopic?._id && notificationFailureReply?._id);
+        await Notifications.insertOne({
+            userId: "did:receiver",
+            type: "pm_received",
+            content: {
+                roomId: publication.conversationId,
+                topicId: notificationFailureTopic!._id,
+                messageId: notificationFailureReply!._id,
+            },
+            isRead: false,
+            createdAt: new Date(),
+        } as any);
+        const notificationUpdateMany = Notifications.updateMany;
+        (Notifications as any).updateMany = async () => {
+            throw new Error("simulated reaction notification failure");
+        };
+        let notificationFailureReaction;
+        try {
+            notificationFailureReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+                mongoActions.toggleMongoReactionAction(notificationFailureReply!._id!.toString(), "👍"),
+            );
+        } finally {
+            (Notifications as any).updateMany = notificationUpdateMany;
+        }
+        assert.equal(notificationFailureReaction?.success, true);
+        assert.equal(notificationFailureReaction?.reactionAdded, true);
+        assert.equal(notificationFailureReaction?.readStatePersisted, true);
+        assert.ok(notificationFailureReaction?.readStateWarning);
+        assert.equal(
+            (await ChatMessageDocs.findOne({ _id: new ObjectId(notificationFailureReply!._id!) }))?.reactions?.length,
+            1,
+        );
+        assert.equal(
+            (
+                await Notifications.findOne({
+                    userId: "did:receiver",
+                    "content.messageId": notificationFailureReply!._id,
+                })
+            )?.isRead,
+            false,
+        );
+
+        const disappearingReactionMessage = await createMessage({
+            conversationId: publication.conversationId,
+            senderDid: "did:sender",
+            body: "Disappearing reaction target",
+            createdAt: new Date(),
+        });
+        const productionMessageUpdateOne = ChatMessageDocs.updateOne;
+        (ChatMessageDocs as any).updateOne = async (filter: any, update: any, options?: any) => {
+            if (String(filter?._id) === disappearingReactionMessage._id!.toString() && update?.$set?.reactions) {
+                await ChatMessageDocs.deleteOne({ _id: new ObjectId(disappearingReactionMessage._id!) });
+            }
+            return productionMessageUpdateOne.call(ChatMessageDocs, filter, update, options);
+        };
+        let disappearingReaction;
+        try {
+            disappearingReaction = await runWithAuthenticatedRequest("did:receiver", () =>
+                mongoActions.toggleMongoReactionAction(disappearingReactionMessage._id!.toString(), "👍"),
+            );
+        } finally {
+            (ChatMessageDocs as any).updateOne = productionMessageUpdateOne;
+        }
+        assert.equal(disappearingReaction?.success, false, "an unmatched primary write cannot report success");
+
+        const unauthorizedReactionCount = await ChatMessageDocs.countDocuments({
+            _id: new ObjectId(reactionReply!._id!),
+            "reactions.userDid": "did:unauthorized-reaction",
+        });
+        const unauthorizedReadStateCount = await ChatTopicReadStates.countDocuments({
+            userDid: "did:unauthorized-reaction",
+            conversationId: publication.conversationId,
+        });
+        const unauthorizedReaction = await runWithAuthenticatedRequest("did:unauthorized-reaction", () =>
+            mongoActions.toggleMongoReactionAction(reactionReply!._id!.toString(), "👍"),
+        );
+        assert.equal(unauthorizedReaction.success, false);
+        assert.equal(
+            await ChatMessageDocs.countDocuments({
+                _id: new ObjectId(reactionReply!._id!),
+                "reactions.userDid": "did:unauthorized-reaction",
+            }),
+            unauthorizedReactionCount,
+        );
+        assert.equal(
+            await ChatTopicReadStates.countDocuments({
+                userDid: "did:unauthorized-reaction",
+                conversationId: publication.conversationId,
+            }),
+            unauthorizedReadStateCount,
         );
 
         const retryReply = await createThreadReply(publication.topicId, publication.conversationId, "did:sender", {

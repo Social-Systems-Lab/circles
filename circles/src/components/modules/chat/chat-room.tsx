@@ -89,6 +89,8 @@ import {
     selectQueuedTopicAcknowledgementBoundary,
     selectTopicAcknowledgementBoundary,
     shouldAcknowledgeTopicInteraction,
+    shouldRefreshUnreadAfterReaction,
+    KeyedTaskQueue,
     canApplyTopicAcknowledgementResult,
     consumePendingTopicScrollRequest,
     confirmOptimisticTopicReply,
@@ -1044,6 +1046,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+    const looseReactionQueueRef = useRef(new KeyedTaskQueue());
+    const looseReactionMountedRef = useRef(false);
+    const looseReactionScopeRef = useRef("");
+    looseReactionScopeRef.current = `${user?.did || ""}\u0000${conversationId || ""}`;
+    useEffect(() => {
+        looseReactionMountedRef.current = true;
+        return () => {
+            looseReactionMountedRef.current = false;
+        };
+    }, []);
     const handleReply = (message: ChatMessage) => {
         if (!canReply) return;
         setReplyToMessage(message);
@@ -1056,12 +1068,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         if (!user.did) return;
 
         const reactionSender = user.did;
-        const anyExistingReaction = Object.entries(message.reactions || {})
-            .map(([key, reactions]) => {
-                const userReaction = reactions.find((r) => r.sender === reactionSender);
-                return userReaction ? { ...userReaction, key } : null;
-            })
-            .find((r) => r !== null);
 
         // Optimistic UI Update
         setRoomMessages((prev) => {
@@ -1072,6 +1078,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
             const updatedMessage = { ...roomMessages[messageIndex] };
             const reactions = { ...(updatedMessage.reactions || {}) };
+            const anyExistingReaction = Object.entries(reactions)
+                .map(([key, entries]) => {
+                    const userReaction = entries.find((reaction) => reaction.sender === reactionSender);
+                    return userReaction ? { ...userReaction, key } : null;
+                })
+                .find((reaction) => reaction !== null);
 
             // Remove any existing reaction from the user
             if (anyExistingReaction) {
@@ -1098,23 +1110,29 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             return newRooms;
         });
 
-        try {
-            const result = await toggleMongoReactionAction(message.id, emoji);
-            if (result.success && result.reactions) {
-                setRoomMessages((prev) => {
-                    const newRooms = { ...prev };
-                    const roomMessages = [...(newRooms[message.roomId] || [])];
-                    const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
-                    if (messageIndex === -1) return prev;
-                    roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
-                    newRooms[message.roomId] = roomMessages;
-                    return newRooms;
-                });
+        const scope = looseReactionScopeRef.current;
+        const queueKey = `${reactionSender}\u0000${message.roomId}\u0000${message.id}`;
+        await looseReactionQueueRef.current.enqueue(queueKey, async () => {
+            try {
+                const result = await toggleMongoReactionAction(message.id, emoji);
+                const canApply = looseReactionMountedRef.current && looseReactionScopeRef.current === scope;
+                if (canApply && result.success && result.reactions) {
+                    setRoomMessages((prev) => {
+                        const newRooms = { ...prev };
+                        const roomMessages = [...(newRooms[message.roomId] || [])];
+                        const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+                        if (messageIndex === -1) return prev;
+                        roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
+                        newRooms[message.roomId] = roomMessages;
+                        return newRooms;
+                    });
+                }
+                if (canApply && shouldRefreshUnreadAfterReaction(result)) await onTopicRead?.(message.id);
+            } catch (error) {
+                console.error("Failed to update reaction:", error);
+                // On failure, the state will be corrected by the next sync
             }
-        } catch (error) {
-            console.error("Failed to update reaction:", error);
-            // On failure, the state will be corrected by the next sync
-        }
+        });
     };
 
     const handleTouchStart = (message: ChatMessage) => {
@@ -3199,8 +3217,11 @@ const TopicCard: React.FC<{
     const handleReaction = async (replyId: string, emoji: string) => {
         try {
             const { toggleMongoReactionAction } = await import("./actions");
-            await toggleMongoReactionAction(replyId, emoji);
-            await loadReplies();
+            const result = await toggleMongoReactionAction(replyId, emoji);
+            await Promise.all([
+                loadReplies(),
+                shouldRefreshUnreadAfterReaction(result) ? onTopicRead?.(messageId) : undefined,
+            ]);
         } catch (e) {
             console.error("Failed to toggle reaction:", e);
         }
