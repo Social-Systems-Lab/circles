@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { canShowExistingReplyActions, canShowMessageFollowUpAction } from "./message-follow-up-ui";
+import {
+    canShowExistingReplyActions,
+    canShowMessageFollowUpAction,
+    isOpenMessageFollowUpStatus,
+} from "./message-follow-up-ui";
+import {
+    isNoteEditorForViewer,
+    MessageFollowUpStatusCache,
+    readCurrentMessageFollowUpStatus,
+} from "./message-follow-up-status-cache";
 
 const persistedId = "64a000000000000000000001";
 
@@ -74,6 +83,54 @@ test("existing reply actions keep their original status rule independently of fo
     assert.equal(canShowExistingReplyActions({}, false), false);
 });
 
+test("the persistent indicator is visible only for an open saved follow-up", () => {
+    assert.equal(isOpenMessageFollowUpStatus({ followUpId: "follow-up", completed: false }), true);
+    assert.equal(isOpenMessageFollowUpStatus({ followUpId: "follow-up", completed: true }), false);
+    assert.equal(isOpenMessageFollowUpStatus(null), false);
+});
+
+test("a successful mutation wins over an older hydration response", () => {
+    const cache = new MessageFollowUpStatusCache();
+    const key = "did:viewer\u0000message";
+    const hydration = cache.beginHydration(key);
+    cache.applyMutation(key, { followUpId: "follow-up", completed: true, note: "new note" });
+    assert.equal(
+        cache.applyHydration(key, hydration, { followUpId: "follow-up", completed: false, note: "old note" }),
+        false,
+    );
+    assert.deepEqual(cache.get(key), { followUpId: "follow-up", completed: true, note: "new note" });
+});
+
+test("only the newest concurrent hydration response may update an entry", () => {
+    const cache = new MessageFollowUpStatusCache();
+    const key = "did:viewer\u0000message";
+    const older = cache.beginHydration(key);
+    const newer = cache.beginHydration(key);
+    assert.equal(cache.applyHydration(key, newer, { followUpId: "new", completed: false }), true);
+    assert.equal(cache.applyHydration(key, older, { followUpId: "old", completed: false }), false);
+    assert.equal(cache.get(key)?.followUpId, "new");
+});
+
+test("account switching never derives status or an editor from the previous viewer", () => {
+    const cache = new MessageFollowUpStatusCache();
+    const oldKey = "did:old\u0000message";
+    const newKey = "did:new\u0000message";
+    const oldStatus = { followUpId: "private", completed: false, note: "old viewer note" };
+    cache.applyMutation(oldKey, oldStatus);
+    assert.equal(readCurrentMessageFollowUpStatus(cache, { cacheKey: oldKey, status: oldStatus }, newKey), null);
+    assert.equal(isNoteEditorForViewer({ viewerDid: "did:old", followUpId: "private" }, "did:new"), false);
+});
+
+test("cross-view note edits and clears update cached private notes without changing status", () => {
+    const cache = new MessageFollowUpStatusCache();
+    const key = "did:viewer\u0000message";
+    cache.applyMutation(key, { followUpId: "follow-up", completed: false, note: "old" });
+    cache.updateFollowUp("follow-up", (status) => ({ ...status, note: "new" }));
+    assert.deepEqual(cache.get(key), { followUpId: "follow-up", completed: false, note: "new" });
+    cache.updateFollowUp("follow-up", ({ note: _note, ...status }) => status);
+    assert.deepEqual(cache.get(key), { followUpId: "follow-up", completed: false });
+});
+
 test("the UI uses private follow-up actions and covers all three existing message action surfaces", () => {
     const actionSource = readFileSync("src/components/modules/chat/message-follow-up-action.tsx", "utf8");
     const roomSource = readFileSync("src/components/modules/chat/chat-room.tsx", "utf8");
@@ -85,6 +142,9 @@ test("the UI uses private follow-up actions and covers all three existing messag
     assert.match(actionSource, /savedFollowUps/);
     assert.match(actionSource, /`\$\{viewerDid\}\\u0000\$\{messageId\}`/);
     assert.match(actionSource, /getMessageFollowUpStatusesAction/);
+    assert.match(actionSource, /status\.completed/);
+    assert.match(actionSource, /applyMessageFollowUpStatus/);
+    assert.match(actionSource, /updateCachedMessageFollowUpCompletion/);
     assert.match(actionSource, /savingRef\.current/);
     assert.match(actionSource, /FOLLOW_UP_STATUS_BATCH_MAX/);
     assert.match(actionSource, /DialogContent/);
@@ -99,8 +159,12 @@ test("the UI uses private follow-up actions and covers all three existing messag
     );
     assert.match(failedSaveBranch, /setError/);
     assert.doesNotMatch(failedSaveBranch, /setNote\(/);
-    assert.match(failedSaveBranch, /setError[\s\S]*return;\s*}\s*setFollowUpId\(null\)/);
+    assert.match(
+        failedSaveBranch,
+        /setError[\s\S]*return;\s*}[\s\S]*updateCachedMessageFollowUpNote[\s\S]*setEditor\(null\)/,
+    );
     assert.equal((roomSource.match(/<MessageFollowUpAction/g) || []).length, 3);
+    assert.equal((roomSource.match(/<MessageFollowUpIndicator/g) || []).length, 3);
     assert.equal((roomSource.match(/useHydrateMessageFollowUpStatuses/g) || []).length, 3);
     assert.equal((roomSource.match(/<MessageFollowUpNoteDialog/g) || []).length, 1);
     assert.match(roomSource, /toggleMobileMessageActions/);
@@ -108,4 +172,10 @@ test("the UI uses private follow-up actions and covers all three existing messag
     assert.match(roomSource, /canFollowUpStarter/);
     assert.match(roomSource, /canFollowUpReply/);
     assert.match(roomSource, /canFollowUpMessage/);
+    assert.match(actionSource, /requestPrivateNote\(viewerDid, status!\.followUpId, status!\.note\)/);
+    assert.match(actionSource, /aria-label="Edit private follow-up note"/);
+    assert.match(actionSource, /text-\[#315C3D\]/);
+    assert.match(actionSource, /after:-inset-2/);
+    assert.match(actionSource, /role="alert"/);
+    assert.match(actionSource, /detail\.viewerDid !== viewerDid/);
 });

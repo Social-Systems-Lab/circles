@@ -107,6 +107,7 @@ import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import { getConversationListPath } from "@/lib/chat/chat-index-navigation";
 import {
     MessageFollowUpAction,
+    MessageFollowUpIndicator,
     MessageFollowUpNoteDialog,
     useHydrateMessageFollowUpStatuses,
 } from "./message-follow-up-action";
@@ -1314,9 +1315,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                             </div>
                                         )}
                                         <MessageRenderer message={message} />
-                                        {isLastInChain && (
+                                        {(isLastInChain || canFollowUpMessage) && (
                                             <div className="mt-0 flex items-center justify-end gap-1 text-[9px] text-gray-400">
-                                                <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                {isLastInChain && (
+                                                    <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                )}
                                                 {isOwnMessage && message.status === "pending" && (
                                                     <span className="flex items-center gap-1 text-blue-400">
                                                         <IoTimeOutline className="h-2.5 w-2.5" />
@@ -1327,12 +1330,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                         <IoWarningOutline className="h-2.5 w-2.5" />
                                                     </span>
                                                 )}
+                                                {canFollowUpMessage && (
+                                                    <MessageFollowUpIndicator
+                                                        messageId={message.id}
+                                                        viewerDid={user?.did || currentUser?.did || ""}
+                                                    />
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div
-                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"} ${canFollowUpMessage && isOwnMessage ? "pr-9" : ""}`}
                                         >
                                             {Object.entries(message.reactions).map(([reaction, reactions]) => (
                                                 <div
@@ -1448,7 +1457,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
-            <MessageFollowUpNoteDialog />
+            <MessageFollowUpNoteDialog viewerDid={user?.did || currentUser?.did || ""} />
             <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
@@ -3335,6 +3344,9 @@ const TopicCard: React.FC<{
                         <div>{topicCreatorName}</div>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
+                        {canFollowUpStarter && (
+                            <MessageFollowUpIndicator messageId={messageId} viewerDid={user?.did || ""} />
+                        )}
                         <div className="relative">
                             <HiLightBulb
                                 className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`}
@@ -3459,8 +3471,16 @@ const TopicCard: React.FC<{
                                             style={{ borderRadius: "12px" }}
                                         >
                                             <div className="px-3 py-1.5">
-                                                <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
-                                                    {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
+                                                <div className="mb-2 flex items-center justify-end gap-1 text-[10px] leading-none text-gray-400">
+                                                    <span>
+                                                        {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
+                                                    </span>
+                                                    {canFollowUpReply && (
+                                                        <MessageFollowUpIndicator
+                                                            messageId={reply.id}
+                                                            viewerDid={user?.did || ""}
+                                                        />
+                                                    )}
                                                 </div>
                                                 {isEditing ? (
                                                     <div className="flex flex-col gap-1">

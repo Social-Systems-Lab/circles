@@ -23,6 +23,10 @@ import {
     setMessageFollowUpCompletedAction,
     updateMessageFollowUpNoteAction,
 } from "@/components/modules/chat/follow-up-actions";
+import {
+    updateCachedMessageFollowUpCompletion,
+    updateCachedMessageFollowUpNote,
+} from "@/components/modules/chat/message-follow-up-action";
 import type { ChatFollowUpCursor, ChatFollowUpListItem } from "@/lib/data/chat-message-followups";
 import {
     moveFollowUpBetweenFilters,
@@ -154,6 +158,7 @@ export function MessageFollowUpList() {
                 setNoteError(result.message || "Could not save private note.");
                 return;
             }
+            updateCachedMessageFollowUpNote(editing.followUp.id, note);
             recordMutation(editing.followUp.id);
             setFilters((value) => ({
                 open: { ...value.open, items: updateFollowUpNoteInItems(value.open.items, editing.followUp.id, note) },
@@ -180,6 +185,7 @@ export function MessageFollowUpList() {
         try {
             const result = await setMessageFollowUpCompletedAction(id, completed);
             if (!result.success) throw new Error(result.message || "Could not update follow-up.");
+            updateCachedMessageFollowUpCompletion(id, completed);
             recordMutation(id, completed ? "completed" : "open");
             setFilters((value) => {
                 const sourceName: FilterName = completed ? "open" : "completed";

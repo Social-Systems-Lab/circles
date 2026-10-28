@@ -33,7 +33,7 @@ export type ChatFollowUpListItem = {
     message: ChatFollowUpMessagePresentation | null;
     unavailableReason?: "unavailable";
 };
-export type ChatFollowUpStatus = { messageId: string; followUpId: string; completed: boolean };
+export type ChatFollowUpStatus = { messageId: string; followUpId: string; completed: boolean; note?: string };
 
 type FollowUpDependencies = {
     followUps: Collection<ChatMessageFollowUp>;
@@ -243,17 +243,49 @@ export async function listAuthorizedMessageFollowUpStatuses(
     const records = await dependencies.followUps
         .find(
             { ownerDid, messageId: { $in: messageIds } },
-            { projection: { messageId: 1, conversationId: 1, completedAt: 1 } },
+            { projection: { messageId: 1, conversationId: 1, completedAt: 1, note: 1 } },
         )
         .toArray();
     const conversationIds = Array.from(new Set(records.map((record) => record.conversationId)));
     const allowed = await dependencies.canReadConversations(ownerDid, conversationIds);
-    return records
-        .filter((record) => allowed.has(record.conversationId))
+    const authorizedRecords = records.filter((record) => allowed.has(record.conversationId));
+    const authorizedMessageIds = authorizedRecords
+        .map((record) => normalizeId(record.messageId))
+        .filter((messageId): messageId is string => !!messageId)
+        .map((messageId) => new ObjectId(messageId));
+    const messages = authorizedMessageIds.length
+        ? await dependencies.messages.find({ _id: { $in: authorizedMessageIds } }).toArray()
+        : [];
+    const messageById = new Map(messages.map((message) => [message._id.toString(), message]));
+    const topicIds = Array.from(
+        new Set(
+            messages
+                .map((message) => message.threadId)
+                .filter((topicId): topicId is string => !!topicId && ObjectId.isValid(topicId)),
+        ),
+    );
+    const topics = topicIds.length
+        ? await dependencies.messages
+              .find({
+                  _id: { $in: topicIds.map((topicId) => new ObjectId(topicId)) },
+                  thread: { $exists: true },
+                  "thread.deletingAt": { $exists: false },
+              } as Filter<ChatMessageDoc>)
+              .toArray()
+        : [];
+    const availableTopics = new Map(topics.map((topic) => [topic._id.toString(), topic.conversationId]));
+    return authorizedRecords
+        .filter((record) => {
+            const message = messageById.get(record.messageId);
+            if (!message || message.conversationId !== record.conversationId) return false;
+            if (message.thread && "deletingAt" in message.thread) return false;
+            return !message.threadId || availableTopics.get(message.threadId) === message.conversationId;
+        })
         .map((record) => ({
             messageId: record.messageId,
             followUpId: record._id.toString(),
             completed: record.completedAt instanceof Date,
+            ...(record.note ? { note: record.note } : {}),
         }));
 }
 
