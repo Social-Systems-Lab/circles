@@ -24,3 +24,6 @@ export const canShowMessageFollowUpAction = (message: FollowUpEligibleMessage): 
 
 export const canShowExistingReplyActions = (message: { status?: string }, canReply: boolean): boolean =>
     canReply && !message.status;
+
+export const isOpenMessageFollowUpStatus = (status?: { followUpId?: string; completed?: boolean } | null): boolean =>
+    !!status?.followUpId && status.completed !== true;

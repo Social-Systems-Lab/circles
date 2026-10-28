@@ -41,8 +41,13 @@ async function main() {
         client,
         ensureRequiredChatIndexes,
     } = await import("@/lib/data/db");
-    const { listAuthorizedMessageFollowUps, markMessageForFollowUp, setFollowUpCompleted, updateFollowUpNote } =
-        await import("@/lib/data/chat-message-followups");
+    const {
+        listAuthorizedMessageFollowUps,
+        listAuthorizedMessageFollowUpStatuses,
+        markMessageForFollowUp,
+        setFollowUpCompleted,
+        updateFollowUpNote,
+    } = await import("@/lib/data/chat-message-followups");
     const { evaluateConversationAccess } = await import("./conversation-access-policy");
     const followUpActions = await import("@/components/modules/chat/follow-up-actions");
     const runWithAuthenticatedRequest = async <T>(viewerDid: string, callback: () => Promise<T>): Promise<T> => {
@@ -300,6 +305,14 @@ async function main() {
         );
         assert.equal(actionMark.success, true);
         assert.equal(actionMark.followUp?.ownerDid, ownerDid);
+        assert.equal(
+            (
+                await runWithAuthenticatedRequest(ownerDid, () =>
+                    followUpActions.updateMessageFollowUpNoteAction(actionMark.followUp!._id, "Status note"),
+                )
+            ).success,
+            true,
+        );
         for (const malformedStatusIds of [
             null,
             actionMessageId.toString(),
@@ -323,9 +336,42 @@ async function main() {
         assert.equal(actionStatuses.success, true);
         assert.ok("statuses" in actionStatuses);
         assert.deepEqual(actionStatuses.statuses, [
-            { messageId: actionMessageId.toString(), followUpId: actionMark.followUp!._id, completed: false },
+            {
+                messageId: actionMessageId.toString(),
+                followUpId: actionMark.followUp!._id,
+                completed: false,
+                note: "Status note",
+            },
         ]);
-        assert.deepEqual(Object.keys(actionStatuses.statuses[0]).sort(), ["completed", "followUpId", "messageId"]);
+        assert.deepEqual(Object.keys(actionStatuses.statuses[0]).sort(), [
+            "completed",
+            "followUpId",
+            "messageId",
+            "note",
+        ]);
+        assert.equal(
+            (
+                await runWithAuthenticatedRequest(ownerDid, () =>
+                    followUpActions.setMessageFollowUpCompletedAction(actionMark.followUp!._id, true),
+                )
+            ).success,
+            true,
+        );
+        const completedActionStatuses = await runWithAuthenticatedRequest(ownerDid, () =>
+            followUpActions.getMessageFollowUpStatusesAction([actionMessageId.toString()]),
+        );
+        if (!completedActionStatuses.success || !completedActionStatuses.statuses) {
+            assert.fail("Expected completed follow-up status");
+        }
+        assert.equal(completedActionStatuses.statuses[0]?.completed, true);
+        assert.equal(
+            (
+                await runWithAuthenticatedRequest(ownerDid, () =>
+                    followUpActions.setMessageFollowUpCompletedAction(actionMark.followUp!._id, false),
+                )
+            ).success,
+            true,
+        );
         const otherStatuses = await runWithAuthenticatedRequest(otherDid, () =>
             followUpActions.getMessageFollowUpStatusesAction([actionMessageId.toString()]),
         );
@@ -374,6 +420,13 @@ async function main() {
         const actionListItem = actionList.items.find((item) => item.followUp.id === actionMark.followUp?._id);
         assert.equal(actionListItem?.message?.body, "Action message");
         assert.equal(Object.prototype.hasOwnProperty.call(actionListItem?.message || {}, "submissionId"), false);
+        await ChatMessageDocs.deleteOne({ _id: actionMessageId });
+        assert.deepEqual(
+            await runWithAuthenticatedRequest(ownerDid, () =>
+                followUpActions.getMessageFollowUpStatusesAction([actionMessageId.toString()]),
+            ),
+            { success: true, statuses: [] },
+        );
 
         const publicCircleId = new ObjectId();
         const publicConversationId = new ObjectId();
@@ -527,11 +580,25 @@ async function main() {
         assert.deepEqual(topicList.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message?.topic, {
             title: "Secret topic",
         });
+        const availableTopicStatuses = await listAuthorizedMessageFollowUpStatuses(
+            ownerDid,
+            [topicId.toString(), replyId.toString()],
+            canRead,
+        );
+        assert.equal(availableTopicStatuses.length, 2);
         await ChatMessageDocs.updateOne({ _id: topicId }, { $set: { "thread.deletingAt": new Date() } } as any);
+        assert.deepEqual(
+            await listAuthorizedMessageFollowUpStatuses(ownerDid, [topicId.toString(), replyId.toString()], canRead),
+            [],
+        );
         const deletingTopicList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
         assert.equal(deletingTopicList.items.find((item) => item.followUp.id === starterFollowUp?._id)?.message, null);
         assert.equal(deletingTopicList.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message, null);
         await ChatMessageDocs.deleteOne({ _id: topicId });
+        assert.deepEqual(
+            await listAuthorizedMessageFollowUpStatuses(ownerDid, [topicId.toString(), replyId.toString()], canRead),
+            [],
+        );
         const afterTopicDelete = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
         assert.equal(afterTopicDelete.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message, null);
 
