@@ -236,6 +236,10 @@ async function main() {
             success: false,
             message: "Not authenticated",
         });
+        assert.deepEqual(await followUpActions.getMessageFollowUpStatusesAction([concurrentMessageId.toString()]), {
+            success: false,
+            message: "Not authenticated",
+        });
         const actionMessageId = new ObjectId();
         await ChatMessageDocs.insertOne({
             _id: actionMessageId,
@@ -250,6 +254,36 @@ async function main() {
         );
         assert.equal(actionMark.success, true);
         assert.equal(actionMark.followUp?.ownerDid, ownerDid);
+        for (const malformedStatusIds of [
+            null,
+            actionMessageId.toString(),
+            ["bad"],
+            [actionMessageId.toString(), 1],
+            Array.from({ length: 201 }, () => actionMessageId.toString()),
+        ]) {
+            assert.deepEqual(
+                await runWithAuthenticatedRequest(ownerDid, () =>
+                    followUpActions.getMessageFollowUpStatusesAction(malformedStatusIds),
+                ),
+                { success: false, message: "Invalid request" },
+            );
+        }
+        const actionStatuses = await runWithAuthenticatedRequest(ownerDid, () =>
+            followUpActions.getMessageFollowUpStatusesAction([
+                actionMessageId.toString().toUpperCase(),
+                actionMessageId.toString(),
+            ]),
+        );
+        assert.equal(actionStatuses.success, true);
+        assert.ok("statuses" in actionStatuses);
+        assert.deepEqual(actionStatuses.statuses, [
+            { messageId: actionMessageId.toString(), followUpId: actionMark.followUp!._id, completed: false },
+        ]);
+        assert.deepEqual(Object.keys(actionStatuses.statuses[0]).sort(), ["completed", "followUpId", "messageId"]);
+        const otherStatuses = await runWithAuthenticatedRequest(otherDid, () =>
+            followUpActions.getMessageFollowUpStatusesAction([actionMessageId.toString()]),
+        );
+        assert.deepEqual(otherStatuses, { success: true, statuses: [] });
         assert.equal(
             (
                 await runWithAuthenticatedRequest(otherDid, () =>
@@ -366,6 +400,14 @@ async function main() {
         assert.equal(publicMark.success, true);
         assert.equal(secretMark.success, true);
 
+        const authorizedGroupStatuses = await runWithAuthenticatedRequest(ownerDid, () =>
+            followUpActions.getMessageFollowUpStatusesAction([publicMessageId.toString(), secretMessageId.toString()]),
+        );
+        if (!authorizedGroupStatuses.success || !authorizedGroupStatuses.statuses) {
+            assert.fail("Expected authorized group statuses");
+        }
+        assert.equal(authorizedGroupStatuses.statuses.length, 2);
+
         await ChatRoomMembers.updateOne(
             { userDid: ownerDid, chatRoomId: publicConversationId.toString() },
             { $set: { status: "removed" } },
@@ -381,6 +423,14 @@ async function main() {
         assert.equal(revokedIds.has(actionMark.followUp!._id), false);
         assert.equal(revokedIds.has(publicMark.followUp!._id), false);
         assert.equal(revokedIds.has(secretMark.followUp!._id), false);
+        const revokedStatuses = await runWithAuthenticatedRequest(ownerDid, () =>
+            followUpActions.getMessageFollowUpStatusesAction([
+                actionMessageId.toString(),
+                publicMessageId.toString(),
+                secretMessageId.toString(),
+            ]),
+        );
+        assert.deepEqual(revokedStatuses, { success: true, statuses: [] });
 
         await ChatMessageDocs.deleteOne({ _id: messageId });
         const deletedList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);

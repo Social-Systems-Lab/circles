@@ -6,6 +6,7 @@ import { ChatMessageDocs, ChatMessageFollowUps, Circles } from "./db";
 export const CHAT_FOLLOW_UP_UNAVAILABLE = "Follow-up unavailable";
 export const CHAT_FOLLOW_UP_NOTE_MAX_LENGTH = 4000;
 export const CHAT_FOLLOW_UP_PAGE_MAX = 50;
+export const CHAT_FOLLOW_UP_STATUS_BATCH_MAX = 200;
 
 export type ChatFollowUpCursor = { updatedAt: string; id: string };
 export type ChatFollowUpListOptions = { completed?: boolean; limit?: number; cursor?: ChatFollowUpCursor };
@@ -24,6 +25,7 @@ export type ChatFollowUpListItem = {
     message: ChatFollowUpMessagePresentation | null;
     unavailableReason?: "deleted";
 };
+export type ChatFollowUpStatus = { messageId: string; followUpId: string; completed: boolean };
 
 type FollowUpDependencies = {
     followUps: Collection<ChatMessageFollowUp>;
@@ -90,6 +92,19 @@ export const parseChatFollowUpListOptions = (
             ...(input.limit !== undefined ? { limit: input.limit as number } : {}),
             ...(input.cursor !== undefined ? { cursor: input.cursor as ChatFollowUpCursor } : {}),
         },
+    };
+};
+
+export const parseChatFollowUpStatusMessageIds = (
+    value: unknown,
+): { success: true; messageIds: string[] } | { success: false } => {
+    if (!Array.isArray(value) || value.length > CHAT_FOLLOW_UP_STATUS_BATCH_MAX) return { success: false };
+    if (value.some((messageId) => typeof messageId !== "string" || !/^[0-9a-fA-F]{24}$/.test(messageId))) {
+        return { success: false };
+    }
+    return {
+        success: true,
+        messageIds: Array.from(new Set(value.map((messageId) => new ObjectId(messageId).toHexString()))),
     };
 };
 
@@ -190,6 +205,30 @@ export async function setFollowUpCompleted(
     );
     if (result.matchedCount === 1) return true;
     return Boolean(await dependencies.followUps.findOne(identity, { projection: { _id: 1 } }));
+}
+
+export async function listAuthorizedMessageFollowUpStatuses(
+    ownerDid: string,
+    messageIds: string[],
+    canReadConversations: FollowUpDependencies["canReadConversations"],
+    dependencies = defaultDependencies(canReadConversations),
+): Promise<ChatFollowUpStatus[]> {
+    if (!messageIds.length) return [];
+    const records = await dependencies.followUps
+        .find(
+            { ownerDid, messageId: { $in: messageIds } },
+            { projection: { messageId: 1, conversationId: 1, completedAt: 1 } },
+        )
+        .toArray();
+    const conversationIds = Array.from(new Set(records.map((record) => record.conversationId)));
+    const allowed = await dependencies.canReadConversations(ownerDid, conversationIds);
+    return records
+        .filter((record) => allowed.has(record.conversationId))
+        .map((record) => ({
+            messageId: record.messageId,
+            followUpId: record._id.toString(),
+            completed: record.completedAt instanceof Date,
+        }));
 }
 
 const buildCursorFilter = (cursor?: ChatFollowUpCursor): Filter<ChatMessageFollowUp> => {

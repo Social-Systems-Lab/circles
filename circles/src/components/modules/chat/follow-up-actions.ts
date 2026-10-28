@@ -4,9 +4,11 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import {
     CHAT_FOLLOW_UP_UNAVAILABLE,
     listAuthorizedMessageFollowUps,
+    listAuthorizedMessageFollowUpStatuses,
     markMessageForFollowUp,
     setFollowUpCompleted,
     parseChatFollowUpListOptions,
+    parseChatFollowUpStatusMessageIds,
     updateFollowUpNote,
 } from "@/lib/data/chat-message-followups";
 import { resolveMongoConversationAccessBatch } from "./mongo-actions";
@@ -47,4 +49,13 @@ export async function listMessageFollowUpsAction(options?: unknown) {
     if (!parsed.success) return { success: false, message: "Invalid request" };
     const result = await listAuthorizedMessageFollowUps(ownerDid, parsed.options, canReadConversations);
     return { success: true, ...result };
+}
+
+export async function getMessageFollowUpStatusesAction(messageIds: unknown) {
+    const ownerDid = await getAuthenticatedUserDid();
+    if (!ownerDid) return { success: false, message: "Not authenticated" };
+    const parsed = parseChatFollowUpStatusMessageIds(messageIds);
+    if (!parsed.success) return { success: false, message: "Invalid request" };
+    const statuses = await listAuthorizedMessageFollowUpStatuses(ownerDid, parsed.messageIds, canReadConversations);
+    return { success: true, statuses };
 }
