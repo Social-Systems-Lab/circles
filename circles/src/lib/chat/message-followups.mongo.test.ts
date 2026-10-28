@@ -73,10 +73,20 @@ async function main() {
         await ChatConversations.insertOne({
             _id: new ObjectId(conversationId),
             type: "dm",
+            name: `dm-${ownerDid}-${otherDid}`,
+            handle: `dm-${ownerDid}-${otherDid}`,
             participants: [ownerDid, otherDid],
             createdAt: originalConversationTime,
             updatedAt: originalConversationTime,
         });
+        await Circles.insertOne({
+            _id: new ObjectId(),
+            circleType: "user",
+            did: otherDid,
+            name: "Other User",
+            handle: "other",
+            picture: { url: "/storage/other.png" },
+        } as any);
         await ChatReadStates.insertOne({
             ownerDid,
             userDid: ownerDid,
@@ -164,19 +174,55 @@ async function main() {
         const ownerList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
         assert.equal(ownerList.items.length, 1);
         assert.equal(ownerList.items[0].message?.body, "Private source message");
-        assert.deepEqual(ownerList.items[0].message?.attachments, [
-            { name: "safe.txt", url: "/storage/safe.txt", mimeType: "text/plain", size: 12 },
-        ]);
+        assert.deepEqual(ownerList.items[0].message?.attachments, [{ name: "safe.txt" }]);
         assert.deepEqual(Object.keys(ownerList.items[0].message || {}).sort(), [
             "attachments",
             "body",
+            "conversation",
             "conversationId",
             "createdAt",
-            "id",
             "sender",
         ]);
+        assert.deepEqual(ownerList.items[0].message?.conversation, {
+            name: "Other User",
+            avatarUrl: "/storage/other.png",
+        });
+        assert.equal(JSON.stringify(ownerList.items[0]).includes(ownerDid), false);
+        assert.equal(JSON.stringify(ownerList.items[0]).includes(otherDid), false);
         const otherList = await listAuthorizedMessageFollowUps(otherDid, { limit: 10 }, canRead);
         assert.deepEqual(otherList.items, []);
+
+        const fallbackConversationId = new ObjectId().toString();
+        const fallbackMessageId = new ObjectId();
+        const missingParticipantDid = "did:missing-follow-up-participant";
+        await ChatConversations.insertOne({
+            _id: new ObjectId(fallbackConversationId),
+            type: "dm",
+            name: `dm-${ownerDid}-${missingParticipantDid}`,
+            handle: `dm-${ownerDid}-${missingParticipantDid}`,
+            participants: [ownerDid, missingParticipantDid],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+        await ChatMessageDocs.insertOne({
+            _id: fallbackMessageId,
+            conversationId: fallbackConversationId,
+            senderDid: ownerDid,
+            body: "Fallback DM",
+            createdAt: new Date(),
+        });
+        allowedByDid.set(ownerDid, new Set([conversationId, fallbackConversationId]));
+        const fallbackFollowUp = await markMessageForFollowUp(ownerDid, fallbackMessageId.toString(), canRead);
+        const fallbackList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
+        assert.equal(
+            fallbackList.items.find((item) => item.followUp.id === fallbackFollowUp?._id)?.message?.conversation.name,
+            "Direct message",
+        );
+        assert.equal(JSON.stringify(fallbackList.items).includes(missingParticipantDid), false);
+        await ChatMessageFollowUps.deleteOne({ _id: new ObjectId(fallbackFollowUp!._id) });
+        await ChatMessageDocs.deleteOne({ _id: fallbackMessageId });
+        await ChatConversations.deleteOne({ _id: new ObjectId(fallbackConversationId) });
+        allowedByDid.set(ownerDid, new Set([conversationId]));
 
         const secretOwner = {
             _id: "secret-circle",
@@ -298,7 +344,7 @@ async function main() {
         assert.equal(otherActionList.success, true);
         assert.ok("items" in otherActionList);
         assert.equal(
-            otherActionList.items.some((item) => item.followUp._id === actionMark.followUp!._id),
+            otherActionList.items.some((item) => item.followUp.id === actionMark.followUp!._id),
             false,
         );
         for (const malformed of [
@@ -325,7 +371,7 @@ async function main() {
         );
         assert.equal(actionList.success, true);
         assert.ok("items" in actionList);
-        const actionListItem = actionList.items.find((item) => item.followUp._id === actionMark.followUp?._id);
+        const actionListItem = actionList.items.find((item) => item.followUp.id === actionMark.followUp?._id);
         assert.equal(actionListItem?.message?.body, "Action message");
         assert.equal(Object.prototype.hasOwnProperty.call(actionListItem?.message || {}, "submissionId"), false);
 
@@ -348,7 +394,6 @@ async function main() {
                 visibility: "secret",
                 name: "Secret group",
             },
-            { _id: new ObjectId(), circleType: "user", did: otherDid, name: "Other User", handle: "other" },
         ] as any[]);
         await ChatConversations.insertMany([
             {
@@ -399,6 +444,21 @@ async function main() {
         );
         assert.equal(publicMark.success, true);
         assert.equal(secretMark.success, true);
+        const authorizedGroupList = await runWithAuthenticatedRequest(ownerDid, () =>
+            followUpActions.listMessageFollowUpsAction({ limit: 50 }),
+        );
+        assert.equal(authorizedGroupList.success, true);
+        assert.ok("items" in authorizedGroupList);
+        assert.equal(
+            authorizedGroupList.items.find((item) => item.followUp.id === publicMark.followUp?._id)?.message
+                ?.conversation.name,
+            "Public group",
+        );
+        assert.equal(
+            authorizedGroupList.items.find((item) => item.followUp.id === secretMark.followUp?._id)?.message
+                ?.conversation.name,
+            "Secret group",
+        );
 
         const authorizedGroupStatuses = await runWithAuthenticatedRequest(ownerDid, () =>
             followUpActions.getMessageFollowUpStatusesAction([publicMessageId.toString(), secretMessageId.toString()]),
@@ -419,7 +479,7 @@ async function main() {
         );
         assert.equal(revokedActionList.success, true);
         assert.ok("items" in revokedActionList);
-        const revokedIds = new Set(revokedActionList.items.map((item) => item.followUp._id));
+        const revokedIds = new Set(revokedActionList.items.map((item) => item.followUp.id));
         assert.equal(revokedIds.has(actionMark.followUp!._id), false);
         assert.equal(revokedIds.has(publicMark.followUp!._id), false);
         assert.equal(revokedIds.has(secretMark.followUp!._id), false);
@@ -434,9 +494,10 @@ async function main() {
 
         await ChatMessageDocs.deleteOne({ _id: messageId });
         const deletedList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
-        const deletedItem = deletedList.items.find((item) => item.followUp._id === created._id);
+        const deletedItem = deletedList.items.find((item) => item.followUp.id === created._id);
         assert.equal(deletedItem?.message, null);
-        assert.equal(deletedItem?.unavailableReason, "deleted");
+        assert.equal(deletedItem?.unavailableReason, "unavailable");
+        assert.deepEqual(Object.keys(deletedItem?.followUp || {}).sort(), ["createdAt", "id", "note", "updatedAt"]);
 
         const topicId = new ObjectId();
         const replyId = new ObjectId();
@@ -459,10 +520,20 @@ async function main() {
             },
         ]);
         const replyFollowUp = await markMessageForFollowUp(ownerDid, replyId.toString(), canRead);
+        const starterFollowUp = await markMessageForFollowUp(ownerDid, topicId.toString(), canRead);
         assert.equal(replyFollowUp?.topicId, topicId.toString());
+        assert.equal(starterFollowUp?.topicId, topicId.toString());
+        const topicList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
+        assert.deepEqual(topicList.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message?.topic, {
+            title: "Secret topic",
+        });
+        await ChatMessageDocs.updateOne({ _id: topicId }, { $set: { "thread.deletingAt": new Date() } } as any);
+        const deletingTopicList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
+        assert.equal(deletingTopicList.items.find((item) => item.followUp.id === starterFollowUp?._id)?.message, null);
+        assert.equal(deletingTopicList.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message, null);
         await ChatMessageDocs.deleteOne({ _id: topicId });
         const afterTopicDelete = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
-        assert.equal(afterTopicDelete.items.find((item) => item.followUp._id === replyFollowUp?._id)?.message, null);
+        assert.equal(afterTopicDelete.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message, null);
 
         allowedByDid.set(ownerDid, new Set());
         const revokedList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
@@ -497,7 +568,21 @@ async function main() {
             canRead,
         );
         assert.equal(secondPage.items.length, 2);
-        assert.equal(new Set([...firstPage.items, ...secondPage.items].map((item) => item.followUp._id)).size, 4);
+        assert.equal(new Set([...firstPage.items, ...secondPage.items].map((item) => item.followUp.id)).size, 4);
+
+        const inaccessibleConversationId = new ObjectId().toString();
+        const inaccessibleFollowUps = [0, 1].map((index) => ({
+            ownerDid,
+            messageId: new ObjectId().toString(),
+            conversationId: inaccessibleConversationId,
+            createdAt: new Date(`2099-01-0${index + 1}T00:00:00.000Z`),
+            updatedAt: new Date(`2099-01-0${index + 1}T00:00:00.000Z`),
+        }));
+        await ChatMessageFollowUps.insertMany(inaccessibleFollowUps);
+        const emptyAuthorizedPage = await listAuthorizedMessageFollowUps(ownerDid, { limit: 1 }, canRead);
+        assert.deepEqual(emptyAuthorizedPage.items, []);
+        assert.ok(emptyAuthorizedPage.nextCursor, "an authorization-filtered empty page must remain pageable");
+        await ChatMessageFollowUps.deleteMany({ conversationId: inaccessibleConversationId });
 
         assert.equal(
             (await ChatConversations.findOne({ _id: new ObjectId(conversationId) }))?.updatedAt?.toISOString(),

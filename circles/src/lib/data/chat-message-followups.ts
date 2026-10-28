@@ -1,7 +1,7 @@
 import { ObjectId, type Collection, type Filter } from "mongodb";
-import type { ChatMessageDoc, ChatMessageFollowUp } from "@/lib/chat/mongo-types";
+import type { ChatConversation, ChatMessageDoc, ChatMessageFollowUp } from "@/lib/chat/mongo-types";
 import type { Circle } from "@/models/models";
-import { ChatMessageDocs, ChatMessageFollowUps, Circles } from "./db";
+import { ChatConversations, ChatMessageDocs, ChatMessageFollowUps, Circles } from "./db";
 
 export const CHAT_FOLLOW_UP_UNAVAILABLE = "Follow-up unavailable";
 export const CHAT_FOLLOW_UP_NOTE_MAX_LENGTH = 4000;
@@ -11,19 +11,27 @@ export const CHAT_FOLLOW_UP_STATUS_BATCH_MAX = 200;
 export type ChatFollowUpCursor = { updatedAt: string; id: string };
 export type ChatFollowUpListOptions = { completed?: boolean; limit?: number; cursor?: ChatFollowUpCursor };
 export type ChatFollowUpMessagePresentation = {
-    id: string;
     conversationId: string;
     topicId?: string;
-    sender: { did: string; name?: string; handle?: string; avatarUrl?: string };
+    sender: { name?: string; handle?: string; avatarUrl?: string };
     body: string;
     createdAt: Date;
     editedAt?: Date;
-    attachments: Array<{ name: string; url: string; mimeType?: string; size?: number }>;
+    attachments: Array<{ name: string }>;
+    conversation: { name: string; avatarUrl?: string };
+    topic?: { title: string };
+};
+export type ChatFollowUpPresentation = {
+    id: string;
+    note?: string;
+    createdAt: Date;
+    updatedAt: Date;
+    completedAt?: Date;
 };
 export type ChatFollowUpListItem = {
-    followUp: ChatMessageFollowUp & { _id: string };
+    followUp: ChatFollowUpPresentation;
     message: ChatFollowUpMessagePresentation | null;
-    unavailableReason?: "deleted";
+    unavailableReason?: "unavailable";
 };
 export type ChatFollowUpStatus = { messageId: string; followUpId: string; completed: boolean };
 
@@ -31,6 +39,7 @@ type FollowUpDependencies = {
     followUps: Collection<ChatMessageFollowUp>;
     messages: Collection<ChatMessageDoc>;
     senders: Collection<Circle>;
+    conversations: Collection<ChatConversation>;
     canReadConversations(ownerDid: string, conversationIds: string[]): Promise<Set<string>>;
 };
 
@@ -40,6 +49,7 @@ const defaultDependencies = (
     followUps: ChatMessageFollowUps,
     messages: ChatMessageDocs,
     senders: Circles,
+    conversations: ChatConversations,
     canReadConversations,
 });
 
@@ -112,6 +122,22 @@ const serializeFollowUp = (followUp: ChatMessageFollowUp): ChatMessageFollowUp &
     ...followUp,
     _id: followUp._id.toString(),
 });
+
+const presentFollowUp = (followUp: ChatMessageFollowUp): ChatFollowUpPresentation => ({
+    id: followUp._id.toString(),
+    ...(followUp.note ? { note: followUp.note } : {}),
+    createdAt: followUp.createdAt,
+    updatedAt: followUp.updatedAt,
+    ...(followUp.completedAt ? { completedAt: followUp.completedAt } : {}),
+});
+
+const safeDmName = (value: string | undefined, participantDids: string[]): string | undefined => {
+    const name = value?.trim();
+    if (!name) return undefined;
+    return name.startsWith("dm-") || participantDids.some((participantDid) => name.includes(participantDid))
+        ? undefined
+        : name;
+};
 
 const loadValidTarget = async (
     ownerDid: string,
@@ -259,16 +285,64 @@ export async function listAuthorizedMessageFollowUps(
     const conversationIds = Array.from(new Set(page.map((record) => record.conversationId)));
     const allowed = await dependencies.canReadConversations(ownerDid, conversationIds);
     const visibleRecords = page.filter((record) => allowed.has(record.conversationId));
+    const visibleConversationIds = Array.from(new Set(visibleRecords.map((record) => record.conversationId)));
+    const visibleConversationObjectIds = visibleConversationIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
+    const conversations = visibleConversationIds.length
+        ? await dependencies.conversations
+              .find(
+                  {
+                      $or: [
+                          { _id: { $in: visibleConversationObjectIds } },
+                          { handle: { $in: visibleConversationIds } },
+                      ],
+                  },
+                  { projection: { type: 1, name: 1, picture: 1, handle: 1, participants: 1, circleId: 1 } },
+              )
+              .toArray()
+        : [];
+    const conversationById = new Map(
+        conversations.flatMap((conversation) => [
+            [conversation._id.toString(), conversation] as const,
+            ...(conversation.handle ? ([[conversation.handle, conversation]] as const) : []),
+        ]),
+    );
     const messageIds = visibleRecords.map((record) => new ObjectId(record.messageId));
     const messages = messageIds.length ? await dependencies.messages.find({ _id: { $in: messageIds } }).toArray() : [];
     const messageById = new Map(messages.map((message) => [message._id.toString(), message]));
-    const senderDids = Array.from(new Set(messages.map((message) => message.senderDid)));
-    const senders = senderDids.length
-        ? await dependencies.senders
-              .find({ did: { $in: senderDids } }, { projection: { did: 1, name: 1, handle: 1, "picture.url": 1 } })
-              .toArray()
-        : [];
-    const senderByDid = new Map(senders.map((sender) => [sender.did, sender]));
+    const senderDids = messages.map((message) => message.senderDid);
+    const dmParticipantDids = conversations.flatMap((conversation) =>
+        conversation.type === "dm"
+            ? conversation.participants.filter((participantDid) => participantDid !== ownerDid)
+            : [],
+    );
+    const presentationDids = Array.from(new Set([...senderDids, ...dmParticipantDids]));
+    const circleObjectIds = Array.from(
+        new Set(
+            conversations
+                .map((conversation) => conversation.circleId)
+                .filter((circleId): circleId is string => !!circleId && ObjectId.isValid(circleId)),
+        ),
+    ).map((circleId) => new ObjectId(circleId));
+    const presenters =
+        presentationDids.length || circleObjectIds.length
+            ? await dependencies.senders
+                  .find(
+                      {
+                          $or: [
+                              { did: { $in: presentationDids } },
+                              ...((circleObjectIds.length
+                                  ? [{ _id: { $in: circleObjectIds } }]
+                                  : []) as Filter<Circle>[]),
+                          ],
+                      },
+                      { projection: { did: 1, name: 1, handle: 1, "picture.url": 1 } },
+                  )
+                  .toArray()
+            : [];
+    const presenterByDid = new Map(
+        presenters.filter((presenter) => presenter.did).map((presenter) => [presenter.did!, presenter]),
+    );
+    const presenterById = new Map(presenters.map((presenter) => [presenter._id.toString(), presenter]));
     const topicIds = Array.from(
         new Set(messages.map((message) => message.threadId).filter((topicId): topicId is string => !!topicId)),
     );
@@ -282,23 +356,42 @@ export async function listAuthorizedMessageFollowUps(
               .toArray()
         : [];
     const existingTopicIds = new Set(existingTopics.map((topic) => topic._id.toString()));
+    const topicById = new Map(existingTopics.map((topic) => [topic._id.toString(), topic]));
     const items = visibleRecords.map((followUp) => {
         const message = messageById.get(followUp.messageId);
         const validMessage =
             message?.conversationId === followUp.conversationId &&
+            !(message.thread && "deletingAt" in message.thread) &&
             (!message.threadId || (message.threadId === followUp.topicId && existingTopicIds.has(message.threadId)))
                 ? message
                 : null;
-        const sender = validMessage ? senderByDid.get(validMessage.senderDid) : undefined;
+        const sender = validMessage ? presenterByDid.get(validMessage.senderDid) : undefined;
+        const conversation = validMessage ? conversationById.get(followUp.conversationId) : undefined;
+        const topic = validMessage?.threadId ? topicById.get(validMessage.threadId) : validMessage;
+        const otherParticipant =
+            conversation?.type === "dm"
+                ? presenterByDid.get(
+                      conversation.participants.find((participantDid) => participantDid !== ownerDid) || "",
+                  )
+                : undefined;
+        const ownerCircle = conversation?.circleId ? presenterById.get(conversation.circleId) : undefined;
+        const conversationName =
+            conversation?.type === "dm"
+                ? safeDmName(otherParticipant?.name, conversation.participants) ||
+                  safeDmName(conversation.name, conversation.participants) ||
+                  "Direct message"
+                : ownerCircle?.name?.trim() || conversation?.name?.trim() || "Conversation";
+        const conversationAvatarUrl =
+            conversation?.type === "dm"
+                ? otherParticipant?.picture?.url || conversation.picture?.url
+                : ownerCircle?.picture?.url || conversation?.picture?.url;
         return {
-            followUp: serializeFollowUp(followUp),
+            followUp: presentFollowUp(followUp),
             message: validMessage
                 ? {
-                      id: validMessage._id.toString(),
                       conversationId: followUp.conversationId,
                       ...(followUp.topicId ? { topicId: followUp.topicId } : {}),
                       sender: {
-                          did: validMessage.senderDid,
                           ...(sender?.name ? { name: sender.name } : {}),
                           ...(sender?.handle ? { handle: sender.handle } : {}),
                           ...(sender?.picture?.url ? { avatarUrl: sender.picture.url } : {}),
@@ -306,15 +399,17 @@ export async function listAuthorizedMessageFollowUps(
                       body: validMessage.body,
                       createdAt: validMessage.createdAt,
                       ...(validMessage.editedAt ? { editedAt: validMessage.editedAt } : {}),
-                      attachments: (validMessage.attachments || []).map((attachment) => ({
-                          name: attachment.name,
-                          url: attachment.url,
-                          ...(attachment.mimeType ? { mimeType: attachment.mimeType } : {}),
-                          ...(typeof attachment.size === "number" ? { size: attachment.size } : {}),
-                      })),
+                      attachments: (validMessage.attachments || []).map((attachment) => ({ name: attachment.name })),
+                      conversation: {
+                          name: conversationName,
+                          ...(conversationAvatarUrl ? { avatarUrl: conversationAvatarUrl } : {}),
+                      },
+                      ...(followUp.topicId && topic?.thread?.title?.trim()
+                          ? { topic: { title: topic.thread.title.trim() } }
+                          : {}),
                   }
                 : null,
-            ...(validMessage ? {} : { unavailableReason: "deleted" as const }),
+            ...(validMessage ? {} : { unavailableReason: "unavailable" as const }),
         };
     });
     const last = page[page.length - 1];
