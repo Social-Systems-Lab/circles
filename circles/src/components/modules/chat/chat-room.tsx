@@ -106,6 +106,12 @@ import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import { getConversationListPath } from "@/lib/chat/chat-index-navigation";
 import {
+    MessageFollowUpAction,
+    MessageFollowUpNoteDialog,
+    useHydrateMessageFollowUpStatuses,
+} from "./message-follow-up-action";
+import { canShowExistingReplyActions, canShowMessageFollowUpAction } from "./message-follow-up-ui";
+import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
     shouldShowLegacyLooseMessageSection,
@@ -1164,6 +1170,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const orderedMessages = displayedTopicIds
         .map((topicId) => topicById.get(topicId))
         .filter((message): message is ChatMessage => !!message);
+    useHydrateMessageFollowUpStatuses(
+        user?.did || currentUser?.did || "",
+        orderedMessages.filter(canShowMessageFollowUpAction).map((message) => message.id),
+    );
 
     const emptyTopicState =
         topicsLoaded && topicMessages.length === 0 ? (
@@ -1245,6 +1255,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 const bubbleRadius = "12px";
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
+                const canFollowUpMessage = canShowMessageFollowUpAction(message);
                 const bubbleStatusClasses =
                     message.status === "pending"
                         ? "opacity-70"
@@ -1344,13 +1355,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         </div>
                                     )}
 
-                                    {canReply &&
+                                    {(canReply || canFollowUpMessage) &&
                                         (hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
                                             <div
                                                 className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
                                                 onClick={(e) => e.stopPropagation()}
                                             >
-                                                {isOwnMessage && (
+                                                {isOwnMessage && canReply && (
                                                     <>
                                                         {canEditMessage && (
                                                             <Button
@@ -1384,26 +1395,36 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                         <MdReply className="h-4 w-4" />
                                                     </Button>
                                                 )}
-                                                <Popover
-                                                    open={pickerOpenForMessage === message.id}
-                                                    onOpenChange={(isOpen) =>
-                                                        setPickerOpenForMessage(isOpen ? message.id : null)
-                                                    }
-                                                >
-                                                    <PopoverTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                            <BsEmojiSmile className="h-4 w-4" />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                        <LazyEmojiPicker
-                                                            onEmojiClick={(emojiData: EmojiClickData) => {
-                                                                handleReaction(message, emojiData.emoji);
-                                                                setPickerOpenForMessage(null);
-                                                            }}
-                                                        />
-                                                    </PopoverContent>
-                                                </Popover>
+                                                {canFollowUpMessage && (
+                                                    <MessageFollowUpAction
+                                                        messageId={message.id}
+                                                        viewerDid={user?.did || currentUser?.did || ""}
+                                                        variant="icon"
+                                                        iconSize="compact"
+                                                    />
+                                                )}
+                                                {canReply && (
+                                                    <Popover
+                                                        open={pickerOpenForMessage === message.id}
+                                                        onOpenChange={(isOpen) =>
+                                                            setPickerOpenForMessage(isOpen ? message.id : null)
+                                                        }
+                                                    >
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                                <BsEmojiSmile className="h-4 w-4" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                            <LazyEmojiPicker
+                                                                onEmojiClick={(emojiData: EmojiClickData) => {
+                                                                    handleReaction(message, emojiData.emoji);
+                                                                    setPickerOpenForMessage(null);
+                                                                }}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                )}
                                             </div>
                                         )}
                                 </div>
@@ -1427,6 +1448,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
+            <MessageFollowUpNoteDialog />
             <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
@@ -2258,6 +2280,10 @@ const TopicCard: React.FC<{
     });
 
     const [replies, setReplies] = useState<ChatMessage[]>([]);
+    useHydrateMessageFollowUpStatuses(
+        user?.did || "",
+        replies.filter(canShowMessageFollowUpAction).map((reply) => reply.id),
+    );
     const [isLoading, setIsLoading] = useState(false);
     const topicTextDraftKey = getTopicTextDraftKey(user?.did, conversationId, messageId);
     const [replyDraftState, setReplyDraftState] = useState<{ key: string | null; text: string }>({
@@ -3215,6 +3241,7 @@ const TopicCard: React.FC<{
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
     const effectiveStarterBody = topicDescription;
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
+    const canFollowUpStarter = canShowMessageFollowUpAction(message);
     const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
     const starterCreatedAt = new Date(message.createdAt);
     const renderUnreadBoundary = (boundaryMessageId: string) =>
@@ -3325,7 +3352,7 @@ const TopicCard: React.FC<{
                         <span className="border-l border-gray-300 pl-2">
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
-                        {canReply && isOwnStarter && (
+                        {(canFollowUpStarter || (canReply && isOwnStarter)) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -3341,25 +3368,36 @@ const TopicCard: React.FC<{
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-                                    <DropdownMenuItem
-                                        onSelect={() => {
-                                            setEditingTopicTitle(thread.title || "");
-                                            setEditingTopicBody(effectiveStarterBody);
-                                            setTopicMutationError("");
-                                            setIsEditingTopic(true);
-                                        }}
-                                    >
-                                        <GrEdit className="mr-2 h-4 w-4" />
-                                        Edit topic
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className="text-red-600 focus:text-red-600"
-                                        disabled={isMutatingTopic}
-                                        onSelect={() => void handleDeleteTopic()}
-                                    >
-                                        <GrTrash className="mr-2 h-4 w-4" />
-                                        Delete topic
-                                    </DropdownMenuItem>
+                                    {canFollowUpStarter && (
+                                        <MessageFollowUpAction
+                                            messageId={messageId}
+                                            viewerDid={user?.did || ""}
+                                            variant="menu"
+                                        />
+                                    )}
+                                    {canReply && isOwnStarter && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onSelect={() => {
+                                                    setEditingTopicTitle(thread.title || "");
+                                                    setEditingTopicBody(effectiveStarterBody);
+                                                    setTopicMutationError("");
+                                                    setIsEditingTopic(true);
+                                                }}
+                                            >
+                                                <GrEdit className="mr-2 h-4 w-4" />
+                                                Edit topic
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="text-red-600 focus:text-red-600"
+                                                disabled={isMutatingTopic}
+                                                onSelect={() => void handleDeleteTopic()}
+                                            >
+                                                <GrTrash className="mr-2 h-4 w-4" />
+                                                Delete topic
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
@@ -3378,6 +3416,8 @@ const TopicCard: React.FC<{
                         )}
                         {replies.map((reply, replyIndex) => {
                             const isOwn = reply.createdBy === user?.did;
+                            const canFollowUpReply = canShowMessageFollowUpAction(reply);
+                            const canShowReplyActions = canShowExistingReplyActions(reply, canReply);
                             const isEditing = editingReplyId === reply.id;
                             const replyCreatedAt = new Date(reply.createdAt);
                             const previousVisibleCreatedAt =
@@ -3457,16 +3497,15 @@ const TopicCard: React.FC<{
                                                 ) : (
                                                     <MessageRenderer message={reply} />
                                                 )}
-                                                {canReply &&
+                                                {(canShowReplyActions || canFollowUpReply) &&
                                                     (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
-                                                    !isEditing &&
-                                                    !reply.status && (
+                                                    !isEditing && (
                                                         <div
                                                             className="absolute -bottom-3 right-2 z-10"
                                                             onClick={(event) => event.stopPropagation()}
                                                         >
                                                             <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                                                {isOwn && (
+                                                                {isOwn && canShowReplyActions && (
                                                                     <>
                                                                         <Button
                                                                             variant="ghost"
@@ -3494,41 +3533,56 @@ const TopicCard: React.FC<{
                                                                         </Button>
                                                                     </>
                                                                 )}
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8"
-                                                                    onClick={() => setReplyToMessage(reply)}
-                                                                >
-                                                                    <MdReply className="h-4 w-4" />
-                                                                </Button>
-                                                                <Popover
-                                                                    open={pickerOpenForReply === reply.id}
-                                                                    onOpenChange={(open) =>
-                                                                        setPickerOpenForReply(open ? reply.id : null)
-                                                                    }
-                                                                >
-                                                                    <PopoverTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8"
-                                                                        >
-                                                                            <BsEmojiSmile className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </PopoverTrigger>
-                                                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                                        <LazyEmojiPicker
-                                                                            onEmojiClick={(data: EmojiClickData) => {
-                                                                                void handleReaction(
-                                                                                    reply.id,
-                                                                                    data.emoji,
-                                                                                );
-                                                                                setPickerOpenForReply(null);
-                                                                            }}
-                                                                        />
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                {canShowReplyActions && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                        onClick={() => setReplyToMessage(reply)}
+                                                                    >
+                                                                        <MdReply className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                                {canFollowUpReply && (
+                                                                    <MessageFollowUpAction
+                                                                        messageId={reply.id}
+                                                                        viewerDid={user?.did || ""}
+                                                                        variant="icon"
+                                                                    />
+                                                                )}
+                                                                {canShowReplyActions && (
+                                                                    <Popover
+                                                                        open={pickerOpenForReply === reply.id}
+                                                                        onOpenChange={(open) =>
+                                                                            setPickerOpenForReply(
+                                                                                open ? reply.id : null,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8"
+                                                                            >
+                                                                                <BsEmojiSmile className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                                            <LazyEmojiPicker
+                                                                                onEmojiClick={(
+                                                                                    data: EmojiClickData,
+                                                                                ) => {
+                                                                                    void handleReaction(
+                                                                                        reply.id,
+                                                                                        data.emoji,
+                                                                                    );
+                                                                                    setPickerOpenForReply(null);
+                                                                                }}
+                                                                            />
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     )}
