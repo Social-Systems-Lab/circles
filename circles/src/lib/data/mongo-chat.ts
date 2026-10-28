@@ -535,7 +535,10 @@ export const getLatestMessageIdForConversation = async (conversationId: string):
 };
 
 export class PersistedChatMessageActivityError extends Error {
-    constructor(public readonly persistedMessage: ChatMessageDoc, cause: unknown) {
+    constructor(
+        public readonly persistedMessage: ChatMessageDoc,
+        cause: unknown,
+    ) {
         super("Message was saved, but chat activity could not be updated");
         this.name = "PersistedChatMessageActivityError";
         (this as Error & { cause?: unknown }).cause = cause;
@@ -566,10 +569,7 @@ export const refreshPersistedMessageActivity = async (message: ChatMessageDoc): 
     await ChatConversations.updateOne(
         {
             _id: new ObjectId(message.conversationId),
-            $or: [
-                { updatedAt: { $exists: false } },
-                { updatedAt: { $lt: message.createdAt } },
-            ],
+            $or: [{ updatedAt: { $exists: false } }, { updatedAt: { $lt: message.createdAt } }],
         },
         {
             $max: { updatedAt: message.createdAt },
@@ -888,23 +888,36 @@ export const toggleReaction = async (
     messageId: string,
     userDid: string,
     emoji: string,
-): Promise<ChatReaction[] | null> => {
+): Promise<{ reactions: ChatReaction[]; added: boolean } | null> => {
     const objectId = toObjectId(messageId);
     if (!objectId) return null;
-    const message = (await ChatMessageDocs.findOne({ _id: objectId })) as ChatMessageDoc | null;
-    if (!message) return null;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const message = (await ChatMessageDocs.findOne(
+            { _id: objectId },
+            { projection: { reactions: 1 } },
+        )) as ChatMessageDoc | null;
+        if (!message) return null;
 
-    const reactions = message.reactions ? [...message.reactions] : [];
-    const existingIndex = reactions.findIndex((reaction) => reaction.userDid === userDid && reaction.emoji === emoji);
+        const hasPersistedReactions = Object.prototype.hasOwnProperty.call(message, "reactions");
+        const previousReactions = message.reactions ? [...message.reactions] : [];
+        const reactions = [...previousReactions];
+        const existingIndex = reactions.findIndex(
+            (reaction) => reaction.userDid === userDid && reaction.emoji === emoji,
+        );
+        const added = existingIndex < 0;
+        if (added) reactions.push({ emoji, userDid, createdAt: new Date() });
+        else reactions.splice(existingIndex, 1);
 
-    if (existingIndex >= 0) {
-        reactions.splice(existingIndex, 1);
-    } else {
-        reactions.push({ emoji, userDid, createdAt: new Date() });
+        const snapshotFilter = hasPersistedReactions
+            ? { reactions: message.reactions ?? null }
+            : { reactions: { $exists: false } };
+        const result = await ChatMessageDocs.updateOne({ _id: objectId, ...snapshotFilter } as any, {
+            $set: { reactions },
+        });
+        if (result.matchedCount === 1 && result.modifiedCount === 1) return { reactions, added };
+        if (result.matchedCount === 1) return null;
     }
-
-    await ChatMessageDocs.updateOne({ _id: objectId }, { $set: { reactions } });
-    return reactions;
+    return null;
 };
 
 const advanceCursorChronologically = async ({

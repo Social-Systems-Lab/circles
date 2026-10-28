@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import test from "node:test";
 import type { ChatMessage } from "@/models/models";
 import {
     FIRST_TOPIC_DEFAULT_TITLE,
@@ -31,6 +32,8 @@ import {
     selectQueuedTopicAcknowledgementBoundary,
     selectTopicAcknowledgementBoundary,
     shouldAcknowledgeTopicInteraction,
+    shouldRefreshUnreadAfterReaction,
+    KeyedTaskQueue,
     shouldAcknowledgeTopicIndicatorFromDraft,
     shouldAutoScrollTopicReplies,
     shouldRenderTopicFeed,
@@ -98,6 +101,63 @@ assert.equal(
     "the current reply response applies to an open topic",
 );
 
+test("keyed reaction tasks preserve click order for one message", async () => {
+    const queue = new KeyedTaskQueue();
+    const order: string[] = [];
+    let reactionPresent = false;
+    let releaseAddition!: () => void;
+    let confirmAdditionStarted!: () => void;
+    const additionGate = new Promise<void>((resolve) => {
+        releaseAddition = resolve;
+    });
+    const additionStarted = new Promise<void>((resolve) => {
+        confirmAdditionStarted = resolve;
+    });
+    const addition = queue.enqueue("message-a", async () => {
+        order.push("addition-start");
+        confirmAdditionStarted();
+        await additionGate;
+        reactionPresent = true;
+        order.push("addition-finish");
+        return "added";
+    });
+    const removal = queue.enqueue("message-a", async () => {
+        reactionPresent = false;
+        order.push("removal");
+        return "removed";
+    });
+    await additionStarted;
+    assert.deepEqual(order, ["addition-start"]);
+    releaseAddition();
+    assert.equal(await addition, "added");
+    assert.equal(await removal, "removed");
+    assert.deepEqual(order, ["addition-start", "addition-finish", "removal"]);
+    assert.equal(reactionPresent, false, "the queued removal determines the final reaction state");
+});
+
+test("keyed reaction tasks run independently for different messages", async () => {
+    const queue = new KeyedTaskQueue();
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+    });
+    const first = queue.enqueue("message-a", async () => firstGate);
+    const second = queue.enqueue("message-b", async () => "message-b-finished");
+    assert.equal(await second, "message-b-finished");
+    releaseFirst();
+    await first;
+});
+
+test("a failed keyed reaction task does not block the next click", async () => {
+    const queue = new KeyedTaskQueue();
+    const failure = queue.enqueue("message-a", async () => {
+        throw new Error("simulated reaction failure");
+    });
+    const next = queue.enqueue("message-a", async () => "next-finished");
+    await assert.rejects(failure, /simulated reaction failure/);
+    assert.equal(await next, "next-finished");
+});
+
 const topicId = "64a000000000000000000001";
 const replyA = "64a000000000000000000002";
 const replyB = "64a000000000000000000003";
@@ -114,6 +174,26 @@ for (const interaction of ["typing", "emoji", "send", "attachment", "mark-read"]
 for (const interaction of ["scroll", "expand", "close", "navigate", "draft-state"] as const) {
     assert.equal(shouldAcknowledgeTopicInteraction(interaction), false, `${interaction} does not acknowledge`);
 }
+assert.equal(
+    shouldRefreshUnreadAfterReaction({ success: true, reactionAdded: true, readStatePersisted: true }),
+    true,
+    "a successful reaction addition refreshes unread counts",
+);
+assert.equal(
+    shouldRefreshUnreadAfterReaction({ success: true, reactionAdded: false, readStatePersisted: true }),
+    false,
+    "reaction removal does not refresh unread counts",
+);
+assert.equal(
+    shouldRefreshUnreadAfterReaction({ success: false, reactionAdded: true, readStatePersisted: true }),
+    false,
+    "a failed reaction does not refresh unread counts",
+);
+assert.equal(
+    shouldRefreshUnreadAfterReaction({ success: true, reactionAdded: true, readStatePersisted: false }),
+    false,
+    "a reaction with failed read persistence does not refresh unread counts",
+);
 assert.equal(
     selectTopicAcknowledgementBoundary({
         topicId,
