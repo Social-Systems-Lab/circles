@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookmarkCheck, BookmarkPlus, Loader2 } from "lucide-react";
+import { Bookmark, BookmarkCheck, BookmarkPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
@@ -259,7 +259,7 @@ export const MessageFollowUpIndicator = ({ messageId, viewerDid }: { messageId: 
             aria-label="Edit private follow-up note"
             title="Saved for follow-up"
         >
-            <BookmarkCheck className="h-4 w-4" aria-hidden="true" />
+            <Bookmark className="h-4 w-4 fill-current" aria-hidden="true" />
         </Button>
     );
 };
