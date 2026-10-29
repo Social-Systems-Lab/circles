@@ -15,6 +15,7 @@ import { assertCanonicalUserHandle } from "./canonical-user-handle";
 import { addMember, getMembers } from "../data/member";
 import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } from "../data/circle";
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
+import { mayLogSensitiveDevelopmentEmailLinks } from "@/lib/email/capture-config";
 import { canParticipate } from "@/lib/profile-completion";
 import { canReadCircleByLifecycle, canWriteCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
 
@@ -53,7 +54,13 @@ export const createUserAccount = async (
     type: AccountType,
     email: string,
     password: string,
-): Promise<Circle & { devVerificationToken?: string; devVerificationUrl?: string }> => {
+): Promise<
+    Circle & {
+        devVerificationToken?: string;
+        devVerificationUrl?: string;
+        verificationEmailStatus?: "sent" | "failed";
+    }
+> => {
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
     }
@@ -117,7 +124,7 @@ export const createUserAccount = async (
     const hashedVerificationToken = hashToken(unhashedVerificationToken);
     const verificationTokenExpiry = new Date(Date.now() + 24 * 3600 * 1000); // 24 hours expiry
 
-    let user: Circle = createNewUser(
+    let user: Circle & { verificationEmailStatus?: "sent" | "failed" } = createNewUser(
         did,
         publicKeyPem as string,
         name,
@@ -144,7 +151,7 @@ export const createUserAccount = async (
 
     // Send verification email
     const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
-    if (process.env.NODE_ENV !== "production") {
+    if (mayLogSensitiveDevelopmentEmailLinks()) {
         console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
         console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
         const devUser = user as Circle & { devVerificationToken?: string; devVerificationUrl?: string };
@@ -162,10 +169,10 @@ export const createUserAccount = async (
         });
         await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
         console.log(`Verification email sent to ${email}`);
+        user.verificationEmailStatus = "sent";
     } catch (error) {
         console.error(`Failed to send verification email to ${email}:`, error);
-        // Decide if account creation should fail if email sending fails.
-        // For now, we'll log the error and continue. User can request resend later.
+        user.verificationEmailStatus = "failed";
     }
 
     // add user as member of their own circle

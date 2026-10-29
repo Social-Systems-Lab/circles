@@ -5,6 +5,7 @@ import { sendEmail, generateSecureToken, hashToken } from "@/lib/data/email";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { emailSchema } from "@/models/models"; // Assuming emailSchema is in models
+import { mayLogSensitiveDevelopmentEmailLinks } from "@/lib/email/capture-config";
 
 interface RequestPasswordResetResponse {
     success: boolean;
@@ -99,8 +100,8 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                 isLocalBaseUrl = false;
             }
             const shouldLogResetLink =
-                isLocalBaseUrl ||
-                (process.env.CIRCLES_DEV_LOG_PASSWORD_RESET === "true" && process.env.NODE_ENV !== "production");
+                mayLogSensitiveDevelopmentEmailLinks() &&
+                (isLocalBaseUrl || process.env.CIRCLES_DEV_LOG_PASSWORD_RESET === "true");
 
             if (shouldLogResetLink) {
                 console.log(`[DEV_RESET_LINK] email=${user.email} url=${resetLink} token=${unhashedToken}`);

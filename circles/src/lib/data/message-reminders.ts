@@ -3,6 +3,7 @@ import type { ChatConversation, ChatMessageDoc, ChatReadState, MessageEmailRemin
 import { ChatConversations, ChatMessageDocs, ChatTopicReadStates, Circles, MessageEmailReminders } from "./db";
 import { resolveTopicMigrationFallback, resolveTopicReadBoundary } from "@/lib/chat/topic-read-state";
 import { sendEmail } from "./email";
+import { isEmailTransportAvailable } from "@/lib/email/capture-config";
 import { ensureChatReadStateV2 } from "./mongo-chat";
 import {
     buildMessagesAfterPositionQuery,
@@ -302,8 +303,8 @@ const processClaimedMessageEmailReminder = async (
             };
         }
 
-        if (!process.env.POSTMARK_API_TOKEN || !process.env.POSTMARK_SENDER_EMAIL) {
-            const failureReason = "postmark_not_configured";
+        if (!isEmailTransportAvailable()) {
+            const failureReason = "email_transport_not_configured";
             await markReminderFailed(claimed._id, failureReason);
             return {
                 outcome: "failed",

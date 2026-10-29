@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { Circles, Notifications } from "./db";
 import { sendEmail } from "./email";
+import { isEmailTransportAvailable } from "@/lib/email/capture-config";
 import type { NotificationType } from "@/models/models";
 
 const DAILY_DIGEST_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -225,7 +226,7 @@ export const processDailyActionableEmailDigests = async (
         failed: 0,
     };
 
-    if (!process.env.POSTMARK_API_TOKEN || !process.env.POSTMARK_SENDER_EMAIL) {
+    if (!isEmailTransportAvailable()) {
         return stats;
     }
 

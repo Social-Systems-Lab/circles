@@ -112,14 +112,18 @@ async function handleNewSubscription(donation: any) {
         const userPrivate = await getUserPrivate(user.did);
         if (userPrivate) {
             await sendUserBecomesMemberNotification(userPrivate);
-            await sendEmail({
-                to: user.email,
-                templateAlias: "new-member-welcome",
-                templateModel: {
-                    name: user.name,
-                    action_url: process.env.CIRCLES_URL || "http://localhost:3000",
-                },
-            });
+            try {
+                await sendEmail({
+                    to: user.email,
+                    templateAlias: "new-member-welcome",
+                    templateModel: {
+                        name: user.name,
+                        action_url: process.env.CIRCLES_URL || "http://localhost:3000",
+                    },
+                });
+            } catch {
+                console.error("Member activation succeeded, but the welcome email could not be delivered.");
+            }
         }
     }
 }
@@ -165,14 +169,18 @@ async function handlePlanUpdate(plan: any) {
         const userPrivate = await getUserPrivate(user.did);
         if (userPrivate) {
             await sendUserBecomesMemberNotification(userPrivate);
-            await sendEmail({
-                to: user.email,
-                templateAlias: "new-member-welcome",
-                templateModel: {
-                    name: user.name,
-                    action_url: process.env.CIRCLES_URL || "http://localhost:3000",
-                },
-            });
+            try {
+                await sendEmail({
+                    to: user.email,
+                    templateAlias: "new-member-welcome",
+                    templateModel: {
+                        name: user.name,
+                        action_url: process.env.CIRCLES_URL || "http://localhost:3000",
+                    },
+                });
+            } catch {
+                console.error("Membership update succeeded, but the welcome email could not be delivered.");
+            }
         }
     }
 }

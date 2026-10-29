@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { submitSignupFormAction } from "./actions";
+import { getSignupDeliveryNotice } from "./verification-delivery";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { DynamicAutoHandleField } from "../dynamic-field";
@@ -81,9 +82,14 @@ export function SignupForm(): React.ReactElement {
         try {
             const result = await submitSignupFormAction({ ...data, altcha: altchaPayload });
             if (result.success) {
+                const deliveryNotice = getSignupDeliveryNotice(
+                    result.data.verificationEmailStatus,
+                    "Welcome! Redirecting you now...",
+                );
                 toast({
-                    title: "Signup Successful",
-                    description: "Welcome! Redirecting you now...",
+                    title: deliveryNotice.title,
+                    description: deliveryNotice.description,
+                    ...(deliveryNotice.deliveryFailed ? { variant: "destructive" as const } : {}),
                 });
 
                 // set logged in user and authenticate status

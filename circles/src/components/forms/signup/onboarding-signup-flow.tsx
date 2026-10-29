@@ -10,6 +10,7 @@ import { Camera, Loader2 } from "lucide-react";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { submitSignupFormAction } from "@/components/forms/signup/actions";
+import { getSignupDeliveryNotice } from "@/components/forms/signup/verification-delivery";
 import {
     saveDonationIntentAction,
     saveInterestsAction,
@@ -408,9 +409,14 @@ export function OnboardingSignupFlow() {
             setCreatedUserHandle(result.data.user.handle || sanitizeHandle(state.handle));
             setVibeIdSignupRequestId(null);
 
+            const deliveryNotice = getSignupDeliveryNotice(
+                "verificationEmailStatus" in result.data ? result.data.verificationEmailStatus : undefined,
+                "Now finish your profile so your page feels like yours.",
+            );
             toast({
-                title: "Account created",
-                description: "Now finish your profile so your page feels like yours.",
+                title: deliveryNotice.title,
+                description: deliveryNotice.description,
+                ...(deliveryNotice.deliveryFailed ? { variant: "destructive" as const } : {}),
             });
 
             setStepIndex(4);

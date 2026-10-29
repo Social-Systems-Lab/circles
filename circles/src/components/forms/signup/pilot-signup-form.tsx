@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 import { submitSignupFormAction } from "@/components/forms/signup/actions";
+import { getSignupDeliveryNotice } from "@/components/forms/signup/verification-delivery";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -193,14 +194,20 @@ export function PilotSignupForm() {
             setUser(result.data.user);
             setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
 
+            const deliveryNotice = getSignupDeliveryNotice(
+                result.data.verificationEmailStatus,
+                "Now verify your email. You can continue into Kamooni after that.",
+            );
             toast({
-                title: "Account created",
-                description: "Now verify your email. You can continue into Kamooni after that.",
+                title: deliveryNotice.title,
+                description: deliveryNotice.description,
+                ...(deliveryNotice.deliveryFailed ? { variant: "destructive" as const } : {}),
             });
 
             const nextParams = new URLSearchParams();
             nextParams.set("email", state.email.trim());
             nextParams.set("handle", result.data.user.handle || sanitizeHandle(state.handle));
+            nextParams.set("delivery", result.data.verificationEmailStatus === "failed" ? "failed" : "sent");
 
             const redirectTo = searchParams?.get("redirectTo");
             if (redirectTo) {

@@ -102,6 +102,7 @@ export const submitSignupFormAction = async (values: Record<string, any>): Promi
                 message: "User signed up successfully",
                 data: {
                     user: toAuthenticatedClientUser(privateUser),
+                    verificationEmailStatus: user.verificationEmailStatus ?? "failed",
                     devVerificationToken:
                         process.env.NODE_ENV !== "production" ? (user.devVerificationToken ?? null) : null,
                     devVerificationUrl:
