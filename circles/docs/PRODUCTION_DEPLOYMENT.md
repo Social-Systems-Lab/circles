@@ -19,7 +19,7 @@ Production SSH access is `root@kamooniorg`. This is the production server, not t
 
 Do not use ad-hoc `docker compose build` or `docker compose up` commands for normal deployments. The deployment script performs the required build, container recreation, and version check.
 
-Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Staging-only email-capture configuration must not be present in the production release branch.
+Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Staging-only email-capture runtime code and configuration must not be present in the production release branch. The required `Production Isolation / production-isolation` check and the deployment script both enforce this exclusion.
 
 ## Production layout
 
@@ -40,8 +40,8 @@ pwd
 git branch --show-current
 git status --short
 git fetch origin main
-git rev-parse --short HEAD
-git rev-parse --short origin/main
+git rev-parse HEAD
+git rev-parse origin/main
 ```
 
 Confirm:
@@ -51,6 +51,7 @@ Confirm:
 - the commit intended for deployment is on `origin/main`
 - the release has been approved after all required checks passed
 - staging-only email-capture configuration is absent from the release
+- the required production-isolation and build checks succeeded for the exact release commit
 - production has not been hot-edited
 - required CI checks have not been bypassed
 
@@ -66,15 +67,17 @@ cd /root/circles/circles && ./circles/deploy-genesis2.sh main
 
 The `deploykamooni` shell command is not installed and must not be used or documented as the deployment method.
 
-For a separately authorized emergency release, the same script accepts the approved remote branch as its explicit argument.
-This does not change the default production policy: normal releases still deploy from approved `origin/main`.
+The deployment script accepts only the explicit argument `main`. Emergency fixes must first be reviewed and promoted to
+`origin/main`; arbitrary feature, staging, tag, or detached-commit deployments are refused.
 
 The script:
 
 - confirms it is running from `/root/circles/circles`
-- fetches the requested remote branch (`main` for normal releases)
-- checks out the requested branch
-- resets the server checkout to the requested `origin/<branch>`
+- confirms the configured `origin` is the `Social-Systems-Lab/circles` GitHub repository
+- fetches only `origin/main`
+- checks out `main` and resets the server checkout to the exact `origin/main` commit
+- verifies the local branch and full commit identity against `origin/main`
+- runs the production staging-isolation guard before building or accessing application services or data
 - exports the deployed `GIT_SHA` and `BUILD_TIME`
 - runs the Kamooni branding guard
 - builds the `circles` Docker Compose service
@@ -85,7 +88,7 @@ The script:
 - verifies there are no legacy/incomplete rows or duplicate logical `chatReadStates` keys
 - creates/verifies the required unique `chatTopicReadStates` identity index
 - starts only the newly built V2 `circles` image
-- confirms the service is running and checks that `https://kamooni.org/api/version` reports the expected Git SHA
+- confirms the service is running and checks that `https://kamooni.org/api/version` reports the expected full Git SHA
 
 Successful verification writes the `schemaMigrations/chat-read-state-v2` completion marker. Later deployments skip the
 one-time offline migration window, run the safe idempotent verifier while the current V2 app remains live, and then follow
@@ -140,7 +143,7 @@ You can confirm the deployed commit on `kamooniorg` with:
 
 ```bash
 cd /root/circles/circles
-git rev-parse --short HEAD
+git rev-parse HEAD
 ```
 
 Optional runtime verification from the application directory:
