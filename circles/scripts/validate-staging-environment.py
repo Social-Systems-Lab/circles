@@ -30,6 +30,17 @@ SECRET_KEYS = (
 )
 PLACEHOLDER = re.compile(r"(?:GENERATE_STAGING_ONLY|CHANGE[ _-]?ME|PLACEHOLDER|REPLACE[ _-]?ME|EXAMPLE|TODO)", re.I)
 GENERATED_SECRET = re.compile(r"[0-9a-fA-F]{64}")
+REQUIRED_STAGING_CONFIG = {
+    "EMAIL_TRANSPORT": "capture",
+    "EMAIL_CAPTURE_ENABLED": "true",
+    "KAMOONI_DEPLOYMENT_ENV": "staging",
+    "CIRCLES_DEV_LOG_PASSWORD_RESET": "false",
+    "NODE_ENV": "production",
+    "CIRCLES_URL": "https://staging.kamooni.org",
+    "NEXT_PUBLIC_APP_URL": "https://staging.kamooni.org",
+    "NEXT_PUBLIC_SITE_URL": "https://staging.kamooni.org",
+}
+REQUIRED_EMPTY = ("POSTMARK_API_TOKEN", "POSTMARK_SENDER_EMAIL")
 FORCED_EMPTY = (
     "CIRCLES_REGISTRY_URL",
     "OPENAI_API_KEY",
@@ -111,8 +122,14 @@ def validate_mongodb_uri(uri: str, username: str, password: str) -> list[str]:
 
 def validate(values: dict[str, str], *, require_forced_empty: bool = False) -> None:
     errors: list[str] = []
-    if values.get("EMAIL_CAPTURE_MODE") != "on":
-        errors.append('EMAIL_CAPTURE_MODE must be exactly "on"')
+    for key, expected in REQUIRED_STAGING_CONFIG.items():
+        if values.get(key) != expected:
+            errors.append(f"{key} must be exactly {expected!r}")
+    if "EMAIL_CAPTURE_MODE" in values:
+        errors.append("EMAIL_CAPTURE_MODE is obsolete and must be removed")
+    for key in REQUIRED_EMPTY:
+        if key not in values or values[key] != "":
+            errors.append(f"{key} must be present and blank")
     for key in REQUIRED:
         value = values.get(key, "")
         if not value:

@@ -32,6 +32,8 @@ Do not place generated values in `.env.staging.example` or any tracked file. The
 
 Initial staging forcibly disables the registry, OpenAI, Postmark, Telegram bot, Donorbox, Stripe, and VibeID issuer through the Compose override even if `.env.staging` contains values. `TELEGRAM_WEBHOOK_SECRET` remains a unique defensive secret, but no Telegram bot username/token is active and no webhook should be registered. Payments and vector search are forced off. Mapbox is intentionally disabled initially. Use test data only.
 
+Staging email uses the captured-email contract: Compose fixes `EMAIL_TRANSPORT=capture`, `EMAIL_CAPTURE_ENABLED=true`, `KAMOONI_DEPLOYMENT_ENV=staging`, `NODE_ENV=production`, and `CIRCLES_DEV_LOG_PASSWORD_RESET=false`, with all three public application URLs fixed to `https://staging.kamooni.org`. Before deployment, update an existing `.env.staging` to include these non-secret values and remove obsolete `EMAIL_CAPTURE_MODE`; keep both Postmark settings present and blank. Captured verification and password-reset messages are available only to authorized staging superadmins at `/admin/emails`; messages are not sent through Postmark. The runtime environment checks are defense in depth: deploy only the reviewed staging-only application branch `codex/messaging-personal-followups-staging-email-capture` for this feature. Keep that source branch and artifact out of production branches and deployments.
+
 ## TLS bootstrap (must happen before first deployment)
 
 DNS must point only `staging.kamooni.org` at the staging VM. Do not request `www.staging.kamooni.org`.
@@ -85,6 +87,8 @@ cd /home/ubuntu/kamooni && ./circles/scripts/deploy-staging.sh BRANCH_NAME
 ```
 
 The script requires a clean infrastructure checkout on `infra/kamooni-staging`, fetches `origin/BRANCH_NAME`, checks both the V2 schema compatibility floor and the committed application safety baseline, and updates the separate detached target worktree. It never pushes or merges and never switches the infrastructure checkout. Every staging deployment target must descend from `3101d0eb7590f089d625d8bfc8bbace42447b8e0`, the reviewed Group 1 application safety baseline. Do not casually change this pinned value: changing it requires review because it protects payment and welcome-link staging safety.
+
+To enable captured verification and reset email, use `BRANCH_NAME=codex/messaging-personal-followups-staging-email-capture`. The script deploys that branch into the separate detached target worktree; do not merge or cherry-pick it into `main`.
 
 Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA.
 

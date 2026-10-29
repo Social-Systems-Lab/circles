@@ -14,7 +14,10 @@ services:
             CIRCLES_URL: https://staging.kamooni.org
             NEXT_PUBLIC_APP_URL: https://staging.kamooni.org
             NEXT_PUBLIC_SITE_URL: https://staging.kamooni.org
-            EMAIL_CAPTURE_MODE: "on"
+            EMAIL_TRANSPORT: capture
+            EMAIL_CAPTURE_ENABLED: "true"
+            KAMOONI_DEPLOYMENT_ENV: staging
+            CIRCLES_DEV_LOG_PASSWORD_RESET: "false"
             NEXT_PUBLIC_CHAT_PROVIDER: mongo
             NEXT_PUBLIC_MAINTENANCE_MODE: "false"
             VDB_ENABLED: "false"
