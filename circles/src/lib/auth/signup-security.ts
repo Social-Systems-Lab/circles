@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import type { Collection } from "mongodb";
 import { getDb } from "@/lib/data/db";
+import { normalizeEmailForComparison } from "@/lib/auth/email-normalization";
+
+export { normalizeEmailForComparison } from "@/lib/auth/email-normalization";
 
 export const SIGNUP_IP_LIMIT = 5;
 export const SIGNUP_EMAIL_LIMIT = 3;
@@ -15,19 +18,6 @@ export class SignupRejectedError extends Error {
     constructor() {
         super(GENERIC_REJECTION);
     }
-}
-
-export function normalizeEmailForComparison(value: string): string {
-    const email = value.trim().toLowerCase();
-    const at = email.lastIndexOf("@");
-    if (at < 1) return email;
-    let local = email.slice(0, at);
-    let domain = email.slice(at + 1);
-    if (domain === "gmail.com" || domain === "googlemail.com") {
-        local = local.split("+", 1)[0].replace(/\./g, "");
-        domain = "gmail.com";
-    }
-    return `${local}@${domain}`;
 }
 
 function signingSecret(): string | null {

@@ -26,8 +26,23 @@ for (const filename of ["SALT_FILENAME", "IV_FILENAME", "PUBLIC_KEY_FILENAME", "
 }
 assert.match(
     authSource,
-    /const verificationTokenExpiry = new Date\(Date\.now\(\) \+ 24 \* 3600 \* 1000\)/,
+    /const verificationTokenExpiry = unhashedVerificationToken \? new Date\(Date\.now\(\) \+ 24 \* 3600 \* 1000\) : undefined/,
     "signup token expires after 24 hours",
+);
+assert.match(
+    authSource,
+    /options: \{[\s\S]*?emailAlreadyVerified\?: boolean[\s\S]*?\} = \{\}/,
+    "legacy signup keeps the compatibility options disabled by default",
+);
+assert.match(
+    authSource,
+    /if \(options\.reserveDid\) await options\.reserveDid\(did\)/,
+    "pending registration can durably reserve its generated DID before credential files are written",
+);
+assert.ok(
+    authSource.indexOf("if (options.reserveDid) await options.reserveDid(did)") <
+        authSource.indexOf("fs.mkdirSync(accountPath"),
+    "DID reservation happens before the credential directory is created",
 );
 assert.match(
     authSource,

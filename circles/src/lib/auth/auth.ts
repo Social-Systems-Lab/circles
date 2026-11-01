@@ -53,6 +53,12 @@ export const createUserAccount = async (
     type: AccountType,
     email: string,
     password: string,
+    options: {
+        emailAlreadyVerified?: boolean;
+        pendingRegistrationId?: string;
+        sendVerificationEmail?: boolean;
+        reserveDid?: (did: string) => Promise<void>;
+    } = {},
 ): Promise<Circle & { devVerificationToken?: string; devVerificationUrl?: string }> => {
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
@@ -85,6 +91,10 @@ export const createUserAccount = async (
         .update(publicKey.export({ type: "pkcs1", format: "pem" }) as string)
         .digest("hex");
 
+    // Pending registration persists this identity before any credential files are written.
+    // A retry must never silently replace a previously reserved DID.
+    if (options.reserveDid) await options.reserveDid(did);
+
     // create a directory for the user using the did as the name
     const accountPath = path.join(USERS_DIR, did);
     if (fs.existsSync(accountPath)) {
@@ -113,9 +123,11 @@ export const createUserAccount = async (
     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
-    const unhashedVerificationToken = generateSecureToken();
-    const hashedVerificationToken = hashToken(unhashedVerificationToken);
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 3600 * 1000); // 24 hours expiry
+    const emailAlreadyVerified = options.emailAlreadyVerified === true;
+    const shouldSendVerificationEmail = options.sendVerificationEmail !== false && !emailAlreadyVerified;
+    const unhashedVerificationToken = shouldSendVerificationEmail ? generateSecureToken() : null;
+    const hashedVerificationToken = unhashedVerificationToken ? hashToken(unhashedVerificationToken) : undefined;
+    const verificationTokenExpiry = unhashedVerificationToken ? new Date(Date.now() + 24 * 3600 * 1000) : undefined;
 
     let user: Circle = createNewUser(
         did,
@@ -124,12 +136,15 @@ export const createUserAccount = async (
         handle,
         type,
         email,
-        false, // isEmailVerified
+        emailAlreadyVerified,
         hashedVerificationToken, // emailVerificationToken
         verificationTokenExpiry, // emailVerificationTokenExpiry
     );
     user.verificationStatus = "unverified";
-    user.accountStatus = "pending_verification";
+    user.accountStatus = emailAlreadyVerified ? "active" : "pending_verification";
+    if (options.pendingRegistrationId) {
+        user.metadata = { ...(user.metadata ?? {}), pendingRegistrationId: options.pendingRegistrationId };
+    }
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
@@ -143,30 +158,33 @@ export const createUserAccount = async (
     }
 
     // Send verification email
-    const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
-    if (process.env.NODE_ENV !== "production") {
+    const verificationLink = unhashedVerificationToken
+        ? `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`
+        : null;
+    if (unhashedVerificationToken && verificationLink && process.env.NODE_ENV !== "production") {
         console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
         console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
         const devUser = user as Circle & { devVerificationToken?: string; devVerificationUrl?: string };
         devUser.devVerificationToken = unhashedVerificationToken;
         devUser.devVerificationUrl = verificationLink;
     }
-    try {
-        await sendEmail({
-            to: email,
-            templateAlias: "email-verification", // As per spec
-            templateModel: {
-                name: name,
-                actionUrl: verificationLink,
-            },
-        });
-        await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
-        console.log(`Verification email sent to ${email}`);
-    } catch (error) {
-        console.error(`Failed to send verification email to ${email}:`, error);
-        // Decide if account creation should fail if email sending fails.
-        // For now, we'll log the error and continue. User can request resend later.
-    }
+    if (unhashedVerificationToken && verificationLink)
+        try {
+            await sendEmail({
+                to: email,
+                templateAlias: "email-verification", // As per spec
+                templateModel: {
+                    name: name,
+                    actionUrl: verificationLink,
+                },
+            });
+            await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
+            console.log(`Verification email sent to ${email}`);
+        } catch (error) {
+            console.error(`Failed to send verification email to ${email}:`, error);
+            // Decide if account creation should fail if email sending fails.
+            // For now, we'll log the error and continue. User can request resend later.
+        }
 
     // add user as member of their own circle
     await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
