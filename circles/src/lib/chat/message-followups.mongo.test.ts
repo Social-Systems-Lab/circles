@@ -179,6 +179,7 @@ async function main() {
         const ownerList = await listAuthorizedMessageFollowUps(ownerDid, { limit: 10 }, canRead);
         assert.equal(ownerList.items.length, 1);
         assert.equal(ownerList.items[0].message?.body, "Private source message");
+        assert.equal(ownerList.items[0].message?.messageId, messageId.toString());
         assert.deepEqual(ownerList.items[0].message?.attachments, [{ name: "safe.txt" }]);
         assert.deepEqual(Object.keys(ownerList.items[0].message || {}).sort(), [
             "attachments",
@@ -186,6 +187,7 @@ async function main() {
             "conversation",
             "conversationId",
             "createdAt",
+            "messageId",
             "sender",
         ]);
         assert.deepEqual(ownerList.items[0].message?.conversation, {
@@ -580,6 +582,10 @@ async function main() {
         assert.deepEqual(topicList.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message?.topic, {
             title: "Secret topic",
         });
+        assert.equal(
+            topicList.items.find((item) => item.followUp.id === replyFollowUp?._id)?.message?.messageId,
+            replyId.toString(),
+        );
         const availableTopicStatuses = await listAuthorizedMessageFollowUpStatuses(
             ownerDid,
             [topicId.toString(), replyId.toString()],

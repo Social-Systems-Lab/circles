@@ -3,11 +3,15 @@
 import { notFound, redirect } from "next/navigation";
 import { ChatRoomComponent } from "@/components/modules/chat/chat-room";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { buildCanonicalChatRedirectPath, validateTopicDeepLink } from "@/lib/chat/topic-deep-link";
+import {
+    buildCanonicalChatRedirectPath,
+    validateMessageDeepLink,
+    validateTopicDeepLink,
+} from "@/lib/chat/topic-deep-link";
 
 type ChatRoomPageProps = {
     params: Promise<{ handle: string }>;
-    searchParams: Promise<{ topic?: string | string[] }>;
+    searchParams: Promise<{ topic?: string | string[]; message?: string | string[] }>;
 };
 
 export default async function ChatRoomPage(props: ChatRoomPageProps) {
@@ -28,12 +32,26 @@ export default async function ChatRoomPage(props: ChatRoomPageProps) {
 
     // 1) If slug is an ObjectId, treat it as conversationId.
     if (isObjectId) {
-        const { findThreadStarter } = await import("@/lib/data/mongo-chat");
+        const { findMessageDeepLinkTarget, findThreadStarter } = await import("@/lib/data/mongo-chat");
         const initialTopicId = await validateTopicDeepLink(searchParams.topic, slug, findThreadStarter);
+        const initialMessageId = await validateMessageDeepLink(
+            searchParams.message,
+            slug,
+            initialTopicId,
+            findMessageDeepLinkTarget,
+        );
 
-        return <ChatRoomComponent chatRoom={chatRoom} circle={chatRoom.circle} initialTopicId={initialTopicId} />;
+        return (
+            <ChatRoomComponent
+                chatRoom={chatRoom}
+                circle={chatRoom.circle}
+                initialTopicId={initialTopicId}
+                initialMessageId={initialMessageId}
+                suppressAutoRead={searchParams.message !== undefined}
+            />
+        );
     }
 
     // 2) Otherwise treat slug as handle and redirect to canonical /chat/<conversationId>.
-    redirect(buildCanonicalChatRedirectPath(String(chatRoom._id), searchParams.topic));
+    redirect(buildCanonicalChatRedirectPath(String(chatRoom._id), searchParams.topic, searchParams.message));
 }

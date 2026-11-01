@@ -1373,6 +1373,18 @@ export const findThreadStarter = async (threadId: string, conversationId: string
     return { ...doc, _id: doc._id?.toString() };
 };
 
+export const findMessageDeepLinkTarget = async (
+    messageId: string,
+    conversationId: string,
+): Promise<Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null> => {
+    const objectId = toObjectId(messageId);
+    if (!objectId) return null;
+    return (await ChatMessageDocs.findOne(
+        { _id: objectId, conversationId },
+        { projection: { conversationId: 1, threadId: 1, thread: 1 } },
+    )) as Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null;
+};
+
 export const createThreadReply = async (
     threadId: string,
     conversationId: string,

@@ -20,8 +20,9 @@ test("page provides lazy filters, empty-page continuation, safe unavailable cont
     assert.match(page, /limit: 25/);
     assert.match(page, /active\.nextCursor &&/);
     assert.match(page, /This saved message is no longer available/);
-    assert.match(page, /message\.topicId[\s\S]*?`\?topic=\$\{message\.topicId\}`/);
-    assert.doesNotMatch(page, /messageId=/);
+    assert.match(page, /new URLSearchParams/);
+    assert.match(page, /topic: message\.topicId/);
+    assert.match(page, /message: message\.messageId/);
     assert.match(page, /router\.push\("\/chat"\)/);
 });
 
