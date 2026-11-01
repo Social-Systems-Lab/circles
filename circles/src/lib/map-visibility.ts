@@ -1,28 +1,35 @@
 import type { Circle } from "@/models/models";
-import { isProfileComplete } from "@/lib/profile-completion";
+import { hasRealProfileImage, hasSelectedProfileLocation } from "@/lib/profile-completion";
 
 export type MapVisibleCircle = Circle & {
     mapEligibility?: {
-        profileComplete?: boolean;
+        personalProfileEligible?: boolean;
     };
 };
 
 export const isMapVisibleCircle = (
-    circle?: (Partial<Circle> & { mapEligibility?: { profileComplete?: boolean } }) | null,
+    circle?: (Partial<Circle> & { mapEligibility?: { personalProfileEligible?: boolean } }) | null,
 ): boolean => {
     if (circle?.circleType !== "user") {
         return true;
     }
 
-    return circle.mapEligibility?.profileComplete === true;
+    return circle.mapEligibility?.personalProfileEligible === true;
 };
+
+export const isPersonalProfileMapEligible = (circle?: Partial<Circle> | null): boolean =>
+    circle?.circleType === "user" &&
+    circle.isEmailVerified === true &&
+    circle.accountStatus !== "rejected" &&
+    hasRealProfileImage(circle) &&
+    hasSelectedProfileLocation(circle);
 
 export const isServerDerivedMapVisibleCircle = (circle?: Partial<Circle> | null): boolean => {
     if (circle?.circleType !== "user") {
         return true;
     }
 
-    return circle.accountStatus !== "rejected" && isProfileComplete(circle);
+    return isPersonalProfileMapEligible(circle);
 };
 
 export const markMapEligiblePersonalProfile = (circle: Circle): MapVisibleCircle => {
@@ -33,7 +40,7 @@ export const markMapEligiblePersonalProfile = (circle: Circle): MapVisibleCircle
     return {
         ...circle,
         mapEligibility: {
-            profileComplete: true,
+            personalProfileEligible: true,
         },
     };
 };
