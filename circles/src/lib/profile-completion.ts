@@ -9,6 +9,21 @@ export type ProfileCompletionRequirements = {
     hasAcceptedCommunityGuidelines: boolean;
 };
 
+export type ParticipationRequirementId = "verified-email" | "introduction" | "community-guidelines";
+
+export type ParticipationReadiness = {
+    ready: boolean;
+    requirements: Record<ParticipationRequirementId, boolean>;
+    missingRequirements: ParticipationRequirementId[];
+};
+
+export type OptionalProfileImprovementId = "profile-image" | "location" | "proof-of-humanity";
+
+export type OptionalProfileImprovements = {
+    completed: Record<OptionalProfileImprovementId, boolean>;
+    missing: OptionalProfileImprovementId[];
+};
+
 export type ParticipationBlockReason = "email_unverified" | "profile_incomplete" | "guidelines_incomplete";
 
 type ParticipationSubject = Partial<Circle> | null | undefined;
@@ -47,6 +62,25 @@ export const hasCompletedCommunityGuidelines = (circle?: Partial<Circle> | null)
     return isCommunityGuidelinesCompleted(circle?.communityGuidelinesAcceptance);
 };
 
+export const hasSelectedProfileLocation = (circle?: Partial<Circle> | null): boolean => {
+    const location = circle?.location;
+    const lng = location?.lngLat?.lng;
+    const lat = location?.lngLat?.lat;
+    const precision = location?.precision;
+
+    return Boolean(
+        Number.isInteger(precision) &&
+            Number(precision) >= 0 &&
+            Number(precision) <= 4 &&
+            Number.isFinite(lng) &&
+            Number(lng) >= -180 &&
+            Number(lng) <= 180 &&
+            Number.isFinite(lat) &&
+            Number(lat) >= -90 &&
+            Number(lat) <= 90,
+    );
+};
+
 export const getProfileCompletionRequirements = (circle?: Partial<Circle> | null): ProfileCompletionRequirements => ({
     hasRealProfileImage: hasRealProfileImage(circle),
     hasAboutText: hasProfileAboutText(circle),
@@ -71,6 +105,39 @@ export const hasConfirmedAccountContactMethod = (user: ParticipationSubject): bo
     return user?.isEmailVerified === true;
 };
 
+export const getParticipationReadiness = (user: ParticipationSubject): ParticipationReadiness => {
+    const requirements: Record<ParticipationRequirementId, boolean> = {
+        "verified-email": hasConfirmedAccountContactMethod(user),
+        introduction: user?.circleType === "user" && hasProfileAboutText(user),
+        "community-guidelines": user?.circleType === "user" && hasCompletedCommunityGuidelines(user),
+    };
+    const missingRequirements = (Object.keys(requirements) as ParticipationRequirementId[]).filter(
+        (requirement) => !requirements[requirement],
+    );
+
+    return {
+        ready: canBypassProfileCompletionRequirement(user) || missingRequirements.length === 0,
+        requirements,
+        missingRequirements,
+    };
+};
+
+export const getOptionalProfileImprovements = (
+    profile: ParticipationSubject,
+    options: { hasProofOfHumanity?: boolean } = {},
+): OptionalProfileImprovements => {
+    const completed: Record<OptionalProfileImprovementId, boolean> = {
+        "profile-image": hasRealProfileImage(profile),
+        location: hasSelectedProfileLocation(profile),
+        "proof-of-humanity": options.hasProofOfHumanity === true,
+    };
+
+    return {
+        completed,
+        missing: (Object.keys(completed) as OptionalProfileImprovementId[]).filter((item) => !completed[item]),
+    };
+};
+
 export const canParticipate = (user: ParticipationSubject): boolean => {
     return getParticipationBlockReason(user) === null;
 };
@@ -92,12 +159,12 @@ export const getParticipationBlockReason = (user: ParticipationSubject): Partici
         return "profile_incomplete";
     }
 
-    const requirements = getProfileCompletionRequirements(user);
-    if (!requirements.hasRealProfileImage || !requirements.hasAboutText) {
+    const readiness = getParticipationReadiness(user);
+    if (!readiness.requirements.introduction) {
         return "profile_incomplete";
     }
 
-    if (!requirements.hasAcceptedCommunityGuidelines) {
+    if (!readiness.requirements["community-guidelines"]) {
         return "guidelines_incomplete";
     }
 

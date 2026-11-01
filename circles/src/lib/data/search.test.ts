@@ -98,6 +98,7 @@ mock.module("./db", () => ({
     EventOccurrences: {},
     EventOccurrenceRsvps: {},
     EventOccurrenceInvitations: {},
+    SecretCircleInvitations: unusedCollection,
     GoalMembers: {},
     RankedLists: {},
     AggregateRanks: unusedCollection,
@@ -105,9 +106,14 @@ mock.module("./db", () => ({
     DefaultNotificationSettings: {},
     Notifications: unusedCollection,
     ChatConversations: unusedCollection,
+    CanonicalDmClaims: unusedCollection,
+    ChatConversationPreferences: unusedCollection,
     ChatMessageDocs: unusedCollection,
+    ChatMessageFollowUps: unusedCollection,
     ChatReadStates: unusedCollection,
     ChatTopicReadStates: {},
+    ChatTopicDrafts: unusedCollection,
+    ChatTopicDraftTombstones: unusedCollection,
     MessageEmailReminders: unusedCollection,
     ExternalNotificationChannels: unusedCollection,
     PlatformBroadcastMessages: {},
@@ -117,6 +123,8 @@ mock.module("./db", () => ({
     PlatformSettingsCollection: {},
     PlatformAuditEvents: {},
     PrivateMediaCollection: {},
+    MembershipCredentialHandoffs: unusedCollection,
+    MembershipCredentialStatuses: unusedCollection,
     getDb: async () => ({}),
     ensureRequiredChatIndexes: async () => undefined,
 }));
@@ -228,6 +236,7 @@ for (const field of [
 assert.deepEqual(serialized.location, locationCases[2].expected);
 
 const { searchDiscoverableCircles } = await import("@/lib/data/search");
+const { getSwipeCircles } = await import("@/lib/data/circle");
 const publicCircle = normalCircle({ name: "Rarefind Public", handle: "rarefind-public", visibility: "public" });
 const legacyCircle = normalCircle({ name: "Rarefind Legacy", handle: "rarefind-legacy", visibility: undefined });
 const activeSecret = normalCircle({ name: "Rarefind Active Secret", visibility: "secret" });
@@ -409,6 +418,73 @@ assert.deepEqual(
     (await searchDiscoverableCircles({ query: "rarefind" })).map((circle) => circle.name),
     ["Rarefind Person", "Another Person"],
     "public exact-name ranking remains above a public nested contains match",
+);
+
+const mapLocation = { precision: 2, city: "Cape Town", lngLat: { lng: 18.4241, lat: -33.9249 } };
+const eligibleMapUser = userProfile({
+    name: "Eligible Map Person",
+    handle: "eligible-map-person",
+    accountStatus: "active",
+    isEmailVerified: true,
+    picture: { url: "/storage/users/map-person.png" },
+    location: mapLocation,
+});
+mockCircleRecords = [
+    eligibleMapUser,
+    userProfile({
+        name: "No Location Person",
+        accountStatus: "active",
+        picture: { url: "/storage/users/no-location.png" },
+    }),
+    userProfile({
+        name: "Default Image Person",
+        accountStatus: "active",
+        picture: { url: "/images/default-user-picture.png" },
+        location: mapLocation,
+    }),
+    userProfile({
+        name: "Unverified Map Person",
+        accountStatus: "active",
+        isEmailVerified: false,
+        picture: { url: "/storage/users/unverified.png" },
+        location: mapLocation,
+    }),
+    userProfile({
+        name: "Draft Map Person",
+        accountStatus: "active",
+        publishStatus: "draft",
+        picture: { url: "/storage/users/draft.png" },
+        location: mapLocation,
+    }),
+    userProfile({
+        name: "Rejected Map Person",
+        accountStatus: "rejected",
+        picture: { url: "/storage/users/rejected.png" },
+        location: mapLocation,
+    }),
+    normalCircle({ name: "Removed Map Circle", moderationStatus: "removed", location: mapLocation }),
+];
+const mapResults = await getSwipeCircles();
+assert.deepEqual(
+    mapResults.map((circle) => circle.name),
+    ["Eligible Map Person"],
+    "map discovery composes server-derived personal eligibility with publication, lifecycle, and account restrictions",
+);
+assert.equal(
+    mapResults[0].mapEligibility?.personalProfileEligible,
+    true,
+    "eligible personal profiles carry only a transient server approval marker",
+);
+assert.equal("content" in mapResults[0], false, "private profile content is stripped before map results reach clients");
+assert.equal(
+    "communityGuidelinesAcceptance" in mapResults[0],
+    false,
+    "guideline acceptance is stripped before map results reach clients",
+);
+assert.equal(
+    "isEmailVerified" in mapResults[0],
+    false,
+    "email-verification state is stripped before map results reach clients",
 );
 
 console.log("search privacy and Secret Circle orchestration tests passed");

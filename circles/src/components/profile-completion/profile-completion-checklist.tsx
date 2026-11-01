@@ -224,19 +224,33 @@ export function ProfileCompletionChecklist({ profile }: ProfileCompletionCheckli
         );
     }
 
+    const visibleItems = checklist.participationReady
+        ? checklist.items.filter((item) => !item.requiredForParticipation && !item.complete)
+        : checklist.items;
+
+    if (visibleItems.length === 0) {
+        return null;
+    }
+
     return (
         <section className="mt-4 w-full rounded-lg border border-emerald-100 bg-white p-4 shadow-sm">
             <div className="space-y-1">
-                <h2 className="text-lg font-semibold text-gray-900">Complete your profile</h2>
-                {checklist.complete ? (
-                    <p className="text-sm text-emerald-700">You&apos;re ready! Welcome to Kamooni.</p>
+                <h2 className="text-lg font-semibold text-gray-900">
+                    {checklist.participationReady ? "Improve your profile" : "Get ready to participate"}
+                </h2>
+                {checklist.participationReady ? (
+                    <p className="text-sm text-emerald-700">
+                        You can take part in Kamooni. These remaining profile improvements are optional.
+                    </p>
                 ) : (
-                    <p className="text-sm text-gray-600">Complete these three quick steps to take part in Kamooni.</p>
+                    <p className="text-sm text-gray-600">
+                        Add an introduction and agree to the Kamooni rules to take part.
+                    </p>
                 )}
             </div>
 
             <div className="mt-4 grid gap-3">
-                {checklist.items.map((item) => {
+                {visibleItems.map((item) => {
                     const isRulesStep = item.id === "rules";
 
                     return (

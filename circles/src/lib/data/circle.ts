@@ -24,7 +24,11 @@ import path from "path";
 import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
-import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
+import {
+    isServerDerivedMapVisibleCircle,
+    markMapEligiblePersonalProfile,
+    type MapVisibleCircle,
+} from "@/lib/map-visibility";
 import { assertCanonicalUserHandle, assertCanonicalUserHandleChange } from "@/lib/auth/canonical-user-handle";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
@@ -64,7 +68,6 @@ export const SAFE_CIRCLE_PROJECTION = {
     picture: 1,
     images: 1,
     description: 1,
-    content: 1,
     mission: 1,
     isPublic: 1,
     showAdminsPublicly: 1,
@@ -124,6 +127,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     content: 1,
     mission: 1,
     isPublic: 1,
+    isEmailVerified: 1,
     isVerified: 1,
     verificationStatus: 1,
     isMember: 1,
@@ -143,14 +147,14 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     websiteUrl: 1,
     representsOrganization: 1,
     organizationName: 1,
-    communityGuidelinesAcceptance: 1,
 } as const;
 
-const toDiscoveryMapCircle = (circle: Circle): Circle => {
+const toDiscoveryMapCircle = (circle: Circle): MapVisibleCircle => {
     const {
         content: _content,
         communityGuidelinesAcceptance: _communityGuidelinesAcceptance,
         accountStatus: _accountStatus,
+        isEmailVerified: _isEmailVerified,
         ...discoveryCircle
     } = circle;
     return markMapEligiblePersonalProfile(discoveryCircle as Circle);
@@ -220,24 +224,22 @@ export const isCirclePublished = (circle?: Partial<Circle> | null): boolean =>
 
 export { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
 
-export const getSwipeCircles = async (viewerDid?: string): Promise<Circle[]> => {
-    let circles: Circle[] = [];
-
+export const getSwipeCircles = async (viewerDid?: string): Promise<MapVisibleCircle[]> => {
     const discoveryQuery = await getViewerCircleDiscoveryQuery(viewerDid);
 
-    circles = await Circles.find(buildSwipeCircleQuery(discoveryQuery), {
+    const circles = await Circles.find(buildSwipeCircleQuery(discoveryQuery), {
         projection: DISCOVERY_CIRCLE_PROJECTION,
     }).toArray();
 
-    circles = circles.filter(isServerDerivedMapVisibleCircle).map(toDiscoveryMapCircle);
+    const mapCircles = circles.filter(isServerDerivedMapVisibleCircle).map(toDiscoveryMapCircle);
 
-    circles.forEach((circle: Circle) => {
+    mapCircles.forEach((circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();
         }
     });
     //circles = filterLocations(circles) as any[];
-    return circles.map(sanitizeCircleDiscoveryResult);
+    return mapCircles.map(sanitizeCircleDiscoveryResult);
 };
 
 export const getCircles = async (
