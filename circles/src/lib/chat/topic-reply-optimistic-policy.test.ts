@@ -9,7 +9,7 @@ const persistenceSource = readFileSync(new URL("../data/mongo-chat.ts", import.m
 test("topic replies render pending state before awaiting the server", () => {
     assert.match(
         chatRoomSource,
-        /setReplies\(\(current\) => \[\.\.\.current, optimisticReply\]\);[\s\S]*?setTopicReplyText\(""\);[\s\S]*?void submitTopicReply\(optimisticReply\)/,
+        /setReplies\(\(current\) => \[\.\.\.current, optimisticReply\]\);[\s\S]*?setTopicReplyText\(""\);[\s\S]*?void submitTopicReply\(optimisticReply, outgoingDraftKey, outgoingDraftText\)/,
     );
     assert.match(chatRoomSource, /Sending…/);
     assert.match(chatRoomSource, />\s*Retry\s*</);

@@ -20,6 +20,7 @@ export type ChatFollowUpMessagePresentation = {
     editedAt?: Date;
     attachments: Array<{ name: string }>;
     conversation: { name: string; avatarUrl?: string };
+    conversationArchived: boolean;
     topic?: { title: string };
 };
 export type ChatFollowUpPresentation = {
@@ -329,7 +330,17 @@ export async function listAuthorizedMessageFollowUps(
                           { handle: { $in: visibleConversationIds } },
                       ],
                   },
-                  { projection: { type: 1, name: 1, picture: 1, handle: 1, participants: 1, circleId: 1 } },
+                  {
+                      projection: {
+                          type: 1,
+                          name: 1,
+                          picture: 1,
+                          handle: 1,
+                          participants: 1,
+                          circleId: 1,
+                          archivedBy: 1,
+                      },
+                  },
               )
               .toArray()
         : [];
@@ -438,6 +449,8 @@ export async function listAuthorizedMessageFollowUps(
                           name: conversationName,
                           ...(conversationAvatarUrl ? { avatarUrl: conversationAvatarUrl } : {}),
                       },
+                      conversationArchived:
+                          conversation?.type === "dm" && conversation.archivedBy?.includes(ownerDid) === true,
                       ...(followUp.topicId && topic?.thread?.title?.trim()
                           ? { topic: { title: topic.thread.title.trim() } }
                           : {}),
