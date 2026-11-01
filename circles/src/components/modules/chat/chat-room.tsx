@@ -89,6 +89,8 @@ import {
     selectQueuedTopicAcknowledgementBoundary,
     selectTopicAcknowledgementBoundary,
     shouldAcknowledgeTopicInteraction,
+    shouldRefreshUnreadAfterReaction,
+    KeyedTaskQueue,
     canApplyTopicAcknowledgementResult,
     consumePendingTopicScrollRequest,
     confirmOptimisticTopicReply,
@@ -105,6 +107,13 @@ import {
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import { getConversationListPath } from "@/lib/chat/chat-index-navigation";
+import {
+    MessageFollowUpAction,
+    MessageFollowUpIndicator,
+    MessageFollowUpNoteDialog,
+    useHydrateMessageFollowUpStatuses,
+} from "./message-follow-up-action";
+import { canShowExistingReplyActions, canShowMessageFollowUpAction } from "./message-follow-up-ui";
 import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
@@ -151,6 +160,7 @@ const CHAT_TOPIC_BACKGROUND_CLASS = "border border-[#DDEBB8] bg-[#F1F6DF]";
 const CHAT_STANDARD_BUBBLE_CLASS = "border border-gray-200 bg-white";
 const CHAT_MESSAGE_ELEMENT_ID_PREFIX = "chat-message-";
 const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-2", "ring-offset-white"];
+const messageHighlightTimers = new WeakMap<HTMLElement, number>();
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
@@ -359,9 +369,13 @@ const scrollToMessageElement = (messageId?: string) => {
 
     element.scrollIntoView({ behavior: "smooth", block: "center" });
     element.classList.add(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
-    window.setTimeout(() => {
+    const existingTimer = messageHighlightTimers.get(element);
+    if (existingTimer) window.clearTimeout(existingTimer);
+    const timer = window.setTimeout(() => {
         element.classList.remove(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+        messageHighlightTimers.delete(element);
     }, 1800);
+    messageHighlightTimers.set(element, timer);
 };
 
 const ReplyReferencePreview: React.FC<{
@@ -739,6 +753,7 @@ type ChatMessagesProps = {
     mentionCandidates?: Circle[];
     topicSortOrder?: TopicSortOrder;
     deferTopicReordering?: boolean;
+    legacyTargetMessageId?: string;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -788,6 +803,8 @@ const LegacyReadOnlyMessageRow: React.FC<{
                 </div>
             )}
             <div
+                id={getMessageElementId(message.id)}
+                data-message-id={message.id}
                 className={`mb-1 flex gap-2 ${isFirstInChain ? "mt-3" : "mt-1"} ${isOwnMessage ? "justify-end" : "justify-start"}`}
             >
                 {!isDirect &&
@@ -863,7 +880,8 @@ const EarlierMessagesSection: React.FC<{
     conversationId?: string;
     isDirect?: boolean;
     currentUserDid?: string;
-}> = ({ conversationId, isDirect = false, currentUserDid }) => {
+    targetMessageId?: string;
+}> = ({ conversationId, isDirect = false, currentUserDid, targetMessageId }) => {
     const [count, setCount] = useState<number | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[] | null>(null);
@@ -922,6 +940,18 @@ const EarlierMessagesSection: React.FC<{
         setIsExpanded(false);
         void loadCount();
     }, [loadCount]);
+
+    useEffect(() => {
+        if (!targetMessageId) return;
+        setIsExpanded(true);
+        if (messages === null && !messagesError && !isLoadingMessages) void loadMessages();
+    }, [isLoadingMessages, loadMessages, messages, messagesError, targetMessageId]);
+
+    useEffect(() => {
+        if (!targetMessageId || !messages?.some((message) => message.id === targetMessageId)) return;
+        const frame = requestAnimationFrame(() => scrollToMessageElement(targetMessageId));
+        return () => cancelAnimationFrame(frame);
+    }, [messages, targetMessageId]);
 
     const toggleExpanded = () => {
         const nextExpanded = !isExpanded;
@@ -1030,6 +1060,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     mentionCandidates = [],
     topicSortOrder = "latest_activity",
     deferTopicReordering = false,
+    legacyTargetMessageId,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -1037,6 +1068,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+    const looseReactionQueueRef = useRef(new KeyedTaskQueue());
+    const looseReactionMountedRef = useRef(false);
+    const looseReactionScopeRef = useRef("");
+    looseReactionScopeRef.current = `${user?.did || ""}\u0000${conversationId || ""}`;
+    useEffect(() => {
+        looseReactionMountedRef.current = true;
+        return () => {
+            looseReactionMountedRef.current = false;
+        };
+    }, []);
     const handleReply = (message: ChatMessage) => {
         if (!canReply) return;
         setReplyToMessage(message);
@@ -1049,12 +1090,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         if (!user.did) return;
 
         const reactionSender = user.did;
-        const anyExistingReaction = Object.entries(message.reactions || {})
-            .map(([key, reactions]) => {
-                const userReaction = reactions.find((r) => r.sender === reactionSender);
-                return userReaction ? { ...userReaction, key } : null;
-            })
-            .find((r) => r !== null);
 
         // Optimistic UI Update
         setRoomMessages((prev) => {
@@ -1065,6 +1100,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
             const updatedMessage = { ...roomMessages[messageIndex] };
             const reactions = { ...(updatedMessage.reactions || {}) };
+            const anyExistingReaction = Object.entries(reactions)
+                .map(([key, entries]) => {
+                    const userReaction = entries.find((reaction) => reaction.sender === reactionSender);
+                    return userReaction ? { ...userReaction, key } : null;
+                })
+                .find((reaction) => reaction !== null);
 
             // Remove any existing reaction from the user
             if (anyExistingReaction) {
@@ -1091,23 +1132,29 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             return newRooms;
         });
 
-        try {
-            const result = await toggleMongoReactionAction(message.id, emoji);
-            if (result.success && result.reactions) {
-                setRoomMessages((prev) => {
-                    const newRooms = { ...prev };
-                    const roomMessages = [...(newRooms[message.roomId] || [])];
-                    const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
-                    if (messageIndex === -1) return prev;
-                    roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
-                    newRooms[message.roomId] = roomMessages;
-                    return newRooms;
-                });
+        const scope = looseReactionScopeRef.current;
+        const queueKey = `${reactionSender}\u0000${message.roomId}\u0000${message.id}`;
+        await looseReactionQueueRef.current.enqueue(queueKey, async () => {
+            try {
+                const result = await toggleMongoReactionAction(message.id, emoji);
+                const canApply = looseReactionMountedRef.current && looseReactionScopeRef.current === scope;
+                if (canApply && result.success && result.reactions) {
+                    setRoomMessages((prev) => {
+                        const newRooms = { ...prev };
+                        const roomMessages = [...(newRooms[message.roomId] || [])];
+                        const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+                        if (messageIndex === -1) return prev;
+                        roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
+                        newRooms[message.roomId] = roomMessages;
+                        return newRooms;
+                    });
+                }
+                if (canApply && shouldRefreshUnreadAfterReaction(result)) await onTopicRead?.(message.id);
+            } catch (error) {
+                console.error("Failed to update reaction:", error);
+                // On failure, the state will be corrected by the next sync
             }
-        } catch (error) {
-            console.error("Failed to update reaction:", error);
-            // On failure, the state will be corrected by the next sync
-        }
+        });
     };
 
     const handleTouchStart = (message: ChatMessage) => {
@@ -1164,6 +1211,10 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const orderedMessages = displayedTopicIds
         .map((topicId) => topicById.get(topicId))
         .filter((message): message is ChatMessage => !!message);
+    useHydrateMessageFollowUpStatuses(
+        user?.did || currentUser?.did || "",
+        orderedMessages.filter(canShowMessageFollowUpAction).map((message) => message.id),
+    );
 
     const emptyTopicState =
         topicsLoaded && topicMessages.length === 0 ? (
@@ -1192,6 +1243,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 conversationId={conversationId}
                 isDirect={isDirect}
                 currentUserDid={user?.did || currentUser?.did}
+                targetMessageId={legacyTargetMessageId}
             />
             {emptyTopicState}
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
@@ -1245,6 +1297,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 const bubbleRadius = "12px";
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
+                const canFollowUpMessage = canShowMessageFollowUpAction(message);
                 const bubbleStatusClasses =
                     message.status === "pending"
                         ? "opacity-70"
@@ -1303,9 +1356,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                             </div>
                                         )}
                                         <MessageRenderer message={message} />
-                                        {isLastInChain && (
+                                        {(isLastInChain || canFollowUpMessage) && (
                                             <div className="mt-0 flex items-center justify-end gap-1 text-[9px] text-gray-400">
-                                                <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                {isLastInChain && (
+                                                    <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                )}
                                                 {isOwnMessage && message.status === "pending" && (
                                                     <span className="flex items-center gap-1 text-blue-400">
                                                         <IoTimeOutline className="h-2.5 w-2.5" />
@@ -1316,12 +1371,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                         <IoWarningOutline className="h-2.5 w-2.5" />
                                                     </span>
                                                 )}
+                                                {canFollowUpMessage && (
+                                                    <MessageFollowUpIndicator
+                                                        messageId={message.id}
+                                                        viewerDid={user?.did || currentUser?.did || ""}
+                                                    />
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div
-                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"} ${canFollowUpMessage && isOwnMessage ? "pr-9" : ""}`}
                                         >
                                             {Object.entries(message.reactions).map(([reaction, reactions]) => (
                                                 <div
@@ -1344,13 +1405,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         </div>
                                     )}
 
-                                    {canReply &&
+                                    {(canReply || canFollowUpMessage) &&
                                         (hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
                                             <div
                                                 className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
                                                 onClick={(e) => e.stopPropagation()}
                                             >
-                                                {isOwnMessage && (
+                                                {isOwnMessage && canReply && (
                                                     <>
                                                         {canEditMessage && (
                                                             <Button
@@ -1384,26 +1445,36 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                         <MdReply className="h-4 w-4" />
                                                     </Button>
                                                 )}
-                                                <Popover
-                                                    open={pickerOpenForMessage === message.id}
-                                                    onOpenChange={(isOpen) =>
-                                                        setPickerOpenForMessage(isOpen ? message.id : null)
-                                                    }
-                                                >
-                                                    <PopoverTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                            <BsEmojiSmile className="h-4 w-4" />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                        <LazyEmojiPicker
-                                                            onEmojiClick={(emojiData: EmojiClickData) => {
-                                                                handleReaction(message, emojiData.emoji);
-                                                                setPickerOpenForMessage(null);
-                                                            }}
-                                                        />
-                                                    </PopoverContent>
-                                                </Popover>
+                                                {canFollowUpMessage && (
+                                                    <MessageFollowUpAction
+                                                        messageId={message.id}
+                                                        viewerDid={user?.did || currentUser?.did || ""}
+                                                        variant="icon"
+                                                        iconSize="compact"
+                                                    />
+                                                )}
+                                                {canReply && (
+                                                    <Popover
+                                                        open={pickerOpenForMessage === message.id}
+                                                        onOpenChange={(isOpen) =>
+                                                            setPickerOpenForMessage(isOpen ? message.id : null)
+                                                        }
+                                                    >
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                                <BsEmojiSmile className="h-4 w-4" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                            <LazyEmojiPicker
+                                                                onEmojiClick={(emojiData: EmojiClickData) => {
+                                                                    handleReaction(message, emojiData.emoji);
+                                                                    setPickerOpenForMessage(null);
+                                                                }}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                )}
                                             </div>
                                         )}
                                 </div>
@@ -1427,6 +1498,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
+            <MessageFollowUpNoteDialog viewerDid={user?.did || currentUser?.did || ""} />
             <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
@@ -2166,6 +2238,7 @@ const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 type TopicNavigationRequest = {
     topicId: string;
+    targetMessageId?: string;
     nonce: number;
 };
 
@@ -2258,6 +2331,10 @@ const TopicCard: React.FC<{
     });
 
     const [replies, setReplies] = useState<ChatMessage[]>([]);
+    useHydrateMessageFollowUpStatuses(
+        user?.did || "",
+        replies.filter(canShowMessageFollowUpAction).map((reply) => reply.id),
+    );
     const [isLoading, setIsLoading] = useState(false);
     const topicTextDraftKey = getTopicTextDraftKey(user?.did, conversationId, messageId);
     const [replyDraftState, setReplyDraftState] = useState<{ key: string | null; text: string }>({
@@ -2303,6 +2380,10 @@ const TopicCard: React.FC<{
     currentTopicTextDraftKeyRef.current = topicTextDraftKey;
     isSendingRef.current = isSending;
     const pendingScrollIntoViewRef = useRef(false);
+    const exactNavigationPendingRef = useRef(false);
+    const exactNavigationFrameRef = useRef<number | null>(null);
+    const topicAutoScrollFrameRef = useRef<number | null>(null);
+    const topicAutoScrollInnerFrameRef = useRef<number | null>(null);
     const pendingScrollToLatestRef = useRef(false);
     const pendingIncomingAutoScrollRef = useRef(false);
     const incomingAutoScrollTopRef = useRef(0);
@@ -2780,6 +2861,14 @@ const TopicCard: React.FC<{
             queuedAcknowledgementRef.current = null;
             persistedAcknowledgementRef.current = null;
             hasLoadedRepliesRef.current = false;
+            if (exactNavigationFrameRef.current !== null) cancelAnimationFrame(exactNavigationFrameRef.current);
+            if (topicAutoScrollFrameRef.current !== null) cancelAnimationFrame(topicAutoScrollFrameRef.current);
+            if (topicAutoScrollInnerFrameRef.current !== null)
+                cancelAnimationFrame(topicAutoScrollInnerFrameRef.current);
+            exactNavigationFrameRef.current = null;
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = null;
+            exactNavigationPendingRef.current = false;
         };
     }, [conversationId, messageId]);
 
@@ -2788,6 +2877,19 @@ const TopicCard: React.FC<{
             return;
         }
 
+        if (exactNavigationFrameRef.current !== null) cancelAnimationFrame(exactNavigationFrameRef.current);
+        exactNavigationFrameRef.current = null;
+        exactNavigationPendingRef.current = !!navigationRequest?.targetMessageId;
+        if (exactNavigationPendingRef.current) {
+            if (topicAutoScrollFrameRef.current !== null) cancelAnimationFrame(topicAutoScrollFrameRef.current);
+            if (topicAutoScrollInnerFrameRef.current !== null)
+                cancelAnimationFrame(topicAutoScrollInnerFrameRef.current);
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = null;
+            pendingIncomingAutoScrollRef.current = false;
+            pendingScrollToLatestRef.current = false;
+            pendingOutgoingScrollRef.current = false;
+        }
         pendingScrollIntoViewRef.current = true;
 
         if (!isOpen) {
@@ -2811,6 +2913,24 @@ const TopicCard: React.FC<{
         if (!pendingScrollIntoViewRef.current) return;
         if (Number.isSafeInteger(expectedReplyCount) && expectedReplyCount > replies.length) return;
 
+        const targetMessageId = navigationRequest?.targetMessageId;
+        if (targetMessageId && !consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) return;
+        if (targetMessageId) {
+            const frame = requestAnimationFrame(() => {
+                exactNavigationFrameRef.current = null;
+                scrollToMessageElement(targetMessageId);
+                exactNavigationPendingRef.current = false;
+            });
+            exactNavigationFrameRef.current = frame;
+            return () => {
+                if (exactNavigationFrameRef.current === frame) {
+                    cancelAnimationFrame(frame);
+                    exactNavigationFrameRef.current = null;
+                    exactNavigationPendingRef.current = false;
+                }
+            };
+        }
+
         const boundaryElementId = firstUnreadMessageId ? `topic-unread-boundary-${firstUnreadMessageId}` : undefined;
         const boundaryTarget =
             unreadBoundary.isComplete && firstUnreadMessageId
@@ -2830,6 +2950,7 @@ const TopicCard: React.FC<{
         messageId,
         navigationRequest?.nonce,
         navigationRequest?.topicId,
+        navigationRequest?.targetMessageId,
         expectedReplyCount,
         replies.length,
         scrollViewportRef,
@@ -2838,6 +2959,7 @@ const TopicCard: React.FC<{
 
     useEffect(() => {
         if (!isTopicOpen || isLoading || (!hasLoadedRepliesRef.current && !pendingOutgoingScrollRef.current)) return;
+        if (exactNavigationPendingRef.current) return;
         const openedNormally = pendingScrollToLatestRef.current;
         const sentReply = pendingOutgoingScrollRef.current;
         const shouldScroll = shouldAutoScrollTopicReplies({
@@ -2855,8 +2977,10 @@ const TopicCard: React.FC<{
         pendingOutgoingScrollRef.current = false;
         pendingScrollToLatestRef.current = false;
         pendingIncomingAutoScrollRef.current = false;
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+        topicAutoScrollFrameRef.current = requestAnimationFrame(() => {
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = requestAnimationFrame(() => {
+                topicAutoScrollInnerFrameRef.current = null;
                 selectTopicReplyScrollTarget({
                     openedNormally,
                     sentReply,
@@ -3164,8 +3288,11 @@ const TopicCard: React.FC<{
     const handleReaction = async (replyId: string, emoji: string) => {
         try {
             const { toggleMongoReactionAction } = await import("./actions");
-            await toggleMongoReactionAction(replyId, emoji);
-            await loadReplies();
+            const result = await toggleMongoReactionAction(replyId, emoji);
+            await Promise.all([
+                loadReplies(),
+                shouldRefreshUnreadAfterReaction(result) ? onTopicRead?.(messageId) : undefined,
+            ]);
         } catch (e) {
             console.error("Failed to toggle reaction:", e);
         }
@@ -3215,6 +3342,7 @@ const TopicCard: React.FC<{
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
     const effectiveStarterBody = topicDescription;
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
+    const canFollowUpStarter = canShowMessageFollowUpAction(message);
     const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
     const starterCreatedAt = new Date(message.createdAt);
     const renderUnreadBoundary = (boundaryMessageId: string) =>
@@ -3308,6 +3436,9 @@ const TopicCard: React.FC<{
                         <div>{topicCreatorName}</div>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
+                        {canFollowUpStarter && (
+                            <MessageFollowUpIndicator messageId={messageId} viewerDid={user?.did || ""} />
+                        )}
                         <div className="relative">
                             <HiLightBulb
                                 className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`}
@@ -3325,7 +3456,7 @@ const TopicCard: React.FC<{
                         <span className="border-l border-gray-300 pl-2">
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
-                        {canReply && isOwnStarter && (
+                        {(canFollowUpStarter || (canReply && isOwnStarter)) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -3341,25 +3472,36 @@ const TopicCard: React.FC<{
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-                                    <DropdownMenuItem
-                                        onSelect={() => {
-                                            setEditingTopicTitle(thread.title || "");
-                                            setEditingTopicBody(effectiveStarterBody);
-                                            setTopicMutationError("");
-                                            setIsEditingTopic(true);
-                                        }}
-                                    >
-                                        <GrEdit className="mr-2 h-4 w-4" />
-                                        Edit topic
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className="text-red-600 focus:text-red-600"
-                                        disabled={isMutatingTopic}
-                                        onSelect={() => void handleDeleteTopic()}
-                                    >
-                                        <GrTrash className="mr-2 h-4 w-4" />
-                                        Delete topic
-                                    </DropdownMenuItem>
+                                    {canFollowUpStarter && (
+                                        <MessageFollowUpAction
+                                            messageId={messageId}
+                                            viewerDid={user?.did || ""}
+                                            variant="menu"
+                                        />
+                                    )}
+                                    {canReply && isOwnStarter && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onSelect={() => {
+                                                    setEditingTopicTitle(thread.title || "");
+                                                    setEditingTopicBody(effectiveStarterBody);
+                                                    setTopicMutationError("");
+                                                    setIsEditingTopic(true);
+                                                }}
+                                            >
+                                                <GrEdit className="mr-2 h-4 w-4" />
+                                                Edit topic
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="text-red-600 focus:text-red-600"
+                                                disabled={isMutatingTopic}
+                                                onSelect={() => void handleDeleteTopic()}
+                                            >
+                                                <GrTrash className="mr-2 h-4 w-4" />
+                                                Delete topic
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
@@ -3378,6 +3520,8 @@ const TopicCard: React.FC<{
                         )}
                         {replies.map((reply, replyIndex) => {
                             const isOwn = reply.createdBy === user?.did;
+                            const canFollowUpReply = canShowMessageFollowUpAction(reply);
+                            const canShowReplyActions = canShowExistingReplyActions(reply, canReply);
                             const isEditing = editingReplyId === reply.id;
                             const replyCreatedAt = new Date(reply.createdAt);
                             const previousVisibleCreatedAt =
@@ -3419,8 +3563,16 @@ const TopicCard: React.FC<{
                                             style={{ borderRadius: "12px" }}
                                         >
                                             <div className="px-3 py-1.5">
-                                                <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
-                                                    {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
+                                                <div className="mb-2 flex items-center justify-end gap-1 text-[10px] leading-none text-gray-400">
+                                                    <span>
+                                                        {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
+                                                    </span>
+                                                    {canFollowUpReply && (
+                                                        <MessageFollowUpIndicator
+                                                            messageId={reply.id}
+                                                            viewerDid={user?.did || ""}
+                                                        />
+                                                    )}
                                                 </div>
                                                 {isEditing ? (
                                                     <div className="flex flex-col gap-1">
@@ -3457,16 +3609,15 @@ const TopicCard: React.FC<{
                                                 ) : (
                                                     <MessageRenderer message={reply} />
                                                 )}
-                                                {canReply &&
+                                                {(canShowReplyActions || canFollowUpReply) &&
                                                     (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
-                                                    !isEditing &&
-                                                    !reply.status && (
+                                                    !isEditing && (
                                                         <div
                                                             className="absolute -bottom-3 right-2 z-10"
                                                             onClick={(event) => event.stopPropagation()}
                                                         >
                                                             <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                                                {isOwn && (
+                                                                {isOwn && canShowReplyActions && (
                                                                     <>
                                                                         <Button
                                                                             variant="ghost"
@@ -3494,41 +3645,56 @@ const TopicCard: React.FC<{
                                                                         </Button>
                                                                     </>
                                                                 )}
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8"
-                                                                    onClick={() => setReplyToMessage(reply)}
-                                                                >
-                                                                    <MdReply className="h-4 w-4" />
-                                                                </Button>
-                                                                <Popover
-                                                                    open={pickerOpenForReply === reply.id}
-                                                                    onOpenChange={(open) =>
-                                                                        setPickerOpenForReply(open ? reply.id : null)
-                                                                    }
-                                                                >
-                                                                    <PopoverTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8"
-                                                                        >
-                                                                            <BsEmojiSmile className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </PopoverTrigger>
-                                                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                                        <LazyEmojiPicker
-                                                                            onEmojiClick={(data: EmojiClickData) => {
-                                                                                void handleReaction(
-                                                                                    reply.id,
-                                                                                    data.emoji,
-                                                                                );
-                                                                                setPickerOpenForReply(null);
-                                                                            }}
-                                                                        />
-                                                                    </PopoverContent>
-                                                                </Popover>
+                                                                {canShowReplyActions && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                        onClick={() => setReplyToMessage(reply)}
+                                                                    >
+                                                                        <MdReply className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                                {canFollowUpReply && (
+                                                                    <MessageFollowUpAction
+                                                                        messageId={reply.id}
+                                                                        viewerDid={user?.did || ""}
+                                                                        variant="icon"
+                                                                    />
+                                                                )}
+                                                                {canShowReplyActions && (
+                                                                    <Popover
+                                                                        open={pickerOpenForReply === reply.id}
+                                                                        onOpenChange={(open) =>
+                                                                            setPickerOpenForReply(
+                                                                                open ? reply.id : null,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8"
+                                                                            >
+                                                                                <BsEmojiSmile className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                                            <LazyEmojiPicker
+                                                                                onEmojiClick={(
+                                                                                    data: EmojiClickData,
+                                                                                ) => {
+                                                                                    void handleReaction(
+                                                                                        reply.id,
+                                                                                        data.emoji,
+                                                                                    );
+                                                                                    setPickerOpenForReply(null);
+                                                                                }}
+                                                                            />
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     )}
@@ -3970,17 +4136,47 @@ export const ChatRoomComponent: React.FC<{
     inToolbox?: boolean;
     chatProvider?: "matrix" | "mongo";
     initialTopicId?: string;
+    initialMessageId?: string;
+    suppressAutoRead?: boolean;
     archivedReadOnly?: boolean;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider, initialTopicId, archivedReadOnly = false }) => {
+}> = ({
+    chatRoom,
+    setSelectedChat,
+    circle,
+    inToolbox,
+    chatProvider,
+    initialTopicId,
+    initialMessageId,
+    suppressAutoRead = false,
+    archivedReadOnly = false,
+}) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
+    const bottomScrollFrameRef = useRef<number | null>(null);
+    const bottomScrollInnerFrameRef = useRef<number | null>(null);
     const userHasScrolledUpRef = useRef(false);
     const lastRenderedMessageRef = useRef<{ count: number; latestCreatedAt: number | null }>({
         count: 0,
         latestCreatedAt: null,
     });
+    useEffect(() => {
+        if (!initialMessageId) return;
+        hasInitiallyScrolledRef.current = true;
+        if (bottomScrollFrameRef.current !== null) cancelAnimationFrame(bottomScrollFrameRef.current);
+        if (bottomScrollInnerFrameRef.current !== null) cancelAnimationFrame(bottomScrollInnerFrameRef.current);
+        bottomScrollFrameRef.current = null;
+        bottomScrollInnerFrameRef.current = null;
+    }, [initialMessageId]);
+
+    useEffect(
+        () => () => {
+            if (bottomScrollFrameRef.current !== null) cancelAnimationFrame(bottomScrollFrameRef.current);
+            if (bottomScrollInnerFrameRef.current !== null) cancelAnimationFrame(bottomScrollInnerFrameRef.current);
+        },
+        [],
+    );
     const isCompact = useIsCompact();
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
     const [newTopicButtonLeft, setNewTopicButtonLeft] = useState<number | null>(null);
@@ -4152,6 +4348,7 @@ export const ChatRoomComponent: React.FC<{
         roomId,
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
+        suppressAutoRead,
     });
 
     const hasLoadedTopicsRef = useRef(false);
@@ -4208,10 +4405,14 @@ export const ChatRoomComponent: React.FC<{
         return () => window.removeEventListener(TOPIC_SORT_PREFERENCE_EVENT, handlePreference);
     }, [roomId]);
 
-    const navigateToTopic = useCallback((topicId: string) => {
+    const navigateToTopic = useCallback((topicId: string, targetMessageId?: string) => {
         setOpenTopicIds((previous) => new Set(previous).add(topicId));
-        setTopicNavigationRequest({ topicId, nonce: Date.now() });
+        setTopicNavigationRequest({ topicId, targetMessageId, nonce: Date.now() });
     }, []);
+
+    useEffect(() => {
+        if (!initialMessageId) openedDeepLinkTopicRef.current = null;
+    }, [initialMessageId]);
 
     const updateTopicUnreadIndicators = useCallback(
         (update: (current: Record<string, TopicUnreadIndicator>) => Record<string, TopicUnreadIndicator>) => {
@@ -4242,15 +4443,16 @@ export const ChatRoomComponent: React.FC<{
             !roomId ||
             !hasLoadedTopics ||
             topicsLoadedRoomRef.current !== roomId ||
-            openedDeepLinkTopicRef.current === initialTopicId
+            openedDeepLinkTopicRef.current === `${initialTopicId}:${initialMessageId || ""}`
         )
             return;
         const topicToOpen = selectLoadedDeepLinkTopic(initialTopicId, roomMessages[roomId] || []);
         if (!topicToOpen) return;
-        openedDeepLinkTopicRef.current = topicToOpen;
+        openedDeepLinkTopicRef.current = `${topicToOpen}:${initialMessageId || ""}`;
         initialTopicEntryHandledRef.current = true;
-        navigateToTopic(topicToOpen);
-    }, [hasLoadedTopics, initialTopicId, navigateToTopic, roomId, roomMessages]);
+        hasInitiallyScrolledRef.current = true;
+        navigateToTopic(topicToOpen, initialMessageId);
+    }, [hasLoadedTopics, initialMessageId, initialTopicId, navigateToTopic, roomId, roomMessages]);
 
     const refreshTopicUnreadCounts = useCallback(async () => {
         const targetRoomId = roomId;
@@ -4520,6 +4722,12 @@ export const ChatRoomComponent: React.FC<{
         const nextSnapshot = getTopicViewportSnapshot(messages);
         if (nextSnapshot.count === 0) return;
 
+        if (initialMessageId) {
+            hasInitiallyScrolledRef.current = true;
+            lastRenderedMessageRef.current = nextSnapshot;
+            return;
+        }
+
         const previousSnapshot = lastRenderedMessageRef.current;
         const hasNewLatestMessage =
             previousSnapshot.count > 0 &&
@@ -4530,8 +4738,10 @@ export const ChatRoomComponent: React.FC<{
 
         if (!hasInitiallyScrolledRef.current) {
             hasInitiallyScrolledRef.current = true;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
+            bottomScrollFrameRef.current = requestAnimationFrame(() => {
+                bottomScrollFrameRef.current = null;
+                bottomScrollInnerFrameRef.current = requestAnimationFrame(() => {
+                    bottomScrollInnerFrameRef.current = null;
                     scrollToBottom("auto");
                 });
             });
@@ -4540,7 +4750,7 @@ export const ChatRoomComponent: React.FC<{
         }
 
         lastRenderedMessageRef.current = nextSnapshot;
-    }, [hasLoadedTopicSortOrder, messages]);
+    }, [hasLoadedTopicSortOrder, initialMessageId, messages]);
 
     useEffect(() => {
         hasInitiallyScrolledRef.current = false;
@@ -4820,6 +5030,7 @@ export const ChatRoomComponent: React.FC<{
                                     mentionCandidates={mentionCandidates}
                                     topicSortOrder={topicSortOrder}
                                     deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
+                                    legacyTargetMessageId={!initialTopicId ? initialMessageId : undefined}
                                 />
                             )}
                         </div>
@@ -4877,6 +5088,7 @@ export const ChatRoomComponent: React.FC<{
                                     mentionCandidates={mentionCandidates}
                                     topicSortOrder={topicSortOrder}
                                     deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
+                                    legacyTargetMessageId={!initialTopicId ? initialMessageId : undefined}
                                 />
                             )}
                         </div>

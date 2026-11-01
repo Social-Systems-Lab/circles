@@ -11,7 +11,7 @@ import { ChatSearch } from "@/components/modules/chat/chat-search";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { CreateChatModal } from "@/components/modules/chat/create-chat-modal";
 import { GroupSettingsModal } from "@/components/modules/chat/group-settings-modal";
-import { Archive, FilePenLine, MessageCircle, SquarePen } from "lucide-react";
+import { Archive, BookmarkCheck, FilePenLine, MessageCircle, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chatSettingsModalAtom, unreadCountsAtom } from "@/lib/data/atoms";
 import { ChatRoomDisplay } from "@/models/models";
@@ -31,6 +31,8 @@ export default function ChatLayout({ children }: PropsWithChildren) {
     const pathname = usePathname();
     const router = useRouter();
     const isArchivedRoute = pathname.startsWith("/chat/archived");
+    const isFollowUpsRoute = pathname.startsWith("/chat/follow-ups");
+    const isMessagesRoute = !isArchivedRoute && !isFollowUpsRoute;
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [chatSearchTerm, setChatSearchTerm] = useState("");
     const [chatSettingsModal, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
@@ -184,8 +186,10 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                     }
                 >
                     <div className="mb-4 mt-2 flex items-center justify-between pl-2 pt-0">
-                        <h2 className="text-xl font-semibold">{isArchivedRoute ? "Archived" : "Messages"}</h2>
-                        {!isArchivedRoute && (
+                        <h2 className="text-xl font-semibold">
+                            {isArchivedRoute ? "Archived" : isFollowUpsRoute ? "Follow-ups" : "Messages"}
+                        </h2>
+                        {isMessagesRoute && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -197,28 +201,39 @@ export default function ChatLayout({ children }: PropsWithChildren) {
                             </Button>
                         )}
                     </div>
-                    <nav className="mb-2 grid grid-cols-2 gap-1" aria-label="Message views">
+                    <nav className="mb-2 grid grid-cols-3 gap-1" aria-label="Message views">
                         <Button
                             variant="ghost"
-                            className={`h-11 justify-start gap-2 ${
-                                !isArchivedRoute ? "bg-[#F1F6DF] text-[#2d6a45] hover:bg-[#e8f0cf]" : ""
+                            className={`h-11 min-w-0 justify-center gap-1 px-1 text-xs ${
+                                isMessagesRoute ? "bg-[#F1F6DF] text-[#2d6a45] hover:bg-[#e8f0cf]" : ""
                             }`}
                             onClick={() => router.push("/chat")}
-                            aria-current={!isArchivedRoute ? "page" : undefined}
+                            aria-current={isMessagesRoute ? "page" : undefined}
                         >
-                            <MessageCircle className="h-5 w-5" aria-hidden="true" />
-                            Messages
+                            <MessageCircle className="h-4 w-4 flex-none" aria-hidden="true" />
+                            <span className="min-w-0 truncate">Messages</span>
                         </Button>
                         <Button
                             variant="ghost"
-                            className={`h-11 justify-start gap-2 ${
+                            className={`h-11 min-w-0 justify-center gap-1 px-1 text-xs ${
+                                isFollowUpsRoute ? "bg-[#F1F6DF] text-[#2d6a45] hover:bg-[#e8f0cf]" : ""
+                            }`}
+                            onClick={() => router.push("/chat/follow-ups")}
+                            aria-current={isFollowUpsRoute ? "page" : undefined}
+                        >
+                            <BookmarkCheck className="h-4 w-4 flex-none" aria-hidden="true" />
+                            <span className="min-w-0 truncate">Follow-ups</span>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            className={`h-11 min-w-0 justify-center gap-1 px-1 text-xs ${
                                 isArchivedRoute ? "bg-[#F1F6DF] text-[#2d6a45] hover:bg-[#e8f0cf]" : ""
                             }`}
                             onClick={() => router.push("/chat/archived")}
                             aria-current={isArchivedRoute ? "page" : undefined}
                         >
-                            <Archive className="h-5 w-5" aria-hidden="true" />
-                            Archived
+                            <Archive className="h-4 w-4 flex-none" aria-hidden="true" />
+                            <span className="min-w-0 truncate">Archived</span>
                         </Button>
                     </nav>
                     <ChatSearch value={chatSearchTerm} onChange={setChatSearchTerm} />

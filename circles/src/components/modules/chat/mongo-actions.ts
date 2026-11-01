@@ -1345,7 +1345,10 @@ export const sendMongoAttachmentAction = async (
                     });
         } catch (error) {
             if (!(error instanceof PersistedChatMessageActivityError)) {
-                const cleanup = await cleanupUploadedFiles([attachment], getChatActionContext()?.deleteFile || deleteFile);
+                const cleanup = await cleanupUploadedFiles(
+                    [attachment],
+                    getChatActionContext()?.deleteFile || deleteFile,
+                );
                 if (cleanup.failedDeletes.length)
                     console.error("Failed to clean up rejected chat attachment", cleanup.failedDeletes);
             }
@@ -1483,10 +1486,7 @@ export const sendComposedMessageAction = async (
     const uploadedAttachments: ChatAttachment[] = [];
     let persistenceAttempted = false;
     const cleanupUploads = async (attachments = uploadedAttachments) => {
-        const cleanup = await cleanupUploadedFiles(
-            attachments,
-            getChatActionContext()?.deleteFile || deleteFile,
-        );
+        const cleanup = await cleanupUploadedFiles(attachments, getChatActionContext()?.deleteFile || deleteFile);
         if (cleanup.failedDeletes.length) {
             console.error("Failed to clean up composed message attachments", cleanup.failedDeletes);
         }
@@ -1615,7 +1615,9 @@ export const sendComposedMessageAction = async (
                         ? await getChatActionContext()!.findMessageBySubmissionId!(userDid, submissionId)
                         : await ChatMessageDocs.findOne({ senderDid: userDid, submissionId });
                     if (candidate?.attachments) {
-                        referencedUploadUrls = new Set(candidate.attachments.map((attachment: ChatAttachment) => attachment.url));
+                        referencedUploadUrls = new Set(
+                            candidate.attachments.map((attachment: ChatAttachment) => attachment.url),
+                        );
                     }
                     const candidateMatchesSubmission =
                         candidate?.conversationId === conversationId &&
@@ -1729,19 +1731,29 @@ export const deleteMongoMessageAction = async (messageId: string): Promise<{ suc
 export const toggleMongoReactionAction = async (
     messageId: string,
     emoji: string,
-): Promise<{ success: boolean; reactions?: ChatMessage["reactions"]; message?: string }> => {
+): Promise<{
+    success: boolean;
+    reactions?: ChatMessage["reactions"];
+    reactionAdded?: boolean;
+    readStatePersisted?: boolean;
+    readStateWarning?: string;
+    message?: string;
+}> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to react" };
     }
 
-    let messageDoc: { conversationId?: string } | null = null;
+    let messageDoc: Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null = null;
     try {
         messageDoc = (
             getChatActionContext()?.findMessage
                 ? await getChatActionContext()!.findMessage!(messageId)
-                : await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } })
-        ) as { conversationId?: string } | null;
+                : await ChatMessageDocs.findOne(
+                      { _id: new ObjectId(messageId) },
+                      { projection: { conversationId: 1, threadId: 1, thread: 1 } },
+                  )
+        ) as Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null;
     } catch {
         return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     }
@@ -1755,13 +1767,30 @@ export const toggleMongoReactionAction = async (
         return { success: false, message: access.message };
     }
 
+    const normalizedMessageId = normalizeObjectIdHex(messageId);
+    if (!normalizedMessageId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    const reactionTopicId = messageDoc.threadId || (messageDoc.thread ? normalizedMessageId : undefined);
+    let validatedTopicCursor: string | null = null;
+    if (reactionTopicId) {
+        const normalizedTopicId = normalizeObjectIdHex(reactionTopicId);
+        if (!normalizedTopicId || !(await findThreadStarter(normalizedTopicId, messageDoc.conversationId))) {
+            return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+        }
+        validatedTopicCursor = await validateTopicReadCursor(
+            messageDoc.conversationId,
+            normalizedTopicId,
+            normalizedMessageId,
+        );
+        if (!validatedTopicCursor) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    }
+
     observeChatActionEffect("reaction-mutation");
-    const reactions = await toggleReaction(messageId, userDid, emoji);
-    if (!reactions) {
+    const mutation = await toggleReaction(messageId, userDid, emoji);
+    if (!mutation) {
         return { success: false, message: "Failed to update reaction" };
     }
 
-    const reactionMap = reactions.reduce((acc: Record<string, any[]>, reaction) => {
+    const reactionMap = mutation.reactions.reduce((acc: Record<string, any[]>, reaction) => {
         if (!acc[reaction.emoji]) {
             acc[reaction.emoji] = [];
         }
@@ -1772,7 +1801,38 @@ export const toggleMongoReactionAction = async (
         return acc;
     }, {});
 
-    return { success: true, reactions: reactionMap };
+    if (!mutation.added) return { success: true, reactions: reactionMap, reactionAdded: false };
+
+    let readStatePersisted = false;
+    try {
+        if (reactionTopicId && validatedTopicCursor) {
+            const normalizedTopicId = normalizeObjectIdHex(reactionTopicId)!;
+            observeChatActionEffect("topic-read-state");
+            await markTopicRead(userDid, messageDoc.conversationId, normalizedTopicId, validatedTopicCursor);
+            readStatePersisted = true;
+            await acknowledgeTopicPmNotifications({
+                userDid,
+                conversationId: messageDoc.conversationId,
+                topicId: normalizedTopicId,
+                lastReadMessageId: validatedTopicCursor,
+            });
+        } else {
+            observeChatActionEffect("conversation-read-state");
+            await markConversationRead(userDid, messageDoc.conversationId, normalizedMessageId);
+            readStatePersisted = true;
+        }
+    } catch (error) {
+        console.error("Reaction saved, but read state could not be fully updated:", error);
+        return {
+            success: true,
+            reactions: reactionMap,
+            reactionAdded: true,
+            readStatePersisted,
+            readStateWarning: "Reaction saved, but read status could not be fully updated.",
+        };
+    }
+
+    return { success: true, reactions: reactionMap, reactionAdded: true, readStatePersisted: true };
 };
 
 export const findOrCreateDMConversationAction = async (
