@@ -12,6 +12,7 @@ export type ChatFollowUpCursor = { updatedAt: string; id: string };
 export type ChatFollowUpListOptions = { completed?: boolean; limit?: number; cursor?: ChatFollowUpCursor };
 export type ChatFollowUpMessagePresentation = {
     conversationId: string;
+    messageId: string;
     topicId?: string;
     sender: { name?: string; handle?: string; avatarUrl?: string };
     body: string;
@@ -422,6 +423,7 @@ export async function listAuthorizedMessageFollowUps(
             message: validMessage
                 ? {
                       conversationId: followUp.conversationId,
+                      messageId: followUp.messageId,
                       ...(followUp.topicId ? { topicId: followUp.topicId } : {}),
                       sender: {
                           ...(sender?.name ? { name: sender.name } : {}),
