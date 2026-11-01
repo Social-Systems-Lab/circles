@@ -415,11 +415,14 @@ export function MessageFollowUpList() {
                                                             className="h-11 min-w-0 gap-2 min-[360px]:ml-auto"
                                                             onClick={() =>
                                                                 router.push(
-                                                                    `/chat/${message.conversationId}${
-                                                                        message.topicId
-                                                                            ? `?topic=${message.topicId}`
-                                                                            : ""
-                                                                    }`,
+                                                                    `/chat/${message.conversationId}?${new URLSearchParams(
+                                                                        {
+                                                                            ...(message.topicId
+                                                                                ? { topic: message.topicId }
+                                                                                : {}),
+                                                                            message: message.messageId,
+                                                                        },
+                                                                    )}`,
                                                                 )
                                                             }
                                                         >

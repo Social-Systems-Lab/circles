@@ -160,6 +160,7 @@ const CHAT_TOPIC_BACKGROUND_CLASS = "border border-[#DDEBB8] bg-[#F1F6DF]";
 const CHAT_STANDARD_BUBBLE_CLASS = "border border-gray-200 bg-white";
 const CHAT_MESSAGE_ELEMENT_ID_PREFIX = "chat-message-";
 const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-2", "ring-offset-white"];
+const messageHighlightTimers = new WeakMap<HTMLElement, number>();
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
@@ -368,9 +369,13 @@ const scrollToMessageElement = (messageId?: string) => {
 
     element.scrollIntoView({ behavior: "smooth", block: "center" });
     element.classList.add(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
-    window.setTimeout(() => {
+    const existingTimer = messageHighlightTimers.get(element);
+    if (existingTimer) window.clearTimeout(existingTimer);
+    const timer = window.setTimeout(() => {
         element.classList.remove(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+        messageHighlightTimers.delete(element);
     }, 1800);
+    messageHighlightTimers.set(element, timer);
 };
 
 const ReplyReferencePreview: React.FC<{
@@ -748,6 +753,7 @@ type ChatMessagesProps = {
     mentionCandidates?: Circle[];
     topicSortOrder?: TopicSortOrder;
     deferTopicReordering?: boolean;
+    legacyTargetMessageId?: string;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -797,6 +803,8 @@ const LegacyReadOnlyMessageRow: React.FC<{
                 </div>
             )}
             <div
+                id={getMessageElementId(message.id)}
+                data-message-id={message.id}
                 className={`mb-1 flex gap-2 ${isFirstInChain ? "mt-3" : "mt-1"} ${isOwnMessage ? "justify-end" : "justify-start"}`}
             >
                 {!isDirect &&
@@ -872,7 +880,8 @@ const EarlierMessagesSection: React.FC<{
     conversationId?: string;
     isDirect?: boolean;
     currentUserDid?: string;
-}> = ({ conversationId, isDirect = false, currentUserDid }) => {
+    targetMessageId?: string;
+}> = ({ conversationId, isDirect = false, currentUserDid, targetMessageId }) => {
     const [count, setCount] = useState<number | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[] | null>(null);
@@ -931,6 +940,18 @@ const EarlierMessagesSection: React.FC<{
         setIsExpanded(false);
         void loadCount();
     }, [loadCount]);
+
+    useEffect(() => {
+        if (!targetMessageId) return;
+        setIsExpanded(true);
+        if (messages === null && !messagesError && !isLoadingMessages) void loadMessages();
+    }, [isLoadingMessages, loadMessages, messages, messagesError, targetMessageId]);
+
+    useEffect(() => {
+        if (!targetMessageId || !messages?.some((message) => message.id === targetMessageId)) return;
+        const frame = requestAnimationFrame(() => scrollToMessageElement(targetMessageId));
+        return () => cancelAnimationFrame(frame);
+    }, [messages, targetMessageId]);
 
     const toggleExpanded = () => {
         const nextExpanded = !isExpanded;
@@ -1039,6 +1060,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     mentionCandidates = [],
     topicSortOrder = "latest_activity",
     deferTopicReordering = false,
+    legacyTargetMessageId,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -1221,6 +1243,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 conversationId={conversationId}
                 isDirect={isDirect}
                 currentUserDid={user?.did || currentUser?.did}
+                targetMessageId={legacyTargetMessageId}
             />
             {emptyTopicState}
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
@@ -2215,6 +2238,7 @@ const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 type TopicNavigationRequest = {
     topicId: string;
+    targetMessageId?: string;
     nonce: number;
 };
 
@@ -2356,6 +2380,10 @@ const TopicCard: React.FC<{
     currentTopicTextDraftKeyRef.current = topicTextDraftKey;
     isSendingRef.current = isSending;
     const pendingScrollIntoViewRef = useRef(false);
+    const exactNavigationPendingRef = useRef(false);
+    const exactNavigationFrameRef = useRef<number | null>(null);
+    const topicAutoScrollFrameRef = useRef<number | null>(null);
+    const topicAutoScrollInnerFrameRef = useRef<number | null>(null);
     const pendingScrollToLatestRef = useRef(false);
     const pendingIncomingAutoScrollRef = useRef(false);
     const incomingAutoScrollTopRef = useRef(0);
@@ -2833,6 +2861,14 @@ const TopicCard: React.FC<{
             queuedAcknowledgementRef.current = null;
             persistedAcknowledgementRef.current = null;
             hasLoadedRepliesRef.current = false;
+            if (exactNavigationFrameRef.current !== null) cancelAnimationFrame(exactNavigationFrameRef.current);
+            if (topicAutoScrollFrameRef.current !== null) cancelAnimationFrame(topicAutoScrollFrameRef.current);
+            if (topicAutoScrollInnerFrameRef.current !== null)
+                cancelAnimationFrame(topicAutoScrollInnerFrameRef.current);
+            exactNavigationFrameRef.current = null;
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = null;
+            exactNavigationPendingRef.current = false;
         };
     }, [conversationId, messageId]);
 
@@ -2841,6 +2877,19 @@ const TopicCard: React.FC<{
             return;
         }
 
+        if (exactNavigationFrameRef.current !== null) cancelAnimationFrame(exactNavigationFrameRef.current);
+        exactNavigationFrameRef.current = null;
+        exactNavigationPendingRef.current = !!navigationRequest?.targetMessageId;
+        if (exactNavigationPendingRef.current) {
+            if (topicAutoScrollFrameRef.current !== null) cancelAnimationFrame(topicAutoScrollFrameRef.current);
+            if (topicAutoScrollInnerFrameRef.current !== null)
+                cancelAnimationFrame(topicAutoScrollInnerFrameRef.current);
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = null;
+            pendingIncomingAutoScrollRef.current = false;
+            pendingScrollToLatestRef.current = false;
+            pendingOutgoingScrollRef.current = false;
+        }
         pendingScrollIntoViewRef.current = true;
 
         if (!isOpen) {
@@ -2864,6 +2913,24 @@ const TopicCard: React.FC<{
         if (!pendingScrollIntoViewRef.current) return;
         if (Number.isSafeInteger(expectedReplyCount) && expectedReplyCount > replies.length) return;
 
+        const targetMessageId = navigationRequest?.targetMessageId;
+        if (targetMessageId && !consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) return;
+        if (targetMessageId) {
+            const frame = requestAnimationFrame(() => {
+                exactNavigationFrameRef.current = null;
+                scrollToMessageElement(targetMessageId);
+                exactNavigationPendingRef.current = false;
+            });
+            exactNavigationFrameRef.current = frame;
+            return () => {
+                if (exactNavigationFrameRef.current === frame) {
+                    cancelAnimationFrame(frame);
+                    exactNavigationFrameRef.current = null;
+                    exactNavigationPendingRef.current = false;
+                }
+            };
+        }
+
         const boundaryElementId = firstUnreadMessageId ? `topic-unread-boundary-${firstUnreadMessageId}` : undefined;
         const boundaryTarget =
             unreadBoundary.isComplete && firstUnreadMessageId
@@ -2883,6 +2950,7 @@ const TopicCard: React.FC<{
         messageId,
         navigationRequest?.nonce,
         navigationRequest?.topicId,
+        navigationRequest?.targetMessageId,
         expectedReplyCount,
         replies.length,
         scrollViewportRef,
@@ -2891,6 +2959,7 @@ const TopicCard: React.FC<{
 
     useEffect(() => {
         if (!isTopicOpen || isLoading || (!hasLoadedRepliesRef.current && !pendingOutgoingScrollRef.current)) return;
+        if (exactNavigationPendingRef.current) return;
         const openedNormally = pendingScrollToLatestRef.current;
         const sentReply = pendingOutgoingScrollRef.current;
         const shouldScroll = shouldAutoScrollTopicReplies({
@@ -2908,8 +2977,10 @@ const TopicCard: React.FC<{
         pendingOutgoingScrollRef.current = false;
         pendingScrollToLatestRef.current = false;
         pendingIncomingAutoScrollRef.current = false;
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+        topicAutoScrollFrameRef.current = requestAnimationFrame(() => {
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = requestAnimationFrame(() => {
+                topicAutoScrollInnerFrameRef.current = null;
                 selectTopicReplyScrollTarget({
                     openedNormally,
                     sentReply,
@@ -4065,17 +4136,47 @@ export const ChatRoomComponent: React.FC<{
     inToolbox?: boolean;
     chatProvider?: "matrix" | "mongo";
     initialTopicId?: string;
+    initialMessageId?: string;
+    suppressAutoRead?: boolean;
     archivedReadOnly?: boolean;
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider, initialTopicId, archivedReadOnly = false }) => {
+}> = ({
+    chatRoom,
+    setSelectedChat,
+    circle,
+    inToolbox,
+    chatProvider,
+    initialTopicId,
+    initialMessageId,
+    suppressAutoRead = false,
+    archivedReadOnly = false,
+}) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
+    const bottomScrollFrameRef = useRef<number | null>(null);
+    const bottomScrollInnerFrameRef = useRef<number | null>(null);
     const userHasScrolledUpRef = useRef(false);
     const lastRenderedMessageRef = useRef<{ count: number; latestCreatedAt: number | null }>({
         count: 0,
         latestCreatedAt: null,
     });
+    useEffect(() => {
+        if (!initialMessageId) return;
+        hasInitiallyScrolledRef.current = true;
+        if (bottomScrollFrameRef.current !== null) cancelAnimationFrame(bottomScrollFrameRef.current);
+        if (bottomScrollInnerFrameRef.current !== null) cancelAnimationFrame(bottomScrollInnerFrameRef.current);
+        bottomScrollFrameRef.current = null;
+        bottomScrollInnerFrameRef.current = null;
+    }, [initialMessageId]);
+
+    useEffect(
+        () => () => {
+            if (bottomScrollFrameRef.current !== null) cancelAnimationFrame(bottomScrollFrameRef.current);
+            if (bottomScrollInnerFrameRef.current !== null) cancelAnimationFrame(bottomScrollInnerFrameRef.current);
+        },
+        [],
+    );
     const isCompact = useIsCompact();
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
     const [newTopicButtonLeft, setNewTopicButtonLeft] = useState<number | null>(null);
@@ -4247,6 +4348,7 @@ export const ChatRoomComponent: React.FC<{
         roomId,
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
+        suppressAutoRead,
     });
 
     const hasLoadedTopicsRef = useRef(false);
@@ -4303,10 +4405,14 @@ export const ChatRoomComponent: React.FC<{
         return () => window.removeEventListener(TOPIC_SORT_PREFERENCE_EVENT, handlePreference);
     }, [roomId]);
 
-    const navigateToTopic = useCallback((topicId: string) => {
+    const navigateToTopic = useCallback((topicId: string, targetMessageId?: string) => {
         setOpenTopicIds((previous) => new Set(previous).add(topicId));
-        setTopicNavigationRequest({ topicId, nonce: Date.now() });
+        setTopicNavigationRequest({ topicId, targetMessageId, nonce: Date.now() });
     }, []);
+
+    useEffect(() => {
+        if (!initialMessageId) openedDeepLinkTopicRef.current = null;
+    }, [initialMessageId]);
 
     const updateTopicUnreadIndicators = useCallback(
         (update: (current: Record<string, TopicUnreadIndicator>) => Record<string, TopicUnreadIndicator>) => {
@@ -4337,15 +4443,16 @@ export const ChatRoomComponent: React.FC<{
             !roomId ||
             !hasLoadedTopics ||
             topicsLoadedRoomRef.current !== roomId ||
-            openedDeepLinkTopicRef.current === initialTopicId
+            openedDeepLinkTopicRef.current === `${initialTopicId}:${initialMessageId || ""}`
         )
             return;
         const topicToOpen = selectLoadedDeepLinkTopic(initialTopicId, roomMessages[roomId] || []);
         if (!topicToOpen) return;
-        openedDeepLinkTopicRef.current = topicToOpen;
+        openedDeepLinkTopicRef.current = `${topicToOpen}:${initialMessageId || ""}`;
         initialTopicEntryHandledRef.current = true;
-        navigateToTopic(topicToOpen);
-    }, [hasLoadedTopics, initialTopicId, navigateToTopic, roomId, roomMessages]);
+        hasInitiallyScrolledRef.current = true;
+        navigateToTopic(topicToOpen, initialMessageId);
+    }, [hasLoadedTopics, initialMessageId, initialTopicId, navigateToTopic, roomId, roomMessages]);
 
     const refreshTopicUnreadCounts = useCallback(async () => {
         const targetRoomId = roomId;
@@ -4615,6 +4722,12 @@ export const ChatRoomComponent: React.FC<{
         const nextSnapshot = getTopicViewportSnapshot(messages);
         if (nextSnapshot.count === 0) return;
 
+        if (initialMessageId) {
+            hasInitiallyScrolledRef.current = true;
+            lastRenderedMessageRef.current = nextSnapshot;
+            return;
+        }
+
         const previousSnapshot = lastRenderedMessageRef.current;
         const hasNewLatestMessage =
             previousSnapshot.count > 0 &&
@@ -4625,8 +4738,10 @@ export const ChatRoomComponent: React.FC<{
 
         if (!hasInitiallyScrolledRef.current) {
             hasInitiallyScrolledRef.current = true;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
+            bottomScrollFrameRef.current = requestAnimationFrame(() => {
+                bottomScrollFrameRef.current = null;
+                bottomScrollInnerFrameRef.current = requestAnimationFrame(() => {
+                    bottomScrollInnerFrameRef.current = null;
                     scrollToBottom("auto");
                 });
             });
@@ -4635,7 +4750,7 @@ export const ChatRoomComponent: React.FC<{
         }
 
         lastRenderedMessageRef.current = nextSnapshot;
-    }, [hasLoadedTopicSortOrder, messages]);
+    }, [hasLoadedTopicSortOrder, initialMessageId, messages]);
 
     useEffect(() => {
         hasInitiallyScrolledRef.current = false;
@@ -4915,6 +5030,7 @@ export const ChatRoomComponent: React.FC<{
                                     mentionCandidates={mentionCandidates}
                                     topicSortOrder={topicSortOrder}
                                     deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
+                                    legacyTargetMessageId={!initialTopicId ? initialMessageId : undefined}
                                 />
                             )}
                         </div>
@@ -4972,6 +5088,7 @@ export const ChatRoomComponent: React.FC<{
                                     mentionCandidates={mentionCandidates}
                                     topicSortOrder={topicSortOrder}
                                     deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
+                                    legacyTargetMessageId={!initialTopicId ? initialMessageId : undefined}
                                 />
                             )}
                         </div>

@@ -11,9 +11,10 @@ type UseMongoChatOptions = {
     roomId?: string;
     enabled: boolean;
     setRoomMessages: React.Dispatch<React.SetStateAction<Record<string, ChatMessage[]>>>;
+    suppressAutoRead?: boolean;
 };
 
-export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatOptions) => {
+export const useMongoChat = ({ roomId, enabled, setRoomMessages, suppressAutoRead = false }: UseMongoChatOptions) => {
     const [isLoading, setIsLoading] = useState(false);
     const [polledTopicReplySignals, setPolledTopicReplySignals] = useState<Record<string, string>>({});
     const sinceIdRef = useRef<string | null>(null);
@@ -22,7 +23,7 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
 
     const markCurrentConversationRead = useCallback(
         async (lastSeenId: string, isStale: () => boolean) => {
-            if (!roomId || lastMarkedIdRef.current === lastSeenId) return;
+            if (!roomId || suppressAutoRead || lastMarkedIdRef.current === lastSeenId) return;
 
             const result = await markConversationReadAction(roomId, null);
             if (result.success && !isStale()) {
@@ -30,7 +31,7 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages }: UseMongoChatO
                 dispatchNotificationRefresh({ reason: "chat-read", roomId });
             }
         },
-        [roomId],
+        [roomId, suppressAutoRead],
     );
 
     useEffect(() => {

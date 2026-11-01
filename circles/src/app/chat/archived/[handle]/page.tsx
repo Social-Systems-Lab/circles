@@ -1,11 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { ChatRoomComponent } from "@/components/modules/chat/chat-room";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { validateTopicDeepLink } from "@/lib/chat/topic-deep-link";
+import { validateMessageDeepLink, validateTopicDeepLink } from "@/lib/chat/topic-deep-link";
 
 type ArchivedChatRoomPageProps = {
     params: Promise<{ handle: string }>;
-    searchParams: Promise<{ topic?: string | string[] }>;
+    searchParams: Promise<{ topic?: string | string[]; message?: string | string[] }>;
 };
 
 export default async function ArchivedChatRoomPage(props: ArchivedChatRoomPageProps) {
@@ -19,14 +19,22 @@ export default async function ArchivedChatRoomPage(props: ArchivedChatRoomPagePr
     const chatRoom = roomResult.success ? roomResult.room : undefined;
     if (!chatRoom) notFound();
 
-    const { findThreadStarter } = await import("@/lib/data/mongo-chat");
+    const { findMessageDeepLinkTarget, findThreadStarter } = await import("@/lib/data/mongo-chat");
     const initialTopicId = await validateTopicDeepLink(searchParams.topic, handle, findThreadStarter);
+    const initialMessageId = await validateMessageDeepLink(
+        searchParams.message,
+        handle,
+        initialTopicId,
+        findMessageDeepLinkTarget,
+    );
 
     return (
         <ChatRoomComponent
             chatRoom={chatRoom}
             circle={chatRoom.circle}
             initialTopicId={initialTopicId}
+            initialMessageId={initialMessageId}
+            suppressAutoRead={searchParams.message !== undefined}
             archivedReadOnly
         />
     );
