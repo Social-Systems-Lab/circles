@@ -23,7 +23,18 @@ test("page provides lazy filters, empty-page continuation, safe unavailable cont
     assert.match(page, /new URLSearchParams/);
     assert.match(page, /topic: message\.topicId/);
     assert.match(page, /message: message\.messageId/);
+    assert.match(page, /message\.conversationArchived \? "archived\/" : ""/);
     assert.match(page, /router\.push\("\/chat"\)/);
+});
+
+test("follow-up presentation derives archive state only for the authenticated viewer", () => {
+    const persistence = readFileSync("src/lib/data/chat-message-followups.ts", "utf8");
+    assert.match(persistence, /archivedBy: 1/);
+    assert.match(
+        persistence,
+        /conversation\?\.type === "dm" && conversation\.archivedBy\?\.includes\(ownerDid\) === true/,
+    );
+    assert.match(persistence, /conversationArchived:\s*conversation\?\.type === "dm"/);
 });
 
 test("page keeps mutations local and exposes accessible mobile controls", () => {
