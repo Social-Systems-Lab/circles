@@ -29,6 +29,7 @@ const matches = (record: any, filter: any): boolean =>
         if (key === "$or") return expected.some((clause: any) => matches(record, clause));
         if (key === "$and") return expected.every((clause: any) => matches(record, clause));
         const actual = valueAt(record, key);
+        if (key === "$in") return expected.includes(actual);
         if (
             expected &&
             typeof expected === "object" &&
@@ -60,8 +61,12 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
     let provisionCalls = 0;
     let finalizeCalls = 0;
     let permanentExists = false;
-    let provisioningFailure: "none" | "before_credentials" | "after_credentials" | "after_mongo" | "after_membership" =
-        "none";
+    let provisioningFailure:
+        | "none"
+        | "before_did_reservation"
+        | "after_credentials"
+        | "after_mongo"
+        | "after_membership" = "none";
     const reservedDids = new Map<string, string>();
     const credentialDirectories = new Set<string>();
     const memberships = new Set<string>();
@@ -144,6 +149,7 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
         permanentAccountExists: async () => permanentExists,
         findAccountByPendingRegistrationId: async (id) => accounts.get(id) || null,
         provisionAccount: async ({ pendingRegistrationId }) => {
+            if (provisioningFailure === "before_did_reservation") throw new Error("interrupted before DID generation");
             provisionCalls += 1;
             const generatedDid = `did-${pendingRegistrationId}-${provisionCalls}`;
             const reservedDid = reservedDids.get(pendingRegistrationId);
@@ -151,7 +157,6 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
                 throw new Error("retry must not replace a reserved identity");
             }
             reservedDids.set(pendingRegistrationId, generatedDid);
-            if (provisioningFailure === "before_credentials") throw new Error("interrupted before credentials");
             credentialDirectories.add(generatedDid);
             if (provisioningFailure === "after_credentials") throw new Error("interrupted after credentials");
             const account = { accountId: `account-${pendingRegistrationId}`, did: generatedDid };
@@ -208,11 +213,13 @@ const validInput = {
 const tokenFrom = (url: string) => new URL(url).searchParams.get("token")!;
 
 async function createPending(harness: ReturnType<typeof createHarness>, overrides: Partial<typeof validInput> = {}) {
-    return beginPendingRegistration({ ...validInput, ...overrides }, harness.deps, {
+    const result = await beginPendingRegistration({ ...validInput, ...overrides }, harness.deps, {
         enabled: true,
         registrationModeAllows: async () => true,
         verifyAltcha: async () => true,
     });
+    if (!result.enabled) throw new Error("Pending registration test harness unexpectedly disabled registration");
+    return result;
 }
 
 async function main() {
@@ -355,7 +362,7 @@ async function main() {
         },
         harness.deps,
     );
-    assert.equal(retry.success, true, "provisioning is idempotent after completion");
+    assert.equal(retry.success, false, "consumed continuation cannot authorize a repeated completion request");
 
     {
         const reservation = createHarness();
@@ -389,11 +396,11 @@ async function main() {
         assert.equal(record.reservedDid, "reserved-did");
     }
 
-    for (const failure of ["before_credentials", "after_credentials"] as const) {
+    for (const failure of ["before_did_reservation", "after_credentials"] as const) {
         const orphaned = createHarness();
         const pending = await createPending(orphaned, {
             email: `${failure}@example.invalid`,
-            requestedHandle: failure.replaceAll("_", "-"),
+            requestedHandle: failure === "after_credentials" ? "after-credentials" : "before-reserve",
         });
         const proof = await verifyPendingRegistrationEmail(tokenFrom(orphaned.sent[0].verificationUrl), orphaned.deps);
         orphaned.setProvisioningFailure(failure);
@@ -410,7 +417,11 @@ async function main() {
             ).success,
             false,
         );
-        assert.equal(orphaned.reservedDids.size, 1, `${failure} durably reserves exactly one DID`);
+        assert.equal(
+            orphaned.reservedDids.size,
+            failure === "before_did_reservation" ? 0 : 1,
+            `${failure} has the expected DID reservation boundary`,
+        );
         assert.equal(
             orphaned.credentialDirectories.size,
             failure === "after_credentials" ? 1 : 0,
@@ -433,7 +444,11 @@ async function main() {
             `${failure} retry fails closed instead of silently creating a different DID`,
         );
         assert.equal(orphaned.accounts.size, 0, `${failure} creates no mismatched permanent account`);
-        assert.equal(orphaned.reservedDids.size, 1, `${failure} retains the original DID reservation`);
+        assert.equal(
+            orphaned.reservedDids.size,
+            failure === "before_did_reservation" ? 0 : 1,
+            `${failure} preserves the reservation boundary`,
+        );
     }
 
     for (const failure of ["after_mongo", "after_membership"] as const) {
@@ -458,7 +473,7 @@ async function main() {
         assert.equal(first.success, false);
         const originalDid = interrupted.accounts.get(proof.pendingRegistrationId!)!.did;
         interrupted.setProvisioningFailure("none");
-        const recovered = await provisionPendingRegistration(
+        const replay = await provisionPendingRegistration(
             {
                 pendingRegistrationId: proof.pendingRegistrationId!,
                 verifiedContinuationSecret: proof.verifiedContinuationSecret!,
@@ -466,14 +481,123 @@ async function main() {
             },
             interrupted.deps,
         );
-        assert.equal(recovered.success, true, `${failure} is recoverable`);
-        assert.equal(recovered.account?.did, originalDid, `${failure} recovery preserves the original DID`);
-        assert.equal(interrupted.provisionCalls, 1, `${failure} recovery does not create a second account`);
+        assert.equal(replay.success, false, `${failure} cannot replay the consumed continuation`);
+        assert.equal(interrupted.provisionCalls, 1, `${failure} replay does not create a second account`);
+        assert.equal(interrupted.accounts.get(proof.pendingRegistrationId!)!.did, originalDid);
         assert.equal(
-            interrupted.memberships.has(recovered.account!.accountId),
-            true,
-            `${failure} recovery ensures self-membership`,
+            interrupted.memberships.has(`account-${proof.pendingRegistrationId}`),
+            failure === "after_membership",
+            `${failure} records the observed membership boundary without granting replay recovery`,
         );
+        assert.equal(
+            await verifyPendingRegistrationEmail(tokenFrom(interrupted.sent[0].verificationUrl), interrupted.deps).then(
+                (result) => result.success,
+            ),
+            false,
+            `${failure} cannot reuse the consumed original verification link`,
+        );
+    }
+
+    {
+        const restart = createHarness();
+        const pending = await createPending(restart, {
+            email: "fresh-recovery@example.invalid",
+            requestedHandle: "fresh-recovery",
+        });
+        const originalToken = tokenFrom(restart.sent[0].verificationUrl);
+        const firstVerification = await verifyPendingRegistrationEmail(originalToken, restart.deps);
+        assert.equal(firstVerification.success, true);
+        restart.setProvisioningFailure("before_did_reservation");
+        const interrupted = await provisionPendingRegistration(
+            {
+                pendingRegistrationId: firstVerification.pendingRegistrationId!,
+                verifiedContinuationSecret: firstVerification.verifiedContinuationSecret!,
+                password: "secure-password",
+            },
+            restart.deps,
+        );
+        assert.equal(interrupted.success, false);
+        const attemptsBeforeRetry = restart.provisionCalls;
+        assert.equal(
+            restart.reservedDids.has(firstVerification.pendingRegistrationId!),
+            false,
+            "pre-DID injected interruption reserves no identity",
+        );
+        assert.equal(restart.accounts.has(firstVerification.pendingRegistrationId!), false);
+        restart.setProvisioningFailure("none");
+        restart.advance(2 * 60 * 1000 + 61_000);
+        await resendPendingRegistrationVerification(
+            {
+                pendingRegistrationId: pending.pendingRegistrationId,
+                continuationSecret: pending.continuationSecret,
+                clientIp: validInput.clientIp,
+            },
+            restart.deps,
+        );
+        assert.equal(restart.sent.length, 2, "fresh email authorization sends a new verification link");
+        assert.equal((await verifyPendingRegistrationEmail(originalToken, restart.deps)).success, false);
+        const freshVerification = await verifyPendingRegistrationEmail(
+            tokenFrom(restart.sent[1].verificationUrl),
+            restart.deps,
+        );
+        assert.equal(freshVerification.success, true);
+        assert.equal(restart.finalizeCalls, 0, "email verification alone creates no session/finalization");
+        const completed = await provisionPendingRegistration(
+            {
+                pendingRegistrationId: freshVerification.pendingRegistrationId!,
+                verifiedContinuationSecret: freshVerification.verifiedContinuationSecret!,
+                password: "secure-password",
+            },
+            restart.deps,
+        );
+        assert.equal(completed.success, true, "unreserved expired attempt may restart after fresh verification");
+        assert.equal(restart.provisionCalls, attemptsBeforeRetry + 1, "fresh authorization invokes provisioning once");
+        assert.equal(restart.accounts.size, 1, "fresh authorization creates exactly one permanent account");
+        assert.equal(restart.reservedDids.size, 1, "successful retry reserves exactly one DID");
+    }
+
+    {
+        const resendStates = createHarness();
+        const pending = await createPending(resendStates, {
+            email: "resend-states@example.invalid",
+            requestedHandle: "resend-states",
+        });
+        await resendPendingRegistrationVerification(
+            {
+                pendingRegistrationId: pending.pendingRegistrationId,
+                continuationSecret: pending.continuationSecret,
+                clientIp: "192.0.2.8",
+            },
+            resendStates.deps,
+        );
+        assert.equal(resendStates.sent.length, 1, "resend cooldown blocks immediate resend");
+        resendStates.advance(61_000);
+        await resendPendingRegistrationVerification(
+            {
+                pendingRegistrationId: pending.pendingRegistrationId,
+                continuationSecret: pending.continuationSecret,
+                clientIp: "192.0.2.8",
+            },
+            resendStates.deps,
+        );
+        assert.equal(resendStates.sent.length, 2, "resend becomes available after cooldown");
+        const proof = await verifyPendingRegistrationEmail(
+            tokenFrom(resendStates.sent[1].verificationUrl),
+            resendStates.deps,
+        );
+        resendStates.registrations[0].status = "provisioning";
+        resendStates.registrations[0].reservedDid = "reserved-did";
+        resendStates.advance(2 * 60 * 1000);
+        await resendPendingRegistrationVerification(
+            {
+                pendingRegistrationId: pending.pendingRegistrationId,
+                continuationSecret: pending.continuationSecret,
+                clientIp: "192.0.2.8",
+            },
+            resendStates.deps,
+        );
+        assert.equal(resendStates.sent.length, 2, "reserved-DID state cannot be reset by resend");
+        assert.equal(proof.success, true);
     }
 
     {
