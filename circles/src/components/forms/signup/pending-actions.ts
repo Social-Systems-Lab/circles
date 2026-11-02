@@ -200,7 +200,7 @@ export async function completePendingRegistrationAction(password: string) {
                     "This secure password setup step has expired or was already used. Sign in if your account is ready, or contact support for help continuing signup.",
             };
         }
-        const safeRedirect = validatePendingRedirect(authorized.redirectTo) || "/explore";
+        const safeRedirect = validatePendingRedirect(authorized.redirectTo) || "/onboarding";
         const result = await provisionPendingRegistration(
             { pendingRegistrationId: parsed[0], verifiedContinuationSecret: parsed[1], password },
             deps,

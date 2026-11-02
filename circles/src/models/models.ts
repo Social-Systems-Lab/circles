@@ -523,6 +523,26 @@ export const communityGuidelineAgreementStateSchema = z.object({
     responsibility: communityGuidelineAgreementSchema,
 });
 
+export const onboardingCardIdSchema = z.enum([
+    "email-verification",
+    "introduction",
+    "community-guidelines",
+    "location",
+    "profile-photo",
+    "proof-of-humanity",
+]);
+export type OnboardingCardId = z.infer<typeof onboardingCardIdSchema>;
+
+export const resumableOnboardingStateSchema = z.object({
+    version: z.literal(1),
+    currentCard: onboardingCardIdSchema,
+    startedAt: z.date(),
+    lastSeenAt: z.date(),
+    skippedCards: z.array(onboardingCardIdSchema).default([]),
+    completionAcknowledgedAt: z.date().nullable().optional(),
+});
+export type ResumableOnboardingState = z.infer<typeof resumableOnboardingStateSchema>;
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -568,6 +588,7 @@ export const circleSchema = z.object({
     organizationName: z.string().optional(),
     officialEmail: z.string().email().optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
+    onboardingState: resumableOnboardingStateSchema.optional(),
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),
     matrixPassword: z.string().optional(),

@@ -57,7 +57,9 @@ export default function Onboarding() {
 
     const [userData, setUserData] = useState<OnboardingUserData | undefined>(undefined);
     const shouldSkipAutoOnboarding =
-        user?.onboardingFlow === "v2-signup" || user?.onboardingFlow === "pilot-quick-signup";
+        user?.onboardingFlow === "v2-signup" ||
+        user?.onboardingFlow === "pilot-quick-signup" ||
+        user?.onboardingFlow === "pending-registration-v1";
 
     // Filter steps based on what's already completed
     const steps = useMemo(() => {
