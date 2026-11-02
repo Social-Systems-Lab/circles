@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Circle } from "@/models/models";
 import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
+import { chunkRecipientDids } from "@/lib/security/recipient-input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import UserPicker from "@/components/forms/user-picker";
@@ -99,13 +100,24 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
 
         startTransition(async () => {
             const userDids = selectedUsers.map((u) => u.did!);
-            const result = await inviteUsersToEventAction(circleHandle, eventId, userDids);
-            if (result.success) {
-                toast({ title: "Invitations sent" });
-                onOpenChange(false);
-            } else {
-                toast({ title: "Error", description: result.message, variant: "destructive" });
+            let invited = 0;
+            for (const batch of chunkRecipientDids(userDids)) {
+                const result = await inviteUsersToEventAction(circleHandle, eventId, batch);
+                if (!result.success) {
+                    toast({
+                        title: invited > 0 ? "Some invitations were sent" : "Error",
+                        description:
+                            invited > 0
+                                ? `Invitations sent to ${invited} of ${userDids.length} selected people. ${result.message || "The remaining invitations were not sent."}`
+                                : result.message,
+                        variant: "destructive",
+                    });
+                    return;
+                }
+                invited += batch.length;
             }
+            toast({ title: "Invitations sent" });
+            onOpenChange(false);
         });
     };
 

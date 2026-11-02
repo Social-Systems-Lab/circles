@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { inspectFormDataBounds, inspectSerializedArrayBounds } from "@/lib/security/bounded-input";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { createDefaultFeed, createPost, getFeedByHandle } from "@/lib/data/feed";
@@ -249,6 +250,8 @@ export async function createFundingAskAction(circleHandle: string, formData: For
             return { success: false, message: "You do not have permission to create funding requests in this circle." };
         }
 
+        const formBounds = inspectFormDataBounds(formData) ?? inspectSerializedArrayBounds(formData.get("items"), 25);
+        if (formBounds) return { success: false, message: `Invalid input: ${formBounds.message}` };
         const parsed = fundingAskFormSchema.safeParse(Object.fromEntries(formData.entries()));
         if (!parsed.success) {
             return {
@@ -361,6 +364,8 @@ export async function updateFundingAskAction(
             return { success: false, message: "You do not have permission to edit this funding request." };
         }
 
+        const formBounds = inspectFormDataBounds(formData) ?? inspectSerializedArrayBounds(formData.get("items"), 25);
+        if (formBounds) return { success: false, message: `Invalid input: ${formBounds.message}` };
         const parsed = fundingAskFormSchema.safeParse(Object.fromEntries(formData.entries()));
         if (!parsed.success) {
             return {

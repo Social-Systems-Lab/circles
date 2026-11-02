@@ -1,6 +1,7 @@
 import type { Circle, Member } from "@/models/models";
 import { NextResponse } from "next/server";
 import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
+import { readJsonBodyLimited } from "@/lib/security/bounded-input";
 
 type AccessHandlerDependencies = {
     authenticate: () => Promise<string | undefined>;
@@ -11,20 +12,32 @@ type AccessHandlerDependencies = {
     isModuleEnabled: (circle: Circle, moduleHandle: string) => boolean;
 };
 
-const neutralCircleNotFound = () =>
-    NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
+const neutralCircleNotFound = () => NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
 
 export const createAccessPostHandler = (dependencies: AccessHandlerDependencies) =>
     async function accessPostHandler(req: Request): Promise<Response> {
         try {
-            const { circleHandle, moduleHandle } = await req.json();
-            const permissionModuleHandle = moduleHandle === "shifts" ? "tasks" : moduleHandle;
+            const body = await readJsonBodyLimited(req, 8 * 1024);
+            if (!body.ok) return NextResponse.json({ error: body.error }, { status: body.status });
+            if (!body.value || typeof body.value !== "object" || Array.isArray(body.value)) {
+                return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+            }
+            const { circleHandle, moduleHandle } = body.value as { circleHandle?: unknown; moduleHandle?: unknown };
+            if (
+                (circleHandle !== undefined && (typeof circleHandle !== "string" || circleHandle.length > 100)) ||
+                (moduleHandle !== undefined && (typeof moduleHandle !== "string" || moduleHandle.length > 100))
+            ) {
+                return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+            }
+            const safeCircleHandle = typeof circleHandle === "string" ? circleHandle : "";
+            const safeModuleHandle = typeof moduleHandle === "string" ? moduleHandle : "";
+            const permissionModuleHandle = safeModuleHandle === "shifts" ? "tasks" : safeModuleHandle;
 
-            if (!circleHandle) {
+            if (!safeCircleHandle) {
                 return NextResponse.json({ authenticated: true, authorized: true });
             }
 
-            const circle = await dependencies.findCircle(circleHandle);
+            const circle = await dependencies.findCircle(safeCircleHandle);
             const userDid = await resolveAuthenticatedViewerDid(dependencies.authenticate);
             if (!circle || !(await dependencies.canReadCircle(userDid, circle))) {
                 return neutralCircleNotFound();
@@ -36,12 +49,12 @@ export const createAccessPostHandler = (dependencies: AccessHandlerDependencies)
                 if (!canViewUnpublished) return neutralCircleNotFound();
             }
 
-            const isFundingRoute = moduleHandle === "funding";
+            const isFundingRoute = safeModuleHandle === "funding";
             if (isFundingRoute && circle.circleType !== "circle") {
                 return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
             }
 
-            if (!dependencies.isModuleEnabled(circle, moduleHandle)) {
+            if (!dependencies.isModuleEnabled(circle, safeModuleHandle)) {
                 return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
             }
 

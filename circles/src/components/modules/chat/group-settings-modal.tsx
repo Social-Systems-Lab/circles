@@ -22,6 +22,7 @@ import {
     isConversationMuteMutationPending,
 } from "@/lib/client/chat-preference-events";
 import { useToast } from "@/components/ui/use-toast";
+import { chunkRecipientDids } from "@/lib/security/recipient-input";
 
 interface GroupSettingsModalProps {
     open: boolean;
@@ -540,24 +541,30 @@ function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin:
         setIsSavingMembers(true);
         try {
             const { addMembersAction } = await import("./actions");
-            const result = await addMembersAction(
-                chatRoom._id as string,
-                selectedUsers.map(u => u.did)
-            );
+            const batches = chunkRecipientDids(selectedUsers.map((u) => u.did));
+            let added = 0;
+            for (const [index, batch] of batches.entries()) {
+                const result = await addMembersAction(chatRoom._id as string, batch);
+                if (!result.success) {
+                    alert(
+                        added > 0
+                            ? `Added ${added} of ${selectedUsers.length} selected members. The remaining members were not added: ${result.message || "Please try again."}`
+                            : result.message || "Failed to add members",
+                    );
+                    break;
+                }
+                added += batch.length;
+                if (index === batches.length - 1) {
+                    setIsAddingMembers(false);
+                    setSelectedUsers([]);
+                    setSearchTerm("");
+                }
+            }
 
-            if (result.success) {
-                // Refresh members
+            if (added > 0) {
                 const { getChatRoomMembersAction } = await import("./actions");
                 const refreshResult = await getChatRoomMembersAction(chatRoom._id as string);
-                if (refreshResult.success && refreshResult.members) {
-                    setMembers(refreshResult.members);
-                }
-                // Reset UI
-                setIsAddingMembers(false);
-                setSelectedUsers([]);
-                setSearchTerm("");
-            } else {
-                alert(result.message || "Failed to add members");
+                if (refreshResult.success && refreshResult.members) setMembers(refreshResult.members);
             }
         } catch (error) {
             console.error("Error adding members:", error);

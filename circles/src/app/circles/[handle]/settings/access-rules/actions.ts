@@ -5,12 +5,14 @@ import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+import { inspectInputBounds } from "@/lib/security/bounded-input";
 
 export async function saveAccessRules(values: {
     _id: any;
     accessRules: Record<string, Record<string, string[]>>;
 }): Promise<FormSubmitResponse> {
-    console.log("Saving circle access rules with values", values);
+    if (inspectInputBounds(values, { maxArrayItems: 500 }))
+        return { success: false, message: "Invalid input: access rules are too large" };
 
     let circle: Partial<Circle> = {
         _id: values._id,
