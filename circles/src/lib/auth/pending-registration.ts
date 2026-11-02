@@ -463,6 +463,27 @@ export async function resumePendingRegistration(
         : { success: false };
 }
 
+export async function getVerifiedPendingRegistration(
+    id: string,
+    verifiedContinuationSecret: string,
+    deps: PendingRegistrationDependencies,
+): Promise<{ success: true; email: string; redirectTo: string | null } | { success: false }> {
+    if (!ObjectId.isValid(id) || !verifiedContinuationSecret || verifiedContinuationSecret.length > 256) {
+        return { success: false };
+    }
+    const now = deps.now?.() ?? new Date();
+    const record = await deps.collections.registrations.findOne({
+        _id: new ObjectId(id),
+        status: "email_verified",
+        verifiedContinuationHash: hashPendingRegistrationSecret("verified-continuation", verifiedContinuationSecret),
+        verifiedContinuationExpiresAt: { $gt: now },
+        $or: [{ expiresAt: { $gt: now } }, { reservedDid: { $type: "string" } }],
+    });
+    return record
+        ? { success: true, email: record.email, redirectTo: validatePendingRedirect(record.redirectTo) }
+        : { success: false };
+}
+
 export async function resendPendingRegistrationVerification(
     input: { pendingRegistrationId: string; continuationSecret: string; clientIp: string },
     deps: PendingRegistrationDependencies,

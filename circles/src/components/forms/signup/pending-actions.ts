@@ -5,18 +5,28 @@ import { verifyAltchaPayload } from "@/lib/auth/altcha";
 import {
     beginPendingRegistration,
     correctPendingRegistrationEmail,
+    getVerifiedPendingRegistration,
     isPendingRegistrationEnabled,
     provisionPendingRegistration,
     resendPendingRegistrationVerification,
     resumePendingRegistration,
+    validatePendingRedirect,
 } from "@/lib/auth/pending-registration";
 import { createPendingRegistrationRuntimeDependencies } from "@/lib/auth/pending-registration-runtime";
 import { assertRegistrationMode } from "@/lib/auth/registration-routing";
 import { authorizePendingRegistrationChallenge } from "@/lib/auth/pending-registration";
 
 const GENERIC = "If registration can continue, we sent an email with the next step.";
+const COMPLETION_UNAVAILABLE =
+    "This signup step can’t continue securely. If your account is ready, sign in. Otherwise contact support for help.";
 const PENDING_COOKIE = "__Host-kamooni-pending-registration";
 const VERIFIED_COOKIE = "__Host-kamooni-verified-registration";
+type PendingMutationResponse = {
+    success: boolean;
+    message: string;
+    email?: string | null;
+    resendAvailableAt?: string | null;
+};
 
 async function trustedRequest(): Promise<{ ok: boolean; clientIp: string }> {
     const requestHeaders = await headers();
@@ -92,7 +102,7 @@ export async function correctPendingRegistrationEmailAction(newEmail: string) {
     return pendingMutation("correct", newEmail);
 }
 
-async function pendingMutation(kind: "resend" | "correct", newEmail?: string) {
+async function pendingMutation(kind: "resend" | "correct", newEmail?: string): Promise<PendingMutationResponse> {
     const request = await trustedRequest();
     if (!request.ok) return { success: true, message: GENERIC };
     try {
@@ -100,12 +110,40 @@ async function pendingMutation(kind: "resend" | "correct", newEmail?: string) {
         const capability = await getPendingCookie(PENDING_COOKIE);
         if (!deps || !capability) return { success: true, message: GENERIC };
         if (kind === "resend") {
-            return await resendPendingRegistrationVerification({ ...capability, clientIp: request.clientIp }, deps);
+            const result = await resendPendingRegistrationVerification(
+                { ...capability, clientIp: request.clientIp },
+                deps,
+            );
+            const state = await resumePendingRegistration(
+                capability.pendingRegistrationId,
+                capability.continuationSecret,
+                deps,
+            );
+            return {
+                ...result,
+                resendAvailableAt:
+                    state.success && state.verificationLastSentAt
+                        ? new Date(state.verificationLastSentAt.getTime() + 60_000).toISOString()
+                        : null,
+            };
         }
-        return await correctPendingRegistrationEmail(
+        const result = await correctPendingRegistrationEmail(
             { ...capability, newEmail: newEmail || "", clientIp: request.clientIp },
             deps,
         );
+        const state = await resumePendingRegistration(
+            capability.pendingRegistrationId,
+            capability.continuationSecret,
+            deps,
+        );
+        return {
+            ...result,
+            email: state.success ? (state.email ?? null) : null,
+            resendAvailableAt:
+                state.success && state.verificationLastSentAt
+                    ? new Date(state.verificationLastSentAt.getTime() + 60_000).toISOString()
+                    : null,
+        };
     } catch {
         return { success: true, message: GENERIC };
     }
@@ -141,25 +179,45 @@ export async function resumePendingRegistrationAction() {
 
 export async function completePendingRegistrationAction(password: string) {
     const request = await trustedRequest();
-    if (!request.ok) return { success: false, message: GENERIC };
+    if (!request.ok) return { success: false, code: "completion_unavailable", message: COMPLETION_UNAVAILABLE };
+    if (typeof password !== "string" || password.length < 8 || password.length > 128) {
+        return { success: false, code: "invalid_password", message: "Choose a password between 8 and 128 characters." };
+    }
     try {
         const deps = await activeDependencies();
         const jar = await cookies();
         const value = jar.get(VERIFIED_COOKIE)?.value;
         const parsed = value?.split(".");
-        if (!deps || !parsed || parsed.length !== 2) return { success: false, message: GENERIC };
-        const authorized = await resumePendingRegistration(parsed[0], parsed[1], deps);
-        if (!authorized.success || authorized.status !== "email_verified") return { success: false, message: GENERIC };
-        const redirectTo = authorized.redirectTo || "/onboarding";
-        const safeRedirect = redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/onboarding";
+        if (!deps || !parsed || parsed.length !== 2) {
+            return { success: false, code: "completion_unavailable", message: COMPLETION_UNAVAILABLE };
+        }
+        const authorized = await getVerifiedPendingRegistration(parsed[0], parsed[1], deps);
+        if (!authorized.success) {
+            return {
+                success: false,
+                code: "authorization_expired",
+                message:
+                    "This secure password setup step has expired or was already used. Sign in if your account is ready, or contact support for help continuing signup.",
+            };
+        }
+        const safeRedirect = validatePendingRedirect(authorized.redirectTo) || "/explore";
         const result = await provisionPendingRegistration(
             { pendingRegistrationId: parsed[0], verifiedContinuationSecret: parsed[1], password },
             deps,
         );
-        if (result.success) jar.delete(VERIFIED_COOKIE);
-        return { success: result.success, message: result.message, redirectTo: result.success ? safeRedirect : null };
+        if (!result.success || !result.account) {
+            return {
+                success: false,
+                code: "recovery_required",
+                message:
+                    "We couldn’t safely finish setting up your account. If you may have completed signup, try signing in. Otherwise contact support for help.",
+            };
+        }
+        jar.delete(VERIFIED_COOKIE);
+        jar.delete(PENDING_COOKIE);
+        return { success: true, message: "Your account is ready.", redirectTo: safeRedirect };
     } catch {
-        return { success: false, message: GENERIC };
+        return { success: false, code: "completion_unavailable", message: COMPLETION_UNAVAILABLE };
     }
 }
 

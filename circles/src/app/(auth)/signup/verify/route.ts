@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         const result = await verifyPendingRegistrationEmail(token, deps);
         if (!result.success || !result.pendingRegistrationId || !result.verifiedContinuationSecret)
             return safeFailure();
-        const response = NextResponse.redirect(new URL("/signup?verification=confirmed", request.url), 303);
+        const response = NextResponse.redirect(new URL("/signup/continue", request.url), 303);
         setPrivateHeaders(response);
         response.cookies.set(VERIFIED_COOKIE, `${result.pendingRegistrationId}.${result.verifiedContinuationSecret}`, {
             httpOnly: true,

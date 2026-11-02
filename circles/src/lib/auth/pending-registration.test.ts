@@ -5,6 +5,7 @@ import {
     authorizePendingRegistrationChallenge,
     beginPendingRegistration,
     correctPendingRegistrationEmail,
+    getVerifiedPendingRegistration,
     hashPendingRegistrationSecret,
     PENDING_REGISTRATION_LIFETIME_MS,
     provisionPendingRegistration,
@@ -224,11 +225,17 @@ async function createPending(harness: ReturnType<typeof createHarness>, override
 
 async function main() {
     const activeSignupSource = readFileSync("src/components/forms/signup/actions.ts", "utf8");
+    const checkEmailPageSource = readFileSync("src/app/(auth)/signup/check-email/page.tsx", "utf8");
+    const continuePageSource = readFileSync("src/app/(auth)/signup/continue/page.tsx", "utf8");
     assert.doesNotMatch(
         activeSignupSource,
         /pending-registration/,
         "disabled backend is not wired into the current production signup action",
     );
+    assert.match(checkEmailPageSource, /isPendingRegistrationEnabled\(\)/);
+    assert.match(checkEmailPageSource, /isRegistrationModeAllowed\("pending"\)/);
+    assert.match(continuePageSource, /isPendingRegistrationEnabled\(\)/);
+    assert.match(continuePageSource, /isRegistrationModeAllowed\("pending"\)/);
     assert.equal(validatePendingRedirect("/safe/path?next=1"), "/safe/path?next=1");
     for (const unsafe of ["https://evil.example/", "//evil.example/", "javascript:alert(1)", "/\\evil"]) {
         assert.equal(validatePendingRedirect(unsafe), null, `unsafe redirect is rejected: ${unsafe}`);
@@ -327,6 +334,21 @@ async function main() {
     );
     const verified = await verifyPendingRegistrationEmail(correctedToken, harness.deps);
     assert.equal(verified.success, true);
+    const verifiedState = await getVerifiedPendingRegistration(
+        verified.pendingRegistrationId!,
+        verified.verifiedContinuationSecret!,
+        harness.deps,
+    );
+    assert.equal(verifiedState.success, true, "password setup can validate the verified continuation capability");
+    if (verifiedState.success) {
+        assert.equal(verifiedState.email, "corrected@example.invalid");
+        assert.equal(verifiedState.redirectTo, validInput.redirectTo);
+    }
+    assert.equal(
+        (await getVerifiedPendingRegistration(verified.pendingRegistrationId!, "wrong-secret", harness.deps)).success,
+        false,
+        "verified registration state cannot be read with another capability",
+    );
     assert.equal(
         (await verifyPendingRegistrationEmail(correctedToken, harness.deps)).success,
         false,
@@ -354,6 +376,17 @@ async function main() {
     assert.equal(firstProvision.success || concurrentProvision.success, true);
     assert.equal(harness.provisionCalls, 1, "concurrent provisioning creates exactly one permanent account");
     assert.ok(harness.finalizeCalls >= 1, "the provisioned account is finalized");
+    assert.equal(
+        (
+            await getVerifiedPendingRegistration(
+                verified.pendingRegistrationId!,
+                verified.verifiedContinuationSecret!,
+                harness.deps,
+            )
+        ).success,
+        false,
+        "successful provisioning consumes the verified continuation capability",
+    );
     const retry = await provisionPendingRegistration(
         {
             pendingRegistrationId: verified.pendingRegistrationId!,
@@ -683,6 +716,31 @@ async function main() {
             (await resumePendingRegistration(pending.pendingRegistrationId, "wrong-secret", expired.deps)).success,
             false,
             "resume requires possession secret",
+        );
+    }
+
+    {
+        const expiredContinuation = createHarness();
+        const pending = await createPending(expiredContinuation, {
+            email: "expired-continuation@example.invalid",
+            requestedHandle: "expired-continuation",
+        });
+        const proof = await verifyPendingRegistrationEmail(
+            tokenFrom(expiredContinuation.sent[0].verificationUrl),
+            expiredContinuation.deps,
+        );
+        assert.equal(proof.success, true);
+        expiredContinuation.advance(31 * 60 * 1000);
+        assert.equal(
+            (
+                await getVerifiedPendingRegistration(
+                    proof.pendingRegistrationId!,
+                    proof.verifiedContinuationSecret!,
+                    expiredContinuation.deps,
+                )
+            ).success,
+            false,
+            "expired verified continuation cannot expose password setup authorization",
         );
     }
 
