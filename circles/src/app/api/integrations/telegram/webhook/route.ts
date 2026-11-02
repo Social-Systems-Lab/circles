@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectTelegramChannelByToken } from "@/lib/data/external-notification-channels";
 import { sendTelegramMessage } from "@/lib/integrations/telegram";
+import { readJsonBodyLimited } from "@/lib/security/bounded-input";
 
 const extractStartToken = (text?: string): string | null => {
     if (!text) return null;
@@ -22,9 +23,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false }, { status: 401 });
     }
 
-    const update = await request.json().catch(() => null);
+    const body = await readJsonBodyLimited(request, 1024 * 1024);
+    if (!body.ok) return NextResponse.json({ ok: false }, { status: body.status });
+    const update = body.value as {
+        message?: { text?: unknown; chat?: { id?: unknown; username?: unknown }; from?: { username?: unknown } };
+    } | null;
     const message = update?.message;
-    const token = extractStartToken(message?.text);
+    const token = extractStartToken(typeof message?.text === "string" ? message.text.slice(0, 2048) : undefined);
     const chatId = message?.chat?.id;
 
     if (!token || chatId === undefined || chatId === null) {
@@ -33,9 +38,9 @@ export async function POST(request: NextRequest) {
 
     const username =
         typeof message?.from?.username === "string"
-            ? message.from.username
+            ? message.from.username.slice(0, 64)
             : typeof message?.chat?.username === "string"
-              ? message.chat.username
+              ? message.chat.username.slice(0, 64)
               : undefined;
 
     const connected = await connectTelegramChannelByToken({

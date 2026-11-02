@@ -8,6 +8,7 @@ import type { PinStateDto } from "@/lib/data/client-user-dto";
 import { toPinStateDto } from "@/lib/data/client-user-dto";
 import { executeAuthenticatedUserMutation } from "@/lib/data/client-user-boundary";
 import { buildPinnedCircleDto, type ClientCircleDto } from "@/lib/data/client-circle-dto";
+import { readJsonBodyLimited } from "@/lib/security/bounded-input";
 
 /**
  * GET /api/pins
@@ -50,8 +51,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<PinStateDto |
             return NextResponse.json({ error: "unauthorized" }, { status: 401 });
         }
 
-        const { circleId } = (await req.json()) as { circleId?: string };
-        if (!circleId) {
+        const body = await readJsonBodyLimited(req, 4 * 1024);
+        if (!body.ok) return NextResponse.json({ error: body.error }, { status: body.status });
+        const circleId =
+            body.value && typeof body.value === "object" ? (body.value as { circleId?: unknown }).circleId : undefined;
+        if (typeof circleId !== "string" || circleId.length > 128 || !circleId) {
             return NextResponse.json({ error: "circleId required" }, { status: 400 });
         }
 

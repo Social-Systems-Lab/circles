@@ -6,9 +6,12 @@ import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features, modules } from "@/lib/data/constants";
 import { getUserPrivate } from "@/lib/data/user";
+import { inspectInputBounds } from "@/lib/security/bounded-input";
 
 export async function savePages(values: { _id: any; enabledModules: string[] }): Promise<FormSubmitResponse> {
-    console.log("Saving circle modules with values", values);
+    if (inspectInputBounds(values) || !Array.isArray(values.enabledModules) || values.enabledModules.length > 100) {
+        return { success: false, message: "Invalid input: too many enabled modules" };
+    }
 
     let circle: Partial<Circle> = {
         _id: values._id,

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
+import { chunkRecipientDids } from "@/lib/security/recipient-input";
 import {
     getEventOccurrenceSeriesParticipantCandidatesAction,
     inviteUsersToEventOccurrenceAction,
@@ -95,29 +96,45 @@ export default function OccurrenceInviteModal(props: Props) {
             return;
         }
         startTransition(async () => {
-            const result = await inviteUsersToEventOccurrenceAction(
-                props.circleHandle,
-                props.seriesId,
-                props.occurrenceKey,
-                selectedDids,
-                message,
-                { resendExisting: true },
-            );
-            if (!result.success) {
-                toast({ title: "Could not send invitations", description: result.message, variant: "destructive" });
-                return;
+            const totals = { newlyInvited: 0, updatedAndResent: 0, alreadyInvitedNotResent: 0, skipped: 0 };
+            for (const batch of chunkRecipientDids(selectedDids)) {
+                const result = await inviteUsersToEventOccurrenceAction(
+                    props.circleHandle,
+                    props.seriesId,
+                    props.occurrenceKey,
+                    batch,
+                    message,
+                    { resendExisting: true },
+                );
+                if (!result.success) {
+                    const sent = totals.newlyInvited + totals.updatedAndResent;
+                    toast({
+                        title: sent > 0 ? "Some invitations were sent" : "Could not send invitations",
+                        description:
+                            sent > 0
+                                ? `Invitations sent to ${sent} of ${selectedDids.length} selected people. ${result.message || "The remaining invitations were not sent."}`
+                                : result.message,
+                        variant: "destructive",
+                    });
+                    window.dispatchEvent(new Event("event-occurrence-invitations-updated"));
+                    return;
+                }
+                totals.newlyInvited += result.newlyInvited;
+                totals.updatedAndResent += result.updatedAndResent;
+                totals.alreadyInvitedNotResent += result.alreadyInvitedNotResent;
+                totals.skipped += result.skipped;
             }
             toast({
                 title:
-                    result.newlyInvited + result.updatedAndResent > 0
+                    totals.newlyInvited + totals.updatedAndResent > 0
                         ? "Invitations and updates sent"
                         : "No invitations sent",
                 description:
                     [
-                        result.newlyInvited > 0 && `${result.newlyInvited} new`,
-                        result.updatedAndResent > 0 && `${result.updatedAndResent} updated`,
-                        result.alreadyInvitedNotResent > 0 && `${result.alreadyInvitedNotResent} already invited`,
-                        result.skipped > 0 && `${result.skipped} skipped`,
+                        totals.newlyInvited > 0 && `${totals.newlyInvited} new`,
+                        totals.updatedAndResent > 0 && `${totals.updatedAndResent} updated`,
+                        totals.alreadyInvitedNotResent > 0 && `${totals.alreadyInvitedNotResent} already invited`,
+                        totals.skipped > 0 && `${totals.skipped} skipped`,
                     ]
                         .filter(Boolean)
                         .join(" · ") || undefined,

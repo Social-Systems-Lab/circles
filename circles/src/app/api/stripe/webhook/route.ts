@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readTextBodyLimited } from "@/lib/security/bounded-input";
 import Stripe from "stripe";
 import {
     applyStripeMembershipUpdate,
@@ -127,7 +128,8 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, eventId: string) {
     await applyStripeMembershipUpdate({
         userId: user._id.toString(),
         stripeCustomerId: typeof invoice.customer === "string" ? invoice.customer : undefined,
-        stripeSubscriptionId: typeof (invoice as any).subscription === "string" ? (invoice as any).subscription : undefined,
+        stripeSubscriptionId:
+            typeof (invoice as any).subscription === "string" ? (invoice as any).subscription : undefined,
         stripePriceId: priceId,
         status: "active",
         membershipState: "active",
@@ -162,7 +164,8 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
     await applyStripeMembershipUpdate({
         userId: user._id.toString(),
         stripeCustomerId: typeof invoice.customer === "string" ? invoice.customer : undefined,
-        stripeSubscriptionId: typeof (invoice as any).subscription === "string" ? (invoice as any).subscription : undefined,
+        stripeSubscriptionId:
+            typeof (invoice as any).subscription === "string" ? (invoice as any).subscription : undefined,
         status: "past_due",
         membershipState: currentExpiry && new Date(currentExpiry) > new Date() ? "grace_period" : "past_due",
         membershipSource: "stripe",
@@ -265,7 +268,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, even
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.text();
+        const bodyResult = await readTextBodyLimited(req, 5 * 1024 * 1024);
+        if (!bodyResult.ok) return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+        const body = bodyResult.value;
         const signature = req.headers.get("stripe-signature");
 
         if (!signature) {

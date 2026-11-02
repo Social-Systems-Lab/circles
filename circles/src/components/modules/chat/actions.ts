@@ -3,6 +3,7 @@
 
 import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid as getProductionAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { validateRecipientInput } from "@/lib/security/recipient-input";
 import { Circle, ChatRoomMember, ChatRoom, ChatRoomDisplay, UserPrivate } from "@/models/models";
 import { getAllUsers, getUserByDid } from "@/lib/data/user";
 import {
@@ -848,6 +849,8 @@ export const addMembersAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in" };
     }
+    const recipientValidation = validateRecipientInput(memberDids);
+    if (!recipientValidation.ok) return { success: false, message: recipientValidation.message };
 
     try {
         const conversation = await requireConversationWriteAccess(chatRoomId, userDid);
@@ -860,7 +863,7 @@ export const addMembersAction = async (
             return { success: false, message: "Only admins can add members" };
         }
 
-        const uniqueMemberDids = Array.from(new Set(memberDids.filter(Boolean)));
+        const uniqueMemberDids = recipientValidation.recipients;
         const existingActiveMemberDids = new Set(
             members.map((member) => (typeof member?.userDid === "string" ? member.userDid : "")),
         );

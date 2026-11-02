@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import {
+process.env.IS_BUILD = "true";
+
+const {
     abandonLoginAttempt,
     beginLoginAttempt,
     clearSuccessfulLogin,
@@ -18,7 +20,7 @@ import {
     recordFailedLogin,
     trustedLoginClientIp,
     verifyDummyLoginPassword,
-} from "./login-security";
+} = await import("./login-security");
 
 type RecordValue = {
     _id: string;

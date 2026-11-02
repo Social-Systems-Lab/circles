@@ -9,6 +9,7 @@ import {
     parseStripeMonthlyTierAmount,
 } from "@/lib/stripe";
 import { assertPaymentsEnabled } from "@/lib/payments";
+import { readJsonBodyLimited } from "@/lib/security/bounded-input";
 
 export async function POST(req: NextRequest) {
     try {
@@ -19,7 +20,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await req.json().catch(() => ({}));
+        const bodyResult = await readJsonBodyLimited(req, 8 * 1024);
+        if (!bodyResult.ok) return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+        const body =
+            bodyResult.value && typeof bodyResult.value === "object" && !Array.isArray(bodyResult.value)
+                ? (bodyResult.value as { interval?: unknown; amount?: unknown })
+                : {};
         const interval = body?.interval === "year" ? "year" : "month";
         const requestedAmount = body?.amount;
         const amount =

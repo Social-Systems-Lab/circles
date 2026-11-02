@@ -5,13 +5,20 @@ import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
+import { inspectInputBounds } from "@/lib/security/bounded-input";
 
 export async function saveMatchmaking(values: {
     _id: any;
     causes?: string[];
     skills?: string[];
 }): Promise<FormSubmitResponse> {
-    console.log("Saving circle matchmaking with values", values);
+    if (
+        inspectInputBounds(values) ||
+        (values.causes && values.causes.length > 100) ||
+        (values.skills && values.skills.length > 100)
+    ) {
+        return { success: false, message: "Invalid input: too many causes or skills" };
+    }
 
     // check if user is authorized to edit circle settings
     const userDid = await getAuthenticatedUserDid();

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { boundedSafeParse, inspectFormDataBounds } from "@/lib/security/bounded-input";
 import {
     Circle,
     Media,
@@ -145,11 +146,12 @@ export async function getIssueAction(circleHandle: string, issueId: string): Pro
 // --- Zod Schemas for Validation ---
 
 const createIssueSchema = z.object({
-    title: z.string().min(1, "Title is required"),
-    description: z.string().min(1, "Description is required"),
-    images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
+    title: z.string().trim().min(1, "Title is required").max(200, "Title is too long"),
+    description: z.string().min(1, "Description is required").max(100_000, "Description is too long"),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects initially
     location: z
         .string()
+        .max(100_000, "Location data is too large")
         .optional()
         .refine(
             (val) => {
@@ -164,7 +166,7 @@ const createIssueSchema = z.object({
             { message: "Invalid location data format" },
         ),
     targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
-    userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    userGroups: z.array(z.string().max(80)).max(500).optional(), // Optional: User groups for visibility
     urgency: z.preprocess(
         (value) => (value === "" || value == null ? undefined : value),
         z.enum(["low", "medium", "high", "critical"]).optional(),
@@ -213,8 +215,10 @@ export async function createIssueAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string; issueId?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = createIssueSchema.safeParse({
+        const validatedData = boundedSafeParse(createIssueSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -387,8 +391,10 @@ export async function updateIssueAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = updateIssueSchema.safeParse({
+        const validatedData = boundedSafeParse(updateIssueSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
