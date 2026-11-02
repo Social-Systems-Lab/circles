@@ -18,7 +18,7 @@ The field is optional, so no backfill or migration is required. Existing `comple
 
 Server actions accept only a card ID, derive the profile DID from the authenticated session, and update only the corresponding `circleType: "user"` profile. Skip records the selected ID and advances navigation; it does not set profile fields. A skipped incomplete card can still be opened directly later. The acknowledgement is a dismissal marker, not proof of participation readiness.
 
-The foundation currently provides a generic shell and progress/navigation controls. The individual editors and their direct settings destinations are intentionally deferred to Milestone 4B.
+The shell provides progress/navigation controls and hosts the functional profile editors described in [ONBOARDING_MILESTONE_4B_FUNCTIONAL_CARDS.md](./ONBOARDING_MILESTONE_4B_FUNCTIONAL_CARDS.md). Navigation state remains separate from their canonical profile data.
 
 ## Requirement categories
 
@@ -33,7 +33,3 @@ Photo, location, and a qualifying `real_person` attestation are shown as optiona
 - No change is made to DID, credentials, email verification, map eligibility, or pending-registration feature flags.
 - Successful pending-registration completion defaults to `/onboarding` when no safe redirect was provided; validated internal destinations remain preserved.
 - No database index or migration is required.
-
-## Milestone 4B integration
-
-Implement the introduction, guidelines, location, photo, and optional Proof of Humanity editors. Each editor should update its existing canonical field through its existing authorized server action. Then refresh derived card status and advance only after the profile field confirms completion. Keep skipped required items visibly incomplete and preserve `canParticipate()` as the authorization boundary. Add editor deep links for the profile-owner progress indicators as a separate integration task.

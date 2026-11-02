@@ -29,6 +29,7 @@ import {
     saveCircleOwnedFile,
 } from "@/lib/data/circle-media-storage";
 import { updateDonationIntent } from "@/lib/data/user";
+import { preparePersonalLocationForSave } from "@/lib/location-privacy";
 
 type SaveMissionActionResponse = {
     success: boolean;
@@ -544,13 +545,22 @@ export const saveLocationAction = async (location: any, circleId: string): Promi
             return { success: false, message: "You are not authorized to edit location" };
         }
 
+        const user = await getUserByDid(userDid);
+        if (!user || String(user._id) !== String(circleId)) {
+            return { success: false, message: "You are not authorized to edit this profile location" };
+        }
+        const personalLocation = preparePersonalLocationForSave(location, user.location);
+        if (!personalLocation.valid) {
+            return { success: false, message: "Choose a valid place on the map before saving your location." };
+        }
+
         // Add location step to completedOnboardingSteps
-        let user = await getUserByDid(userDid);
         circle.completedOnboardingSteps = user.completedOnboardingSteps ?? [];
         if (!circle.completedOnboardingSteps.includes("location")) {
             circle.completedOnboardingSteps.push("location");
         }
 
+        circle.location = personalLocation.location;
         await updateCircle(circle, userDid);
 
         // Clear page cache so pages update

@@ -48,6 +48,23 @@ assert.doesNotMatch(userDto, /onboardingState/, "client profile DTOs do not expo
 assert.match(shell, /href=\{`\/onboarding\?card=\$\{encodeURIComponent\(step\.id\)\}`\}/);
 assert.match(shell, /catch \{/, "rejected server actions produce visible error feedback");
 assert.match(shell, /role="alert"/, "navigation failures are announced accessibly");
+const completionAction = actions.slice(actions.indexOf("export async function acknowledgeOnboardingCompletion"));
+assert.doesNotMatch(completionAction, /unfinishedUnskipped|Please continue or skip/);
+assert.match(completionAction, /persistOnboardingCompletionAcknowledgement\(own\.did\)/);
+assert.match(completionAction, /redirectTo:\s*getCircleDefaultPath\(own\.profile\)/);
+assert.match(actions, /import \{ getCircleDefaultPath \} from "@\/lib\/utils\/circle-routes"/);
+assert.match(shell, /if \(result\.redirectTo\) router\.push\(result\.redirectTo\)/);
+assert.match(shell, /pending \? "Saving…" : "Finish for now"/);
+assert.doesNotMatch(shell, /allRemainingSkipped|firstUnskippedIncomplete/);
+assert.match(persistence, /enabledModules:\s*1/, "canonical profile routing data is loaded for exit destination");
+assert.match(shell, /<progress[\s\S]*?aria-label="Onboarding progress"/);
+assert.match(shell, /<details>[\s\S]*?<summary[\s\S]*?View progress/);
+assert.match(shell, /pt-\[calc\(5rem\+env\(safe-area-inset-top,0px\)\)\]/);
+assert.match(shell, /pb-\[calc\(5rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+assert.match(
+    shell,
+    /<StepLink\s+key=\{step\.id\}\s+step=\{step\}\s+current=\{step\.id === currentCard\}\s+onSelect=\{navigate\}/,
+);
 assert.match(
     route,
     /navigationSaveFailed = !\(await persistOnboardingNavigation/,

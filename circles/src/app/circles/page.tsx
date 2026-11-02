@@ -6,6 +6,7 @@ import { getDiscoverableCirclesByIds, getCirclesWithMetrics, getMetricsForCircle
 import { getUserPrivate } from "@/lib/data/user";
 import { Circle, SortingOptions, WithMetric } from "@/models/models";
 import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
+import { buildClientLocation } from "@/lib/data/client-circle-dto";
 
 type CirclesProps = {
     params: Promise<{ handle: string }>;
@@ -15,7 +16,7 @@ type CirclesProps = {
 export default async function Home(props: CirclesProps) {
     const searchParams = await props.searchParams;
     let activeTab = searchParams?.tab as string;
-    let circleType = searchParams?.circleType as "circle" | "project" | undefined;
+    let circleType: "circle" | "project" = searchParams?.circleType === "project" ? "project" : "circle";
 
     // get user handle
     let userDid = await getAuthenticatedUserDid();
@@ -47,6 +48,8 @@ export default async function Home(props: CirclesProps) {
     } else {
         circles = await getCirclesWithMetrics(undefined, undefined, searchParams?.sort as SortingOptions, filterType);
     }
+
+    circles = circles.map((circle) => ({ ...circle, location: buildClientLocation(circle.location) }));
 
     return (
         <div className="mt-14 flex flex-1 flex-col justify-center overflow-hidden">

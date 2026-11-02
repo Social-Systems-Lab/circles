@@ -142,8 +142,21 @@ export async function persistCircleThenCleanupMedia(
         urls: readonly string[],
         expectedCircleId: string,
     ) => Promise<CircleMediaCleanupResult> = cleanupCircleOwnedMedia,
+    rollbackUrls: readonly string[] = [],
+    cleanupRollback?: (urls: readonly string[], expectedCircleId: string) => Promise<CircleMediaCleanupResult>,
 ): Promise<CircleMediaCleanupResult> {
-    await persist();
+    try {
+        await persist();
+    } catch (error) {
+        const rollbackResult = await (cleanupRollback ?? cleanup)([...new Set(rollbackUrls)], expectedCircleId);
+        if (rollbackResult.status === "failed") {
+            console.error(
+                "Circle update failed and newly uploaded media could not be cleaned up:",
+                rollbackResult.error,
+            );
+        }
+        throw error;
+    }
     return cleanup([...new Set(urls)], expectedCircleId);
 }
 

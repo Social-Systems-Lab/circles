@@ -7,10 +7,12 @@ import { revalidatePath } from "next/cache";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { Feeds, Members, Posts } from "@/lib/data/db";
 import { features } from "@/lib/data/constants";
+import { buildClientCircleDto } from "@/lib/data/client-circle-dto";
 
 export async function getCircleByIdAction(id: string) {
     try {
-        return await getCircleById(id);
+        const circle = await getCircleById(id);
+        return circle ? buildClientCircleDto(circle) : null;
     } catch (error) {
         console.error("Error getting circle by ID:", error);
         throw new Error("Failed to get circle");

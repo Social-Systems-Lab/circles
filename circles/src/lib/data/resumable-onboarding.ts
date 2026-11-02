@@ -15,9 +15,12 @@ export type PersonalOnboardingProfile = Pick<
     | "location"
     | "picture"
     | "onboardingState"
->;
+    | "handle"
+    | "enabledModules"
+> & { _id?: string };
 
 const ONBOARDING_PROFILE_PROJECTION = {
+    _id: 1,
     did: 1,
     circleType: 1,
     isEmailVerified: 1,
@@ -27,6 +30,8 @@ const ONBOARDING_PROFILE_PROJECTION = {
     location: 1,
     picture: 1,
     onboardingState: 1,
+    handle: 1,
+    enabledModules: 1,
 };
 
 export const hasActiveRealPersonAttestation = async (subjectDid: string): Promise<boolean> => {
@@ -43,10 +48,9 @@ export const hasActiveRealPersonAttestation = async (subjectDid: string): Promis
 };
 
 export const getPersonalOnboardingProfile = async (did: string): Promise<PersonalOnboardingProfile | null> => {
-    return (await Circles.findOne(
-        { did, circleType: "user" },
-        { projection: ONBOARDING_PROFILE_PROJECTION },
-    )) as PersonalOnboardingProfile | null;
+    const profile = await Circles.findOne({ did, circleType: "user" }, { projection: ONBOARDING_PROFILE_PROJECTION });
+    if (!profile) return null;
+    return { ...profile, _id: profile._id?.toString() } as PersonalOnboardingProfile;
 };
 
 export const ensurePersonalOnboardingState = async (

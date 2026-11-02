@@ -6,6 +6,8 @@ This document is the canonical developer reference for the current Kamooni onboa
 
 The resumable navigation foundation is described in [ONBOARDING_MILESTONE_4A_RESUMABLE_FOUNDATION.md](./ONBOARDING_MILESTONE_4A_RESUMABLE_FOUNDATION.md). It adds navigation state only; participation and profile readiness remain derived from the canonical fields described below.
 
+The functional card editors are described in [ONBOARDING_MILESTONE_4B_FUNCTIONAL_CARDS.md](./ONBOARDING_MILESTONE_4B_FUNCTIONAL_CARDS.md).
+
 ## Scope
 
 This describes behavior that is live in the codebase now:
@@ -243,6 +245,8 @@ The older multi-screen `CommunityGuidelinesAgreementFlow` remains available for 
 Visible Request Verification entry points have been removed from normal onboarding/profile UX.
 
 Verification backend/data/admin architecture remains preserved.
+
+The authenticated `/onboarding` resumable shell now also provides functional introduction, Community Guidelines, location, profile-photo, and Proof of Humanity cards. These update or link to the canonical profile and verification systems described in the Milestone 4B document. The older signup/profile-completion journeys above remain compatible and are not replaced by this work.
 
 ## Profile Completion Welcome And Supporter Card
 
