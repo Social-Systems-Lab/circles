@@ -128,7 +128,11 @@ export function hashPendingRegistrationSecret(purpose: string, value: string): s
 }
 
 export function isPendingRegistrationEnabled(): boolean {
-    return process.env.PENDING_REGISTRATION_ENABLED === "true";
+    return process.env.PENDING_REGISTRATION_ENABLED === "true" && isPendingRegistrationJourneyReady();
+}
+
+export function isPendingRegistrationJourneyReady(): boolean {
+    return process.env.PENDING_REGISTRATION_JOURNEY_READY === "true";
 }
 
 export function validatePendingRedirect(value?: string | null): string | null {
@@ -364,7 +368,55 @@ export async function verifyPendingRegistrationEmail(
         },
         { returnDocument: "after" },
     );
-    if (!record) return { success: false, message: "This verification link is invalid or expired." };
+    if (!record) {
+        const existing = await deps.collections.registrations.findOne({
+            verificationTokenHash: hashPendingRegistrationSecret("email-verification", token),
+            verificationTokenExpiresAt: { $gt: now },
+            $or: [{ expiresAt: { $gt: now } }, { reservedDid: { $type: "string" as const } }],
+        });
+        if (!existing) return { success: false, message: "This verification link is invalid or expired." };
+        if (existing.status === "provisioning" && existing.reservedDid) {
+            return { success: false, message: "This registration needs support review before it can continue." };
+        }
+        if (existing.status === "provisioning" && !existing.reservedDid) {
+            const recoverySecret = pendingSecret();
+            const recoveryRecord = await deps.collections.registrations.findOneAndUpdate(
+                {
+                    _id: existing._id,
+                    status: "provisioning",
+                    reservedDid: null,
+                    verificationTokenHash: hashPendingRegistrationSecret("email-verification", token),
+                    verificationTokenExpiresAt: { $gt: now },
+                },
+                {
+                    $set: {
+                        status: "email_verified",
+                        verifiedContinuationHash: hashPendingRegistrationSecret(
+                            "verified-continuation",
+                            recoverySecret,
+                        ),
+                        verifiedContinuationExpiresAt: new Date(now.getTime() + PENDING_VERIFIED_CONTINUATION_TTL_MS),
+                        updatedAt: now,
+                    },
+                    $unset: {
+                        verificationTokenHash: "",
+                        verificationTokenExpiresAt: "",
+                        provisioningLeaseHash: "",
+                        provisioningLeaseExpiresAt: "",
+                    },
+                },
+                { returnDocument: "after" },
+            );
+            if (!recoveryRecord) return { success: false, message: "This verification link is invalid or expired." };
+            return {
+                success: true,
+                message: "Email verified.",
+                pendingRegistrationId: recoveryRecord._id.toHexString(),
+                verifiedContinuationSecret: recoverySecret,
+            };
+        }
+        return { success: false, message: "This verification link is invalid or expired." };
+    }
     await audit(deps.collections, record._id.toHexString(), "pending_registration.email_verified", now);
     return {
         success: true,
@@ -387,12 +439,28 @@ export async function resumePendingRegistration(
     id: string,
     continuationSecret: string,
     deps: PendingRegistrationDependencies,
-): Promise<{ success: boolean; status?: PendingRegistrationStatus; redirectTo?: string | null }> {
+): Promise<{
+    success: boolean;
+    status?: PendingRegistrationStatus;
+    redirectTo?: string | null;
+    email?: string;
+    verificationLastSentAt?: Date | null;
+    verifiedContinuationExpiresAt?: Date | null;
+}> {
     const now = deps.now?.() ?? new Date();
     const filter = possessionFilter(id, continuationSecret, now);
     if (!filter) return { success: false };
     const record = await deps.collections.registrations.findOne(filter);
-    return record ? { success: true, status: record.status, redirectTo: record.redirectTo } : { success: false };
+    return record
+        ? {
+              success: true,
+              status: record.status,
+              redirectTo: record.redirectTo,
+              email: record.email,
+              verificationLastSentAt: record.verificationLastSentAt,
+              verifiedContinuationExpiresAt: record.verifiedContinuationExpiresAt,
+          }
+        : { success: false };
 }
 
 export async function resendPendingRegistrationVerification(
@@ -415,10 +483,19 @@ export async function resendPendingRegistrationVerification(
     const record = await deps.collections.registrations.findOneAndUpdate(
         {
             ...filter,
-            status: "pending_email",
-            $or: [
-                { verificationLastSentAt: null },
-                { verificationLastSentAt: { $lte: new Date(now.getTime() - PENDING_RESEND_COOLDOWN_MS) } },
+            $and: [
+                {
+                    $or: [
+                        { status: "pending_email" },
+                        { status: "provisioning", reservedDid: null, provisioningLeaseExpiresAt: { $lte: now } },
+                    ],
+                },
+                {
+                    $or: [
+                        { verificationLastSentAt: null },
+                        { verificationLastSentAt: { $lte: new Date(now.getTime() - PENDING_RESEND_COOLDOWN_MS) } },
+                    ],
+                },
             ],
         },
         {
@@ -427,6 +504,13 @@ export async function resendPendingRegistrationVerification(
                 verificationTokenExpiresAt: new Date(now.getTime() + PENDING_VERIFICATION_TOKEN_TTL_MS),
                 verificationLastSentAt: now,
                 updatedAt: now,
+                status: "pending_email",
+            },
+            $unset: {
+                verifiedContinuationHash: "",
+                verifiedContinuationExpiresAt: "",
+                provisioningLeaseHash: "",
+                provisioningLeaseExpiresAt: "",
             },
             $inc: { verificationVersion: 1 },
         },
@@ -543,33 +627,15 @@ export async function provisionPendingRegistration(
     };
     const authorized = await deps.collections.registrations.findOne({
         _id: id,
+        status: "email_verified",
+        $and: [retentionFilter],
         verifiedContinuationHash: hashPendingRegistrationSecret(
             "verified-continuation",
             input.verifiedContinuationSecret,
         ),
         verifiedContinuationExpiresAt: { $gt: now },
-        $and: [retentionFilter],
     });
     if (!authorized) return { success: false, message: "Registration could not be completed." };
-    const existing = await deps.findAccountByPendingRegistrationId(input.pendingRegistrationId);
-    if (existing) {
-        await deps.finalizeAccount(existing);
-        await deps.collections.registrations.updateOne(
-            { _id: id },
-            {
-                $set: {
-                    status: "provisioned",
-                    accountId: existing.accountId,
-                    accountDid: existing.did,
-                    provisionedAt: now,
-                    updatedAt: now,
-                    reconciliationRequiredAt: null,
-                    expiresAt: new Date(now.getTime() + PENDING_PROVISIONED_RETENTION_MS),
-                },
-            },
-        );
-        return { success: true, account: existing, message: "Registration completed." };
-    }
     const lease = pendingSecret();
     const record = await deps.collections.registrations.findOneAndUpdate(
         {
@@ -596,15 +662,13 @@ export async function provisionPendingRegistration(
                 provisioningLeaseExpiresAt: new Date(now.getTime() + PENDING_PROVISIONING_LEASE_MS),
                 updatedAt: now,
             },
+            $unset: { verifiedContinuationHash: "", verifiedContinuationExpiresAt: "" },
             $inc: { provisioningAttempts: 1 },
         },
         { returnDocument: "after" },
     );
     if (!record) {
-        const recovered = await deps.findAccountByPendingRegistrationId(input.pendingRegistrationId);
-        return recovered
-            ? { success: true, account: recovered, message: "Registration completed." }
-            : { success: false, message: "Registration could not be completed." };
+        return { success: false, message: "Registration could not be completed." };
     }
     try {
         const account = await deps.provisionAccount({
