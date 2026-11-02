@@ -10,6 +10,7 @@ import { updateCircle } from "@/lib/data/circle";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 import { addMember, getMember } from "@/lib/data/member";
+import { assertRegistrationMode } from "@/lib/auth/registration-routing";
 import {
     getPendingRegistrationCollections,
     reservePendingRegistrationDid,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/auth/pending-registration";
 
 type ProvisioningLock = { _id: string; pendingRegistrationId: string; expiresAt: Date };
+type FinalizationLock = { _id: string; expiresAt: Date };
 
 async function findPermanentAccount(normalizedEmail: string, requestedHandle: string) {
     const emailCandidates = normalizedEmail.endsWith("@gmail.com")
@@ -63,7 +65,9 @@ export async function createPendingRegistrationRuntimeDependencies(): Promise<Pe
     const db = await getDb();
     const collections = await getPendingRegistrationCollections(db);
     const locks = db.collection<ProvisioningLock>("pendingRegistrationProvisioningLocks");
+    const finalizationLocks = db.collection<FinalizationLock>("pendingRegistrationFinalizationLocks");
     await locks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await finalizationLocks.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     await Circles.createIndex(
         { "metadata.pendingRegistrationId": 1 },
         { unique: true, partialFilterExpression: { "metadata.pendingRegistrationId": { $type: "string" } } },
@@ -87,24 +91,42 @@ export async function createPendingRegistrationRuntimeDependencies(): Promise<Pe
             );
             return account?._id && account.did ? { accountId: account._id.toString(), did: account.did } : null;
         },
-        finalizeAccount: async ({ did }) => {
-            const user = await getUserPrivate(did);
-            if (!(await getMember(did, user._id!))) {
-                await addMember(did, user._id!, ["admins", "moderators", "members"]);
+        finalizeAccount: async ({ accountId, did }) => {
+            let acquired = false;
+            try {
+                await finalizationLocks.insertOne({
+                    _id: accountId,
+                    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+                });
+                acquired = true;
+            } catch (error) {
+                if ((error as { code?: number }).code === 11000) {
+                    throw new Error("Registration finalization is already in progress");
+                }
+                throw error;
             }
-            await updateCircle(
-                {
-                    _id: user._id!,
-                    isHuman: true,
-                    metadata: { ...(user.metadata ?? {}), onboardingFlow: "pending-registration-v1" },
-                },
-                did,
-            );
-            const resolvedWelcome = await getResolvedWelcomeTemplate();
-            await ensureWelcomeMessageForNewUser(did, resolvedWelcome.config, resolvedWelcome.senderDid);
-            await createUserSession(user, did);
+            try {
+                const user = await getUserPrivate(did);
+                if (!(await getMember(did, user._id!))) {
+                    await addMember(did, user._id!, ["admins", "moderators", "members"]);
+                }
+                await updateCircle(
+                    {
+                        _id: user._id!,
+                        isHuman: true,
+                        metadata: { ...(user.metadata ?? {}), onboardingFlow: "pending-registration-v1" },
+                    },
+                    did,
+                );
+                const resolvedWelcome = await getResolvedWelcomeTemplate();
+                await ensureWelcomeMessageForNewUser(did, resolvedWelcome.config, resolvedWelcome.senderDid);
+                await createUserSession(user, did);
+            } finally {
+                if (acquired) await finalizationLocks.deleteOne({ _id: accountId });
+            }
         },
         provisionAccount: async ({ pendingRegistrationId, name, email, requestedHandle, password }) => {
+            await assertRegistrationMode("pending");
             const normalizedEmail = normalizeEmailForComparison(email);
             const release = await acquireProvisioningLocks(
                 locks,

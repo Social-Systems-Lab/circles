@@ -17,6 +17,7 @@ import {
     guardPilotSignup,
     withSignupEmailReservation,
 } from "@/lib/auth/signup-security";
+import { assertRegistrationMode } from "@/lib/auth/registration-routing";
 
 const GENERIC_SIGNUP_REJECTION = "We couldn't complete your signup. Please check your details and try again later.";
 
@@ -37,6 +38,7 @@ async function comparisonEmailAlreadyExists(email: string): Promise<boolean> {
 
 export const submitSignupFormAction = async (values: Record<string, any>): Promise<FormSubmitResponse> => {
     try {
+        await assertRegistrationMode("legacy");
         const requestHeaders = await headers();
         // Production prerequisite: nginx must overwrite/set X-Real-IP; never trust X-Forwarded-For here.
         const clientIp = requestHeaders.get("x-real-ip")?.trim() || "missing-x-real-ip";

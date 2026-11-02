@@ -35,13 +35,13 @@ pending_email
 - The password is accepted only with the verified continuation. Permanent provisioning then calls the existing RSA/DID/password-encryption machinery with `emailAlreadyVerified` and a pending-registration idempotency marker.
 - Finalization creates the session and reuses the existing idempotent welcome-message path. An interrupted finalization can be retried while the verified continuation remains valid.
 
-Pending records expire after 48 hours. Email-verification and verified-continuation capabilities expire after 30 minutes. Resend has a one-minute cooldown.
+Pending records expire after 48 hours until a DID is reserved. Reserving a DID removes TTL eligibility until reconciliation or successful provisioning. Successfully provisioned records become TTL-eligible after a seven-day operational review window. Email-verification and verified-continuation capabilities expire after 30 minutes. Resend has a one-minute cooldown.
 
 ## MongoDB collections and indexes
 
 ### `pendingRegistrations`
 
-- TTL: `{ expiresAt: 1 }`.
+- TTL: `{ expiresAt: 1 }`. Records with a reserved, unfinished DID intentionally omit `expiresAt`.
 - Unique: `{ verificationTokenHash: 1 }`, sparse.
 - Unique: `{ normalizedEmail: 1 }`.
 - Unique: `{ requestedHandle: 1 }`.
@@ -119,7 +119,7 @@ Filesystem creation, Mongo account insertion and the legacy membership helper ar
 5. Preserve complete or partial key material. Do not delete the directory, clear `reservedDid`, or issue a replacement identity automatically. Completing the Mongo account from an orphan directory requires a reviewed recovery tool because the legacy account creator does not expose a safe import operation.
 6. A reserved DID with no directory is also a hard stop by default. Abandoning it and issuing a new identity requires an explicit operator decision, an audit entry and confirmation that no matching account or files exist.
 
-No automatic cleanup acts on user credential directories. Mongo TTL cleanup of a pending record therefore does not delete cryptographic material; operational monitoring must flag expired records with a `reservedDid` for review before their correlation data expires.
+No automatic cleanup acts on user credential directories. Reserved, unfinished records are excluded from Mongo TTL cleanup and remain until explicit reconciliation. Successful records retain their correlation metadata for seven days.
 
 ### Legacy/new-flow uniqueness boundary
 

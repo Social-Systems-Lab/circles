@@ -27,6 +27,7 @@ const equal = (left: any, right: any) =>
 const matches = (record: any, filter: any): boolean =>
     Object.entries(filter).every(([key, expected]: [string, any]) => {
         if (key === "$or") return expected.some((clause: any) => matches(record, clause));
+        if (key === "$and") return expected.every((clause: any) => matches(record, clause));
         const actual = valueAt(record, key);
         if (
             expected &&
@@ -209,6 +210,7 @@ const tokenFrom = (url: string) => new URL(url).searchParams.get("token")!;
 async function createPending(harness: ReturnType<typeof createHarness>, overrides: Partial<typeof validInput> = {}) {
     return beginPendingRegistration({ ...validInput, ...overrides }, harness.deps, {
         enabled: true,
+        registrationModeAllows: async () => true,
         verifyAltcha: async () => true,
     });
 }
@@ -238,8 +240,25 @@ async function main() {
     }
 
     {
+        const routedToLegacy = createHarness();
+        const disabled = await beginPendingRegistration(validInput, routedToLegacy.deps, {
+            enabled: true,
+            registrationModeAllows: async () => false,
+            verifyAltcha: async () => {
+                throw new Error("ALTCHA must not run for an inactive route");
+            },
+        });
+        assert.deepEqual(disabled, { enabled: false }, "legacy routing keeps pending registration inert");
+        assert.equal(routedToLegacy.registrations.length, 0);
+    }
+
+    {
         const harness = createHarness();
-        await beginPendingRegistration(validInput, harness.deps, { enabled: true, verifyAltcha: async () => false });
+        await beginPendingRegistration(validInput, harness.deps, {
+            enabled: true,
+            registrationModeAllows: async () => true,
+            verifyAltcha: async () => false,
+        });
         assert.equal(harness.registrations.length, 0, "ALTCHA rejection creates no pending record");
         assert.equal(harness.provisionCalls, 0, "ALTCHA rejection creates no permanent account");
     }
@@ -255,7 +274,7 @@ async function main() {
         "pending record contains no password field",
     );
     assert.equal(
-        harness.registrations[0].expiresAt.getTime() - harness.registrations[0].createdAt.getTime(),
+        harness.registrations[0].expiresAt!.getTime() - harness.registrations[0].createdAt.getTime(),
         PENDING_REGISTRATION_LIFETIME_MS,
         "pending registration expires after 48 hours",
     );
@@ -355,6 +374,8 @@ async function main() {
             true,
         );
         assert.equal(record.reservedDid, "reserved-did");
+        assert.equal(record.expiresAt, undefined, "reserved identities are excluded from TTL cleanup");
+        assert.ok(record.reconciliationRequiredAt, "reserved identities are marked for operator reconciliation");
         assert.equal(
             await reservePendingRegistrationDid(proof.pendingRegistrationId!, "reserved-did", reservation.deps),
             true,

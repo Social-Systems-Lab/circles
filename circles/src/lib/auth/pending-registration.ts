@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { ObjectId, type Collection, type Db } from "mongodb";
+import { ObjectId, type Collection, type Db, type Filter } from "mongodb";
 import { normalizeEmailForComparison } from "@/lib/auth/email-normalization";
 
 export const PENDING_REGISTRATION_LIFETIME_MS = 48 * 60 * 60 * 1000;
@@ -7,6 +7,7 @@ export const PENDING_VERIFICATION_TOKEN_TTL_MS = 30 * 60 * 1000;
 export const PENDING_VERIFIED_CONTINUATION_TTL_MS = 30 * 60 * 1000;
 export const PENDING_RESEND_COOLDOWN_MS = 60 * 1000;
 export const PENDING_PROVISIONING_LEASE_MS = 2 * 60 * 1000;
+export const PENDING_PROVISIONED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const PENDING_REGISTRATION_PUBLIC_MESSAGE = "If registration can continue, we sent an email with the next step.";
 
 export type PendingRegistrationStatus = "pending_email" | "email_verified" | "provisioning" | "provisioned";
@@ -31,12 +32,13 @@ export type PendingRegistration = {
     provisioningLeaseExpiresAt: Date | null;
     provisioningAttempts: number;
     reservedDid: string | null;
+    reconciliationRequiredAt: Date | null;
     accountId: string | null;
     accountDid: string | null;
     provisionedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
-    expiresAt: Date;
+    expiresAt?: Date;
 };
 
 export type PendingRegistrationAuditEvent = {
@@ -90,9 +92,17 @@ export async function beginPendingRegistration(
         altcha: string;
     },
     deps: PendingRegistrationDependencies,
-    controls: { enabled?: boolean; verifyAltcha: (payload: string) => Promise<boolean> },
+    controls: {
+        enabled?: boolean;
+        verifyAltcha: (payload: string) => Promise<boolean>;
+        registrationModeAllows?: () => Promise<boolean>;
+    },
 ): Promise<{ enabled: false } | ({ enabled: true } & Awaited<ReturnType<typeof startPendingRegistration>>)> {
     if (!(controls.enabled ?? isPendingRegistrationEnabled())) return { enabled: false };
+    const routeAllowed = controls.registrationModeAllows
+        ? await controls.registrationModeAllows()
+        : await (await import("@/lib/auth/registration-routing")).isRegistrationModeAllowed("pending");
+    if (!routeAllowed) return { enabled: false };
     if (!(await controls.verifyAltcha(input.altcha))) {
         return {
             enabled: true,
@@ -237,7 +247,10 @@ export async function reservePendingRegistrationDid(
             status: "provisioning",
             $or: [{ reservedDid: null }, { reservedDid: did }],
         },
-        { $set: { reservedDid: did, updatedAt: now } },
+        {
+            $set: { reservedDid: did, reconciliationRequiredAt: now, updatedAt: now },
+            $unset: { expiresAt: "" },
+        },
     );
     return result.matchedCount === 1;
 }
@@ -295,6 +308,7 @@ export async function startPendingRegistration(
         provisioningLeaseExpiresAt: null,
         provisioningAttempts: 0,
         reservedDid: null,
+        reconciliationRequiredAt: null,
         accountId: null,
         accountDid: null,
         provisionedAt: null,
@@ -524,6 +538,9 @@ export async function provisionPendingRegistration(
         return { success: false, message: "Registration could not be completed." };
     }
     const id = new ObjectId(input.pendingRegistrationId);
+    const retentionFilter: Filter<PendingRegistration> = {
+        $or: [{ expiresAt: { $gt: now } }, { reservedDid: { $type: "string" as const } }],
+    };
     const authorized = await deps.collections.registrations.findOne({
         _id: id,
         verifiedContinuationHash: hashPendingRegistrationSecret(
@@ -531,7 +548,7 @@ export async function provisionPendingRegistration(
             input.verifiedContinuationSecret,
         ),
         verifiedContinuationExpiresAt: { $gt: now },
-        expiresAt: { $gt: now },
+        $and: [retentionFilter],
     });
     if (!authorized) return { success: false, message: "Registration could not be completed." };
     const existing = await deps.findAccountByPendingRegistrationId(input.pendingRegistrationId);
@@ -546,6 +563,8 @@ export async function provisionPendingRegistration(
                     accountDid: existing.did,
                     provisionedAt: now,
                     updatedAt: now,
+                    reconciliationRequiredAt: null,
+                    expiresAt: new Date(now.getTime() + PENDING_PROVISIONED_RETENTION_MS),
                 },
             },
         );
@@ -560,8 +579,15 @@ export async function provisionPendingRegistration(
                 input.verifiedContinuationSecret,
             ),
             verifiedContinuationExpiresAt: { $gt: now },
-            expiresAt: { $gt: now },
-            $or: [{ status: "email_verified" }, { status: "provisioning", provisioningLeaseExpiresAt: { $lte: now } }],
+            $and: [
+                retentionFilter,
+                {
+                    $or: [
+                        { status: "email_verified" },
+                        { status: "provisioning", provisioningLeaseExpiresAt: { $lte: now } },
+                    ],
+                },
+            ],
         },
         {
             $set: {
@@ -588,6 +614,7 @@ export async function provisionPendingRegistration(
             requestedHandle: record.requestedHandle,
             password: input.password,
         });
+        await deps.finalizeAccount(account);
         await deps.collections.registrations.updateOne(
             {
                 _id: id,
@@ -600,6 +627,8 @@ export async function provisionPendingRegistration(
                     accountDid: account.did,
                     provisionedAt: now,
                     updatedAt: now,
+                    reconciliationRequiredAt: null,
+                    expiresAt: new Date(now.getTime() + PENDING_PROVISIONED_RETENTION_MS),
                 },
                 $unset: {
                     provisioningLeaseHash: "",
@@ -607,7 +636,6 @@ export async function provisionPendingRegistration(
                 },
             },
         );
-        await deps.finalizeAccount(account);
         await audit(deps.collections, input.pendingRegistrationId, "pending_registration.provisioned", now);
         return { success: true, account, message: "Registration completed." };
     } catch {
