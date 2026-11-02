@@ -4,6 +4,8 @@ Implementation reference: updated for the Milestone 1 participation/map policy s
 
 This document is the canonical developer reference for the current Kamooni onboarding/profile-completion architecture.
 
+The resumable navigation foundation is described in [ONBOARDING_MILESTONE_4A_RESUMABLE_FOUNDATION.md](./ONBOARDING_MILESTONE_4A_RESUMABLE_FOUNDATION.md). It adds navigation state only; participation and profile readiness remain derived from the canonical fields described below.
+
 ## Scope
 
 This describes behavior that is live in the codebase now:
