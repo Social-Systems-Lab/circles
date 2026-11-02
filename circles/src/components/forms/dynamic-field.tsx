@@ -1024,10 +1024,22 @@ export const DynamicLocationField: React.FC<RenderFieldProps> = ({ field, formFi
     return (
         <FormItem>
             <FormLabel>{getUserOrCircleInfo(field.label, isUser)}</FormLabel>
+            {isUser && (
+                <div className="space-y-1 rounded-md bg-muted/50 p-3 text-sm">
+                    <h3 className="font-medium">Choose where people can find you</h3>
+                    <p className="text-muted-foreground">
+                        Select a nearby public place, such as a café, park or library, rather than your home address.
+                        Somewhere you could comfortably reach within 30 minutes is a good starting point. Your selected
+                        location will be visible to other Kamooni members.
+                    </p>
+                </div>
+            )}
             <FormControl>
-                <LocationPicker value={formField.value} onChange={formField.onChange} />
+                <LocationPicker value={formField.value} onChange={formField.onChange} personalProfile={isUser} />
             </FormControl>
-            {field.description && <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>}
+            {field.description && !isUser && (
+                <FormDescription>{getUserOrCircleInfo(field.description, isUser)}</FormDescription>
+            )}
             <FormMessage />
         </FormItem>
     );

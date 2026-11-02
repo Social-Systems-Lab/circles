@@ -961,6 +961,10 @@ export async function rejectVerificationRequest(id: string) {
 }
 
 export async function getCircleByIdAction(id: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) throw new Error("Unauthorized");
+    const user = await getUserPrivate(userDid);
+    if (!user?.isAdmin) throw new Error("Unauthorized");
     return await getCircleById(id);
 }
 

@@ -10,8 +10,9 @@ import {
 } from "@/lib/data/resumable-onboarding";
 import { getNextOnboardingCard, getOnboardingCardStatuses, isOnboardingCardId } from "@/lib/onboarding/resumable-state";
 import { revalidatePath } from "next/cache";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
-export type OnboardingNavigationResult = { success: boolean; card?: string; message?: string };
+export type OnboardingNavigationResult = { success: boolean; card?: string; redirectTo?: string; message?: string };
 
 const loadOwnOnboarding = async () => {
     const did = await getAuthenticatedUserDid();
@@ -48,12 +49,8 @@ export async function skipOnboardingCard(cardValue: unknown): Promise<Onboarding
 export async function acknowledgeOnboardingCompletion(): Promise<OnboardingNavigationResult> {
     const own = await loadOwnOnboarding();
     if (!own) return { success: false, message: "Please sign in to continue onboarding." };
-    const unfinishedUnskipped = getOnboardingCardStatuses(own.profile, own.hasPoH).some(
-        (card) => !card.complete && !own.state.skippedCards.includes(card.id),
-    );
-    if (unfinishedUnskipped) return { success: false, message: "Please continue or skip the remaining steps first." };
     const saved = await persistOnboardingCompletionAcknowledgement(own.did);
     if (!saved) return { success: false, message: "Your progress could not be saved." };
     revalidatePath("/onboarding");
-    return { success: true };
+    return { success: true, redirectTo: getCircleDefaultPath(own.profile) };
 }

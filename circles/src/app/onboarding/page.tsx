@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import {
     ensurePersonalOnboardingState,
     hasActiveRealPersonAttestation,
@@ -24,6 +25,7 @@ export default async function ResumableOnboardingPage({ searchParams }: Onboardi
     if (!userDid) redirect("/login?redirectTo=%2Fonboarding");
 
     const hasPoH = await hasActiveRealPersonAttestation(userDid);
+    const verificationSummary = await getHumanityVerificationSummary(userDid, userDid);
     const result = await ensurePersonalOnboardingState(userDid, hasPoH);
     if (!result) redirect("/explore");
 
@@ -53,6 +55,19 @@ export default async function ResumableOnboardingPage({ searchParams }: Onboardi
             }
             previousCard={getPreviousOnboardingCard(currentCard)}
             navigationSaveFailed={navigationSaveFailed}
+            profile={{
+                circleId: result.profile._id,
+                handle: result.profile.handle,
+                description: result.profile.description,
+                content: result.profile.content,
+                communityGuidelinesAcceptance: result.profile.communityGuidelinesAcceptance,
+                location: result.profile.location,
+                pictureUrl: result.profile.picture?.url,
+            }}
+            humanVerification={{
+                realPersonCount: verificationSummary.realPersonCount,
+                metInRealLifeCount: verificationSummary.metInRealLifeCount,
+            }}
         />
     );
 }

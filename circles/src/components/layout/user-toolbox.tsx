@@ -320,7 +320,7 @@ export const UserToolbox = () => {
                                 : circle.circleType === "project"
                                   ? "Project"
                                   : "Circle",
-                        href: getCircleDefaultPath(circle),
+                        href: circle.href,
                         pinned: pinnedIds.includes(circle._id?.toString() ?? ""),
                         description: circle.description ?? circle.mission,
                     })),

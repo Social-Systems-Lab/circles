@@ -18,6 +18,7 @@ import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/l
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import {
+    cleanupCircleOwnedMedia,
     collectReplacedCircleMedia,
     persistCircleThenCleanupMedia,
     saveCircleOwnedFile,
@@ -43,6 +44,8 @@ import { UserRelationships } from "@/lib/data/db";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import type { AuthenticatedClientUser, BookmarkStateDto, PinStateDto } from "@/lib/data/client-user-dto";
+import { buildClientLocation } from "@/lib/data/client-circle-dto";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { toAuthenticatedClientUser, toBookmarkStateDto, toPinStateDto } from "@/lib/data/client-user-dto";
 import {
     executeAuthenticatedUserMutation,
@@ -235,7 +238,19 @@ export const toggleBookmarkAction = async (circleId: string): Promise<BookmarkSt
 /**
  * Fetch bookmarked circles for the authenticated user.
  */
-export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
+export type BookmarkedCircleActionDto = {
+    _id: string;
+    did?: string;
+    name?: string;
+    handle?: string;
+    circleType?: Circle["circleType"];
+    description?: string;
+    mission?: string;
+    href: string;
+    location?: Circle["location"];
+};
+
+export const getBookmarkedCirclesAction = async (): Promise<BookmarkedCircleActionDto[]> => {
     try {
         // Prefer server-side auth util if available
         const token = readAuthToken(await cookies());
@@ -254,7 +269,23 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
             return [];
         }
         const circles = await getDiscoverableCirclesByIds(ids, userDid);
-        return circles;
+        return circles.flatMap((circle) =>
+            circle._id
+                ? [
+                      {
+                          _id: circle._id.toString(),
+                          did: circle.did,
+                          name: circle.name,
+                          handle: circle.handle,
+                          circleType: circle.circleType,
+                          description: circle.description,
+                          mission: circle.mission,
+                          href: getCircleDefaultPath(circle),
+                          location: buildClientLocation(circle.location),
+                      },
+                  ]
+                : [],
+        );
     } catch (error) {
         console.error("Failed to load bookmarked circles", error);
         return [];
@@ -356,7 +387,11 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
 
         const ownerCircle = await getCircleById(circleId);
         if (!ownerCircle) return { success: false, message: "Circle not found" };
+        if (ownerCircle.circleType === "user" && ownerCircle.did !== userDid) {
+            return { success: false, message: "You are not authorized to edit this profile." };
+        }
         let updateData: Partial<Circle> = { _id: circleId };
+        const newlyUploadedMediaUrls: string[] = [];
 
         for (const [key, value] of formData.entries() as any) {
             if (key === "picture" || key === "cover") {
@@ -369,6 +404,7 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
                     resourceType: "circle",
                 });
                 updateData[key as keyof Circle] = fileInfo;
+                newlyUploadedMediaUrls.push(fileInfo.url);
                 revalidatePath(fileInfo.url);
             } else if (key === "location") {
                 try {
@@ -392,6 +428,29 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
             () => updateCircle(updateData, userDid),
             replacedSingularMedia,
             ownerCircle._id!.toString(),
+            undefined,
+            newlyUploadedMediaUrls,
+            async (urls, expectedCircleId) => {
+                try {
+                    const persisted = await getCircleById(expectedCircleId);
+                    const persistedWithCover = persisted as (Circle & { cover?: { url?: string } }) | undefined;
+                    const referencedUrls = new Set(
+                        [
+                            typeof persistedWithCover?.picture === "string"
+                                ? persistedWithCover.picture
+                                : persistedWithCover?.picture?.url,
+                            persistedWithCover?.cover?.url,
+                            ...(persistedWithCover?.images?.map((media) => media.fileInfo.url) ?? []),
+                        ].filter((url): url is string => Boolean(url)),
+                    );
+                    return cleanupCircleOwnedMedia(
+                        urls.filter((url) => !referencedUrls.has(url)),
+                        expectedCircleId,
+                    );
+                } catch (error) {
+                    return { status: "failed", error };
+                }
+            },
         );
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
