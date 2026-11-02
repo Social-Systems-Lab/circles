@@ -28,7 +28,7 @@ assert.ok(
     "completion validates the verified capability before one-time provisioning consumes it",
 );
 assert.match(completionAction, /validatePendingRedirect\(authorized\.redirectTo\)/);
-assert.match(completionAction, /validatePendingRedirect\(authorized\.redirectTo\) \|\| "\/explore"/);
+assert.match(completionAction, /validatePendingRedirect\(authorized\.redirectTo\) \|\| "\/onboarding"/);
 assert.match(completionAction, /jar\.delete\(VERIFIED_COOKIE\)/);
 assert.match(completionAction, /jar\.delete\(PENDING_COOKIE\)/);
 assert.match(runtime, /await createUserSession\(user, did\)/);
