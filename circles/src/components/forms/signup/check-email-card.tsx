@@ -186,7 +186,7 @@ export function CheckEmailCard({
                         </>
                     )}
                     <p className="text-sm text-muted-foreground">
-                        Didn't get the email? Check your spam folder or request a new link.
+                        Didn&apos;t get the email? Check your spam folder or request a new link.
                     </p>
                     {message && (
                         <p role="status" className="text-sm text-muted-foreground">
