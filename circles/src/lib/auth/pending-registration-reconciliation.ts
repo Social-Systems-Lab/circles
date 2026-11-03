@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { ObjectId, type Db, type Filter } from "mongodb";
 import type { PendingRegistration } from "@/lib/auth/pending-registration";
+import { normalizeEmailForComparison } from "@/lib/auth/email-normalization";
 
 const EXPECTED_FILES = {
     salt: "salt.bin",
@@ -17,12 +18,13 @@ export type ReconciliationClassification =
     | "manual_review_missing_credentials"
     | "manual_review_invalid_public_key"
     | "manual_review_account_mismatch"
-    | "manual_review_duplicate_accounts";
+    | "manual_review_duplicate_accounts"
+    | "manual_review_claim_without_did";
 
 export type PendingRegistrationReconciliation = {
     pendingRegistrationId: string;
     status: PendingRegistration["status"];
-    reservedDid: string;
+    reservedDid: string | null;
     reconciliationRequiredAt: Date | null;
     credentialDirectoryExists: boolean;
     credentialFiles: Record<keyof typeof EXPECTED_FILES, boolean>;
@@ -31,6 +33,11 @@ export type PendingRegistrationReconciliation = {
     accountWithReservedDidCount: number;
     correlatedAccountId: string | null;
     correlatedAccountDid: string | null;
+    didReservationMatches: boolean;
+    canonicalHandleMatches: boolean;
+    normalizedEmailMatches: boolean;
+    accountPublicKeyMatchesDid: boolean;
+    permanentAccountIdentityMatches: boolean;
     selfMembershipExists: boolean | null;
     classification: ReconciliationClassification;
     safeNextAction: string;
@@ -44,7 +51,6 @@ export async function inspectPendingRegistrationReconciliation(
 ): Promise<PendingRegistrationReconciliation[]> {
     const registrations = db.collection<PendingRegistration>("pendingRegistrations");
     const filter: Filter<PendingRegistration> = {
-        reservedDid: { $type: "string" },
         status: { $ne: "provisioned" },
     };
     if (options.pendingRegistrationId) {
@@ -52,9 +58,56 @@ export async function inspectPendingRegistrationReconciliation(
         filter._id = new ObjectId(options.pendingRegistrationId);
     }
     const records = await registrations.find(filter).sort({ reconciliationRequiredAt: 1, createdAt: 1 }).toArray();
+    const reservations = await db
+        .collection<PendingRegistrationDidReservationLike>("pendingRegistrationDidReservations")
+        .find()
+        .toArray();
+    const reservationsByOwner = new Map(reservations.map((reservation) => [reservation._id, reservation.did]));
     const results: PendingRegistrationReconciliation[] = [];
-    for (const record of records) results.push(await inspectRecord(db, options.usersDirectory, record));
+    for (const record of records) {
+        const reservedDid = record.reservedDid || reservationsByOwner.get(record._id.toHexString());
+        if (!reservedDid) {
+            if (record.status === "provisioning_claimed") {
+                results.push(await inspectClaimWithoutDid(db, record));
+            }
+            continue;
+        }
+        results.push(await inspectRecord(db, options.usersDirectory, { ...record, reservedDid }));
+    }
     return results;
+}
+
+type PendingRegistrationDidReservationLike = { _id: string; did: string; createdAt: Date };
+
+async function inspectClaimWithoutDid(db: Db, record: PendingRegistration): Promise<PendingRegistrationReconciliation> {
+    const pendingRegistrationId = record._id.toHexString();
+    const correlated = await db
+        .collection("circles")
+        .find({ "metadata.pendingRegistrationId": pendingRegistrationId }, { projection: { _id: 1, did: 1 } })
+        .toArray();
+    return {
+        pendingRegistrationId,
+        status: record.status,
+        reservedDid: null,
+        reconciliationRequiredAt: record.reconciliationRequiredAt,
+        credentialDirectoryExists: false,
+        credentialFiles: { salt: false, iv: false, publicKey: false, encryptedPrivateKey: false },
+        publicKeyMatchesDid: null,
+        correlatedAccountCount: correlated.length,
+        accountWithReservedDidCount: 0,
+        correlatedAccountId: correlated.length === 1 ? (correlated[0]._id?.toString() ?? null) : null,
+        correlatedAccountDid:
+            correlated.length === 1 && typeof correlated[0].did === "string" ? correlated[0].did : null,
+        didReservationMatches: false,
+        canonicalHandleMatches: false,
+        normalizedEmailMatches: false,
+        accountPublicKeyMatchesDid: false,
+        permanentAccountIdentityMatches: false,
+        selfMembershipExists: null,
+        classification: "manual_review_claim_without_did",
+        safeNextAction:
+            "Preserve the non-expiring claim. Confirm every worker from the claiming attempt is stopped before any separately authorized recovery; age alone is not proof that ownership can be transferred.",
+    };
 }
 
 async function inspectRecord(
@@ -87,12 +140,38 @@ async function inspectRecord(
 
     const circles = db.collection("circles");
     const correlated = await circles
-        .find({ "metadata.pendingRegistrationId": pendingRegistrationId }, { projection: { _id: 1, did: 1 } })
+        .find(
+            { "metadata.pendingRegistrationId": pendingRegistrationId },
+            { projection: { _id: 1, did: 1, email: 1, handle: 1, publicKey: 1, metadata: 1 } },
+        )
         .toArray();
     const didAccounts = await circles.find({ did: reservedDid }, { projection: { _id: 1 } }).toArray();
     const account = correlated.length === 1 ? correlated[0] : null;
     const accountId = account?._id?.toString() ?? null;
     const accountDid = typeof account?.did === "string" ? account.did : null;
+    const didReservation = await db
+        .collection<{ _id: string; did: string }>("pendingRegistrationDidReservations")
+        .findOne({ _id: pendingRegistrationId });
+    const didReservationMatches = didReservation?.did === reservedDid;
+    const canonicalHandleMatches = Boolean(account && account.handle === record.requestedHandle);
+    const normalizedEmailMatches = Boolean(
+        account && normalizeEmailForComparison(String(account.email || "")) === record.normalizedEmail,
+    );
+    const accountPublicKeyMatchesDid = Boolean(
+        account &&
+            typeof account.publicKey === "string" &&
+            crypto.createHash("sha256").update(account.publicKey).digest("hex") === reservedDid,
+    );
+    const permanentAccountIdentityMatches = Boolean(
+        account &&
+            accountId &&
+            accountDid === reservedDid &&
+            didAccounts.length === 1 &&
+            didAccounts[0]._id?.toString() === accountId &&
+            (!record.accountId || record.accountId === accountId) &&
+            (!record.accountDid || record.accountDid === accountDid) &&
+            account.metadata?.pendingRegistrationId === pendingRegistrationId,
+    );
     const selfMembershipExists = accountId
         ? Boolean(
               await db
@@ -107,15 +186,30 @@ async function inspectRecord(
     if (correlated.length > 1 || didAccounts.length > 1) {
         classification = "manual_review_duplicate_accounts";
         safeNextAction = "Stop and escalate; do not modify accounts or credential files.";
-    } else if (account && accountDid !== reservedDid) {
-        classification = "manual_review_account_mismatch";
-        safeNextAction = "Stop and escalate the DID correlation mismatch.";
+    } else if (account || didAccounts.length > 0) {
+        if (
+            !account ||
+            !didReservationMatches ||
+            !canonicalHandleMatches ||
+            !normalizedEmailMatches ||
+            !accountPublicKeyMatchesDid ||
+            !permanentAccountIdentityMatches
+        ) {
+            classification = "manual_review_account_mismatch";
+            safeNextAction = "Stop and verify DID reservation ownership, account ID, DID, handle and normalized email.";
+        } else if (publicKeyMatchesDid === false) {
+            classification = "manual_review_invalid_public_key";
+            safeNextAction = "Preserve the directory and escalate the public-key/DID mismatch.";
+        } else if (completeCredentials && publicKeyMatchesDid === true) {
+            classification = "recoverable_finalize";
+            safeNextAction = "Identity evidence matches; member-authorized finalization recovery is not enabled yet.";
+        } else {
+            classification = "manual_review_missing_credentials";
+            safeNextAction = "Preserve all records and credential files; verify missing identity evidence manually.";
+        }
     } else if (publicKeyMatchesDid === false) {
         classification = "manual_review_invalid_public_key";
         safeNextAction = "Preserve the directory and escalate the public-key/DID mismatch.";
-    } else if (account && completeCredentials && publicKeyMatchesDid === true) {
-        classification = "recoverable_finalize";
-        safeNextAction = "Use the authenticated provisioning retry to repair finalization and self-membership.";
     } else if (!account && credentialDirectoryExists) {
         classification = "manual_review_orphan_credentials";
         safeNextAction = "Preserve key material and use a reviewed account-import procedure; never retry a new DID.";
@@ -136,6 +230,11 @@ async function inspectRecord(
         accountWithReservedDidCount: didAccounts.length,
         correlatedAccountId: accountId,
         correlatedAccountDid: accountDid,
+        didReservationMatches,
+        canonicalHandleMatches,
+        normalizedEmailMatches,
+        accountPublicKeyMatchesDid,
+        permanentAccountIdentityMatches,
         selfMembershipExists,
         classification,
         safeNextAction,

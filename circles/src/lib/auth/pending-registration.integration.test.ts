@@ -6,7 +6,9 @@ import path from "path";
 import net from "net";
 import { MongoClient, ObjectId } from "mongodb";
 import {
+    acquirePendingRegistrationProvisioningClaim,
     ensurePendingRegistrationIndexes,
+    hashPendingRegistrationSecret,
     reservePendingRegistrationDid,
     type PendingRegistration,
 } from "@/lib/auth/pending-registration";
@@ -52,6 +54,7 @@ async function main() {
         await db.dropDatabase();
         const collections = {
             registrations: db.collection<PendingRegistration>("pendingRegistrations"),
+            didReservations: db.collection("pendingRegistrationDidReservations"),
             rateLimits: db.collection("pendingRegistrationRateLimits"),
             auditEvents: db.collection("pendingRegistrationAuditEvents"),
         } as any;
@@ -75,8 +78,10 @@ async function main() {
             verifiedContinuationExpiresAt: new Date(now.getTime() + 60_000),
             verifiedAt: now,
             redirectTo: null,
-            provisioningLeaseHash: "test-only",
+            provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", "integration-lease"),
             provisioningLeaseExpiresAt: new Date(now.getTime() + 60_000),
+            provisioningClaimHash: null,
+            provisioningClaimedAt: null,
             provisioningAttempts: 1,
             reservedDid: null,
             reconciliationRequiredAt: null,
@@ -91,10 +96,27 @@ async function main() {
         const { publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
         const publicKeyPem = publicKey.export({ type: "pkcs1", format: "pem" }).toString();
         const did = crypto.createHash("sha256").update(publicKeyPem).digest("hex");
-        assert.equal(await reservePendingRegistrationDid(pendingId.toHexString(), did, { collections }), true);
-        assert.equal(await reservePendingRegistrationDid(pendingId.toHexString(), did, { collections }), true);
         assert.equal(
-            await reservePendingRegistrationDid(pendingId.toHexString(), "f".repeat(64), { collections }),
+            await acquirePendingRegistrationProvisioningClaim(
+                pendingId.toHexString(),
+                "integration-lease",
+                "integration-claim",
+                { collections },
+            ),
+            true,
+        );
+        assert.equal(
+            await reservePendingRegistrationDid(pendingId.toHexString(), did, "integration-claim", { collections }),
+            true,
+        );
+        assert.equal(
+            await reservePendingRegistrationDid(pendingId.toHexString(), did, "integration-claim", { collections }),
+            true,
+        );
+        assert.equal(
+            await reservePendingRegistrationDid(pendingId.toHexString(), "f".repeat(64), "integration-claim", {
+                collections,
+            }),
             false,
         );
         const reserved = await collections.registrations.findOne({ _id: pendingId });
@@ -136,6 +158,7 @@ async function main() {
             did,
             email: "integration@example.invalid",
             handle: "integration-test",
+            publicKey: publicKeyPem,
             metadata: { pendingRegistrationId: pendingId.toHexString() },
         });
         await db

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ObjectId } from "mongodb";
 import {
+    acquirePendingRegistrationProvisioningClaim,
     authorizePendingRegistrationChallenge,
     beginPendingRegistration,
     buildPendingRegistrationVerificationUrl,
@@ -61,6 +63,7 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
     const registrations: PendingRegistration[] = [];
     const rates: any[] = [];
     const audits: any[] = [];
+    const didReservationRecords: Array<{ _id: string; did: string; createdAt: Date }> = [];
     const sent: Array<{ to: string; verificationUrl: string }> = [];
     const accounts = new Map<string, ProvisionedPendingAccount>();
     let provisionCalls = 0;
@@ -140,8 +143,30 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
             return { acknowledged: true, insertedId: new ObjectId() };
         },
     };
+    const didReservationCollection = {
+        async createIndex() {
+            return "index";
+        },
+        async insertOne(record: { _id: string; did: string; createdAt: Date }) {
+            if (didReservationRecords.some((item) => item._id === record._id || item.did === record.did)) {
+                throw Object.assign(new Error("duplicate DID reservation"), { code: 11000 });
+            }
+            didReservationRecords.push({ ...record });
+            return { acknowledged: true, insertedId: record._id };
+        },
+        async findOne(filter: any) {
+            return didReservationRecords.find((item) => matches(item, filter)) || null;
+        },
+        async deleteOne(filter: any) {
+            const index = didReservationRecords.findIndex((item) => matches(item, filter));
+            if (index < 0) return { deletedCount: 0 };
+            didReservationRecords.splice(index, 1);
+            return { deletedCount: 1 };
+        },
+    };
     const collections = {
         registrations: registrationCollection,
+        didReservations: didReservationCollection,
         rateLimits: rateCollection,
         auditEvents: auditCollection,
     } as unknown as PendingRegistrationCollections;
@@ -155,13 +180,36 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
         },
         permanentAccountExists: async () => permanentExists,
         findAccountByPendingRegistrationId: async (id) => accounts.get(id) || null,
-        provisionAccount: async ({ pendingRegistrationId }) => {
+        provisionAccount: async ({ pendingRegistrationId, provisioningLeaseToken, provisioningClaimToken }) => {
             if (provisioningFailure === "before_did_reservation") throw new Error("interrupted before DID generation");
             provisionCalls += 1;
-            const generatedDid = `did-${pendingRegistrationId}-${provisionCalls}`;
+            if (
+                !(await acquirePendingRegistrationProvisioningClaim(
+                    pendingRegistrationId,
+                    provisioningLeaseToken,
+                    provisioningClaimToken,
+                    deps,
+                ))
+            ) {
+                throw new Error("durable claim unavailable");
+            }
+            const generatedDid = crypto
+                .createHash("sha256")
+                .update(`${pendingRegistrationId}:${provisioningClaimToken}:${provisionCalls}`)
+                .digest("hex");
             const reservedDid = reservedDids.get(pendingRegistrationId);
             if (reservedDid && reservedDid !== generatedDid) {
                 throw new Error("retry must not replace a reserved identity");
+            }
+            if (
+                !(await reservePendingRegistrationDid(
+                    pendingRegistrationId,
+                    generatedDid,
+                    provisioningClaimToken,
+                    deps,
+                ))
+            ) {
+                throw new Error("DID reservation failed");
             }
             reservedDids.set(pendingRegistrationId, generatedDid);
             credentialDirectories.add(generatedDid);
@@ -467,25 +515,54 @@ async function main() {
             reservation.deps,
         );
         const record = reservation.registrations[0];
+        const leaseToken = "unit-test-reservation-lease";
         record.status = "provisioning";
+        record.provisioningLeaseHash = hashPendingRegistrationSecret("provisioning-lease", leaseToken);
+        record.provisioningLeaseExpiresAt = new Date(Date.now() + 60_000);
+        const claimToken = "unit-test-reservation-claim";
         assert.equal(
-            await reservePendingRegistrationDid(proof.pendingRegistrationId!, "reserved-did", reservation.deps),
+            await acquirePendingRegistrationProvisioningClaim(
+                proof.pendingRegistrationId!,
+                leaseToken,
+                claimToken,
+                reservation.deps,
+            ),
             true,
         );
-        assert.equal(record.reservedDid, "reserved-did");
+        const reservedDid = "a".repeat(64);
+        assert.equal(
+            await reservePendingRegistrationDid(
+                proof.pendingRegistrationId!,
+                reservedDid,
+                claimToken,
+                reservation.deps,
+            ),
+            true,
+        );
+        assert.equal(record.reservedDid, reservedDid);
         assert.equal(record.expiresAt, undefined, "reserved identities are excluded from TTL cleanup");
         assert.ok(record.reconciliationRequiredAt, "reserved identities are marked for operator reconciliation");
         assert.equal(
-            await reservePendingRegistrationDid(proof.pendingRegistrationId!, "reserved-did", reservation.deps),
+            await reservePendingRegistrationDid(
+                proof.pendingRegistrationId!,
+                reservedDid,
+                claimToken,
+                reservation.deps,
+            ),
             true,
             "reserving the same DID is idempotent",
         );
         assert.equal(
-            await reservePendingRegistrationDid(proof.pendingRegistrationId!, "different-did", reservation.deps),
+            await reservePendingRegistrationDid(
+                proof.pendingRegistrationId!,
+                "b".repeat(64),
+                claimToken,
+                reservation.deps,
+            ),
             false,
             "a retry cannot replace a reserved DID",
         );
-        assert.equal(record.reservedDid, "reserved-did");
+        assert.equal(record.reservedDid, reservedDid);
     }
 
     for (const failure of ["before_did_reservation", "after_credentials"] as const) {

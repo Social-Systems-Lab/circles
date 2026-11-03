@@ -58,6 +58,8 @@ export const createUserAccount = async (
         pendingRegistrationId?: string;
         sendVerificationEmail?: boolean;
         reserveDid?: (did: string) => Promise<void>;
+        acquireProvisioningClaim?: () => Promise<void>;
+        assertProvisioningClaim?: () => Promise<void>;
     } = {},
 ): Promise<Circle & { devVerificationToken?: string; devVerificationUrl?: string }> => {
     if (!name || !email || !password || !handle) {
@@ -77,6 +79,14 @@ export const createUserAccount = async (
         throw new Error("Handle already in use");
     }
 
+    if (options.pendingRegistrationId) {
+        if (!options.acquireProvisioningClaim || !options.assertProvisioningClaim || !options.reserveDid) {
+            throw new Error("Pending identity provisioning requires a durable claim");
+        }
+        await options.acquireProvisioningClaim();
+        await options.assertProvisioningClaim();
+    }
+
     // make sure account directory exists
     if (!fs.existsSync(USERS_DIR)) {
         fs.mkdirSync(USERS_DIR, { recursive: true });
@@ -94,13 +104,11 @@ export const createUserAccount = async (
     // Pending registration persists this identity before any credential files are written.
     // A retry must never silently replace a previously reserved DID.
     if (options.reserveDid) await options.reserveDid(did);
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
 
-    // create a directory for the user using the did as the name
+    // Never reuse an existing credential directory, even if its contents look incomplete.
     const accountPath = path.join(USERS_DIR, did);
-    if (fs.existsSync(accountPath)) {
-        throw new Error("Account already exists");
-    }
-    fs.mkdirSync(accountPath, { recursive: true });
+    fs.mkdirSync(accountPath);
 
     // generate salt, iv, encryption key and encrypt private key
     const salt = crypto.randomBytes(16);
@@ -117,9 +125,13 @@ export const createUserAccount = async (
     let publicKeyPem = publicKey.export({ type: "pkcs1", format: "pem" });
 
     // save salt, iv and keypair in the user directory
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, SALT_FILENAME), salt);
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, IV_FILENAME), iv);
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKey.export({ type: "pkcs1", format: "pem" }));
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
@@ -145,9 +157,11 @@ export const createUserAccount = async (
     if (options.pendingRegistrationId) {
         user.metadata = { ...(user.metadata ?? {}), pendingRegistrationId: options.pendingRegistrationId };
     }
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     try {
         const { getNextSignupOrder } = await import("@/lib/data/platform-settings");
         const order = await getNextSignupOrder();
@@ -185,6 +199,7 @@ export const createUserAccount = async (
         }
 
     // add user as member of their own circle
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
 
     // add user to default circle by default

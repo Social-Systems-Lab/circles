@@ -26,6 +26,7 @@ Setting `PENDING_REGISTRATION_ENABLED=false` or removing it disables the guarded
 pending_email
   -> email_verified
   -> provisioning (short database lease)
+  -> provisioning_claimed (durable, non-expiring owner)
   -> provisioned
 ```
 
@@ -33,9 +34,11 @@ pending_email
 - The initial continuation secret authorizes resume, resend and email correction.
 - Email verification consumes a purpose-specific hashed token atomically and issues a separate 30-minute verified continuation secret.
 - The password is accepted only with the verified continuation. Permanent provisioning then calls the existing RSA/DID/password-encryption machinery with `emailAlreadyVerified` and a pending-registration idempotency marker.
-- Finalization creates the session and reuses the existing idempotent welcome-message path. An interrupted finalization can be retried while the verified continuation remains valid.
+- After acquiring email/handle locks, the current lease owner atomically converts the lease into a durable claim before key generation, DID reservation, credential-directory creation, or account insertion.
+- The durable claim has no expiry and is not transferred by ordinary retries. A process restart preserves it. Any interruption after claim acquisition fails closed for operator reconciliation until a separately authorized recovery exists.
+- Current finalization still creates the session before the durable `provisioned` state transition; this ordering and repair of incomplete membership side effects remain Milestone 2B work.
 
-Pending records expire after 48 hours until a DID is reserved. Reserving a DID removes TTL eligibility until reconciliation or successful provisioning. Successfully provisioned records become TTL-eligible after a seven-day operational review window. Email-verification and verified-continuation capabilities expire after 30 minutes. Resend has a one-minute cooldown.
+Pending records expire after 48 hours until a DID is reserved or a durable claim is acquired. Both actions remove TTL eligibility. Successfully provisioned records become TTL-eligible after a seven-day operational review window. Email-verification and verified-continuation capabilities expire after 30 minutes. Resend has a one-minute cooldown.
 
 ## MongoDB collections and indexes
 
@@ -47,7 +50,7 @@ Pending records expire after 48 hours until a DID is reserved. Reserving a DID r
 - Unique: `{ requestedHandle: 1 }`.
 - Unique partial: `{ accountId: 1 }` for string account ids.
 
-`reservedDid` is written atomically before the account credential directory is created. Once set, it cannot be replaced by a retry.
+The atomic lease-to-claim update sets `status: provisioning_claimed`, a purpose-hashed `provisioningClaimHash` and `provisioningClaimedAt`, and removes both the temporary lease and `expiresAt`. Only then may the worker generate the keypair. `reservedDid` and its unique registry entry are recorded under the durable claim before the account credential directory is created. Once set, neither the claim nor DID can be replaced by an ordinary retry.
 
 ### `pendingRegistrationRateLimits`
 
@@ -72,6 +75,7 @@ Scopes cover start IP/email, resend and correction. The same helper is available
 
 - Unique partial index on `metadata.pendingRegistrationId`.
 - The marker provides trustworthy recovery after a crash between permanent account insertion and pending-state finalization.
+- Permanent-account insertion is preceded by a durable-claim ownership check. The claim cannot expire or be replaced, so lease expiry cannot authorize a competing insert.
 
 ## Security properties
 
@@ -82,42 +86,47 @@ Scopes cover start IP/email, resend and correction. The same helper is available
 - Duplicate permanent emails/handles return the same public start response.
 - Redirects must be relative same-site paths; absolute, protocol-relative and backslash-containing values are discarded.
 - Rate limits and provisioning locks live in MongoDB and work across application instances.
-- Provisioning requires the short-lived verified continuation even during recovery.
+- A short-lived verified continuation authorizes the initial attempt. The lease-to-claim transition is atomic; after it, only the non-expiring claim owner may perform provisioning mutations.
+- Account and credential writes that cannot share a MongoDB transaction are serialized under the non-expiring claim. If the process crashes, the claim is retained and no ordinary request can take over based on elapsed time.
 - Passwords are passed directly into existing permanent key encryption and are never persisted in pending state or audit records.
-- The generated DID is reserved before the first credential-file write. If that attempt does not reach Mongo insertion, automatic retries fail closed rather than silently generating a different identity.
+- The durable claim precedes key generation and DID reservation. The DID registry is unique by DID and pending-registration ID; a registry write interrupted before the pending record update is retained and visible to reconciliation.
+- Credential directories are created without overwrite semantics. Partial files are retained; an existing directory causes the attempt to fail closed.
 
 ## Provisioning failure matrix
 
-| Failure boundary                                   | Durable state                                                           | Retry behavior                                                                     |
-| -------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Before DID reservation                             | Pending record and provisioning lease only                              | Lease may expire and provisioning may retry.                                       |
-| After DID reservation, before credential files     | `reservedDid`, no account                                               | Fails closed; operator review is required before abandoning the reserved identity. |
-| After any credential write, before Mongo insertion | `reservedDid` and possibly a partial/full credential directory          | Fails closed; key material is preserved for reconciliation.                        |
-| After Mongo insertion, before self-membership      | Exact account linked by `metadata.pendingRegistrationId`                | Retry recovers the same account/DID and ensures self-membership.                   |
-| After self-membership, before pending finalization | Account and membership exist, pending state may still be `provisioning` | Retry recovers the same account/DID and repeats idempotent finalization.           |
-| During welcome/session finalization                | Pending record may already be `provisioned`                             | Retry re-runs finalization for the correlated account.                             |
+| Failure boundary                                       | Durable state                                                       | Retry behavior                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Failure boundary                                       | Durable state                                                       | Retry/recovery behavior                                                               |
+| -----------------------------------------------------  | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Before durable claim                                   | Pending record and temporary provisioning lease                     | After lease expiry, fresh email verification can authorize another attempt.           |
+| After claim, before DID generation/reservation         | Non-expiring `provisioning_claimed`; no DID                         | Ordinary retry is blocked; preserve the claim for operator review.                    |
+| After DID registry insert, before pending DID update   | Claim and registry-only DID ownership                               | Reconciliation reports it; never delete or reuse the registry entry automatically.    |
+| After DID reservation, before credential files         | Claim, reserved DID, no account                                     | Fail closed; preserve the identity for operator review.                               |
+| During credential writes, before Mongo account insert  | Claim, reserved DID and partial credential directory                | Fail closed; preserve all files for reconciliation.                                   |
+| After Mongo account insertion                          | Claim and exactly correlated permanent account                      | Ordinary retry cannot obtain a session or transfer the claim; operator review needed. |
+| During membership/profile/welcome/session finalization | Claim and some side effects may exist                               | No automatic claim transfer; Milestone 2B will define repair and durable ordering.    |
 
 ## Failure recovery
 
 - Failed email delivery leaves the pending registration resumable and auditable.
-- A provisioning lease prevents concurrent workers from creating multiple accounts.
-- Expired leases can be reclaimed.
-- If account insertion succeeded before interruption, the unique pending-registration marker recovers that exact account; recovery never guesses by email.
-- Self-membership, session, profile and welcome finalization are retried for recovered accounts.
-- If only a DID reservation or credential directory exists, retry refuses to create a replacement DID.
+- A short lease prevents concurrent pre-claim work. The durable claim prevents competing provisioning attempts after claim acquisition and survives process restarts.
+- Expired pre-claim leases can be reclaimed only while no durable claim exists and no DID is reserved. After claim acquisition, no ordinary retry or timestamp-based process transfers ownership.
+- Account correlation requires exact pending id, reserved DID, unique account DID, public-key/DID match, canonical handle, normalized email and recorded identity evidence. Reconciliation labels absent or inconsistent evidence for manual review.
+- A crash after claim acquisition can strand even a claim with no DID. Reconciliation now lists this state; it must not be reset merely because it is old.
 
-Filesystem creation, Mongo account insertion and the legacy membership helper are not one transaction. The idempotency marker handles interruption after Mongo insertion and finalization recreates a missing self-membership. A failure before Mongo insertion may leave an orphan credential directory; a failure after membership insertion but before its secondary chat/count updates may leave partial membership side effects.
+Filesystem creation, Mongo account insertion and the legacy membership helper are not one transaction. The non-expiring claim prevents another application worker from taking over while the original worker could resume; this trades automatic availability for identity integrity. A crash may leave partial credentials or a correlated account under a retained claim. No operator transfer command exists. Any future recovery must be audited and prove the prior process cohort is stopped/fenced, verify all identity evidence, and must not grant a session without ordinary authentication. Membership side effects may still be incomplete after an inserted member row; that repair is Milestone 2B.
 
 ### Operator reconciliation procedure
 
 1. Keep the feature disabled for the affected registration and preserve the pending record, audit events and credential directory.
-2. Locate the pending record by id and record its `reservedDid`, status, lease timestamps and verification expiry. Never use an email-only match as proof of ownership.
-3. Query `circles.metadata.pendingRegistrationId` for the same pending id.
+2. Locate the pending record by id and record its `reservedDid` (if any), claim state, status, lease timestamps and verification expiry. Never use an email-only match as proof of ownership.
+3. If the record has `provisioning_claimed` but no DID, do not release it based on age. Establish that all workers that could hold the attempt are stopped before any separately reviewed recovery decision.
+4. Query `circles.metadata.pendingRegistrationId` for the same pending id.
     - If exactly one account exists and its DID equals `reservedDid`, allow the authenticated retry path to repair membership/finalization.
     - If the account exists but the DID differs, stop: this is an identity-integrity incident requiring engineering review.
-4. If no account exists, inspect `users/<reservedDid>` without modifying it. Record which expected files exist (`salt`, IV, public key and encrypted private key), and confirm the public key hashes to `reservedDid`.
-5. Preserve complete or partial key material. Do not delete the directory, clear `reservedDid`, or issue a replacement identity automatically. Completing the Mongo account from an orphan directory requires a reviewed recovery tool because the legacy account creator does not expose a safe import operation.
-6. A reserved DID with no directory is also a hard stop by default. Abandoning it and issuing a new identity requires an explicit operator decision, an audit entry and confirmation that no matching account or files exist.
+5. If no account exists and a DID is recorded, inspect `users/<reservedDid>` without modifying it. Record which expected files exist (`salt`, IV, public key and encrypted private key), and confirm the public key hashes to `reservedDid`.
+6. Preserve complete or partial key material. Do not delete the directory, clear a reservation, release a claim, or issue a replacement identity automatically. Completing the Mongo account from an orphan directory requires a reviewed recovery tool because the legacy account creator does not expose a safe import operation.
+7. A reserved DID with no directory is also a hard stop by default. Abandoning it and issuing a new identity requires an explicit operator decision, an audit entry and confirmation that no matching account or files exist.
 
 No automatic cleanup acts on user credential directories. Reserved, unfinished records are excluded from Mongo TTL cleanup and remain until explicit reconciliation. Successful records retain their correlation metadata for seven days.
 
