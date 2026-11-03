@@ -5,6 +5,7 @@ import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { contentPreviewAtom, sidePanelContentVisibleAtom } from "@/lib/data/atoms";
 import { cn } from "@/lib/utils";
 import { Circle, ContentPreviewData, FileInfo, CircleType } from "@/models/models"; // Import needed types
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import CircleTypeIndicator from "@/components/utils/circle-type-indicator";
@@ -16,6 +17,7 @@ interface CircleLike {
     picture?: FileInfo;
     handle?: string;
     circleType?: CircleType;
+    enabledModules?: string[];
 }
 
 type CirclePictureProps = {
@@ -52,7 +54,7 @@ export const CirclePicture = ({
 
     const onOpenPreview = (e: React.MouseEvent) => {
         if (isMobile) {
-            router.push(`/circle/${circle?.handle}`);
+            if (circle.handle) router.push(getCircleDefaultPath(circle));
             return;
         }
 
@@ -78,9 +80,7 @@ export const CirclePicture = ({
                 onClick={openPreview ? onOpenPreview : undefined}
                 style={size ? { width: size, height: size } : {}}
             >
-                <AvatarImage
-                    src={typeof circle?.picture === "string" ? circle.picture : circle?.picture?.url}
-                />
+                <AvatarImage src={typeof circle?.picture === "string" ? circle.picture : circle?.picture?.url} />
                 <AvatarFallback>{getInitials()}</AvatarFallback>
             </Avatar>
 

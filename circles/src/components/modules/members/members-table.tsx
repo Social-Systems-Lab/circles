@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/components/ui/use-toast";
 import type { UserGroup } from "@/models/models";
 import type { MemberDirectoryManagementEntryDto, PublicMemberDirectoryEntryDto } from "@/lib/data/member-directory";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import InviteButton from "../home/invite-button";
 import { UserPicture } from "./user-picture";
 import { removeMemberAction, updateUserGroupsAction } from "./actions";
@@ -144,7 +145,10 @@ export default function MembersTable({ circle, members, management }: MemberTabl
                                         <TableRow
                                             key={`${member.handle ?? member.name}-${index}`}
                                             className={member.handle ? "cursor-pointer" : undefined}
-                                            onClick={() => member.handle && router.push(`/circle/${member.handle}`)}
+                                            onClick={() =>
+                                                member.handle &&
+                                                router.push(getCircleDefaultPath({ handle: member.handle }))
+                                            }
                                         >
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
