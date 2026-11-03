@@ -6,23 +6,40 @@ import { FaEdit } from "react-icons/fa";
 import { Input } from "@/components/ui/input";
 import { updateCircleField } from "./actions";
 import { useToast } from "@/components/ui/use-toast";
+import { validatePersonalProfileDisplayName } from "@/lib/profile-name-validation";
 
 type EditableFieldProps = {
     id: string;
     value: string;
     circleId: string;
     multiline?: boolean;
+    isPersonalProfile?: boolean;
     setCircle?: React.Dispatch<React.SetStateAction<any>>;
 };
 
-const EditableField: React.FC<EditableFieldProps> = ({ id, value, circleId, setCircle, multiline = false }) => {
+const EditableField: React.FC<EditableFieldProps> = ({
+    id,
+    value,
+    circleId,
+    setCircle,
+    multiline = false,
+    isPersonalProfile = false,
+}) => {
     const [editValue, setEditValue] = useState(value);
     const [isEditing, setIsEditing] = useState(false);
     const { toast } = useToast();
 
     const handleSave = async () => {
-        setIsEditing(false);
         if (editValue !== value) {
+            if (id === "name" && isPersonalProfile) {
+                const validation = validatePersonalProfileDisplayName(editValue);
+                if (!validation.valid) {
+                    toast({ title: "Name not saved", description: validation.message, variant: "destructive" });
+                    return;
+                }
+            }
+
+            setIsEditing(false);
             const formData = new FormData();
             formData.append(id, editValue);
             const result = await updateCircleField(circleId, formData);
@@ -42,6 +59,8 @@ const EditableField: React.FC<EditableFieldProps> = ({ id, value, circleId, setC
                 toast({ title: "Error", description: result.message, variant: "destructive" });
                 setEditValue(value);
             }
+        } else {
+            setIsEditing(false);
         }
     };
 
@@ -77,6 +96,8 @@ const EditableField: React.FC<EditableFieldProps> = ({ id, value, circleId, setC
                         onChange={(e) => setEditValue(e.target.value)}
                         onBlur={handleSave}
                         onKeyDown={handleKeyDown}
+                        required={isPersonalProfile && id === "name"}
+                        maxLength={isPersonalProfile && id === "name" ? 100 : undefined}
                         autoFocus
                     />
                 )

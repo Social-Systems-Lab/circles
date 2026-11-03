@@ -289,7 +289,7 @@ export async function saveGlobalServerSettings(data: GlobalServerSettingsFormDat
     const validationResult = globalServerSettingsValidationSchema.safeParse(data);
     if (!validationResult.success) {
         // Combine Zod error messages
-        const errorMessages = validationResult.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ");
+        const errorMessages = validationResult.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ");
         return { success: false, message: `Invalid data: ${errorMessages}` };
     }
 

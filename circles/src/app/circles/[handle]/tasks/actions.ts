@@ -593,10 +593,10 @@ export async function createTaskAction( // Renamed function
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -814,10 +814,10 @@ export async function updateTaskAction(
 
         if (!validatedData.success) {
             // ... (error handling)
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -1082,10 +1082,10 @@ export async function updateTaskPriorityAction(
             .safeParse({ priority });
 
         if (!validatedData.success) {
-            console.error("Priority Validation Error:", validatedData.error.errors);
+            console.error("Priority Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid priority: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid priority: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
 
@@ -1389,7 +1389,7 @@ export async function requestTaskChangesAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: validated.error.errors.map((error) => error.message).join(", "),
+                message: validated.error.issues.map((error) => error.message).join(", "),
             };
         }
 
@@ -1544,7 +1544,7 @@ export async function reviewTaskClaimAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: validated.error.errors.map((error) => error.message).join(", "),
+                message: validated.error.issues.map((error) => error.message).join(", "),
             };
         }
 
@@ -2007,7 +2007,7 @@ export async function reviewShiftAttendanceAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: validated.error.errors.map((error) => error.message).join(", "),
+                message: validated.error.issues.map((error) => error.message).join(", "),
             };
         }
 

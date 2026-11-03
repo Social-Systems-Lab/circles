@@ -803,7 +803,7 @@ export async function createEventAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: `Invalid input: ${validated.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validated.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validated.data;
@@ -1003,7 +1003,7 @@ export async function updateEventAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: `Invalid input: ${validated.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validated.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validated.data;

@@ -25,6 +25,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader"; // Import the new component
 import { socialPlatforms } from "@/lib/data/social";
+import { validatePersonalProfileDisplayNameField } from "@/lib/profile-name-validation";
 
 interface AboutSettingsFormProps {
     circle: Circle;
@@ -113,7 +114,9 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
             } else {
                 toast({
                     title: "Error",
-                    description: result.message || (isUserProfile ? "Failed to update profile" : "Failed to update circle profile"),
+                    description:
+                        result.message ||
+                        (isUserProfile ? "Failed to update profile" : "Failed to update circle profile"),
                     variant: "destructive",
                 });
             }
@@ -145,11 +148,14 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                         <Controller
                             name="name"
                             control={form.control as unknown as Control}
+                            rules={{ validate: isUserProfile ? validatePersonalProfileDisplayNameField : undefined }}
                             render={({ field }) => (
                                 <DynamicTextField
                                     field={{ name: "name", type: "text", label: "Name", required: true }}
                                     formField={field}
                                     control={form.control as unknown as Control}
+                                    required={isUserProfile}
+                                    maxLength={isUserProfile ? 100 : undefined}
                                 />
                             )}
                         />
@@ -345,15 +351,18 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                                         name: "content",
                                         type: "textarea",
                                         label: isUserProfile ? "About me" : "Content",
-                                        placeholder: isUserProfile ? "Tell people a little about who you are" : "Detailed information about your circle",
-                                        description: isUserProfile ? "Tell people a little about who you are." : undefined,
+                                        placeholder: isUserProfile
+                                            ? "Tell people a little about who you are"
+                                            : "Detailed information about your circle",
+                                        description: isUserProfile
+                                            ? "Tell people a little about who you are."
+                                            : undefined,
                                     }}
                                     formField={field}
                                     control={form.control as unknown as Control}
                                 />
                             )}
                         />
-
                     </CardContent>
                 </Card>
 

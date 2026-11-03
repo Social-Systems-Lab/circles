@@ -9,14 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,14 +42,16 @@ const fundingFormItemSchema = z.object({
     price: z.number().positive("Item price must be greater than zero"),
     currency: fundingAskCurrencySchema,
     quantity: z.number().positive("Quantity must be greater than zero").optional(),
-    unitLabel: z.preprocess(
-        (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-        z.string().max(80, "Unit label must be 80 characters or fewer").optional(),
-    ),
-    note: z.preprocess(
-        (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-        z.string().max(280, "Short note must be 280 characters or fewer").optional(),
-    ),
+    unitLabel: z
+        .string()
+        .optional()
+        .transform((value) => value?.trim() || undefined)
+        .pipe(z.string().max(80, "Unit label must be 80 characters or fewer").optional()),
+    note: z
+        .string()
+        .optional()
+        .transform((value) => value?.trim() || undefined)
+        .pipe(z.string().max(280, "Short note must be 280 characters or fewer").optional()),
 });
 
 const fundingFormSchema = z
@@ -67,14 +62,17 @@ const fundingFormSchema = z
         items: z.array(fundingFormItemSchema).min(1, "Add at least one funding item"),
         isProxy: z.boolean().default(false),
         beneficiaryType: fundingAskBeneficiaryTypeSchema,
-        beneficiaryName: z.preprocess(
-            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-            z.string().max(120, "Beneficiary name must be 120 characters or fewer").optional(),
-        ),
-        proxyNote: z.preprocess(
-            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-            z.string().max(500, "Proxy note must be 500 characters or fewer").optional(),
-        ),
+        beneficiaryName: z
+            .string()
+            .optional()
+            .transform((value) => value?.trim() || undefined)
+            .pipe(z.string().max(120, "Beneficiary name must be 120 characters or fewer").optional()),
+        proxyNote: z
+            .string()
+            .optional()
+            .transform((value) => value?.trim() || undefined)
+            .pipe(z.string().max(500, "Proxy note must be 500 characters or fewer").optional()),
+        publishToNoticeboard: z.boolean().default(true),
     })
     .superRefine((value, context) => {
         if (value.isProxy && !value.beneficiaryName) {
@@ -86,8 +84,9 @@ const fundingFormSchema = z
         }
     });
 
-type FundingFormValues = z.infer<typeof fundingFormSchema>;
-type FundingFormSubmissionValues = FundingFormValues & { publishToNoticeboard: boolean };
+type FundingFormValues = z.output<typeof fundingFormSchema>;
+type FundingFormInputValues = z.input<typeof fundingFormSchema>;
+type FundingFormSubmissionValues = FundingFormValues;
 
 type FundingFormProps = {
     circle: Circle;
@@ -95,11 +94,23 @@ type FundingFormProps = {
 };
 
 const steps = [
-    { key: "request", title: "Request", description: "Add the parent funding request title, story, and broader project context." },
+    {
+        key: "request",
+        title: "Request",
+        description: "Add the parent funding request title, story, and broader project context.",
+    },
     { key: "items", title: "Items", description: "Add one or more individually fundable child items." },
-    { key: "beneficiary", title: "Beneficiary", description: "Add proxy or beneficiary context if it helps clarify the request." },
+    {
+        key: "beneficiary",
+        title: "Beneficiary",
+        description: "Add proxy or beneficiary context if it helps clarify the request.",
+    },
     { key: "image", title: "Image", description: "Add an optional cover image for the parent request." },
-    { key: "review", title: "Review", description: "Check the funding request and its child items before saving or publishing." },
+    {
+        key: "review",
+        title: "Review",
+        description: "Check the funding request and its child items before saving or publishing.",
+    },
 ] as const;
 
 const fieldsByStep: Array<Array<keyof FundingFormValues>> = [
@@ -136,19 +147,17 @@ const getDefaultValues = (ask?: FundingAskDisplay): FundingFormSubmissionValues 
     title: ask?.title || "",
     shortStory: ask?.shortStory || "",
     description: ask?.description || "",
-    items: (
-        ask?.items?.length
-            ? ask.items.map((item) => ({
-                  title: item.title,
-                  category: item.category,
-                  price: typeof item.price === "number" ? item.price : undefined,
-                  currency: item.currency,
-                  quantity: item.quantity,
-                  unitLabel: item.unitLabel || "",
-                  note: item.note || "",
-              }))
-            : [getEmptyFundingItem()]
-    ) as FundingFormValues["items"],
+    items: (ask?.items?.length
+        ? ask.items.map((item) => ({
+              title: item.title,
+              category: item.category,
+              price: typeof item.price === "number" ? item.price : undefined,
+              currency: item.currency,
+              quantity: item.quantity,
+              unitLabel: item.unitLabel || "",
+              note: item.note || "",
+          }))
+        : [getEmptyFundingItem()]) as FundingFormValues["items"],
     isProxy: ask?.isProxy || false,
     beneficiaryType: ask?.beneficiaryType || "self",
     beneficiaryName: ask?.beneficiaryName || "",
@@ -166,13 +175,17 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
     const isEditing = Boolean(ask);
     const defaultValues = React.useMemo(() => getDefaultValues(ask), [ask]);
 
-    const form = useForm<FundingFormSubmissionValues>({
+    const form = useForm<FundingFormInputValues, unknown, FundingFormSubmissionValues>({
         resolver: zodResolver(fundingFormSchema),
         defaultValues,
         shouldUnregister: false,
     });
 
-    const { fields: itemFields, append, remove } = useFieldArray({
+    const {
+        fields: itemFields,
+        append,
+        remove,
+    } = useFieldArray({
         control: form.control,
         name: "items",
     });
@@ -333,7 +346,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                             <FormItem className="md:col-span-2">
                                                 <FormLabel>Funding request title</FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="Roof repair materials for the community workshop" {...field} />
+                                                    <Input
+                                                        placeholder="Roof repair materials for the community workshop"
+                                                        {...field}
+                                                    />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -387,7 +403,12 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                 Each child item is listed separately and has its own category and price.
                                             </p>
                                         </div>
-                                        <Button type="button" variant="outline" size="sm" onClick={() => append(getEmptyFundingItem())}>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => append(getEmptyFundingItem())}
+                                        >
                                             Add item
                                         </Button>
                                     </div>
@@ -402,8 +423,15 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         {itemFields.map((itemField, index) => (
                                             <div key={itemField.id} className="rounded-lg border border-slate-200 p-4">
                                                 <div className="mb-3 flex items-center justify-between gap-3">
-                                                    <div className="text-sm font-medium text-slate-900">Funding item {index + 1}</div>
-                                                    <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+                                                    <div className="text-sm font-medium text-slate-900">
+                                                        Funding item {index + 1}
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => remove(index)}
+                                                    >
                                                         Remove
                                                     </Button>
                                                 </div>
@@ -416,7 +444,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                             <FormItem className="md:col-span-2">
                                                                 <FormLabel>Item title</FormLabel>
                                                                 <FormControl>
-                                                                    <Input placeholder="4 sheets of 18 mm plywood" {...field} />
+                                                                    <Input
+                                                                        placeholder="4 sheets of 18 mm plywood"
+                                                                        {...field}
+                                                                    />
                                                                 </FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
@@ -429,7 +460,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                         render={({ field }) => (
                                                             <FormItem>
                                                                 <FormLabel>Category</FormLabel>
-                                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                                <Select
+                                                                    onValueChange={field.onChange}
+                                                                    value={field.value}
+                                                                >
                                                                     <FormControl>
                                                                         <SelectTrigger>
                                                                             <SelectValue placeholder="Choose a category" />
@@ -437,7 +471,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                                     </FormControl>
                                                                     <SelectContent>
                                                                         {fundingCategoryOptions.map((option) => (
-                                                                            <SelectItem key={option.value} value={option.value}>
+                                                                            <SelectItem
+                                                                                key={option.value}
+                                                                                value={option.value}
+                                                                            >
                                                                                 {option.label}
                                                                             </SelectItem>
                                                                         ))}
@@ -466,7 +503,9 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                                             onBlur={field.onBlur}
                                                                             onChange={(event) =>
                                                                                 field.onChange(
-                                                                                    event.target.value ? Number(event.target.value) : undefined,
+                                                                                    event.target.value
+                                                                                        ? Number(event.target.value)
+                                                                                        : undefined,
                                                                                 )
                                                                             }
                                                                         />
@@ -482,7 +521,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                             render={({ field }) => (
                                                                 <FormItem>
                                                                     <FormLabel>Currency</FormLabel>
-                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                    <Select
+                                                                        onValueChange={field.onChange}
+                                                                        value={field.value}
+                                                                    >
                                                                         <FormControl>
                                                                             <SelectTrigger>
                                                                                 <SelectValue placeholder="Currency" />
@@ -490,7 +532,10 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                                         </FormControl>
                                                                         <SelectContent>
                                                                             {fundingCurrencyOptions.map((option) => (
-                                                                                <SelectItem key={option.value} value={option.value}>
+                                                                                <SelectItem
+                                                                                    key={option.value}
+                                                                                    value={option.value}
+                                                                                >
                                                                                     {option.label}
                                                                                 </SelectItem>
                                                                             ))}
@@ -519,7 +564,9 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                                         onBlur={field.onBlur}
                                                                         onChange={(event) =>
                                                                             field.onChange(
-                                                                                event.target.value ? Number(event.target.value) : undefined,
+                                                                                event.target.value
+                                                                                    ? Number(event.target.value)
+                                                                                    : undefined,
                                                                             )
                                                                         }
                                                                     />
@@ -536,7 +583,11 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                             <FormItem>
                                                                 <FormLabel>Unit label</FormLabel>
                                                                 <FormControl>
-                                                                    <Input placeholder="sheets, pairs, boxes" {...field} value={field.value ?? ""} />
+                                                                    <Input
+                                                                        placeholder="sheets, pairs, boxes"
+                                                                        {...field}
+                                                                        value={field.value ?? ""}
+                                                                    />
                                                                 </FormControl>
                                                                 <FormMessage />
                                                             </FormItem>
@@ -580,9 +631,12 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                     onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                                                 />
                                                 <div>
-                                                    <FormLabel>This request is posted on behalf of someone else</FormLabel>
+                                                    <FormLabel>
+                                                        This request is posted on behalf of someone else
+                                                    </FormLabel>
                                                     <p className="mt-1 text-sm text-slate-600">
-                                                        Use this when the parent funding request is being posted for a person, family, group, or project.
+                                                        Use this when the parent funding request is being posted for a
+                                                        person, family, group, or project.
                                                     </p>
                                                 </div>
                                             </div>
@@ -662,13 +716,18 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                 <div>
                                     <div className="mb-2 text-sm font-medium">Cover image</div>
                                     <MultiImageUploader
-                                        initialImages={ask?.coverImage ? [{ name: "Cover image", type: "image", fileInfo: ask.coverImage }] : []}
+                                        initialImages={
+                                            ask?.coverImage
+                                                ? [{ name: "Cover image", type: "image", fileInfo: ask.coverImage }]
+                                                : []
+                                        }
                                         maxImages={1}
                                         onChange={setCoverImageItems}
                                         previewMode="large"
                                     />
                                     <p className="mt-2 text-sm text-slate-600">
-                                        Optional. The selected image stays attached when you move between steps or save a draft.
+                                        Optional. The selected image stays attached when you move between steps or save
+                                        a draft.
                                     </p>
                                 </div>
                             </div>
@@ -686,12 +745,21 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         </CardHeader>
                                         <CardContent className="space-y-3 text-sm text-slate-600">
                                             {requestItems.map((item, index) => (
-                                                <div key={`${item.title}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                                                <div
+                                                    key={`${item.title}-${index}`}
+                                                    className="rounded-lg border border-slate-200 bg-white p-3"
+                                                >
                                                     <div className="flex flex-wrap items-start justify-between gap-3">
                                                         <div>
-                                                            <div className="font-medium text-slate-900">{item.title}</div>
+                                                            <div className="font-medium text-slate-900">
+                                                                {item.title}
+                                                            </div>
                                                             <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">
-                                                                {fundingCategoryOptions.find((option) => option.value === item.category)?.label}
+                                                                {
+                                                                    fundingCategoryOptions.find(
+                                                                        (option) => option.value === item.category,
+                                                                    )?.label
+                                                                }
                                                             </div>
                                                         </div>
                                                         <div className="text-sm font-medium text-slate-900">
@@ -739,7 +807,8 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                 <div>
                                                     <FormLabel>Publish to Noticeboard</FormLabel>
                                                     <p className="mt-1 text-sm text-slate-600">
-                                                        Create one linked Noticeboard post when this funding request is published.
+                                                        Create one linked Noticeboard post when this funding request is
+                                                        published.
                                                     </p>
                                                 </div>
                                             </div>
@@ -760,7 +829,11 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                         Back
                                     </Button>
                                     {stepIndex < steps.length - 1 ? (
-                                        <Button type="button" onClick={() => void goToStep(stepIndex + 1)} disabled={isSubmitting}>
+                                        <Button
+                                            type="button"
+                                            onClick={() => void goToStep(stepIndex + 1)}
+                                            disabled={isSubmitting}
+                                        >
                                             Next
                                         </Button>
                                     ) : null}
@@ -783,7 +856,11 @@ export function FundingForm({ circle, ask }: FundingFormProps) {
                                                     onClick={() => void handleSubmit("publish")}
                                                     disabled={isSubmitting}
                                                 >
-                                                    {isSubmitting ? "Saving..." : isEditing ? "Publish changes" : "Publish"}
+                                                    {isSubmitting
+                                                        ? "Saving..."
+                                                        : isEditing
+                                                          ? "Publish changes"
+                                                          : "Publish"}
                                                 </Button>
                                             </>
                                         ) : (

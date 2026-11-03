@@ -53,7 +53,15 @@ type RenderFieldProps = {
     isUser?: boolean;
 };
 
-export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField, collapse, readOnly, isUser }) => (
+export const DynamicTextField: React.FC<RenderFieldProps & { required?: boolean; maxLength?: number }> = ({
+    field,
+    formField,
+    collapse,
+    readOnly,
+    isUser,
+    required,
+    maxLength,
+}) => (
     <FormItem style={{ visibility: collapse ? "collapse" : "visible" }}>
         <FormLabel>{getUserOrCircleInfo(field.label, isUser)}</FormLabel>
         <FormControl>
@@ -63,6 +71,9 @@ export const DynamicTextField: React.FC<RenderFieldProps> = ({ field, formField,
                 autoComplete={field.autoComplete}
                 readOnly={readOnly}
                 disabled={field.disabled}
+                required={required}
+                aria-required={required || undefined}
+                maxLength={maxLength}
                 {...formField}
                 value={formField.value || ""}
             />

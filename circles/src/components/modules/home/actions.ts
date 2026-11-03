@@ -52,6 +52,7 @@ import {
     getAuthenticatedClientUserBoundary,
     getOwnedUserUpdateBoundary,
 } from "@/lib/data/client-user-boundary";
+import { validatePersonalProfileDisplayName } from "@/lib/profile-name-validation";
 
 type CircleActionResponse = {
     success: boolean;
@@ -390,6 +391,20 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
         if (ownerCircle.circleType === "user" && ownerCircle.did !== userDid) {
             return { success: false, message: "You are not authorized to edit this profile." };
         }
+
+        const personalNameEntries = formData.getAll("name");
+        let validatedPersonalName: string | undefined;
+        if (ownerCircle.circleType === "user" && personalNameEntries.length > 0) {
+            if (personalNameEntries.length !== 1) {
+                return { success: false, message: "Submit one display name at a time." };
+            }
+            const validation = validatePersonalProfileDisplayName(personalNameEntries[0]);
+            if (!validation.valid) {
+                return { success: false, message: validation.message };
+            }
+            validatedPersonalName = validation.name;
+        }
+
         let updateData: Partial<Circle> = { _id: circleId };
         const newlyUploadedMediaUrls: string[] = [];
 
@@ -413,8 +428,13 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
                     console.error("Failed to parse location data", e);
                 }
             } else {
+                if (key === "name" && ownerCircle.circleType === "user") continue;
                 updateData[key as keyof Circle] = value as string;
             }
+        }
+
+        if (validatedPersonalName !== undefined) {
+            updateData.name = validatedPersonalName;
         }
 
         const circleWithCover = ownerCircle as Circle & { cover?: { url?: string } };
