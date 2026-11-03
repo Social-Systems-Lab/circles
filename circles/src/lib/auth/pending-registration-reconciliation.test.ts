@@ -29,8 +29,18 @@ function collection(records: any[]) {
         },
         async findOne(filter: any) {
             return (
-                records.find((record) => Object.entries(filter).every(([key, value]) => record[key] === value)) ?? null
+                records.find((record) =>
+                    Object.entries(filter).every(([key, value]) =>
+                        Array.isArray(record[key]) && typeof value === "string"
+                            ? record[key].includes(value)
+                            : String(record[key]) === String(value),
+                    ),
+                ) ?? null
             );
+        },
+        async countDocuments(filter: any = {}) {
+            return records.filter((record) => Object.entries(filter).every(([key, value]) => record[key] === value))
+                .length;
         },
     };
 }
@@ -61,7 +71,7 @@ async function main() {
                 createdAt: new Date(),
             },
         ];
-        const circles = [
+        const circles: any[] = [
             {
                 _id: accountId,
                 did,
@@ -72,6 +82,18 @@ async function main() {
             },
         ];
         const members: any[] = [];
+        const chatRooms: any[] = [];
+        const chatRoomMembers: any[] = [];
+        const chatConversations: any[] = [];
+        const chatMessageDocs: any[] = [];
+        const membersChatId = new ObjectId();
+        const welcomeConversationId = new ObjectId();
+        chatRooms.push({ _id: membersChatId, circleId: accountId.toHexString(), handle: "members" });
+        chatConversations.push({
+            _id: welcomeConversationId,
+            handle: `welcome-${did}`,
+            participants: [did],
+        });
         const didReservations = [{ _id: pendingId.toHexString(), did, createdAt: new Date() }];
         const db = {
             collection(name: string) {
@@ -82,7 +104,17 @@ async function main() {
                           ? circles
                           : name === "pendingRegistrationDidReservations"
                             ? didReservations
-                            : members,
+                            : name === "members"
+                              ? members
+                              : name === "chatRooms"
+                                ? chatRooms
+                                : name === "chatRoomMembers"
+                                  ? chatRoomMembers
+                                  : name === "chatConversations"
+                                    ? chatConversations
+                                    : name === "chatMessageDocs"
+                                      ? chatMessageDocs
+                                      : [],
                 );
             },
         };
@@ -95,7 +127,27 @@ async function main() {
         assert.equal(recoverable.accountPublicKeyMatchesDid, true);
         assert.equal(recoverable.permanentAccountIdentityMatches, true);
         assert.equal(recoverable.selfMembershipExists, false);
+        assert.equal(recoverable.selfChatMembershipExists, false);
+        assert.equal(recoverable.membershipCountMatches, false, "the profile count is independently inspected");
+        assert.equal(recoverable.profileInitialized, false);
+        assert.equal(recoverable.welcomeConversationExists, true);
+        assert.equal(recoverable.welcomeMessageExists, false);
         assert.equal(JSON.stringify(recoverable).includes("opaque-encrypted-test-material"), false);
+
+        members.push({ userDid: did, circleId: accountId.toHexString() });
+        chatRoomMembers.push({ userDid: did, chatRoomId: membersChatId.toHexString() });
+        chatMessageDocs.push({ conversationId: welcomeConversationId.toHexString(), source: "system_welcome" });
+        circles[0].members = 1;
+        circles[0].isHuman = true;
+        circles[0].metadata.onboardingFlow = "pending-registration-v1";
+        circles[0].metadata.pendingRegistrationFinalizationVersion = 1;
+        const [completeEffects] = await inspectPendingRegistrationReconciliation(db as any, { usersDirectory: root });
+        assert.equal(completeEffects.selfMembershipExists, true);
+        assert.equal(completeEffects.selfChatMembershipExists, true);
+        assert.equal(completeEffects.membershipCountMatches, true);
+        assert.equal(completeEffects.profileInitialized, true);
+        assert.equal(completeEffects.welcomeConversationExists, true);
+        assert.equal(completeEffects.welcomeMessageExists, true);
 
         circles.length = 0;
         const [orphan] = await inspectPendingRegistrationReconciliation(db as any, { usersDirectory: root });

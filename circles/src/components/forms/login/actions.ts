@@ -94,6 +94,19 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
         lease = undefined;
         await clearSuccessfulLogin(successfulLease);
 
+        if (typeof user.metadata?.pendingRegistrationId === "string") {
+            const { finalizeClaimedRegistrationForAuthenticatedLogin } = await import(
+                "@/lib/auth/pending-registration-runtime"
+            );
+            if (!(await finalizeClaimedRegistrationForAuthenticatedLogin(user))) {
+                return {
+                    success: false,
+                    message:
+                        "Your account setup is still being safely completed. Please try again shortly or contact support.",
+                };
+            }
+        }
+
         let privateUser = await getUserPrivate(user.did!);
         await createUserSession(privateUser, user.did!);
 

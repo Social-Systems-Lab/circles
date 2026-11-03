@@ -242,6 +242,13 @@ export async function getDb() {
     return client.db(MONGODB_DATABASE);
 }
 
+export async function closeDbForTests() {
+    if (process.env.NODE_ENV !== "test") {
+        throw new Error("Database shutdown helper is available only in test mode");
+    }
+    if (client) await client.close();
+}
+
 let requiredChatIndexesReady: Promise<void> | undefined;
 
 export function ensureRequiredChatIndexes(): Promise<void> {

@@ -34,9 +34,9 @@ async function main() {
     const [{ createCircle, updateCircle }, { createNewUser, updateUser }, { createUserAccount }] =
         await productionModules;
 
-    function circleHarness(options: { conflict?: Circle } = {}) {
+    function circleHarness(options: { conflict?: Circle; current?: Circle } = {}) {
         const calls: PersistenceCalls = { finds: [], updates: [] };
-        const current = existingUser();
+        const current = options.current ?? existingUser();
         return {
             calls,
             dependencies: {
@@ -55,6 +55,51 @@ async function main() {
                 updateChatRoom: async () => undefined,
             },
         };
+    }
+
+    {
+        const current = existingUser({
+            metadata: { pendingRegistrationId: "pending-123", pendingRegistrationFinalizationVersion: 1 },
+        });
+        const harness = circleHarness({ current });
+        await updateCircle(
+            {
+                _id: id,
+                metadata: {
+                    pendingRegistrationId: "attacker-controlled",
+                    pendingRegistrationFinalizationVersion: 0,
+                    onboardingFlow: { version: 1, currentCard: "introduction" },
+                },
+                "metadata.pendingRegistrationId": "also-attacker-controlled",
+                "metadata.pendingRegistrationFinalizationVersion": 2,
+            } as Partial<Circle>,
+            did,
+            harness.dependencies,
+        );
+        const persisted = (harness.calls.updates[0].update as any).$set;
+        assert.equal(persisted.metadata.pendingRegistrationId, "pending-123");
+        assert.equal(persisted.metadata.pendingRegistrationFinalizationVersion, 1);
+        assert.deepEqual(persisted.metadata.onboardingFlow, { version: 1, currentCard: "introduction" });
+        assert.equal(Object.hasOwn(persisted, "metadata.pendingRegistrationId"), false);
+        assert.equal(Object.hasOwn(persisted, "metadata.pendingRegistrationFinalizationVersion"), false);
+    }
+
+    {
+        const harness = circleHarness();
+        await updateCircle(
+            {
+                _id: id,
+                metadata: {
+                    pendingRegistrationId: "forged-registration-id",
+                    pendingRegistrationFinalizationVersion: 1,
+                },
+            } as Partial<Circle>,
+            did,
+            harness.dependencies,
+        );
+        const persisted = (harness.calls.updates[0].update as any).$set;
+        assert.equal(Object.hasOwn(persisted.metadata, "pendingRegistrationId"), false);
+        assert.equal(Object.hasOwn(persisted.metadata, "pendingRegistrationFinalizationVersion"), false);
     }
 
     function userHarness(options: { conflict?: Circle } = {}) {

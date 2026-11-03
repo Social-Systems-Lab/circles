@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
 import {
@@ -225,18 +226,35 @@ export const ensureWelcomeMessageForNewUser = async (
         archived: { $ne: true },
     })) as ChatConversation | null;
 
-    const conversation =
-        existingConversation ||
-        (await createConversation({
-            type: "dm",
-            name: config.threadName,
-            handle: welcomeHandle,
-            participants: [userDid],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            picture: { url: canonicalSender.avatarUrl },
-            metadata: welcomeMetadata,
-        }));
+    let conversation = existingConversation;
+    if (!conversation) {
+        const deterministicId = new ObjectId(
+            crypto.createHash("sha256").update(welcomeHandle).digest("hex").slice(0, 24),
+        );
+        try {
+            conversation = await createConversation({
+                _id: deterministicId,
+                type: "dm",
+                name: config.threadName,
+                handle: welcomeHandle,
+                participants: [userDid],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                picture: { url: canonicalSender.avatarUrl },
+                metadata: welcomeMetadata,
+            });
+        } catch (error) {
+            if ((error as { code?: number }).code !== 11000) throw error;
+            conversation = (await ChatConversations.findOne({ _id: deterministicId })) as ChatConversation | null;
+            if (
+                !conversation ||
+                conversation.handle !== welcomeHandle ||
+                !conversation.participants?.includes(userDid)
+            ) {
+                throw error;
+            }
+        }
+    }
 
     const conversationId = String(conversation._id);
     const conversationObjectId = toObjectId(conversationId);
@@ -282,7 +300,14 @@ export const ensureWelcomeMessageForNewUser = async (
         return { conversationId, messageCreated: false };
     }
 
-    await createMessage({
+    const idempotentWelcome = await createIdempotentMessage({
+        _id: new ObjectId(
+            crypto
+                .createHash("sha256")
+                .update(`welcome-message:${userDid}:${config.source}`)
+                .digest("hex")
+                .slice(0, 24),
+        ),
         conversationId,
         senderDid: systemSenderDid,
         body: config.markdown,
@@ -291,9 +316,10 @@ export const ensureWelcomeMessageForNewUser = async (
         source: config.source,
         version: config.version,
         system: welcomeSystemMetadata,
+        submissionId: `welcome:${userDid}:${config.source}`,
     });
 
-    return { conversationId, messageCreated: true };
+    return { conversationId, messageCreated: idempotentWelcome.created };
 };
 
 export const ensureConversationForCircle = async (circleId: string): Promise<ChatConversation> => {
