@@ -3,6 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import net from "net";
 import { MongoClient, ObjectId } from "mongodb";
 import {
     ensurePendingRegistrationIndexes,
@@ -21,8 +22,30 @@ async function main() {
     if (!/^circles_stage1a_test_pending_[a-z0-9_-]+$/i.test(databaseName)) {
         throw new Error("Integration test database must use the circles_stage1a_test_pending_* safety prefix");
     }
+    const parsedUri = new URL(uri);
+    const uriDatabaseName = decodeURIComponent(parsedUri.pathname.replace(/^\//, ""));
+    if (
+        parsedUri.protocol !== "mongodb:" ||
+        parsedUri.hostname !== "127.0.0.1" ||
+        parsedUri.port !== "27019" ||
+        net.isIP(parsedUri.hostname) !== 4 ||
+        parsedUri.username ||
+        parsedUri.password ||
+        parsedUri.search ||
+        uriDatabaseName !== databaseName
+    ) {
+        throw new Error("Integration test requires the dedicated loopback MongoDB endpoint and matching database URI");
+    }
     const client = new MongoClient(uri);
-    const usersDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "pending-registration-integration-"));
+    const projectDirectory = path.resolve(process.cwd());
+    const tempRoot = path.resolve(os.tmpdir());
+    if (tempRoot === projectDirectory || tempRoot.startsWith(`${projectDirectory}${path.sep}`)) {
+        throw new Error("System temporary directory must be outside the project before creating test credentials");
+    }
+    const usersDirectory = fs.mkdtempSync(path.join(tempRoot, "pending-registration-integration-"));
+    if (path.resolve(usersDirectory).startsWith(`${projectDirectory}${path.sep}`)) {
+        throw new Error("Integration credentials directory must be outside the project");
+    }
     try {
         await client.connect();
         const db = client.db(databaseName);
