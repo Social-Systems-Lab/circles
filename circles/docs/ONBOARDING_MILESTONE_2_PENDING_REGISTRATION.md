@@ -140,6 +140,6 @@ Milestone 3 must make one coordinated server-side routing switch: once the pendi
 
 - Add the UI/server-action boundary and challenge-issuance endpoint with the provided distributed rate-limit helper.
 - Build and review an operator-only orphan inspection/import tool before production activation; Milestone 2 intentionally fails closed instead of deleting or replacing key material.
-- Confirm the email template and `/register/verify` route naming before exposing links.
+- Pending-registration verification emails use `/signup/verify`, which consumes the `token` query parameter.
 - Ensure rollout atomically switches the active signup action rather than running legacy and pending provisioning concurrently for the same address or across mixed-version instances.
 - Add monitoring for expired pending records with `reservedDid` before TTL cleanup removes their correlation record.
