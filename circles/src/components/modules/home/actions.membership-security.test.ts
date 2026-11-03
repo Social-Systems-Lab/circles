@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import * as constants from "@/lib/data/constants";
 // @ts-expect-error Bun provides its test and mock APIs at runtime.
 import { beforeEach, mock, test } from "bun:test";
 
@@ -10,6 +11,7 @@ const state = {
     membershipRequests: new Map<string, any>(),
     updatedRequests: [] as Array<{ requestId: string; status: "approved" | "rejected" }>,
     operations: [] as string[],
+    updates: [] as Array<Record<string, unknown>>,
 };
 
 mock.module("@/lib/auth/jwt", () => ({ verifyUserToken: async () => ({ userDid: "did:viewer" }) }));
@@ -38,7 +40,7 @@ mock.module("@/lib/data/membership-requests", () => ({
 mock.module("@/lib/data/circle", () => ({
     getCircleById: async () => state.circle,
     getCirclePath: async () => "/circles/test/",
-    updateCircle: async () => undefined,
+    updateCircle: async (update: Record<string, unknown>) => void state.updates.push(update),
     getCircleByDid: async () => undefined,
     getDiscoverableCirclesByIds: async () => [],
 }));
@@ -48,14 +50,25 @@ mock.module("@/lib/data/circle-detach", () => ({
 }));
 mock.module("@/lib/auth/auth", () => ({
     getAuthenticatedUserDid: async () => "did:viewer",
+    getMemberAccessLevel: async () => 0,
     getAuthorizedMembers: async () => [],
     isAuthorized: async () => true,
 }));
-mock.module("@/lib/data/constants", () => ({ features: { general: { manage_membership_requests: {} } } }));
+mock.module("@/lib/data/constants", () => ({
+    ...constants,
+    features: {
+        general: { manage_membership_requests: {} },
+        settings: { edit_about: {} },
+    },
+}));
 mock.module("@/lib/data/storage", () => ({ saveFile: async () => undefined }));
 mock.module("@/lib/data/circle-media-storage", () => ({
+    cleanupCircleOwnedMedia: async () => undefined,
     collectReplacedCircleMedia: () => [],
-    persistCircleThenCleanupMedia: async () => undefined,
+    persistCircleThenCleanupMedia: async (persist: () => Promise<unknown>) => {
+        await persist();
+        return { status: "success" };
+    },
     saveCircleOwnedFile: async () => undefined,
 }));
 mock.module("next/cache", () => ({ revalidatePath: () => undefined }));
@@ -97,7 +110,7 @@ mock.module("@/lib/data/client-user-boundary", () => ({
     getOwnedUserUpdateBoundary: async () => undefined,
 }));
 
-const { followCircle } = await import("./actions");
+const { followCircle, updateCircleField } = await import("./actions");
 const { approveMembershipRequestAction, rejectMembershipRequestAction } = await import(
     "../membership-requests/actions"
 );
@@ -121,6 +134,58 @@ beforeEach(() => {
     state.membershipRequests.clear();
     state.updatedRequests = [];
     state.operations = [];
+    state.updates = [];
+});
+
+test("inline personal-profile name updates reject empty, whitespace, and too-short values before persistence", async () => {
+    state.circle = {
+        _id: "personal-profile-id",
+        circleType: "user",
+        did: "did:viewer",
+        handle: "profile-handle",
+        name: "Existing Name",
+    };
+
+    for (const name of ["", "   ", "A", "N".repeat(101)]) {
+        const formData = new FormData();
+        formData.append("name", name);
+        const result = await updateCircleField("personal-profile-id", formData);
+
+        assert.equal(result.success, false);
+        assert.equal(result.message, "Enter your name (2–100 characters).");
+        assert.deepEqual(state.updates, []);
+    }
+});
+
+test("inline personal-profile name updates save a normalized name without changing handle or DID", async () => {
+    state.circle = {
+        _id: "personal-profile-id",
+        circleType: "user",
+        did: "did:viewer",
+        handle: "profile-handle",
+        name: "Existing Name",
+    };
+    const formData = new FormData();
+    formData.append("name", "  Jordan Member  ");
+
+    const result = await updateCircleField("personal-profile-id", formData);
+
+    assert.equal(result.success, true);
+    assert.equal(state.updates.length, 1);
+    assert.equal(state.updates[0].name, "Jordan Member");
+    assert.equal(state.updates[0].handle, undefined);
+    assert.equal(Object.hasOwn(state.updates[0], "did"), false);
+});
+
+test("inline editor keeps non-personal circle name behavior unchanged", async () => {
+    state.circle = { _id: "circle-id", circleType: "circle", did: "did:circle-owner", handle: "community" };
+    const formData = new FormData();
+    formData.append("name", "");
+
+    const result = await updateCircleField("circle-id", formData);
+
+    assert.equal(result.success, true);
+    assert.equal(state.updates[0]?.name, "");
 });
 
 test("Secret Circles reject the ordinary follow flow without creating a request", async () => {

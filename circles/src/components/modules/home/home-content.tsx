@@ -247,7 +247,12 @@ export default function HomeContent({
                                 <div className="flex min-w-0 flex-wrap items-center gap-4">
                                     <h4 className="m-0 p-0 text-4xl font-bold text-gray-800">
                                         {authorizedToEdit ? (
-                                            <EditableField id="name" value={circle.name ?? ""} circleId={circle._id!} />
+                                            <EditableField
+                                                id="name"
+                                                value={circle.name ?? ""}
+                                                circleId={circle._id!}
+                                                isPersonalProfile={isUser}
+                                            />
                                         ) : (
                                             circle.name
                                         )}

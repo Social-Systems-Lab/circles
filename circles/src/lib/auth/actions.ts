@@ -188,7 +188,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
             password: newPassword, // Zod schema uses 'password'
         });
         if (!result.success) {
-            const errors = result.error.errors.map((e) => e.message).join(", ");
+            const errors = result.error.issues.map((e) => e.message).join(", ");
             return { success: false, error: `Invalid input: ${errors}` };
         }
 

@@ -9,16 +9,9 @@ import { sendEmail } from "@/lib/data/email";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendVerificationRequestNotification } from "@/lib/data/notifications";
 import { getVerificationStatus as getStatus } from "@/lib/data/user";
-import {
-    buildVerifiedUserSet,
-    getRestrictedActionMessage,
-    isVerifiedUser,
-} from "@/lib/auth/verification";
+import { buildVerifiedUserSet, getRestrictedActionMessage, isVerifiedUser } from "@/lib/auth/verification";
 import { isCommunityGuidelinesCompleted } from "@/lib/community-guidelines";
-import {
-    ACTIVE_VERIFICATION_REQUEST_STATUSES,
-    createVerificationRequest,
-} from "@/lib/data/verification-workflow";
+import { ACTIVE_VERIFICATION_REQUEST_STATUSES, createVerificationRequest } from "@/lib/data/verification-workflow";
 import { getVerificationReadiness, type VerificationReadiness } from "@/lib/verification-readiness";
 
 export async function getVerificationStatus() {
@@ -170,15 +163,14 @@ export async function verifyUserByInviteAction(
 
         const parsed = verifyUserByInviteSchema.safeParse({ targetIdentifier });
         if (!parsed.success) {
-            return { success: false, message: parsed.error.errors[0]?.message || "Invalid target user." };
+            return { success: false, message: parsed.error.issues[0]?.message || "Invalid target user." };
         }
 
         const normalizedIdentifier = parsed.data.targetIdentifier.trim();
         const targetUser =
             (ObjectId.isValid(normalizedIdentifier)
                 ? await Circles.findOne({ _id: new ObjectId(normalizedIdentifier), circleType: "user" })
-                : null) ||
-            (await Circles.findOne({ did: normalizedIdentifier, circleType: "user" }));
+                : null) || (await Circles.findOne({ did: normalizedIdentifier, circleType: "user" }));
 
         if (!targetUser) {
             return { success: false, message: "User not found." };

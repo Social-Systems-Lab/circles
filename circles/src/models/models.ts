@@ -180,7 +180,7 @@ export const moduleSchema = z.object({
     name: z.string(),
     handle: handleSchema,
     description: z.string(),
-    component: z.any(),
+    component: z.any().optional(),
     layoutComponent: z.any().optional(),
     excludeFromMenu: z.boolean().optional(),
     defaultIcon: z.string().optional(),
@@ -1838,7 +1838,7 @@ export const eventSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
-    noticeboardPostIdsByCircleId: z.record(z.string()).optional(), // Linked noticeboard posts by host circle
+    noticeboardPostIdsByCircleId: z.record(z.string(), z.string()).optional(), // Linked noticeboard posts by host circle
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
     // Format
     isVirtual: z.boolean().optional(),
