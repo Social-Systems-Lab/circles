@@ -14,6 +14,16 @@ new_fixture() {
   local root="$TEMP_ROOT/$name"
   mkdir -p "$root/src"
   printf 'export const safe = true;\n' >"$root/src/safe.ts"
+  cat >"$root/docker-compose.yml" <<'YAML'
+services:
+  circles:
+    build:
+      args:
+        KAMOONI_DEPLOYMENT_ROLE: production
+    environment:
+      - EMAIL_TRANSPORT=postmark
+YAML
+  printf 'ARG KAMOONI_DEPLOYMENT_ROLE=production\n' >"$root/Dockerfile"
   printf '%s\n' "$root"
 }
 
@@ -68,7 +78,6 @@ done
 
 for signature in \
   EMAIL_CAPTURE_ENABLED \
-  EMAIL_TRANSPORT \
   KAMOONI_DEPLOYMENT_ENV \
   stagingCapturedEmails \
   storeCapturedEmail \
@@ -82,6 +91,39 @@ for signature in \
   printf '// %s\n' "$signature" >"$fixture/src/signature.ts"
   expect_fail "$signature" "$fixture"
 done
+
+shared_router_fixture="$(new_fixture shared-router-safe-production)"
+mkdir -p "$shared_router_fixture/src/lib/data"
+cat >"$shared_router_fixture/src/lib/data/email.ts" <<'TS'
+import { readFileSync } from "node:fs";
+const DEPLOYMENT_ROLE_FILE = "/app/.kamooni-deployment-role";
+function runtimeDeploymentRole() { return readFileSync(DEPLOYMENT_ROLE_FILE, "utf8"); }
+export function resolveEmailTransportConfiguration() { return runtimeDeploymentRole(); }
+TS
+expect_pass "shared email router with production-pinned Postmark" "$shared_router_fixture"
+
+runtime_role_override_fixture="$(new_fixture runtime-role-environment-override)"
+mkdir -p "$runtime_role_override_fixture/src/lib/data"
+cat >"$runtime_role_override_fixture/src/lib/data/email.ts" <<'TS'
+import { readFileSync } from "node:fs";
+const DEPLOYMENT_ROLE_FILE = "/app/.kamooni-deployment-role";
+function runtimeDeploymentRole() {
+  return process.env.KAMOONI_DEPLOYMENT_ROLE || readFileSync(DEPLOYMENT_ROLE_FILE, "utf8");
+}
+export function resolveEmailTransportConfiguration() { return runtimeDeploymentRole(); }
+TS
+expect_fail "runtime environment override of the deployment role" "$runtime_role_override_fixture"
+
+mailpit_production_fixture="$(new_fixture mailpit-production-compose)"
+printf 'services:\n  circles:\n    environment:\n      - EMAIL_TRANSPORT=mailpit\n  mailpit:\n    image: axllent/mailpit:v1.33.0\n' >"$mailpit_production_fixture/docker-compose.yml"
+printf 'export function resolveEmailTransportConfiguration() {}\n' >"$mailpit_production_fixture/src/email.ts"
+expect_fail "Mailpit in production Compose" "$mailpit_production_fixture"
+
+wrong_role_fixture="$(new_fixture wrong-production-image-role)"
+printf 'export function resolveEmailTransportConfiguration() {}\n' >"$wrong_role_fixture/src/email.ts"
+printf 'services:\n  circles:\n    environment:\n      - EMAIL_TRANSPORT=postmark\n' >"$wrong_role_fixture/docker-compose.yml"
+printf 'ARG KAMOONI_DEPLOYMENT_ROLE=staging\n' >"$wrong_role_fixture/Dockerfile"
+expect_fail "staging role in production image" "$wrong_role_fixture"
 
 allowed_fixture="$(new_fixture allowed-staging-material)"
 mkdir -p "$allowed_fixture/docs"

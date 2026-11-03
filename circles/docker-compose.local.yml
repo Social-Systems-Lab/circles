@@ -35,6 +35,27 @@ services:
         networks:
             - webnet
 
+    mailpit:
+        image: axllent/mailpit:v1.33.0
+        environment:
+            MP_UI_BIND_ADDR: "0.0.0.0:8025"
+            MP_SMTP_BIND_ADDR: "0.0.0.0:1025"
+            MP_ALLOWED_HOSTS: "localhost,127.0.0.1"
+            MP_MAX_MESSAGES: "100"
+            MP_MAX_AGE: "24h"
+            MP_MAX_MESSAGE_SIZE: "2"
+            MP_DISABLE_VERSION_CHECK: "true"
+            MP_SMTP_RELAY_ALL: "false"
+            MP_SMTP_RELAY_MATCHING: ""
+            MP_SMTP_RELAY_CONFIG: ""
+            MP_SMTP_FORWARD_CONFIG: ""
+        ports:
+            - "127.0.0.1:8025:8025"
+            - "127.0.0.1:1025:1025"
+        restart: unless-stopped
+        networks:
+            - webnet
+
     qdrant:
         image: qdrant/qdrant
         env_file:

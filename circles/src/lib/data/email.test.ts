@@ -1,85 +1,212 @@
 import assert from "node:assert/strict";
-// @ts-expect-error Bun provides test and module-mocking APIs at runtime; Bun types are not installed.
-import { afterAll, mock, test } from "bun:test";
+// @ts-expect-error Bun provides test at runtime; Bun types are not installed.
+import { test } from "bun:test";
+import {
+    EmailDeliveryError,
+    resolveEmailTransportConfiguration,
+    sendEmailWithDependencies,
+    type EmailOptions,
+    type EmailSenderDependencies,
+} from "./email";
 
-type CapturedTemplateMessage = {
-    from: string;
-    templateAlias: string;
-    templateModel: Record<string, unknown>;
-    to: string;
+const token = "verification-token+/?=";
+const verificationUrl = `https://staging.kamooni.org/signup/verify?token=${encodeURIComponent(token)}`;
+const emailOptions: EmailOptions = {
+    to: "test-member@example.invalid",
+    templateAlias: "email-verification",
+    templateModel: { name: "Test Member", actionUrl: verificationUrl },
 };
 
-const originalToken = process.env.POSTMARK_API_TOKEN;
-const originalSender = process.env.POSTMARK_SENDER_EMAIL;
-process.env.POSTMARK_API_TOKEN = "postmark-test-token";
-process.env.POSTMARK_SENDER_EMAIL = "test-sender@example.invalid";
-
-let constructedClientToken: string | undefined;
-const constructedMessages: CapturedTemplateMessage[] = [];
-let sendFailure: Error | undefined;
-
-class MockTemplatedMessage implements CapturedTemplateMessage {
-    constructor(
-        public from: string,
-        public templateAlias: string,
-        public templateModel: Record<string, unknown>,
-        public to: string,
-    ) {}
+function harness(
+    role: EmailSenderDependencies["role"],
+    env: Record<string, string | undefined>,
+    overrides: Partial<EmailSenderDependencies> = {},
+) {
+    const calls = { postmark: 0, mailpit: 0 };
+    const captured: unknown[] = [];
+    const logs: Array<{ event: string; details: Record<string, string> }> = [];
+    const dependencies: EmailSenderDependencies = {
+        role,
+        env,
+        sendPostmark: async (configuration, options) => {
+            calls.postmark += 1;
+            captured.push({ configuration, options });
+            return { MessageID: "test-message-id" };
+        },
+        sendMailpit: async (configuration, message) => {
+            calls.mailpit += 1;
+            captured.push({ configuration, message });
+            return { messageId: "test-mailpit-message-id" };
+        },
+        logError: (event, details) => logs.push({ event, details }),
+        ...overrides,
+    };
+    return { dependencies, calls, captured, logs };
 }
 
-class MockServerClient {
-    constructor(token: string) {
-        constructedClientToken = token;
-    }
+const stagingConfig = {
+    EMAIL_TRANSPORT: "mailpit",
+    MAILPIT_SMTP_HOST: "mailpit",
+    MAILPIT_SMTP_PORT: "1025",
+    POSTMARK_API_TOKEN: "",
+    POSTMARK_SENDER_EMAIL: "",
+    CIRCLES_URL: "https://staging.kamooni.org",
+};
 
-    async sendEmailWithTemplate(message: CapturedTemplateMessage) {
-        constructedMessages.push(message);
-        if (sendFailure) throw sendFailure;
-        return { MessageID: "disposable-postmark-test-message" };
-    }
-}
-
-mock.module("postmark", () => ({
-    ServerClient: MockServerClient,
-    TemplatedMessage: MockTemplatedMessage,
-}));
-
-const { sendEmail } = await import("./email");
-
-test("sendEmail constructs and sends a Postmark templated message", async () => {
-    constructedMessages.length = 0;
-    sendFailure = undefined;
-
-    await sendEmail({
-        to: "member@example.invalid",
-        templateAlias: "welcome",
-        templateModel: { name: "Member", actionUrl: "https://kamooni.example/verify" },
+test("production Postmark transport preserves templated-message dispatch", async () => {
+    const testHarness = harness("production", {
+        EMAIL_TRANSPORT: "postmark",
+        POSTMARK_API_TOKEN: "test-postmark-token",
+        POSTMARK_SENDER_EMAIL: "sender@example.invalid",
     });
 
-    assert.equal(constructedClientToken, "postmark-test-token");
-    const actual = constructedMessages[0];
-    assert.ok(actual);
-    assert.equal(actual.from, "test-sender@example.invalid");
-    assert.equal(actual.templateAlias, "welcome");
-    assert.equal(actual.to, "member@example.invalid");
-    assert.equal(actual.templateModel.name, "Member");
-    assert.equal(actual.templateModel.action_url, "https://kamooni.example/verify");
-    assert.equal(actual.templateModel.product_name, "Kamooni");
+    await sendEmailWithDependencies(emailOptions, testHarness.dependencies);
+
+    assert.equal(testHarness.calls.postmark, 1);
+    assert.equal(testHarness.calls.mailpit, 0);
+    assert.equal(testHarness.logs.length, 0);
 });
 
-test("sendEmail wraps provider failures without changing successful call semantics", async () => {
-    sendFailure = new Error("provider unavailable");
+test("Postmark delivery failures reject with a sanitized error and log no message secrets", async () => {
+    const testHarness = harness(
+        "production",
+        {
+            EMAIL_TRANSPORT: "postmark",
+            POSTMARK_API_TOKEN: "test-postmark-token",
+            POSTMARK_SENDER_EMAIL: "sender@example.invalid",
+        },
+        {
+            sendPostmark: async () => {
+                throw Object.assign(new Error(`failed ${verificationUrl} for ${emailOptions.to}`), {
+                    code: "ECONNRESET",
+                });
+            },
+        },
+    );
 
-    await assert.rejects(sendEmail({ to: "member@example.invalid", templateAlias: "verify", templateModel: {} }), {
-        message: "Failed to send email: provider unavailable",
+    await assert.rejects(sendEmailWithDependencies(emailOptions, testHarness.dependencies), EmailDeliveryError);
+
+    const logged = JSON.stringify(testHarness.logs);
+    assert.equal(testHarness.logs[0]?.details.error, "ECONNRESET");
+    assert.doesNotMatch(logged, /verification-token|staging\.kamooni|test-member|example\.invalid/);
+});
+
+test("Mailpit captures the pending verification link without changing its encoded token", async () => {
+    const testHarness = harness("staging", stagingConfig);
+
+    await sendEmailWithDependencies(emailOptions, testHarness.dependencies);
+
+    assert.equal(testHarness.calls.mailpit, 1);
+    assert.equal(testHarness.calls.postmark, 0);
+    const captured = testHarness.captured[0] as { message: { text: string; html: string; to: string } };
+    assert.equal(captured.message.to, emailOptions.to);
+    assert.ok(captured.message.text.includes(verificationUrl));
+    assert.ok(captured.message.html.includes(verificationUrl.replaceAll("&", "&amp;")));
+    assert.equal(testHarness.logs.length, 0);
+});
+
+test("Mailpit rejects unsupported templates and routes without sending", async () => {
+    const testHarness = harness("staging", stagingConfig);
+    const unsupported = { ...emailOptions, templateAlias: "password-reset" };
+
+    await assert.rejects(sendEmailWithDependencies(unsupported, testHarness.dependencies), EmailDeliveryError);
+    assert.equal(testHarness.calls.mailpit, 0);
+    assert.equal(testHarness.calls.postmark, 0);
+
+    const externalUrl = { ...emailOptions, templateModel: { actionUrl: "https://evil.example/signup/verify?token=x" } };
+    await assert.rejects(sendEmailWithDependencies(externalUrl, testHarness.dependencies), EmailDeliveryError);
+    assert.equal(testHarness.calls.mailpit, 0);
+
+    const wrongPath = {
+        ...emailOptions,
+        templateModel: { actionUrl: `https://staging.kamooni.org/register/verify?token=${encodeURIComponent(token)}` },
+    };
+    await assert.rejects(sendEmailWithDependencies(wrongPath, testHarness.dependencies), EmailDeliveryError);
+    assert.equal(testHarness.calls.mailpit, 0);
+});
+
+test("Mailpit supports the existing account verification route without enabling other templates", async () => {
+    const testHarness = harness("staging", stagingConfig);
+    const legacyVerification = {
+        ...emailOptions,
+        templateModel: {
+            name: "Existing Member",
+            actionUrl: "https://staging.kamooni.org/verify-email?token=legacy-token",
+        },
+    };
+
+    await sendEmailWithDependencies(legacyVerification, testHarness.dependencies);
+    assert.equal(testHarness.calls.mailpit, 1);
+    assert.equal(testHarness.calls.postmark, 0);
+});
+
+test("missing or invalid transport configuration fails closed", async () => {
+    for (const [role, env] of [
+        ["development", {}],
+        ["production", { EMAIL_TRANSPORT: "mailpit", POSTMARK_API_TOKEN: "x", POSTMARK_SENDER_EMAIL: "x" }],
+        [
+            "staging",
+            { ...stagingConfig, EMAIL_TRANSPORT: "postmark", POSTMARK_API_TOKEN: "", POSTMARK_SENDER_EMAIL: "" },
+        ],
+        ["staging", { ...stagingConfig, POSTMARK_API_TOKEN: "accidental-secret" }],
+        ["staging", { ...stagingConfig, MAILPIT_SMTP_HOST: "smtp.external.example" }],
+        ["staging", { ...stagingConfig, CIRCLES_URL: "https://kamooni.org" }],
+    ] as Array<[EmailSenderDependencies["role"], Record<string, string | undefined>]>) {
+        assert.throws(() => resolveEmailTransportConfiguration(role, env), EmailDeliveryError);
+        const testHarness = harness(role, env);
+        await assert.rejects(sendEmailWithDependencies(emailOptions, testHarness.dependencies), EmailDeliveryError);
+        assert.equal(testHarness.calls.postmark, 0);
+        assert.equal(testHarness.calls.mailpit, 0);
+    }
+});
+
+test("production requires both Postmark credentials and never accepts Mailpit", () => {
+    for (const env of [
+        { EMAIL_TRANSPORT: "postmark", POSTMARK_SENDER_EMAIL: "sender@example.invalid" },
+        { EMAIL_TRANSPORT: "postmark", POSTMARK_API_TOKEN: "test-postmark-token" },
+        {
+            EMAIL_TRANSPORT: "mailpit",
+            POSTMARK_API_TOKEN: "test-postmark-token",
+            POSTMARK_SENDER_EMAIL: "sender@example.invalid",
+        },
+    ]) {
+        assert.throws(() => resolveEmailTransportConfiguration("production", env), EmailDeliveryError);
+    }
+});
+
+test("unavailable SMTP rejects and never falls back to Postmark", async () => {
+    const testHarness = harness("staging", stagingConfig, {
+        sendMailpit: async () => {
+            throw Object.assign(new Error(`socket failure ${verificationUrl}`), { code: "ECONNREFUSED" });
+        },
     });
 
-    sendFailure = undefined;
+    await assert.rejects(sendEmailWithDependencies(emailOptions, testHarness.dependencies), EmailDeliveryError);
+
+    assert.equal(testHarness.calls.postmark, 0);
+    const logged = JSON.stringify(testHarness.logs);
+    assert.equal(testHarness.logs[0]?.details.error, "ECONNREFUSED");
+    assert.doesNotMatch(logged, /verification-token|staging\.kamooni|test-member/);
 });
 
-afterAll(() => {
-    if (originalToken === undefined) delete process.env.POSTMARK_API_TOKEN;
-    else process.env.POSTMARK_API_TOKEN = originalToken;
-    if (originalSender === undefined) delete process.env.POSTMARK_SENDER_EMAIL;
-    else process.env.POSTMARK_SENDER_EMAIL = originalSender;
+test("local development requires explicit loopback Mailpit configuration", () => {
+    assert.throws(() => resolveEmailTransportConfiguration("development", {}), EmailDeliveryError);
+    assert.throws(
+        () =>
+            resolveEmailTransportConfiguration("development", {
+                EMAIL_TRANSPORT: "mailpit",
+                MAILPIT_SMTP_HOST: "smtp.example.com",
+                MAILPIT_SMTP_PORT: "25",
+                CIRCLES_URL: "https://kamooni.org",
+            }),
+        EmailDeliveryError,
+    );
+    assert.doesNotThrow(() =>
+        resolveEmailTransportConfiguration("development", {
+            EMAIL_TRANSPORT: "mailpit",
+            MAILPIT_SMTP_HOST: "127.0.0.1",
+            MAILPIT_SMTP_PORT: "1025",
+            CIRCLES_URL: "http://localhost:3000",
+        }),
+    );
 });

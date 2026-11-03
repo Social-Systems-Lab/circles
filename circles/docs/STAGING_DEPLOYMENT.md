@@ -10,7 +10,7 @@ The staging environment and its `/api/version` response were verified at commit 
 
 The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
 
-Staging MongoDB, MinIO, and email-capture configuration use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. Never use production deployment scripts, credentials, data, or volumes for staging. Staging-only email capture must never enter a production release branch.
+Staging MongoDB and MinIO use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. The staging Compose changes add an ephemeral Mailpit sink; the current live staging host has not been changed or verified with Mailpit yet. Never use production deployment scripts, credentials, data, or volumes for staging. Mailpit is absent from production Compose, and the production image rejects its transport.
 
 Treat the staging database and object storage as persistent. Tests requiring disposable databases must use separate isolated test instances; never run destructive integration tests against staging's persistent database. Never automatically delete Docker volumes, databases, or persistent storage.
 
@@ -63,6 +63,28 @@ mongodb://ENCODED_STAGING_USERNAME:ENCODED_STAGING_PASSWORD@db:27017/circles?aut
 Do not place generated values in `.env.staging.example` or any tracked file. The deploy script rejects blanks, placeholders, weak values, reused independent secrets, mismatched Mongo credentials, and any Mongo endpoint other than `mongodb://db:27017/circles?authSource=admin`.
 
 Initial staging forcibly disables the registry, OpenAI, Postmark, Telegram bot, Donorbox, Stripe, and VibeID issuer through the Compose override even if `.env.staging` contains values. `TELEGRAM_WEBHOOK_SECRET` remains a unique defensive secret, but no Telegram bot username/token is active and no webhook should be registered. Payments and vector search are forced off. Mapbox is intentionally disabled initially. Use test data only.
+
+## Staging email capture (Mailpit)
+
+The staging Compose override selects Mailpit explicitly for email and continues to force `POSTMARK_API_TOKEN` and `POSTMARK_SENDER_EMAIL` empty. The app image is marked as a staging build; it accepts Mailpit only when that immutable image role, transport, staging URL, and internal Mailpit host/port all agree. Staging supports the pending-registration verification link and the existing `/verify-email` compatibility link; other email templates and verification destinations fail closed. There is no Postmark fallback.
+
+Mailpit is attached only to an internal Docker network shared by the app. SMTP port `1025` is not published on the host. The web UI/API port `8025` is published only as `127.0.0.1:8025`; it is not routed through public NGINX. Mailpit has no relay or forwarding configuration, is isolated from external network egress, stores no persistent volume, and prunes messages after 72 hours or when the 100-message bound is exceeded. Captured verification links are credentials: use staging test identities only and restrict UI access to staging SSH operators.
+
+Once the reviewed infrastructure change is present in the staging infrastructure checkout, deploy the reviewed application branch with the existing staging deployment script. It starts Mailpit with the other required services. On the staging VM, check service status with:
+
+```bash
+docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml ps circles db minio mailpit nginx
+```
+
+From the local Mac terminal, open a private SSH tunnel:
+
+```bash
+ssh -i ~/.ssh/kamooni_staging -o IdentitiesOnly=yes -N -L 8025:127.0.0.1:8025 ubuntu@188.95.227.109
+```
+
+While that command remains open, visit <http://127.0.0.1:8025> in the local browser. The tunnel does not expose the Mailpit UI publicly. Check the verification message and its `/signup/verify?token=...` link there. Do not copy links into logs, tickets, analytics, or shared chat.
+
+Pending registration remains disabled unless its separately reviewed flags and coordinated routing state are deliberately enabled for a staging test. Before rollback, disable pending registration and return registration routing to `legacy`. Delete captured messages using Mailpit’s **Delete all** control after testing; restarting the service also removes its ephemeral database. Do not remove staging MongoDB or MinIO volumes as part of email cleanup.
 
 ## TLS bootstrap (must happen before first deployment)
 

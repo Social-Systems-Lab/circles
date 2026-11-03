@@ -162,8 +162,6 @@ export const createUserAccount = async (
         ? `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`
         : null;
     if (unhashedVerificationToken && verificationLink && process.env.NODE_ENV !== "production") {
-        console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
-        console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
         const devUser = user as Circle & { devVerificationToken?: string; devVerificationUrl?: string };
         devUser.devVerificationToken = unhashedVerificationToken;
         devUser.devVerificationUrl = verificationLink;
@@ -179,9 +177,9 @@ export const createUserAccount = async (
                 },
             });
             await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
-            console.log(`Verification email sent to ${email}`);
+            console.log("Verification email delivery accepted");
         } catch (error) {
-            console.error(`Failed to send verification email to ${email}:`, error);
+            console.error("Failed to deliver verification email");
             // Decide if account creation should fail if email sending fails.
             // For now, we'll log the error and continue. User can request resend later.
         }

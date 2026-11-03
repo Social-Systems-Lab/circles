@@ -32,7 +32,7 @@ if [[ -n "$(git -C "$INFRA_REPO_DIR" status --porcelain --untracked-files=normal
     git -C "$INFRA_REPO_DIR" status --short >&2
     exit 1
 fi
-for required in "$ENV_FILE" "$VALIDATOR" "$STAGING_COMPOSE_FILE" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf"; do
+for required in "$ENV_FILE" "$VALIDATOR" "$STAGING_COMPOSE_FILE" "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf"; do
     [[ -f "$required" ]] || { echo "Error: required staging file is missing: $required" >&2; exit 1; }
 done
 
@@ -91,58 +91,9 @@ compose config --format json >"$RENDERED_CONFIG"
 compose --profile "*" config --format json >"$RENDERED_ALL_CONFIG"
 # Validate the actual environment Docker will provide before any service starts.
 python3 "$VALIDATOR" compose-json "$RENDERED_CONFIG"
-
-python3 - "$RENDERED_CONFIG" "$RENDERED_ALL_CONFIG" "$PROJECT_NAME" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf" <<'PY'
-import json, re, sys
-default_path, all_path, project, nginx_path = sys.argv[1:]
-config = json.load(open(default_path, encoding="utf-8"))
-all_config = json.load(open(all_path, encoding="utf-8"))
-nginx = open(nginx_path, encoding="utf-8").read()
-errors = []
-if config.get("name") != project or all_config.get("name") != project:
-    errors.append("Compose project name is not kamooni_staging")
-rendered = json.dumps(all_config, sort_keys=True)
-patterns = {
-    "production volume": r"circles_(?:mongo|minio|qdrant|postgres|synapse)(?:[^A-Za-z0-9_]|$)",
-    "production certificate": r"/etc/letsencrypt/live/kamooni[.]org(?:/|\\\")",
-    "production URL": r"https?://kamooni[.]org(?:[/\\\":]|$)",
-    "production alias": r'(?<![A-Za-z0-9.-])(?:www[.])?kamooni[.]org(?:[^A-Za-z0-9.-]|$)',
-}
-for label, pattern in patterns.items():
-    if re.search(pattern, rendered): errors.append(f"rendered config contains {label}")
-nginx_patterns = {
-    "production server_name": r"(?m)^\\s*server_name\\s+(?:www[.]kamooni[.]org|kamooni[.]org)(?:\\s|;)",
-    "production URL": r"https?://kamooni[.]org(?:[/\\s;]|$)",
-    "production certificate": r"/etc/letsencrypt/live/kamooni[.]org(?:/|\\s|$)",
-    "production volume": r"circles_(?:mongo|minio|qdrant|postgres|synapse)(?:[^A-Za-z0-9_]|$)",
-}
-for label, pattern in nginx_patterns.items():
-    if re.search(pattern, nginx): errors.append(f"staging NGINX contains {label}")
-default_services = config.get("services", {})
-expected = {"circles", "db", "minio", "nginx"}
-if set(default_services) != expected: errors.append(f"default services are {sorted(default_services)!r}")
-services = all_config.get("services", {})
-profiles = {"qdrant":"vdb", "cron":"cron", "watchtower":"watchtower", "minio_loopback":"loopback", "nginx_loopback":"loopback", "postgres":"matrix", "synapse":"matrix"}
-for service, profile in profiles.items():
-    if profile not in services.get(service, {}).get("profiles", []): errors.append(f"{service} lacks profile {profile}")
-for service, definition in services.items():
-    if service != "nginx" and definition.get("ports"): errors.append(f"{service} publishes host ports")
-published = sorted((int(p["published"]), int(p["target"])) for p in services.get("nginx", {}).get("ports", []))
-if published != [(80,80), (443,443)]: errors.append(f"NGINX ports are {published!r}")
-env = default_services.get("circles", {}).get("environment", {})
-for key in ("PAYMENTS_ENABLED", "VDB_ENABLED"):
-    if str(env.get(key, "")).lower() != "false": errors.append(f"{key} is not forced false")
-forced_empty = ("CIRCLES_REGISTRY_URL","OPENAI_API_KEY","MAPBOX_API_KEY","NEXT_PUBLIC_MAPBOX_TOKEN","POSTMARK_API_TOKEN","POSTMARK_SENDER_EMAIL","TELEGRAM_BOT_TOKEN","TELEGRAM_BOT_USERNAME","DONORBOX_EMAIL","DONORBOX_API_USER","DONORBOX_API_KEY","DONORBOX_WEBHOOK_SECRET","STRIPE_SECRET_KEY","STRIPE_WEBHOOK_SECRET","STRIPE_PRICE_MONTHLY","STRIPE_PRICE_YEARLY","STRIPE_PRICE_MONTHLY_1","STRIPE_PRICE_MONTHLY_2","STRIPE_PRICE_MONTHLY_5","STRIPE_PRICE_MONTHLY_10","VIBE_ID_CREDENTIAL_ISSUER_PRIVATE_JWK","KAMOONI_VIBE_ID_ISSUER_PRIVATE_JWK","VIBE_ID_CREDENTIAL_ISSUER_DID")
-for key in forced_empty:
-    if env.get(key) not in (None, ""): errors.append(f"{key} is not forced empty")
-for name, volume in all_config.get("volumes", {}).items():
-    if not volume.get("name", "").startswith(project + "_"): errors.append(f"volume {name} is outside staging")
-    if volume.get("external"): errors.append(f"volume {name} is external")
-if errors:
-    print("Error: unsafe staging configuration:", file=sys.stderr)
-    for error in errors: print(f"  - {error}", file=sys.stderr)
-    raise SystemExit(1)
-PY
+python3 "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" \
+    "$RENDERED_CONFIG" "$RENDERED_ALL_CONFIG" "$PROJECT_NAME" \
+    "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf"
 
 if [[ ! -f /etc/letsencrypt/live/staging.kamooni.org/fullchain.pem || ! -f /etc/letsencrypt/live/staging.kamooni.org/privkey.pem ]]; then
     echo "Error: staging-only TLS certificate is missing; complete TLS bootstrap first." >&2
@@ -153,8 +104,8 @@ echo "Building exact target $DEPLOY_SHA as kamooni-staging-circles:$STAGING_IMAG
 compose build circles
 echo "Stopping staging writers and proxy before readiness and migration checks..."
 compose stop circles nginx
-echo "Starting staging Mongo and MinIO only..."
-compose up -d db minio
+echo "Starting staging Mongo, MinIO, and the internal Mailpit sink..."
+compose up -d db minio mailpit
 
 APP_MONGODB_URI="$(python3 - "$RENDERED_CONFIG" <<'PY'
 import json, sys
@@ -209,7 +160,7 @@ else
 fi
 
 compose up -d --no-deps --force-recreate circles || fail_public_services "circles startup failed"
-compose up -d --no-deps db minio nginx || fail_public_services "nginx startup failed"
+compose up -d --no-deps db minio mailpit nginx || fail_public_services "public services startup failed"
 VERSION_URL="https://staging.kamooni.org/api/version"
 VERSION_OUTPUT=""
 for attempt in $(seq 1 30); do
