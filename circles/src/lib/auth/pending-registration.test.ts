@@ -10,6 +10,7 @@ import {
     getVerifiedPendingRegistration,
     hashPendingRegistrationSecret,
     PENDING_REGISTRATION_LIFETIME_MS,
+    PENDING_REGISTRATION_PUBLIC_MESSAGE,
     provisionPendingRegistration,
     PENDING_REGISTRATION_VERIFICATION_PATH,
     reservePendingRegistrationDid,
@@ -63,6 +64,7 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
     const sent: Array<{ to: string; verificationUrl: string }> = [];
     const accounts = new Map<string, ProvisionedPendingAccount>();
     let provisionCalls = 0;
+    let emailDeliveryFails = false;
     let finalizeCalls = 0;
     let permanentExists = false;
     let provisioningFailure:
@@ -148,6 +150,7 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
         baseUrl: "https://staging.kamooni.example",
         now: () => now,
         sendVerificationEmail: async ({ to, verificationUrl }) => {
+            if (emailDeliveryFails) throw new Error(`smtp failed for token=${tokenFrom(verificationUrl)}`);
             sent.push({ to, verificationUrl });
         },
         permanentAccountExists: async () => permanentExists,
@@ -198,6 +201,9 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
         },
         setProvisioningFailure(value: typeof provisioningFailure) {
             provisioningFailure = value;
+        },
+        setEmailDeliveryFailure(value: boolean) {
+            emailDeliveryFails = value;
         },
         advance(ms: number) {
             now = new Date(now.getTime() + ms);
@@ -304,6 +310,27 @@ async function main() {
         });
         assert.equal(harness.registrations.length, 0, "ALTCHA rejection creates no pending record");
         assert.equal(harness.provisionCalls, 0, "ALTCHA rejection creates no permanent account");
+    }
+
+    {
+        const deliveryFailure = createHarness();
+        deliveryFailure.setEmailDeliveryFailure(true);
+        const attempted = await createPending(deliveryFailure, {
+            email: "mailpit-unavailable@example.invalid",
+            requestedHandle: "mailpit-unavailable",
+        });
+        assert.equal(attempted.success, true, "public registration remains account-safe during email failure");
+        assert.equal(attempted.message, PENDING_REGISTRATION_PUBLIC_MESSAGE);
+        assert.equal(deliveryFailure.sent.length, 0, "failed transport does not count as delivered");
+        assert.equal(deliveryFailure.registrations.length, 1, "failure retains the recoverable pending record");
+        assert.ok(
+            deliveryFailure.audits.some((event) => event.eventType === "pending_registration.email_delivery_failed"),
+            "delivery failure is recorded for operators",
+        );
+        assert.ok(
+            deliveryFailure.audits.every((event) => !JSON.stringify(event).includes("smtp failed")),
+            "audit events do not contain transport errors or tokens",
+        );
     }
 
     const harness = createHarness();

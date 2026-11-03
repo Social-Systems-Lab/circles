@@ -8,7 +8,7 @@ export const PENDING_VERIFIED_CONTINUATION_TTL_MS = 30 * 60 * 1000;
 export const PENDING_RESEND_COOLDOWN_MS = 60 * 1000;
 export const PENDING_PROVISIONING_LEASE_MS = 2 * 60 * 1000;
 export const PENDING_PROVISIONED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-export const PENDING_REGISTRATION_PUBLIC_MESSAGE = "If registration can continue, we sent an email with the next step.";
+export const PENDING_REGISTRATION_PUBLIC_MESSAGE = "If registration can continue, check your email for the next step.";
 export const PENDING_REGISTRATION_VERIFICATION_PATH = "/signup/verify";
 
 export function buildPendingRegistrationVerificationUrl(baseUrl: string, token: string): string {

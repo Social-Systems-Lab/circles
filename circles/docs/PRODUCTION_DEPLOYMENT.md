@@ -19,7 +19,7 @@ Production SSH access is `root@kamooniorg`. This is the production server, not t
 
 Do not use ad-hoc `docker compose build` or `docker compose up` commands for normal deployments. The deployment script performs the required build, container recreation, and version check.
 
-Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Staging-only email-capture runtime code and configuration must not be present in the production release branch. The required `Production Isolation / production-isolation` check and the deployment script both enforce this exclusion.
+Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Production Compose hard-selects Postmark and builds an image with an immutable production role marker; runtime email validation rejects Mailpit for that image. Mailpit services and staging transport configuration must not be present in production Compose. The required `Production Isolation / production-isolation` check and the deployment script enforce these contracts.
 
 ## Production layout
 
@@ -50,7 +50,8 @@ Confirm:
 - the working tree is clean
 - the commit intended for deployment is on `origin/main`
 - the release has been approved after all required checks passed
-- staging-only email-capture configuration is absent from the release
+- production email transport is hard-selected as Postmark, and the image role defaults to production
+- Mailpit service/configuration is absent from production Compose
 - the required production-isolation and build checks succeeded for the exact release commit
 - production has not been hot-edited
 - required CI checks have not been bypassed

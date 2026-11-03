@@ -171,7 +171,7 @@ async function createVibeIdUser(params: {
         });
         await Circles.updateOne({ _id: result.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
     } catch (error) {
-        console.error(`Failed to send VibeID signup verification email to ${email}:`, error);
+        console.error("Failed to deliver VibeID signup verification email");
     }
 
     try {

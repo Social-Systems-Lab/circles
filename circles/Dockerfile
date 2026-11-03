@@ -33,6 +33,13 @@ RUN VERSION="$(node -p "require('./package.json').version")" && \
 FROM node:20.19.5-bookworm-slim AS runner
 WORKDIR /app
 
+# The email transport is selected against this image identity, not NODE_ENV
+# or an env-file value. Production builds default to production; only the
+# staging Compose override should set the staging build argument.
+ARG KAMOONI_DEPLOYMENT_ROLE=production
+RUN case "$KAMOONI_DEPLOYMENT_ROLE" in production|staging) ;; *) exit 1 ;; esac \
+  && printf '%s\n' "$KAMOONI_DEPLOYMENT_ROLE" > /app/.kamooni-deployment-role
+
 ENV NODE_ENV production
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 

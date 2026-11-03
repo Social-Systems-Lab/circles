@@ -90,6 +90,22 @@ bun run dev
 
 The local Docker services above are optional. Use them only when a specific local test genuinely needs them; a local Docker build is not a routine release gate.
 
+For local email testing without external delivery, start the loopback-only Mailpit service:
+
+```bash
+cd ~/circles/circles
+docker compose -f docker-compose.local.yml up -d mailpit
+```
+
+Run the app with an explicit local Mailpit transport and blank Postmark settings:
+
+```bash
+cd ~/circles/circles
+EMAIL_TRANSPORT=mailpit MAILPIT_SMTP_HOST=127.0.0.1 MAILPIT_SMTP_PORT=1025 POSTMARK_API_TOKEN= POSTMARK_SENDER_EMAIL= CIRCLES_URL=http://localhost:3000 bun run dev
+```
+
+Open <http://127.0.0.1:8025> to inspect captured messages. Local development rejects missing email configuration and permits only loopback SMTP; it does not fall back to Postmark.
+
 Useful verified package scripts:
 
 ```bash

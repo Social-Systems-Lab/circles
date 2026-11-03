@@ -71,7 +71,6 @@ done
 
 forbidden_identifiers=(
   "EMAIL_CAPTURE_ENABLED"
-  "EMAIL_TRANSPORT"
   "KAMOONI_DEPLOYMENT_ENV"
   "stagingCapturedEmails"
   "storeCapturedEmail"
@@ -97,19 +96,71 @@ for identifier in "${forbidden_identifiers[@]}"; do
   fi
 done
 
-capture_transport_pattern='EMAIL_TRANSPORT.{0,120}["'"'']capture["'"'']|["'"'']capture["'"''].{0,120}EMAIL_TRANSPORT|transport[[:space:]]*:[[:space:]]*["'"'']capture["'"'']'
-transport_matches=""
-transport_status=0
-transport_matches="$(LC_ALL=C grep -E -n -H -- "$capture_transport_pattern" "${scan_files[@]}" 2>&1)" || transport_status=$?
-if [[ "$transport_status" -eq 0 ]]; then
+capture_transport_pattern="EMAIL_TRANSPORT[[:space:]]*[:=][[:space:]]*['\"]?capture|transport[[:space:]]*:[[:space:]]*['\"]capture"
+capture_transport_matches=""
+capture_transport_status=0
+capture_transport_matches="$(LC_ALL=C grep -E -n -H -- "$capture_transport_pattern" "${scan_files[@]}" 2>&1)" || capture_transport_status=$?
+if [[ "$capture_transport_status" -eq 0 ]]; then
   while IFS= read -r match; do
     relative_match="${match#"$APPLICATION_ROOT/"}"
     echo "PRODUCTION ISOLATION FAIL: staging-only capture transport: $relative_match" >&2
-  done <<<"$transport_matches"
+  done <<<"$capture_transport_matches"
   failures=1
-elif [[ "$transport_status" -ne 1 ]]; then
-  echo "PRODUCTION ISOLATION FAIL: capture transport scan failed: $transport_matches" >&2
+elif [[ "$capture_transport_status" -ne 1 ]]; then
+  echo "PRODUCTION ISOLATION FAIL: capture transport scan failed: $capture_transport_matches" >&2
   exit 1
+fi
+
+PRODUCTION_COMPOSE="$APPLICATION_ROOT/docker-compose.yml"
+PRODUCTION_DOCKERFILE="$APPLICATION_ROOT/Dockerfile"
+if [[ ! -f "$PRODUCTION_COMPOSE" || ! -r "$PRODUCTION_COMPOSE" ]]; then
+  echo "PRODUCTION ISOLATION FAIL: production Compose file is missing or unreadable." >&2
+  failures=1
+else
+  if LC_ALL=C grep -Fqi -- 'mailpit' "$PRODUCTION_COMPOSE"; then
+    echo "PRODUCTION ISOLATION FAIL: production Compose contains Mailpit configuration." >&2
+    failures=1
+  fi
+  if LC_ALL=C grep -Fq -- 'EMAIL_TRANSPORT=mailpit' "$PRODUCTION_COMPOSE"; then
+    echo "PRODUCTION ISOLATION FAIL: production email transport is Mailpit." >&2
+    failures=1
+  fi
+fi
+
+shared_email_router=false
+router_status=0
+LC_ALL=C grep -Fq -- "resolveEmailTransportConfiguration" "${scan_files[@]}" || router_status=$?
+if [[ "$router_status" -eq 0 ]]; then
+  shared_email_router=true
+elif [[ "$router_status" -ne 1 ]]; then
+  echo "PRODUCTION ISOLATION FAIL: could not inspect shared email transport policy." >&2
+  exit 1
+fi
+
+if [[ "$shared_email_router" == true ]]; then
+  EMAIL_ROUTER="$APPLICATION_ROOT/src/lib/data/email.ts"
+  if [[ ! -f "$EMAIL_ROUTER" || ! -r "$EMAIL_ROUTER" ]] || \
+    ! LC_ALL=C grep -Fq -- 'const DEPLOYMENT_ROLE_FILE = "/app/.kamooni-deployment-role"' "$EMAIL_ROUTER" || \
+    ! LC_ALL=C grep -Fq -- 'readFileSync(DEPLOYMENT_ROLE_FILE' "$EMAIL_ROUTER"; then
+    echo "PRODUCTION ISOLATION FAIL: runtime email policy does not read the baked deployment-role marker." >&2
+    failures=1
+  fi
+  if [[ -f "$EMAIL_ROUTER" ]] && LC_ALL=C grep -Fq -- 'process.env.KAMOONI_DEPLOYMENT_ROLE' "$EMAIL_ROUTER"; then
+    echo "PRODUCTION ISOLATION FAIL: runtime deployment role can be selected through an environment variable." >&2
+    failures=1
+  fi
+  if ! LC_ALL=C grep -Fq -- 'EMAIL_TRANSPORT=postmark' "$PRODUCTION_COMPOSE"; then
+    echo "PRODUCTION ISOLATION FAIL: production Compose does not hard-select Postmark." >&2
+    failures=1
+  fi
+  if ! LC_ALL=C grep -Eq -- 'KAMOONI_DEPLOYMENT_ROLE:[[:space:]]*production' "$PRODUCTION_COMPOSE"; then
+    echo "PRODUCTION ISOLATION FAIL: production image role is not explicitly set to production." >&2
+    failures=1
+  fi
+  if [[ ! -f "$PRODUCTION_DOCKERFILE" ]] || ! LC_ALL=C grep -Fq -- 'ARG KAMOONI_DEPLOYMENT_ROLE=production' "$PRODUCTION_DOCKERFILE"; then
+    echo "PRODUCTION ISOLATION FAIL: Dockerfile does not default the immutable image role to production." >&2
+    failures=1
+  fi
 fi
 
 if [[ "$failures" -ne 0 ]]; then

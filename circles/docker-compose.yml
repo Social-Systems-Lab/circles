@@ -1,4 +1,3 @@
-
 services:
     circles:
         image: circles-circles:latest
@@ -6,8 +5,9 @@ services:
             context: .
             dockerfile: Dockerfile
             args:
-              GIT_SHA: ${GIT_SHA:-unknown}
-              BUILD_TIME: ${BUILD_TIME:-unknown}
+                GIT_SHA: ${GIT_SHA:-unknown}
+                BUILD_TIME: ${BUILD_TIME:-unknown}
+                KAMOONI_DEPLOYMENT_ROLE: production
         ports:
             - "${CIRCLES_PORT}:${CIRCLES_PORT}"
         env_file:
@@ -27,6 +27,7 @@ services:
             - CIRCLES_REGISTRY_URL=${CIRCLES_REGISTRY_URL}
             - POSTMARK_API_TOKEN=${POSTMARK_API_TOKEN}
             - POSTMARK_SENDER_EMAIL=${POSTMARK_SENDER_EMAIL}
+            - EMAIL_TRANSPORT=postmark
             - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
             - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
             - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
@@ -155,9 +156,9 @@ services:
             - "443:443"
         networks:
             webnet:
-              aliases:
-                - kamooni.org
-                - www.kamooni.org
+                aliases:
+                    - kamooni.org
+                    - www.kamooni.org
         restart: unless-stopped
         depends_on:
             - circles

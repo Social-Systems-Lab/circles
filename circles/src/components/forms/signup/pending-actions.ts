@@ -16,7 +16,7 @@ import { createPendingRegistrationRuntimeDependencies } from "@/lib/auth/pending
 import { assertRegistrationMode } from "@/lib/auth/registration-routing";
 import { authorizePendingRegistrationChallenge } from "@/lib/auth/pending-registration";
 
-const GENERIC = "If registration can continue, we sent an email with the next step.";
+const GENERIC = "If registration can continue, check your email for the next step.";
 const COMPLETION_UNAVAILABLE =
     "This signup step can’t continue securely. If your account is ready, sign in. Otherwise contact support for help.";
 const PENDING_COOKIE = "__Host-kamooni-pending-registration";
