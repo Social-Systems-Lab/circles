@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { ObjectId } from "mongodb";
 import {
     authorizePendingRegistrationChallenge,
     beginPendingRegistration,
+    buildPendingRegistrationVerificationUrl,
     correctPendingRegistrationEmail,
     getVerifiedPendingRegistration,
     hashPendingRegistrationSecret,
     PENDING_REGISTRATION_LIFETIME_MS,
     provisionPendingRegistration,
+    PENDING_REGISTRATION_VERIFICATION_PATH,
     reservePendingRegistrationDid,
     resendPendingRegistrationVerification,
     resumePendingRegistration,
@@ -213,6 +216,14 @@ const validInput = {
 
 const tokenFrom = (url: string) => new URL(url).searchParams.get("token")!;
 
+function assertVerificationUrl(url: string, expectedToken: string, expectedBaseUrl: string) {
+    const parsed = new URL(url);
+    assert.equal(parsed.origin, expectedBaseUrl);
+    assert.equal(parsed.pathname, PENDING_REGISTRATION_VERIFICATION_PATH);
+    assert.deepEqual([...parsed.searchParams.keys()], ["token"]);
+    assert.equal(parsed.searchParams.get("token"), expectedToken);
+}
+
 async function createPending(harness: ReturnType<typeof createHarness>, overrides: Partial<typeof validInput> = {}) {
     const result = await beginPendingRegistration({ ...validInput, ...overrides }, harness.deps, {
         enabled: true,
@@ -225,6 +236,13 @@ async function createPending(harness: ReturnType<typeof createHarness>, override
 
 async function main() {
     const activeSignupSource = readFileSync("src/components/forms/signup/actions.ts", "utf8");
+    const verificationRouteFile = "src/app/(auth)/signup/verify/route.ts";
+    const verificationRouteSource = readFileSync(verificationRouteFile, "utf8");
+    const routeGroupRoot = "src/app/(auth)";
+    const implementedVerificationPath = `/${path
+        .relative(routeGroupRoot, path.dirname(verificationRouteFile))
+        .split(path.sep)
+        .join("/")}`;
     const checkEmailPageSource = readFileSync("src/app/(auth)/signup/check-email/page.tsx", "utf8");
     const continuePageSource = readFileSync("src/app/(auth)/signup/continue/page.tsx", "utf8");
     assert.doesNotMatch(
@@ -232,6 +250,17 @@ async function main() {
         /pending-registration/,
         "disabled backend is not wired into the current production signup action",
     );
+    assert.equal(
+        PENDING_REGISTRATION_VERIFICATION_PATH,
+        implementedVerificationPath,
+        "verification email links use the route implemented by Next.js",
+    );
+    assert.match(verificationRouteSource, /searchParams\.get\("token"\)/);
+    const specialToken = "token+/?=";
+    const encodedUrl = buildPendingRegistrationVerificationUrl("https://staging.kamooni.example/", specialToken);
+    assert.equal(new URL(encodedUrl).pathname, implementedVerificationPath);
+    assert.ok(encodedUrl.includes("token=token%2B%2F%3F%3D"), "verification token is URL encoded");
+    assert.equal(tokenFrom(encodedUrl), specialToken, "the route's token query parameter preserves the token");
     assert.match(checkEmailPageSource, /isPendingRegistrationEnabled\(\)/);
     assert.match(checkEmailPageSource, /isRegistrationModeAllowed\("pending"\)/);
     assert.match(continuePageSource, /isPendingRegistrationEnabled\(\)/);
@@ -300,6 +329,7 @@ async function main() {
     );
 
     const firstToken = tokenFrom(harness.sent[0].verificationUrl);
+    assertVerificationUrl(harness.sent[0].verificationUrl, firstToken, harness.deps.baseUrl);
     harness.advance(61_000);
     await resendPendingRegistrationVerification(
         {
@@ -310,6 +340,7 @@ async function main() {
         harness.deps,
     );
     const secondToken = tokenFrom(harness.sent[1].verificationUrl);
+    assertVerificationUrl(harness.sent[1].verificationUrl, secondToken, harness.deps.baseUrl);
     assert.notEqual(secondToken, firstToken, "resend rotates the verification token");
     assert.equal(
         (await verifyPendingRegistrationEmail(firstToken, harness.deps)).success,
@@ -327,6 +358,7 @@ async function main() {
         harness.deps,
     );
     const correctedToken = tokenFrom(harness.sent[2].verificationUrl);
+    assertVerificationUrl(harness.sent[2].verificationUrl, correctedToken, harness.deps.baseUrl);
     assert.equal(
         (await verifyPendingRegistrationEmail(secondToken, harness.deps)).success,
         false,

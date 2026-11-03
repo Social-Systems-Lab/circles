@@ -9,6 +9,11 @@ export const PENDING_RESEND_COOLDOWN_MS = 60 * 1000;
 export const PENDING_PROVISIONING_LEASE_MS = 2 * 60 * 1000;
 export const PENDING_PROVISIONED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const PENDING_REGISTRATION_PUBLIC_MESSAGE = "If registration can continue, we sent an email with the next step.";
+export const PENDING_REGISTRATION_VERIFICATION_PATH = "/signup/verify";
+
+export function buildPendingRegistrationVerificationUrl(baseUrl: string, token: string): string {
+    return `${baseUrl.replace(/\/+$/, "")}${PENDING_REGISTRATION_VERIFICATION_PATH}?token=${encodeURIComponent(token)}`;
+}
 
 export type PendingRegistrationStatus = "pending_email" | "email_verified" | "provisioning" | "provisioned";
 
@@ -259,9 +264,6 @@ export async function reservePendingRegistrationDid(
     return result.matchedCount === 1;
 }
 
-const verificationUrl = (baseUrl: string, token: string) =>
-    `${baseUrl.replace(/\/+$/, "")}/register/verify?token=${encodeURIComponent(token)}`;
-
 export async function startPendingRegistration(
     input: { name: string; email: string; requestedHandle: string; redirectTo?: string | null; clientIp: string },
     deps: PendingRegistrationDependencies,
@@ -331,7 +333,7 @@ export async function startPendingRegistration(
         await deps.sendVerificationEmail({
             to: record.email,
             name: record.name,
-            verificationUrl: verificationUrl(deps.baseUrl, verificationToken),
+            verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, verificationToken),
         });
         await audit(deps.collections, record._id.toHexString(), "pending_registration.verification_sent", now);
     } catch {
@@ -542,7 +544,7 @@ export async function resendPendingRegistrationVerification(
             await deps.sendVerificationEmail({
                 to: record.email,
                 name: record.name,
-                verificationUrl: verificationUrl(deps.baseUrl, token),
+                verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, token),
             });
             await audit(deps.collections, input.pendingRegistrationId, "pending_registration.verification_resent", now);
         } catch {
@@ -619,7 +621,7 @@ export async function correctPendingRegistrationEmail(
             await deps.sendVerificationEmail({
                 to: record.email,
                 name: record.name,
-                verificationUrl: verificationUrl(deps.baseUrl, token),
+                verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, token),
             });
             await audit(deps.collections, input.pendingRegistrationId, "pending_registration.email_corrected", now);
         } catch {
