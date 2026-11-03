@@ -50,6 +50,7 @@ MONGO_ROOT_PASSWORD= \
 CIRCLES_MONGODB_DATABASE="$DATABASE" \
 PENDING_REGISTRATION_TEST_MONGODB_URI="mongodb://127.0.0.1:27019/$DATABASE" \
 PENDING_REGISTRATION_TEST_DATABASE="$DATABASE" \
+PENDING_REGISTRATION_TOKEN_HMAC_KEY=disposable-integration-test-only \
 NODE_ENV=test \
 IS_BUILD=true \
     bun src/lib/auth/pending-registration-crash.integration.test.ts
@@ -62,6 +63,7 @@ MONGO_ROOT_PASSWORD= \
 CIRCLES_MONGODB_DATABASE="$DATABASE" \
 PENDING_REGISTRATION_TEST_MONGODB_URI="mongodb://127.0.0.1:27019/$DATABASE" \
 PENDING_REGISTRATION_TEST_DATABASE="$DATABASE" \
+PENDING_REGISTRATION_TOKEN_HMAC_KEY=disposable-integration-test-only \
 NODE_ENV=test \
 IS_BUILD=true \
     bun src/lib/auth/pending-registration.integration.test.ts

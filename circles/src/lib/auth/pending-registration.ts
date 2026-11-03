@@ -15,7 +15,12 @@ export function buildPendingRegistrationVerificationUrl(baseUrl: string, token: 
     return `${baseUrl.replace(/\/+$/, "")}${PENDING_REGISTRATION_VERIFICATION_PATH}?token=${encodeURIComponent(token)}`;
 }
 
-export type PendingRegistrationStatus = "pending_email" | "email_verified" | "provisioning" | "provisioned";
+export type PendingRegistrationStatus =
+    | "pending_email"
+    | "email_verified"
+    | "provisioning"
+    | "provisioning_claimed"
+    | "provisioned";
 
 export type PendingRegistration = {
     _id: ObjectId;
@@ -35,6 +40,8 @@ export type PendingRegistration = {
     redirectTo: string | null;
     provisioningLeaseHash: string | null;
     provisioningLeaseExpiresAt: Date | null;
+    provisioningClaimHash: string | null;
+    provisioningClaimedAt: Date | null;
     provisioningAttempts: number;
     reservedDid: string | null;
     reconciliationRequiredAt: Date | null;
@@ -55,9 +62,12 @@ export type PendingRegistrationAuditEvent = {
 };
 
 type PendingRateLimit = { _id: string; count: number; expiresAt: Date };
+export type PendingRegistrationDidReservation = { _id: string; did: string; createdAt: Date };
+export type PendingRegistrationOwnedLock = { _id: string; ownerTokenHash: string; expiresAt: Date };
 
 export type PendingRegistrationCollections = {
     registrations: Collection<PendingRegistration>;
+    didReservations: Collection<PendingRegistrationDidReservation>;
     rateLimits: Collection<PendingRateLimit>;
     auditEvents: Collection<PendingRegistrationAuditEvent>;
 };
@@ -77,12 +87,18 @@ export type PendingRegistrationDependencies = {
     findAccountByPendingRegistrationId: (pendingRegistrationId: string) => Promise<ProvisionedPendingAccount | null>;
     provisionAccount: (input: {
         pendingRegistrationId: string;
+        provisioningLeaseToken: string;
+        provisioningClaimToken: string;
+        reservedDid: string | null;
         name: string;
         email: string;
         requestedHandle: string;
         password: string;
     }) => Promise<ProvisionedPendingAccount>;
-    finalizeAccount: (account: ProvisionedPendingAccount) => Promise<void>;
+    finalizeAccount: (
+        account: ProvisionedPendingAccount,
+        input: { pendingRegistrationId: string; provisioningClaimToken: string },
+    ) => Promise<void>;
     baseUrl: string;
     now?: () => Date;
 };
@@ -179,16 +195,60 @@ export async function ensurePendingRegistrationIndexes(collections: PendingRegis
             { accountId: 1 },
             { unique: true, partialFilterExpression: { accountId: { $type: "string" } } },
         ),
+        collections.didReservations.createIndex({ did: 1 }, { unique: true }),
+        collections.didReservations.createIndex({ createdAt: 1 }),
         collections.rateLimits.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
         collections.auditEvents.createIndex({ pendingRegistrationId: 1, occurredAt: -1 }),
         collections.auditEvents.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     ]);
+    await backfillPendingRegistrationDidReservations(collections);
+}
+
+export async function backfillPendingRegistrationDidReservations(
+    collections: Pick<PendingRegistrationCollections, "registrations" | "didReservations">,
+): Promise<void> {
+    const records = await collections.registrations
+        .find({ reservedDid: { $type: "string" } }, { projection: { _id: 1, reservedDid: 1 } })
+        .toArray();
+    const owners = new Map<string, string>();
+    for (const record of records) {
+        if (!record.reservedDid) continue;
+        const id = record._id.toHexString();
+        const previous = owners.get(record.reservedDid);
+        if (previous && previous !== id) {
+            throw new Error("Conflicting legacy pending DID reservations require manual review");
+        }
+        owners.set(record.reservedDid, id);
+    }
+    for (const [did, pendingRegistrationId] of owners) {
+        const sameRegistration = await collections.didReservations.findOne({ _id: pendingRegistrationId });
+        const sameDid = await collections.didReservations.findOne({ did });
+        if ((sameRegistration && sameRegistration.did !== did) || (sameDid && sameDid._id !== pendingRegistrationId)) {
+            throw new Error("Pending DID reservation ownership conflict requires manual review");
+        }
+        if (!sameRegistration) {
+            try {
+                await collections.didReservations.updateOne(
+                    { _id: pendingRegistrationId },
+                    { $setOnInsert: { _id: pendingRegistrationId, did, createdAt: new Date() } },
+                    { upsert: true },
+                );
+            } catch (error) {
+                if ((error as { code?: number }).code !== 11000) throw error;
+                const racedReservation = await collections.didReservations.findOne({ _id: pendingRegistrationId });
+                if (racedReservation?.did !== did) {
+                    throw new Error("Concurrent pending DID reservation conflict requires manual review");
+                }
+            }
+        }
+    }
 }
 
 export async function getPendingRegistrationCollections(db?: Db): Promise<PendingRegistrationCollections> {
     const database = db ?? (await (await import("@/lib/data/db")).getDb());
     const collections = {
         registrations: database.collection<PendingRegistration>("pendingRegistrations"),
+        didReservations: database.collection<PendingRegistrationDidReservation>("pendingRegistrationDidReservations"),
         rateLimits: database.collection<PendingRateLimit>("pendingRegistrationRateLimits"),
         auditEvents: database.collection<PendingRegistrationAuditEvent>("pendingRegistrationAuditEvents"),
     };
@@ -246,14 +306,42 @@ export async function authorizePendingRegistrationChallenge(
 export async function reservePendingRegistrationDid(
     pendingRegistrationId: string,
     did: string,
+    provisioningClaimToken: string,
     deps: Pick<PendingRegistrationDependencies, "collections" | "now">,
 ): Promise<boolean> {
-    if (!ObjectId.isValid(pendingRegistrationId)) return false;
+    if (!ObjectId.isValid(pendingRegistrationId) || !/^[a-f0-9]{64}$/i.test(did) || !provisioningClaimToken) {
+        return false;
+    }
     const now = deps.now?.() ?? new Date();
+    const id = new ObjectId(pendingRegistrationId);
+    const ownerTokenHash = hashPendingRegistrationSecret("provisioning-claim", provisioningClaimToken);
+    const filter: Filter<PendingRegistration> = {
+        _id: id,
+        status: "provisioning_claimed",
+        provisioningClaimHash: ownerTokenHash,
+        $or: [{ reservedDid: null }, { reservedDid: did }],
+    };
+    const current = await deps.collections.registrations.findOne(filter);
+    if (!current) return false;
+
+    try {
+        await deps.collections.didReservations.insertOne({
+            _id: pendingRegistrationId,
+            did,
+            createdAt: now,
+        });
+    } catch (error) {
+        if ((error as { code?: number }).code !== 11000) throw error;
+        const [byRegistration, byDid] = await Promise.all([
+            deps.collections.didReservations.findOne({ _id: pendingRegistrationId }),
+            deps.collections.didReservations.findOne({ did }),
+        ]);
+        if (byRegistration?.did !== did || byDid?._id !== pendingRegistrationId) return false;
+    }
+
     const result = await deps.collections.registrations.updateOne(
         {
-            _id: new ObjectId(pendingRegistrationId),
-            status: "provisioning",
+            ...filter,
             $or: [{ reservedDid: null }, { reservedDid: did }],
         },
         {
@@ -261,7 +349,158 @@ export async function reservePendingRegistrationDid(
             $unset: { expiresAt: "" },
         },
     );
+    if (result.matchedCount === 1) return true;
+    // Preserve even an incomplete reservation mapping for reconciliation. It is safer
+    // to retain an orphan mapping than to make this DID available to another identity.
+    return false;
+}
+
+export async function renewPendingRegistrationProvisioningLease(
+    pendingRegistrationId: string,
+    provisioningLeaseToken: string,
+    deps: Pick<PendingRegistrationDependencies, "collections" | "now">,
+): Promise<boolean> {
+    if (!ObjectId.isValid(pendingRegistrationId) || !provisioningLeaseToken) return false;
+    const now = deps.now?.() ?? new Date();
+    const result = await deps.collections.registrations.updateOne(
+        {
+            _id: new ObjectId(pendingRegistrationId),
+            status: "provisioning",
+            provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", provisioningLeaseToken),
+            provisioningLeaseExpiresAt: { $gt: now },
+        },
+        {
+            $set: {
+                provisioningLeaseExpiresAt: new Date(now.getTime() + PENDING_PROVISIONING_LEASE_MS),
+                updatedAt: now,
+            },
+        },
+    );
     return result.matchedCount === 1;
+}
+
+/**
+ * Atomically changes the temporary lease into a durable, non-expiring commit claim.
+ * The claim is deliberately never transferred automatically: once acquired, only an
+ * operator-approved recovery after the previous worker is fenced may resolve it.
+ */
+export async function acquirePendingRegistrationProvisioningClaim(
+    pendingRegistrationId: string,
+    provisioningLeaseToken: string,
+    provisioningClaimToken: string,
+    deps: Pick<PendingRegistrationDependencies, "collections" | "now">,
+): Promise<boolean> {
+    if (!ObjectId.isValid(pendingRegistrationId) || !provisioningLeaseToken || !provisioningClaimToken) {
+        return false;
+    }
+    const now = deps.now?.() ?? new Date();
+    const result = await deps.collections.registrations.updateOne(
+        {
+            _id: new ObjectId(pendingRegistrationId),
+            status: "provisioning",
+            provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", provisioningLeaseToken),
+            provisioningLeaseExpiresAt: { $gt: now },
+            $or: [{ provisioningClaimHash: null }, { provisioningClaimHash: { $exists: false } }],
+        },
+        {
+            $set: {
+                status: "provisioning_claimed",
+                provisioningClaimHash: hashPendingRegistrationSecret("provisioning-claim", provisioningClaimToken),
+                provisioningClaimedAt: now,
+                reconciliationRequiredAt: now,
+                updatedAt: now,
+            },
+            $unset: { provisioningLeaseHash: "", provisioningLeaseExpiresAt: "", expiresAt: "" },
+        },
+    );
+    if (result.matchedCount !== 1) return false;
+    await audit(deps.collections, pendingRegistrationId, "pending_registration.provisioning_claimed", now);
+    return true;
+}
+
+export async function isPendingRegistrationProvisioningClaimOwner(
+    pendingRegistrationId: string,
+    provisioningClaimToken: string,
+    deps: Pick<PendingRegistrationDependencies, "collections">,
+): Promise<boolean> {
+    if (!ObjectId.isValid(pendingRegistrationId) || !provisioningClaimToken) return false;
+    const record = await deps.collections.registrations.findOne({
+        _id: new ObjectId(pendingRegistrationId),
+        status: "provisioning_claimed",
+        provisioningClaimHash: hashPendingRegistrationSecret("provisioning-claim", provisioningClaimToken),
+    });
+    return Boolean(record);
+}
+
+export async function isPendingRegistrationProvisioningLeaseOwner(
+    pendingRegistrationId: string,
+    provisioningLeaseToken: string,
+    deps: Pick<PendingRegistrationDependencies, "collections" | "now">,
+): Promise<boolean> {
+    if (!ObjectId.isValid(pendingRegistrationId) || !provisioningLeaseToken) return false;
+    const now = deps.now?.() ?? new Date();
+    const record = await deps.collections.registrations.findOne({
+        _id: new ObjectId(pendingRegistrationId),
+        status: "provisioning",
+        provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", provisioningLeaseToken),
+        provisioningLeaseExpiresAt: { $gt: now },
+    });
+    return Boolean(record);
+}
+
+export async function acquirePendingRegistrationOwnedLock(
+    collection: Collection<PendingRegistrationOwnedLock>,
+    id: string,
+    ownerToken: string,
+    now = new Date(),
+    leaseMs = 5 * 60 * 1000,
+): Promise<boolean> {
+    if (!id || !ownerToken) return false;
+    const ownerTokenHash = hashPendingRegistrationSecret("pending-lock-owner", ownerToken);
+    try {
+        const result = await collection.findOneAndUpdate(
+            {
+                _id: id,
+                expiresAt: { $lte: now },
+            },
+            { $set: { ownerTokenHash, expiresAt: new Date(now.getTime() + leaseMs) } },
+            { upsert: true, returnDocument: "after" },
+        );
+        return result?.ownerTokenHash === ownerTokenHash;
+    } catch (error) {
+        if ((error as { code?: number }).code === 11000) return false;
+        throw error;
+    }
+}
+
+export async function renewPendingRegistrationOwnedLock(
+    collection: Collection<PendingRegistrationOwnedLock>,
+    id: string,
+    ownerToken: string,
+    now = new Date(),
+    leaseMs = 5 * 60 * 1000,
+): Promise<boolean> {
+    const result = await collection.updateOne(
+        {
+            _id: id,
+            ownerTokenHash: hashPendingRegistrationSecret("pending-lock-owner", ownerToken),
+            expiresAt: { $gt: now },
+        },
+        { $set: { expiresAt: new Date(now.getTime() + leaseMs) } },
+    );
+    return result.matchedCount === 1;
+}
+
+export async function releasePendingRegistrationOwnedLock(
+    collection: Collection<PendingRegistrationOwnedLock>,
+    id: string,
+    ownerToken: string,
+): Promise<boolean> {
+    const result = await collection.deleteOne({
+        _id: id,
+        ownerTokenHash: hashPendingRegistrationSecret("pending-lock-owner", ownerToken),
+    });
+    return result.deletedCount === 1;
 }
 
 export async function startPendingRegistration(
@@ -312,6 +551,8 @@ export async function startPendingRegistration(
         redirectTo: validatePendingRedirect(input.redirectTo),
         provisioningLeaseHash: null,
         provisioningLeaseExpiresAt: null,
+        provisioningClaimHash: null,
+        provisioningClaimedAt: null,
         provisioningAttempts: 0,
         reservedDid: null,
         reconciliationRequiredAt: null,
@@ -694,36 +935,56 @@ export async function provisionPendingRegistration(
         return { success: false, message: "Registration could not be completed." };
     }
     try {
+        const provisioningClaimToken = pendingSecret();
         const account = await deps.provisionAccount({
             pendingRegistrationId: input.pendingRegistrationId,
+            provisioningLeaseToken: lease,
+            provisioningClaimToken,
+            reservedDid: record.reservedDid ?? null,
             name: record.name,
             email: record.email,
             requestedHandle: record.requestedHandle,
             password: input.password,
         });
-        await deps.finalizeAccount(account);
-        await deps.collections.registrations.updateOne(
+        if (
+            !(await isPendingRegistrationProvisioningClaimOwner(
+                input.pendingRegistrationId,
+                provisioningClaimToken,
+                deps,
+            ))
+        ) {
+            throw new Error("Durable provisioning claim ownership was lost");
+        }
+        await deps.finalizeAccount(account, {
+            pendingRegistrationId: input.pendingRegistrationId,
+            provisioningClaimToken,
+        });
+        const finalizedAt = deps.now?.() ?? new Date();
+        const finalTransition = await deps.collections.registrations.updateOne(
             {
                 _id: id,
-                provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", lease),
+                status: "provisioning_claimed",
+                provisioningClaimHash: hashPendingRegistrationSecret("provisioning-claim", provisioningClaimToken),
             },
             {
                 $set: {
                     status: "provisioned",
                     accountId: account.accountId,
                     accountDid: account.did,
-                    provisionedAt: now,
-                    updatedAt: now,
+                    provisionedAt: finalizedAt,
+                    updatedAt: finalizedAt,
                     reconciliationRequiredAt: null,
-                    expiresAt: new Date(now.getTime() + PENDING_PROVISIONED_RETENTION_MS),
+                    expiresAt: new Date(finalizedAt.getTime() + PENDING_PROVISIONED_RETENTION_MS),
                 },
                 $unset: {
-                    provisioningLeaseHash: "",
-                    provisioningLeaseExpiresAt: "",
+                    provisioningClaimHash: "",
                 },
             },
         );
-        await audit(deps.collections, input.pendingRegistrationId, "pending_registration.provisioned", now);
+        if (finalTransition.matchedCount !== 1) {
+            throw new Error("Provisioning lease lost before final state transition");
+        }
+        await audit(deps.collections, input.pendingRegistrationId, "pending_registration.provisioned", finalizedAt);
         return { success: true, account, message: "Registration completed." };
     } catch {
         await audit(

@@ -5,15 +5,24 @@ import os from "node:os";
 import path from "node:path";
 import { MongoClient, ObjectId } from "mongodb";
 import {
+    acquirePendingRegistrationProvisioningClaim,
+    acquirePendingRegistrationOwnedLock,
+    backfillPendingRegistrationDidReservations,
     ensurePendingRegistrationIndexes,
     hashPendingRegistrationSecret,
+    isPendingRegistrationProvisioningClaimOwner,
+    isPendingRegistrationProvisioningLeaseOwner,
     PENDING_PROVISIONING_LEASE_MS,
     provisionPendingRegistration,
     reservePendingRegistrationDid,
+    renewPendingRegistrationOwnedLock,
+    renewPendingRegistrationProvisioningLease,
+    releasePendingRegistrationOwnedLock,
     resendPendingRegistrationVerification,
     type PendingRegistration,
     type PendingRegistrationCollections,
     type PendingRegistrationDependencies,
+    type PendingRegistrationDidReservation,
     verifyPendingRegistrationEmail,
 } from "@/lib/auth/pending-registration";
 import { inspectPendingRegistrationReconciliation } from "@/lib/auth/pending-registration-reconciliation";
@@ -22,7 +31,8 @@ process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY = "crash-contract-integration-te
 
 type FaultPoint =
     | "none"
-    | "before_did_reservation"
+    | "before_claim"
+    | "after_claim_before_did_reservation"
     | "after_did_reservation"
     | "during_credential_writes"
     | "after_credentials"
@@ -71,12 +81,7 @@ const cases: Array<{ name: string; run: () => Promise<void> }> = [];
 const reproducedContractFailures: string[] = [];
 const expectedContractFailures = [
     "session issuance must follow durable status=provisioned",
-    "a zero-match provisioned transition must not return success",
-    "a stale worker must not reserve a DID under a newer lease",
-    "a DID reserved by one registration must not be claimable by another",
-    "lock release must match the acquiring worker's fencing token",
     "an existing member row must not suppress repair of incomplete side effects",
-    "reconciliation must reject account email/handle mismatch",
 ];
 function describe(_name: string, register: () => void) {
     register();
@@ -95,7 +100,10 @@ function assertContractForMilestone2(name: string, assertion: () => void) {
     }
 }
 
-async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate?: boolean } = {}) {
+async function makeCase(
+    fault: FaultPoint = "none",
+    overrides: { loseFinalUpdate?: boolean; pauseBeforeClaim?: boolean } = {},
+) {
     let now = new Date();
     const id = new ObjectId();
     const continuation = crypto.randomBytes(32).toString("base64url");
@@ -120,6 +128,8 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
         redirectTo: "/explore",
         provisioningLeaseHash: null,
         provisioningLeaseExpiresAt: null,
+        provisioningClaimHash: null,
+        provisioningClaimedAt: null,
         provisioningAttempts: 0,
         reservedDid: null,
         reconciliationRequiredAt: null,
@@ -136,10 +146,16 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
     let generatedDid: string | null = null;
     let sessionCount = 0;
     let accountInsertCount = 0;
+    let generatedDidCount = 0;
     let membershipInsertCount = 0;
     let welcomeInsertCount = 0;
     let loseUpdate = overrides.loseFinalUpdate ?? false;
     let updateWasLost = false;
+    let pauseBeforeClaim = overrides.pauseBeforeClaim ?? false;
+    let signalClaimPaused!: () => void;
+    let releaseClaimPause!: () => void;
+    const claimPaused = new Promise<void>((resolve) => (signalClaimPaused = resolve));
+    const claimPauseGate = new Promise<void>((resolve) => (releaseClaimPause = resolve));
     const deps: PendingRegistrationDependencies = {
         collections: {
             ...collections,
@@ -149,6 +165,11 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
                     collections.registrations.findOneAndUpdate(filter, update, options),
                 createIndex: (index: any, options?: any) => collections.registrations.createIndex(index, options),
                 updateOne: async (filter: any, update: any, options?: any) => {
+                    if (pauseBeforeClaim && update.$set?.status === "provisioning_claimed") {
+                        pauseBeforeClaim = false;
+                        signalClaimPaused();
+                        await claimPauseGate;
+                    }
                     if (activeFault === "before_provisioned_update" && update.$set?.status === "provisioned") {
                         throw new Error("injected before durable provisioned transition");
                     }
@@ -187,22 +208,42 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
         },
         permanentAccountExists: async () => false,
         findAccountByPendingRegistrationId: async () => null,
-        provisionAccount: async ({ pendingRegistrationId }) => {
+        provisionAccount: async ({ pendingRegistrationId, provisioningLeaseToken, provisioningClaimToken }) => {
             events.push("provision-start");
-            if (activeFault === "before_did_reservation") throw new Error("injected before DID reservation");
+            if (activeFault === "before_claim") throw new Error("injected before durable claim");
+            assert.equal(
+                await acquirePendingRegistrationProvisioningClaim(
+                    pendingRegistrationId,
+                    provisioningLeaseToken,
+                    provisioningClaimToken,
+                    deps,
+                ),
+                true,
+                "worker acquires durable claim before generating identity or touching credential storage",
+            );
+            events.push("claim-acquired");
+            if (activeFault === "after_claim_before_did_reservation") {
+                throw new Error("injected after durable claim and before DID reservation");
+            }
             const keyPair = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
             const publicKeyPem = keyPair.publicKey.export({ type: "pkcs1", format: "pem" }).toString();
             const did = crypto.createHash("sha256").update(publicKeyPem).digest("hex");
             generatedDid = did;
+            generatedDidCount += 1;
+            events.push("did-generated");
             assert.equal(
-                await reservePendingRegistrationDid(pendingRegistrationId, did, deps),
+                await reservePendingRegistrationDid(pendingRegistrationId, did, provisioningClaimToken, deps),
                 true,
                 "test worker reserves the generated identity",
             );
             events.push("did-reserved");
+            assert.equal(
+                await isPendingRegistrationProvisioningClaimOwner(pendingRegistrationId, provisioningClaimToken, deps),
+                true,
+            );
             if (activeFault === "after_did_reservation") throw new Error("injected after DID reservation");
             const credentialDirectory = path.join(usersDirectory, did);
-            fs.mkdirSync(credentialDirectory, { recursive: true });
+            fs.mkdirSync(credentialDirectory);
             fs.writeFileSync(path.join(credentialDirectory, "publicKey.pem"), publicKeyPem);
             if (activeFault === "during_credential_writes") throw new Error("injected during credential writes");
             fs.writeFileSync(path.join(credentialDirectory, "salt.bin"), crypto.randomBytes(16));
@@ -210,11 +251,17 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
             fs.writeFileSync(path.join(credentialDirectory, "privateKey.pem.enc"), crypto.randomBytes(64));
             events.push("credentials-complete");
             if (activeFault === "after_credentials") throw new Error("injected after credentials");
+            assert.equal(
+                await isPendingRegistrationProvisioningClaimOwner(pendingRegistrationId, provisioningClaimToken, deps),
+                true,
+                "permanent-account insertion requires the durable claim",
+            );
             await db.collection("circles").insertOne({
                 _id: accountId,
                 did,
                 email: registration.email,
                 handle: registration.requestedHandle,
+                publicKey: publicKeyPem,
                 metadata: { pendingRegistrationId },
             });
             accountInsertCount += 1;
@@ -277,6 +324,9 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
         get accountInsertCount() {
             return accountInsertCount;
         },
+        get generatedDidCount() {
+            return generatedDidCount;
+        },
         get membershipInsertCount() {
             return membershipInsertCount;
         },
@@ -295,16 +345,43 @@ async function makeCase(fault: FaultPoint = "none", overrides: { loseFinalUpdate
         loseUpdate() {
             loseUpdate = true;
         },
+        waitForClaimPause() {
+            return claimPaused;
+        },
+        resumeClaimPause() {
+            releaseClaimPause();
+        },
     };
 }
 
-async function complete(testCase: Awaited<ReturnType<typeof makeCase>>) {
+async function complete(testCase: Awaited<ReturnType<typeof makeCase>>, continuation = testCase.continuation) {
     return provisionPendingRegistration(
         {
             pendingRegistrationId: testCase.id.toHexString(),
-            verifiedContinuationSecret: testCase.continuation,
+            verifiedContinuationSecret: continuation,
             password: "synthetic-test-password",
         },
+        testCase.deps,
+    );
+}
+
+async function prepareClaim(testCase: Awaited<ReturnType<typeof makeCase>>, leaseToken: string, claimToken: string) {
+    await collections.registrations.updateOne(
+        { _id: testCase.id },
+        {
+            $set: {
+                status: "provisioning",
+                provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", leaseToken),
+                provisioningLeaseExpiresAt: new Date(Date.now() + 60_000),
+                provisioningClaimHash: null,
+                reservedDid: null,
+            },
+        },
+    );
+    return acquirePendingRegistrationProvisioningClaim(
+        testCase.id.toHexString(),
+        leaseToken,
+        claimToken,
         testCase.deps,
     );
 }
@@ -327,20 +404,21 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         assert.equal(c.sessionCount, 0);
     });
 
-    it("characterizes the post-claim/pre-reservation interruption and consumed-capability replay", async () => {
-        const c = await makeCase("before_did_reservation");
+    it("retains a durable claim after interruption before DID reservation", async () => {
+        const c = await makeCase("after_claim_before_did_reservation");
         const result = await complete(c);
         const stored = await collections.registrations.findOne({ _id: c.id });
         assert.equal(result.success, false);
-        assert.equal(stored?.status, "provisioning");
+        assert.equal(stored?.status, "provisioning_claimed");
         assert.equal(stored?.reservedDid, null);
+        assert.equal(stored?.expiresAt, undefined, "TTL cannot remove an unresolved claim");
         assert.equal(stored?.verifiedContinuationHash, undefined);
         assert.equal(c.sessionCount, 0);
         assert.equal((await complete(c)).success, false, "consumed continuation is not reusable");
     });
 
-    it("retries a pre-DID interruption only after lease expiry and fresh email verification", async () => {
-        const c = await makeCase("before_did_reservation");
+    it("retries an interruption before claim only after lease expiry and fresh email verification", async () => {
+        const c = await makeCase("before_claim");
         assert.equal((await complete(c)).success, false);
         assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, null);
         assert.equal((await complete(c)).success, false, "the consumed continuation cannot retry directly");
@@ -375,12 +453,102 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
             c.deps,
         );
         assert.equal(retry.success, true);
-        assert.ok(c.generatedDid, "one original DID is generated on the renewed authorized attempt");
+        assert.ok(c.generatedDid, "one DID is generated on the renewed, newly authorized attempt");
+        assert.equal(c.generatedDidCount, 1);
         assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, c.generatedDid);
         assert.equal(
             await db.collection("circles").countDocuments({ "metadata.pendingRegistrationId": c.id.toHexString() }),
             1,
         );
+        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.status, "provisioned");
+    });
+
+    it("fences a paused pre-claim worker after fresh verification lets a replacement claim", async () => {
+        const c = await makeCase("none", { pauseBeforeClaim: true });
+        const workerA = complete(c);
+        await c.waitForClaimPause();
+
+        c.advance(PENDING_PROVISIONING_LEASE_MS + 60_000);
+        const resend = await resendPendingRegistrationVerification(
+            {
+                pendingRegistrationId: c.id.toHexString(),
+                continuationSecret: c.pendingContinuation,
+                clientIp: "127.0.0.1",
+            },
+            c.deps,
+        );
+        assert.equal(resend.success, true);
+        const token = new URL(c.capturedEmails.at(-1)!).searchParams.get("token");
+        assert.ok(token);
+        const verification = await verifyPendingRegistrationEmail(token, c.deps);
+        assert.equal(verification.success, true);
+        assert.ok(verification.verifiedContinuationSecret);
+
+        const workerB = await complete(c, verification.verifiedContinuationSecret);
+        assert.equal(workerB.success, true);
+        const winnerDid = c.generatedDid;
+        assert.ok(winnerDid);
+
+        c.resumeClaimPause();
+        const staleWorkerResult = await workerA;
+        assert.equal(staleWorkerResult.success, false);
+        assert.equal(c.generatedDidCount, 1, "worker A does not generate an identity after losing its lease");
+        assert.equal(c.events.filter((event) => event === "did-generated").length, 1);
+        assert.equal(c.accountInsertCount, 1, "only the durable-claim owner inserts a permanent account");
+        assert.equal(
+            await db.collection("circles").countDocuments({ "metadata.pendingRegistrationId": c.id.toHexString() }),
+            1,
+        );
+        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, winnerDid);
+    });
+
+    it("keeps an acquired claim exclusive after lease expiry and process restart", async () => {
+        const c = await makeCase();
+        const lease = "durable-claim-initial-lease";
+        const claim = "durable-claim-owner";
+        assert.equal(await prepareClaim(c, lease, claim), true);
+        c.advance(PENDING_PROVISIONING_LEASE_MS + 60_000);
+        await collections.registrations.deleteMany({ expiresAt: { $lte: new Date(Date.now() + 1_000_000) } });
+        assert.ok(
+            await collections.registrations.findOne({ _id: c.id }),
+            "claim acquisition removes the TTL date so cleanup cannot delete it",
+        );
+        const restartedClient = new MongoClient(uri, { serverSelectionTimeoutMS: 3000 });
+        try {
+            await restartedClient.connect();
+            const restartedCollections = {
+                ...c.deps.collections,
+                registrations: restartedClient.db(databaseName).collection<PendingRegistration>("pendingRegistrations"),
+            } as PendingRegistrationCollections;
+            assert.equal(
+                await isPendingRegistrationProvisioningClaimOwner(c.id.toHexString(), claim, {
+                    collections: restartedCollections,
+                }),
+                true,
+            );
+            const replacementLease = "replacement-after-claim";
+            assert.equal(
+                await renewPendingRegistrationProvisioningLease(c.id.toHexString(), lease, c.deps),
+                false,
+                "the temporary lease cannot be revived after claim transition",
+            );
+            assert.equal(
+                await acquirePendingRegistrationProvisioningClaim(
+                    c.id.toHexString(),
+                    replacementLease,
+                    "replacement-claim",
+                    { collections: restartedCollections },
+                ),
+                false,
+                "ordinary application requests cannot transfer a durable claim",
+            );
+            assert.equal(
+                (await restartedCollections.registrations.findOne({ _id: c.id }))?.status,
+                "provisioning_claimed",
+            );
+        } finally {
+            await restartedClient.close();
+        }
     });
 
     it("preserves the reservation and partial files after interruption during credential writes", async () => {
@@ -400,7 +568,10 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         assert.ok(firstDid);
         const stored = await collections.registrations.findOne({ _id: c.id });
         assert.equal(stored?.reservedDid, firstDid);
-        assert.equal(await reservePendingRegistrationDid(c.id.toHexString(), "f".repeat(64), c.deps), false);
+        assert.equal(
+            await reservePendingRegistrationDid(c.id.toHexString(), "f".repeat(64), "stale-worker", c.deps),
+            false,
+        );
         assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, firstDid);
     });
 
@@ -436,6 +607,11 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
             await db.collection("circles").countDocuments({ "metadata.pendingRegistrationId": c.id.toHexString() }),
             1,
         );
+        assert.equal(
+            (await collections.registrations.findOne({ _id: c.id }))?.status,
+            "provisioning_claimed",
+            "an inserted account interrupted before finalization remains held by its durable claim",
+        );
     });
 
     it("characterizes partial self-membership and verifies the persisted insert is singular", async () => {
@@ -461,7 +637,7 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
     it("models failure before and after the durable provisioned transition", async () => {
         const before = await makeCase("before_provisioned_update");
         assert.equal((await complete(before)).success, false);
-        assert.equal((await collections.registrations.findOne({ _id: before.id }))?.status, "provisioning");
+        assert.equal((await collections.registrations.findOne({ _id: before.id }))?.status, "provisioning_claimed");
 
         const after = await makeCase("after_provisioned_update");
         assert.equal((await complete(after)).success, false);
@@ -481,12 +657,12 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         const before = await makeCase("during_session_issuance");
         assert.equal((await complete(before)).success, false);
         assert.equal(before.sessionCount, 0);
-        assert.equal((await collections.registrations.findOne({ _id: before.id }))?.status, "provisioning");
+        assert.equal((await collections.registrations.findOne({ _id: before.id }))?.status, "provisioning_claimed");
 
         const after = await makeCase("after_session_issuance");
         assert.equal((await complete(after)).success, false);
         assert.equal(after.sessionCount, 1);
-        assert.equal((await collections.registrations.findOne({ _id: after.id }))?.status, "provisioning");
+        assert.equal((await collections.registrations.findOne({ _id: after.id }))?.status, "provisioning_claimed");
     });
 
     it("models two completion workers racing on the same one-use continuation", async () => {
@@ -510,64 +686,251 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         });
     });
 
-    it("reproduces success being returned when the lease-fenced provisioned update matches no record", async () => {
+    it("rejects success when the lease-fenced provisioned update matches no record", async () => {
         const c = await makeCase("none", { loseFinalUpdate: true });
         const result = await complete(c);
         const state = await collections.registrations.findOne({ _id: c.id });
-        assert.equal(result.success, true);
+        assert.equal(result.success, false);
         assert.equal(c.updateWasLost, true);
-        assert.equal(state?.status, "provisioning");
-        assertContractForMilestone2("a zero-match provisioned transition must not return success", () => {
-            assert.equal(result.success, false);
-        });
+        assert.equal(state?.status, "provisioning_claimed");
     });
 
-    it("reproduces an unfenced DID reservation accepting a stale worker during a newer lease", async () => {
+    it("rejects expired leases for claim acquisition and requires a durable claim for DID reservation", async () => {
         const c = await makeCase("none");
+        const expiredLease = "expired-worker";
         await collections.registrations.updateOne(
             { _id: c.id },
             {
                 $set: {
                     status: "provisioning",
-                    provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", "new-worker"),
-                    provisioningLeaseExpiresAt: new Date(Date.now() + 60_000),
+                    provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", expiredLease),
+                    provisioningLeaseExpiresAt: new Date(Date.now() - 1),
                     reservedDid: null,
                 },
             },
         );
         const staleWorkerDid = "a".repeat(64);
-        const reservationAccepted = await reservePendingRegistrationDid(c.id.toHexString(), staleWorkerDid, c.deps);
-        assert.equal(reservationAccepted, true);
-        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, staleWorkerDid);
-        assertContractForMilestone2("a stale worker must not reserve a DID under a newer lease", () => {
-            assert.equal(reservationAccepted, false);
-        });
+        assert.equal(
+            await acquirePendingRegistrationProvisioningClaim(
+                c.id.toHexString(),
+                expiredLease,
+                "expired-claim",
+                c.deps,
+            ),
+            false,
+        );
+        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, null);
+        assert.equal(
+            await reservePendingRegistrationDid(c.id.toHexString(), staleWorkerDid, "expired-claim", c.deps),
+            false,
+        );
+        assert.equal(await renewPendingRegistrationProvisioningLease(c.id.toHexString(), expiredLease, c.deps), false);
+        const newLease = "replacement-worker";
+        const newClaim = "replacement-claim";
+        await collections.registrations.updateOne(
+            { _id: c.id },
+            {
+                $set: {
+                    provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", newLease),
+                    provisioningLeaseExpiresAt: new Date(Date.now() + 60_000),
+                },
+            },
+        );
+        assert.equal(
+            await acquirePendingRegistrationProvisioningClaim(c.id.toHexString(), expiredLease, "stale-claim", c.deps),
+            false,
+        );
+        assert.equal(
+            await isPendingRegistrationProvisioningLeaseOwner(c.id.toHexString(), expiredLease, c.deps),
+            false,
+        );
+        assert.equal(await renewPendingRegistrationProvisioningLease(c.id.toHexString(), newLease, c.deps), true);
+        assert.equal(
+            await acquirePendingRegistrationProvisioningClaim(c.id.toHexString(), newLease, newClaim, c.deps),
+            true,
+        );
+        assert.equal(await reservePendingRegistrationDid(c.id.toHexString(), staleWorkerDid, newClaim, c.deps), true);
     });
 
-    it("reproduces a second registration reserving another registration's DID", async () => {
+    it("prevents a second registration from reserving another registration's DID", async () => {
         const first = await makeCase("after_did_reservation");
         assert.equal((await complete(first)).success, false);
         const second = await makeCase();
-        await collections.registrations.updateOne({ _id: second.id }, { $set: { status: "provisioning" } });
+        const secondLease = "second-registration-lease";
+        const secondClaim = "second-registration-claim";
+        await collections.registrations.updateOne(
+            { _id: second.id },
+            {
+                $set: {
+                    status: "provisioning",
+                    provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", secondLease),
+                    provisioningLeaseExpiresAt: new Date(Date.now() + 60_000),
+                },
+            },
+        );
+        assert.equal(
+            await acquirePendingRegistrationProvisioningClaim(
+                second.id.toHexString(),
+                secondLease,
+                secondClaim,
+                second.deps,
+            ),
+            true,
+        );
         const crossRegistrationReservation = await reservePendingRegistrationDid(
             second.id.toHexString(),
             first.generatedDid!,
+            secondClaim,
             second.deps,
         );
-        assert.equal(crossRegistrationReservation, true);
-        assert.equal((await collections.registrations.findOne({ _id: second.id }))?.reservedDid, first.generatedDid);
-        assertContractForMilestone2("a DID reserved by one registration must not be claimable by another", () => {
-            assert.equal(crossRegistrationReservation, false);
-        });
+        assert.equal(crossRegistrationReservation, false);
+        assert.equal((await collections.registrations.findOne({ _id: second.id }))?.reservedDid, null);
     });
 
-    it("reproduces finalization-lock release without owner fencing", async () => {
-        const runtimeSource = fs.readFileSync("src/lib/auth/pending-registration-runtime.ts", "utf8");
-        assert.match(runtimeSource, /finalizationLocks\.deleteOne\(\{ _id: accountId \}\)/);
-        assert.match(runtimeSource, /type FinalizationLock = \{ _id: string; expiresAt: Date \}/);
-        assertContractForMilestone2("lock release must match the acquiring worker's fencing token", () => {
-            assert.doesNotMatch(runtimeSource, /finalizationLocks\.deleteOne\(\{ _id: accountId \}\)/);
+    it("atomically permits only one of two concurrent registrations to reserve the same DID", async () => {
+        const first = await makeCase();
+        const second = await makeCase();
+        const firstLease = "concurrent-owner-one";
+        const secondLease = "concurrent-owner-two";
+        const claims = ["concurrent-claim-one", "concurrent-claim-two"] as const;
+        const registrations: Array<[typeof first, string]> = [
+            [first, firstLease],
+            [second, secondLease],
+        ];
+        for (const [index, [registration, token]] of registrations.entries()) {
+            await collections.registrations.updateOne(
+                { _id: registration.id },
+                {
+                    $set: {
+                        status: "provisioning",
+                        provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", token),
+                        provisioningLeaseExpiresAt: new Date(Date.now() + 60_000),
+                    },
+                },
+            );
+            assert.equal(
+                await acquirePendingRegistrationProvisioningClaim(
+                    registration.id.toHexString(),
+                    token,
+                    claims[index],
+                    registration.deps,
+                ),
+                true,
+            );
+        }
+        const did = "c".repeat(64);
+        const results = await Promise.all([
+            reservePendingRegistrationDid(first.id.toHexString(), did, claims[0], first.deps),
+            reservePendingRegistrationDid(second.id.toHexString(), did, claims[1], second.deps),
+        ]);
+        assert.equal(results.filter(Boolean).length, 1);
+        assert.equal(await collections.didReservations.countDocuments({ did }), 1);
+        assert.equal(await collections.registrations.countDocuments({ reservedDid: did }), 1);
+    });
+
+    it("retains DID ownership across a new Mongo client after process restart", async () => {
+        const owner = await makeCase("after_did_reservation");
+        assert.equal((await complete(owner)).success, false);
+        const ownerDid = owner.generatedDid;
+        if (!ownerDid) throw new Error("Test did not retain the synthetic DID");
+        const contender = await makeCase();
+        const contenderLease = "restarted-contender";
+        const contenderClaim = "restarted-contender-claim";
+        const restartedClient = new MongoClient(uri, { serverSelectionTimeoutMS: 3000 });
+        try {
+            await restartedClient.connect();
+            const restartedDb = restartedClient.db(databaseName);
+            const restartedCollections = {
+                ...contender.deps.collections,
+                registrations: restartedDb.collection<PendingRegistration>("pendingRegistrations"),
+                didReservations: restartedDb.collection<PendingRegistrationDidReservation>(
+                    "pendingRegistrationDidReservations",
+                ),
+            } as PendingRegistrationCollections;
+            await restartedCollections.registrations.updateOne(
+                { _id: contender.id },
+                {
+                    $set: {
+                        status: "provisioning",
+                        provisioningLeaseHash: hashPendingRegistrationSecret("provisioning-lease", contenderLease),
+                        provisioningLeaseExpiresAt: new Date(Date.now() + 60_000),
+                    },
+                },
+            );
+            assert.equal(
+                await acquirePendingRegistrationProvisioningClaim(
+                    contender.id.toHexString(),
+                    contenderLease,
+                    contenderClaim,
+                    { collections: restartedCollections },
+                ),
+                true,
+            );
+            assert.equal(
+                await reservePendingRegistrationDid(contender.id.toHexString(), ownerDid, contenderClaim, {
+                    collections: restartedCollections,
+                }),
+                false,
+            );
+            const persisted = await restartedCollections.didReservations.findOne({ _id: owner.id.toHexString() });
+            assert.equal(persisted?.did, ownerDid);
+        } finally {
+            await restartedClient.close();
+        }
+    });
+
+    it("backfills non-conflicting legacy reservations and fails closed on duplicate legacy ownership", async () => {
+        const legacy = await makeCase();
+        const legacyDid = "d".repeat(64);
+        await collections.registrations.updateOne(
+            { _id: legacy.id },
+            { $set: { status: "provisioning", reservedDid: legacyDid } },
+        );
+        await backfillPendingRegistrationDidReservations(collections);
+        assert.equal((await collections.didReservations.findOne({ _id: legacy.id.toHexString() }))?.did, legacyDid);
+
+        const duplicate = await makeCase();
+        await collections.registrations.updateOne(
+            { _id: duplicate.id },
+            { $set: { status: "provisioning", reservedDid: legacyDid } },
+        );
+        await assert.rejects(
+            backfillPendingRegistrationDidReservations(collections),
+            /Conflicting legacy pending DID reservations require manual review/,
+        );
+        assert.equal(await collections.didReservations.countDocuments({ did: legacyDid }), 1);
+    });
+
+    it("reconciliation finds a DID registry write interrupted before the pending record update", async () => {
+        const c = await makeCase();
+        assert.equal(await prepareClaim(c, "registry-only-lease", "registry-only-claim"), true);
+        const did = "e".repeat(64);
+        await collections.didReservations.insertOne({
+            _id: c.id.toHexString(),
+            did,
+            createdAt: new Date(),
         });
+        const report = await inspectPendingRegistrationReconciliation(db, {
+            usersDirectory,
+            pendingRegistrationId: c.id.toHexString(),
+        });
+        assert.equal(report.length, 1, "registry-only reservations remain visible for review");
+        assert.equal(report[0].reservedDid, did);
+        assert.equal(report[0].classification, "manual_review_missing_credentials");
+        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.reservedDid, null);
+    });
+
+    it("fences lock acquire, renew, expiry reclaim and release across workers", async () => {
+        const locks = db.collection<any>("pendingRegistrationTestOwnedLocks");
+        const id = new ObjectId().toHexString();
+        const now = new Date();
+        assert.equal(await acquirePendingRegistrationOwnedLock(locks as any, id, "worker-one", now, 1000), true);
+        assert.equal(await acquirePendingRegistrationOwnedLock(locks as any, id, "worker-two", now, 1000), false);
+        assert.equal(await renewPendingRegistrationOwnedLock(locks as any, id, "worker-one", now, 1000), true);
+        await locks.updateOne({ _id: id }, { $set: { expiresAt: new Date(now.getTime() - 1) } });
+        assert.equal(await acquirePendingRegistrationOwnedLock(locks as any, id, "worker-two", now, 1000), true);
+        assert.equal(await releasePendingRegistrationOwnedLock(locks as any, id, "worker-one"), false);
+        assert.equal(await releasePendingRegistrationOwnedLock(locks as any, id, "worker-two"), true);
     });
 
     it("reproduces membership retry skipping side effects after the member row exists", async () => {
@@ -578,14 +941,13 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
                 memberSource.indexOf("await autoAddToMemberChats"),
         );
         assert.ok(memberSource.indexOf("await autoAddToMemberChats") < memberSource.indexOf("$inc: { members: 1 }"));
-        assert.match(runtimeSource, /if \(\!\(await getMember\(did, user\._id!\)\)\)\s*\{\s*await addMember/);
+        const skipWhenMemberExists =
+            /if\s*\(\s*!\(await getMember\(did, user\._id!\)\)\s*\)\s*\{[\s\S]*?await addMember/;
+        assert.match(runtimeSource, skipWhenMemberExists);
         assertContractForMilestone2(
             "an existing member row must not suppress repair of incomplete side effects",
             () => {
-                assert.doesNotMatch(
-                    runtimeSource,
-                    /if \(\!\(await getMember\(did, user\._id!\)\)\)\s*\{\s*await addMember/,
-                );
+                assert.doesNotMatch(runtimeSource, skipWhenMemberExists);
             },
         );
     });
@@ -605,21 +967,24 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
             { _id: c.id },
             { $set: { status: "provisioning", reservedDid: did, reconciliationRequiredAt: new Date() } },
         );
+        await collections.didReservations.insertOne({
+            _id: c.id.toHexString(),
+            did,
+            createdAt: new Date(),
+        });
         await db.collection("circles").insertOne({
             _id: c.accountId,
             did,
             email: "different-account@example.invalid",
             handle: "different-account",
+            publicKey: publicKeyPem,
             metadata: { pendingRegistrationId: c.id.toHexString() },
         });
         const [report] = await inspectPendingRegistrationReconciliation(db, {
             usersDirectory,
             pendingRegistrationId: c.id.toHexString(),
         });
-        assert.equal(report.classification, "recoverable_finalize");
-        assertContractForMilestone2("reconciliation must reject account email/handle mismatch", () => {
-            assert.notEqual(report.classification, "recoverable_finalize");
-        });
+        assert.equal(report.classification, "manual_review_account_mismatch");
     });
 
     it("allows retry after a successful durable transition only with a new registration authorization", async () => {
@@ -642,6 +1007,7 @@ async function main() {
         await db.dropDatabase();
         collections = {
             registrations: db.collection<PendingRegistration>("pendingRegistrations"),
+            didReservations: db.collection("pendingRegistrationDidReservations"),
             rateLimits: db.collection("pendingRegistrationRateLimits"),
             auditEvents: db.collection("pendingRegistrationAuditEvents"),
         };

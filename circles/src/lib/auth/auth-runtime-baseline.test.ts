@@ -39,10 +39,30 @@ assert.match(
     /if \(options\.reserveDid\) await options\.reserveDid\(did\)/,
     "pending registration can durably reserve its generated DID before credential files are written",
 );
+assert.match(
+    authSource,
+    /if \(options\.pendingRegistrationId\) \{[\s\S]*?await options\.acquireProvisioningClaim\(\);[\s\S]*?await options\.assertProvisioningClaim\(\);[\s\S]*?\}/,
+    "pending registration must acquire and verify its durable claim before identity generation",
+);
+assert.ok(
+    authSource.indexOf("await options.acquireProvisioningClaim()") <
+        authSource.indexOf('crypto.generateKeyPairSync("rsa", { modulusLength: 2048 })'),
+    "the durable claim precedes key generation",
+);
 assert.ok(
     authSource.indexOf("if (options.reserveDid) await options.reserveDid(did)") <
         authSource.indexOf("fs.mkdirSync(accountPath"),
     "DID reservation happens before the credential directory is created",
+);
+const accountInsertIndex = authSource.indexOf("Circles.insertOne(user)");
+assert.ok(
+    authSource.lastIndexOf("await options.assertProvisioningClaim()", accountInsertIndex) >= 0,
+    "permanent-account insertion is guarded by durable claim ownership",
+);
+assert.match(
+    authSource,
+    /fs\.mkdirSync\(accountPath\);/,
+    "credential-directory creation fails if a DID directory already exists instead of reusing it",
 );
 assert.match(
     authSource,
