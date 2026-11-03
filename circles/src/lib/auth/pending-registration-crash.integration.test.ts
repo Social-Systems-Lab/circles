@@ -26,6 +26,10 @@ import {
     verifyPendingRegistrationEmail,
 } from "@/lib/auth/pending-registration";
 import { inspectPendingRegistrationReconciliation } from "@/lib/auth/pending-registration-reconciliation";
+import { ensureProvisionedPersonalMembership } from "@/lib/data/member";
+import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
+import { finalizeClaimedRegistrationForAuthenticatedLogin } from "@/lib/auth/pending-registration-runtime";
+import { closeDbForTests } from "@/lib/data/db";
 
 process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY = "crash-contract-integration-test-only";
 
@@ -38,9 +42,13 @@ type FaultPoint =
     | "after_credentials"
     | "after_account_insert"
     | "during_membership"
-    | "after_membership"
+    | "after_membership_row"
+    | "during_member_chat"
+    | "after_membership_side_effects"
     | "during_profile_finalization"
+    | "after_profile_finalization"
     | "during_welcome_finalization"
+    | "after_welcome_finalization"
     | "before_provisioned_update"
     | "after_provisioned_update"
     | "during_session_issuance"
@@ -78,8 +86,8 @@ if (realUsersDirectory.startsWith(`${realProjectDirectory}${path.sep}`)) {
 let db: ReturnType<MongoClient["db"]>;
 let collections: PendingRegistrationCollections;
 const cases: Array<{ name: string; run: () => Promise<void> }> = [];
-const reproducedContractFailures: string[] = [];
-const expectedContractFailures = [
+const satisfiedMilestone2Contracts: string[] = [];
+const milestone2Contracts = [
     "session issuance must follow durable status=provisioned",
     "an existing member row must not suppress repair of incomplete side effects",
 ];
@@ -90,14 +98,9 @@ function it(name: string, run: () => Promise<void>) {
     cases.push({ name, run });
 }
 function assertContractForMilestone2(name: string, assertion: () => void) {
-    try {
-        assertion();
-        console.log(`CONTRACT SATISFIED: ${name}`);
-    } catch (error) {
-        if (!error || typeof error !== "object" || !("code" in error) || error.code !== "ERR_ASSERTION") throw error;
-        reproducedContractFailures.push(name);
-        console.warn(`EXPECTED CURRENT FAILURE: ${name}`);
-    }
+    assertion();
+    satisfiedMilestone2Contracts.push(name);
+    console.log(`CONTRACT SATISFIED: ${name}`);
 }
 
 async function makeCase(
@@ -259,6 +262,7 @@ async function makeCase(
             await db.collection("circles").insertOne({
                 _id: accountId,
                 did,
+                circleType: "user",
                 email: registration.email,
                 handle: registration.requestedHandle,
                 publicKey: publicKeyPem,
@@ -267,20 +271,46 @@ async function makeCase(
             accountInsertCount += 1;
             events.push("account-inserted");
             if (activeFault === "after_account_insert") throw new Error("injected after account insert");
-            if (activeFault === "during_membership") throw new Error("injected during membership creation");
+            return { accountId: accountId.toHexString(), did };
+        },
+        validateProvisionedAccount: async (pendingRegistrationId, account) => {
+            const pending = await collections.registrations.findOne({ _id: new ObjectId(pendingRegistrationId) });
+            const correlated = await db.collection("circles").findOne({
+                _id: accountId,
+                did: account.did,
+                "metadata.pendingRegistrationId": pendingRegistrationId,
+            });
+            const reservation = await collections.didReservations.findOne({ _id: pendingRegistrationId });
+            return Boolean(
+                pending?.status === "provisioning_claimed" &&
+                    pending.reservedDid === account.did &&
+                    reservation?.did === account.did &&
+                    correlated?.email === registration.email &&
+                    correlated?.handle === registration.requestedHandle &&
+                    correlated?.publicKey &&
+                    crypto.createHash("sha256").update(correlated.publicKey).digest("hex") === account.did,
+            );
+        },
+        finalizeAccount: async (_account, { pendingRegistrationId }) => {
+            if (activeFault === "during_membership") throw new Error("injected before membership row insertion");
             await db
                 .collection("members")
                 .updateOne(
-                    { userDid: did, circleId: accountId.toHexString() },
+                    { userDid: generatedDid, circleId: accountId.toHexString() },
                     { $setOnInsert: { joinedAt: now, userGroups: ["admins", "moderators", "members"] } },
                     { upsert: true },
                 );
             membershipInsertCount += 1;
-            events.push("membership-created");
-            if (activeFault === "after_membership") throw new Error("injected after membership creation");
-            return { accountId: accountId.toHexString(), did };
-        },
-        finalizeAccount: async () => {
+            events.push("membership-row-inserted");
+            if (activeFault === "after_membership_row") throw new Error("injected after membership row insertion");
+            if (activeFault === "during_member_chat") throw new Error("injected during member chat side effect");
+            await db
+                .collection("pendingTestChatMembers")
+                .updateOne({ _id: accountId }, { $setOnInsert: { userDid: generatedDid } }, { upsert: true });
+            await db.collection("circles").updateOne({ _id: accountId }, { $set: { members: 1 } });
+            events.push("membership-side-effects-complete");
+            if (activeFault === "after_membership_side_effects")
+                throw new Error("injected after membership side effects");
             if (activeFault === "during_profile_finalization") throw new Error("injected during profile finalization");
             await db
                 .collection("pendingTestProfiles")
@@ -289,7 +319,18 @@ async function makeCase(
                     { $setOnInsert: { createdAt: now, onboardingComplete: false } },
                     { upsert: true },
                 );
+            await db.collection("circles").updateOne(
+                { _id: accountId, did: generatedDid, "metadata.pendingRegistrationId": pendingRegistrationId },
+                {
+                    $set: {
+                        isHuman: true,
+                        "metadata.onboardingFlow": "pending-registration-v1",
+                        "metadata.pendingRegistrationFinalizationVersion": 1,
+                    },
+                },
+            );
             events.push("profile-finalized");
+            if (activeFault === "after_profile_finalization") throw new Error("injected after profile finalization");
             if (activeFault === "during_welcome_finalization") throw new Error("injected during welcome finalization");
             await db
                 .collection("pendingTestWelcomeMessages")
@@ -300,6 +341,16 @@ async function makeCase(
                 );
             welcomeInsertCount += 1;
             events.push("welcome-finalized");
+            if (activeFault === "after_welcome_finalization") throw new Error("injected after welcome finalization");
+        },
+        issueSession: async (pendingRegistrationId, account) => {
+            const state = await collections.registrations.findOne({
+                _id: new ObjectId(pendingRegistrationId),
+                status: "provisioned",
+                accountId: account.accountId,
+                accountDid: account.did,
+            });
+            assert.ok(state, "session issuance is forbidden before durable finalization");
             if (activeFault === "during_session_issuance") throw new Error("injected during session issuance");
             sessionCount += 1;
             events.push("session-issued");
@@ -614,12 +665,136 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         );
     });
 
-    it("characterizes partial self-membership and verifies the persisted insert is singular", async () => {
-        const c = await makeCase("after_membership");
+    it("repairs a correlated claimed account after authenticated login without issuing a session", async () => {
+        const c = await makeCase("after_account_insert");
+        assert.equal((await complete(c)).success, false);
+        const account = await db
+            .collection("circles")
+            .findOne({ "metadata.pendingRegistrationId": c.id.toHexString() });
+        assert.ok(account?._id);
+        const user = {
+            _id: account!._id.toString(),
+            did: c.generatedDid!,
+            metadata: { pendingRegistrationId: c.id.toHexString() },
+        };
+
+        const refreshedUser = await db.collection("circles").findOne({ _id: account!._id });
+        const authenticatedUser = { ...user, metadata: refreshedUser?.metadata };
+        assert.equal(await finalizeClaimedRegistrationForAuthenticatedLogin(authenticatedUser), true);
+        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.status, "provisioned");
+        assert.equal(await db.collection("members").countDocuments({ circleId: user._id }), 1);
+        assert.equal(await db.collection("chatConversations").countDocuments({ participants: user.did }), 1);
+        assert.equal(c.sessionCount, 0, "internal repair does not issue a session");
+
+        const nextLoginUser = await db.collection("circles").findOne({ _id: account!._id });
+        assert.equal(
+            await finalizeClaimedRegistrationForAuthenticatedLogin({
+                ...user,
+                metadata: nextLoginUser?.metadata,
+            }),
+            true,
+        );
+        assert.equal(await db.collection("members").countDocuments({ circleId: user._id }), 1);
+        assert.equal(await db.collection("chatConversations").countDocuments({ participants: user.did }), 1);
+        assert.equal(c.sessionCount, 0, "repeat repair still does not issue a session");
+    });
+
+    it("refuses authenticated repair when exact account correlation is inconsistent", async () => {
+        const c = await makeCase("after_account_insert");
+        assert.equal((await complete(c)).success, false);
+        const account = await db
+            .collection("circles")
+            .findOne({ "metadata.pendingRegistrationId": c.id.toHexString() });
+        assert.ok(account?._id);
+        await db
+            .collection("circles")
+            .updateOne({ _id: account!._id }, { $set: { email: "mismatch@example.invalid" } });
+
+        assert.equal(
+            await finalizeClaimedRegistrationForAuthenticatedLogin({
+                _id: account!._id.toString(),
+                did: c.generatedDid!,
+                metadata: { pendingRegistrationId: c.id.toHexString() },
+            }),
+            false,
+        );
+        assert.equal((await collections.registrations.findOne({ _id: c.id }))?.status, "provisioning_claimed");
+        assert.equal(await db.collection("members").countDocuments({ circleId: account!._id.toString() }), 0);
+        assert.equal(c.sessionCount, 0);
+    });
+
+    it("preserves a membership row when later finalization effects fail", async () => {
+        const c = await makeCase("after_membership_row");
         assert.equal((await complete(c)).success, false);
         assert.equal(c.membershipInsertCount, 1);
         assert.equal(await db.collection("members").countDocuments({ circleId: c.accountId.toHexString() }), 1);
         assert.equal(c.sessionCount, 0);
+    });
+
+    it("repairs an existing membership row, chat membership and count idempotently", async () => {
+        const did = crypto.createHash("sha256").update(`membership-repair:${new ObjectId()}`).digest("hex");
+        const circleId = new ObjectId();
+        const chatRoomId = new ObjectId();
+        await db.collection("circles").insertOne({ _id: circleId, did, circleType: "user", members: 0 });
+        await db
+            .collection("chatRooms")
+            .insertOne({ _id: chatRoomId, circleId: circleId.toHexString(), handle: "members" });
+        await db.collection("members").insertOne({
+            userDid: did,
+            circleId: circleId.toHexString(),
+            joinedAt: new Date(),
+            userGroups: ["admins", "moderators", "members"],
+        });
+
+        await Promise.all([
+            ensureProvisionedPersonalMembership(did, circleId.toHexString()),
+            ensureProvisionedPersonalMembership(did, circleId.toHexString()),
+        ]);
+        await ensureProvisionedPersonalMembership(did, circleId.toHexString());
+
+        assert.equal(
+            await db.collection("members").countDocuments({ userDid: did, circleId: circleId.toHexString() }),
+            1,
+        );
+        const chatMembershipCount = await db
+            .collection("chatRoomMembers")
+            .countDocuments({ userDid: did, chatRoomId: chatRoomId.toHexString() });
+        assert.equal(chatMembershipCount, 1);
+        assert.equal((await db.collection("circles").findOne({ _id: circleId }))?.members, 1);
+        assertContractForMilestone2("an existing member row must not suppress repair of incomplete side effects", () =>
+            assert.equal(chatMembershipCount, 1),
+        );
+    });
+
+    it("repairs and deduplicates welcome conversation and message creation", async () => {
+        const did = crypto.createHash("sha256").update(`welcome-repair:${new ObjectId()}`).digest("hex");
+        const config = {
+            senderHandle: "kamooni",
+            displayName: "Kamooni",
+            avatarUrl: "/images/kamooni.png",
+            threadName: "Welcome to Kamooni",
+            source: "system_welcome" as const,
+            version: "test-v1",
+            repliesDisabled: true,
+            markdown: "Synthetic welcome message",
+        };
+        const [first, retry] = await Promise.all([
+            ensureWelcomeMessageForNewUser(did, config, `sender-${did}`),
+            ensureWelcomeMessageForNewUser(did, config, `sender-${did}`),
+        ]);
+        assert.equal(first.conversationId, retry.conversationId);
+        assert.equal([first.messageCreated, retry.messageCreated].filter(Boolean).length, 1);
+        assert.equal((await ensureWelcomeMessageForNewUser(did, config, `sender-${did}`)).messageCreated, false);
+        assert.equal(
+            await db.collection("chatConversations").countDocuments({ handle: `welcome-${did}`, participants: did }),
+            1,
+        );
+        assert.equal(
+            await db
+                .collection("chatMessageDocs")
+                .countDocuments({ conversationId: first.conversationId, source: config.source }),
+            1,
+        );
     });
 
     it("models interruption during profile and welcome finalization", async () => {
@@ -643,9 +818,38 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         assert.equal((await complete(after)).success, false);
         assert.equal((await collections.registrations.findOne({ _id: after.id }))?.status, "provisioned");
         assert.equal(
+            after.sessionCount,
+            0,
+            "a lost response after durable finalization does not roll back account readiness",
+        );
+        assert.equal(
             (await complete(after)).success,
             false,
             "consumed capability cannot repeat completion after lost response",
+        );
+        const finalizedAccount = await db
+            .collection("circles")
+            .findOne({ "metadata.pendingRegistrationId": after.id.toHexString() });
+        assert.ok(finalizedAccount?._id);
+        assert.equal(
+            await finalizeClaimedRegistrationForAuthenticatedLogin({
+                _id: finalizedAccount!._id.toString(),
+                did: after.generatedDid!,
+                metadata: finalizedAccount!.metadata,
+            }),
+            true,
+            "an authenticated ordinary login recognizes durable completion after the response was lost",
+        );
+        assert.equal(after.sessionCount, 0, "reconciliation does not issue a session");
+        await collections.registrations.deleteOne({ _id: after.id });
+        assert.equal(
+            await finalizeClaimedRegistrationForAuthenticatedLogin({
+                _id: finalizedAccount!._id.toString(),
+                did: after.generatedDid!,
+                metadata: finalizedAccount!.metadata,
+            }),
+            true,
+            "the durable account marker preserves ordinary login after provisioned-record TTL cleanup",
         );
         assert.equal(
             await db.collection("circles").countDocuments({ "metadata.pendingRegistrationId": after.id.toHexString() }),
@@ -657,12 +861,12 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         const before = await makeCase("during_session_issuance");
         assert.equal((await complete(before)).success, false);
         assert.equal(before.sessionCount, 0);
-        assert.equal((await collections.registrations.findOne({ _id: before.id }))?.status, "provisioning_claimed");
+        assert.equal((await collections.registrations.findOne({ _id: before.id }))?.status, "provisioned");
 
         const after = await makeCase("after_session_issuance");
         assert.equal((await complete(after)).success, false);
         assert.equal(after.sessionCount, 1);
-        assert.equal((await collections.registrations.findOne({ _id: after.id }))?.status, "provisioning_claimed");
+        assert.equal((await collections.registrations.findOne({ _id: after.id }))?.status, "provisioned");
     });
 
     it("models two completion workers racing on the same one-use continuation", async () => {
@@ -676,7 +880,7 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         assert.equal(c.sessionCount, 1);
     });
 
-    it("records the current session-before-durable-completion ordering as a reproduced contract violation", async () => {
+    it("enforces session issuance only after durable registration finalization", async () => {
         const c = await makeCase("none");
         assert.equal((await complete(c)).success, true);
         const state = await collections.registrations.findOne({ _id: c.id });
@@ -693,6 +897,7 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         assert.equal(result.success, false);
         assert.equal(c.updateWasLost, true);
         assert.equal(state?.status, "provisioning_claimed");
+        assert.equal(c.sessionCount, 0, "zero-match finalization never issues a session");
     });
 
     it("rejects expired leases for claim acquisition and requires a durable claim for DID reservation", async () => {
@@ -933,25 +1138,6 @@ describe("pending-registration crash-boundary contracts (disposable MongoDB + sy
         assert.equal(await releasePendingRegistrationOwnedLock(locks as any, id, "worker-two"), true);
     });
 
-    it("reproduces membership retry skipping side effects after the member row exists", async () => {
-        const memberSource = fs.readFileSync("src/lib/data/member.ts", "utf8");
-        const runtimeSource = fs.readFileSync("src/lib/auth/pending-registration-runtime.ts", "utf8");
-        assert.ok(
-            memberSource.indexOf("await Members.insertOne(member)") <
-                memberSource.indexOf("await autoAddToMemberChats"),
-        );
-        assert.ok(memberSource.indexOf("await autoAddToMemberChats") < memberSource.indexOf("$inc: { members: 1 }"));
-        const skipWhenMemberExists =
-            /if\s*\(\s*!\(await getMember\(did, user\._id!\)\)\s*\)\s*\{[\s\S]*?await addMember/;
-        assert.match(runtimeSource, skipWhenMemberExists);
-        assertContractForMilestone2(
-            "an existing member row must not suppress repair of incomplete side effects",
-            () => {
-                assert.doesNotMatch(runtimeSource, skipWhenMemberExists);
-            },
-        );
-    });
-
     it("reproduces reconciliation accepting a correlated account with mismatched email and handle", async () => {
         const c = await makeCase();
         const keyPair = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -1024,21 +1210,22 @@ async function main() {
             console.log(`PASS ${testCase.name}`);
         }
         console.log(`Passed ${cases.length} pending-registration crash-contract cases.`);
-        console.log(
-            `Milestone 2 assertions failing against current implementation: ${reproducedContractFailures.length}`,
-        );
-        for (const failure of reproducedContractFailures) console.log(`  - ${failure}`);
         assert.deepEqual(
-            [...reproducedContractFailures].sort(),
-            [...expectedContractFailures].sort(),
-            "Expected-failure inventory changed; review the security contract before updating this baseline",
+            [...satisfiedMilestone2Contracts].sort(),
+            [...milestone2Contracts].sort(),
+            "Both original Milestone 2B contracts must remain explicit passing assertions",
         );
+        console.log("Both original Milestone 2B expected failures are now enforced as passing assertions.");
     } finally {
         try {
             if (db) await db.dropDatabase();
         } finally {
-            await client.close();
-            fs.rmSync(usersDirectory, { recursive: true, force: true });
+            try {
+                await closeDbForTests();
+            } finally {
+                await client.close();
+                fs.rmSync(usersDirectory, { recursive: true, force: true });
+            }
         }
     }
 }

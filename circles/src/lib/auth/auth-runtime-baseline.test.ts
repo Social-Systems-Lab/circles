@@ -70,7 +70,11 @@ assert.match(
     "signup persists a hash rather than the raw verification token",
 );
 assert.match(authSource, /Circles\.insertOne\(user\)/, "signup inserts the permanent user before verification");
-assert.match(authSource, /await addMember\(did, user\._id!/, "signup creates self-membership before verification");
+assert.match(
+    authSource,
+    /if \(!options\.pendingRegistrationId\)\s*\{\s*await addMember\(did, user\._id!/,
+    "legacy signup keeps its membership behavior while pending signup defers it to finalization",
+);
 assert.match(
     signupActionSource,
     /await createUserSession\(user as UserPrivate, user\.did!\)/,
@@ -96,6 +100,19 @@ assert.match(
     loginActionSource,
     /authenticateUser\(user\.did!, password\)/,
     "login authenticates against existing DID credentials",
+);
+assert.ok(
+    loginActionSource.indexOf("authenticateUser(user.did!, password)") <
+        loginActionSource.indexOf("finalizeClaimedRegistrationForAuthenticatedLogin(user)") &&
+        loginActionSource.indexOf("finalizeClaimedRegistrationForAuthenticatedLogin(user)") <
+            loginActionSource.indexOf("createUserSession(privateUser, user.did!)"),
+    "pending finalization recovery runs only after password verification and before session issuance",
+);
+const pendingRegistrationSource = readFileSync("src/lib/auth/pending-registration.ts", "utf8");
+assert.ok(
+    pendingRegistrationSource.indexOf("const finalTransition") <
+        pendingRegistrationSource.indexOf("await deps.issueSession(input.pendingRegistrationId, account)"),
+    "durable provisioned transition precedes session issuance",
 );
 
 assert.match(resetSource, /const existingDid = user\.did/, "password reset captures the existing DID");

@@ -35,8 +35,9 @@ pending_email
 - Email verification consumes a purpose-specific hashed token atomically and issues a separate 30-minute verified continuation secret.
 - The password is accepted only with the verified continuation. Permanent provisioning then calls the existing RSA/DID/password-encryption machinery with `emailAlreadyVerified` and a pending-registration idempotency marker.
 - After acquiring email/handle locks, the current lease owner atomically converts the lease into a durable claim before key generation, DID reservation, credential-directory creation, or account insertion.
-- The durable claim has no expiry and is not transferred by ordinary retries. A process restart preserves it. Any interruption after claim acquisition fails closed for operator reconciliation until a separately authorized recovery exists.
-- Current finalization still creates the session before the durable `provisioned` state transition; this ordering and repair of incomplete membership side effects remain Milestone 2B work.
+- The durable claim has no expiry and is not transferred by ordinary retries. A process restart preserves it. Interruptions with no exact, credential-complete permanent account remain closed for operator reconciliation; a proven account can complete secondary finalization after the member passes ordinary password login.
+- Required finalization effects now run under the durable claim and an owner-fenced finalization lock. The status transition to `provisioned` is compare-and-set against that claim, and a session is issued only after exactly one record matches.
+- A crash after account insertion can be repaired when the member later completes ordinary password login. Login first verifies the password, exact account correlation, DID reservation and public-key identity; the repair path itself never issues a session. If finalization completed but the response/session was lost, ordinary login proceeds without replaying the consumed continuation.
 
 Pending records expire after 48 hours until a DID is reserved or a durable claim is acquired. Both actions remove TTL eligibility. Successfully provisioned records become TTL-eligible after a seven-day operational review window. Email-verification and verified-continuation capabilities expire after 30 minutes. Resend has a one-minute cooldown.
 
@@ -94,17 +95,16 @@ Scopes cover start IP/email, resend and correction. The same helper is available
 
 ## Provisioning failure matrix
 
-| Failure boundary                                       | Durable state                                                       | Retry behavior                                                                        |
-| ------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Failure boundary                                       | Durable state                                                       | Retry/recovery behavior                                                               |
-| -----------------------------------------------------  | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Before durable claim                                   | Pending record and temporary provisioning lease                     | After lease expiry, fresh email verification can authorize another attempt.           |
-| After claim, before DID generation/reservation         | Non-expiring `provisioning_claimed`; no DID                         | Ordinary retry is blocked; preserve the claim for operator review.                    |
-| After DID registry insert, before pending DID update   | Claim and registry-only DID ownership                               | Reconciliation reports it; never delete or reuse the registry entry automatically.    |
-| After DID reservation, before credential files         | Claim, reserved DID, no account                                     | Fail closed; preserve the identity for operator review.                               |
-| During credential writes, before Mongo account insert  | Claim, reserved DID and partial credential directory                | Fail closed; preserve all files for reconciliation.                                   |
-| After Mongo account insertion                          | Claim and exactly correlated permanent account                      | Ordinary retry cannot obtain a session or transfer the claim; operator review needed. |
-| During membership/profile/welcome/session finalization | Claim and some side effects may exist                               | No automatic claim transfer; Milestone 2B will define repair and durable ordering.    |
+| Failure boundary                                      | Durable state                                            | Retry/recovery behavior                                                                                                |
+| ----------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Before durable claim                                  | Pending record and temporary provisioning lease          | After lease expiry, fresh email verification can authorize another attempt.                                            |
+| After claim, before DID generation/reservation        | Non-expiring `provisioning_claimed`; no DID              | Ordinary retry is blocked; preserve the claim for operator review.                                                     |
+| After DID registry insert, before pending DID update  | Claim and registry-only DID ownership                    | Reconciliation reports it; never delete or reuse the registry entry automatically.                                     |
+| After DID reservation, before credential files        | Claim, reserved DID, no account                          | Fail closed; preserve the identity for operator review.                                                                |
+| During credential writes, before Mongo account insert | Claim, reserved DID and partial credential directory     | Fail closed; preserve all files for reconciliation.                                                                    |
+| After Mongo account insertion                         | Claim and exactly correlated permanent account           | Member must authenticate normally; login repairs idempotent effects without issuing a session from the repair routine. |
+| During membership/profile/welcome finalization        | Claim and some effects may exist                         | Authenticated login repairs effects; identity mismatch or incomplete credentials require operator review.              |
+| After `provisioned`, before session issuance/response | Durable completed account; session may not reach browser | Ordinary login; completion credential remains consumed.                                                                |
 
 ## Failure recovery
 
@@ -112,9 +112,12 @@ Scopes cover start IP/email, resend and correction. The same helper is available
 - A short lease prevents concurrent pre-claim work. The durable claim prevents competing provisioning attempts after claim acquisition and survives process restarts.
 - Expired pre-claim leases can be reclaimed only while no durable claim exists and no DID is reserved. After claim acquisition, no ordinary retry or timestamp-based process transfers ownership.
 - Account correlation requires exact pending id, reserved DID, unique account DID, public-key/DID match, canonical handle, normalized email and recorded identity evidence. Reconciliation labels absent or inconsistent evidence for manual review.
+- Reconciliation also reports self-membership, members-chat membership, profile member count, profile initialization (including the durable finalization version marker), welcome conversation and welcome-message state independently. That account marker preserves the completed state after the pending record's seven-day TTL cleanup.
+- Self-membership and members-chat membership use deterministic ObjectIds for insertion so concurrent repair upserts converge without adding collection indexes; an existing membership row does not imply the chat row or count was completed. Welcome conversations and messages use deterministic identities plus the existing idempotent submission key. Profile initialization is an idempotent update filtered by the exact account identity and pending marker.
+- A successful completion response implies the pending record is durably `provisioned`. A zero-match transition cannot issue a session. Login-time repair returns only a readiness result; the login action issues a session only after ordinary password authentication and successful repair.
 - A crash after claim acquisition can strand even a claim with no DID. Reconciliation now lists this state; it must not be reset merely because it is old.
 
-Filesystem creation, Mongo account insertion and the legacy membership helper are not one transaction. The non-expiring claim prevents another application worker from taking over while the original worker could resume; this trades automatic availability for identity integrity. A crash may leave partial credentials or a correlated account under a retained claim. No operator transfer command exists. Any future recovery must be audited and prove the prior process cohort is stopped/fenced, verify all identity evidence, and must not grant a session without ordinary authentication. Membership side effects may still be incomplete after an inserted member row; that repair is Milestone 2B.
+Filesystem creation, Mongo account insertion and secondary effects are not one transaction. The non-expiring claim prevents another application worker from taking over while the original worker could resume; this trades automatic availability for identity integrity. A crash may leave partial credentials or a correlated account under a retained claim. No operator transfer command exists. Any future claim recovery must be audited and prove the prior process cohort is stopped/fenced, verify all identity evidence, and must not grant a session without ordinary authentication. Exact, complete credential/account states can repair membership, profile and welcome effects on password-authenticated login; orphan credentials, incomplete credentials and inconsistent correlations remain operator-only.
 
 ### Operator reconciliation procedure
 
@@ -122,7 +125,7 @@ Filesystem creation, Mongo account insertion and the legacy membership helper ar
 2. Locate the pending record by id and record its `reservedDid` (if any), claim state, status, lease timestamps and verification expiry. Never use an email-only match as proof of ownership.
 3. If the record has `provisioning_claimed` but no DID, do not release it based on age. Establish that all workers that could hold the attempt are stopped before any separately reviewed recovery decision.
 4. Query `circles.metadata.pendingRegistrationId` for the same pending id.
-    - If exactly one account exists and its DID equals `reservedDid`, allow the authenticated retry path to repair membership/finalization.
+    - If exactly one account exists and all identity evidence matches, the member can use ordinary password login to repair membership/finalization. The repair helper does not issue a session.
     - If the account exists but the DID differs, stop: this is an identity-integrity incident requiring engineering review.
 5. If no account exists and a DID is recorded, inspect `users/<reservedDid>` without modifying it. Record which expected files exist (`salt`, IV, public key and encrypted private key), and confirm the public key hashes to `reservedDid`.
 6. Preserve complete or partial key material. Do not delete the directory, clear a reservation, release a claim, or issue a replacement identity automatically. Completing the Mongo account from an orphan directory requires a reviewed recovery tool because the legacy account creator does not expose a safe import operation.

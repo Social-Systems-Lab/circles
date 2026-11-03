@@ -39,6 +39,11 @@ export type PendingRegistrationReconciliation = {
     accountPublicKeyMatchesDid: boolean;
     permanentAccountIdentityMatches: boolean;
     selfMembershipExists: boolean | null;
+    selfChatMembershipExists: boolean | null;
+    membershipCountMatches: boolean | null;
+    profileInitialized: boolean | null;
+    welcomeConversationExists: boolean | null;
+    welcomeMessageExists: boolean | null;
     classification: ReconciliationClassification;
     safeNextAction: string;
 };
@@ -104,6 +109,11 @@ async function inspectClaimWithoutDid(db: Db, record: PendingRegistration): Prom
         accountPublicKeyMatchesDid: false,
         permanentAccountIdentityMatches: false,
         selfMembershipExists: null,
+        selfChatMembershipExists: null,
+        membershipCountMatches: null,
+        profileInitialized: null,
+        welcomeConversationExists: null,
+        welcomeMessageExists: null,
         classification: "manual_review_claim_without_did",
         safeNextAction:
             "Preserve the non-expiring claim. Confirm every worker from the claiming attempt is stopped before any separately authorized recovery; age alone is not proof that ownership can be transferred.",
@@ -142,7 +152,7 @@ async function inspectRecord(
     const correlated = await circles
         .find(
             { "metadata.pendingRegistrationId": pendingRegistrationId },
-            { projection: { _id: 1, did: 1, email: 1, handle: 1, publicKey: 1, metadata: 1 } },
+            { projection: { _id: 1, did: 1, email: 1, handle: 1, publicKey: 1, metadata: 1, isHuman: 1 } },
         )
         .toArray();
     const didAccounts = await circles.find({ did: reservedDid }, { projection: { _id: 1 } }).toArray();
@@ -179,6 +189,40 @@ async function inspectRecord(
                   .findOne({ userDid: reservedDid, circleId: accountId }, { projection: { _id: 1 } }),
           )
         : null;
+    const membersChat = accountId
+        ? await db.collection("chatRooms").findOne({ circleId: accountId, handle: "members" })
+        : null;
+    const selfChatMembershipExists = accountId
+        ? !membersChat ||
+          Boolean(
+              await db.collection("chatRoomMembers").findOne({
+                  userDid: reservedDid,
+                  chatRoomId: String(membersChat._id),
+              }),
+          )
+        : null;
+    const circle = accountId ? await circles.findOne({ _id: account?._id }) : null;
+    const membershipCountMatches = accountId
+        ? Boolean(circle && circle.members === (await db.collection("members").countDocuments({ circleId: accountId })))
+        : null;
+    const profileInitialized = account
+        ? account.isHuman === true &&
+          account.metadata?.onboardingFlow === "pending-registration-v1" &&
+          account.metadata?.pendingRegistrationFinalizationVersion === 1
+        : null;
+    const welcomeHandle = `welcome-${reservedDid}`;
+    const welcomeConversation = accountId
+        ? await db.collection("chatConversations").findOne({ handle: welcomeHandle, participants: reservedDid })
+        : null;
+    const welcomeConversationExists = Boolean(welcomeConversation);
+    const welcomeMessageExists = welcomeConversation
+        ? Boolean(
+              await db.collection("chatMessageDocs").findOne({
+                  conversationId: String(welcomeConversation._id),
+                  source: "system_welcome",
+              }),
+          )
+        : false;
     const completeCredentials = Object.values(credentialFiles).every(Boolean);
 
     let classification: ReconciliationClassification;
@@ -202,7 +246,8 @@ async function inspectRecord(
             safeNextAction = "Preserve the directory and escalate the public-key/DID mismatch.";
         } else if (completeCredentials && publicKeyMatchesDid === true) {
             classification = "recoverable_finalize";
-            safeNextAction = "Identity evidence matches; member-authorized finalization recovery is not enabled yet.";
+            safeNextAction =
+                "Identity evidence matches; the member may authenticate normally to finish idempotent finalization.";
         } else {
             classification = "manual_review_missing_credentials";
             safeNextAction = "Preserve all records and credential files; verify missing identity evidence manually.";
@@ -236,6 +281,11 @@ async function inspectRecord(
         accountPublicKeyMatchesDid,
         permanentAccountIdentityMatches,
         selfMembershipExists,
+        selfChatMembershipExists,
+        membershipCountMatches,
+        profileInitialized,
+        welcomeConversationExists,
+        welcomeMessageExists,
         classification,
         safeNextAction,
     };

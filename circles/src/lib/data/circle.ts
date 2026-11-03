@@ -680,6 +680,32 @@ export const updateCircle = async (
         } else {
             delete circleWithoutId.handle;
         }
+
+        // These fields are written only by trusted pending-registration flows.
+        // Public profile editors can submit arbitrary FormData keys (including
+        // dotted Mongo paths), so preserve the current values and reject attempts
+        // to add, replace, or remove either marker through this shared update path.
+        const protectedMetadataKeys = ["pendingRegistrationId", "pendingRegistrationFinalizationVersion"] as const;
+        for (const key of protectedMetadataKeys) {
+            delete (circleWithoutId as Record<string, unknown>)[`metadata.${key}`];
+        }
+        if (Object.prototype.hasOwnProperty.call(circleWithoutId, "metadata")) {
+            const submittedMetadata = circleWithoutId.metadata;
+            if (!submittedMetadata || typeof submittedMetadata !== "object" || Array.isArray(submittedMetadata)) {
+                delete circleWithoutId.metadata;
+            } else {
+                const safeMetadata = { ...submittedMetadata } as Record<string, unknown>;
+                const currentMetadata = existingCircle.metadata ?? {};
+                for (const key of protectedMetadataKeys) {
+                    if (Object.prototype.hasOwnProperty.call(currentMetadata, key)) {
+                        safeMetadata[key] = currentMetadata[key];
+                    } else {
+                        delete safeMetadata[key];
+                    }
+                }
+                circleWithoutId.metadata = safeMetadata;
+            }
+        }
     } else {
         await dependencies.assertCircleWritesAllowed(_id.toString());
     }

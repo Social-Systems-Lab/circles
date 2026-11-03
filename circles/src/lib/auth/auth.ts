@@ -198,9 +198,11 @@ export const createUserAccount = async (
             // For now, we'll log the error and continue. User can request resend later.
         }
 
-    // add user as member of their own circle
-    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
-    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+    // Pending registrations defer memberships and other secondary writes until
+    // the retryable, claim-fenced finalization phase. Legacy signup is unchanged.
+    if (!options.pendingRegistrationId) {
+        await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+    }
 
     // add user to default circle by default
     // let defaultCircle = await getDefaultCircle();

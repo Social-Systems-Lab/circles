@@ -85,6 +85,7 @@ export type PendingRegistrationDependencies = {
     sendVerificationEmail: (email: PendingRegistrationEmail) => Promise<void>;
     permanentAccountExists: (normalizedEmail: string, requestedHandle: string) => Promise<boolean>;
     findAccountByPendingRegistrationId: (pendingRegistrationId: string) => Promise<ProvisionedPendingAccount | null>;
+    validateProvisionedAccount: (pendingRegistrationId: string, account: ProvisionedPendingAccount) => Promise<boolean>;
     provisionAccount: (input: {
         pendingRegistrationId: string;
         provisioningLeaseToken: string;
@@ -99,6 +100,7 @@ export type PendingRegistrationDependencies = {
         account: ProvisionedPendingAccount,
         input: { pendingRegistrationId: string; provisioningClaimToken: string },
     ) => Promise<void>;
+    issueSession: (pendingRegistrationId: string, account: ProvisionedPendingAccount) => Promise<void>;
     baseUrl: string;
     now?: () => Date;
 };
@@ -955,6 +957,9 @@ export async function provisionPendingRegistration(
         ) {
             throw new Error("Durable provisioning claim ownership was lost");
         }
+        if (!(await deps.validateProvisionedAccount(input.pendingRegistrationId, account))) {
+            throw new Error("Permanent account identity could not be proven");
+        }
         await deps.finalizeAccount(account, {
             pendingRegistrationId: input.pendingRegistrationId,
             provisioningClaimToken,
@@ -985,6 +990,7 @@ export async function provisionPendingRegistration(
             throw new Error("Provisioning lease lost before final state transition");
         }
         await audit(deps.collections, input.pendingRegistrationId, "pending_registration.provisioned", finalizedAt);
+        await deps.issueSession(input.pendingRegistrationId, account);
         return { success: true, account, message: "Registration completed." };
     } catch {
         await audit(

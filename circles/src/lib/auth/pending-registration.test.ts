@@ -180,6 +180,10 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
         },
         permanentAccountExists: async () => permanentExists,
         findAccountByPendingRegistrationId: async (id) => accounts.get(id) || null,
+        validateProvisionedAccount: async (id, account) => {
+            const stored = accounts.get(id);
+            return Boolean(stored && stored.accountId === account.accountId && stored.did === account.did);
+        },
         provisionAccount: async ({ pendingRegistrationId, provisioningLeaseToken, provisioningClaimToken }) => {
             if (provisioningFailure === "before_did_reservation") throw new Error("interrupted before DID generation");
             provisionCalls += 1;
@@ -228,6 +232,7 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
             finalizeCalls += 1;
             memberships.add(account.accountId);
         },
+        issueSession: async () => {},
     };
     return {
         deps,
