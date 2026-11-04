@@ -97,11 +97,25 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
         errors.append("staging URL is not fixed to staging.kamooni.org")
     if str(env.get("POSTMARK_API_TOKEN", "")) or str(env.get("POSTMARK_SENDER_EMAIL", "")):
         errors.append("Postmark credentials are not forced empty")
+    for key in ("PENDING_REGISTRATION_ENABLED", "PENDING_REGISTRATION_JOURNEY_READY"):
+        if str(env.get(key, "")).lower() != "false":
+            errors.append(f"{key} is not forced false")
     build_args = default_services.get("circles", {}).get("build", {}).get("args", {})
     if build_args.get("KAMOONI_DEPLOYMENT_ROLE") != "staging":
         errors.append("circles image is not marked as a staging build")
     if set(default_services.get("circles", {}).get("networks", {})) != {"webnet", "mailpit_internal"}:
         errors.append("circles has unexpected staging network attachments")
+    circles_mounts = {
+        (mount.get("source"), mount.get("target"), mount.get("type"))
+        for mount in default_services.get("circles", {}).get("volumes", [])
+        if isinstance(mount, dict)
+    }
+    expected_circles_mounts = {
+        ("circles", "/circles", "volume"),
+        ("circles_users", "/circles/users", "volume"),
+    }
+    if circles_mounts != expected_circles_mounts:
+        errors.append(f"application and credential mounts are {sorted(circles_mounts)!r}")
 
     mailpit = services.get("mailpit", {})
     if mailpit.get("image") != "axllent/mailpit:v1.33.0":

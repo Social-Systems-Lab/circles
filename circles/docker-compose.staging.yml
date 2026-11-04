@@ -31,6 +31,8 @@ services:
             EMAIL_TRANSPORT: mailpit
             MAILPIT_SMTP_HOST: mailpit
             MAILPIT_SMTP_PORT: "1025"
+            PENDING_REGISTRATION_ENABLED: "false"
+            PENDING_REGISTRATION_JOURNEY_READY: "false"
             CIRCLES_REGISTRY_URL: ""
             OPENAI_API_KEY: ""
             MAPBOX_API_KEY: ""
