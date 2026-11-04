@@ -3,9 +3,15 @@
 set +x
 set -euo pipefail
 
+if [[ "$#" -ne 1 || "$1" != "main" ]]; then
+  echo "Error: production deployment requires the explicit branch argument: main" >&2
+  exit 2
+fi
+
 EXPECTED_DIR="/root/circles/circles"
 APP_DIR="${EXPECTED_DIR}/circles"
 CURRENT_DIR="$(pwd -P)"
+BRANCH="$1"
 
 if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]; then
   echo "Error: run this script from $EXPECTED_DIR (current: $CURRENT_DIR)" >&2
@@ -17,27 +23,75 @@ if [[ ! -d "$APP_DIR" ]]; then
   exit 1
 fi
 
-BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
-
-DIRTY_STATUS="$(git status --porcelain)"
-if [[ -n "$DIRTY_STATUS" ]]; then
-  echo "Error: refusing to deploy with a dirty working tree." >&2
-  echo "$DIRTY_STATUS" >&2
+if [[ "$(git branch --show-current)" != "main" ]]; then
+  echo "Error: production checkout must already be on branch main." >&2
   exit 1
 fi
 
-echo "Deploying branch: $BRANCH"
-git fetch origin "$BRANCH"
+require_clean_worktree() {
+  local dirty_status
+  dirty_status="$(git status --porcelain --untracked-files=all)"
+  if [[ -n "$dirty_status" ]]; then
+    echo "Error: refusing to deploy with a dirty working tree." >&2
+    echo "$dirty_status" >&2
+    return 1
+  fi
+}
 
-if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
-  git checkout "$BRANCH"
-else
-  git checkout -b "$BRANCH" "origin/$BRANCH"
+if ! require_clean_worktree; then
+  exit 1
 fi
 
-git reset --hard "origin/$BRANCH"
+ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+case "$ORIGIN_URL" in
+  https://github.com/Social-Systems-Lab/circles.git|git@github.com:Social-Systems-Lab/circles.git|ssh://git@github.com/Social-Systems-Lab/circles.git)
+    ;;
+  *)
+    echo "Error: origin must be the Social-Systems-Lab/circles GitHub repository (found: $ORIGIN_URL)." >&2
+    exit 1
+    ;;
+esac
 
-GIT_SHA="$(git rev-parse --short HEAD)"
+echo "Deploying branch: $BRANCH"
+git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
+
+if ! require_clean_worktree; then
+  exit 1
+fi
+
+if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+  echo "Error: local main has diverged from origin/main; refusing synchronization." >&2
+  exit 1
+fi
+
+git merge --ff-only refs/remotes/origin/main
+
+if ! require_clean_worktree; then
+  echo "Error: working tree became dirty during main synchronization." >&2
+  exit 1
+fi
+
+if [[ "$(git branch --show-current)" != "main" ]]; then
+  echo "Error: production checkout is not on main after synchronization." >&2
+  exit 1
+fi
+
+LOCAL_SHA="$(git rev-parse HEAD)"
+ORIGIN_MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
+if [[ "$LOCAL_SHA" != "$ORIGIN_MAIN_SHA" ]]; then
+  echo "Error: production HEAD does not exactly match origin/main." >&2
+  exit 1
+fi
+
+ISOLATION_GUARD="$APP_DIR/scripts/check-production-staging-isolation.sh"
+if [[ ! -f "$ISOLATION_GUARD" || ! -x "$ISOLATION_GUARD" ]]; then
+  echo "Error: production staging-isolation guard is missing or not executable: $ISOLATION_GUARD" >&2
+  exit 1
+fi
+echo "Running production staging-isolation guard..."
+(cd "$APP_DIR" && ./scripts/check-production-staging-isolation.sh)
+
+GIT_SHA="$LOCAL_SHA"
 BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export GIT_SHA BUILD_TIME
 
@@ -47,7 +101,7 @@ echo "Build time (UTC): $BUILD_TIME"
 echo "Running branding guard for Kamooni..."
 (cd "$APP_DIR" && ./scripts/check-branding-guard.sh kamooni)
 
-(cd "$APP_DIR" && docker compose build circles)
+(cd "$APP_DIR" && docker compose build circles cron)
 
 resolve_application_mongodb_uri() {
   # Resolve the exact environment assigned to the application service. This works even when
@@ -64,6 +118,13 @@ fi
 
 if [[ "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then
   echo "Error: resolved MONGODB_URI contains an invalid line break." >&2
+  exit 1
+fi
+
+echo "Running read-only Messaging Stage 1A production preflight..."
+if ! (cd "$APP_DIR" && APP_MONGODB_URI="$APP_MONGODB_URI" ./scripts/preflight-messaging-stage1a.sh); then
+  echo "Error: Messaging Stage 1A preflight failed." >&2
+  echo "The running circles application and cron services were not stopped or replaced." >&2
   exit 1
 fi
 
@@ -172,6 +233,17 @@ for attempt in $(seq 1 20); do
     grep -Eq "\"gitSha\"[[:space:]]*:[[:space:]]*\"$GIT_SHA\"" <<<"$VERSION_OUTPUT"; then
     echo "Version check (attempt $attempt):"
     echo "$VERSION_OUTPUT"
+    echo "Recreating the cron service with the verified application deployment..."
+    if ! (cd "$APP_DIR" && docker compose up -d --no-deps --force-recreate cron); then
+      echo "Error: application is healthy, but the cron service could not be recreated." >&2
+      exit 1
+    fi
+    if ! (cd "$APP_DIR" && docker compose exec -T cron sh -lc \
+      'grep -Fq "/api/cron/email-reminders" /etc/crontabs/root && grep -Fq "/api/cron/first-topic-notifications" /etc/crontabs/root'); then
+      echo "Error: cron schedule verification failed; expected reminder and first-topic jobs." >&2
+      exit 1
+    fi
+    echo "Verified cron schedules: hourly email reminders and minutely first-topic notification recovery."
     exit 0
   fi
   sleep 1

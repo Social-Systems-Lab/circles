@@ -8,16 +8,14 @@ services:
         build:
             context: ${STAGING_TARGET_APP_DIR:?STAGING_TARGET_APP_DIR is required}
             dockerfile: Dockerfile
+            args:
+                KAMOONI_DEPLOYMENT_ROLE: staging
         environment:
             PORT: "3000"
             NODE_ENV: production
             CIRCLES_URL: https://staging.kamooni.org
             NEXT_PUBLIC_APP_URL: https://staging.kamooni.org
             NEXT_PUBLIC_SITE_URL: https://staging.kamooni.org
-            EMAIL_TRANSPORT: capture
-            EMAIL_CAPTURE_ENABLED: "true"
-            KAMOONI_DEPLOYMENT_ENV: staging
-            CIRCLES_DEV_LOG_PASSWORD_RESET: "false"
             NEXT_PUBLIC_CHAT_PROVIDER: mongo
             NEXT_PUBLIC_MAINTENANCE_MODE: "false"
             VDB_ENABLED: "false"
@@ -30,6 +28,11 @@ services:
             MINIO_PORT: "9000"
             MINIO_BUCKET: circles
             MINIO_PRIVATE_BUCKET: circles-private
+            EMAIL_TRANSPORT: mailpit
+            MAILPIT_SMTP_HOST: mailpit
+            MAILPIT_SMTP_PORT: "1025"
+            PENDING_REGISTRATION_ENABLED: "false"
+            PENDING_REGISTRATION_JOURNEY_READY: "false"
             CIRCLES_REGISTRY_URL: ""
             OPENAI_API_KEY: ""
             MAPBOX_API_KEY: ""
@@ -56,6 +59,29 @@ services:
         ports: !override []
         expose:
             - "3000"
+        networks:
+            - webnet
+            - mailpit_internal
+        restart: unless-stopped
+
+    mailpit:
+        image: axllent/mailpit:v1.33.0
+        environment:
+            MP_UI_BIND_ADDR: "0.0.0.0:8025"
+            MP_SMTP_BIND_ADDR: "0.0.0.0:1025"
+            MP_ALLOWED_HOSTS: "localhost,127.0.0.1"
+            MP_MAX_MESSAGES: "100"
+            MP_MAX_AGE: "72h"
+            MP_MAX_MESSAGE_SIZE: "2"
+            MP_DISABLE_VERSION_CHECK: "true"
+            MP_SMTP_RELAY_ALL: "false"
+            MP_SMTP_RELAY_MATCHING: ""
+            MP_SMTP_RELAY_CONFIG: ""
+            MP_SMTP_FORWARD_CONFIG: ""
+        ports: !override
+            - "127.0.0.1:8025:8025"
+        networks:
+            - mailpit_internal
         restart: unless-stopped
 
     db:
@@ -98,6 +124,8 @@ services:
 
     watchtower:
         profiles: ["watchtower"]
+        networks: !override
+            - webnet
 
     minio_loopback:
         profiles: ["loopback"]
@@ -127,3 +155,5 @@ volumes: !override
 
 networks:
     webnet:
+    mailpit_internal:
+        internal: true

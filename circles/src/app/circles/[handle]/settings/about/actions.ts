@@ -43,6 +43,8 @@ import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { Circles } from "@/lib/data/db";
 import { ObjectId } from "mongodb";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import { preparePersonalLocationForSave } from "@/lib/location-privacy";
+import { validatePersonalProfileDisplayName } from "@/lib/profile-name-validation";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -681,6 +683,23 @@ export async function saveAbout(values: {
         let existingCircle = await getCircleById(values._id);
         if (!existingCircle) {
             throw new Error("Circle not found");
+        }
+
+        if (existingCircle.circleType === "user") {
+            if (existingCircle.did !== userDid) {
+                return { success: false, message: "You are not authorized to edit this profile." };
+            }
+            const validatedName = validatePersonalProfileDisplayName(values.name ?? "");
+            if (!validatedName.valid) {
+                return { success: false, message: validatedName.message };
+            }
+            circleUpdateData.name = validatedName.name;
+
+            const personalLocation = preparePersonalLocationForSave(values.location, existingCircle.location);
+            if (!personalLocation.valid) {
+                return { success: false, message: "Choose a valid place on the map before saving your location." };
+            }
+            circleUpdateData.location = personalLocation.location;
         }
 
         if (existingCircle.circleType !== "user" && existingCircle.circleLevel === "profile_child") {

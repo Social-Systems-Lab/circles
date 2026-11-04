@@ -38,11 +38,3 @@ export const buildReadStateV2InitializationOperation = (
         },
     },
 });
-
-export const buildMonotonicLegacyCursorUpdate = (cursor: string | null, updatedAt: Date) => {
-    const normalizedCursor = normalizeObjectIdHex(cursor);
-    if (cursor && !normalizedCursor) throw new Error("Invalid legacy read cursor");
-    return normalizedCursor
-        ? { $max: { legacyLastReadMessageId: normalizedCursor }, $set: { updatedAt } }
-        : { $set: { updatedAt } };
-};

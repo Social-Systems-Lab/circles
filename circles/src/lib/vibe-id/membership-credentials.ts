@@ -101,9 +101,7 @@ function getIssuerKeyMaterial(): IssuerKeyMaterial | null {
     }
 
     const rawPrivateJwk =
-        process.env.VIBE_ID_CREDENTIAL_ISSUER_PRIVATE_JWK ||
-        process.env.KAMOONI_VIBE_ID_ISSUER_PRIVATE_JWK ||
-        "";
+        process.env.VIBE_ID_CREDENTIAL_ISSUER_PRIVATE_JWK || process.env.KAMOONI_VIBE_ID_ISSUER_PRIVATE_JWK || "";
     if (!rawPrivateJwk.trim()) {
         issuerKeyMaterial = null;
         return issuerKeyMaterial;
@@ -213,7 +211,6 @@ export function createPlatformMembershipCredentialCard(input: {
     }
 
     const statusUrl = new URL("/api/vibe-id/credentials/platform-membership/status", getSiteOrigin());
-    statusUrl.searchParams.set("subjectDid", input.subjectVibeDid);
     const credentialUrl = new URL("/api/vibe-id/credentials/platform-membership/claim", getSiteOrigin());
     credentialUrl.searchParams.set("subjectDid", input.subjectVibeDid);
     const envelope = createSignedPlatformMembershipCredentialEnvelope(input);
@@ -234,22 +231,59 @@ export function createPlatformMembershipCredentialCard(input: {
     };
 }
 
-export async function createPlatformMembershipCredentialEnvelope(input: {
-    subjectVibeDid: string;
-}): Promise<VibeCredentialEnvelope | null> {
-    const { Circles } = await import("@/lib/data/db");
-    const user = await Circles.findOne({
-        circleType: "user",
-        "metadata.authProviders.vibeId.did": input.subjectVibeDid,
-    });
+export type MembershipCredentialDependencies = {
+    findUser: (authenticatedUserDid: string) => Promise<Circle | null>;
+    findCircle: (circleId: string) => Promise<Circle | null>;
+    findMember: (authenticatedUserDid: string, circleId: string) => Promise<Member | null>;
+};
+
+async function getMembershipCredentialDependencies(): Promise<MembershipCredentialDependencies> {
+    const [{ Circles }, { getMember }] = await Promise.all([import("@/lib/data/db"), import("@/lib/data/member")]);
+    return {
+        findUser: (authenticatedUserDid) => Circles.findOne({ circleType: "user", did: authenticatedUserDid }),
+        findCircle: (circleId) => Circles.findOne({ _id: new ObjectId(circleId) }),
+        findMember: getMember,
+    };
+}
+
+export async function createPlatformMembershipCredentialEnvelopeForAccount(
+    input: {
+        authenticatedUserDid: string;
+        expectedSubjectVibeDid?: string;
+        statusUrl?: string;
+    },
+    dependencies?: MembershipCredentialDependencies,
+): Promise<VibeCredentialEnvelope | null> {
+    const resolvedDependencies = dependencies ?? (await getMembershipCredentialDependencies());
+    const user = await resolvedDependencies.findUser(input.authenticatedUserDid);
     if (!user || !isPlatformMember(user as Circle)) {
+        return null;
+    }
+
+    const subjectVibeDid = getLinkedVibeIdDid(user as Circle);
+    if (!subjectVibeDid || (input.expectedSubjectVibeDid && input.expectedSubjectVibeDid !== subjectVibeDid)) {
         return null;
     }
 
     return createSignedPlatformMembershipCredentialEnvelope({
         user: { ...user, _id: user._id.toString() } as Circle,
-        subjectVibeDid: input.subjectVibeDid,
+        subjectVibeDid,
+        statusUrl: input.statusUrl,
     });
+}
+
+export async function revalidatePlatformMembershipCredentialAuthorization(
+    input: { authenticatedUserDid: string; expectedSubjectVibeDid: string },
+    dependencies?: MembershipCredentialDependencies,
+): Promise<boolean> {
+    const resolvedDependencies = dependencies ?? (await getMembershipCredentialDependencies());
+    const user = await resolvedDependencies.findUser(input.authenticatedUserDid);
+    return (
+        !!user?.did &&
+        user.did === input.authenticatedUserDid &&
+        getLinkedVibeIdDid(user) === input.expectedSubjectVibeDid &&
+        isPlatformMember(user)
+    );
 }
 
 export function createCircleMembershipCredentialCard(input: {
@@ -264,8 +298,6 @@ export function createCircleMembershipCredentialCard(input: {
 
     const circleId = String(input.circle._id);
     const statusUrl = new URL("/api/vibe-id/credentials/circle-membership/status", getSiteOrigin());
-    statusUrl.searchParams.set("circleId", circleId);
-    statusUrl.searchParams.set("subjectDid", input.subjectVibeDid);
     const credentialUrl = new URL("/api/vibe-id/credentials/circle-membership/claim", getSiteOrigin());
     credentialUrl.searchParams.set("circleId", circleId);
     credentialUrl.searchParams.set("subjectDid", input.subjectVibeDid);
@@ -289,43 +321,77 @@ export function createCircleMembershipCredentialCard(input: {
     };
 }
 
-export async function createCircleMembershipCredentialEnvelope(input: {
-    circleId: string;
-    subjectVibeDid: string;
-}): Promise<VibeCredentialEnvelope | null> {
-    const { Circles } = await import("@/lib/data/db");
-    const { getMember } = await import("@/lib/data/member");
-    const circle = await Circles.findOne({ _id: new ObjectId(input.circleId) });
+export async function createCircleMembershipCredentialEnvelopeForAccount(
+    input: {
+        circleId: string;
+        authenticatedUserDid: string;
+        expectedSubjectVibeDid?: string;
+        statusUrl?: string;
+    },
+    dependencies?: MembershipCredentialDependencies,
+): Promise<VibeCredentialEnvelope | null> {
+    if (!ObjectId.isValid(input.circleId)) {
+        return null;
+    }
+
+    const resolvedDependencies = dependencies ?? (await getMembershipCredentialDependencies());
+    const circle = await resolvedDependencies.findCircle(input.circleId);
     if (!circle) {
         return null;
     }
 
-    const user = await Circles.findOne(
-        {
-            circleType: "user",
-            "metadata.authProviders.vibeId.did": input.subjectVibeDid,
-        },
-        { projection: { did: 1 } },
-    );
-    if (!user?.did) {
+    const user = await resolvedDependencies.findUser(input.authenticatedUserDid);
+    const subjectVibeDid = getLinkedVibeIdDid(user as Circle | null);
+    if (
+        !user?.did ||
+        user.did !== input.authenticatedUserDid ||
+        !subjectVibeDid ||
+        (input.expectedSubjectVibeDid && input.expectedSubjectVibeDid !== subjectVibeDid)
+    ) {
         return null;
     }
 
-    const member = await getMember(user.did, input.circleId);
-    if (!member) {
+    const member = await resolvedDependencies.findMember(input.authenticatedUserDid, input.circleId);
+    if (!member || member.userDid !== input.authenticatedUserDid || member.circleId !== input.circleId) {
         return null;
     }
 
     const card = createCircleMembershipCredentialCard({
         circle: { ...circle, _id: circle._id.toString() } as Circle,
         member,
-        subjectVibeDid: input.subjectVibeDid,
+        subjectVibeDid,
     });
-    return card ? createSignedCircleMembershipCredentialEnvelope({
-        circle: { ...circle, _id: circle._id.toString() } as Circle,
-        member,
-        subjectVibeDid: input.subjectVibeDid,
-    }) : null;
+    return card
+        ? createSignedCircleMembershipCredentialEnvelope({
+              circle: { ...circle, _id: circle._id.toString() } as Circle,
+              member,
+              subjectVibeDid,
+              statusUrl: input.statusUrl,
+          })
+        : null;
+}
+
+export async function revalidateCircleMembershipCredentialAuthorization(
+    input: { circleId: string; authenticatedUserDid: string; expectedSubjectVibeDid: string },
+    dependencies?: MembershipCredentialDependencies,
+): Promise<boolean> {
+    if (!ObjectId.isValid(input.circleId)) return false;
+
+    const resolvedDependencies = dependencies ?? (await getMembershipCredentialDependencies());
+    const user = await resolvedDependencies.findUser(input.authenticatedUserDid);
+    if (
+        !user?.did ||
+        user.did !== input.authenticatedUserDid ||
+        getLinkedVibeIdDid(user) !== input.expectedSubjectVibeDid
+    ) {
+        return false;
+    }
+
+    const circle = await resolvedDependencies.findCircle(input.circleId);
+    if (!circle || circle.circleType === "user") return false;
+
+    const member = await resolvedDependencies.findMember(input.authenticatedUserDid, input.circleId);
+    return member?.userDid === input.authenticatedUserDid && member?.circleId === input.circleId;
 }
 
 export function verifyCircleMembershipCredentialEnvelope(input: unknown): CircleMembershipCredentialVerificationResult {
@@ -356,9 +422,7 @@ export function verifyCircleMembershipCredentialEnvelope(input: unknown): Circle
         };
     }
 
-    if (
-        credential.issuer !== keyMaterial.issuer
-    ) {
+    if (credential.issuer !== keyMaterial.issuer) {
         return {
             ok: false,
             error: "issuer_mismatch",
@@ -463,6 +527,7 @@ function absoluteUrl(value?: string | null): string | null {
 function createSignedPlatformMembershipCredentialEnvelope(input: {
     user: Circle;
     subjectVibeDid: string;
+    statusUrl?: string;
 }): VibeCredentialEnvelope | null {
     const keyMaterial = getIssuerKeyMaterial();
     if (!keyMaterial || !isPlatformMember(input.user)) {
@@ -471,8 +536,8 @@ function createSignedPlatformMembershipCredentialEnvelope(input: {
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + DEFAULT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-    const statusUrl = new URL("/api/vibe-id/credentials/platform-membership/status", getSiteOrigin());
-    statusUrl.searchParams.set("subjectDid", input.subjectVibeDid);
+    const statusUrl =
+        input.statusUrl || new URL("/api/vibe-id/credentials/platform-membership/status", getSiteOrigin()).toString();
 
     const credential: VibeUnsignedCredential = {
         id: createPlatformMembershipCredentialId(input.subjectVibeDid),
@@ -482,7 +547,7 @@ function createSignedPlatformMembershipCredentialEnvelope(input: {
         claims: {},
         issuedAt: now.toISOString(),
         expiresAt: expiresAt.toISOString(),
-        statusUrl: statusUrl.toString(),
+        statusUrl,
         presentationRef: buildPlatformMembershipPresentationRef(),
     };
 
@@ -496,6 +561,7 @@ function createSignedCircleMembershipCredentialEnvelope(input: {
     circle: Circle;
     member: Member;
     subjectVibeDid: string;
+    statusUrl?: string;
 }): VibeCredentialEnvelope | null {
     const keyMaterial = getIssuerKeyMaterial();
     if (!keyMaterial || !input.circle._id) {
@@ -505,9 +571,8 @@ function createSignedCircleMembershipCredentialEnvelope(input: {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + DEFAULT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
     const circleId = String(input.circle._id);
-    const statusUrl = new URL("/api/vibe-id/credentials/circle-membership/status", getSiteOrigin());
-    statusUrl.searchParams.set("circleId", circleId);
-    statusUrl.searchParams.set("subjectDid", input.subjectVibeDid);
+    const statusUrl =
+        input.statusUrl || new URL("/api/vibe-id/credentials/circle-membership/status", getSiteOrigin()).toString();
 
     const credential: VibeUnsignedCredential = {
         id: createMembershipCredentialId(circleId, input.subjectVibeDid),
@@ -525,7 +590,7 @@ function createSignedCircleMembershipCredentialEnvelope(input: {
         },
         issuedAt: now.toISOString(),
         expiresAt: expiresAt.toISOString(),
-        statusUrl: statusUrl.toString(),
+        statusUrl,
     };
 
     return {
@@ -608,8 +673,14 @@ function parseCredentialEnvelope(value: unknown): VibeCredentialEnvelope | null 
             subjectDid: credential.subjectDid,
             claims: credential.claims as JsonRecord,
             issuedAt: credential.issuedAt,
-            expiresAt: typeof credential.expiresAt === "string" || credential.expiresAt === null ? credential.expiresAt : undefined,
-            statusUrl: typeof credential.statusUrl === "string" || credential.statusUrl === null ? credential.statusUrl : undefined,
+            expiresAt:
+                typeof credential.expiresAt === "string" || credential.expiresAt === null
+                    ? credential.expiresAt
+                    : undefined,
+            statusUrl:
+                typeof credential.statusUrl === "string" || credential.statusUrl === null
+                    ? credential.statusUrl
+                    : undefined,
             presentationRef: parsePresentationRef(credential.presentationRef),
             alg: CREDENTIAL_ALGORITHM,
             signature: credential.signature,
@@ -623,11 +694,7 @@ function parsePresentationRef(value: unknown): CredentialPresentationRef | undef
     }
 
     const ref = value as Partial<CredentialPresentationRef>;
-    if (
-        typeof ref.id !== "string" ||
-        typeof ref.version !== "string" ||
-        typeof ref.uri !== "string"
-    ) {
+    if (typeof ref.id !== "string" || typeof ref.version !== "string" || typeof ref.uri !== "string") {
         return undefined;
     }
 
@@ -650,7 +717,6 @@ function createCredentialClaimDeepLink(credentialUrl: string): string {
     url.searchParams.set("u", credentialUrl);
     return url.toString();
 }
-
 
 function parseJsonWebKey(value: string): JsonWebKey {
     const trimmed = value.trim();

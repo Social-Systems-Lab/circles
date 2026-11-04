@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { boundedSafeParse, inspectFormDataBounds } from "@/lib/security/bounded-input";
 import {
     Circle,
     Media,
@@ -31,7 +32,7 @@ import {
     changeIssueStage,
     assignIssue,
 } from "@/lib/data/issue";
-import { getMembers } from "@/lib/data/member";
+import { getAuthorizedMemberPickerResult } from "@/lib/data/member-picker";
 import { Feeds, Posts, Issues } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type
 import { createPost } from "@/lib/data/feed"; // Import createPost
@@ -145,11 +146,12 @@ export async function getIssueAction(circleHandle: string, issueId: string): Pro
 // --- Zod Schemas for Validation ---
 
 const createIssueSchema = z.object({
-    title: z.string().min(1, "Title is required"),
-    description: z.string().min(1, "Description is required"),
-    images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
+    title: z.string().trim().min(1, "Title is required").max(200, "Title is too long"),
+    description: z.string().min(1, "Description is required").max(100_000, "Description is too long"),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects initially
     location: z
         .string()
+        .max(100_000, "Location data is too large")
         .optional()
         .refine(
             (val) => {
@@ -164,7 +166,7 @@ const createIssueSchema = z.object({
             { message: "Invalid location data format" },
         ),
     targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
-    userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    userGroups: z.array(z.string().max(80)).max(500).optional(), // Optional: User groups for visibility
     urgency: z.preprocess(
         (value) => (value === "" || value == null ? undefined : value),
         z.enum(["low", "medium", "high", "critical"]).optional(),
@@ -213,8 +215,10 @@ export async function createIssueAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string; issueId?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = createIssueSchema.safeParse({
+        const validatedData = boundedSafeParse(createIssueSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -225,10 +229,10 @@ export async function createIssueAction(
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -387,8 +391,10 @@ export async function updateIssueAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = updateIssueSchema.safeParse({
+        const validatedData = boundedSafeParse(updateIssueSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -399,10 +405,10 @@ export async function updateIssueAction(
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -755,7 +761,7 @@ export async function acknowledgeIssueAction(
         if (!validatedData.success) {
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
 
@@ -916,19 +922,8 @@ export async function assignIssueAction(
 }
 
 export const getMembersAction = async (circleId: string) => {
-    // Get the current user
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "User not authenticated" };
-    }
-    const user = await getUserByDid(userDid); // For notifications
-    if (!user) {
-        return { success: false, message: "User data not found" };
-    }
-
-    // get members of circle
-    let members = await getMembers(circleId);
-    return members;
+    return getAuthorizedMemberPickerResult({ viewerDid: userDid, circleId, requiredFeature: features.issues.assign });
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.

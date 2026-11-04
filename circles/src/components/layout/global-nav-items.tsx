@@ -274,8 +274,12 @@ export default function GlobalNavItems() {
                                     });
                                     if (res.ok) {
                                         const data = await res.json();
-                                        if (data?.user) {
-                                            setUser(data.user);
+                                        if (user && Array.isArray(data?.pinnedCircles)) {
+                                            setUser({
+                                                ...user,
+                                                pinnedCircles: data.pinnedCircles,
+                                                bookmarkedCircles: data.bookmarkedCircles ?? user.bookmarkedCircles,
+                                            });
                                         }
                                         const r = await fetch("/api/pins", { cache: "no-store" });
                                         if (r.ok) {

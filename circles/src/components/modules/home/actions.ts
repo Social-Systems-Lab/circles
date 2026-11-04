@@ -3,7 +3,7 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { readAuthToken } from "@/lib/auth/cookie";
 import { addMember, countAdmins, getMember, removeMember } from "@/lib/data/member";
-import { ChatRoom, Circle, UserPrivate } from "@/models/models";
+import { Circle, UserPrivate } from "@/models/models";
 import { cookies } from "next/headers";
 import { createPendingMembershipRequest, deletePendingMembershipRequest } from "@/lib/data/membership-requests";
 import {
@@ -18,6 +18,7 @@ import { getAuthenticatedUserDid, getAuthorizedMembers, isAuthorized } from "@/l
 import { features } from "@/lib/data/constants";
 import { saveFile } from "@/lib/data/storage";
 import {
+    cleanupCircleOwnedMedia,
     collectReplacedCircleMedia,
     persistCircleThenCleanupMedia,
     saveCircleOwnedFile,
@@ -33,7 +34,6 @@ import {
     unpinCircle,
 } from "@/lib/data/user";
 import { notifyNewMember, sendNotifications } from "@/lib/data/notifications";
-import { findOrCreateDMRoom as findOrCreateDMRoomData } from "@/lib/data/chat";
 import {
     getDmEligibility,
     getProfileRelationshipState,
@@ -43,6 +43,16 @@ import {
 import { UserRelationships } from "@/lib/data/db";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
+import type { AuthenticatedClientUser, BookmarkStateDto, PinStateDto } from "@/lib/data/client-user-dto";
+import { buildClientLocation } from "@/lib/data/client-circle-dto";
+import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { toAuthenticatedClientUser, toBookmarkStateDto, toPinStateDto } from "@/lib/data/client-user-dto";
+import {
+    executeAuthenticatedUserMutation,
+    getAuthenticatedClientUserBoundary,
+    getOwnedUserUpdateBoundary,
+} from "@/lib/data/client-user-boundary";
+import { validatePersonalProfileDisplayName } from "@/lib/profile-name-validation";
 
 type CircleActionResponse = {
     success: boolean;
@@ -51,13 +61,8 @@ type CircleActionResponse = {
     circle?: Circle;
 };
 
-export const getUserPrivateAction = async (): Promise<UserPrivate | undefined> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return undefined;
-    }
-
-    return await getUserPrivate(userDid);
+export const getUserPrivateAction = async (): Promise<AuthenticatedClientUser | undefined> => {
+    return getAuthenticatedClientUserBoundary({ getAuthenticatedUserDid, getUserPrivate });
 };
 
 export const followCircle = async (circle: Circle, answers?: Record<string, string>): Promise<CircleActionResponse> => {
@@ -79,6 +84,9 @@ export const followCircle = async (circle: Circle, answers?: Record<string, stri
 
         if (!updatedCircle) {
             return { success: false, message: isUser ? "User not found" : "Circle not found" };
+        }
+        if (updatedCircle.visibility === "secret") {
+            return { success: false, message: "Circle not found" };
         }
         await assertCircleWritesAllowed(updatedCircle._id ?? "");
 
@@ -194,9 +202,9 @@ export const cancelFollowRequest = async (circle: Circle): Promise<CircleActionR
 };
 
 /**
- * Toggle bookmark for a circle. Returns the updated UserPrivate on success.
+ * Toggle bookmark for a circle. Returns the updated bookmark state on success.
  */
-export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+export const toggleBookmarkAction = async (circleId: string): Promise<BookmarkStateDto | undefined> => {
     const token = readAuthToken(await cookies());
 
     try {
@@ -210,21 +218,18 @@ export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivat
             return undefined;
         }
 
-        // Get current user and toggle bookmark based on current state
-        const current = (await getUserPrivate(userDid)) as UserPrivate;
-        const currentList = current.bookmarkedCircles ?? [];
-        const isBookmarked = currentList.includes(circleId);
-
-        if (isBookmarked) {
-            await removeBookmark(userDid, circleId);
-        } else {
-            if (!(await getDiscoverableCirclesByIds([circleId], userDid))[0]) return undefined;
-            await addBookmark(userDid, circleId);
-        }
-
-        // Return updated user
-        const updated = (await getUserPrivate(userDid)) as UserPrivate;
-        return updated;
+        return executeAuthenticatedUserMutation(
+            userDid,
+            { getUserPrivate },
+            async (did, current) => {
+                if ((current.bookmarkedCircles ?? []).includes(circleId)) await removeBookmark(did, circleId);
+                else {
+                    if (!(await getDiscoverableCirclesByIds([circleId], did))[0]) return;
+                    await addBookmark(did, circleId);
+                }
+            },
+            toBookmarkStateDto,
+        );
     } catch (error) {
         console.error("Failed to toggle bookmark", error);
         return undefined;
@@ -234,7 +239,19 @@ export const toggleBookmarkAction = async (circleId: string): Promise<UserPrivat
 /**
  * Fetch bookmarked circles for the authenticated user.
  */
-export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
+export type BookmarkedCircleActionDto = {
+    _id: string;
+    did?: string;
+    name?: string;
+    handle?: string;
+    circleType?: Circle["circleType"];
+    description?: string;
+    mission?: string;
+    href: string;
+    location?: Circle["location"];
+};
+
+export const getBookmarkedCirclesAction = async (): Promise<BookmarkedCircleActionDto[]> => {
     try {
         // Prefer server-side auth util if available
         const token = readAuthToken(await cookies());
@@ -253,7 +270,23 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
             return [];
         }
         const circles = await getDiscoverableCirclesByIds(ids, userDid);
-        return circles;
+        return circles.flatMap((circle) =>
+            circle._id
+                ? [
+                      {
+                          _id: circle._id.toString(),
+                          did: circle.did,
+                          name: circle.name,
+                          handle: circle.handle,
+                          circleType: circle.circleType,
+                          description: circle.description,
+                          mission: circle.mission,
+                          href: getCircleDefaultPath(circle),
+                          location: buildClientLocation(circle.location),
+                      },
+                  ]
+                : [],
+        );
     } catch (error) {
         console.error("Failed to load bookmarked circles", error);
         return [];
@@ -261,9 +294,9 @@ export const getBookmarkedCirclesAction = async (): Promise<Circle[]> => {
 };
 
 /**
- * Pin a circle for the current user. Returns updated UserPrivate.
+ * Pin a circle for the current user. Returns the updated pin and bookmark state.
  */
-export const pinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+export const pinCircleAction = async (circleId: string): Promise<PinStateDto | undefined> => {
     const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
@@ -272,9 +305,12 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
         if (!userDid) return undefined;
 
         if (!(await getDiscoverableCirclesByIds([circleId], userDid))[0]) return undefined;
-        await pinCircle(userDid, circleId);
-        const updated = (await getUserPrivate(userDid)) as UserPrivate;
-        return updated;
+        return executeAuthenticatedUserMutation(
+            userDid,
+            { getUserPrivate },
+            async (did) => pinCircle(did, circleId),
+            toPinStateDto,
+        );
     } catch (e) {
         console.error("Failed to pin circle", e);
         return undefined;
@@ -282,9 +318,9 @@ export const pinCircleAction = async (circleId: string): Promise<UserPrivate | u
 };
 
 /**
- * Unpin a circle for the current user. Returns updated UserPrivate.
+ * Unpin a circle for the current user. Returns the updated pin and bookmark state.
  */
-export const unpinCircleAction = async (circleId: string): Promise<UserPrivate | undefined> => {
+export const unpinCircleAction = async (circleId: string): Promise<PinStateDto | undefined> => {
     const token = readAuthToken(await cookies());
     try {
         if (!token) return undefined;
@@ -292,26 +328,23 @@ export const unpinCircleAction = async (circleId: string): Promise<UserPrivate |
         const userDid = payload.userDid as string;
         if (!userDid) return undefined;
 
-        await unpinCircle(userDid, circleId);
-        const updated = (await getUserPrivate(userDid)) as UserPrivate;
-        return updated;
+        return executeAuthenticatedUserMutation(
+            userDid,
+            { getUserPrivate },
+            async (did) => unpinCircle(did, circleId),
+            toPinStateDto,
+        );
     } catch (e) {
         console.error("Failed to unpin circle", e);
         return undefined;
     }
 };
 
-export const updateUser = async (userId: string, formData: FormData): Promise<UserPrivate | undefined> => {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return undefined;
-    }
-
+export const updateUser = async (userId: string, formData: FormData): Promise<AuthenticatedClientUser | undefined> => {
     try {
-        const currentUser = await getUserById(userId);
-        if (!currentUser || currentUser.did !== userDid) {
-            return undefined;
-        }
+        const owner = await getOwnedUserUpdateBoundary(userId, { getAuthenticatedUserDid, getUserById });
+        if (!owner) return undefined;
+        const { authenticatedDid: userDid, currentUser } = owner;
 
         let updateData: Partial<Circle> = { _id: userId };
 
@@ -334,7 +367,7 @@ export const updateUser = async (userId: string, formData: FormData): Promise<Us
         await updateCircle(updateData, userDid);
         revalidatePath(`/circles/${currentUser.handle}`);
         const updatedUser = await getUserPrivate(userDid);
-        return updatedUser;
+        return toAuthenticatedClientUser(updatedUser);
     } catch (error) {
         console.error("Failed to update user", error);
         return undefined;
@@ -355,7 +388,25 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
 
         const ownerCircle = await getCircleById(circleId);
         if (!ownerCircle) return { success: false, message: "Circle not found" };
+        if (ownerCircle.circleType === "user" && ownerCircle.did !== userDid) {
+            return { success: false, message: "You are not authorized to edit this profile." };
+        }
+
+        const personalNameEntries = formData.getAll("name");
+        let validatedPersonalName: string | undefined;
+        if (ownerCircle.circleType === "user" && personalNameEntries.length > 0) {
+            if (personalNameEntries.length !== 1) {
+                return { success: false, message: "Submit one display name at a time." };
+            }
+            const validation = validatePersonalProfileDisplayName(personalNameEntries[0]);
+            if (!validation.valid) {
+                return { success: false, message: validation.message };
+            }
+            validatedPersonalName = validation.name;
+        }
+
         let updateData: Partial<Circle> = { _id: circleId };
+        const newlyUploadedMediaUrls: string[] = [];
 
         for (const [key, value] of formData.entries() as any) {
             if (key === "picture" || key === "cover") {
@@ -368,6 +419,7 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
                     resourceType: "circle",
                 });
                 updateData[key as keyof Circle] = fileInfo;
+                newlyUploadedMediaUrls.push(fileInfo.url);
                 revalidatePath(fileInfo.url);
             } else if (key === "location") {
                 try {
@@ -376,8 +428,13 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
                     console.error("Failed to parse location data", e);
                 }
             } else {
+                if (key === "name" && ownerCircle.circleType === "user") continue;
                 updateData[key as keyof Circle] = value as string;
             }
+        }
+
+        if (validatedPersonalName !== undefined) {
+            updateData.name = validatedPersonalName;
         }
 
         const circleWithCover = ownerCircle as Circle & { cover?: { url?: string } };
@@ -391,6 +448,29 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
             () => updateCircle(updateData, userDid),
             replacedSingularMedia,
             ownerCircle._id!.toString(),
+            undefined,
+            newlyUploadedMediaUrls,
+            async (urls, expectedCircleId) => {
+                try {
+                    const persisted = await getCircleById(expectedCircleId);
+                    const persistedWithCover = persisted as (Circle & { cover?: { url?: string } }) | undefined;
+                    const referencedUrls = new Set(
+                        [
+                            typeof persistedWithCover?.picture === "string"
+                                ? persistedWithCover.picture
+                                : persistedWithCover?.picture?.url,
+                            persistedWithCover?.cover?.url,
+                            ...(persistedWithCover?.images?.map((media) => media.fileInfo.url) ?? []),
+                        ].filter((url): url is string => Boolean(url)),
+                    );
+                    return cleanupCircleOwnedMedia(
+                        urls.filter((url) => !referencedUrls.has(url)),
+                        expectedCircleId,
+                    );
+                } catch (error) {
+                    return { status: "failed", error };
+                }
+            },
         );
         let circlePath = await getCirclePath({ _id: circleId } as Circle);
         revalidatePath(circlePath);
@@ -409,7 +489,7 @@ export const updateCircleField = async (circleId: string, formData: FormData): P
     }
 };
 
-export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | null> {
+export async function canInviteToProjectByMessageAction(recipientDid: string): Promise<boolean> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) {
@@ -421,25 +501,22 @@ export async function findOrCreateDMRoom(recipient: Circle): Promise<ChatRoom | 
             throw new Error("User not found");
         }
 
-        if (!recipient?.did) {
+        if (!recipientDid || recipientDid === userDid) {
             throw new Error("Recipient not found");
         }
 
+        const recipient = await getCircleByDid(recipientDid);
+        if (!recipient || recipient.circleType !== "user") return false;
+
         if (!canParticipate(user)) {
             console.warn(getParticipationRequiredMessage("start direct messages", user));
-            return null;
+            return false;
         }
 
-        const dmEligibility = await getDmEligibility(userDid, recipient.did);
-        if (!dmEligibility.isAllowed) {
-            return null;
-        }
-
-        const room = await findOrCreateDMRoomData(user, recipient);
-        return room;
+        return (await getDmEligibility(userDid, recipientDid)).isAllowed;
     } catch (error) {
         console.error("Error finding or creating DM room:", error);
-        return null;
+        return false;
     }
 }
 

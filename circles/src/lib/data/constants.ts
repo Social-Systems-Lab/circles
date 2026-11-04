@@ -6,6 +6,14 @@ export const RANKING_STALENESS_DAYS = 7; // How many days before a ranking becom
 
 export const features = {
     general: {
+        invite_members: {
+            name: "Invite Members",
+            handle: "invite_members",
+            description: "Invite existing Kamooni users to a secret Circle",
+            defaultUserGroups: ["admins", "moderators"],
+            module: "general",
+            needsToBeVerified: true,
+        } as Feature,
         edit_same_level_user_groups: {
             name: "Edit Same Level User Groups",
             handle: "edit_same_level_user_groups",

@@ -9,6 +9,7 @@ import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { shouldUnoptimizeCircleAvatar } from "@/lib/utils/circle-avatar-image";
 
 export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; defaultCircle: Circle }) {
     const [circleMenuOpen, setCircleMenuOpen] = useState(false);
@@ -57,6 +58,9 @@ export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; 
                             className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
                             width={100}
                             height={100}
+                            unoptimized={shouldUnoptimizeCircleAvatar(
+                                circle?.picture?.url ?? "/images/default-picture.png",
+                            )}
                         />
                     </div>
                 </PopoverTrigger>
@@ -75,6 +79,9 @@ export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; 
                                         className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
                                         width={100}
                                         height={100}
+                                        unoptimized={shouldUnoptimizeCircleAvatar(
+                                            user.picture?.url ?? "/images/default-user-picture.png",
+                                        )}
                                     />
                                 </div>
                                 <div className="pl-3">{user.name}</div>
@@ -94,6 +101,9 @@ export default function CircleMenu({ circle, defaultCircle }: { circle: Circle; 
                                         className="h-[40px] w-[40px] overflow-hidden rounded-full object-cover shadow"
                                         width={100}
                                         height={100}
+                                        unoptimized={shouldUnoptimizeCircleAvatar(
+                                            circleItem?.picture?.url ?? "/images/default-picture.png",
+                                        )}
                                     />
                                 </div>
                                 <div className="pl-3">{circleItem.name}</div>

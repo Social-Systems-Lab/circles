@@ -13,6 +13,7 @@ import { notFound } from "next/navigation";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { GoalDisplay, UserPrivate } from "@/models/models"; // Import GoalDisplay type, UserPrivate
 import { CreatableItemDetail } from "@/components/global-create/global-create-dialog-content"; // Keep type import
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -96,7 +97,7 @@ export default async function CreateTaskPage(props: PageProps) {
             </div>
             {/* Pass fetched goals to TaskForm */}
             <TaskForm
-                user={user as UserPrivate} // Pass user
+                user={toAuthenticatedClientUser(user)} // Pass user
                 itemDetail={taskItemDetail} // Pass locally defined itemDetail for task
                 initialSelectedCircleId={circle._id} // Pass initialSelectedCircleId
                 // goals and goalsModuleEnabled are now handled within TaskForm based on selectedCircle

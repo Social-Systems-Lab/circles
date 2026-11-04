@@ -53,6 +53,14 @@ export const createUserAccount = async (
     type: AccountType,
     email: string,
     password: string,
+    options: {
+        emailAlreadyVerified?: boolean;
+        pendingRegistrationId?: string;
+        sendVerificationEmail?: boolean;
+        reserveDid?: (did: string) => Promise<void>;
+        acquireProvisioningClaim?: () => Promise<void>;
+        assertProvisioningClaim?: () => Promise<void>;
+    } = {},
 ): Promise<Circle & { devVerificationToken?: string; devVerificationUrl?: string }> => {
     if (!name || !email || !password || !handle) {
         throw new Error("Missing required fields");
@@ -71,6 +79,14 @@ export const createUserAccount = async (
         throw new Error("Handle already in use");
     }
 
+    if (options.pendingRegistrationId) {
+        if (!options.acquireProvisioningClaim || !options.assertProvisioningClaim || !options.reserveDid) {
+            throw new Error("Pending identity provisioning requires a durable claim");
+        }
+        await options.acquireProvisioningClaim();
+        await options.assertProvisioningClaim();
+    }
+
     // make sure account directory exists
     if (!fs.existsSync(USERS_DIR)) {
         fs.mkdirSync(USERS_DIR, { recursive: true });
@@ -85,12 +101,14 @@ export const createUserAccount = async (
         .update(publicKey.export({ type: "pkcs1", format: "pem" }) as string)
         .digest("hex");
 
-    // create a directory for the user using the did as the name
+    // Pending registration persists this identity before any credential files are written.
+    // A retry must never silently replace a previously reserved DID.
+    if (options.reserveDid) await options.reserveDid(did);
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
+
+    // Never reuse an existing credential directory, even if its contents look incomplete.
     const accountPath = path.join(USERS_DIR, did);
-    if (fs.existsSync(accountPath)) {
-        throw new Error("Account already exists");
-    }
-    fs.mkdirSync(accountPath, { recursive: true });
+    fs.mkdirSync(accountPath);
 
     // generate salt, iv, encryption key and encrypt private key
     const salt = crypto.randomBytes(16);
@@ -107,15 +125,21 @@ export const createUserAccount = async (
     let publicKeyPem = publicKey.export({ type: "pkcs1", format: "pem" });
 
     // save salt, iv and keypair in the user directory
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, SALT_FILENAME), salt);
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, IV_FILENAME), iv);
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, PUBLIC_KEY_FILENAME), publicKey.export({ type: "pkcs1", format: "pem" }));
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     fs.writeFileSync(path.join(accountPath, ENCRYPTED_PRIVATE_KEY_FILENAME), encryptedPrivateKey);
 
     // add user to the database
-    const unhashedVerificationToken = generateSecureToken();
-    const hashedVerificationToken = hashToken(unhashedVerificationToken);
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 3600 * 1000); // 24 hours expiry
+    const emailAlreadyVerified = options.emailAlreadyVerified === true;
+    const shouldSendVerificationEmail = options.sendVerificationEmail !== false && !emailAlreadyVerified;
+    const unhashedVerificationToken = shouldSendVerificationEmail ? generateSecureToken() : null;
+    const hashedVerificationToken = unhashedVerificationToken ? hashToken(unhashedVerificationToken) : undefined;
+    const verificationTokenExpiry = unhashedVerificationToken ? new Date(Date.now() + 24 * 3600 * 1000) : undefined;
 
     let user: Circle = createNewUser(
         did,
@@ -124,15 +148,20 @@ export const createUserAccount = async (
         handle,
         type,
         email,
-        false, // isEmailVerified
+        emailAlreadyVerified,
         hashedVerificationToken, // emailVerificationToken
         verificationTokenExpiry, // emailVerificationTokenExpiry
     );
     user.verificationStatus = "unverified";
-    user.accountStatus = "pending_verification";
+    user.accountStatus = emailAlreadyVerified ? "active" : "pending_verification";
+    if (options.pendingRegistrationId) {
+        user.metadata = { ...(user.metadata ?? {}), pendingRegistrationId: options.pendingRegistrationId };
+    }
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     let res = await Circles.insertOne(user);
     user._id = res.insertedId.toString();
 
+    if (options.assertProvisioningClaim) await options.assertProvisioningClaim();
     try {
         const { getNextSignupOrder } = await import("@/lib/data/platform-settings");
         const order = await getNextSignupOrder();
@@ -143,33 +172,37 @@ export const createUserAccount = async (
     }
 
     // Send verification email
-    const verificationLink = `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`;
-    if (process.env.NODE_ENV !== "production") {
-        console.log(`[DEV_EMAIL_VERIFICATION_TOKEN] ${email}: ${unhashedVerificationToken}`);
-        console.log(`[DEV_EMAIL_VERIFICATION_URL] ${email}: ${verificationLink}`);
+    const verificationLink = unhashedVerificationToken
+        ? `${process.env.CIRCLES_URL || "http://localhost:3000"}/verify-email?token=${unhashedVerificationToken}`
+        : null;
+    if (unhashedVerificationToken && verificationLink && process.env.NODE_ENV !== "production") {
         const devUser = user as Circle & { devVerificationToken?: string; devVerificationUrl?: string };
         devUser.devVerificationToken = unhashedVerificationToken;
         devUser.devVerificationUrl = verificationLink;
     }
-    try {
-        await sendEmail({
-            to: email,
-            templateAlias: "email-verification", // As per spec
-            templateModel: {
-                name: name,
-                actionUrl: verificationLink,
-            },
-        });
-        await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
-        console.log(`Verification email sent to ${email}`);
-    } catch (error) {
-        console.error(`Failed to send verification email to ${email}:`, error);
-        // Decide if account creation should fail if email sending fails.
-        // For now, we'll log the error and continue. User can request resend later.
-    }
+    if (unhashedVerificationToken && verificationLink)
+        try {
+            await sendEmail({
+                to: email,
+                templateAlias: "email-verification", // As per spec
+                templateModel: {
+                    name: name,
+                    actionUrl: verificationLink,
+                },
+            });
+            await Circles.updateOne({ _id: res.insertedId }, { $set: { emailVerificationLastSentAt: new Date() } });
+            console.log("Verification email delivery accepted");
+        } catch (error) {
+            console.error("Failed to deliver verification email");
+            // Decide if account creation should fail if email sending fails.
+            // For now, we'll log the error and continue. User can request resend later.
+        }
 
-    // add user as member of their own circle
-    await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+    // Pending registrations defer memberships and other secondary writes until
+    // the retryable, claim-fenced finalization phase. Legacy signup is unchanged.
+    if (!options.pendingRegistrationId) {
+        await addMember(did, user._id!, ["admins", "moderators", "members"], undefined);
+    }
 
     // add user to default circle by default
     // let defaultCircle = await getDefaultCircle();
@@ -279,6 +312,7 @@ export const getUserPrivateKey = (did: string, password: string): string => {
     try {
         decryptedPrivateKey = decipher.update(encryptedPrivateKeyStr, "hex", "utf8"); // Use the string variable
         decryptedPrivateKey += decipher.final("utf8");
+        crypto.createPrivateKey(decryptedPrivateKey);
     } catch (error) {
         if (process.env.NODE_ENV !== "production") {
             console.log(

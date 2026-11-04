@@ -1,8 +1,12 @@
 # Kamooni Onboarding, Profile Completion, and Participation Readiness
 
-Implementation reference: verified against commit `0204b7fe`
+Implementation reference: updated for the Milestone 1 participation/map policy split.
 
 This document is the canonical developer reference for the current Kamooni onboarding/profile-completion architecture.
+
+The resumable navigation foundation is described in [ONBOARDING_MILESTONE_4A_RESUMABLE_FOUNDATION.md](./ONBOARDING_MILESTONE_4A_RESUMABLE_FOUNDATION.md). It adds navigation state only; participation and profile readiness remain derived from the canonical fields described below.
+
+The functional card editors are described in [ONBOARDING_MILESTONE_4B_FUNCTIONAL_CARDS.md](./ONBOARDING_MILESTONE_4B_FUNCTIONAL_CARDS.md).
 
 ## Scope
 
@@ -25,7 +29,7 @@ Canonical implementation:
 
 - `src/lib/profile-completion.ts`
 
-A personal profile is complete only when all of the following are true:
+A personal profile retains the historical `profileComplete` compatibility concept when all of the following are true:
 
 - `circle.circleType === "user"`
 - the personal profile has a real profile image
@@ -70,7 +74,7 @@ Profile completion is:
 - About text
 - Kamooni rules / community guidelines agreement
 
-It is a participation-readiness requirement, but it is not account/profile verification.
+It is retained for the existing one-time completion/supporter boundary, but it is no longer the participation or map policy.
 
 ### Account/Profile Verification
 
@@ -106,10 +110,10 @@ Canonical helper:
 
 - `canParticipate(user)` in `src/lib/profile-completion.ts`
 
-Current normal-user rule:
+Current Phase 1 normal-user rule:
 
 ```ts
-hasConfirmedAccountContactMethod(user) && isProfileComplete(user)
+verified email && non-empty introduction && accepted community guidelines
 ```
 
 The current confirmed account contact method is verified email:
@@ -118,6 +122,10 @@ The current confirmed account contact method is verified email:
 - `isEmailVerified === true`
 
 Admins retain the existing bypass through the shared helper.
+
+A profile image, location, Proof of Humanity, `isHuman`, and historical account/profile verification are not Phase 1 participation requirements. Explicit readiness and missing-requirement data comes from `getParticipationReadiness()`.
+
+Optional profile improvements are derived separately by `getOptionalProfileImprovements()`. They currently include profile image, selected location, and Proof of Humanity status supplied by its canonical attestation architecture.
 
 This separation intentionally leaves room for a future confirmed account/contact/recovery method, such as VibeID, passkeys, or another identity path, without redefining `profileComplete`.
 
@@ -169,7 +177,7 @@ Key files:
 
 Incomplete personal profiles may appear in normal Kamooni search.
 
-Incomplete personal profiles must not appear on the map.
+Personal profiles must have a verified email, a genuine profile image, and a valid selected location before they can appear on the map.
 
 Normal non-user circles keep their own map/search visibility behavior and are not subjected to profile completion.
 
@@ -183,11 +191,11 @@ Relevant files:
 
 Map profile eligibility is derived server-side.
 
-`getSwipeCircles()` derives personal-profile completion server-side for map discovery. Fields needed for derivation, including `content` and `communityGuidelinesAcceptance`, are stripped before map discovery data is returned to the client.
+`getSwipeCircles()` derives personal-profile map eligibility server-side after the existing publication, visibility, lifecycle, moderation, and account-status discovery restrictions. Map eligibility requires verified email but does not require an introduction or Community Guidelines acceptance.
 
-Complete personal profiles are marked with transient:
+Eligible personal profiles are marked with transient:
 
-- `mapEligibility.profileComplete = true`
+- `mapEligibility.personalProfileEligible = true`
 
 `mapEligibility` is not persisted.
 
@@ -224,11 +232,11 @@ The Check your email page no longer offers:
 - Go to login
 - continue for now
 
-The three profile-completion steps are:
+The active profile checklist distinguishes required participation steps from optional improvement:
 
-1. Add a profile image
-2. Introduce yourself
-3. Agree to the Kamooni rules
+1. Introduce yourself — required for participation
+2. Agree to the Kamooni rules — required for participation
+3. Add a profile image — optional for participation, required for personal-profile map eligibility
 
 Rules use the simple one-page `CodeOfConductAgreement` in `profileCompletion` context.
 
@@ -237,6 +245,8 @@ The older multi-screen `CommunityGuidelinesAgreementFlow` remains available for 
 Visible Request Verification entry points have been removed from normal onboarding/profile UX.
 
 Verification backend/data/admin architecture remains preserved.
+
+The authenticated `/onboarding` resumable shell now also provides functional introduction, Community Guidelines, location, profile-photo, and Proof of Humanity cards. These update or link to the canonical profile and verification systems described in the Milestone 4B document. The older signup/profile-completion journeys above remain compatible and are not replaced by this work.
 
 ## Profile Completion Welcome And Supporter Card
 

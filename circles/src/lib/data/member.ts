@@ -1,6 +1,7 @@
 // member.ts - membership management
+import crypto from "crypto";
 import { Content, Member, MemberDisplay, SortingOptions } from "@/models/models";
-import { ChatRoomMembers, Circles, Members } from "./db";
+import { ChatRoomMembers, ChatRooms, Circles, Members } from "./db";
 import { ObjectId } from "mongodb";
 import { filterLocations } from "../utils";
 import { getMetrics } from "../utils/metrics";
@@ -8,6 +9,11 @@ import { SAFE_CIRCLE_PROJECTION } from "./circle";
 import { addChatRoomMember, getChatRoomByHandle, removeChatRoomMember } from "./chat";
 import { upsertFollowState } from "./relationships";
 import { assertCircleWritesAllowed } from "./circle-lifecycle-policy";
+export {
+    getMemberDirectoryForViewer,
+    getMemberDirectoryManagement,
+    getPublicMemberDirectory,
+} from "./member-directory-data";
 
 export const getMember = async (userDid: string, circleId: string): Promise<Member | null> => {
     return await Members.findOne({ userDid: userDid, circleId: circleId });
@@ -118,6 +124,81 @@ export const addMember = async (
     }
 
     return member;
+};
+
+/**
+ * Idempotently completes the self-membership side effects required for a newly
+ * provisioned personal profile. Unlike addMember, an existing row does not mean
+ * that chat membership and the denormalized member count were also completed.
+ */
+export const ensureProvisionedPersonalMembership = async (userDid: string, circleId: string): Promise<void> => {
+    await assertCircleWritesAllowed(circleId);
+    const circleObjectId = new ObjectId(circleId);
+    const circle = await Circles.findOne({ _id: circleObjectId }, { projection: { did: 1, circleType: 1 } });
+    if (!circle || circle.circleType !== "user" || circle.did !== userDid) {
+        throw new Error("Personal profile membership identity does not match");
+    }
+
+    const selfMembershipId = new ObjectId(
+        crypto.createHash("sha256").update(`pending-self:${userDid}:${circleId}`).digest().subarray(0, 12),
+    );
+    try {
+        await Members.updateOne(
+            { userDid, circleId },
+            {
+                $setOnInsert: {
+                    _id: selfMembershipId,
+                    userDid,
+                    circleId,
+                    userGroups: ["admins", "moderators", "members"],
+                    joinedAt: new Date(),
+                },
+            },
+            { upsert: true },
+        );
+    } catch (error) {
+        if ((error as { code?: number }).code !== 11000) throw error;
+        const existing = await Members.findOne({ userDid, circleId }, { projection: { _id: 1 } });
+        if (!existing) throw error;
+    }
+
+    const membersChat = await ChatRooms.findOne({ circleId, handle: "members" }, { projection: { _id: 1 } });
+    if (membersChat?._id) {
+        const chatRoomId = membersChat._id.toString();
+        const chatMembershipId = new ObjectId(
+            crypto.createHash("sha256").update(`pending-self-chat:${userDid}:${chatRoomId}`).digest().subarray(0, 12),
+        );
+        try {
+            await ChatRoomMembers.updateOne(
+                { userDid, chatRoomId },
+                {
+                    $setOnInsert: {
+                        _id: chatMembershipId,
+                        userDid,
+                        chatRoomId,
+                        circleId,
+                        joinedAt: new Date(),
+                        role: "member",
+                    },
+                    $set: { status: "active", active: true, isActive: true },
+                },
+                { upsert: true },
+            );
+        } catch (error) {
+            if ((error as { code?: number }).code !== 11000) throw error;
+            const existing = await ChatRoomMembers.findOne({ userDid, chatRoomId }, { projection: { _id: 1 } });
+            if (!existing) throw error;
+        }
+    }
+
+    // Recompute from the authoritative membership collection. This repairs the
+    // crash window after the row insert without incrementing the count twice.
+    const memberCount = await Members.countDocuments({ circleId });
+    const countUpdate = await Circles.updateOne(
+        { _id: circleObjectId, did: userDid },
+        { $set: { members: memberCount } },
+    );
+    if (countUpdate.matchedCount !== 1) throw new Error("Personal profile disappeared during membership finalization");
 };
 
 export const removeMember = async (userDid: string, circleId: string): Promise<boolean> => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
+import { Archive, Users, Image as ImageIcon, Settings as SettingsIcon, Info, Search, Check, X } from "lucide-react";
 import { HiLightBulb } from "react-icons/hi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,18 @@ import { CirclePicture } from "../circles/circle-picture";
 import { useAtom, useAtomValue } from "jotai";
 import { useRouter } from "next/navigation";
 import { useIsCompact } from "@/components/utils/use-is-compact";
+import { TOPIC_SORT_PREFERENCE_EVENT, type TopicSortOrder } from "./chat-topic-utils";
+import {
+    beginConversationMuteMutation,
+    CONVERSATION_MUTE_PENDING_EVENT,
+    CONVERSATION_MUTE_PREFERENCE_EVENT,
+    createLatestPreferenceRequest,
+    dispatchConversationMutePreference,
+    finishConversationMuteMutation,
+    isConversationMuteMutationPending,
+} from "@/lib/client/chat-preference-events";
+import { useToast } from "@/components/ui/use-toast";
+import { chunkRecipientDids } from "@/lib/security/recipient-input";
 
 interface GroupSettingsModalProps {
     open: boolean;
@@ -18,7 +30,6 @@ interface GroupSettingsModalProps {
     chatRoom: ChatRoomDisplay;
     isAdmin: boolean;
 }
-
 const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: GroupSettingsModalProps) {
@@ -130,7 +141,7 @@ export function GroupSettingsModal({ open, onOpenChange, chatRoom, isAdmin }: Gr
                         </TabsContent>
 
                         <TabsContent value="settings" className="mt-0">
-                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} />
+                            <SettingsTab chatRoom={chatRoom} isAdmin={isAdmin || canEditInfo} onOpenChange={onOpenChange} />
                         </TabsContent>
                     </div>
                 </Tabs>
@@ -408,7 +419,6 @@ function InfoTab({
         </div>
     );
 }
-
 // Members Tab Component
 function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
     const user = useAtomValue(userAtom);
@@ -531,24 +541,30 @@ function MembersTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin:
         setIsSavingMembers(true);
         try {
             const { addMembersAction } = await import("./actions");
-            const result = await addMembersAction(
-                chatRoom._id as string,
-                selectedUsers.map(u => u.did)
-            );
+            const batches = chunkRecipientDids(selectedUsers.map((u) => u.did));
+            let added = 0;
+            for (const [index, batch] of batches.entries()) {
+                const result = await addMembersAction(chatRoom._id as string, batch);
+                if (!result.success) {
+                    alert(
+                        added > 0
+                            ? `Added ${added} of ${selectedUsers.length} selected members. The remaining members were not added: ${result.message || "Please try again."}`
+                            : result.message || "Failed to add members",
+                    );
+                    break;
+                }
+                added += batch.length;
+                if (index === batches.length - 1) {
+                    setIsAddingMembers(false);
+                    setSelectedUsers([]);
+                    setSearchTerm("");
+                }
+            }
 
-            if (result.success) {
-                // Refresh members
+            if (added > 0) {
                 const { getChatRoomMembersAction } = await import("./actions");
                 const refreshResult = await getChatRoomMembersAction(chatRoom._id as string);
-                if (refreshResult.success && refreshResult.members) {
-                    setMembers(refreshResult.members);
-                }
-                // Reset UI
-                setIsAddingMembers(false);
-                setSelectedUsers([]);
-                setSearchTerm("");
-            } else {
-                alert(result.message || "Failed to add members");
+                if (refreshResult.success && refreshResult.members) setMembers(refreshResult.members);
             }
         } catch (error) {
             console.error("Error adding members:", error);
@@ -895,13 +911,144 @@ function MediaTab({ chatRoom, isActive }: { chatRoom: ChatRoomDisplay; isActive:
 }
 
 // Settings Tab Component
-function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin: boolean }) {
+function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDisplay; isAdmin: boolean; onOpenChange: (open: boolean) => void }) {
+    const router = useRouter();
+    const { toast } = useToast();
+    const [isArchiving, setIsArchiving] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [announcementBody, setAnnouncementBody] = useState("");
     const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
     const [announcementNotice, setAnnouncementNotice] = useState<string | null>(null);
     const [announcementError, setAnnouncementError] = useState<string | null>(null);
+    const [topicSortOrder, setTopicSortOrder] = useState<TopicSortOrder>("latest_activity");
+    const [isSavingTopicSort, setIsSavingTopicSort] = useState(false);
+    const [notificationsMuted, setNotificationsMuted] = useState<boolean | null>(null);
+    const [isSavingMute, setIsSavingMute] = useState(false);
+    const [muteLoadState, setMuteLoadState] = useState<"loading" | "loaded" | "error">("loading");
+    const [muteLoadAttempt, setMuteLoadAttempt] = useState(0);
+    const muteLoadRequestRef = useRef(createLatestPreferenceRequest());
+    const currentConversationIdRef = useRef(String(chatRoom._id));
+    currentConversationIdRef.current = String(chatRoom._id);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadTopicSortOrder = async () => {
+            const { getTopicSortPreferenceAction } = await import("./mongo-actions");
+            const result = await getTopicSortPreferenceAction(String(chatRoom._id));
+            if (!cancelled && result.success && result.sortOrder) setTopicSortOrder(result.sortOrder);
+        };
+        void loadTopicSortOrder();
+        return () => {
+            cancelled = true;
+        };
+    }, [chatRoom._id]);
+
+    useEffect(() => {
+        const requestTracker = muteLoadRequestRef.current;
+        const requestId = requestTracker.next();
+        const loadMutePreference = async () => {
+            setNotificationsMuted(null);
+            setMuteLoadState("loading");
+            try {
+                const { getConversationMutePreferenceAction } = await import("./actions");
+                const result = await getConversationMutePreferenceAction(String(chatRoom._id));
+                if (!result.success) throw new Error(result.message || "Failed to load notification preference");
+                if (!requestTracker.isCurrent(requestId)) return;
+                setNotificationsMuted(result.muted === true);
+                setMuteLoadState("loaded");
+            } catch (error) {
+                console.error("Failed to load notification preference:", error);
+                if (!requestTracker.isCurrent(requestId)) return;
+                setNotificationsMuted(null);
+                setMuteLoadState("error");
+            }
+        };
+        void loadMutePreference();
+        return () => {
+            if (requestTracker.isCurrent(requestId)) requestTracker.invalidate();
+        };
+    }, [chatRoom._id, muteLoadAttempt]);
+
+    useEffect(() => {
+        const handlePreference = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; muted?: boolean }>).detail;
+            if (detail?.conversationId === String(chatRoom._id) && typeof detail.muted === "boolean") {
+                muteLoadRequestRef.current.invalidate();
+                setNotificationsMuted(detail.muted);
+                setMuteLoadState("loaded");
+            }
+        };
+        const handlePending = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; pending?: boolean }>).detail;
+            if (detail?.conversationId === String(chatRoom._id) && typeof detail.pending === "boolean") {
+                setIsSavingMute(detail.pending);
+            }
+        };
+        setIsSavingMute(isConversationMuteMutationPending(String(chatRoom._id)));
+        window.addEventListener(CONVERSATION_MUTE_PREFERENCE_EVENT, handlePreference);
+        window.addEventListener(CONVERSATION_MUTE_PENDING_EVENT, handlePending);
+        return () => {
+            window.removeEventListener(CONVERSATION_MUTE_PREFERENCE_EVENT, handlePreference);
+            window.removeEventListener(CONVERSATION_MUTE_PENDING_EVENT, handlePending);
+        };
+    }, [chatRoom._id]);
+
+    const handleMuteChange = async (muted: boolean) => {
+        if (muteLoadState !== "loaded" || notificationsMuted === null) return;
+        const conversationId = String(chatRoom._id);
+        if (!beginConversationMuteMutation(conversationId)) return;
+        const previous = notificationsMuted;
+        setNotificationsMuted(muted);
+        setIsSavingMute(true);
+        try {
+            const { setConversationMutePreferenceAction } = await import("./actions");
+            const result = await setConversationMutePreferenceAction(conversationId, muted);
+            if (!result.success) {
+                if (currentConversationIdRef.current === conversationId) setNotificationsMuted(previous);
+                throw new Error(result.message || "Failed to save notification preference");
+            }
+            dispatchConversationMutePreference(conversationId, muted);
+        } catch (error) {
+            console.error("Failed to save notification preference:", error);
+            if (currentConversationIdRef.current === conversationId) {
+                setNotificationsMuted(previous);
+                toast({
+                    title: "Couldn’t update notifications",
+                    description: error instanceof Error ? error.message : "Please try again.",
+                    variant: "destructive",
+                });
+            }
+        } finally {
+            finishConversationMuteMutation(conversationId);
+        }
+    };
+
+    const handleTopicSortChange = async (sortOrder: TopicSortOrder) => {
+        const previous = topicSortOrder;
+        setTopicSortOrder(sortOrder);
+        setIsSavingTopicSort(true);
+        try {
+            const { setTopicSortPreferenceAction } = await import("./mongo-actions");
+            const result = await setTopicSortPreferenceAction(String(chatRoom._id), sortOrder);
+            if (!result.success) {
+                setTopicSortOrder(previous);
+                alert(result.message || "Failed to save topic order");
+                return;
+            }
+            window.dispatchEvent(
+                new CustomEvent(TOPIC_SORT_PREFERENCE_EVENT, {
+                    detail: { conversationId: String(chatRoom._id), sortOrder },
+                }),
+            );
+        } catch (error) {
+            console.error("Failed to save topic order:", error);
+            setTopicSortOrder(previous);
+            alert("Failed to save topic order");
+        } finally {
+            setIsSavingTopicSort(false);
+        }
+    };
 
     const handleSendAnnouncement = async () => {
         if (!isAdmin || chatRoom.isDirect) {
@@ -984,8 +1131,49 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
         }
     };
 
+    const handleArchiveConversation = async () => {
+        if (!chatRoom.isDirect || !chatRoom._id) return;
+        setIsArchiving(true);
+        try {
+            const { archiveDmConversationAction } = await import("./actions");
+            const result = await archiveDmConversationAction(String(chatRoom._id));
+            if (!result.success) {
+                alert(result.message || "Failed to archive conversation");
+                return;
+            }
+            onOpenChange(false);
+            router.replace("/chat/archived");
+        } catch (error) {
+            console.error("Error archiving conversation:", error);
+            alert("Failed to archive conversation");
+        } finally {
+            setIsArchiving(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
+            <fieldset className="rounded-lg border border-gray-200 p-3" disabled={isSavingTopicSort}>
+                <legend className="px-1 font-medium">Topic order</legend>
+                <p className="mb-3 text-sm text-gray-500">This setting applies only to you.</p>
+                <div className="space-y-2">
+                    {([
+                        ["latest_activity", "Latest activity"],
+                        ["date_created", "Date created"],
+                    ] as const).map(([value, label]) => (
+                        <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                            <input
+                                type="radio"
+                                name={`topic-sort-${chatRoom._id}`}
+                                value={value}
+                                checked={topicSortOrder === value}
+                                onChange={() => void handleTopicSortChange(value)}
+                            />
+                            {label}
+                        </label>
+                    ))}
+                </div>
+            </fieldset>
             {isAdmin && !chatRoom.isDirect && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="font-medium text-slate-900">Send Announcement</p>
@@ -1018,22 +1206,56 @@ function SettingsTab({ chatRoom, isAdmin }: { chatRoom: ChatRoomDisplay; isAdmin
             <div className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
                 <div>
                     <p className="font-medium">Mute Notifications</p>
-                    <p className="text-sm text-gray-500">Silence notifications from this chat</p>
+                    {muteLoadState === "error" ? (
+                        <p className="text-sm text-amber-700">
+                            Couldn’t load this setting.{" "}
+                            <button
+                                type="button"
+                                className="underline underline-offset-2"
+                                onClick={() => setMuteLoadAttempt((attempt) => attempt + 1)}
+                            >
+                                Retry
+                            </button>
+                        </p>
+                    ) : (
+                        <p className="text-sm text-gray-500">
+                            {muteLoadState === "loading" ? "Loading notification setting…" : "Silence notifications from this chat"}
+                        </p>
+                    )}
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" />
+                    <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={notificationsMuted === true}
+                        disabled={isSavingMute || muteLoadState !== "loaded"}
+                        onChange={(event) => void handleMuteChange(event.target.checked)}
+                        aria-label="Mute notifications for this conversation"
+                    />
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
             </div>
 
-            {/* Leave Group */}
-            <button 
-                onClick={handleLeaveGroup}
-                disabled={isLeaving}
-                className="w-full p-3 text-left rounded-lg hover:bg-red-50 text-red-600 font-medium transition-colors disabled:opacity-50"
-            >
-                {isLeaving ? "Leaving..." : `Leave ${chatRoom.isDirect ? "Chat" : "Group"}`}
-            </button>
+            {chatRoom.isDirect ? (
+                <button
+                    type="button"
+                    onClick={handleArchiveConversation}
+                    disabled={isArchiving}
+                    className="flex min-h-11 w-full items-center gap-2 rounded-lg p-3 text-left font-medium text-amber-700 transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                >
+                    <Archive className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                    {isArchiving ? "Archiving..." : "Archive conversation"}
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    onClick={handleLeaveGroup}
+                    disabled={isLeaving}
+                    className="w-full p-3 text-left rounded-lg hover:bg-red-50 text-red-600 font-medium transition-colors disabled:opacity-50"
+                >
+                    {isLeaving ? "Leaving..." : "Leave Group"}
+                </button>
+            )}
 
             {/* Delete Group (Admin Only) */}
             {isAdmin && !chatRoom.isDirect && (
@@ -1119,7 +1341,7 @@ function ThreadsTab({
                             ) : null}
                             <p className="mt-2 text-xs text-gray-400">
                                 {thread.thread?.replyCount || 0} {thread.thread?.replyCount === 1 ? "reply" : "replies"} ·{" "}
-                                {new Date(thread.thread?.updatedAt || thread.createdAt).toLocaleDateString()}
+                                {new Date(thread.thread?.createdAt || thread.createdAt).toLocaleDateString()}
                             </p>
                         </div>
                         <span className="shrink-0 text-xs font-medium text-blue-600">Open</span>

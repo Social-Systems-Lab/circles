@@ -29,6 +29,7 @@ import { AiFillHeart } from "react-icons/ai";
 import { Button } from "../ui/button";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { addNotificationRefreshListener, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
+import { presentChatMentionNotificationMessage } from "@/lib/chat/notification-presentation";
 
 type Notification = {
     id: string;
@@ -47,6 +48,8 @@ type Notification = {
     commentId?: string;
     reaction?: string;
     roomId?: string;
+    topicId?: string;
+    topicTitle?: string;
     project?: Circle;
     projectId?: string;
     // Proposal fields
@@ -238,7 +241,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                         groupKey = `pm_received_${content.roomId || record._id}`;
                         break;
                     case "chat_mention":
-                        groupKey = `chat_mention_${content.roomId || record._id}`;
+                        groupKey = `chat_mention_${content.roomId || record._id}_${content.topicId || "chat"}`;
                         break;
                     default:
                         groupKey = record._id;
@@ -261,6 +264,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     commentId: content.commentId,
                     reaction: content.reaction,
                     roomId: content.roomId,
+                    topicId: content.topicId,
+                    topicTitle: content.topicTitle,
                     project: content.project,
                     projectId: content.projectId,
                     proposalId: content.proposalId,
@@ -503,6 +508,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "user_verification_reply_received":
                     return `/admin`;
                 case "pm_received":
+                case "circle_moderation_update":
                 case "chat_mention":
                     return notification.roomId ? `/chat/${notification.roomId}` : null;
                 case "contact_request_received":
@@ -573,6 +579,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "pm_received":
                     return "Reply";
                 case "chat_mention":
+                case "circle_moderation_update":
                     return "View";
                 case "task_assigned":
                 case "task_shift_signup":
@@ -652,6 +659,13 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
 
         if (count === 1) {
             // For single notifications, use the original message
+            if (notificationType === "chat_mention") {
+                return presentChatMentionNotificationMessage({
+                    message: groupedNotification.latestNotification.message,
+                    senderName: groupedNotification.latestNotification.user?.name,
+                    topicTitle: groupedNotification.latestNotification.topicTitle,
+                });
+            }
             return groupedNotification.latestNotification.message;
         }
 
@@ -784,9 +798,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     ? `${userList} sent you ${count} messages`
                     : groupedNotification.latestNotification.message;
             case "chat_mention":
-                return count > 1
-                    ? `${userList} mentioned you ${count} times in chat`
-                    : groupedNotification.latestNotification.message;
+                return groupedNotification.latestNotification.topicTitle
+                    ? `${userList} mentioned you ${count} times in “${groupedNotification.latestNotification.topicTitle}”`
+                    : `${userList} mentioned you ${count} times in chat`;
             default:
                 return groupedNotification.latestNotification.message;
         }

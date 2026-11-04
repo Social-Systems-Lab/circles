@@ -19,10 +19,6 @@ function normalizeBaseUrl(url: string): string {
     return url.replace(/\/+$/, "");
 }
 
-function isLocalHost(hostname: string): boolean {
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-}
-
 async function resolveResetBaseUrl(): Promise<string> {
     const explicitBaseUrl =
         process.env.NEXT_PUBLIC_APP_URL ||
@@ -92,19 +88,6 @@ export async function requestPasswordResetAction(email: string): Promise<Request
 
             const baseUrl = await resolveResetBaseUrl();
             const resetLink = `${baseUrl}/reset-password?token=${unhashedToken}`;
-            let isLocalBaseUrl = false;
-            try {
-                isLocalBaseUrl = isLocalHost(new URL(baseUrl).hostname);
-            } catch {
-                isLocalBaseUrl = false;
-            }
-            const shouldLogResetLink =
-                isLocalBaseUrl ||
-                (process.env.CIRCLES_DEV_LOG_PASSWORD_RESET === "true" && process.env.NODE_ENV !== "production");
-
-            if (shouldLogResetLink) {
-                console.log(`[DEV_RESET_LINK] email=${user.email} url=${resetLink} token=${unhashedToken}`);
-            }
 
             try {
                 await sendEmail({
@@ -123,9 +106,9 @@ export async function requestPasswordResetAction(email: string): Promise<Request
                         // browser_name: "Unknown", // Placeholder
                     },
                 });
-                console.log(`Password reset email initiated for ${user.email}`);
-            } catch (emailError) {
-                console.error(`Failed to send password reset email to ${user.email}:`, emailError);
+                console.log("Password reset email delivery accepted");
+            } catch {
+                console.error("Failed to deliver password reset email");
                 // Do not expose this error to the client to prevent information leakage.
                 // Log it for server-side debugging.
                 // The generic success message will still be returned.
@@ -133,10 +116,10 @@ export async function requestPasswordResetAction(email: string): Promise<Request
         } else if (user && !user.isEmailVerified) {
             // User exists but email not verified. Still return generic success message.
             // Log this case for admin review if necessary.
-            console.log(`Password reset requested for unverified email: ${validation.data.email}`);
+            console.log("Password reset request skipped for unverified account");
         } else {
             // User does not exist. Still return generic success message.
-            console.log(`Password reset requested for non-existent email: ${validation.data.email}`);
+            console.log("Password reset request skipped for unknown account");
         }
 
         // Always return a generic success message to prevent email enumeration

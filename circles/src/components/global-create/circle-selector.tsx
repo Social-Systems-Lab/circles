@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAtom } from "jotai";
 import { userAtom } from "@/lib/data/atoms";
-import { Circle, UserPrivate } from "@/models/models";
+import { Circle } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { CreatableItemDetail } from "./global-create-dialog-content";
 import { modules as moduleInfos } from "@/lib/data/constants";
 import { Label } from "../ui/label"; // Re-imported Label
@@ -39,19 +40,22 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
     const [isLoading, setIsLoading] = useState(true);
     const [showEnableModuleMessage, setShowEnableModuleMessage] = useState(false);
 
-    const updateModuleEnableMessage = useCallback((selectedCircle: Circle | null, userCircle: UserPrivate | null) => {
-        if (
-            selectedCircle &&
-            userCircle &&
-            selectedCircle._id === userCircle._id &&
-            itemType &&
-            !selectedCircle.enabledModules?.includes(itemType.moduleHandle)
-        ) {
-            setShowEnableModuleMessage(true);
-        } else {
-            setShowEnableModuleMessage(false);
-        }
-    }, [itemType]);
+    const updateModuleEnableMessage = useCallback(
+        (selectedCircle: Circle | null, userCircle: AuthenticatedClientUser | null) => {
+            if (
+                selectedCircle &&
+                userCircle &&
+                selectedCircle._id === userCircle._id &&
+                itemType &&
+                !selectedCircle.enabledModules?.includes(itemType.moduleHandle)
+            ) {
+                setShowEnableModuleMessage(true);
+            } else {
+                setShowEnableModuleMessage(false);
+            }
+        },
+        [itemType],
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -66,7 +70,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         }
 
         setIsLoading(true);
-        const currentUserCircle = user as UserPrivate;
+        const currentUserCircle = user;
 
         const loadSelectableCircles = async () => {
             const result = await getSelectableCirclesAction(
@@ -128,7 +132,7 @@ export const CircleSelector: React.FC<CircleSelectorProps> = ({
         setSelectedCircleId(circleId);
         onCircleSelected(circle || null);
         if (user && circle) {
-            updateModuleEnableMessage(circle, user as UserPrivate);
+            updateModuleEnableMessage(circle, user);
         } else {
             setShowEnableModuleMessage(false);
         }

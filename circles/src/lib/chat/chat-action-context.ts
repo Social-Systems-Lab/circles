@@ -9,16 +9,28 @@ export type ChatActionContext = {
     findLegacyChatMember?: (viewerDid: string, chatRoomId: string) => Promise<any | null>;
     findLegacyChatRoom?: (chatRoomId: string) => Promise<any | null>;
     findMessage?: (messageId: string) => Promise<any | null>;
+    findMessageBySubmissionId?: (senderDid: string, submissionId: string) => Promise<any | null>;
+    findThreadStarter?: (threadId: string, conversationId: string) => Promise<any | null>;
+    refreshMessageActivity?: (message: any) => Promise<void>;
     findCanonicalMemberships?: (viewerDid: string) => Promise<any[]>;
     findCandidates?: (viewerDid: string, canonicalCircleIds: string[]) => Promise<any[]>;
     findOwningCircles?: (circleIds: string[]) => Promise<any[]>;
     findChatMemberships?: (conversationIds: string[]) => Promise<any[]>;
     mapConversations?: (viewerDid: string, conversations: any[], circles: any[]) => Promise<any[]>;
     getUnreadCounts?: (viewerDid: string, conversationIds: string[]) => Promise<Record<string, number>>;
+    getConversationMutePreferences?: (viewerDid: string, conversationIds: string[]) => Promise<Record<string, boolean>>;
     findMessagingUser?: (viewerDid: string) => Promise<any | null>;
     fetchRecentMessages?: (conversationId: string, limit: number) => Promise<any[]>;
     createMessage?: (input: any) => Promise<any>;
+    createThreadReply?: (threadId: string, conversationId: string, senderDid: string, input: any) => Promise<any>;
     notifyMessage?: (input: any) => Promise<void>;
+    updateConversationArchive?: (
+        conversationId: string,
+        userDid: string,
+        archived: boolean,
+    ) => Promise<{ matchedCount: number; modifiedCount?: number }>;
+    getConversationNotificationsMuted?: (userDid: string, conversationId: string) => Promise<boolean>;
+    setConversationNotificationsMuted?: (userDid: string, conversationId: string, muted: boolean) => Promise<void>;
     listChatMembers?: (conversationId: string) => Promise<any[]>;
     updateChatMemberRole?: (
         filter: { _id: unknown },
@@ -32,6 +44,7 @@ export type ChatActionContext = {
     contactCircleAdminsEffect?: (input: any) => Promise<any>;
     sendSystemMessageEffect?: (input: any) => Promise<{ created: boolean; messageId: string }>;
     saveFile?: (...args: any[]) => Promise<any>;
+    deleteFile?: (url: string) => Promise<void>;
     observeEffect?: (effect: ChatActionEffect) => void;
 };
 
@@ -41,6 +54,7 @@ export type ChatActionEffect =
     | "system-message"
     | "membership-mutation"
     | "conversation-mutation"
+    | "conversation-archive"
     | "conversation-read-state"
     | "topic-read-state"
     | "role-repair"

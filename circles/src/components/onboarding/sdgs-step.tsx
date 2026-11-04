@@ -69,7 +69,7 @@ function SdgsStep({ userData, setUserData, nextStep, prevStep }: OnboardingStepP
     const handleNext = async () => {
         startTransition(async () => {
             let selectedSdgs = (userData.selectedSdgs || []).map((x) => x.handle);
-            const response = await saveSdgsAction(selectedSdgs, user?._id);
+            const response = await saveSdgsAction(selectedSdgs, user?._id ?? "");
             if (!response.success) {
                 // Handle error
                 console.error(response.message);

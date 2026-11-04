@@ -50,8 +50,7 @@ async function main() {
     const originalCirclesUrl = process.env.CIRCLES_URL;
     process.env.CIRCLES_URL = "https://configured.example";
     try {
-        const [{ createCircle }, { deleteCirclePrivateFileWithDependencies }, circleMediaStorage] =
-            await productionModules;
+        const [, { deleteCirclePrivateFileWithDependencies }, circleMediaStorage] = await productionModules;
         const {
             canRetainSubmittedCircleMediaUrl,
             classifyOwnedMediaUrl,
@@ -323,6 +322,49 @@ async function main() {
         assert.equal(persistedPicture, newPicture.url, "cleanup failure does not roll back the persisted replacement");
         assert.equal(replacementFailure.status, "failed");
 
+        const failedWriteCleanup: string[][] = [];
+        await assert.rejects(
+            persistCircleThenCleanupMedia(
+                async () => {
+                    throw new Error("injected database write failure");
+                },
+                collectReplacedCircleMedia(oldPicture, newPicture),
+                circleId,
+                async (urls) => {
+                    failedWriteCleanup.push([...urls]);
+                    return { status: "complete" };
+                },
+                [newPicture.url],
+            ),
+            /injected database write failure/,
+        );
+        assert.deepEqual(failedWriteCleanup, [[newPicture.url]], "failed writes clean only newly stored media");
+
+        const referencedUploadCleanup: string[][] = [];
+        await assert.rejects(
+            persistCircleThenCleanupMedia(
+                async () => {
+                    throw new Error("write acknowledgement was lost");
+                },
+                [],
+                circleId,
+                undefined,
+                [newPicture.url],
+                async (urls) => {
+                    const referencedUrls = new Set([newPicture.url]);
+                    const safeOrphans = urls.filter((url) => !referencedUrls.has(url));
+                    referencedUploadCleanup.push(safeOrphans);
+                    return { status: safeOrphans.length ? "complete" : "not-needed" };
+                },
+            ),
+            /write acknowledgement was lost/,
+        );
+        assert.deepEqual(
+            referencedUploadCleanup,
+            [[]],
+            "ambiguous writes preserve media now referenced by the profile",
+        );
+
         let persistedCover: string | undefined = oldPicture.url;
         const removalFailure = await persistCircleThenCleanupMedia(
             async () => {
@@ -425,20 +467,6 @@ async function main() {
         assert.equal(
             getFundingPostMutationMessage(fundingSuccess, "Funding request updated."),
             "Funding request updated.",
-        );
-
-        await assert.rejects(
-            createCircle(
-                {
-                    name: "Blocked Secret",
-                    handle: "blocked-secret",
-                    circleType: "circle",
-                    visibility: "secret",
-                    createdBy: "did:actor",
-                },
-                "did:actor",
-            ),
-            /Secret Circle creation remains disabled/,
         );
 
         console.log("circle media storage tests passed");

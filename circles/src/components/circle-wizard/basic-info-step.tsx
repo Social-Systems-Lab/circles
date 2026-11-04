@@ -55,7 +55,10 @@ export default function BasicInfoStep({
         ? CIRCLE_LEVEL_OPTIONS
         : CIRCLE_LEVEL_OPTIONS.filter((option) => option.value === "profile_child");
     const shouldShowCircleLevelChoice = circleData.circleType === "circle" && !initialParentCircleId;
-    const effectiveCircleLevel = shouldShowCircleLevelChoice ? circleData.circleLevel || "profile_child" : "profile_child";
+    const canChooseSecretVisibility = circleData.circleType === "circle" && user?.isAdmin === true;
+    const effectiveCircleLevel = shouldShowCircleLevelChoice
+        ? circleData.circleLevel || "profile_child"
+        : "profile_child";
     const entityLabel = circleData.circleType === "project" ? "Project" : "Circle";
     const entityLabelLower = entityLabel.toLowerCase();
     const handlePlaceholder = circleData.circleType === "project" ? "project-handle" : "community-handle";
@@ -82,15 +85,18 @@ export default function BasicInfoStep({
     //     }
     // }, [selectedParentCircle, setCircleData, user]);
 
-    const handleParentCircleSelected = useCallback((circle: Circle | null) => {
-        console.log("Setting parent circle id:", circle ? circle._id : undefined);
-        setCircleLevelError("");
-        setParentCircleId(circle ? circle._id : undefined);
-        setCircleData((prev) => ({
-            ...prev,
-            parentCircleId: circle ? circle._id : undefined,
-        }));
-    }, [setCircleData]);
+    const handleParentCircleSelected = useCallback(
+        (circle: Circle | null) => {
+            console.log("Setting parent circle id:", circle ? circle._id : undefined);
+            setCircleLevelError("");
+            setParentCircleId(circle ? circle._id : undefined);
+            setCircleData((prev) => ({
+                ...prev,
+                parentCircleId: circle ? circle._id : undefined,
+            }));
+        },
+        [setCircleData],
+    );
 
     const handleCircleLevelChange = (value: "profile_child" | "top_level") => {
         if (value === "top_level" && !canCreateIndependentCircle) {
@@ -136,6 +142,11 @@ export default function BasicInfoStep({
         setCircleData((prev) => ({ ...prev, isPublic: checked }));
     };
 
+    const handleVisibilityChange = (visibility: "public" | "secret") => {
+        if (visibility === "secret" && !canChooseSecretVisibility) return;
+        setCircleData((prev) => ({ ...prev, visibility }));
+    };
+
     const handleOrganizationClaimChange = (checked: boolean) => {
         setOrganizationNameError("");
         setWebsiteUrlError("");
@@ -172,7 +183,11 @@ export default function BasicInfoStep({
             isValid = false;
         }
 
-        if (effectiveCircleLevel === "top_level" && circleData.circleType === "circle" && circleData.representsOrganization) {
+        if (
+            effectiveCircleLevel === "top_level" &&
+            circleData.circleType === "circle" &&
+            circleData.representsOrganization
+        ) {
             if (!circleData.organizationName?.trim()) {
                 setOrganizationNameError("Official organization name is required");
                 isValid = false;
@@ -210,6 +225,7 @@ export default function BasicInfoStep({
                 circleData.representsOrganization,
                 circleData.organizationName,
                 circleData.officialEmail,
+                circleData.visibility,
             );
 
             if (result.success) {
@@ -276,9 +292,7 @@ export default function BasicInfoStep({
                                     >
                                         <div className="font-semibold">{option.title}</div>
                                         <div
-                                            className={`mt-1 text-sm ${
-                                                isSelected ? "text-gray-100" : "text-gray-500"
-                                            }`}
+                                            className={`mt-1 text-sm ${isSelected ? "text-gray-100" : "text-gray-500"}`}
                                         >
                                             {option.description}
                                         </div>
@@ -388,6 +402,41 @@ export default function BasicInfoStep({
                                 </div>
                             </div>
                         ) : null}
+                    </div>
+                )}
+
+                {canChooseSecretVisibility && (
+                    <div className="space-y-3">
+                        <div>
+                            <Label>Visibility</Label>
+                            <p className="text-sm text-gray-500">Choose who can discover and open this circle.</p>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                            {(["public", "secret"] as const).map((visibility) => {
+                                const isSelected = circleData.visibility === visibility;
+                                return (
+                                    <button
+                                        key={visibility}
+                                        type="button"
+                                        onClick={() => handleVisibilityChange(visibility)}
+                                        className={`rounded-xl border p-4 text-left transition ${
+                                            isSelected
+                                                ? "border-gray-900 bg-gray-900 text-white"
+                                                : "border-gray-200 bg-white text-gray-900 hover:border-gray-400"
+                                        }`}
+                                    >
+                                        <div className="font-semibold capitalize">{visibility}</div>
+                                        <div
+                                            className={`mt-1 text-sm ${isSelected ? "text-gray-100" : "text-gray-500"}`}
+                                        >
+                                            {visibility === "public"
+                                                ? "Anyone can discover and open this circle."
+                                                : "Only members of this circle can find and open it."}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 

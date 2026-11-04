@@ -23,9 +23,8 @@ type Scenario = {
 };
 
 const makeHandler = ({ circle = baseCircle, viewerDid, member = false, invalidSession = false }: Scenario) => {
-    const canonicalMember: Member | null = member && viewerDid
-        ? { userDid: viewerDid, circleId, userGroups: ["members"], joinedAt: new Date() }
-        : null;
+    const canonicalMember: Member | null =
+        member && viewerDid ? { userDid: viewerDid, circleId, userGroups: ["members"], joinedAt: new Date() } : null;
     return createAccessPostHandler({
         authenticate: async () => {
             if (invalidSession) throw new errors.JWTInvalid("invalid session");
@@ -56,6 +55,13 @@ const invoke = (scenario: Scenario) =>
 const neutral = async (response: Response) => ({ status: response.status, body: await response.json() });
 
 async function main() {
+    const oversizedRequest = new Request("http://localhost/api/access", {
+        method: "POST",
+        body: JSON.stringify({ value: "x".repeat(9 * 1024) }),
+    });
+    const oversizedResponse = await makeHandler({})(oversizedRequest);
+    assert.equal(oversizedResponse.status, 413, "oversized JSON is rejected before access checks run");
+
     const expectedNeutral = await neutral(await invoke({ circle: null }));
     assert.deepEqual(expectedNeutral, {
         status: 404,

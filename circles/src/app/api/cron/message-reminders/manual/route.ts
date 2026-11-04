@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processMessageEmailReminderById } from "@/lib/data/message-reminders";
+import { readJsonBodyLimited } from "@/lib/security/bounded-input";
 
 export async function POST(req: NextRequest) {
     const authToken = process.env.CRON_SECRET;
@@ -9,8 +10,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => null);
-    const reminderId = typeof body?.reminderId === "string" ? body.reminderId.trim() : "";
+    const bodyResult = await readJsonBodyLimited(req, 4 * 1024);
+    if (!bodyResult.ok) return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+    const body =
+        bodyResult.value && typeof bodyResult.value === "object" && !Array.isArray(bodyResult.value)
+            ? (bodyResult.value as { reminderId?: unknown })
+            : null;
+    const reminderId = typeof body?.reminderId === "string" ? body.reminderId.trim().slice(0, 128) : "";
 
     if (!reminderId) {
         return NextResponse.json({ error: "reminderId is required" }, { status: 400 });

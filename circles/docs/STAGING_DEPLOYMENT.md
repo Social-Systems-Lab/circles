@@ -1,6 +1,38 @@
 # Kamooni staging deployment
 
-Kamooni staging is an isolated, test-data-only installation at `staging.kamooni.org`. It must never receive production secrets, production data, production identity material, or production external-service accounts.
+Kamooni staging is an isolated, test-data-only installation at <https://staging.kamooni.org> on a dedicated Cleura VM separate from production. It must never receive production secrets, production data, production identity material, production volumes, production deployment scripts, or production external-service accounts.
+
+Staging is the preferred environment for full Docker builds, integration testing, and desktop/mobile browser validation. Every change must originate on a Git branch, be pushed to GitHub, and be deployed from the remote branch with the existing script. Never routinely hot-edit staging.
+
+## Verified environment
+
+The staging environment and its `/api/version` response were verified at commit `e742a7898395c73ea6080af4139aa1def7eb54d7`. The infrastructure checkout remains at `/home/ubuntu/kamooni` on branch `infra/kamooni-staging`; the deployment target worktree is `/home/ubuntu/kamooni-target`, detached at the exact requested SHA. The Docker Compose project is `kamooni_staging`.
+
+The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), Mailpit (`mailpit`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
+
+Staging MongoDB and MinIO use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. The staging Compose changes add an ephemeral Mailpit sink; the current live staging host has not been changed or verified with Mailpit yet. Never use production deployment scripts, credentials, data, or volumes for staging. Mailpit is absent from production Compose, and the production image rejects its transport.
+
+Treat the staging database and object storage as persistent. Tests requiring disposable databases must use separate isolated test instances; never run destructive integration tests against staging's persistent database. Never automatically delete Docker volumes, databases, or persistent storage.
+
+Media upload has been verified end-to-end through staging MinIO. New media URLs are stored in staging MongoDB as relative `/storage/...` paths. A scan of staging MongoDB found no references to `https://kamooni.org`, `www.kamooni.org`, `127.0.0.1`, or `localhost`.
+
+## Staging access
+
+The staging host and SSH access verified on October 27, 2026 are:
+
+- Public hostname: `staging.kamooni.org`
+- Public IP: `188.95.227.109`
+- SSH user: `ubuntu`
+- Local SSH identity: `~/.ssh/kamooni_staging`
+- Infrastructure checkout: `/home/ubuntu/kamooni`
+
+Connect from the local Mac terminal with:
+
+```bash
+ssh -i ~/.ssh/kamooni_staging -o IdentitiesOnly=yes ubuntu@188.95.227.109
+```
+
+This access is only for the dedicated staging VM. Production uses `root@kamooniorg` and the production checkout under `/root/circles/circles`; it does not use the staging IP, `ubuntu` account, identity file, checkout, deployment script, data, or volumes. See [Production deployment](PRODUCTION_DEPLOYMENT.md) for the separate production workflow.
 
 ## Checkout architecture
 
@@ -32,7 +64,29 @@ Do not place generated values in `.env.staging.example` or any tracked file. The
 
 Initial staging forcibly disables the registry, OpenAI, Postmark, Telegram bot, Donorbox, Stripe, and VibeID issuer through the Compose override even if `.env.staging` contains values. `TELEGRAM_WEBHOOK_SECRET` remains a unique defensive secret, but no Telegram bot username/token is active and no webhook should be registered. Payments and vector search are forced off. Mapbox is intentionally disabled initially. Use test data only.
 
-Staging email uses the captured-email contract: Compose fixes `EMAIL_TRANSPORT=capture`, `EMAIL_CAPTURE_ENABLED=true`, `KAMOONI_DEPLOYMENT_ENV=staging`, `NODE_ENV=production`, and `CIRCLES_DEV_LOG_PASSWORD_RESET=false`, with all three public application URLs fixed to `https://staging.kamooni.org`. Before deployment, update an existing `.env.staging` to include these non-secret values and remove obsolete `EMAIL_CAPTURE_MODE`; keep both Postmark settings present and blank. Captured verification and password-reset messages are available only to authorized staging superadmins at `/admin/emails`; messages are not sent through Postmark. The runtime environment checks are defense in depth: deploy only the reviewed staging-only application branch `codex/messaging-personal-followups-staging-email-capture` for this feature. Keep that source branch and artifact out of production branches and deployments.
+## Staging email capture (Mailpit)
+
+The staging Compose override selects Mailpit explicitly for email and continues to force `POSTMARK_API_TOKEN` and `POSTMARK_SENDER_EMAIL` empty. The app image is marked as a staging build; it accepts Mailpit only when that immutable image role, transport, staging URL, and internal Mailpit host/port all agree. Staging supports the pending-registration verification link and the existing `/verify-email` compatibility link; other email templates and verification destinations fail closed. There is no Postmark fallback.
+
+Mailpit is attached only to an internal Docker network shared by the app. SMTP port `1025` is not published on the host. The web UI/API port `8025` is published only as `127.0.0.1:8025`; it is not routed through public NGINX. Mailpit has no relay or forwarding configuration, is isolated from external network egress, stores no persistent volume, and prunes messages after 72 hours or when the 100-message bound is exceeded. Captured verification links are credentials: use staging test identities only and restrict UI access to staging SSH operators.
+
+Once the reviewed infrastructure change is present in the staging infrastructure checkout, deploy the reviewed application branch with the existing staging deployment script. It starts Mailpit with the other required services. On the staging VM, check service status with:
+
+```bash
+docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml ps circles db minio mailpit nginx
+```
+
+From the local Mac terminal, open a private SSH tunnel:
+
+```bash
+ssh -i ~/.ssh/kamooni_staging -o IdentitiesOnly=yes -N -L 8025:127.0.0.1:8025 ubuntu@188.95.227.109
+```
+
+While that command remains open, visit <http://127.0.0.1:8025> in the local browser. The tunnel does not expose the Mailpit UI publicly. Check the verification message and its `/signup/verify?token=...` link there. Do not copy links into logs, tickets, analytics, or shared chat.
+
+Pending registration remains disabled unless its separately reviewed flags and coordinated routing state are deliberately enabled for a staging test. Before rollback, disable pending registration and return registration routing to `legacy`. Delete captured messages using Mailpit’s **Delete all** control after testing; restarting the service also removes its ephemeral database. Do not remove staging MongoDB or MinIO volumes as part of email cleanup.
+
+The staging Compose override and rendered-configuration validator force both `PENDING_REGISTRATION_ENABLED=false` and `PENDING_REGISTRATION_JOURNEY_READY=false`. Existing `.env.staging` files may omit these previously unnecessary keys; no live secrets-file edit is required for this infrastructure upgrade because the effective Compose values remain explicitly disabled. Changing either effective value, or the MongoDB registration routing mode, requires a separate authorization and deployment review.
 
 ## TLS bootstrap (must happen before first deployment)
 
@@ -83,16 +137,40 @@ This manual method avoids a port-80 conflict and changes no production container
 Run on the staging VM from the infrastructure checkout:
 
 ```bash
-cd /home/ubuntu/kamooni && ./circles/scripts/deploy-staging.sh BRANCH_NAME
+cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh BRANCH_NAME
 ```
 
-The script requires a clean infrastructure checkout on `infra/kamooni-staging`, fetches `origin/BRANCH_NAME`, checks both the V2 schema compatibility floor and the committed application safety baseline, and updates the separate detached target worktree. It never pushes or merges and never switches the infrastructure checkout. Every staging deployment target must descend from `3101d0eb7590f089d625d8bfc8bbace42447b8e0`, the reviewed Group 1 application safety baseline. Do not casually change this pinned value: changing it requires review because it protects payment and welcome-link staging safety.
+The script requires a clean infrastructure checkout on `infra/kamooni-staging`, fetches `origin/BRANCH_NAME`, checks both the V2 schema compatibility floor and the committed application safety baseline, and updates the separate detached target worktree to deploy that branch's exact SHA. It never pushes or merges and never switches the infrastructure checkout. Every staging deployment target must descend from `3101d0eb7590f089d625d8bfc8bbace42447b8e0`, the reviewed Group 1 application safety baseline. Do not casually change this pinned value: changing it requires review because it protects payment and welcome-link staging safety.
 
-To enable captured verification and reset email, use `BRANCH_NAME=codex/messaging-personal-followups-staging-email-capture`. The script deploys that branch into the separate detached target worktree; do not merge or cherry-pick it into `main`.
+For the normal production-equivalent staging deployment, use:
 
-Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA.
+```bash
+cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh main
+```
 
-Deployment and Docker maintenance share an exclusive lock at `/run/lock/kamooni-staging-docker.lock`. A successful deployment atomically records its full Git SHA, immutable image ID, tag, and build time in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv` after version verification.
+Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA. Use the script rather than ad-hoc deployment commands so the verified-image rollback ledger is maintained.
+
+## Roll back to a verified staging image
+
+Rollback is an explicitly authorized staging operation; preparing this procedure does not authorize running it. It does not restore or migrate MongoDB. Before rollback, confirm that the database remains compatible with the selected application revision and that registration routing is `legacy` with both pending-registration flags disabled.
+
+The verified image and the staging override used to start it must implement the same email transport. In particular, the pre-Mailpit `0013e90a47ea2933ffcac1578a12d66f0454eed1` image uses the earlier `capture` transport and cannot be recreated with the promoted Mailpit override. Do not attempt to roll that image back with the standard Mailpit Compose command.
+
+The executable compatibility bundle for that image is `scripts/rollback-staging-capture-0013e90a.sh`. It is pinned to application SHA `0013e90a47ea2933ffcac1578a12d66f0454eed1`, infrastructure SHA `b39e2169537de7e08c41ad0affa00da12a9fd9ca`, the reviewed capture override and application contract Git blobs, image tag `kamooni-staging-circles:0013e90a`, and immutable image ID `sha256:0db0d222aab99763e63e08c2fb1721d25327935c2d238bf8e73a3d18e8f73ec6`. It reads the old override directly from the pinned Git object and never reverts or switches the infrastructure checkout.
+
+Only after separate rollback authorization and confirmation that the current database remains compatible, run on the staging VM:
+
+```bash
+cd /home/ubuntu/kamooni/circles && ./scripts/rollback-staging-capture-0013e90a.sh --confirm-database-compatible
+```
+
+The script acquires the same exclusive lock as deployment and maintenance; requires a clean `infra/kamooni-staging` checkout; verifies every pinned Git object, the unique ledger record, local image tag, and immutable image ID; validates the fully rendered capture Compose model; uses `--no-build`; and verifies both `/api/version` and the running container image ID. It performs no MongoDB query, migration, restore, volume operation, or image deletion. On failure after service mutation, it stops only staging NGINX and the application while preserving MongoDB, MinIO, and all volumes.
+
+Use only a record already present in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv`. Under the same exclusive `/run/lock/kamooni-staging-docker.lock` used by deployment, verify that the selected record has four valid fields, its tag is `kamooni-staging-circles:<first-eight-git-characters>`, `docker image inspect` returns the ledger's immutable image ID, and the target Git commit exists locally. Keep the infrastructure checkout on `infra/kamooni-staging`, detach `/home/ubuntu/kamooni-target` at that exact full Git SHA, and render and run both staging validators before changing services.
+
+For any other verified image, use only a separately reviewed transport-compatible override. Never use `docker compose down -v`, restore the database, delete images, or change registration routing as part of application rollback.
+
+Deployment and Docker maintenance share an exclusive lock at `/run/lock/kamooni-staging-docker.lock`. A successful deployment atomically records its full Git SHA, immutable image ID, tag, and build time in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv` only after exact version and running-image verification.
 
 ## Docker image maintenance
 
@@ -104,7 +182,7 @@ cd /home/ubuntu/kamooni && ./circles/scripts/maintain-staging-docker.sh --dry-ru
 
 The script fails closed unless the running container, public version endpoint, Docker images, and ledger agree. It preserves the current and two preceding verified deployment images. Until three verified deployment records exist, it preserves every staging application image. It removes only individually checked, ledger-verified, unreferenced obsolete `kamooni-staging-circles` images, then prunes unused dangling images older than seven days. It never removes containers, networks, or volumes.
 
-Install and enable the weekly timer on the staging VM. The installer runs validation as the `ubuntu` service user and refuses to change systemd state unless its own maintenance dry run succeeds first:
+Install and enable the weekly timer on the staging VM only with separate authorization. The installer runs validation as the `ubuntu` service user and refuses to change systemd state unless its own maintenance dry run succeeds first:
 
 ```bash
 cd /home/ubuntu/kamooni && sudo ./circles/scripts/manage-staging-docker-maintenance.sh install
@@ -124,18 +202,42 @@ After deployment, show the ports published by only the `kamooni_staging` Compose
 docker ps --filter label=com.docker.compose.project=kamooni_staging --format 'table {{.Names}}\t{{.Ports}}'
 ```
 
-The only host bindings in the output must be staging NGINX on ports `80` and `443`. Entries such as `3000/tcp`, `27017/tcp`, or `9000/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other `0.0.0.0:PORT->...` or `[::]:PORT->...` bindings may appear.
+The only host bindings in the output must be staging NGINX on ports `80` and `443`, plus Mailpit on `127.0.0.1:8025`. Mailpit must never bind `8025` or SMTP port `1025` to `0.0.0.0` or `[::]`. Entries such as `3000/tcp`, `27017/tcp`, `9000/tcp`, or `1025/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other host bindings may appear.
+
+## Conservative disk maintenance
+
+Inspect disk use before changing anything. Run on the staging VM:
+
+```bash
+df -h /
+```
+
+Then inspect Docker's accounting:
+
+```bash
+docker system df
+```
+
+If unused build cache is consuming substantial space, remove only unused builder cache:
+
+```bash
+docker builder prune -f
+```
+
+On October 27, 2026, this conservative cache cleanup reclaimed approximately 55 GB on staging. It did not require deleting persistent application data.
+
+Preserve all staging volumes, persistent MongoDB data, uploaded MinIO media, and images retained by the verified rollback ledger. Never use `docker volume prune`, `docker system prune --volumes`, or an indiscriminate image-deletion command. Do not delete rollback images merely because Docker reports them as reclaimable; use the deployment script's verified-image retention policy.
 
 ## Verify media URL storage
 
 Use only artificial staging data. In the browser, sign in to `https://staging.kamooni.org`, create or use a public staging-only test circle, create an issue titled exactly `STAGING MEDIA URL TEST`, upload one artificial test image through the normal issue form, and save it. Do not use a secret circle, because its media intentionally uses the private-media path.
 
-Then run this read-only query on the staging VM to inspect the newest matching staging record and fail unless every stored image URL has the staging storage prefix:
+Then run this read-only query on the staging VM to inspect the newest matching staging record and fail unless every stored image URL is a relative storage path:
 
 ```bash
-cd /home/ubuntu/kamooni-target/circles && STAGING_INFRA_APP_DIR=/home/ubuntu/kamooni/circles STAGING_TARGET_APP_DIR=/home/ubuntu/kamooni-target/circles GIT_SHA=verify STAGING_IMAGE_TAG=verify BUILD_TIME=verify docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml exec -T db sh -lc 'mongosh "$MONGODB_URI" --quiet --eval '\''const d=db.getSiblingDB("circles"); const doc=d.issues.find({title:"STAGING MEDIA URL TEST","images.0":{$exists:true}}).sort({createdAt:-1}).limit(1).next(); if(!doc){print("No matching staging issue with an image"); quit(1)} const urls=doc.images.map(image=>image?.fileInfo?.url).filter(Boolean); printjson(urls); if(!urls.length || urls.some(url=>!url.startsWith("https://staging.kamooni.org/storage/"))){quit(1)}'\'''
+cd /home/ubuntu/kamooni-target/circles && STAGING_INFRA_APP_DIR=/home/ubuntu/kamooni/circles STAGING_TARGET_APP_DIR=/home/ubuntu/kamooni-target/circles GIT_SHA=verify STAGING_IMAGE_TAG=verify BUILD_TIME=verify docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml exec -T db sh -lc 'mongosh "$MONGODB_URI" --quiet --eval '\''const d=db.getSiblingDB("circles"); const doc=d.issues.find({title:"STAGING MEDIA URL TEST","images.0":{$exists:true}}).sort({createdAt:-1}).limit(1).next(); if(!doc){print("No matching staging issue with an image"); quit(1)} const urls=doc.images.map(image=>image?.fileInfo?.url).filter(Boolean); printjson(urls); if(!urls.length || urls.some(url=>!url.startsWith("/storage/"))){quit(1)}'\'''
 ```
 
-Success prints the stored URL array and exits zero; every URL must begin `https://staging.kamooni.org/storage/`. A nonzero result is a deployment blocker. This query reads only the isolated staging `circles` database and does not modify or delete the test record.
+Success prints the stored URL array and exits zero; every URL must begin `/storage/`. A nonzero result is a deployment blocker. This query reads only the isolated staging `circles` database and does not modify or delete the test record.
 
-The default services are exactly `circles`, `db`, `minio`, and `nginx`. Only host ports 80 and 443 are published. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.
+The default services are exactly `circles`, `db`, `minio`, `mailpit`, and `nginx`. NGINX publishes host ports `80` and `443`; Mailpit publishes only `127.0.0.1:8025`. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.

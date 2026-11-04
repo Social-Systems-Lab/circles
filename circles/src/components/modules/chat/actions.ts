@@ -3,6 +3,7 @@
 
 import { ObjectId } from "mongodb";
 import { getAuthenticatedUserDid as getProductionAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { validateRecipientInput } from "@/lib/security/recipient-input";
 import { Circle, ChatRoomMember, ChatRoom, ChatRoomDisplay, UserPrivate } from "@/models/models";
 import { getAllUsers, getUserByDid } from "@/lib/data/user";
 import {
@@ -49,11 +50,13 @@ const circleChatEntryDependencies = {
         if (context?.findCircle) return context.findCircle(circleId);
         return ObjectId.isValid(circleId) ? Circles.findOne({ _id: new ObjectId(circleId) }) : null;
     },
-    canRead: async (viewerDid: string, circle: Circle) => canReadCircle(viewerDid, circle, {
-        getMember: async (did, circleId) => getChatActionContext()?.findCanonicalMember
-            ? getChatActionContext()!.findCanonicalMember!(did, circleId)
-            : Members.findOne({ userDid: did, circleId }),
-    }),
+    canRead: async (viewerDid: string, circle: Circle) =>
+        canReadCircle(viewerDid, circle, {
+            getMember: async (did, circleId) =>
+                getChatActionContext()?.findCanonicalMember
+                    ? getChatActionContext()!.findCanonicalMember!(did, circleId)
+                    : Members.findOne({ userDid: did, circleId }),
+        }),
     assertWritable: assertCircleWritesAllowed,
 };
 
@@ -200,7 +203,12 @@ export async function leaveChatRoomAction(chatRoomId: string): Promise<{ success
         }
         if (chatRoom.circleId) {
             if (!ObjectId.isValid(chatRoom.circleId)) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
-            const circle = await authorizeCircleChatEntry(userDid, chatRoom.circleId, "write", circleChatEntryDependencies);
+            const circle = await authorizeCircleChatEntry(
+                userDid,
+                chatRoom.circleId,
+                "write",
+                circleChatEntryDependencies,
+            );
             if (!circle) {
                 return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
             }
@@ -278,6 +286,32 @@ export const listChatRoomsAction = async (): Promise<{
     return await listMongoChatRoomsAction();
 };
 
+export const listArchivedChatRoomsAction = async (): Promise<{
+    success: boolean;
+    rooms?: ChatRoomDisplay[];
+    message?: string;
+}> => listMongoChatRoomsAction("archived");
+
+export const archiveDmConversationAction = async (conversationId: string) => {
+    const { archiveDmConversationAction: archive } = await import("./mongo-actions");
+    return archive(conversationId);
+};
+
+export const unarchiveDmConversationAction = async (conversationId: string) => {
+    const { unarchiveDmConversationAction: unarchive } = await import("./mongo-actions");
+    return unarchive(conversationId);
+};
+
+export const getConversationMutePreferenceAction = async (conversationId: string) => {
+    const { getConversationMutePreferenceAction: getPreference } = await import("./mongo-actions");
+    return getPreference(conversationId);
+};
+
+export const setConversationMutePreferenceAction = async (conversationId: string, muted: boolean) => {
+    const { setConversationMutePreferenceAction: setPreference } = await import("./mongo-actions");
+    return setPreference(conversationId, muted);
+};
+
 export const fetchMongoMessagesAction = async (conversationId: string, sinceId?: string, limit: number = 50) => {
     return await fetchMongoMessagesActionInternal(conversationId, sinceId, limit);
 };
@@ -299,6 +333,11 @@ export const sendMongoAttachmentAction = async (formData: FormData) => {
     return await sendMongoAttachmentActionInternal(formData);
 };
 
+export const sendComposedMessageAction = async (formData: FormData) => {
+    const { sendComposedMessageAction: sendComposed } = await import("./mongo-actions");
+    return await sendComposed(formData);
+};
+
 export const editMongoMessageAction = async (messageId: string, content: string) => {
     return await editMongoMessageActionInternal(messageId, content);
 };
@@ -311,11 +350,8 @@ export const toggleMongoReactionAction = async (messageId: string, emoji: string
     return await toggleMongoReactionActionInternal(messageId, emoji);
 };
 
-export const findOrCreateDMConversationAction = async (
-    inRecipient: Circle,
-    options?: { source?: "composer" | "profile" },
-) => {
-    return await findOrCreateDMConversationActionInternal(inRecipient, options);
+export const findOrCreateDMConversationAction = async (inRecipient: Circle) => {
+    return await findOrCreateDMConversationActionInternal(inRecipient);
 };
 
 export const createMongoGroupChatAction = async (formData: FormData) => {
@@ -682,7 +718,9 @@ export const updateGroupAvatarAction = async (
         observeChatActionEffect("avatar-storage-write");
         const fileInfo = getChatActionContext()?.saveFile
             ? await getChatActionContext()!.saveFile!(file, "chat-group-avatar", ownerCircle._id as string, true)
-            : await (await import("@/lib/data/storage")).saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
+            : await (
+                  await import("@/lib/data/storage")
+              ).saveFile(file, "chat-group-avatar", ownerCircle._id as string, true);
         observeChatActionEffect("conversation-mutation");
         await ChatConversations.updateOne(
             { _id: new ObjectId(chatRoomId) },
@@ -749,7 +787,12 @@ export const getChatRoomMembersAction = async (
                 try {
                     const repairFilter = { _id: earliestMemberId };
                     const repairUpdate = {
-                        $set: { role: "admin" as const, status: "active" as const, active: true as const, isActive: true as const },
+                        $set: {
+                            role: "admin" as const,
+                            status: "active" as const,
+                            active: true as const,
+                            isActive: true as const,
+                        },
                     };
                     const repairResult = getChatActionContext()?.updateChatMemberRole
                         ? await getChatActionContext()!.updateChatMemberRole!(repairFilter, repairUpdate)
@@ -762,7 +805,9 @@ export const getChatRoomMembersAction = async (
                 }
                 if (repairMatched) {
                     members = members.map((member) =>
-                        member._id?.toString?.() === earliestMemberId.toString() ? { ...member, role: "admin" } : member,
+                        member._id?.toString?.() === earliestMemberId.toString()
+                            ? { ...member, role: "admin" }
+                            : member,
                     );
                 }
             }
@@ -804,6 +849,8 @@ export const addMembersAction = async (
     if (!userDid) {
         return { success: false, message: "You need to be logged in" };
     }
+    const recipientValidation = validateRecipientInput(memberDids);
+    if (!recipientValidation.ok) return { success: false, message: recipientValidation.message };
 
     try {
         const conversation = await requireConversationWriteAccess(chatRoomId, userDid);
@@ -816,7 +863,7 @@ export const addMembersAction = async (
             return { success: false, message: "Only admins can add members" };
         }
 
-        const uniqueMemberDids = Array.from(new Set(memberDids.filter(Boolean)));
+        const uniqueMemberDids = recipientValidation.recipients;
         const existingActiveMemberDids = new Set(
             members.map((member) => (typeof member?.userDid === "string" ? member.userDid : "")),
         );

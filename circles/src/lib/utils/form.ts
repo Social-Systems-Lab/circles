@@ -87,9 +87,14 @@ export const generateZodSchema = (fields: FormField[]): ZodSchema<any> => {
                     let ensureUniqueField = field.ensureUniqueField ?? false;
                     if (ensureUniqueField) {
                         schema = schema.superRefine((items, ctx) => {
+                            if (!Array.isArray(items)) return;
                             let uniqueValues = new Set();
                             let index = 0;
                             for (let item of items) {
+                                if (item === null || typeof item !== "object") {
+                                    index++;
+                                    continue;
+                                }
                                 let value = item[ensureUniqueField];
                                 if (uniqueValues.has(value)) {
                                     ctx.addIssue({

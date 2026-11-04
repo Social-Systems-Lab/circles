@@ -3,6 +3,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+    boundedSafeParse,
+    INPUT_LIMITS,
+    inspectFormDataBounds,
+    inspectRepeatedStringFieldBounds,
+} from "@/lib/security/bounded-input";
 import { Feeds, Posts, Tasks } from "@/lib/data/db"; // Import DB collections
 import { Post } from "@/models/models"; // Import Post type
 import { createDefaultFeed, createPost, getFeedByHandle, updatePost } from "@/lib/data/feed"; // Import createPost
@@ -49,7 +55,8 @@ import {
     submitTaskClaim,
     reviewTaskClaim,
 } from "@/lib/data/task";
-import { getMember, getMembers, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
+import { getMember, getMemberIdsByUserGroup } from "@/lib/data/member"; // Will be created in member.ts
+import { getAuthorizedMemberPickerResult } from "@/lib/data/member-picker";
 import { updateAggregateRankCache } from "@/lib/data/ranking"; // Import cache update function
 import { getCirclesByDids } from "@/lib/data/circle";
 import { listAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
@@ -366,11 +373,15 @@ export async function getShiftViewerContextAction(
 
 const baseTaskSchema = z.object({
     // Renamed schema
-    title: z.string().min(1, "Title is required"),
-    description: z.preprocess((value) => (typeof value === "string" ? value : ""), z.string()),
-    images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
+    title: z.string().trim().min(1, "Title is required").max(200, "Title is too long"),
+    description: z.preprocess(
+        (value) => (typeof value === "string" ? value : ""),
+        z.string().max(100_000, "Description is too long"),
+    ),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects initially
     location: z
         .string()
+        .max(100_000, "Location data is too large")
         .optional()
         .refine(
             (val) => {
@@ -385,7 +396,7 @@ const baseTaskSchema = z.object({
             { message: "Invalid location data format" },
         ),
     targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
-    userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    userGroups: z.array(z.string().max(80)).max(500).optional(), // Optional: User groups for visibility
     goalId: z.string().optional(), // Optional: Goal ID for task association
     eventId: z.string().optional(), // Optional: Event ID for task association
     taskType: z.preprocess((value) => (value === "" || value == null ? "outcome" : value), taskTypeSchema),
@@ -559,8 +570,10 @@ export async function createTaskAction( // Renamed function
 ): Promise<{ success: boolean; message?: string; taskId?: string }> {
     // Renamed return property
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = createTaskSchema.safeParse({
+        const validatedData = boundedSafeParse(createTaskSchema, {
             // Renamed schema
             title: formData.get("title"),
             description: formData.get("description"),
@@ -580,10 +593,10 @@ export async function createTaskAction( // Renamed function
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -775,8 +788,10 @@ export async function updateTaskAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = updateTaskSchema.safeParse({
+        const validatedData = boundedSafeParse(updateTaskSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -799,10 +814,10 @@ export async function updateTaskAction(
 
         if (!validatedData.success) {
             // ... (error handling)
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -1067,10 +1082,10 @@ export async function updateTaskPriorityAction(
             .safeParse({ priority });
 
         if (!validatedData.success) {
-            console.error("Priority Validation Error:", validatedData.error.errors);
+            console.error("Priority Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid priority: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid priority: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
 
@@ -1374,7 +1389,7 @@ export async function requestTaskChangesAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: validated.error.errors.map((error) => error.message).join(", "),
+                message: validated.error.issues.map((error) => error.message).join(", "),
             };
         }
 
@@ -1529,7 +1544,7 @@ export async function reviewTaskClaimAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: validated.error.errors.map((error) => error.message).join(", "),
+                message: validated.error.issues.map((error) => error.message).join(", "),
             };
         }
 
@@ -1992,7 +2007,7 @@ export async function reviewShiftAttendanceAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: validated.error.errors.map((error) => error.message).join(", "),
+                message: validated.error.issues.map((error) => error.message).join(", "),
             };
         }
 
@@ -2311,19 +2326,8 @@ export async function assignTaskAction( // Renamed function
 }
 
 export const getMembersAction = async (circleId: string) => {
-    // Get the current user
     const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "User not authenticated" };
-    }
-    const user = await getUserByDid(userDid); // For notifications
-    if (!user) {
-        return { success: false, message: "User data not found" };
-    }
-
-    // get members of circle
-    let members = await getMembers(circleId);
-    return members;
+    return getAuthorizedMemberPickerResult({ viewerDid: userDid, circleId, requiredFeature: features.tasks.assign });
 };
 
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
@@ -2427,7 +2431,7 @@ export async function getUserRankedListAction(circleHandle: string): Promise<Ran
 }
 
 const saveRankedListSchema = z.object({
-    rankedItemIds: z.array(z.string()),
+    rankedItemIds: z.array(z.string().max(128)).max(10_000),
 });
 
 /**
@@ -2442,10 +2446,18 @@ export async function saveUserRankedListAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
+        const rankBounds = inspectRepeatedStringFieldBounds(formData, "rankedItemIds", 10_000);
+        if (rankBounds) return { success: false, message: "Invalid input data for ranked list." };
         // Validate input
-        const validatedData = saveRankedListSchema.safeParse({
-            rankedItemIds: formData.getAll("rankedItemIds"), // Assuming form sends multiple values for the same key
-        });
+        const validatedData = boundedSafeParse(
+            saveRankedListSchema,
+            {
+                rankedItemIds: formData.getAll("rankedItemIds"), // Assuming form sends multiple values for the same key
+            },
+            { ...INPUT_LIMITS, maxArrayItems: 10_000 },
+        );
 
         if (!validatedData.success) {
             return { success: false, message: "Invalid input data for ranked list." };

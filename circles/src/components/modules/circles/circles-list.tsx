@@ -29,8 +29,27 @@ import { updateQueryParam } from "@/lib/utils/helpers-client";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { shouldUnoptimizeCircleAvatar } from "@/lib/utils/circle-avatar-image";
+import {
+    buildCircleInventoryFilterUrl,
+    shouldReplaceCircleInventoryFilters,
+    type CircleInventoryFilters,
+} from "./circle-list-query-params";
 
 const RichText = dynamic(() => import("@/components/modules/feeds/RichText"), { ssr: false });
+
+const CircleCardCover = ({ circle }: { circle: Circle }) => {
+    const coverImageUrl = circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png";
+    return (
+        <Image
+            src={coverImageUrl}
+            alt="Cover"
+            className="bg-white object-cover"
+            fill
+            unoptimized={shouldUnoptimizeCircleAvatar(coverImageUrl)}
+        />
+    );
+};
 
 export const twoLineEllipsisStyle = {
     WebkitLineClamp: 2,
@@ -46,11 +65,19 @@ interface CirclesListProps {
     activeTab?: string;
     inUser?: boolean;
     isProjectsList?: boolean;
+    initialInventoryFilters?: CircleInventoryFilters;
 }
 
 type RelationshipFilter = "all" | "child" | "affiliate";
 
-const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: CirclesListProps) => {
+const CirclesList = ({
+    circle,
+    circles,
+    activeTab,
+    inUser,
+    isProjectsList,
+    initialInventoryFilters = { includeCreated: true, includeMember: true },
+}: CirclesListProps) => {
     const [user] = useAtom(userAtom);
     const isCompact = useIsCompact();
     const isMobile = useIsMobile();
@@ -62,15 +89,20 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
     const [sdgFilterOpen, setSdgFilterOpen] = useState(false);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [sdgSearch, setSdgSearch] = useState("");
-    const [includeCreated, setIncludeCreated] = useState(true);
-    const [includeMember, setIncludeMember] = useState(true);
+    const [includeCreated, setIncludeCreated] = useState(initialInventoryFilters.includeCreated);
+    const [includeMember, setIncludeMember] = useState(initialInventoryFilters.includeMember);
     const [relationshipFilter, setRelationshipFilter] = useState<RelationshipFilter>("all");
     const hasRelationshipLabels = circles.some((circle) => "relationshipToCurrentCircle" in circle);
 
     useEffect(() => {
-        updateQueryParam(router, "includeCreated", includeCreated.toString());
-        updateQueryParam(router, "includeMember", includeMember.toString());
-    }, [includeCreated, includeMember, router]);
+        const currentInventoryFilters = { includeCreated, includeMember };
+        if (!shouldReplaceCircleInventoryFilters(currentInventoryFilters, initialInventoryFilters)) {
+            return;
+        }
+        router.replace(buildCircleInventoryFilterUrl(window.location.search, currentInventoryFilters), {
+            scroll: false,
+        });
+    }, [includeCreated, includeMember, initialInventoryFilters, router]);
 
     const visibleSdgs = useMemo(() => {
         if (sdgSearch) {
@@ -282,13 +314,7 @@ const CirclesList = ({ circle, circles, activeTab, inUser, isProjectsList }: Cir
                                 onClick={() => handleCircleClick(circle)}
                             >
                                 <div className="relative h-[150px] w-full overflow-hidden">
-                                    <Image
-                                        // Use the first image from the 'images' array, fallback to default
-                                        src={circle.images?.[0]?.fileInfo?.url ?? "/images/default-cover.png"}
-                                        alt="Cover"
-                                        className="bg-white object-cover"
-                                        fill
-                                    />
+                                    <CircleCardCover circle={circle} />
                                 </div>
 
                                 {circle.metrics && (

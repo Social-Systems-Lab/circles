@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { getEntitiesByType, deleteEntity } from "../actions";
+import { changeCircleModerationStatusAction, getEntitiesByType, deleteEntity } from "../actions";
 import { Circle } from "@/models/models";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, RefreshCw, Search } from "lucide-react";
+import { Trash2, RefreshCw, Search, MoreHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -23,8 +25,31 @@ import {
 import { useSetAtom } from "jotai";
 import { contentPreviewAtom } from "@/lib/data/atoms";
 import { getCircleByIdAction } from "../actions";
+import type { CircleModerationStatus } from "@/models/models";
+import {
+    getCircleLifecycleStatus,
+    getCircleLifecycleStatusBadgeClassName,
+    getCircleLifecycleStatusLabel,
+    getCircleLifecycleTransitions,
+    submitCircleLifecycleChange,
+} from "../circle-lifecycle-ui";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
-const getCircleLevel = (circle: Circle) => circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
+const getCircleLevel = (circle: Circle) =>
+    circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
 
 const getCircleKindLabel = (circle: Circle) =>
     getCircleLevel(circle) === "profile_child" ? "Profile circle" : "Independent circle";
@@ -58,6 +83,11 @@ export default function CirclesTab() {
     const [showPendingOnly, setShowPendingOnly] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [circleToDelete, setCircleToDelete] = useState<Circle | null>(null);
+    const [moderationCircle, setModerationCircle] = useState<Circle | null>(null);
+    const [moderationTarget, setModerationTarget] = useState<CircleModerationStatus | null>(null);
+    const [moderationActionLabel, setModerationActionLabel] = useState("");
+    const [moderationReason, setModerationReason] = useState("");
+    const [moderationSubmitting, setModerationSubmitting] = useState(false);
     const { toast } = useToast();
     const setContentPreview = useSetAtom(contentPreviewAtom);
 
@@ -118,7 +148,53 @@ export default function CirclesTab() {
         }
     };
 
-    const pendingVerificationCount = circles.filter((circle) => getPublishStatus(circle) === "pending_verification").length;
+    const openModerationDialog = (circle: Circle, status: CircleModerationStatus, label: string) => {
+        setModerationCircle(circle);
+        setModerationTarget(status);
+        setModerationActionLabel(label);
+        setModerationReason("");
+    };
+
+    const closeModerationDialog = () => {
+        if (moderationSubmitting) return;
+        setModerationCircle(null);
+        setModerationTarget(null);
+        setModerationReason("");
+    };
+
+    const confirmModerationChange = async () => {
+        if (!moderationCircle || !moderationTarget || !moderationReason.trim()) return;
+        setModerationSubmitting(true);
+        try {
+            const result = await submitCircleLifecycleChange(
+                changeCircleModerationStatusAction,
+                moderationCircle._id,
+                moderationTarget,
+                moderationReason,
+            );
+            if (!result.success) {
+                toast({ title: "Lifecycle change failed", description: result.message, variant: "destructive" });
+                return;
+            }
+            toast({ title: "Lifecycle updated", description: result.message });
+            setModerationCircle(null);
+            setModerationTarget(null);
+            setModerationReason("");
+            await fetchCircles();
+        } catch (error) {
+            toast({
+                title: "Lifecycle change failed",
+                description: error instanceof Error ? error.message : "The lifecycle change could not be completed.",
+                variant: "destructive",
+            });
+        } finally {
+            setModerationSubmitting(false);
+        }
+    };
+
+    const pendingVerificationCount = circles.filter(
+        (circle) => getPublishStatus(circle) === "pending_verification",
+    ).length;
 
     const filteredCircles = circles.filter((circle) => {
         const matchesSearch =
@@ -177,6 +253,7 @@ export default function CirclesTab() {
                                 <TableHead>Name</TableHead>
                                 <TableHead>Kind</TableHead>
                                 <TableHead>Workflow</TableHead>
+                                <TableHead>Lifecycle</TableHead>
                                 <TableHead>Handle</TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead>Members</TableHead>
@@ -187,7 +264,7 @@ export default function CirclesTab() {
                         <TableBody>
                             {filteredCircles.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                                         {searchTerm
                                             ? "No circles found matching your search"
                                             : showPendingOnly
@@ -225,6 +302,15 @@ export default function CirclesTab() {
                                                 {getPublishStatusLabel(circle)}
                                             </Badge>
                                         </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant="outline"
+                                                className={getCircleLifecycleStatusBadgeClassName(circle)}
+                                                data-lifecycle-status={getCircleLifecycleStatus(circle)}
+                                            >
+                                                {getCircleLifecycleStatusLabel(circle)}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell>{circle.handle}</TableCell>
                                         <TableCell className="max-w-xs truncate">
                                             {circle.description ?? circle.mission}
@@ -239,12 +325,49 @@ export default function CirclesTab() {
                                             <div className="flex justify-end gap-2">
                                                 {getPublishStatus(circle) === "pending_verification" ? (
                                                     <Button variant="outline" size="sm" asChild>
-                                                        <Link href={`/admin?tab=verification-requests&circleId=${circle._id}`}>
+                                                        <Link
+                                                            href={`/admin?tab=verification-requests&circleId=${circle._id}`}
+                                                        >
                                                             Review
                                                         </Link>
                                                     </Button>
                                                 ) : null}
-                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(circle)}>
+                                                {getCircleLifecycleTransitions(circle).length > 0 ? (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                aria-label={`Lifecycle actions for ${circle.name}`}
+                                                            >
+                                                                Lifecycle <MoreHorizontal className="ml-1 h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            {getCircleLifecycleTransitions(circle).map((transition) => (
+                                                                <DropdownMenuItem
+                                                                    key={transition.status}
+                                                                    onSelect={() =>
+                                                                        openModerationDialog(
+                                                                            circle,
+                                                                            transition.status,
+                                                                            transition.label,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {transition.label}
+                                                                </DropdownMenuItem>
+                                                            ))}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                ) : null}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    aria-label={`Permanently delete ${circle.name}`}
+                                                    title="Permanently delete"
+                                                    onClick={() => handleDeleteClick(circle)}
+                                                >
                                                     <Trash2 className="h-4 w-4 text-red-500" />
                                                 </Button>
                                             </div>
@@ -257,19 +380,63 @@ export default function CirclesTab() {
                 </div>
             )}
 
+            <Dialog
+                open={Boolean(moderationCircle && moderationTarget)}
+                onOpenChange={(open) => !open && closeModerationDialog()}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{moderationActionLabel} Circle</DialogTitle>
+                        <DialogDescription>
+                            Change the lifecycle status of &quot;{moderationCircle?.name}&quot; from{" "}
+                            {moderationCircle ? getCircleLifecycleStatusLabel(moderationCircle) : ""} to{" "}
+                            {moderationTarget
+                                ? moderationTarget.charAt(0).toUpperCase() + moderationTarget.slice(1)
+                                : ""}
+                            .
+                            {moderationTarget === "removed"
+                                ? " Lifecycle removal does not permanently delete Circle data."
+                                : ""}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="circle-moderation-reason">Moderation reason</Label>
+                        <Textarea
+                            id="circle-moderation-reason"
+                            value={moderationReason}
+                            onChange={(event) => setModerationReason(event.target.value)}
+                            placeholder="Enter the required moderation reason"
+                            disabled={moderationSubmitting}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeModerationDialog} disabled={moderationSubmitting}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmModerationChange}
+                            disabled={!moderationReason.trim() || moderationSubmitting}
+                        >
+                            {moderationSubmitting ? "Updating..." : `Confirm ${moderationActionLabel}`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This will permanently delete the circle &quot;{circleToDelete?.name}&quot; and all
-                            associated data. This action cannot be undone.
+                            associated data. This is destructive, cannot be undone, and is different from lifecycle
+                            removal, which does not delete Circle data.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmDelete} className="bg-red-500 hover:bg-red-600">
-                            Delete
+                            Permanently delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

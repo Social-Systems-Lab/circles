@@ -16,10 +16,9 @@ interface DMModalProps {
     recipient: Circle;
     onClose: () => void;
     initialMessage?: string;
-    source?: "composer" | "profile";
 }
 
-export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initialMessage, source = "composer" }) => {
+export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initialMessage }) => {
     const [user] = useAtom(userAtom);
     const [message, setMessage] = useState(initialMessage || "");
     const [loading, setLoading] = useState(false);
@@ -32,7 +31,7 @@ export const DmChatModal: React.FC<DMModalProps> = ({ recipient, onClose, initia
         setLoading(true);
 
         try {
-            const result = await findOrCreateDMConversationAction(recipient, { source });
+            const result = await findOrCreateDMConversationAction(recipient);
             const conversationId = result.chatRoom?._id || result.chatRoom?.handle;
             if (!result.success || !conversationId) {
                 toast({

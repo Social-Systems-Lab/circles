@@ -3,6 +3,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import SubscriptionFormSettings from "./subscription-form-settings";
 import { getTelegramChannelViewForUser } from "@/lib/data/external-notification-channels";
+import { toAccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import { EmailVerificationBanner } from "./email-verification-banner";
 
 type SubscriptionProps = {
@@ -20,6 +21,7 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
         return <div>Unauthorized</div>;
     }
 
+    const clientUser = toAccountSettingsClientUser(user);
     return (
         <div className="container py-8">
             <div className="max-w-3xl space-y-3">
@@ -30,8 +32,8 @@ export default async function SubscriptionPage(props: SubscriptionProps) {
                 </p>
             </div>
             <div className="mt-8 max-w-5xl space-y-8">
-                <EmailVerificationBanner user={user} />
-                <SubscriptionFormSettings user={user} telegramChannel={telegramChannel} />
+                <EmailVerificationBanner user={clientUser} />
+                <SubscriptionFormSettings user={clientUser} telegramChannel={telegramChannel} />
             </div>
         </div>
     );

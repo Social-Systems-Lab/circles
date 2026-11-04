@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { UserPrivate } from "@/models/models"; // Circle removed
 import { IssueForm } from "@/components/modules/issues/issue-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
 // CircleSelector import removed
@@ -60,7 +59,7 @@ export const CreateIssueDialog: React.FC<CreateIssueDialogProps> = ({
                 {!user && <p className="p-4 text-red-500">Please log in to create an issue.</p>}
                 {user && itemDetail && (
                     <IssueForm
-                        user={user as UserPrivate}
+                        user={user}
                         itemDetail={itemDetail}
                         onFormSubmitSuccess={handleFormSuccess}
                         onCancel={handleCancel}

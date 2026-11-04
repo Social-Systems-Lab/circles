@@ -16,6 +16,7 @@ import { CreatableItemDetail } from "@/components/global-create/global-create-di
 // Import the goals action
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { GoalDisplay } from "@/models/models"; // Import GoalDisplay type
+import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 
 type PageProps = {
     params: Promise<{ handle: string; taskId: string }>;
@@ -115,7 +116,7 @@ export default async function EditTaskPage(props: PageProps) {
             </div>
             {/* Pass fetched goals and task to TaskForm */}
             <TaskForm
-                user={userProfile}
+                user={toAuthenticatedClientUser(userProfile)}
                 itemDetail={itemDetailForTaskForm}
                 circle={circle}
                 task={task}

@@ -4,6 +4,8 @@
 import { revalidatePath } from "next/cache";
 import { parseEventSubmitStage, type EventHostCircleOption } from "@/lib/event-publish-capability";
 import { z } from "zod";
+import { boundedSafeParse, inspectFormDataBounds } from "@/lib/security/bounded-input";
+import { validateRecipientInput } from "@/lib/security/recipient-input";
 import { ObjectId } from "mongodb";
 import {
     Feeds,
@@ -66,7 +68,6 @@ import {
     notifyEventStatusChanged,
 } from "@/lib/data/eventNotifications";
 import { inviteUsersToEvent } from "@/lib/data/event";
-import { getMembers } from "@/lib/data/member";
 import { resolveFeedActionViewerDid } from "@/lib/data/post-access-policy";
 import {
     addEventCommentWithDependencies,
@@ -81,7 +82,6 @@ import { toCommentDto } from "@/lib/data/comment-dto";
 import { buildEventNoticeboardPostData } from "@/lib/event-noticeboard-post-policy";
 import { Comment } from "@/models/models";
 import { getTasksByEventId } from "@/lib/data/task";
-import { listAcceptedConnectionsForUserDid, searchAcceptedConnectionsForUserDid } from "@/lib/data/relationships";
 import {
     EXTERNAL_EVENT_INVITE_ERRORS,
     getExternalEventInviteProfileError,
@@ -116,6 +116,17 @@ import {
     hasStoredEventNoticeboardReferences,
     shouldOrchestrateEventNoticeboardUpdate,
 } from "@/lib/data/event-noticeboard-binding-orchestration";
+import { getMember } from "@/lib/data/member";
+import {
+    getEligibleCircleMemberEventInviteCandidates,
+    getEligibleEventInviteCandidates,
+} from "@/lib/data/event-invite-candidates";
+import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
+import {
+    hasEventInviteCandidateAuthority,
+    resolveEventInviteCandidateAccess,
+    type EventInviteCandidateAccessDependencies,
+} from "@/lib/event-invite-candidate-policy";
 
 // ----- Types -----
 
@@ -136,25 +147,14 @@ export type EventOccurrenceInviteeRow = {
     updatedAt?: Date;
 };
 
-type GetCircleMembersActionResult = {
-    members: Circle[];
-};
-
-type InviteCandidateSource = "circle_member" | "contact";
-
-type InviteCandidate = Circle & {
-    inviteSources?: InviteCandidateSource[];
-    inviteSourceLabel?: string;
-};
-
 type GetInviteCandidatesActionResult = {
-    candidates: InviteCandidate[];
+    candidates: EventInviteCandidateDto[];
     canBulkInviteCircleMembers: boolean;
     circleMemberCount: number;
 };
 
 type GetCircleMemberInviteCandidatesActionResult = {
-    candidates: InviteCandidate[];
+    candidates: EventInviteCandidateDto[];
     count: number;
     success: boolean;
     message?: string;
@@ -186,11 +186,12 @@ type HideCancelledEventResult = {
 // ----- Zod Schemas -----
 
 const createEventSchema = z.object({
-    title: z.string().min(1, "Title is required"),
-    description: z.string().min(1, "Description is required"),
-    images: z.array(z.any()).optional(),
+    title: z.string().trim().min(1, "Title is required").max(200, "Title is too long"),
+    description: z.string().min(1, "Description is required").max(100_000, "Description is too long"),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(),
     location: z
         .string()
+        .max(100_000, "Location data is too large")
         .optional()
         .refine(
             (val) => {
@@ -204,20 +205,21 @@ const createEventSchema = z.object({
             },
             { message: "Invalid location data format" },
         ),
-    userGroups: z.array(z.string()).optional(),
+    userGroups: z.array(z.string().max(80)).max(500).optional(),
     isVirtual: z.string().optional(), // "on" / "true" / undefined
     isHybrid: z.string().optional(),
     virtualUrl: z.string().url().optional().or(z.literal("")).optional(),
     startAt: z.string().min(1, "Start date/time is required"),
     endAt: z.string().min(1, "End date/time is required"),
     allDay: z.string().optional(), // "on" / undefined
-    categories: z.array(z.string()).optional(),
-    causes: z.array(z.string()).optional(),
+    categories: z.array(z.string().max(80)).max(100).optional(),
+    causes: z.array(z.string().max(80)).max(100).optional(),
     capacity: z.string().optional(), // parse to number
     visibility: eventVisibilitySchema.optional(),
-    hostCircleIds: z.array(z.string()).optional(),
+    hostCircleIds: z.array(z.string().max(128)).max(500).optional(),
     recurrence: z
         .string()
+        .max(10_000, "Recurrence data is too large")
         .optional()
         .refine(
             (val) => {
@@ -414,101 +416,43 @@ const getEventInternalPreviewUrl = (circleHandle: string, eventId: string) => {
     return `${baseUrl}/circles/${circleHandle}/events/${eventId}?source=noticeboard`;
 };
 
-const getInviteSourceLabel = (sources: InviteCandidateSource[] = []) => {
-    const uniqueSources = Array.from(new Set(sources));
-    if (uniqueSources.includes("circle_member") && uniqueSources.includes("contact")) {
-        return "Circle member + Contact";
-    }
-    if (uniqueSources.includes("circle_member")) {
-        return "Circle member";
-    }
-    if (uniqueSources.includes("contact")) {
-        return "Contact";
-    }
-    return "Eligible";
-};
-
-const addInviteCandidate = (
-    candidatesByDid: Map<string, InviteCandidate>,
-    user: Circle,
-    source: InviteCandidateSource,
-) => {
-    if (!user.did) return;
-    const existing = candidatesByDid.get(user.did);
-    const inviteSources = Array.from(new Set([...(existing?.inviteSources || []), source]));
-    candidatesByDid.set(user.did, {
-        ...(existing || user),
-        ...user,
-        inviteSources,
-        inviteSourceLabel: getInviteSourceLabel(inviteSources),
-    });
-};
-
-const candidateMatchesQuery = (candidate: Circle, query?: string) => {
-    const normalizedQuery = query?.trim().toLowerCase();
-    if (!normalizedQuery) return true;
-    return Boolean(
-        candidate.name?.toLowerCase().includes(normalizedQuery) ||
-            candidate.handle?.toLowerCase().includes(normalizedQuery),
-    );
-};
-
 const getEligibleInviteCandidatesForCircle = async (
     circle: Circle,
     inviterDid: string,
     query?: string,
     limit: number = 100,
-): Promise<InviteCandidate[]> => {
-    const candidatesByDid = new Map<string, InviteCandidate>();
-
-    if (circle.circleType === "user") {
-        const contacts = query?.trim()
-            ? await searchAcceptedConnectionsForUserDid(inviterDid, query, limit)
-            : await listAcceptedConnectionsForUserDid(inviterDid);
-        contacts.forEach((contact) => addInviteCandidate(candidatesByDid, contact, "contact"));
-    } else {
-        const memberUsers = await getEligibleCircleMemberInviteCandidates(circle, inviterDid);
-        memberUsers.forEach((member) => addInviteCandidate(candidatesByDid, member, "circle_member"));
-
-        const contacts = await listAcceptedConnectionsForUserDid(inviterDid);
-        contacts.forEach((contact) => addInviteCandidate(candidatesByDid, contact, "contact"));
-    }
-
-    return Array.from(candidatesByDid.values())
-        .filter((candidate) => candidate.did !== inviterDid)
-        .filter((candidate) => candidateMatchesQuery(candidate, query))
-        .sort((a, b) => (a.name || a.handle || "").localeCompare(b.name || b.handle || ""))
-        .slice(0, limit);
-};
+): Promise<EventInviteCandidateDto[]> =>
+    getEligibleEventInviteCandidates({
+        circleId: circle._id!.toString(),
+        isUserCircle: circle.circleType === "user",
+        inviterDid,
+        query,
+        limit,
+    });
 
 const getEligibleCircleMemberInviteCandidates = async (
     circle: Circle,
     inviterDid: string,
-): Promise<InviteCandidate[]> => {
+): Promise<EventInviteCandidateDto[]> => {
     if (circle.circleType === "user") {
         return [];
     }
 
-    const members = await getMembers(circle._id!.toString());
-    const memberDids = members.map((m) => m.userDid);
-    const memberUsers = await getCirclesByDids(memberDids);
-    const eligibilityChecks = await Promise.all(
-        memberUsers.map((u) =>
-            u.did ? isAuthorized(u.did, circle._id as string, features.events.view) : Promise.resolve(false),
-        ),
-    );
-
-    return memberUsers
-        .filter((_, idx) => eligibilityChecks[idx])
-        .filter((member) => member.did !== inviterDid)
-        .map((member) => ({
-            ...member,
-            inviteSources: ["circle_member" as const],
-            inviteSourceLabel: "Circle member",
-        }))
-        .sort((a, b) => (a.name || a.handle || "").localeCompare(b.name || b.handle || ""));
+    return getEligibleCircleMemberEventInviteCandidates(circle._id!.toString(), inviterDid);
 };
 
+const eventInviteCandidateAccessDependencies: EventInviteCandidateAccessDependencies = {
+    getAuthenticatedUserDid,
+    getRouteCircle: getCircleByHandle,
+    getEvent: getEventById,
+    getHostCircle: async (circleId) => (await getCirclesByIds([circleId]))[0] ?? null,
+    getMembership: getMember,
+    isFeatureAuthorized: isAuthorized,
+    assertHostCirclesWritable: assertEventHostCirclesWritable,
+};
+
+const resolveEventInviteCandidateTarget = (circleHandle: string, eventId: string) =>
+    resolveEventInviteCandidateAccess(circleHandle, eventId, eventInviteCandidateAccessDependencies);
 const upsertEventNoticeboardPost = async ({
     circle,
     circleHandle,
@@ -823,6 +767,8 @@ export async function createEventAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string; eventId?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
 
@@ -835,7 +781,7 @@ export async function createEventAction(
         const circle = await getCircleByHandle(circleHandle);
         if (!circle) return { success: false, message: "Circle not found" };
 
-        const validated = createEventSchema.safeParse({
+        const validated = boundedSafeParse(createEventSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -857,7 +803,7 @@ export async function createEventAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: `Invalid input: ${validated.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validated.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validated.data;
@@ -1015,6 +961,8 @@ export async function updateEventAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
 
@@ -1030,7 +978,7 @@ export async function updateEventAction(
         const canEdit = await canManageEvent(userDid, event);
         if (!canEdit) return { success: false, message: "Not authorized to update this event" };
 
-        const validated = updateEventSchema.safeParse({
+        const validated = boundedSafeParse(updateEventSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -1055,7 +1003,7 @@ export async function updateEventAction(
         if (!validated.success) {
             return {
                 success: false,
-                message: `Invalid input: ${validated.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validated.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validated.data;
@@ -1800,7 +1748,7 @@ type EventOccurrenceSeriesParticipantCandidateCounts = {
     ineligibleOrUnavailable: number;
 };
 
-type EventOccurrenceParticipantCandidate = Circle & {
+type EventOccurrenceParticipantCandidate = EventInviteCandidateDto & {
     effectiveOccurrenceRsvpStatus: "going" | "interested";
 };
 
@@ -1822,11 +1770,10 @@ export async function getEventOccurrenceSeriesParticipantCandidatesAction(
         notAttending: 0,
         ineligibleOrUnavailable: 0,
     };
+    const deniedResult = { success: false as const, candidates: [], counts: emptyCounts };
     try {
         const actorDid = await getAuthenticatedUserDid();
-        if (!actorDid) {
-            return { success: false, candidates: [], counts: emptyCounts, message: "User not authenticated" };
-        }
+        if (!actorDid) return deniedResult;
 
         const target = await resolveManageableEventOccurrenceInvitationTarget(
             circleHandle,
@@ -1834,17 +1781,11 @@ export async function getEventOccurrenceSeriesParticipantCandidatesAction(
             occurrenceKey,
             actorDid,
         );
-        if (!target.success) {
-            return { success: false, candidates: [], counts: emptyCounts, message: target.message };
+        if (!target.success || target.event.stage !== "open") return deniedResult;
+        if (!(await hasEventInviteCandidateAuthority(actorDid, target.event, eventInviteCandidateAccessDependencies))) {
+            return deniedResult;
         }
-        if (target.event.stage !== "open") {
-            return {
-                success: false,
-                candidates: [],
-                counts: emptyCounts,
-                message: "Invitations can only be sent for open events",
-            };
-        }
+        await assertEventHostCirclesWritable(target.event);
 
         const [exactOccurrenceRsvps, legacySeriesRsvps, existingInvitations, eligibleCandidates] = await Promise.all([
             EventOccurrenceRsvps.find({ seriesId, occurrenceKey })
@@ -1906,10 +1847,7 @@ export async function getEventOccurrenceSeriesParticipantCandidatesAction(
     } catch (error) {
         console.error("Error loading series participant invitation candidates:", error);
         return {
-            success: false,
-            candidates: [],
-            counts: emptyCounts,
-            message: "Failed to load series participants",
+            ...deniedResult,
         };
     }
 }
@@ -1933,6 +1871,8 @@ export async function inviteUsersToEventOccurrenceAction(
     try {
         const actorDid = await getAuthenticatedUserDid();
         if (!actorDid) return { success: false, message: "User not authenticated", ...emptyResult };
+        const recipientValidation = validateRecipientInput(userDids);
+        if (!recipientValidation.ok) return { success: false, message: recipientValidation.message, ...emptyResult };
 
         const actor = await getUserByDid(actorDid);
         if (!actor) return { success: false, message: "User not found", ...emptyResult };
@@ -1954,7 +1894,7 @@ export async function inviteUsersToEventOccurrenceAction(
             return { success: false, message: "Invitation message must be 500 characters or fewer", ...emptyResult };
         }
 
-        const requestedDids = Array.from(new Set(userDids.filter((did) => didSchema.safeParse(did).success)));
+        const requestedDids = recipientValidation.recipients.filter((did) => didSchema.safeParse(did).success);
         const candidates = await getEligibleInviteCandidatesForCircle(
             target.circle,
             actorDid,
@@ -2077,6 +2017,8 @@ export async function inviteUsersToEventAction(
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
+        const recipientValidation = validateRecipientInput(userDids);
+        if (!recipientValidation.ok) return { success: false, message: recipientValidation.message };
 
         const user = await getUserByDid(userDid);
         if (!user) return { success: false, message: "User not found" };
@@ -2094,7 +2036,7 @@ export async function inviteUsersToEventAction(
             return { success: false, message: "Not authorized to invite users to this event" };
         }
 
-        await inviteUsersToEvent(eventId, circle._id!.toString(), userDids, user);
+        await inviteUsersToEvent(eventId, circle._id!.toString(), recipientValidation.recipients, user);
 
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
         return { success: true, message: "Invitations sent" };
@@ -2383,31 +2325,6 @@ export async function rsvpEventWithOptionsAction(
 }
 
 /**
- * Cancel RSVP
- */
-export async function getCircleMembersAction(circleHandle: string): Promise<GetCircleMembersActionResult> {
-    const defaultResult: GetCircleMembersActionResult = { members: [] };
-
-    try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) return defaultResult;
-
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) return defaultResult;
-
-        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
-        if (!canView) return defaultResult;
-
-        const members = await getEligibleInviteCandidatesForCircle(circle, userDid);
-        return { members };
-    } catch (error) {
-        console.error("Error in getCircleMembersAction:", error);
-        return defaultResult;
-    }
-}
-
-/**
-/**
  * Add a comment to an event (via its shadow post)
  */
 export async function addEventCommentAction(
@@ -2472,35 +2389,6 @@ export async function getCirclesBySearchQueryAction(
     }
 }
 
-/**
- * Search users and return only those eligible to view events in the circle (for invites).
- */
-export async function searchEligibleUsersAction(
-    circleHandle: string,
-    query: string,
-    limit: number = 10,
-): Promise<GetCirclesBySearchQueryActionResult> {
-    const defaultResult: GetCirclesBySearchQueryActionResult = { circles: [] };
-
-    try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) return defaultResult;
-
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) return defaultResult;
-
-        // Ensure current user can view events in this circle
-        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
-        if (!canView) return defaultResult;
-
-        const circles = await getEligibleInviteCandidatesForCircle(circle, userDid, query, limit);
-        return { circles };
-    } catch (error) {
-        console.error("Error in searchEligibleUsersAction:", error);
-        return defaultResult;
-    }
-}
-
 export async function getEventInviteCandidatesAction(
     circleHandle: string,
     eventId: string,
@@ -2514,29 +2402,18 @@ export async function getEventInviteCandidatesAction(
     };
 
     try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) return defaultResult;
-
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) return defaultResult;
-
-        const event = await getEventById(eventId, userDid);
-        if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
-            return defaultResult;
-        }
-
-        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
-        if (!canView) return defaultResult;
+        const target = await resolveEventInviteCandidateTarget(circleHandle, eventId);
+        if (!target) return defaultResult;
+        const { userDid } = target;
 
         const [candidates, circleMemberCandidates] = await Promise.all([
-            getEligibleInviteCandidatesForCircle(circle, userDid, query, limit),
-            getEligibleCircleMemberInviteCandidates(circle, userDid),
+            getEligibleInviteCandidatesForCircle(target.circle, userDid, query, limit),
+            getEligibleCircleMemberInviteCandidates(target.circle, userDid),
         ]);
-        const canBulkInviteCircleMembers = await canManageEvent(userDid, event);
 
         return {
             candidates,
-            canBulkInviteCircleMembers,
+            canBulkInviteCircleMembers: true,
             circleMemberCount: circleMemberCandidates.length,
         };
     } catch (error) {
@@ -2556,26 +2433,11 @@ export async function getEventCircleMemberInviteCandidatesAction(
     };
 
     try {
-        const userDid = await getAuthenticatedUserDid();
-        if (!userDid) return { ...defaultResult, message: "User not authenticated" };
+        const target = await resolveEventInviteCandidateTarget(circleHandle, eventId);
+        if (!target) return defaultResult;
+        const { userDid } = target;
 
-        const circle = await getCircleByHandle(circleHandle);
-        if (!circle) return { ...defaultResult, message: "Circle not found" };
-
-        const event = await getEventById(eventId, userDid);
-        if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
-            return { ...defaultResult, message: "Event not found" };
-        }
-
-        const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
-        if (!canView) return { ...defaultResult, message: "Not authorized to view this event" };
-
-        const canBulkInviteCircleMembers = await canManageEvent(userDid, event);
-        if (!canBulkInviteCircleMembers) {
-            return { ...defaultResult, message: "Not authorized to invite users to this event" };
-        }
-
-        const candidates = await getEligibleCircleMemberInviteCandidates(circle, userDid);
+        const candidates = await getEligibleCircleMemberInviteCandidates(target.circle, userDid);
         return {
             candidates,
             count: candidates.length,
@@ -2583,7 +2445,7 @@ export async function getEventCircleMemberInviteCandidatesAction(
         };
     } catch (error) {
         console.error("Error in getEventCircleMemberInviteCandidatesAction:", error);
-        return { ...defaultResult, message: "Failed to load circle members" };
+        return defaultResult;
     }
 }
 

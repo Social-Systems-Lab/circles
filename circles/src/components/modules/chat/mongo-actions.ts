@@ -1,10 +1,11 @@
 "use server";
 
 import { ObjectId } from "mongodb";
-import type { ChatAttachment } from "@/lib/chat/mongo-types";
+import type { ChatAttachment, ChatMessageDoc } from "@/lib/chat/mongo-types";
 import { ChatMessage, ChatRoomDisplay, Circle } from "@/models/models";
 import {
     createConversation,
+    createIdempotentMessage,
     createMessage,
     createThreadReply,
     countLegacyLooseMessages,
@@ -16,16 +17,23 @@ import {
     fetchTopicStarters,
     findConversationById,
     findThreadStarter,
+    PersistedChatMessageActivityError,
+    refreshPersistedMessageActivity,
     getLatestLegacyMessageIdForConversation,
     findOrCreateDmConversation,
     getUnreadCountsForUser,
     getTopicUnreadCountsForUser,
+    getTopicSortOrder,
+    getConversationNotificationsMuted,
+    getConversationNotificationMutePreferences,
     getLegacyUnreadCountForUser,
     listConversationCandidatesForUser,
     mapConversationsToChatRoomDisplays,
     mapConversationToChatRoomDisplay,
     markConversationRead,
     markTopicRead,
+    setTopicSortOrder,
+    setConversationNotificationsMuted,
     toggleReaction,
     updateMessage,
     updateTopic,
@@ -35,9 +43,9 @@ import { ChatConversations, ChatMessageDocs, ChatRoomMembers, ChatRooms, Circles
 import { getCircleByDid, getCircleByHandle, getCircleById, getCirclesByDids } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
-import { saveFile } from "@/lib/data/storage";
+import { deleteFile, saveFile } from "@/lib/data/storage";
+import { cleanupUploadedFiles } from "@/lib/data/post-upload-rollback";
 import { getAuthenticatedUserDid as getProductionAuthenticatedUserDid } from "@/lib/auth/auth";
-import { extractChatMentionIds } from "@/lib/chat/mention-markup";
 import { normalizeObjectIdHex, sumConversationUnreadCounts } from "@/lib/chat/topic-read-state";
 import { WELCOME_MESSAGE, isSystemMessageSource } from "@/config/welcome-message";
 import { normalizeSystemMessageMetadata } from "@/lib/chat/system-messages";
@@ -45,11 +53,26 @@ import { getSkillLabelByHandle } from "@/lib/data/skills";
 import { canParticipate, getParticipationRequiredMessage } from "@/lib/profile-completion";
 import { getDmEligibility } from "@/lib/data/relationships";
 import { assertCircleWritesAllowed, canReadCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
-import { buildConversationScopedReplyFilter, CHAT_UNAVAILABLE_MESSAGE, evaluateConversationAccess } from "@/lib/chat/conversation-access-policy";
+import {
+    buildConversationScopedReplyFilter,
+    CHAT_UNAVAILABLE_MESSAGE,
+    evaluateConversationAccess,
+} from "@/lib/chat/conversation-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
 import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { authorizeCircleChatEntry } from "@/lib/chat/circle-chat-entry-orchestration";
 import { getChatActionContext, getChatActionViewerDid, observeChatActionEffect } from "@/lib/chat/chat-action-context";
+import { getCircleModerationStarterAuthor } from "@/lib/chat/moderation-presentation";
+import {
+    CIRCLE_MODERATION_SOURCE,
+    getChatNotificationLocation,
+    getParticipantNotificationDids,
+    isPrivateParticipantNotificationConversation,
+    PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
+    resolveChatMentionRecipientDids,
+} from "@/lib/chat/participant-notifications";
+import { buildChatMentionNotificationMessage } from "@/lib/chat/notification-presentation";
+import { acknowledgeTopicPmNotifications } from "@/lib/chat/pm-notification-read";
 
 const getAuthenticatedUserDid = () => getChatActionViewerDid(getProductionAuthenticatedUserDid);
 
@@ -86,19 +109,19 @@ const ensureParticipatingMessagingUser = async (userDid: string, action: string)
     const user = getChatActionContext()?.findMessagingUser
         ? await getChatActionContext()!.findMessagingUser!(userDid)
         : await Circles.findOne(
-        { did: userDid },
-        {
-            projection: {
-                circleType: 1,
-                picture: 1,
-                description: 1,
-                content: 1,
-                communityGuidelinesAcceptance: 1,
-                isEmailVerified: 1,
-                isAdmin: 1,
-            },
-        },
-    );
+              { did: userDid },
+              {
+                  projection: {
+                      circleType: 1,
+                      picture: 1,
+                      description: 1,
+                      content: 1,
+                      communityGuidelinesAcceptance: 1,
+                      isEmailVerified: 1,
+                      isAdmin: 1,
+                  },
+              },
+          );
     if (!canParticipate(user)) {
         return getParticipationRequiredMessage(action, user);
     }
@@ -179,65 +202,32 @@ const resolveChatMentionRecipients = async ({
     senderDid: string;
     messageBody: string;
 }) => {
-    const mentionIds = extractChatMentionIds(messageBody);
-    if (!mentionIds.length) {
-        return [];
-    }
-
-    const participantDids = new Set(
-        ((conversation?.participants || []) as string[]).filter((did) => typeof did === "string" && did.length > 0),
-    );
-    if (!participantDids.size) {
-        return [];
-    }
-
-    const mentionedDids = new Set<string>();
-    await Promise.all(
-        mentionIds.map(async (mentionId) => {
-            const mentionLookupClauses: any[] = [{ handle: mentionId }, { did: mentionId }];
-            if (ObjectId.isValid(mentionId)) {
-                mentionLookupClauses.push({ _id: new ObjectId(mentionId) });
-            }
-
-            const mentionedCircle = (await Circles.findOne(
-                { $or: mentionLookupClauses },
-                { projection: { did: 1 } },
-            )) as Circle | null;
-            const mentionedDid = mentionedCircle?.did;
-            if (!mentionedDid || mentionedDid === senderDid) {
-                return;
-            }
-            if (!participantDids.has(mentionedDid)) {
-                return;
-            }
-            mentionedDids.add(mentionedDid);
-        }),
-    );
-
-    if (!mentionedDids.size) {
-        return [];
-    }
-
-    return (await Promise.all(Array.from(mentionedDids).map((recipientDid) => getUserPrivate(recipientDid)))).filter(
+    const mentionedDids = await resolveChatMentionRecipientDids(conversation, senderDid, messageBody);
+    return (await Promise.all(mentionedDids.map((recipientDid) => getUserPrivate(recipientDid)))).filter(
         (recipient): recipient is any => !!recipient?.did,
     );
 };
 
-const sendConversationMessageNotifications = async ({
+export const sendConversationMessageNotifications = async ({
     conversationId,
     conversation,
     senderDid,
     messageBody,
     messageId,
+    topicId,
+    idempotencyKey,
 }: {
     conversationId: string;
     conversation: any;
     senderDid: string;
     messageBody: string;
     messageId?: string;
+    topicId?: string;
+    idempotencyKey?: string;
 }) => {
     const isDirectMessage = conversation?.type === "dm";
     const isCircleContact = conversation?.metadata?.source === CIRCLE_CONTACT_SOURCE;
+    const isCircleModeration = conversation?.metadata?.source === CIRCLE_MODERATION_SOURCE;
     const sender = await getCircleByDid(senderDid);
     if (!sender?.did) {
         return;
@@ -250,43 +240,50 @@ const sendConversationMessageNotifications = async ({
     });
     const mentionRecipientDids = new Set(mentionRecipients.map((recipient) => recipient.did));
 
-    if (isDirectMessage || isCircleContact) {
-        const recipientDids: string[] = Array.from(
-            new Set(
-                (conversation?.participants || []).filter(
-                    (participantDid: string) =>
-                        typeof participantDid === "string" &&
-                        participantDid !== senderDid &&
-                        !mentionRecipientDids.has(participantDid),
-                ),
-            ),
-        );
+    if (isPrivateParticipantNotificationConversation(conversation)) {
+        const recipientDids = getParticipantNotificationDids(conversation, senderDid, mentionRecipientDids);
 
         const recipients = (
             await Promise.all(recipientDids.map((recipientDid) => getUserPrivate(recipientDid)))
         ).filter((recipient): recipient is any => !!recipient?.did);
 
         if (recipients.length) {
-            await sendNotifications("pm_received", recipients, {
-                roomId: conversationId,
-                user: sender,
-                circle: isCircleContact ? circle : undefined,
-                contactType: conversation?.metadata?.contactType,
-                conversationName: conversation?.name,
-                messagePreview: messageBody,
-            });
+            await sendNotifications(
+                PARTICIPANT_MESSAGE_NOTIFICATION_TYPE,
+                recipients,
+                {
+                    ...getChatNotificationLocation(conversationId, topicId),
+                    ...(messageId ? { messageId } : {}),
+                    user: sender,
+                    circle: isCircleContact ? circle : undefined,
+                    contactType: conversation?.metadata?.contactType,
+                    conversationName: isCircleModeration ? "Circle moderation" : conversation?.name,
+                    messagePreview: isCircleModeration
+                        ? "A Circle moderation message is ready for review."
+                        : messageBody,
+                },
+                idempotencyKey ? { idempotencyKey } : undefined,
+            );
         }
     }
 
     if (mentionRecipients.length) {
-        await sendNotifications("chat_mention", mentionRecipients, {
-            roomId: conversationId,
-            user: sender,
-            circle,
-            conversationName: conversation?.name,
-            messageBody: `${sender.name || "Someone"} mentioned you in ${conversation?.name || "chat"}`,
-            messagePreview: messageBody,
-        });
+        const topic = topicId ? await findThreadStarter(topicId, conversationId) : null;
+        const topicTitle = topic?.thread?.title?.trim() || undefined;
+        await sendNotifications(
+            "chat_mention",
+            mentionRecipients,
+            {
+                ...getChatNotificationLocation(conversationId, topicId),
+                user: sender,
+                circle,
+                conversationName: conversation?.name,
+                topicTitle,
+                messageBody: buildChatMentionNotificationMessage(sender.name, topicTitle),
+                messagePreview: messageBody,
+            },
+            idempotencyKey ? { idempotencyKey } : undefined,
+        );
     }
 
     if (!isDirectMessage || !messageId) {
@@ -316,11 +313,12 @@ export const resolveMongoConversationAccess = async (
 
     const unauthorized = { ok: false as const, message: CHAT_UNAVAILABLE_MESSAGE };
     const circleId = typeof conversation.circleId === "string" ? conversation.circleId : undefined;
-    const ownerCircle = circleId && ObjectId.isValid(circleId)
-        ? context?.findCircle
-            ? await context.findCircle(circleId)
-            : await getCircleById(circleId)
-        : null;
+    const ownerCircle =
+        circleId && ObjectId.isValid(circleId)
+            ? context?.findCircle
+                ? await context.findCircle(circleId)
+                : await getCircleById(circleId)
+            : null;
     const canonicalMember = circleId
         ? Boolean(
               context?.findCanonicalMember
@@ -342,11 +340,12 @@ export const resolveMongoConversationAccess = async (
         delete membershipQuery.chatRoomId;
     }
 
-    const membership: any = conversation.type === "dm"
-        ? null
-        : context?.findChatMember
-          ? await context.findChatMember(userDid, chatRoomId)
-          : await ChatRoomMembers.findOne(membershipQuery);
+    const membership: any =
+        conversation.type === "dm"
+            ? null
+            : context?.findChatMember
+              ? await context.findChatMember(userDid, chatRoomId)
+              : await ChatRoomMembers.findOne(membershipQuery);
     const allowed = evaluateConversationAccess({
         conversation,
         viewerDid: userDid,
@@ -368,8 +367,14 @@ export const resolveMongoConversationAccessBatch = async (
     const uniqueIds = Array.from(new Set(conversationIds.filter(Boolean)));
     if (!uniqueIds.length) return new Set();
     if (getChatActionContext()?.findConversation) {
-        const checks = await Promise.all(uniqueIds.map(async (id) => ({ id, access: await resolveMongoConversationAccess(id, userDid, intent) })));
-        return new Set(checks.filter(({ access }) => access.ok).flatMap(({ id, access }) => [id, access.conversation?._id?.toString?.()].filter(Boolean) as string[]));
+        const checks = await Promise.all(
+            uniqueIds.map(async (id) => ({ id, access: await resolveMongoConversationAccess(id, userDid, intent) })),
+        );
+        return new Set(
+            checks
+                .filter(({ access }) => access.ok)
+                .flatMap(({ id, access }) => [id, access.conversation?._id?.toString?.()].filter(Boolean) as string[]),
+        );
     }
     const objectIds = uniqueIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
     const conversations = await ChatConversations.find({
@@ -377,7 +382,11 @@ export const resolveMongoConversationAccessBatch = async (
         $or: [{ _id: { $in: objectIds } }, { handle: { $in: uniqueIds } }],
     }).toArray();
     const circleIds = Array.from(
-        new Set(conversations.map((conversation: any) => conversation.circleId).filter((id): id is string => typeof id === "string")),
+        new Set(
+            conversations
+                .map((conversation: any) => conversation.circleId)
+                .filter((id): id is string => typeof id === "string"),
+        ),
     );
     const circleObjectIds = circleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
     const [circles, canonicalRows, chatRows] = await Promise.all([
@@ -386,32 +395,36 @@ export const resolveMongoConversationAccessBatch = async (
             ? Members.find({ userDid, circleId: { $in: circleIds } }, { projection: { circleId: 1 } }).toArray()
             : Promise.resolve([]),
         ChatRoomMembers.find(
-            ({
+            {
                 userDid,
                 $or: [
                     { chatRoomId: { $in: uniqueIds } },
                     ...(objectIds.length ? [{ chatRoomId: { $in: objectIds } }] : []),
                 ],
-            } as any),
+            } as any,
             { projection: { chatRoomId: 1, status: 1, active: 1, isActive: 1 } },
         ).toArray(),
     ]);
     const circleById = new Map(circles.map((circle: any) => [circle._id.toString(), circle]));
     const canonicalIds = new Set(canonicalRows.map((row: any) => row.circleId));
     const activeChatIds = new Set(
-        chatRows.filter(isActiveGroupMembership).map((row: any) => row.chatRoomId?.toString?.() || String(row.chatRoomId)),
+        chatRows
+            .filter(isActiveGroupMembership)
+            .map((row: any) => row.chatRoomId?.toString?.() || String(row.chatRoomId)),
     );
     const allowed = new Set<string>();
     for (const conversation of conversations) {
         const id = conversation._id.toString();
-        if (evaluateConversationAccess({
-            conversation,
-            viewerDid: userDid,
-            intent,
-            ownerCircle: typeof conversation.circleId === "string" ? circleById.get(conversation.circleId) : null,
-            canonicalMember: typeof conversation.circleId === "string" && canonicalIds.has(conversation.circleId),
-            chatMember: activeChatIds.has(id),
-        })) {
+        if (
+            evaluateConversationAccess({
+                conversation,
+                viewerDid: userDid,
+                intent,
+                ownerCircle: typeof conversation.circleId === "string" ? circleById.get(conversation.circleId) : null,
+                canonicalMember: typeof conversation.circleId === "string" && canonicalIds.has(conversation.circleId),
+                chatMember: activeChatIds.has(id),
+            })
+        ) {
             allowed.add(id);
             if (conversation.handle) allowed.add(conversation.handle);
         }
@@ -431,17 +444,19 @@ const validateReplyTargetForConversation = async (
         return { ok: true };
     }
 
-    const replyTargetDoc = await ChatMessageDocs.findOne(
-        {
-            _id: new ObjectId(replyToMessageId),
-            conversationId,
-        },
-        {
-            projection: { source: 1, version: 1, system: 1 },
-        },
-    );
+    const replyTargetDoc = getChatActionContext()?.findMessage
+        ? await getChatActionContext()!.findMessage!(replyToMessageId)
+        : await ChatMessageDocs.findOne(
+              {
+                  _id: new ObjectId(replyToMessageId),
+                  conversationId,
+              },
+              {
+                  projection: { conversationId: 1, source: 1, version: 1, system: 1 },
+              },
+          );
 
-    if (!replyTargetDoc) {
+    if (!replyTargetDoc || replyTargetDoc.conversationId !== conversationId) {
         return { ok: false, message: "Reply target not found" };
     }
 
@@ -458,7 +473,9 @@ const validateReplyTargetForConversation = async (
     return { ok: true };
 };
 
-export const listChatRoomsAction = async (): Promise<{
+export const listChatRoomsAction = async (
+    view: "active" | "archived" = "active",
+): Promise<{
     success: boolean;
     rooms?: ChatRoomDisplay[];
     message?: string;
@@ -473,10 +490,13 @@ export const listChatRoomsAction = async (): Promise<{
         // A provider mismatch could hide Mongo DMs in production.
         const context = getChatActionContext();
         const batch = await loadAuthorizedConversationCandidates(userDid, {
-            findCanonicalMemberships: async (did) => context?.findCanonicalMemberships
-                ? context.findCanonicalMemberships(did)
-                : Members.find({ userDid: did }).toArray(),
-            findCandidates: context?.findCandidates || listConversationCandidatesForUser,
+            findCanonicalMemberships: async (did) =>
+                context?.findCanonicalMemberships
+                    ? context.findCanonicalMemberships(did)
+                    : Members.find({ userDid: did }).toArray(),
+            findCandidates: context?.findCandidates
+                ? context.findCandidates
+                : (did, circleIds) => listConversationCandidatesForUser(did, circleIds, view),
             findOwningCircles: async (circleIds) => {
                 if (context?.findOwningCircles) return context.findOwningCircles(circleIds);
                 const ids = circleIds.filter(ObjectId.isValid).map((id) => new ObjectId(id));
@@ -506,8 +526,10 @@ export const listChatRoomsAction = async (): Promise<{
         const authorizedConversations = batch.conversations;
         const circles = batch.ownerCircles;
         const candidateMemberships = batch.memberships;
-        authorizedConversations.sort((a, b) =>
-            (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) - (a.updatedAt ? new Date(a.updatedAt).getTime() : 0),
+        authorizedConversations.sort(
+            (a, b) =>
+                (b.updatedAt ? new Date(b.updatedAt).getTime() : 0) -
+                (a.updatedAt ? new Date(a.updatedAt).getTime() : 0),
         );
         // Participant and Circle metadata hydration happens only after canonical authorization.
         const rooms = context?.mapConversations
@@ -545,6 +567,20 @@ export const listChatRoomsAction = async (): Promise<{
         const unreadCounts = context?.getUnreadCounts
             ? await context.getUnreadCounts(userDid, conversationIds)
             : await getUnreadCountsForUser(userDid, conversationIds);
+        let mutePreferences: Record<string, boolean> = {};
+        let mutePreferencesAvailable = true;
+        try {
+            mutePreferences = context?.getConversationMutePreferences
+                ? await context.getConversationMutePreferences(userDid, conversationIds)
+                : await getConversationNotificationMutePreferences(userDid, conversationIds);
+        } catch (error) {
+            mutePreferencesAvailable = false;
+            console.error("Failed to load conversation mute preferences", {
+                event: "chat_mute_preference_batch_lookup_failed",
+                conversationCount: conversationIds.length,
+                errorName: error instanceof Error ? error.name : "UnknownError",
+            });
+        }
         const roomsWithUnread = rooms.map((room) => ({
             ...room,
             picture:
@@ -555,12 +591,119 @@ export const listChatRoomsAction = async (): Promise<{
             memberCount:
                 !room.isDirect && typeof room._id === "string" ? groupMemberCounts.get(room._id) || 0 : undefined,
             unreadCount: room._id || room.handle ? unreadCounts[(room._id || room.handle) as string] || 0 : 0,
+            notificationsMuted:
+                mutePreferencesAvailable && typeof room._id === "string"
+                    ? mutePreferences[room._id] === true
+                    : undefined,
+            notificationsMutePreferenceAvailable: mutePreferencesAvailable,
         }));
         return { success: true, rooms: roomsWithUnread };
     } catch (error) {
         console.error("❌ Error listing chat rooms:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to load chats" };
     }
+};
+
+export const getChatRoomAction = async (
+    conversationId: string,
+    view: "active" | "archived" = "active",
+): Promise<{ success: boolean; room?: ChatRoomDisplay; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "You need to be logged in to view chats" };
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
+    if (!access.ok || !access.conversation) return { success: false, message: access.message };
+
+    const conversation = access.conversation as any;
+    const archivedByViewer = Array.isArray(conversation.archivedBy) && conversation.archivedBy.includes(userDid);
+    const isUnavailable =
+        conversation.archived === true ||
+        conversation.metadata?.dmProvisional === true ||
+        (view === "archived"
+            ? conversation.type !== "dm" || !archivedByViewer
+            : conversation.type === "dm" && archivedByViewer);
+    if (isUnavailable) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+
+    try {
+        const context = getChatActionContext();
+        const rooms = context?.mapConversations
+            ? await context.mapConversations(userDid, [conversation], [])
+            : [await mapConversationToChatRoomDisplay(userDid, conversation)].filter(
+                  (room): room is ChatRoomDisplay => !!room,
+              );
+        const room = rooms[0];
+        return room ? { success: true, room } : { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    } catch (error) {
+        console.error("Failed to load chat room:", error);
+        return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    }
+};
+
+const setDmArchivedForCurrentUser = async (
+    conversationId: string,
+    archived: boolean,
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (!ObjectId.isValid(conversationId)) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+
+    try {
+        observeChatActionEffect("conversation-archive");
+        const context = getChatActionContext();
+        const result = context?.updateConversationArchive
+            ? await context.updateConversationArchive(conversationId, userDid, archived)
+            : await ChatConversations.updateOne(
+                  {
+                      _id: new ObjectId(conversationId),
+                      type: "dm",
+                      participants: userDid,
+                      archived: { $ne: true },
+                      "metadata.dmProvisional": { $ne: true },
+                  },
+                  archived ? { $addToSet: { archivedBy: userDid } } : { $pull: { archivedBy: userDid } },
+              );
+        if (result.matchedCount !== 1) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to ${archived ? "archive" : "unarchive"} direct message:`, error);
+        return { success: false, message: `Failed to ${archived ? "archive" : "unarchive"} conversation` };
+    }
+};
+
+export const archiveDmConversationAction = async (conversationId: string) =>
+    setDmArchivedForCurrentUser(conversationId, true);
+
+export const unarchiveDmConversationAction = async (conversationId: string) =>
+    setDmArchivedForCurrentUser(conversationId, false);
+
+export const getConversationMutePreferenceAction = async (
+    conversationId: string,
+): Promise<{ success: boolean; muted?: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
+    if (!access.ok) return { success: false, message: access.message };
+    const muted = getChatActionContext()?.getConversationNotificationsMuted
+        ? await getChatActionContext()!.getConversationNotificationsMuted!(userDid, conversationId)
+        : await getConversationNotificationsMuted(userDid, conversationId);
+    return { success: true, muted };
+};
+
+export const setConversationMutePreferenceAction = async (
+    conversationId: string,
+    muted: boolean,
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (typeof muted !== "boolean") return { success: false, message: "Invalid mute preference" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
+    if (!access.ok) return { success: false, message: access.message };
+    if (getChatActionContext()?.setConversationNotificationsMuted) {
+        await getChatActionContext()!.setConversationNotificationsMuted!(userDid, conversationId, muted);
+    } else {
+        await setConversationNotificationsMuted(userDid, conversationId, muted);
+    }
+    return { success: true };
 };
 
 export const fetchRecentMessagesAction = async (
@@ -602,7 +745,9 @@ export const fetchRecentMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find(buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any).toArray()) as any[])
+            ? ((await ChatMessageDocs.find(
+                  buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any,
+              ).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -622,8 +767,19 @@ export const fetchRecentMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                (presentedAuthor
+                    ? presentedAuthor
+                    : shouldUseSystemTemplateAuthor
+                      ? fallbackSystemAuthor
+                      : senderByDid.get(doc.senderDid)) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -634,7 +790,13 @@ export const fetchRecentMessagesAction = async (
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) || { _id: replyDoc.senderDid, name: replyDoc.senderDid }
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  }) || { _id: replyDoc.senderDid, name: replyDoc.senderDid }
                 : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
@@ -756,7 +918,9 @@ export const fetchLegacyLooseMessagesAction = async (
         const replyIds = Array.from(new Set(docs.map((doc) => doc.replyToMessageId).filter(Boolean) as string[]));
         const replyObjectIds = replyIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
         const replyDocs = replyObjectIds.length
-            ? ((await ChatMessageDocs.find(buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any).toArray()) as any[])
+            ? ((await ChatMessageDocs.find(
+                  buildConversationScopedReplyFilter(conversationId, replyObjectIds) as any,
+              ).toArray()) as any[])
             : [];
         const replyById = new Map(
             replyDocs.map((reply) => [reply._id.toString(), { ...reply, _id: reply._id.toString() }]),
@@ -776,8 +940,16 @@ export const fetchLegacyLooseMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                presentedAuthor ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -788,7 +960,13 @@ export const fetchLegacyLooseMessagesAction = async (
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) ||
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  }) ||
                   (isSystemMessageSource(replyDoc.source)
                       ? fallbackSystemAuthor
                       : ({
@@ -913,8 +1091,16 @@ export const fetchMongoMessagesAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                presentedAuthor ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({
@@ -925,7 +1111,13 @@ export const fetchMongoMessagesAction = async (
 
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
             const replyAuthor = replyDoc
-                ? senderByDid.get(replyDoc.senderDid) ||
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  }) ||
                   (isSystemMessageSource(replyDoc.source)
                       ? fallbackSystemAuthor
                       : ({
@@ -1126,20 +1318,42 @@ export const sendMongoAttachmentAction = async (
         };
 
         observeChatActionEffect("message-persistence");
-        const doc = threadId
-            ? await createThreadReply(threadId, conversationId, userDid, {
-                  body: file.name,
-                  attachments: [attachment],
-                  replyToMessageId,
-              })
-            : await createMessage({
-                  conversationId,
-                  senderDid: userDid,
-                  body: file.name,
-                  createdAt: new Date(),
-                  replyToMessageId,
-                  attachments: [attachment],
-              });
+        let doc;
+        try {
+            doc = threadId
+                ? await createThreadReply(threadId, conversationId, userDid, {
+                      body: file.name,
+                      attachments: [attachment],
+                      replyToMessageId,
+                  })
+                : getChatActionContext()?.createMessage
+                  ? await getChatActionContext()!.createMessage!({
+                        conversationId,
+                        senderDid: userDid,
+                        body: file.name,
+                        createdAt: new Date(),
+                        replyToMessageId,
+                        attachments: [attachment],
+                    })
+                  : await createMessage({
+                        conversationId,
+                        senderDid: userDid,
+                        body: file.name,
+                        createdAt: new Date(),
+                        replyToMessageId,
+                        attachments: [attachment],
+                    });
+        } catch (error) {
+            if (!(error instanceof PersistedChatMessageActivityError)) {
+                const cleanup = await cleanupUploadedFiles(
+                    [attachment],
+                    getChatActionContext()?.deleteFile || deleteFile,
+                );
+                if (cleanup.failedDeletes.length)
+                    console.error("Failed to clean up rejected chat attachment", cleanup.failedDeletes);
+            }
+            throw error;
+        }
         if (!doc?._id) {
             return {
                 success: false,
@@ -1153,12 +1367,325 @@ export const sendMongoAttachmentAction = async (
             senderDid: userDid,
             messageBody: file.name,
             messageId: doc._id as string,
+            topicId: threadId,
         });
 
         return { success: true, messageId: doc._id as string };
     } catch (error) {
         console.error("❌ Error sending mongo attachment:", error);
         return { success: false, message: error instanceof Error ? error.message : "Failed to send attachment" };
+    }
+};
+
+const COMPOSED_MESSAGE_MAX_ATTACHMENTS = 10;
+const COMPOSED_MESSAGE_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const COMPOSED_MESSAGE_MAX_TOTAL_SIZE = 25 * 1024 * 1024;
+
+const getComposedMessageFiles = (formData: FormData): FormDataEntryValue[] => {
+    const files = formData.getAll("files");
+    if (files.length) return files;
+    const compatibleFiles = formData.getAll("file");
+    return compatibleFiles;
+};
+
+export const sendComposedMessageAction = async (
+    formData: FormData,
+): Promise<{ success: boolean; messageId?: string; message?: string; createdAt?: Date; submissionId?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "You need to be logged in to send messages" };
+
+    const verificationMessage = await ensureInteractiveMessagingUser(userDid, "send messages");
+    if (verificationMessage) return { success: false, message: verificationMessage };
+
+    const conversationId = String(formData.get("roomId") || "");
+    const requestedBody = String(formData.get("body") || formData.get("content") || "").trim();
+    const replyToMessageId =
+        String(formData.get("replyToMessageId") || formData.get("replyToEventId") || "") || undefined;
+    const threadId = String(formData.get("threadId") || "") || undefined;
+    const submissionId = String(formData.get("submissionId") || "") || undefined;
+    const fileEntries = getComposedMessageFiles(formData);
+
+    if (!conversationId) return { success: false, message: "Missing room ID" };
+    if (!requestedBody && fileEntries.length === 0) return { success: false, message: "Message cannot be empty" };
+    if (fileEntries.length > COMPOSED_MESSAGE_MAX_ATTACHMENTS) {
+        return { success: false, message: "A message can include at most 10 attachments" };
+    }
+    if (submissionId && (submissionId.length < 8 || submissionId.length > 128)) {
+        return { success: false, message: "Invalid message submission" };
+    }
+    if (fileEntries.some((entry) => !isUploadedFileLike(entry))) {
+        return { success: false, message: "Invalid attachment" };
+    }
+    const files = fileEntries as File[];
+    if (files.some((file) => file.size > COMPOSED_MESSAGE_MAX_FILE_SIZE)) {
+        return { success: false, message: "File size exceeds 5MB limit" };
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > COMPOSED_MESSAGE_MAX_TOTAL_SIZE) {
+        return { success: false, message: "Combined attachment size exceeds 25MB limit" };
+    }
+
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
+    if (!access.ok) return { success: false, message: access.message };
+    if (access.conversation?.type === "announcement") {
+        return { success: false, message: "Replies are disabled for this conversation." };
+    }
+    const replyValidation = await validateReplyTargetForConversation(conversationId, replyToMessageId);
+    if (!replyValidation.ok) return { success: false, message: replyValidation.message };
+    if (threadId) {
+        const topic = getChatActionContext()?.findThreadStarter
+            ? await getChatActionContext()!.findThreadStarter!(threadId, conversationId)
+            : await findThreadStarter(threadId, conversationId);
+        if (!topic || topic.conversationId !== conversationId) {
+            return { success: false, message: "Topic not found for this conversation" };
+        }
+    }
+
+    const body = requestedBody || files[0]?.name || "";
+    const findExistingSubmission = async () => {
+        if (!submissionId) return null;
+        const existing = getChatActionContext()?.findMessageBySubmissionId
+            ? await getChatActionContext()!.findMessageBySubmissionId!(userDid, submissionId)
+            : await ChatMessageDocs.findOne({ senderDid: userDid, submissionId });
+        if (!existing) return null;
+        const matches =
+            existing.conversationId === conversationId &&
+            existing.senderDid === userDid &&
+            existing.body === body &&
+            (existing.replyToMessageId || undefined) === replyToMessageId &&
+            (existing.threadId || undefined) === threadId;
+        if (!matches) return { conflict: true as const };
+        return { conflict: false as const, message: existing };
+    };
+
+    const existingSubmission = await findExistingSubmission();
+    if (existingSubmission?.conflict) {
+        return { success: false, message: "Message submission id was already used for another message" };
+    }
+    if (existingSubmission?.message) {
+        try {
+            if (getChatActionContext()?.refreshMessageActivity) {
+                await getChatActionContext()!.refreshMessageActivity!(existingSubmission.message);
+            } else {
+                await refreshPersistedMessageActivity(existingSubmission.message);
+            }
+        } catch (error) {
+            console.error("sendComposedMessageAction activity recovery error:", error);
+            return {
+                success: false,
+                message: "Message was saved, but chat activity could not be updated. Retry to confirm.",
+            };
+        }
+        return {
+            success: true,
+            messageId: existingSubmission.message._id.toString(),
+            createdAt: existingSubmission.message.createdAt,
+            submissionId,
+        };
+    }
+
+    const uploadedAttachments: ChatAttachment[] = [];
+    let persistenceAttempted = false;
+    const cleanupUploads = async (attachments = uploadedAttachments) => {
+        const cleanup = await cleanupUploadedFiles(attachments, getChatActionContext()?.deleteFile || deleteFile);
+        if (cleanup.failedDeletes.length) {
+            console.error("Failed to clean up composed message attachments", cleanup.failedDeletes);
+        }
+    };
+
+    try {
+        const ownerCircle = files.length
+            ? access.conversation?.circleId
+                ? getChatActionContext()?.findCircle
+                    ? await getChatActionContext()!.findCircle!(access.conversation.circleId)
+                    : await getCircleById(access.conversation.circleId)
+                : await getCircleByDid(userDid)
+            : undefined;
+        if (files.length && !ownerCircle?._id) return { success: false, message: "Could not resolve storage owner" };
+
+        for (const file of files) {
+            observeChatActionEffect("storage-write");
+            const fileInfo = getChatActionContext()?.saveFile
+                ? await getChatActionContext()!.saveFile!(file, "chat-attachment", ownerCircle!._id as string, true)
+                : await saveFile(file, "chat-attachment", ownerCircle!._id as string, true);
+            uploadedAttachments.push({
+                url: fileInfo.url,
+                key: fileInfo.fileName,
+                name: fileInfo.originalName || file.name,
+                mimeType: file.type,
+                size: file.size,
+            });
+        }
+
+        persistenceAttempted = true;
+        observeChatActionEffect(threadId ? "reply-create" : "message-persistence");
+        let doc: ChatMessageDoc | null;
+        let created = true;
+        if (threadId) {
+            const replyInput = {
+                body,
+                attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                replyToMessageId,
+                submissionId,
+            };
+            doc = getChatActionContext()?.createThreadReply
+                ? await getChatActionContext()!.createThreadReply!(threadId, conversationId, userDid, replyInput)
+                : await createThreadReply(threadId, conversationId, userDid, replyInput);
+            created =
+                !submissionId ||
+                uploadedAttachments.length === 0 ||
+                (doc?.attachments?.length === uploadedAttachments.length &&
+                    uploadedAttachments.every((uploaded, index) => doc?.attachments?.[index]?.url === uploaded.url));
+        } else if (submissionId && !getChatActionContext()?.createMessage) {
+            const result = await createIdempotentMessage({
+                conversationId,
+                senderDid: userDid,
+                body,
+                createdAt: new Date(),
+                replyToMessageId,
+                attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                submissionId,
+            });
+            doc = result.message;
+            created = result.created;
+        } else {
+            doc = getChatActionContext()?.createMessage
+                ? await getChatActionContext()!.createMessage!({
+                      conversationId,
+                      senderDid: userDid,
+                      body,
+                      createdAt: new Date(),
+                      replyToMessageId,
+                      attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                      submissionId,
+                  })
+                : await createMessage({
+                      conversationId,
+                      senderDid: userDid,
+                      body,
+                      createdAt: new Date(),
+                      replyToMessageId,
+                      attachments: uploadedAttachments.length ? uploadedAttachments : undefined,
+                      submissionId,
+                  });
+        }
+
+        if (!doc?._id) throw new Error(threadId ? "Topic not found for this conversation" : "Failed to send message");
+        if (!created) await cleanupUploads();
+
+        try {
+            observeChatActionEffect("notification");
+            const notificationInput = {
+                conversationId,
+                conversation: access.conversation,
+                senderDid: userDid,
+                messageBody: body,
+                messageId: doc._id.toString(),
+                topicId: threadId,
+                idempotencyKey: submissionId ? `composed-message:${submissionId}` : undefined,
+            };
+            if (getChatActionContext()?.notifyMessage) {
+                await getChatActionContext()!.notifyMessage!(notificationInput);
+            } else {
+                await sendConversationMessageNotifications(notificationInput);
+            }
+        } catch (notificationError) {
+            console.error("sendComposedMessageAction notification error:", notificationError);
+        }
+
+        return {
+            success: true,
+            messageId: doc._id.toString(),
+            createdAt: doc.createdAt,
+            submissionId: doc.submissionId,
+        };
+    } catch (error) {
+        if (error instanceof PersistedChatMessageActivityError) {
+            console.error("sendComposedMessageAction persisted message activity error:", error);
+            return {
+                success: false,
+                message: "Message was saved, but chat activity could not be updated. Retry to confirm.",
+            };
+        }
+        if (persistenceAttempted && uploadedAttachments.length) {
+            let persistedMessage: ChatMessageDoc | null;
+            let referencedUploadUrls = new Set<string>();
+            try {
+                if (submissionId) {
+                    const candidate = getChatActionContext()?.findMessageBySubmissionId
+                        ? await getChatActionContext()!.findMessageBySubmissionId!(userDid, submissionId)
+                        : await ChatMessageDocs.findOne({ senderDid: userDid, submissionId });
+                    if (candidate?.attachments) {
+                        referencedUploadUrls = new Set(
+                            candidate.attachments.map((attachment: ChatAttachment) => attachment.url),
+                        );
+                    }
+                    const candidateMatchesSubmission =
+                        candidate?.conversationId === conversationId &&
+                        candidate?.senderDid === userDid &&
+                        candidate?.body === body &&
+                        (candidate?.replyToMessageId || undefined) === replyToMessageId &&
+                        (candidate?.threadId || undefined) === threadId;
+                    persistedMessage =
+                        candidateMatchesSubmission &&
+                        candidate?.attachments?.length === uploadedAttachments.length &&
+                        uploadedAttachments.every(
+                            (attachment, index) => candidate.attachments?.[index]?.url === attachment.url,
+                        )
+                            ? (candidate as ChatMessageDoc)
+                            : null;
+                } else {
+                    persistedMessage = (await ChatMessageDocs.findOne({
+                        conversationId,
+                        senderDid: userDid,
+                        body,
+                        ...(threadId ? { threadId } : { threadId: { $exists: false } }),
+                        ...(replyToMessageId ? { replyToMessageId } : { replyToMessageId: { $exists: false } }),
+                        "attachments.url": { $all: uploadedAttachments.map((attachment) => attachment.url) },
+                    })) as ChatMessageDoc | null;
+                    if (persistedMessage?.attachments) {
+                        referencedUploadUrls = new Set(
+                            persistedMessage.attachments.map((attachment) => attachment.url),
+                        );
+                    }
+                }
+            } catch (recoveryError) {
+                console.error("sendComposedMessageAction persistence recovery lookup error:", recoveryError);
+                return {
+                    success: false,
+                    message: "Could not confirm whether the message was saved. Retry with the same submission.",
+                };
+            }
+            if (persistedMessage?._id) {
+                try {
+                    if (getChatActionContext()?.refreshMessageActivity) {
+                        await getChatActionContext()!.refreshMessageActivity!(persistedMessage);
+                    } else {
+                        await refreshPersistedMessageActivity(persistedMessage);
+                    }
+                } catch (recoveryError) {
+                    console.error("sendComposedMessageAction activity recovery error:", recoveryError);
+                    return {
+                        success: false,
+                        message: "Message was saved, but chat activity could not be updated. Retry to confirm.",
+                    };
+                }
+                return {
+                    success: true,
+                    messageId: persistedMessage._id.toString(),
+                    createdAt: persistedMessage.createdAt,
+                    submissionId: persistedMessage.submissionId,
+                };
+            }
+            if (referencedUploadUrls.size) {
+                await cleanupUploads(
+                    uploadedAttachments.filter((attachment) => !referencedUploadUrls.has(attachment.url)),
+                );
+                return { success: false, message: "Submission id was already used for another message" };
+            }
+        }
+        await cleanupUploads();
+        console.error("sendComposedMessageAction error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Failed to send message" };
     }
 };
 
@@ -1174,10 +1701,7 @@ export const editMongoMessageAction = async (
 
     const messageDoc = getChatActionContext()?.findMessage
         ? await getChatActionContext()!.findMessage!(messageId)
-        : await ChatMessageDocs.findOne(
-        { _id: new ObjectId(messageId) },
-        { projection: { conversationId: 1 } },
-    );
+        : await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } });
     if (!messageDoc?.conversationId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
@@ -1195,10 +1719,7 @@ export const deleteMongoMessageAction = async (messageId: string): Promise<{ suc
 
     const messageDoc = getChatActionContext()?.findMessage
         ? await getChatActionContext()!.findMessage!(messageId)
-        : await ChatMessageDocs.findOne(
-        { _id: new ObjectId(messageId) },
-        { projection: { conversationId: 1 } },
-    );
+        : await ChatMessageDocs.findOne({ _id: new ObjectId(messageId) }, { projection: { conversationId: 1 } });
     if (!messageDoc?.conversationId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     const access = await resolveMongoConversationAccess(messageDoc.conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
@@ -1210,20 +1731,29 @@ export const deleteMongoMessageAction = async (messageId: string): Promise<{ suc
 export const toggleMongoReactionAction = async (
     messageId: string,
     emoji: string,
-): Promise<{ success: boolean; reactions?: ChatMessage["reactions"]; message?: string }> => {
+): Promise<{
+    success: boolean;
+    reactions?: ChatMessage["reactions"];
+    reactionAdded?: boolean;
+    readStatePersisted?: boolean;
+    readStateWarning?: string;
+    message?: string;
+}> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
         return { success: false, message: "You need to be logged in to react" };
     }
 
-    let messageDoc: { conversationId?: string } | null = null;
+    let messageDoc: Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null = null;
     try {
-        messageDoc = (getChatActionContext()?.findMessage
-            ? await getChatActionContext()!.findMessage!(messageId)
-            : await ChatMessageDocs.findOne(
-            { _id: new ObjectId(messageId) },
-            { projection: { conversationId: 1 } },
-        )) as { conversationId?: string } | null;
+        messageDoc = (
+            getChatActionContext()?.findMessage
+                ? await getChatActionContext()!.findMessage!(messageId)
+                : await ChatMessageDocs.findOne(
+                      { _id: new ObjectId(messageId) },
+                      { projection: { conversationId: 1, threadId: 1, thread: 1 } },
+                  )
+        ) as Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null;
     } catch {
         return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
     }
@@ -1237,13 +1767,30 @@ export const toggleMongoReactionAction = async (
         return { success: false, message: access.message };
     }
 
+    const normalizedMessageId = normalizeObjectIdHex(messageId);
+    if (!normalizedMessageId) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    const reactionTopicId = messageDoc.threadId || (messageDoc.thread ? normalizedMessageId : undefined);
+    let validatedTopicCursor: string | null = null;
+    if (reactionTopicId) {
+        const normalizedTopicId = normalizeObjectIdHex(reactionTopicId);
+        if (!normalizedTopicId || !(await findThreadStarter(normalizedTopicId, messageDoc.conversationId))) {
+            return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+        }
+        validatedTopicCursor = await validateTopicReadCursor(
+            messageDoc.conversationId,
+            normalizedTopicId,
+            normalizedMessageId,
+        );
+        if (!validatedTopicCursor) return { success: false, message: CHAT_UNAVAILABLE_MESSAGE };
+    }
+
     observeChatActionEffect("reaction-mutation");
-    const reactions = await toggleReaction(messageId, userDid, emoji);
-    if (!reactions) {
+    const mutation = await toggleReaction(messageId, userDid, emoji);
+    if (!mutation) {
         return { success: false, message: "Failed to update reaction" };
     }
 
-    const reactionMap = reactions.reduce((acc: Record<string, any[]>, reaction) => {
+    const reactionMap = mutation.reactions.reduce((acc: Record<string, any[]>, reaction) => {
         if (!acc[reaction.emoji]) {
             acc[reaction.emoji] = [];
         }
@@ -1254,12 +1801,42 @@ export const toggleMongoReactionAction = async (
         return acc;
     }, {});
 
-    return { success: true, reactions: reactionMap };
+    if (!mutation.added) return { success: true, reactions: reactionMap, reactionAdded: false };
+
+    let readStatePersisted = false;
+    try {
+        if (reactionTopicId && validatedTopicCursor) {
+            const normalizedTopicId = normalizeObjectIdHex(reactionTopicId)!;
+            observeChatActionEffect("topic-read-state");
+            await markTopicRead(userDid, messageDoc.conversationId, normalizedTopicId, validatedTopicCursor);
+            readStatePersisted = true;
+            await acknowledgeTopicPmNotifications({
+                userDid,
+                conversationId: messageDoc.conversationId,
+                topicId: normalizedTopicId,
+                lastReadMessageId: validatedTopicCursor,
+            });
+        } else {
+            observeChatActionEffect("conversation-read-state");
+            await markConversationRead(userDid, messageDoc.conversationId, normalizedMessageId);
+            readStatePersisted = true;
+        }
+    } catch (error) {
+        console.error("Reaction saved, but read state could not be fully updated:", error);
+        return {
+            success: true,
+            reactions: reactionMap,
+            reactionAdded: true,
+            readStatePersisted,
+            readStateWarning: "Reaction saved, but read status could not be fully updated.",
+        };
+    }
+
+    return { success: true, reactions: reactionMap, reactionAdded: true, readStatePersisted: true };
 };
 
 export const findOrCreateDMConversationAction = async (
     inRecipient: Circle,
-    options?: { source?: "composer" | "profile" },
 ): Promise<{ success: boolean; message?: string; chatRoom?: ChatRoomDisplay }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) {
@@ -1280,9 +1857,8 @@ export const findOrCreateDMConversationAction = async (
         return { success: false, message: "You cannot send a message to yourself" };
     }
 
-    const source = options?.source || "composer";
     const dmEligibility = await getDmEligibility(userDid, recipient.did!);
-    if (source !== "profile" && !dmEligibility.isAllowed) {
+    if (!dmEligibility.isAllowed) {
         return {
             success: false,
             message: "Messaging is only available for existing conversations and contacts right now.",
@@ -1369,7 +1945,12 @@ export const createMongoGroupChatAction = async (
             }
 
             const fileInfo = getChatActionContext()?.saveFile
-                ? await getChatActionContext()!.saveFile!(avatarFile, "chat-group-avatar", ownerCircle._id as string, true)
+                ? await getChatActionContext()!.saveFile!(
+                      avatarFile,
+                      "chat-group-avatar",
+                      ownerCircle._id as string,
+                      true,
+                  )
                 : await saveFile(avatarFile, "chat-group-avatar", ownerCircle._id as string, true);
             picture = { url: fileInfo.url };
         }
@@ -1436,14 +2017,15 @@ export const contactCircleAdminsAction = async (
     }
 
     const circle = await authorizeCircleChatEntry(userDid, circleId, "write", {
-        loadCircle: async (id) => getChatActionContext()?.findCircle
-            ? getChatActionContext()!.findCircle!(id)
-            : getCircleById(id),
-        canRead: async (did, value) => canReadCircle(did, value, {
-            getMember: async (viewerDid, ownerId) => getChatActionContext()?.findCanonicalMember
-                ? getChatActionContext()!.findCanonicalMember!(viewerDid, ownerId)
-                : Members.findOne({ userDid: viewerDid, circleId: ownerId }),
-        }),
+        loadCircle: async (id) =>
+            getChatActionContext()?.findCircle ? getChatActionContext()!.findCircle!(id) : getCircleById(id),
+        canRead: async (did, value) =>
+            canReadCircle(did, value, {
+                getMember: async (viewerDid, ownerId) =>
+                    getChatActionContext()?.findCanonicalMember
+                        ? getChatActionContext()!.findCanonicalMember!(viewerDid, ownerId)
+                        : Members.findOne({ userDid: viewerDid, circleId: ownerId }),
+            }),
         assertWritable: assertCircleWritesAllowed,
     });
     if (!circle?._id) {
@@ -1660,7 +2242,7 @@ export const markConversationReadAction = async (
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "You need to be logged in." };
 
-    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
     if (!access.ok) return { success: false, message: access.message };
 
     let effectiveLastSeen = lastSeenMessageId;
@@ -1709,10 +2291,15 @@ export const markTopicReadAction = async (
     conversationId: string,
     topicId: string,
     lastSeenMessageId: string,
-): Promise<{ success: boolean; lastReadMessageId?: string | null; message?: string }> => {
+): Promise<{
+    success: boolean;
+    lastReadMessageId?: string | null;
+    readStatePersisted?: boolean;
+    message?: string;
+}> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
-    const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
+    const access = await resolveMongoConversationAccess(conversationId, userDid, "read");
     if (!access.ok) return { success: false, message: access.message };
     const normalizedTopicId = normalizeObjectIdHex(topicId);
     if (!normalizedTopicId) return { success: false, message: "Invalid topic" };
@@ -1723,6 +2310,22 @@ export const markTopicReadAction = async (
     if (!validatedCursor) return { success: false, message: "Invalid topic read boundary" };
     observeChatActionEffect("topic-read-state");
     await markTopicRead(userDid, conversationId, normalizedTopicId, validatedCursor);
+    try {
+        await acknowledgeTopicPmNotifications({
+            userDid,
+            conversationId,
+            topicId: normalizedTopicId,
+            lastReadMessageId: validatedCursor,
+        });
+    } catch (error) {
+        console.error("Failed to acknowledge topic PM notifications:", error);
+        return {
+            success: false,
+            lastReadMessageId: validatedCursor,
+            readStatePersisted: true,
+            message: "Topic read state was saved, but notification acknowledgement must be retried.",
+        };
+    }
     return { success: true, lastReadMessageId: validatedCursor };
 };
 
@@ -1808,10 +2411,14 @@ export const sendThreadReplyAction = async (
     conversationId: string,
     body: string,
     replyToMessageId?: string,
-): Promise<{ success: boolean; message?: string; messageId?: string }> => {
+    submissionId?: string,
+): Promise<{ success: boolean; message?: string; messageId?: string; createdAt?: Date; submissionId?: string }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
     if (!body.trim()) return { success: false, message: "Reply cannot be empty" };
+    if (submissionId && (submissionId.length < 8 || submissionId.length > 128)) {
+        return { success: false, message: "Invalid reply submission" };
+    }
     const access = await resolveMongoConversationAccess(conversationId, userDid, "write");
     if (!access.ok) return { success: false, message: access.message };
     if (access.conversation?.type === "announcement") {
@@ -1824,7 +2431,14 @@ export const sendThreadReplyAction = async (
     try {
         const { sendThreadReply } = await import("@/lib/data/mongo-chat");
         observeChatActionEffect("reply-create");
-        const doc = await sendThreadReply(threadId, conversationId, userDid, body.trim(), replyToMessageId);
+        const doc = await sendThreadReply(
+            threadId,
+            conversationId,
+            userDid,
+            body.trim(),
+            replyToMessageId,
+            submissionId,
+        );
         if (!doc?._id) return { success: false, message: "Topic not found for this conversation" };
         // Fire notifications (DM and circle-contact conversations only for now)
         try {
@@ -1835,11 +2449,18 @@ export const sendThreadReplyAction = async (
                 senderDid: userDid,
                 messageBody: body.trim(),
                 messageId: doc._id.toString(),
+                topicId: threadId,
+                idempotencyKey: submissionId ? `topic-reply:${submissionId}` : undefined,
             });
         } catch (notifError) {
             console.error("sendThreadReplyAction notification error:", notifError);
         }
-        return { success: true, messageId: doc._id.toString() };
+        return {
+            success: true,
+            messageId: doc._id.toString(),
+            createdAt: doc.createdAt,
+            submissionId: doc.submissionId,
+        };
     } catch (error) {
         console.error("sendThreadReplyAction error:", error);
         return { success: false, message: "Failed to send reply" };
@@ -1855,6 +2476,7 @@ export const fetchThreadRepliesAction = async (
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) return { success: false, message: access.message };
     try {
+        const conversationMetadata = (access.conversation as any)?.metadata as Record<string, unknown> | undefined;
         const { fetchThreadReplies } = await import("@/lib/data/mongo-chat");
         const threadStarter = await findThreadStarter(threadId, conversationId);
         if (!threadStarter) return { success: false, message: "Topic not found for this conversation" };
@@ -1879,7 +2501,15 @@ export const fetchThreadRepliesAction = async (
             const fullName = circle?.name || "";
             const firstName = fullName.trim().split(" ")[0] || circle?.handle || doc.senderDid;
             const replyDoc = doc.replyToMessageId ? replyById.get(doc.replyToMessageId) : undefined;
-            const replyAuthorCircle = replyDoc ? senderByDid.get(replyDoc.senderDid) : undefined;
+            const replyAuthorCircle = replyDoc
+                ? getCircleModerationStarterAuthor({
+                      conversationSource: conversationMetadata?.source,
+                      messageSource: replyDoc.source,
+                      messageVersion: replyDoc.version,
+                      senderDid: replyDoc.senderDid,
+                      realAuthor: senderByDid.get(replyDoc.senderDid),
+                  })
+                : undefined;
             const normalizedReplyAttachments = Array.isArray(replyDoc?.attachments)
                 ? replyDoc.attachments.map((attachment: ChatAttachment) => ({
                       ...attachment,
@@ -1903,6 +2533,7 @@ export const fetchThreadRepliesAction = async (
                           attachments: normalizedReplyAttachments,
                       }
                     : undefined,
+                submissionId: doc.submissionId,
             };
         });
 
@@ -1928,6 +2559,31 @@ export const listThreadsAction = async (
         console.error("listThreadsAction error:", error);
         return { success: false, message: "Failed to list threads" };
     }
+};
+
+export const getTopicSortPreferenceAction = async (
+    conversationId: string,
+): Promise<{ success: boolean; sortOrder?: "latest_activity" | "date_created"; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    return { success: true, sortOrder: await getTopicSortOrder(userDid, conversationId) };
+};
+
+export const setTopicSortPreferenceAction = async (
+    conversationId: string,
+    sortOrder: "latest_activity" | "date_created",
+): Promise<{ success: boolean; message?: string }> => {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) return { success: false, message: "Not authenticated" };
+    if (sortOrder !== "latest_activity" && sortOrder !== "date_created") {
+        return { success: false, message: "Invalid topic sort preference" };
+    }
+    const access = await resolveMongoConversationAccess(conversationId, userDid);
+    if (!access.ok) return { success: false, message: access.message };
+    await setTopicSortOrder(userDid, conversationId, sortOrder);
+    return { success: true };
 };
 
 export const fetchTopicStartersAction = async (
@@ -1977,8 +2633,16 @@ export const fetchTopicStartersAction = async (
                 (systemMetadata.source === "platform_admin" ||
                     (typeof (doc as any)?.broadcastId === "string" && ((doc as any).broadcastId as string).length > 0));
             const shouldUseSystemTemplateAuthor = isWelcomeSystemMessage || isPlatformAnnouncementMessage;
+            const presentedAuthor = getCircleModerationStarterAuthor({
+                conversationSource: conversationMetadata?.source,
+                messageSource: doc.source,
+                messageVersion: doc.version,
+                senderDid: doc.senderDid,
+                realAuthor: senderByDid.get(doc.senderDid),
+            });
             const author =
-                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : senderByDid.get(doc.senderDid)) ||
+                presentedAuthor ||
+                (shouldUseSystemTemplateAuthor ? fallbackSystemAuthor : undefined) ||
                 (isTemplateSystemMessage
                     ? fallbackSystemAuthor
                     : ({

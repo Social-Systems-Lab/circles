@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Circle } from "@/models/models";
 import { useAtom } from "jotai";
 import { imageGalleryAtom } from "@/lib/data/atoms";
+import { shouldUnoptimizeCircleAvatar } from "@/lib/utils/circle-avatar-image";
 
 type EditableImageProps = {
     id: string;
@@ -109,6 +110,7 @@ const EditableImage: React.FC<EditableImageProps> = ({
                 height={height}
                 fill={fill}
                 sizes={sizes}
+                unoptimized={shouldUnoptimizeCircleAvatar(currentSrc)}
                 onClick={imageClick}
             />
             <label

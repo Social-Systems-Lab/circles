@@ -19,7 +19,13 @@ import {
     GoalStage,
     Event,
 } from "@/models/models";
-import { DefaultNotificationSettings, Notifications, UserNotificationSettings } from "./db";
+import {
+    ChatConversationPreferences,
+    DefaultNotificationSettings,
+    Notifications,
+    UserNotificationSettings,
+} from "./db";
+import { filterMutedConversationRecipients } from "@/lib/chat/conversation-notification-mute";
 import { sanitizeObjectForJSON } from "../utils/sanitize";
 import { getUser, getUserPrivate } from "./user";
 import { getFeed, getPost } from "./feed";
@@ -33,6 +39,7 @@ import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 import { dispatchExternalNotifications } from "./external-notifications";
+import { getNotificationIdempotencyId } from "./notification-read";
 
 Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
 Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
@@ -169,6 +176,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
             return `${actorName} updated ${eventName}`;
         case "event_invitation":
             return `${actorName} invited you to ${eventName}`;
+        case "secret_circle_invitation":
+            return "You have received a private Circle invitation.";
         case "ranking_stale_reminder":
             return "Your ranking needs attention";
         case "ranking_grace_period_ended":
@@ -191,6 +200,8 @@ const buildNotificationBody = (type: string, payload: any): string => {
                 return `${actorName} offered help in ${circleName}`;
             }
             return `${actorName} sent you a direct message`;
+        case "circle_moderation_update":
+            return "A Circle moderation update is ready for review.";
         case "contact_request_received":
             return `${actorName} sent you a contact request`;
         default:
@@ -198,7 +209,11 @@ const buildNotificationBody = (type: string, payload: any): string => {
     }
 };
 
-const isNotificationEnabledForRecipient = async (type: string, recipientDid: string, payload: any): Promise<boolean> => {
+const isNotificationEnabledForRecipient = async (
+    type: string,
+    recipientDid: string,
+    payload: any,
+): Promise<boolean> => {
     const context = getNotificationPreferenceContext(type, payload, recipientDid);
     if (!context) {
         return true;
@@ -222,8 +237,13 @@ const isNotificationEnabledForRecipient = async (type: string, recipientDid: str
     return typeof defaultSetting?.defaultIsEnabled === "boolean" ? defaultSetting.defaultIsEnabled : true;
 };
 
-export async function sendNotifications(type: string, recipients: any[], payload: any) {
-    const uniqueRecipients = Array.from(
+export async function sendNotifications(
+    type: string,
+    recipients: any[],
+    payload: any,
+    options?: { idempotencyKey?: string },
+) {
+    let uniqueRecipients = Array.from(
         new Map(
             (recipients || [])
                 .filter((recipient) => typeof recipient?.did === "string" && recipient.did.length > 0)
@@ -232,8 +252,27 @@ export async function sendNotifications(type: string, recipients: any[], payload
     );
 
     if (uniqueRecipients.length === 0) {
-        return;
+        return [];
     }
+
+    const roomId = typeof payload?.roomId === "string" ? payload.roomId : "";
+    uniqueRecipients = await filterMutedConversationRecipients(
+        type,
+        roomId,
+        uniqueRecipients,
+        async (conversationId, recipientDids) =>
+            (
+                await ChatConversationPreferences.find(
+                    {
+                        conversationId,
+                        userDid: { $in: recipientDids },
+                        notificationsMuted: true,
+                    },
+                    { projection: { userDid: 1 } },
+                ).toArray()
+            ).map((preference) => preference.userDid),
+    );
+    if (uniqueRecipients.length === 0) return [];
 
     const createdAt = new Date();
     const notificationContent = sanitizeObjectForJSON({
@@ -257,13 +296,30 @@ export async function sendNotifications(type: string, recipients: any[], payload
     }
 
     if (!docs.length) {
-        return;
+        return [];
     }
 
-    await Notifications.insertMany(docs as any[]);
-    void dispatchExternalNotifications(docs as any[]).catch((error) => {
-        console.error("External notification dispatch failed:", error);
-    });
+    const insertedDocs = [];
+    const persistentIds: string[] = [];
+    for (const doc of docs) {
+        if (!options?.idempotencyKey) {
+            insertedDocs.push(doc);
+            continue;
+        }
+        const id = getNotificationIdempotencyId(type, options.idempotencyKey, doc.userId);
+        const result = await Notifications.updateOne({ _id: id } as any, { $setOnInsert: { ...doc, _id: id } } as any, {
+            upsert: true,
+        });
+        persistentIds.push(id);
+        if (result.upsertedCount === 1) insertedDocs.push({ ...doc, _id: id });
+    }
+    if (!options?.idempotencyKey && insertedDocs.length) await Notifications.insertMany(insertedDocs as any[]);
+    if (insertedDocs.length) {
+        void dispatchExternalNotifications(insertedDocs as any[]).catch((error) => {
+            console.error("External notification dispatch failed:", error);
+        });
+    }
+    return persistentIds;
 }
 
 type NotificationQueryOptions = {
@@ -327,7 +383,8 @@ export async function sendVerificationRequestNotification(
             admins,
             sanitizeObjectForJSON({
                 user,
-                messageBody: options?.messageBody || `User ${user.name} (@${user.handle}) has requested account verification.`,
+                messageBody:
+                    options?.messageBody || `User ${user.name} (@${user.handle}) has requested account verification.`,
                 url: options?.url || `/admin?tab=verification-requests`,
             }),
         );
@@ -1664,9 +1721,9 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
             console.log("🔔 [NOTIFY] No recipients found to notify for task review submission:", task._id);
             return;
         }
-        const reviewerUserPrivates = (await Promise.all(Array.from(recipientDids).map((did) => getUserPrivate(did)))).filter(
-            (up): up is UserPrivate => up !== null,
-        );
+        const reviewerUserPrivates = (
+            await Promise.all(Array.from(recipientDids).map((did) => getUserPrivate(did)))
+        ).filter((up): up is UserPrivate => up !== null);
 
         if (reviewerUserPrivates.length === 0) {
             console.log("🔔 [NOTIFY] No reviewers (UserPrivate) found to notify for task:", task._id); // Updated message
@@ -1691,11 +1748,7 @@ export async function notifyTaskSubmittedForReview(task: TaskDisplay, submitter:
     }
 }
 
-export async function notifyTaskChangesRequested(
-    task: TaskDisplay,
-    requester: Circle,
-    note?: string,
-): Promise<void> {
+export async function notifyTaskChangesRequested(task: TaskDisplay, requester: Circle, note?: string): Promise<void> {
     try {
         if (!task.assignedTo || task.assignedTo === requester.did) {
             return;
@@ -1720,7 +1773,6 @@ export async function notifyTaskChangesRequested(
                 reviewRequestedChangesNote: note,
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskChangesRequested:", error);
     }
@@ -1806,7 +1858,6 @@ export async function notifyTaskAssigned(task: TaskDisplay, assigner: Circle, as
                 assigneeName: assignee.name, // Add assignee name for context
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskAssigned:", error); // Updated message
     }
@@ -1848,7 +1899,11 @@ export async function notifyTaskClaimSubmitted(task: TaskDisplay, claimant: Circ
     }
 }
 
-export async function notifyTaskClaimApproved(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+export async function notifyTaskClaimApproved(
+    task: TaskDisplay,
+    reviewer: Circle,
+    claimant: UserPrivate,
+): Promise<void> {
     try {
         if (reviewer.did === claimant.did) {
             return;
@@ -1872,7 +1927,11 @@ export async function notifyTaskClaimApproved(task: TaskDisplay, reviewer: Circl
     }
 }
 
-export async function notifyTaskClaimDeclined(task: TaskDisplay, reviewer: Circle, claimant: UserPrivate): Promise<void> {
+export async function notifyTaskClaimDeclined(
+    task: TaskDisplay,
+    reviewer: Circle,
+    claimant: UserPrivate,
+): Promise<void> {
     try {
         if (reviewer.did === claimant.did) {
             return;
@@ -2050,7 +2109,6 @@ export async function notifyTaskVerified(task: TaskDisplay, verifier: Circle): P
                 taskTitle: task.title,
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskVerified:", error);
     }
@@ -2113,7 +2171,6 @@ export async function notifyTaskStatusChanged( // Renamed function
                 taskNewStage: task.stage, // Renamed property
             }),
         );
-
     } catch (error) {
         console.error("🔔 [NOTIFY] Error in notifyTaskStatusChanged:", error); // Updated message
     }

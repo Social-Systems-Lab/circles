@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Circle } from "@/models/models";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -11,13 +10,13 @@ import {
 } from "@/components/modules/members/actions";
 
 type AdminRoleRemovalBannerProps = {
-    circle: Circle;
+    circleId: string;
     requestId: string;
     requesterName?: string;
 };
 
 export default function AdminRoleRemovalBanner({
-    circle,
+    circleId,
     requestId,
     requesterName,
 }: AdminRoleRemovalBannerProps): React.ReactElement {
@@ -31,8 +30,8 @@ export default function AdminRoleRemovalBanner({
         startTransition(async () => {
             const result =
                 nextDecision === "approve"
-                    ? await approveAdminRoleRemovalRequestAction(requestId, circle)
-                    : await declineAdminRoleRemovalRequestAction(requestId, circle);
+                    ? await approveAdminRoleRemovalRequestAction(requestId, circleId)
+                    : await declineAdminRoleRemovalRequestAction(requestId, circleId);
 
             toast({
                 title: result.success ? "Updated" : "Error",
@@ -63,18 +62,10 @@ export default function AdminRoleRemovalBanner({
                     ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button
-                        variant="outline"
-                        disabled={isPending}
-                        onClick={() => runAction("approve")}
-                    >
+                    <Button variant="outline" disabled={isPending} onClick={() => runAction("approve")}>
                         {decision === "approve" ? "Approving..." : "Approve"}
                     </Button>
-                    <Button
-                        variant="destructive"
-                        disabled={isPending}
-                        onClick={() => runAction("decline")}
-                    >
+                    <Button variant="destructive" disabled={isPending} onClick={() => runAction("decline")}>
                         {decision === "decline" ? "Declining..." : "Decline"}
                     </Button>
                 </div>

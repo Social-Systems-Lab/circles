@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import RichText from "../feeds/RichText";
 import { useRouter } from "next/navigation";
-import { findOrCreateDMRoom } from "./actions";
+import { canInviteToProjectByMessageAction } from "./actions";
 import { DmChatModal } from "../chat/dm-chat-modal";
 import { trackEvent } from "@/app/api/analytics/actions";
 import { getInterestLabel } from "@/lib/data/interests";
@@ -33,8 +33,8 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
 
     const onInvite = async () => {
         trackEvent("invite_to_project_click", { circleId: circle._id });
-        const room = await findOrCreateDMRoom(circle);
-        if (room) {
+        const allowed = await canInviteToProjectByMessageAction(circle.did || "");
+        if (allowed) {
             setInitialMessage(`Saw your ‘What I want to engage in’ and think you’d be great for [project name] …`);
             setShowDM(true);
         }

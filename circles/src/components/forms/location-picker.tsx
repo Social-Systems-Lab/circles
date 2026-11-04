@@ -28,17 +28,26 @@ interface LocationPickerProps {
     value?: Location;
     onChange: (value: Location) => void;
     compact?: boolean; // Add compact mode option
+    personalProfile?: boolean;
 }
 
-const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compact = false }) => {
+const LocationPicker: React.FC<LocationPickerProps> = ({
+    value,
+    onChange,
+    compact = false,
+    personalProfile = false,
+}) => {
     const map = useRef<mapboxgl.Map | null>(null);
     const mapContainer = useRef<HTMLDivElement | null>(null);
     const mapMarker = useRef<mapboxgl.Marker | null>(null);
     const [searchOptions, setSearchOptions] = useState<Option[]>([]);
     // Default to Exact precision (4), regardless of whether location is set
-    const [precision, setPrecision] = useState<PrecisionLevel>((value?.precision as PrecisionLevel) ?? 4);
+    const [precision, setPrecision] = useState<PrecisionLevel>(
+        personalProfile ? 4 : ((value?.precision as PrecisionLevel) ?? 4),
+    );
     const [mapboxKey] = useAtom(mapboxKeyAtom);
     const [isLoading, setIsLoading] = useState(false);
+    const [currentAreaMessage, setCurrentAreaMessage] = useState("");
     const [autoCompleteValue, setAutoCompleteValue] = useState<Option>({
         value: value?.lngLat ? `${value.lngLat.lat},${value.lngLat.lng}` : "",
         label: "",
@@ -136,6 +145,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
 
     const updateLocation = async (lngLat: LngLat, flyTo: boolean) => {
         if (!map.current || !mapMarker.current) return;
+        setCurrentAreaMessage("");
 
         try {
             const response = await fetch(
@@ -188,7 +198,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     useEffect(() => {
         if (value && value.lngLat) {
             // Only update if we have an actual location and precision has changed
-            if (value.precision !== precision) {
+            if (!personalProfile && value.precision !== precision) {
                 const updatedValue = { ...value, precision };
                 onChange(updatedValue);
             }
@@ -242,13 +252,35 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
     };
 
     const handleUseCurrentLocation = () => {
-        if (!map) return;
-
-        navigator.geolocation.getCurrentPosition((position) => {
-            const { latitude, longitude } = position.coords;
-            updateLocation({ lng: longitude, lat: latitude }, true);
-            setIsLocationConfirmed(true);
-        });
+        setCurrentAreaMessage("");
+        if (!navigator.geolocation) {
+            setCurrentAreaMessage(
+                "Location access is not available in this browser. Search for a place or select one on the map.",
+            );
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                if (personalProfile) {
+                    if (!map.current) {
+                        setCurrentAreaMessage("The map is still loading. Please try again in a moment.");
+                        return;
+                    }
+                    map.current.flyTo({ center: [longitude, latitude], zoom: 13.5 });
+                    setCurrentAreaMessage(
+                        "The map is centered near you. Select a public place to set your profile pin.",
+                    );
+                    return;
+                }
+                updateLocation({ lng: longitude, lat: latitude }, true);
+                setIsLocationConfirmed(true);
+            },
+            () =>
+                setCurrentAreaMessage(
+                    "We couldn’t access your location. You can search for a place or select one on the map.",
+                ),
+        );
     };
 
     const getDisplayLocation = useCallback((location: Location | undefined, precisionLevel: PrecisionLevel) => {
@@ -300,15 +332,20 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ value, onChange, compac
             />
             <Button type="button" onClick={handleUseCurrentLocation}>
                 <MapPin className="mr-2 h-4 w-4" />
-                Use Current Location
+                {personalProfile ? "Find My Current Area" : "Use Current Location"}
             </Button>
+            {currentAreaMessage && (
+                <p role="status" className="text-sm text-muted-foreground">
+                    {currentAreaMessage}
+                </p>
+            )}
             {/* Adjust map height based on compact mode */}
             <div className={`relative w-full ${compact ? "h-[200px]" : "h-[300px]"}`}>
                 <div ref={mapContainer} style={{ width: "100%", height: "100%" }}></div>
             </div>
 
-            {/* Only show precision controls if not in compact mode */}
-            {!compact && (
+            {/* Personal locations use one deliberately selected public pin; precision remains for other entity types. */}
+            {!compact && !personalProfile && (
                 <>
                     <div className="w-full max-w-sm space-y-4">
                         <div className="space-y-2">

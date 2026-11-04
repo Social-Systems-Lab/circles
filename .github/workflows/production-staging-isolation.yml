@@ -1,0 +1,24 @@
+name: Production Isolation
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  production-isolation:
+    name: production-isolation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Reject staging-only runtime code
+        run: ./circles/scripts/check-production-staging-isolation.sh

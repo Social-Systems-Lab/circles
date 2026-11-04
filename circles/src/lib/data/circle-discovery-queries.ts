@@ -1,6 +1,26 @@
 import type { Circle, CircleType } from "@/models/models";
 import type { ObjectId } from "mongodb";
 
+export const getCircleRelationshipToCurrentCircle = (
+    circle: Pick<Circle, "parentCircleId" | "affiliatedCircleIds">,
+    circleId: string,
+): "child" | "affiliate" | undefined => {
+    if (circle.parentCircleId === circleId) return "child";
+    if (circle.affiliatedCircleIds?.includes(circleId)) return "affiliate";
+    return undefined;
+};
+
+export const canViewUnpublishedInventoryCircle = async (
+    circle: Pick<Circle, "_id" | "createdBy">,
+    viewerDid: string | undefined,
+    canEditCircle: (circleId: string) => Promise<boolean>,
+): Promise<boolean> => {
+    if (!viewerDid) return false;
+    if (circle.createdBy === viewerDid) return true;
+    const circleId = circle._id?.toString();
+    return Boolean(circleId && (await canEditCircle(circleId)));
+};
+
 export const sanitizeCircleDiscoveryResult = <T extends Circle>(circle: T): T => {
     const {
         parentCircleId: _parentCircleId,
@@ -68,15 +88,38 @@ export const buildCommunityRelatedCirclesQuery = (
     circleId: string,
     discoveryQuery: Record<string, unknown>,
     sdgHandles: string[] = [],
-) => ({
-    $and: [
-        { circleType: "circle" },
-        getPublishedCircleQuery(),
-        discoveryQuery,
-        { $or: [{ parentCircleId: circleId }, { affiliatedCircleIds: circleId }] },
-        ...(sdgHandles.length > 0 ? [{ causes: { $in: sdgHandles } }] : []),
-    ],
-});
+    includeCreatedBy?: string,
+    includeMemberCircleIds: ObjectId[] = [],
+): Record<string, any> => {
+    const relationshipScopes = [{ parentCircleId: circleId }, { affiliatedCircleIds: circleId }];
+    const inventoryScopes: Record<string, unknown>[] = [];
+    if (includeCreatedBy) inventoryScopes.push({ createdBy: includeCreatedBy });
+    if (includeMemberCircleIds.length > 0) inventoryScopes.push({ _id: { $in: includeMemberCircleIds } });
+    const allScopes = [...relationshipScopes, ...inventoryScopes];
+    const publicationScope =
+        inventoryScopes.length > 0
+            ? {
+                  $or: [
+                      { $and: [getPublishedCircleQuery(), { $or: allScopes }] },
+                      {
+                          $and: [
+                              { publishStatus: { $in: ["draft", "pending_verification"] } },
+                              { $or: inventoryScopes },
+                          ],
+                      },
+                  ],
+              }
+            : { $and: [getPublishedCircleQuery(), { $or: relationshipScopes }] };
+
+    return {
+        $and: [
+            { circleType: "circle" },
+            discoveryQuery,
+            publicationScope,
+            ...(sdgHandles.length > 0 ? [{ causes: { $in: sdgHandles } }] : []),
+        ],
+    };
+};
 
 export const composeSearchCandidateQuery = (
     candidateQuery: Record<string, unknown>,

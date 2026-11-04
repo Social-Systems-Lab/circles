@@ -1,14 +1,32 @@
+import crypto from "crypto";
 import { ObjectId } from "mongodb";
 import { ChatRoomDisplay, Circle } from "@/models/models";
-import { ChatAttachment, ChatConversation, ChatMessageDoc, ChatReaction, ChatReadState } from "@/lib/chat/mongo-types";
-import { ChatConversations, ChatMessageDocs, ChatReadStates, ChatRoomMembers, ChatTopicReadStates, Circles } from "./db";
+import {
+    ChatAttachment,
+    ChatConversation,
+    ChatConversationPreference,
+    ChatMessageDoc,
+    ChatReaction,
+    ChatReadState,
+} from "@/lib/chat/mongo-types";
+import {
+    ChatConversations,
+    ChatConversationPreferences,
+    ChatMessageDocs,
+    ChatReadStates,
+    ChatRoomMembers,
+    ChatTopicReadStates,
+    Circles,
+} from "./db";
 import { getCircleByHandle, getCircleById, getCirclesByDids } from "./circle";
 import { getKamooniSystemSender, SystemSenderIdentity } from "@/config/system-sender";
 import { WelcomeMessageConfig, WELCOME_MESSAGE } from "@/config/welcome-message";
 import { buildSystemMessageMetadata } from "@/lib/chat/system-messages";
 import { loadAuthorizedConversationCandidates } from "@/lib/chat/conversation-access-batch";
 import { buildLatestConversationMessageLookup } from "@/lib/chat/conversation-read-state";
-import { buildUnreadMessagesQuery } from "@/lib/chat/unread-counts";
+import { compareMessagePositions, type MessagePosition } from "@/lib/chat/message-position";
+import { buildThreadActivityCompareAndSetFilter } from "@/lib/chat/topic-mutations";
+import { buildMessagesAfterPositionQuery } from "@/lib/chat/message-position-query";
 import {
     CHAT_READ_STATE_VERSION,
     normalizeObjectIdHex,
@@ -19,20 +37,8 @@ import {
 } from "@/lib/chat/topic-read-state";
 import { buildLegacyLooseMessageQuery } from "@/lib/chat/legacy-messages";
 import { buildConversationUpdatedAtCompareAndSetFilter } from "@/lib/chat/topic-mutations";
-import {
-    buildMonotonicLegacyCursorUpdate,
-    buildReadStateV2InitializationOperation,
-    resolveHistoricalReadBoundary,
-} from "@/lib/chat/chat-read-state-v2";
-
-// High-value indexes for chat list/message paths.
-ChatConversations?.createIndex({ participants: 1, type: 1, archived: 1, updatedAt: -1 });
-ChatConversations?.createIndex({ circleId: 1, type: 1, archived: 1 });
-ChatRoomMembers?.createIndex({ userDid: 1, chatRoomId: 1 });
-ChatRoomMembers?.createIndex({ chatRoomId: 1 });
-ChatMessageDocs?.createIndex({ conversationId: 1, _id: 1 });
-ChatReadStates?.createIndex({ userDid: 1, conversationId: 1 });
-ChatMessageDocs?.createIndex({ conversationId: 1, threadId: 1, _id: 1 });
+import { buildReadStateV2InitializationOperation, resolveHistoricalReadBoundary } from "@/lib/chat/chat-read-state-v2";
+import { resolveCanonicalDm } from "@/lib/chat/canonical-dm";
 
 const toObjectId = (value?: string | null) => {
     if (!value) return null;
@@ -196,26 +202,7 @@ export const findConversationByHandleForUser = async (
 };
 
 export const findOrCreateDmConversation = async (userA: Circle, userB: Circle): Promise<ChatConversation> => {
-    const participants = [userA.did!, userB.did!].sort();
-    const existing = (await ChatConversations.findOne({
-        type: "dm",
-        participants: { $all: participants },
-        archived: { $ne: true },
-    })) as ChatConversation | null;
-
-    if (existing) {
-        return normalizeConversation(existing);
-    }
-
-    const handle = `dm-${participants[0]}-${participants[1]}`;
-    return createConversation({
-        type: "dm",
-        name: handle,
-        handle,
-        participants,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    });
+    return normalizeConversation(await resolveCanonicalDm(userA.did!, userB.did!, { provisional: true }));
 };
 
 export const ensureWelcomeMessageForNewUser = async (
@@ -239,18 +226,35 @@ export const ensureWelcomeMessageForNewUser = async (
         archived: { $ne: true },
     })) as ChatConversation | null;
 
-    const conversation =
-        existingConversation ||
-        (await createConversation({
-            type: "dm",
-            name: config.threadName,
-            handle: welcomeHandle,
-            participants: [userDid],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            picture: { url: canonicalSender.avatarUrl },
-            metadata: welcomeMetadata,
-        }));
+    let conversation = existingConversation;
+    if (!conversation) {
+        const deterministicId = new ObjectId(
+            crypto.createHash("sha256").update(welcomeHandle).digest("hex").slice(0, 24),
+        );
+        try {
+            conversation = await createConversation({
+                _id: deterministicId,
+                type: "dm",
+                name: config.threadName,
+                handle: welcomeHandle,
+                participants: [userDid],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                picture: { url: canonicalSender.avatarUrl },
+                metadata: welcomeMetadata,
+            });
+        } catch (error) {
+            if ((error as { code?: number }).code !== 11000) throw error;
+            conversation = (await ChatConversations.findOne({ _id: deterministicId })) as ChatConversation | null;
+            if (
+                !conversation ||
+                conversation.handle !== welcomeHandle ||
+                !conversation.participants?.includes(userDid)
+            ) {
+                throw error;
+            }
+        }
+    }
 
     const conversationId = String(conversation._id);
     const conversationObjectId = toObjectId(conversationId);
@@ -296,7 +300,14 @@ export const ensureWelcomeMessageForNewUser = async (
         return { conversationId, messageCreated: false };
     }
 
-    await createMessage({
+    const idempotentWelcome = await createIdempotentMessage({
+        _id: new ObjectId(
+            crypto
+                .createHash("sha256")
+                .update(`welcome-message:${userDid}:${config.source}`)
+                .digest("hex")
+                .slice(0, 24),
+        ),
         conversationId,
         senderDid: systemSenderDid,
         body: config.markdown,
@@ -305,9 +316,10 @@ export const ensureWelcomeMessageForNewUser = async (
         source: config.source,
         version: config.version,
         system: welcomeSystemMetadata,
+        submissionId: `welcome:${userDid}:${config.source}`,
     });
 
-    return { conversationId, messageCreated: true };
+    return { conversationId, messageCreated: idempotentWelcome.created };
 };
 
 export const ensureConversationForCircle = async (circleId: string): Promise<ChatConversation> => {
@@ -337,9 +349,9 @@ export const mapConversationsToChatRoomDisplays = async (
     const circleIdsToLoad = Array.from(
         new Set(conversations.map((conversation) => conversation.circleId).filter(Boolean) as string[]),
     );
-    const loadedOwnerCircles = preloadedOwnerCircles ?? (await Promise.all(circleIdsToLoad.map(getCircleById))).filter(
-        (circle): circle is Circle => !!circle,
-    );
+    const loadedOwnerCircles =
+        preloadedOwnerCircles ??
+        (await Promise.all(circleIdsToLoad.map(getCircleById))).filter((circle): circle is Circle => !!circle);
     const circleById = new Map(loadedOwnerCircles.map((circle) => [circle._id.toString(), circle]));
 
     return conversations.map((conversation) => {
@@ -386,6 +398,7 @@ export const mapConversationsToChatRoomDisplays = async (
             conversationType,
             repliesDisabled,
             metadata: conversation.metadata,
+            updatedAt: conversation.updatedAt,
         } as ChatRoomDisplay;
     });
 };
@@ -394,17 +407,25 @@ export const mapConversationsToChatRoomDisplays = async (
 export const listConversationCandidatesForUser = async (
     userDid: string,
     canonicalCircleIds: string[],
+    view: "active" | "archived" = "active",
 ): Promise<Array<ChatConversation & { _id: ObjectId }>> => {
     const conversations = (await ChatConversations.find({
         archived: { $ne: true },
-        $or: [
-            { type: "dm", participants: userDid },
-            { type: { $ne: "dm" }, participants: userDid },
-            { type: { $ne: "dm" }, circleId: { $in: canonicalCircleIds } },
-        ],
+        "metadata.dmProvisional": { $ne: true },
+        ...(view === "archived"
+            ? { type: "dm", participants: userDid, archivedBy: userDid }
+            : {
+                  $or: [
+                      { type: "dm", participants: userDid, archivedBy: { $ne: userDid } },
+                      { type: { $ne: "dm" }, participants: userDid },
+                      { type: { $ne: "dm" }, circleId: { $in: canonicalCircleIds } },
+                  ],
+              }),
     }).toArray()) as ChatConversation[];
     return Array.from(
-        new Map(conversations.map((conversation) => [conversation._id.toString(), normalizeConversation(conversation)])).values(),
+        new Map(
+            conversations.map((conversation) => [conversation._id.toString(), normalizeConversation(conversation)]),
+        ).values(),
     ) as Array<ChatConversation & { _id: ObjectId }>;
 };
 
@@ -448,7 +469,7 @@ export const listConversationsForUser = async (userDid: string, circleIds: strin
 export const fetchRecentMessages = async (conversationId: string, limit: number = 50): Promise<ChatMessageDoc[]> => {
     // Fetch the most recent messages by sorting descending, then reverse for display order
     const messages = (await ChatMessageDocs.find({ conversationId, threadId: { $exists: false } })
-        .sort({ _id: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .limit(limit)
         .toArray()) as ChatMessageDoc[];
 
@@ -465,7 +486,7 @@ export const fetchRecentMessages = async (conversationId: string, limit: number 
 
 export const fetchTopicStarters = async (conversationId: string): Promise<ChatMessageDoc[]> => {
     const docs = (await ChatMessageDocs.find({ conversationId, thread: { $exists: true } })
-        .sort({ createdAt: 1 })
+        .sort({ createdAt: 1, _id: 1 })
         .toArray()) as ChatMessageDoc[];
     return docs.map((message) => {
         if (message._id) {
@@ -497,13 +518,30 @@ export const fetchMessagesSince = async (
     sinceId?: string,
     limit: number = 50,
 ): Promise<ChatMessageDoc[]> => {
-    const query: any = { conversationId };
+    let query: any = { conversationId };
     const sinceObjectId = toObjectId(sinceId);
     if (sinceObjectId) {
-        query._id = { $gt: sinceObjectId };
+        const cursor = await ChatMessageDocs.findOne(
+            { _id: sinceObjectId, conversationId },
+            { projection: { _id: 1, createdAt: 1 } },
+        );
+        if (!cursor) {
+            const recent = (await ChatMessageDocs.find({ conversationId })
+                .sort({ createdAt: -1, _id: -1 })
+                .limit(limit)
+                .toArray()) as ChatMessageDoc[];
+            return recent.reverse().map((message) => ({ ...message, _id: message._id?.toString() }));
+        }
+        query = {
+            conversationId,
+            ...buildMessagesAfterPositionQuery({ id: cursor._id.toString(), createdAt: cursor.createdAt }),
+        };
     }
 
-    const messages = (await ChatMessageDocs.find(query).sort({ _id: 1 }).limit(limit).toArray()) as ChatMessageDoc[];
+    const messages = (await ChatMessageDocs.find(query)
+        .sort({ createdAt: 1, _id: 1 })
+        .limit(limit)
+        .toArray()) as ChatMessageDoc[];
 
     return messages.map((message) => {
         if (message._id) {
@@ -522,15 +560,105 @@ export const getLatestMessageIdForConversation = async (conversationId: string):
     return latest?._id ? latest._id.toString() : null;
 };
 
+export class PersistedChatMessageActivityError extends Error {
+    constructor(
+        public readonly persistedMessage: ChatMessageDoc,
+        cause: unknown,
+    ) {
+        super("Message was saved, but chat activity could not be updated");
+        this.name = "PersistedChatMessageActivityError";
+        (this as Error & { cause?: unknown }).cause = cause;
+    }
+}
+
+export const refreshPersistedMessageActivity = async (message: ChatMessageDoc): Promise<void> => {
+    if (message.threadId) {
+        const persistedReplyCount = await ChatMessageDocs.countDocuments({
+            conversationId: message.conversationId,
+            threadId: message.threadId,
+        });
+        await ChatMessageDocs.updateOne(
+            {
+                _id: new ObjectId(message.threadId),
+                conversationId: message.conversationId,
+                thread: { $exists: true },
+                "thread.deletingAt": { $exists: false },
+            },
+            {
+                $max: {
+                    "thread.updatedAt": message.createdAt,
+                    "thread.replyCount": persistedReplyCount,
+                },
+            },
+        );
+    }
+    await ChatConversations.updateOne(
+        {
+            _id: new ObjectId(message.conversationId),
+            $or: [{ updatedAt: { $exists: false } }, { updatedAt: { $lt: message.createdAt } }],
+        },
+        {
+            $max: { updatedAt: message.createdAt },
+            $unset: { "metadata.dmProvisional": "" },
+            $pull: { archivedBy: { $ne: message.senderDid } },
+        },
+    );
+};
+
 export const createMessage = async (message: ChatMessageDoc): Promise<ChatMessageDoc> => {
     const result = await ChatMessageDocs.insertOne(message);
+    const persistedMessage = { ...message, _id: result.insertedId.toString() };
     // Why this broke: conversation.updatedAt was never bumped on message send,
     // so new DMs never appeared active in the chat list on prod.
-    await ChatConversations.updateOne(
-        { _id: new ObjectId(message.conversationId) },
-        { $set: { updatedAt: new Date() } },
-    );
-    return { ...message, _id: result.insertedId.toString() };
+    try {
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(message.conversationId) },
+            {
+                $set: { updatedAt: new Date() },
+                $unset: { "metadata.dmProvisional": "" },
+                $pull: { archivedBy: { $ne: message.senderDid } },
+            },
+        );
+    } catch (error) {
+        throw new PersistedChatMessageActivityError(persistedMessage, error);
+    }
+    return persistedMessage;
+};
+
+export const createIdempotentMessage = async (
+    message: ChatMessageDoc & { submissionId: string },
+): Promise<{ message: ChatMessageDoc; created: boolean }> => {
+    const matchesSubmission = (existing: ChatMessageDoc): boolean =>
+        existing.conversationId === message.conversationId &&
+        existing.senderDid === message.senderDid &&
+        existing.body === message.body &&
+        (existing.replyToMessageId || undefined) === (message.replyToMessageId || undefined) &&
+        !existing.threadId;
+    const findExisting = async (): Promise<ChatMessageDoc | null> => {
+        const existing = (await ChatMessageDocs.findOne({
+            senderDid: message.senderDid,
+            submissionId: message.submissionId,
+        })) as ChatMessageDoc | null;
+        if (!existing) return null;
+        if (!matchesSubmission(existing)) throw new Error("Message submission id was already used for another message");
+        return { ...existing, _id: existing._id?.toString() };
+    };
+
+    const existing = await findExisting();
+    if (existing) {
+        await refreshPersistedMessageActivity(existing);
+        return { message: existing, created: false };
+    }
+
+    try {
+        return { message: await createMessage(message), created: true };
+    } catch (error: any) {
+        if (error?.code !== 11000) throw error;
+        const recovered = await findExisting();
+        if (!recovered) throw error;
+        await refreshPersistedMessageActivity(recovered);
+        return { message: recovered, created: false };
+    }
 };
 
 export const updateMessage = async (messageId: string, userDid: string, body: string): Promise<boolean> => {
@@ -667,46 +795,213 @@ export const deleteMessage = async (messageId: string, userDid: string): Promise
 
     const result = await ChatMessageDocs.deleteOne({ _id: objectId, senderDid: userDid });
     if (result.deletedCount > 0 && message.threadId && message.conversationId) {
-        const threadStarter = (await ChatMessageDocs.findOne(
-            { _id: new ObjectId(message.threadId), conversationId: message.conversationId, thread: { $exists: true } },
-            { projection: { thread: 1 } },
-        )) as ChatMessageDoc | null;
-        const nextReplyCount = Math.max(((threadStarter?.thread?.replyCount as number | undefined) || 0) - 1, 0);
-
+        const topicObjectId = new ObjectId(message.threadId);
         await ChatMessageDocs.updateOne(
-            { _id: new ObjectId(message.threadId), conversationId: message.conversationId, thread: { $exists: true } },
-            {
-                $set: {
-                    "thread.updatedAt": new Date(),
-                    "thread.replyCount": nextReplyCount,
+            { _id: topicObjectId, conversationId: message.conversationId, thread: { $exists: true } },
+            [
+                {
+                    $set: {
+                        "thread.replyCount": {
+                            $max: [{ $subtract: [{ $ifNull: ["$thread.replyCount", 0] }, 1] }, 0],
+                        },
+                    },
                 },
-            },
+            ],
         );
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            const threadStarter = (await ChatMessageDocs.findOne(
+                { _id: topicObjectId, conversationId: message.conversationId, thread: { $exists: true } },
+                { projection: { thread: 1 } },
+            )) as ChatMessageDoc | null;
+            if (!threadStarter?.thread) break;
+
+            const latestRemainingReply = (await ChatMessageDocs.findOne(
+                { conversationId: message.conversationId, threadId: message.threadId },
+                { sort: { createdAt: -1, _id: -1 }, projection: { createdAt: 1 } },
+            )) as Pick<ChatMessageDoc, "createdAt"> | null;
+            const update = await ChatMessageDocs.updateOne(
+                buildThreadActivityCompareAndSetFilter(
+                    topicObjectId,
+                    message.conversationId,
+                    threadStarter.thread.updatedAt,
+                ),
+                {
+                    $set: {
+                        "thread.updatedAt": latestRemainingReply?.createdAt || threadStarter.thread.createdAt,
+                    },
+                },
+            );
+            if (update.modifiedCount === 1 || update.matchedCount === 1) return true;
+        }
+        return true;
     }
     return result.deletedCount > 0;
+};
+
+export const getTopicSortOrder = async (
+    userDid: string,
+    conversationId: string,
+): Promise<"latest_activity" | "date_created"> => {
+    const preference = await ChatConversationPreferences.findOne(
+        { userDid, conversationId },
+        { projection: { topicSortOrder: 1 } },
+    );
+    return preference?.topicSortOrder === "date_created" ? "date_created" : "latest_activity";
+};
+
+const setConversationPreferenceFields = async (
+    userDid: string,
+    conversationId: string,
+    fields: Partial<Pick<ChatConversationPreference, "topicSortOrder" | "notificationsMuted">>,
+): Promise<void> => {
+    const now = new Date();
+    try {
+        await ChatConversationPreferences.updateOne(
+            { userDid, conversationId },
+            {
+                $set: { ...fields, updatedAt: now },
+                $setOnInsert: { userDid, conversationId, createdAt: now },
+            },
+            { upsert: true },
+        );
+    } catch (error: any) {
+        if (error?.code !== 11000) throw error;
+        await ChatConversationPreferences.updateOne(
+            { userDid, conversationId },
+            { $set: { ...fields, updatedAt: now } },
+        );
+    }
+};
+
+export const setTopicSortOrder = async (
+    userDid: string,
+    conversationId: string,
+    topicSortOrder: "latest_activity" | "date_created",
+): Promise<void> => {
+    await setConversationPreferenceFields(userDid, conversationId, { topicSortOrder });
+};
+
+export const getConversationNotificationsMuted = async (userDid: string, conversationId: string): Promise<boolean> =>
+    (await ChatConversationPreferences.findOne({ userDid, conversationId }, { projection: { notificationsMuted: 1 } }))
+        ?.notificationsMuted === true;
+
+export const getConversationNotificationMutePreferences = async (
+    userDid: string,
+    conversationIds: string[],
+): Promise<Record<string, boolean>> => {
+    const uniqueConversationIds = Array.from(new Set(conversationIds.filter(Boolean)));
+    if (!uniqueConversationIds.length) return {};
+    const preferences = await ChatConversationPreferences.find(
+        {
+            userDid,
+            conversationId: { $in: uniqueConversationIds },
+            notificationsMuted: true,
+        },
+        { projection: { conversationId: 1 } },
+    ).toArray();
+    return Object.fromEntries(preferences.map((preference) => [preference.conversationId, true]));
+};
+
+export const setConversationNotificationsMuted = async (
+    userDid: string,
+    conversationId: string,
+    notificationsMuted: boolean,
+): Promise<void> => {
+    await setConversationPreferenceFields(userDid, conversationId, { notificationsMuted });
 };
 
 export const toggleReaction = async (
     messageId: string,
     userDid: string,
     emoji: string,
-): Promise<ChatReaction[] | null> => {
+): Promise<{ reactions: ChatReaction[]; added: boolean } | null> => {
     const objectId = toObjectId(messageId);
     if (!objectId) return null;
-    const message = (await ChatMessageDocs.findOne({ _id: objectId })) as ChatMessageDoc | null;
-    if (!message) return null;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const message = (await ChatMessageDocs.findOne(
+            { _id: objectId },
+            { projection: { reactions: 1 } },
+        )) as ChatMessageDoc | null;
+        if (!message) return null;
 
-    const reactions = message.reactions ? [...message.reactions] : [];
-    const existingIndex = reactions.findIndex((reaction) => reaction.userDid === userDid && reaction.emoji === emoji);
+        const hasPersistedReactions = Object.prototype.hasOwnProperty.call(message, "reactions");
+        const previousReactions = message.reactions ? [...message.reactions] : [];
+        const reactions = [...previousReactions];
+        const existingIndex = reactions.findIndex(
+            (reaction) => reaction.userDid === userDid && reaction.emoji === emoji,
+        );
+        const added = existingIndex < 0;
+        if (added) reactions.push({ emoji, userDid, createdAt: new Date() });
+        else reactions.splice(existingIndex, 1);
 
-    if (existingIndex >= 0) {
-        reactions.splice(existingIndex, 1);
-    } else {
-        reactions.push({ emoji, userDid, createdAt: new Date() });
+        const snapshotFilter = hasPersistedReactions
+            ? { reactions: message.reactions ?? null }
+            : { reactions: { $exists: false } };
+        const result = await ChatMessageDocs.updateOne({ _id: objectId, ...snapshotFilter } as any, {
+            $set: { reactions },
+        });
+        if (result.matchedCount === 1 && result.modifiedCount === 1) return { reactions, added };
+        if (result.matchedCount === 1) return null;
     }
+    return null;
+};
 
-    await ChatMessageDocs.updateOne({ _id: objectId }, { $set: { reactions } });
-    return reactions;
+const advanceCursorChronologically = async ({
+    identity,
+    cursorField,
+    proposedCursor,
+    collection,
+}: {
+    identity: { conversationId: string; userDid: string; topicId?: string };
+    cursorField: "lastReadMessageId" | "legacyLastReadMessageId";
+    proposedCursor: string;
+    collection: typeof ChatReadStates | typeof ChatTopicReadStates;
+}): Promise<void> => {
+    const proposedObjectId = toObjectId(proposedCursor);
+    if (!proposedObjectId) throw new Error("Invalid chat read cursor");
+    const proposedMessage = await ChatMessageDocs.findOne(
+        { _id: proposedObjectId, conversationId: identity.conversationId },
+        { projection: { _id: 1, createdAt: 1 } },
+    );
+    if (!proposedMessage) throw new Error("Chat read cursor message not found");
+    const proposedPosition: MessagePosition = {
+        id: proposedMessage._id.toString(),
+        createdAt: proposedMessage.createdAt,
+    };
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const state = (await collection.findOne(identity)) as Record<string, any> | null;
+        if (!state) throw new Error("Chat read state not found");
+        const currentCursor = normalizeObjectIdHex(state[cursorField]);
+        if (currentCursor === proposedPosition.id) return;
+        if (currentCursor) {
+            const currentMessage = await ChatMessageDocs.findOne(
+                { _id: new ObjectId(currentCursor), conversationId: identity.conversationId },
+                { projection: { _id: 1, createdAt: 1 } },
+            );
+            if (!currentMessage) {
+                console.warn("Chat read cursor message is missing; refusing to advance an unresolved boundary", {
+                    conversationId: identity.conversationId,
+                    topicId: identity.topicId,
+                });
+                throw new Error("Cannot advance an unresolved chat read cursor");
+            }
+            if (
+                compareMessagePositions(proposedPosition, {
+                    id: currentMessage._id.toString(),
+                    createdAt: currentMessage.createdAt,
+                }) <= 0
+            ) {
+                return;
+            }
+        }
+        const result = await collection.updateOne(
+            { ...identity, [cursorField]: state[cursorField] ?? null } as any,
+            { $set: { [cursorField]: proposedPosition.id, updatedAt: new Date() } } as any,
+        );
+        if (result.modifiedCount === 1) return;
+    }
+    throw new Error("Chat read cursor advancement did not stabilize");
 };
 
 export const markConversationRead = async (
@@ -717,18 +1012,31 @@ export const markConversationRead = async (
     await ensureChatReadStateV2(userDid, conversationId);
     const identity = { conversationId, userDid };
     const now = new Date();
-    const cursorUpdate = buildMonotonicLegacyCursorUpdate(lastReadMessageId, now);
-    const update: Record<string, any> = {
-        ...cursorUpdate,
-        $setOnInsert: {
-            ...identity,
-            lastReadMessageId: null,
-            topicFallbackMessageId: null,
-            readStateVersion: CHAT_READ_STATE_VERSION,
-            readStateMigratedAt: now,
+    await ChatReadStates.updateOne(
+        identity,
+        {
+            $setOnInsert: {
+                ...identity,
+                lastReadMessageId: null,
+                legacyLastReadMessageId: null,
+                topicFallbackMessageId: null,
+                readStateVersion: CHAT_READ_STATE_VERSION,
+                readStateMigratedAt: now,
+                updatedAt: now,
+            },
         },
-    };
-    await ChatReadStates.updateOne(identity, update, { upsert: true });
+        { upsert: true },
+    );
+    if (!lastReadMessageId) {
+        await ChatReadStates.updateOne(identity, { $set: { updatedAt: now } });
+        return;
+    }
+    await advanceCursorChronologically({
+        identity,
+        cursorField: "legacyLastReadMessageId",
+        proposedCursor: lastReadMessageId,
+        collection: ChatReadStates,
+    });
 };
 
 const getHistoricalReadBoundary = async (conversationId: string, readState: ChatReadState): Promise<string | null> => {
@@ -737,10 +1045,9 @@ const getHistoricalReadBoundary = async (conversationId: string, readState: Chat
         const latestAtHistoricalRead = await ChatMessageDocs.findOne(
             {
                 conversationId,
-                _id: { $lt: nextSecond },
-                $or: [{ createdAt: { $lte: updatedAt } }, { createdAt: { $exists: false } }],
+                $or: [{ createdAt: { $lte: updatedAt } }, { createdAt: { $exists: false }, _id: { $lt: nextSecond } }],
             },
-            { sort: { _id: -1 }, projection: { _id: 1 } },
+            { sort: { createdAt: -1, _id: -1 }, projection: { _id: 1 } },
         );
         return latestAtHistoricalRead?._id ? latestAtHistoricalRead._id.toString() : null;
     });
@@ -772,7 +1079,7 @@ export const ensureChatReadStateV2 = async (userDid: string, conversationId: str
 export const getLatestLegacyMessageIdForConversation = async (conversationId: string): Promise<string | null> => {
     const latest = await ChatMessageDocs.findOne(
         { conversationId, threadId: { $exists: false }, thread: { $exists: false } },
-        { sort: { _id: -1 }, projection: { _id: 1 } },
+        { sort: { createdAt: -1, _id: -1 }, projection: { _id: 1 } },
     );
     return latest?._id ? latest._id.toString() : null;
 };
@@ -834,12 +1141,16 @@ export const markTopicRead = async (
     await ChatTopicReadStates.updateOne(
         identity,
         {
-            $max: { lastReadMessageId: normalizedCursor },
-            $set: { updatedAt: new Date() },
-            $setOnInsert: identity,
+            $setOnInsert: { ...identity, lastReadMessageId: null, updatedAt: new Date() },
         },
         { upsert: true },
     );
+    await advanceCursorChronologically({
+        identity,
+        cursorField: "lastReadMessageId",
+        proposedCursor: normalizedCursor,
+        collection: ChatTopicReadStates,
+    });
 };
 
 export const getTopicUnreadCountsForUser = async (
@@ -864,6 +1175,28 @@ export const getTopicUnreadCountsForUser = async (
     const explicitByTopic = new Map(topicReadStates.map((state) => [state.topicId, state.lastReadMessageId]));
 
     const migrationFallback = resolveTopicMigrationFallback(conversationReadState);
+    const boundaryIds = Array.from(
+        new Set(
+            normalizedTopicIds
+                .map((topicId) =>
+                    resolveTopicReadBoundary({
+                        topicId,
+                        explicitLastReadMessageId: explicitByTopic.has(topicId)
+                            ? explicitByTopic.get(topicId)
+                            : undefined,
+                        conversationFallbackMessageId: migrationFallback,
+                    }),
+                )
+                .filter((value): value is string => !!normalizeObjectIdHex(value)),
+        ),
+    );
+    const boundaryMessages = boundaryIds.length
+        ? await ChatMessageDocs.find(
+              { conversationId, _id: { $in: boundaryIds.map((id) => new ObjectId(id)) } },
+              { projection: { _id: 1, createdAt: 1 } },
+          ).toArray()
+        : [];
+    const boundaryById = new Map(boundaryMessages.map((message) => [message._id.toString(), message]));
     const topicClauses = normalizedTopicIds.map((topicId) => {
         const boundary = resolveTopicReadBoundary({
             topicId,
@@ -873,8 +1206,14 @@ export const getTopicUnreadCountsForUser = async (
         const scope = includeStarters
             ? { $or: [{ _id: toObjectId(topicId), thread: { $exists: true } }, { threadId: topicId }] }
             : { threadId: topicId };
-        const boundaryObjectId = toObjectId(boundary);
-        return boundaryObjectId ? { $and: [scope, { _id: { $gt: boundaryObjectId } }] } : scope;
+        const normalizedBoundary = normalizeObjectIdHex(boundary);
+        if (!normalizedBoundary) return scope;
+        const boundaryMessage = boundaryById.get(normalizedBoundary);
+        const afterBoundary = buildMessagesAfterPositionQuery({
+            id: normalizedBoundary,
+            createdAt: boundaryMessage?.createdAt,
+        });
+        return { $and: [scope, afterBoundary] };
     });
     const rows = await ChatMessageDocs.aggregate<{ _id: string; count: number }>([
         { $match: { conversationId, senderDid: { $ne: userDid }, $or: topicClauses } },
@@ -888,10 +1227,22 @@ export const getTopicUnreadCountsForUser = async (
 
 export const getLegacyUnreadCountForUser = async (userDid: string, conversationId: string): Promise<number> => {
     const readState = await ensureChatReadStateV2(userDid, conversationId);
-    const lastReadObjectId = toObjectId(readState?.legacyLastReadMessageId);
-    const legacyQuery = buildUnreadMessagesQuery(userDid, conversationId, lastReadObjectId || undefined);
-    legacyQuery.threadId = { $exists: false };
-    legacyQuery.thread = { $exists: false };
+    const normalizedBoundary = normalizeObjectIdHex(readState?.legacyLastReadMessageId);
+    const boundaryMessage = normalizedBoundary
+        ? await ChatMessageDocs.findOne(
+              { conversationId, _id: new ObjectId(normalizedBoundary) },
+              { projection: { _id: 1, createdAt: 1 } },
+          )
+        : null;
+    const legacyQuery: Record<string, any> = {
+        conversationId,
+        senderDid: { $ne: userDid },
+        threadId: { $exists: false },
+        thread: { $exists: false },
+        ...(normalizedBoundary
+            ? buildMessagesAfterPositionQuery({ id: normalizedBoundary, createdAt: boundaryMessage?.createdAt })
+            : {}),
+    };
     return ChatMessageDocs.countDocuments(legacyQuery);
 };
 
@@ -972,13 +1323,31 @@ export const createThread = async (
     title: string,
     body: string,
     hashtags: string[],
+    metadata?: Pick<ChatMessageDoc, "source" | "version"> & { lifecycleEventId?: string },
+    messageId?: string,
+    dependencies: {
+        insertThread: (doc: any) => Promise<{ insertedId: ObjectId }>;
+        findThread: (query: any) => Promise<any>;
+        updateConversation: (conversationId: ObjectId, updatedAt: Date) => Promise<void>;
+    } = {
+        insertThread: (doc) => ChatMessageDocs.insertOne(doc),
+        findThread: (query) => ChatMessageDocs.findOne(query),
+        updateConversation: async (id, updatedAt) => {
+            await ChatConversations.updateOne(
+                { _id: id },
+                { $set: { updatedAt }, $pull: { archivedBy: { $ne: senderDid } } },
+            );
+        },
+    },
 ): Promise<ChatMessageDoc | null> => {
     const now = new Date();
-    const doc: ChatMessageDoc = {
+    const doc: ChatMessageDoc & { lifecycleEventId?: string } = {
+        ...(messageId ? { _id: new ObjectId(messageId) } : {}),
         conversationId,
         senderDid,
         body,
         createdAt: now,
+        ...metadata,
         thread: {
             title,
             hashtags,
@@ -987,12 +1356,32 @@ export const createThread = async (
             replyCount: 0,
         },
     };
-    const result = await ChatMessageDocs.insertOne(doc);
-    await ChatConversations.updateOne(
-        { _id: new (await import("mongodb")).ObjectId(conversationId) },
-        { $set: { updatedAt: now } },
-    );
-    return { ...doc, _id: result.insertedId.toString() };
+    let createdId!: ObjectId;
+    let recovered: ChatMessageDoc | null = null;
+    try {
+        const result = await dependencies.insertThread(doc);
+        createdId = result.insertedId;
+    } catch (error: any) {
+        if (!messageId || error?.code !== 11000) throw error;
+        const expectedTitle = title;
+        const existing = await dependencies.findThread({
+            _id: new ObjectId(messageId),
+            conversationId,
+            lifecycleEventId: metadata?.lifecycleEventId,
+            source: "circle_moderation",
+            version: "v1",
+            senderDid,
+            "thread.title": expectedTitle,
+            thread: { $exists: true },
+        } as any);
+        if (!existing) throw error;
+        recovered = existing as ChatMessageDoc;
+        createdId = existing._id as ObjectId;
+    }
+    await dependencies.updateConversation(new ObjectId(conversationId), now);
+    return recovered
+        ? ({ ...recovered, _id: recovered._id?.toString() } as ChatMessageDoc)
+        : { ...doc, _id: createdId.toString() };
 };
 
 export const findThreadStarter = async (threadId: string, conversationId: string): Promise<ChatMessageDoc | null> => {
@@ -1010,6 +1399,18 @@ export const findThreadStarter = async (threadId: string, conversationId: string
     return { ...doc, _id: doc._id?.toString() };
 };
 
+export const findMessageDeepLinkTarget = async (
+    messageId: string,
+    conversationId: string,
+): Promise<Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null> => {
+    const objectId = toObjectId(messageId);
+    if (!objectId) return null;
+    return (await ChatMessageDocs.findOne(
+        { _id: objectId, conversationId },
+        { projection: { conversationId: 1, threadId: 1, thread: 1 } },
+    )) as Pick<ChatMessageDoc, "conversationId" | "threadId" | "thread"> | null;
+};
+
 export const createThreadReply = async (
     threadId: string,
     conversationId: string,
@@ -1018,8 +1419,32 @@ export const createThreadReply = async (
         body: string;
         attachments?: ChatAttachment[];
         replyToMessageId?: string;
+        submissionId?: string;
     },
 ): Promise<ChatMessageDoc | null> => {
+    const matchesSubmission = (message: ChatMessageDoc): boolean =>
+        message.conversationId === conversationId &&
+        message.threadId === threadId &&
+        message.senderDid === senderDid &&
+        message.body === payload.body &&
+        message.replyToMessageId === payload.replyToMessageId;
+    const findExistingSubmission = async (): Promise<ChatMessageDoc | null> => {
+        if (!payload.submissionId) return null;
+        const existing = (await ChatMessageDocs.findOne({
+            senderDid,
+            submissionId: payload.submissionId,
+        })) as ChatMessageDoc | null;
+        if (!existing) return null;
+        if (!matchesSubmission(existing)) throw new Error("Reply submission id was already used for another message");
+        return { ...existing, _id: existing._id?.toString() };
+    };
+
+    const existingSubmission = await findExistingSubmission();
+    if (existingSubmission) {
+        await refreshPersistedMessageActivity(existingSubmission);
+        return existingSubmission;
+    }
+
     const threadStarter = await findThreadStarter(threadId, conversationId);
     if (!threadStarter) return null;
 
@@ -1030,27 +1455,44 @@ export const createThreadReply = async (
         body: payload.body,
         createdAt: now,
         threadId,
+        ...(payload.submissionId ? { submissionId: payload.submissionId } : {}),
         ...(payload.attachments ? { attachments: payload.attachments } : {}),
         ...(payload.replyToMessageId ? { replyToMessageId: payload.replyToMessageId } : {}),
     };
-    const result = await ChatMessageDocs.insertOne(doc);
-    const threadUpdate = await ChatMessageDocs.updateOne(
-        {
-            _id: new ObjectId(threadId),
-            conversationId,
-            thread: { $exists: true },
-            "thread.deletingAt": { $exists: false },
-        },
-        {
-            $set: { "thread.updatedAt": now },
-            $inc: { "thread.replyCount": 1 },
-        },
-    );
-    if (threadUpdate.matchedCount === 0) {
-        await ChatMessageDocs.deleteOne({ _id: result.insertedId, conversationId, threadId });
-        return null;
+    let result;
+    try {
+        result = await ChatMessageDocs.insertOne(doc);
+    } catch (error: any) {
+        if (error?.code !== 11000 || !payload.submissionId) throw error;
+        const recovered = await findExistingSubmission();
+        if (!recovered) throw error;
+        await refreshPersistedMessageActivity(recovered);
+        return recovered;
     }
-    await ChatConversations.updateOne({ _id: new ObjectId(conversationId) }, { $set: { updatedAt: now } });
+    try {
+        const threadUpdate = await ChatMessageDocs.updateOne(
+            {
+                _id: new ObjectId(threadId),
+                conversationId,
+                thread: { $exists: true },
+                "thread.deletingAt": { $exists: false },
+            },
+            {
+                $set: { "thread.updatedAt": now },
+                $inc: { "thread.replyCount": 1 },
+            },
+        );
+        if (threadUpdate.matchedCount === 0) {
+            await ChatMessageDocs.deleteOne({ _id: result.insertedId, conversationId, threadId });
+            return null;
+        }
+        await ChatConversations.updateOne(
+            { _id: new ObjectId(conversationId) },
+            { $set: { updatedAt: now }, $pull: { archivedBy: { $ne: senderDid } } },
+        );
+    } catch (error) {
+        throw new PersistedChatMessageActivityError({ ...doc, _id: result.insertedId.toString() }, error);
+    }
     return { ...doc, _id: result.insertedId.toString() };
 };
 
@@ -1060,12 +1502,13 @@ export const sendThreadReply = async (
     senderDid: string,
     body: string,
     replyToMessageId?: string,
+    submissionId?: string,
 ): Promise<ChatMessageDoc | null> => {
-    return createThreadReply(threadId, conversationId, senderDid, { body, replyToMessageId });
+    return createThreadReply(threadId, conversationId, senderDid, { body, replyToMessageId, submissionId });
 };
 
 export const fetchThreadReplies = async (threadId: string, conversationId: string): Promise<ChatMessageDoc[]> => {
-    const docs = await ChatMessageDocs.find({ threadId, conversationId }).sort({ createdAt: 1 }).toArray();
+    const docs = await ChatMessageDocs.find({ threadId, conversationId }).sort({ createdAt: 1, _id: 1 }).toArray();
     return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
 };
 
@@ -1074,7 +1517,7 @@ export const listThreadsForConversation = async (conversationId: string): Promis
         conversationId,
         thread: { $exists: true },
     })
-        .sort({ "thread.createdAt": 1, createdAt: 1 })
+        .sort({ "thread.createdAt": 1, createdAt: 1, _id: 1 })
         .toArray();
     return docs.map((doc) => ({ ...doc, _id: doc._id?.toString() }));
 };
