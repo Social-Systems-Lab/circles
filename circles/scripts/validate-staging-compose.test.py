@@ -18,6 +18,7 @@ SPEC.loader.exec_module(MODULE)
 
 def configuration():
     circles_env = {
+        "HOSTNAME": "0.0.0.0",
         "CIRCLES_URL": "https://staging.kamooni.org",
         "EMAIL_TRANSPORT": "mailpit",
         "MAILPIT_SMTP_HOST": "mailpit",
@@ -151,6 +152,10 @@ class StagingComposeValidationTests(unittest.TestCase):
 
     def test_safe_staging_configuration_passes(self):
         self.assertEqual(self.errors(lambda _config, _all: None), [])
+
+    def test_container_hostname_binding_is_rejected(self):
+        errors = self.errors(lambda config, _all: config["services"]["circles"]["environment"].pop("HOSTNAME"))
+        self.assertTrue(any("all container interfaces" in error for error in errors))
 
     def test_postmark_transport_is_rejected(self):
         errors = self.errors(lambda config, _all: config["services"]["circles"]["environment"].update(EMAIL_TRANSPORT="postmark"))

@@ -11,6 +11,9 @@ services:
             args:
                 KAMOONI_DEPLOYMENT_ROLE: staging
         environment:
+            # Next standalone otherwise inherits Docker's container hostname and can
+            # bind to only one address when the service joins multiple networks.
+            HOSTNAME: "0.0.0.0"
             PORT: "3000"
             NODE_ENV: production
             CIRCLES_URL: https://staging.kamooni.org
