@@ -89,6 +89,8 @@ def validate(config: dict, all_config: dict, project: str, nginx: str, mailpit_p
         errors.append(f"Mailpit UI proxy ports are {mailpit_ui_ports!r}")
 
     env = default_services.get("circles", {}).get("environment", {})
+    if env.get("HOSTNAME") != "0.0.0.0":
+        errors.append("staging application is not bound to all container interfaces")
     for key in ("PAYMENTS_ENABLED", "VDB_ENABLED"):
         if str(env.get(key, "")).lower() != "false":
             errors.append(f"{key} is not forced false")
