@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Circle } from "@/models/models";
+import type { AccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import type { TelegramChannelView } from "@/lib/data/external-notification-channels";
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
@@ -39,7 +39,7 @@ const emailPreferenceOptions: { key: EmailPreferenceKey; label: string; descript
     },
 ];
 
-const getInitialEmailPreferences = (user: Circle): Record<EmailPreferenceKey, boolean> => ({
+const getInitialEmailPreferences = (user: AccountSettingsClientUser): Record<EmailPreferenceKey, boolean> => ({
     emailMissedMessages: user.emailMissedMessages !== false,
     emailTaskAssigned: user.emailTaskAssigned === true,
     emailTaskUpdates: user.emailTaskUpdates === true,
@@ -50,7 +50,7 @@ export default function SubscriptionFormSettings({
     user,
     telegramChannel,
 }: {
-    user: Circle;
+    user: AccountSettingsClientUser;
     telegramChannel?: TelegramChannelView | null;
 }) {
     const [subscriptionAttempted, setSubscriptionAttempted] = useState(false);

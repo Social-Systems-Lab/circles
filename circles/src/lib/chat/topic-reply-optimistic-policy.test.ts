@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+
+const chatRoomSource = readFileSync(new URL("../../components/modules/chat/chat-room.tsx", import.meta.url), "utf8");
+const actionSource = readFileSync(new URL("../../components/modules/chat/mongo-actions.ts", import.meta.url), "utf8");
+const persistenceSource = readFileSync(new URL("../data/mongo-chat.ts", import.meta.url), "utf8");
+
+test("topic replies render pending state before awaiting the server", () => {
+    assert.match(
+        chatRoomSource,
+        /setReplies\(\(current\) => \[\.\.\.current, optimisticReply\]\);[\s\S]*?setTopicReplyText\(""\);[\s\S]*?void submitTopicReply\(optimisticReply, outgoingDraftKey, outgoingDraftText\)/,
+    );
+    assert.match(chatRoomSource, /Sending…/);
+    assert.match(chatRoomSource, />\s*Retry\s*</);
+});
+
+test("retry reuses a stable submission id and persistence recovers duplicate requests", () => {
+    assert.match(chatRoomSource, /submitTopicReply\(reply\)/, "Retry resubmits the retained reply object");
+    assert.match(chatRoomSource, /optimisticReply\.submissionId/);
+    assert.match(actionSource, /idempotencyKey: submissionId \? `topic-reply:\$\{submissionId\}`/);
+    assert.match(persistenceSource, /senderDid,\s*submissionId: payload\.submissionId/);
+    assert.match(persistenceSource, /error\?\.code !== 11000/);
+    assert.match(persistenceSource, /return recovered/);
+});
+
+test("topic scrolling stays separate from acknowledgement", () => {
+    assert.match(chatRoomSource, /pendingScrollToLatestRef\.current = true/);
+    assert.match(chatRoomSource, /isTopicViewportNearBottom/);
+    assert.match(chatRoomSource, /ref=\{replyComposerRef\}/);
+    assert.match(chatRoomSource, /Close topic[\s\S]*?ref=\{topicEndRef\}/);
+    assert.match(chatRoomSource, /selectTopicReplyScrollTarget\(\{/);
+    assert.match(
+        chatRoomSource,
+        /const openedNormally = pendingScrollToLatestRef\.current;[\s\S]*?const sentReply = pendingOutgoingScrollRef\.current/,
+        "normal opening and outgoing sends retain independent scroll targets",
+    );
+    assert.doesNotMatch(
+        chatRoomSource,
+        /scrollIntoView[\s\S]{0,200}acknowledgeLoadedTopic/,
+        "scroll effects do not acknowledge topic reads",
+    );
+});
+
+test("deep-link and next-unread positioning remains independent from composer scrolling", () => {
+    assert.match(chatRoomSource, /target\.scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+    assert.match(chatRoomSource, /navigationRequest\?\.topicId !== messageId/);
+});

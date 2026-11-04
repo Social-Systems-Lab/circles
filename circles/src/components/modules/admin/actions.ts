@@ -289,7 +289,7 @@ export async function saveGlobalServerSettings(data: GlobalServerSettingsFormDat
     const validationResult = globalServerSettingsValidationSchema.safeParse(data);
     if (!validationResult.success) {
         // Combine Zod error messages
-        const errorMessages = validationResult.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ");
+        const errorMessages = validationResult.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ");
         return { success: false, message: `Invalid data: ${errorMessages}` };
     }
 
@@ -961,6 +961,10 @@ export async function rejectVerificationRequest(id: string) {
 }
 
 export async function getCircleByIdAction(id: string) {
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) throw new Error("Unauthorized");
+    const user = await getUserPrivate(userDid);
+    if (!user?.isAdmin) throw new Error("Unauthorized");
     return await getCircleById(id);
 }
 

@@ -1,5 +1,8 @@
-import type { Circle, CircleModerationStatus } from "@/models/models";
+import type { Circle } from "@/models/models";
 import { ObjectId, type Filter } from "mongodb";
+import { getCircleModerationStatus } from "@/lib/data/circle-lifecycle-rules";
+
+export { getCircleModerationStatus } from "@/lib/data/circle-lifecycle-rules";
 
 export const getDiscoverableLifecycleQuery = (): Filter<Circle> => ({
     $or: [
@@ -11,9 +14,6 @@ export const getDiscoverableLifecycleQuery = (): Filter<Circle> => ({
 
 // Read and discovery currently share lifecycle availability, but remain separately named policy seams.
 export const getReadableLifecycleQuery = getDiscoverableLifecycleQuery;
-
-export const getCircleModerationStatus = (circle?: Partial<Circle> | null): CircleModerationStatus =>
-    circle?.moderationStatus ?? "active";
 
 export const canReadCircleByLifecycle = (circle?: Partial<Circle> | null) =>
     circle?.circleType === "user" || ["active", "paused"].includes(getCircleModerationStatus(circle));

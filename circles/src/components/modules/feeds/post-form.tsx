@@ -22,7 +22,6 @@ import {
     Location,
     Media,
     PostDisplay,
-    UserPrivate,
     ProposalDisplay,
     IssueDisplay,
     FundingAskDisplay,
@@ -30,6 +29,7 @@ import {
     Cause as SDG,
 } from "@/models/models";
 import { appendPreviewFormData } from "@/lib/internal-preview-form-data";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import {
     CreatableItemKey,
     CreatableItemDetail,
@@ -173,7 +173,7 @@ type ImageItem = {
 };
 
 type PostFormProps = {
-    user: UserPrivate;
+    user: AuthenticatedClientUser;
     initialPost?: PostDisplay;
     onSubmit: (formData: FormData, targetCircleId: string, targetCircleHandle?: string) => Promise<void>;
     onCancel: () => void;

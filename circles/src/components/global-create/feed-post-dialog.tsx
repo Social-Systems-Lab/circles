@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAtom } from "jotai";
 import { createPostDialogAtom, userAtom } from "@/lib/data/atoms";
 import { PostForm } from "@/components/modules/feeds/post-form";
-import { UserPrivate } from "@/models/models";
 import { createPostAction } from "@/components/modules/feeds/actions";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
@@ -73,7 +72,7 @@ export function FeedPostDialog() {
                     <DialogTitle>Create a new post</DialogTitle>
                 </div>
                 <PostForm
-                    user={user as UserPrivate}
+                    user={user}
                     onSubmit={handleSubmit}
                     onCancel={handleClose}
                     itemKey="post" // This is for the PostForm's internal logic for CircleSelector

@@ -3,6 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { boundedSafeParse, inspectFormDataBounds } from "@/lib/security/bounded-input";
 import { Media, Goal, GoalDisplay, GoalStage, locationSchema, GoalMember } from "@/models/models";
 import { getCircleByHandle } from "@/lib/data/circle";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
@@ -25,7 +26,6 @@ import {
     changeGoalStage,
     getCompletedGoalsByCircleId, // Added
 } from "@/lib/data/goal";
-import { getMembers } from "@/lib/data/member";
 import {
     notifyGoalSubmittedForReview,
     notifyGoalApproved,
@@ -197,11 +197,12 @@ export async function getGoalAction(circleHandle: string, goalId: string): Promi
 
 const createGoalSchema = z.object({
     // Renamed schema
-    title: z.string().min(1, "Title is required"),
-    description: z.string().min(1, "Description is required"),
-    images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
+    title: z.string().trim().min(1, "Title is required").max(200, "Title is too long"),
+    description: z.string().min(1, "Description is required").max(100_000, "Description is too long"),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects initially
     location: z
         .string()
+        .max(100_000, "Location data is too large")
         .optional()
         .refine(
             (val) => {
@@ -215,7 +216,7 @@ const createGoalSchema = z.object({
             },
             { message: "Invalid location data format" },
         ),
-    userGroups: z.array(z.string()).optional(), // Optional: User groups for visibility
+    userGroups: z.array(z.string().max(80)).max(500).optional(), // Optional: User groups for visibility
     targetDate: z.string().datetime({ offset: true }).optional(), // Expect ISO string from form
 });
 
@@ -226,7 +227,7 @@ const updateGoalSchema = createGoalSchema.extend({
 
 const completeGoalSchema = z.object({
     resultSummary: z.string().min(1, "Result summary is required"),
-    resultImages: z.array(z.any()).optional(), // Allow files or existing Media objects initially
+    resultImages: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects initially
 });
 
 // --- Action Functions ---
@@ -243,8 +244,10 @@ export async function createGoalAction( // Renamed function
 ): Promise<{ success: boolean; message?: string; goalId?: string }> {
     // Renamed return property
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = createGoalSchema.safeParse({
+        const validatedData = boundedSafeParse(createGoalSchema, {
             // Renamed schema
             title: formData.get("title"),
             description: formData.get("description"),
@@ -255,10 +258,10 @@ export async function createGoalAction( // Renamed function
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -433,8 +436,10 @@ export async function updateGoalAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = updateGoalSchema.safeParse({
+        const validatedData = boundedSafeParse(updateGoalSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             images: formData.getAll("images"),
@@ -445,10 +450,10 @@ export async function updateGoalAction(
 
         if (!validatedData.success) {
             // ... error handling ...
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -770,22 +775,6 @@ export async function changeGoalStageAction( // Renamed function
     }
 }
 
-export const getMembersAction = async (circleId: string) => {
-    // Get the current user
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "User not authenticated" };
-    }
-    const user = await getUserByDid(userDid); // For notifications
-    if (!user) {
-        return { success: false, message: "User data not found" };
-    }
-
-    // get members of circle
-    let members = await getMembers(circleId);
-    return members;
-};
-
 // TODO: Add actions for comment handling if using shadow posts or a dedicated system.
 
 /**
@@ -988,16 +977,18 @@ export async function completeGoalAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string; resultPostId?: string }> {
     try {
-        const validatedData = completeGoalSchema.safeParse({
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
+        const validatedData = boundedSafeParse(completeGoalSchema, {
             resultSummary: formData.get("resultSummary"),
             resultImages: formData.getAll("resultImages"),
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error (completeGoalAction):", validatedData.error.errors);
+            console.error("Validation Error (completeGoalAction):", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;

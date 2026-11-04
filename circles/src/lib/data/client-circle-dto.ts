@@ -8,12 +8,14 @@ import type {
     Location,
     Media,
     MemberDisplay,
+    Metrics,
     Question,
     SocialLink,
     TaskDisplay,
     TaskPermissions,
 } from "@/models/models";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
+import { projectPublicLocation } from "@/lib/location-privacy";
 
 export type ClientCircleDto = Pick<
     Circle,
@@ -27,6 +29,7 @@ export type ClientCircleDto = Pick<
     | "members"
     | "circleType"
     | "circleLevel"
+    | "visibility"
     | "parentCircleId"
     | "isVerified"
     | "verificationStatus"
@@ -44,6 +47,12 @@ export type ClientCircleDto = Pick<
     offers?: Circle["offers"];
     engagements?: Circle["engagements"];
     needs?: Circle["needs"];
+};
+
+export type PublicMapCircleDto = ClientCircleDto & {
+    createdAt?: Date;
+    metrics?: Omit<Metrics, "distance" | "proximity" | "rank">;
+    mapEligibility?: { profileComplete?: boolean };
 };
 
 export type ClientParentCircleDto = Pick<Circle, "_id" | "name" | "handle" | "circleType">;
@@ -195,32 +204,7 @@ const copyQuestionnaire = (value: unknown): Question[] | undefined => {
     return questions;
 };
 
-export const buildClientLocation = (value: unknown): Location | undefined => {
-    if (!value || typeof value !== "object") return undefined;
-    const source = value as Record<string, unknown>;
-    const precision = source.precision;
-    if (typeof precision !== "number" || !Number.isInteger(precision) || precision < 0 || precision > 4) {
-        return undefined;
-    }
-
-    const location: Location = { precision };
-    if (typeof source.country === "string") location.country = source.country;
-    if (precision >= 1 && typeof source.region === "string") location.region = source.region;
-    if (precision >= 2 && typeof source.city === "string") location.city = source.city;
-    if (precision >= 3 && typeof source.street === "string") location.street = source.street;
-    if (precision === 4 && source.lngLat && typeof source.lngLat === "object") {
-        const lngLat = source.lngLat as Record<string, unknown>;
-        if (
-            typeof lngLat.lng === "number" &&
-            Number.isFinite(lngLat.lng) &&
-            typeof lngLat.lat === "number" &&
-            Number.isFinite(lngLat.lat)
-        ) {
-            location.lngLat = { lng: lngLat.lng, lat: lngLat.lat };
-        }
-    }
-    return location;
-};
+export const buildClientLocation = projectPublicLocation;
 
 const copyPublicOffers = (value: unknown): Circle["offers"] => {
     if (!value || typeof value !== "object") return undefined;
@@ -271,6 +255,7 @@ export const buildClientCircleDto = (circle: Circle): ClientCircleDto => ({
     ...(typeof circle.members === "number" ? { members: circle.members } : {}),
     ...(circle.circleType ? { circleType: circle.circleType } : {}),
     ...(circle.circleLevel ? { circleLevel: circle.circleLevel } : {}),
+    ...(circle.visibility ? { visibility: circle.visibility } : {}),
     ...(typeof circle.parentCircleId === "string" ? { parentCircleId: circle.parentCircleId } : {}),
     ...(typeof circle.isVerified === "boolean" ? { isVerified: circle.isVerified } : {}),
     ...(circle.verificationStatus ? { verificationStatus: circle.verificationStatus } : {}),
@@ -285,6 +270,31 @@ export const buildClientCircleDto = (circle: Circle): ClientCircleDto => ({
     ...(copyPublicEngagements(circle.engagements) ? { engagements: copyPublicEngagements(circle.engagements) } : {}),
     ...(copyPublicNeeds(circle.needs) ? { needs: copyPublicNeeds(circle.needs) } : {}),
 });
+
+const buildPublicMapMetrics = (value: unknown): PublicMapCircleDto["metrics"] => {
+    if (!value || typeof value !== "object") return undefined;
+    const source = value as Record<string, unknown>;
+    const metrics: NonNullable<PublicMapCircleDto["metrics"]> = {};
+    for (const key of ["similarity", "recentness", "popularity", "activity", "searchRank"] as const) {
+        if (typeof source[key] === "number" && Number.isFinite(source[key])) metrics[key] = source[key];
+    }
+    return Object.keys(metrics).length ? metrics : undefined;
+};
+
+export const buildPublicMapCircleDto = (
+    circle: Circle & { metrics?: Metrics; mapEligibility?: { profileComplete?: boolean } },
+): PublicMapCircleDto => {
+    const dto = buildClientCircleDto(circle);
+    const metrics = buildPublicMapMetrics(circle.metrics);
+    return {
+        ...dto,
+        ...(circle.createdAt instanceof Date ? { createdAt: new Date(circle.createdAt) } : {}),
+        ...(metrics ? { metrics } : {}),
+        ...(circle.mapEligibility?.profileComplete === true ? { mapEligibility: { profileComplete: true } } : {}),
+    };
+};
+
+export const buildPinnedCircleDto = (circle: Circle): ClientCircleDto => buildClientCircleDto(circle);
 
 export const buildClientParentCircleDto = (circle?: Circle | null): ClientParentCircleDto | undefined =>
     circle

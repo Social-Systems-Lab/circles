@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"; // Added C
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Circle, Media, Issue, IssueUrgency, Location, UserPrivate } from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Issue, IssueUrgency, Location } from "@/models/models";
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -56,7 +57,7 @@ type IssueFormValues = Omit<z.infer<typeof issueFormSchema>, "images" | "locatio
 };
 
 interface IssueFormProps {
-    user: UserPrivate;
+    user: AuthenticatedClientUser;
     itemDetail: CreatableItemDetail;
     issue?: Issue;
     issueId?: string;

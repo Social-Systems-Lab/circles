@@ -2,15 +2,23 @@ import assert from "node:assert/strict";
 import type { Circle } from "@/models/models";
 import {
     canParticipate,
+    getOptionalProfileImprovements,
     getParticipationBlockReason,
+    getParticipationReadiness,
     getParticipationRequiredMessage,
     hasProfileAboutText,
     hasRealProfileImage,
     hasRealProfileImageUrl,
+    hasSelectedProfileLocation,
     isProfileComplete,
 } from "@/lib/profile-completion";
 import { getProfileCompletionChecklistState } from "@/lib/profile-completion-checklist";
-import { isMapVisibleCircle, isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
+import {
+    isMapVisibleCircle,
+    isPersonalProfileMapEligible,
+    isServerDerivedMapVisibleCircle,
+    markMapEligiblePersonalProfile,
+} from "@/lib/map-visibility";
 import { COMMUNITY_GUIDELINE_RULE_IDS, createEmptyCommunityGuidelineAgreementState } from "@/lib/community-guidelines";
 
 const completedGuidelines = () => {
@@ -28,6 +36,7 @@ const baseUser = (overrides: Partial<Circle> = {}): Partial<Circle> => ({
     circleType: "user",
     isEmailVerified: true,
     picture: { url: "/storage/users/profile.png" },
+    location: { precision: 2, city: "Cape Town", lngLat: { lng: 18.4241, lat: -33.9249 } },
     description: "About me",
     communityGuidelinesAcceptance: completedGuidelines(),
     ...overrides,
@@ -52,6 +61,18 @@ assert.equal(hasRealProfileImageUrl("/storage/users/profile.png"), true, "custom
 assert.equal(hasProfileAboutText({ description: "About me" }), true, "description satisfies About");
 assert.equal(hasProfileAboutText({ content: "Long about me" }), true, "content satisfies About");
 assert.equal(hasProfileAboutText({ description: "  ", content: "\n" }), false, "blank About fields fail");
+assert.equal(hasSelectedProfileLocation(baseUser()), true, "finite selected coordinates satisfy location improvement");
+assert.equal(hasSelectedProfileLocation(baseUser({ location: undefined })), false, "missing location fails");
+assert.equal(
+    hasSelectedProfileLocation(baseUser({ location: { precision: 2, lngLat: { lng: 181, lat: 0 } } })),
+    false,
+    "out-of-range longitude fails",
+);
+assert.equal(
+    hasSelectedProfileLocation(baseUser({ location: { precision: 2, lngLat: { lng: 0, lat: Number.NaN } } })),
+    false,
+    "non-finite coordinates fail",
+);
 
 const checklistState = (profile: Partial<Circle>) => getProfileCompletionChecklistState(profile);
 const checklistCompletionById = (profile: Partial<Circle>) =>
@@ -96,11 +117,23 @@ assert.deepEqual(
     "checklist handles rules complete only",
 );
 assert.deepEqual(
-    checklistCompletionById(baseUser({ content: "", communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() })),
+    checklistCompletionById(
+        baseUser({ content: "", communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
+    ),
     { "profile-image": true, about: true, rules: false },
     "checklist handles mixed completion",
 );
 assert.equal(checklistState(baseUser()).complete, true, "checklist complete state follows profileComplete");
+assert.equal(
+    checklistState(baseUser({ picture: undefined })).participationReady,
+    true,
+    "checklist recognizes participation-ready users without a profile image",
+);
+assert.deepEqual(
+    Object.fromEntries(checklistState(baseUser()).items.map((item) => [item.id, item.requiredForParticipation])),
+    { "profile-image": false, about: true, rules: true },
+    "checklist labels the profile image as an optional improvement",
+);
 
 assert.equal(
     isProfileComplete(baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() })),
@@ -119,10 +152,31 @@ assert.equal(
     isServerDerivedMapVisibleCircle(
         baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
     ),
-    false,
-    "incomplete user profiles are excluded from map visibility",
+    true,
+    "guideline acceptance is not independently required for map visibility",
 );
-assert.equal(isServerDerivedMapVisibleCircle(baseUser()), true, "complete user profiles are included in map visibility");
+assert.equal(
+    isServerDerivedMapVisibleCircle(baseUser()),
+    true,
+    "complete user profiles are included in map visibility",
+);
+assert.equal(
+    isServerDerivedMapVisibleCircle(baseUser({ location: undefined })),
+    false,
+    "personal map eligibility requires a selected location",
+);
+assert.equal(
+    isServerDerivedMapVisibleCircle(
+        baseUser({ location: { precision: 2, city: "Cape Town", lngLat: { lng: 18.4241, lat: -33.9249 } } }),
+    ),
+    true,
+    "a location does not change an otherwise complete profile's map eligibility",
+);
+assert.equal(
+    isServerDerivedMapVisibleCircle(baseUser({ picture: { url: "/images/default-user-picture.png" } })),
+    false,
+    "default personal profile images are excluded from map eligibility",
+);
 const completePendingProfile = baseUser({
     isEmailVerified: true,
     isVerified: false,
@@ -139,11 +193,7 @@ assert.equal(
     false,
     "rejected user profiles are excluded from Explore even when complete",
 );
-assert.equal(
-    isMapVisibleCircle(baseUser()),
-    false,
-    "client-facing user map visibility requires server eligibility",
-);
+assert.equal(isMapVisibleCircle(baseUser()), false, "client-facing user map visibility requires server eligibility");
 assert.equal(
     isMapVisibleCircle(markMapEligiblePersonalProfile(baseUser() as Circle)),
     true,
@@ -164,6 +214,11 @@ assert.equal(
     ),
     false,
     "incomplete users fail participation readiness even when isHuman is true",
+);
+assert.equal(
+    canParticipate(baseUser({ picture: undefined })),
+    true,
+    "a genuine profile image is not required for Phase 1 participation",
 );
 assert.equal(
     canParticipate(baseUser({ isEmailVerified: false })),
@@ -190,14 +245,39 @@ assert.equal(
     true,
     "admin bypass preserves existing restricted-action behavior",
 );
+assert.equal(
+    getParticipationReadiness(
+        baseUser({ isAdmin: true, isEmailVerified: false, description: "", communityGuidelinesAcceptance: undefined }),
+    ).ready,
+    true,
+    "administrator bypass is reflected by the reusable readiness helper",
+);
 assert.equal(canParticipate(undefined), false, "missing users do not pass participation readiness");
 assert.equal(
-    getParticipationBlockReason(baseUser()),
-    null,
-    "fully ready users have no participation block reason",
+    canParticipate(
+        baseUser({
+            completedOnboardingSteps: ["welcome", "terms", "member", "profile", "final"],
+        }),
+    ),
+    true,
+    "legacy onboarding markers do not replace or invalidate derived readiness",
 );
 assert.equal(
-    getParticipationBlockReason(baseUser({ isAdmin: true, isEmailVerified: false, communityGuidelinesAcceptance: undefined })),
+    canParticipate(
+        baseUser({
+            isEmailVerified: true,
+            description: undefined,
+            content: "Legacy long-form introduction",
+        }),
+    ),
+    true,
+    "legacy content satisfies the current introduction requirement",
+);
+assert.equal(getParticipationBlockReason(baseUser()), null, "fully ready users have no participation block reason");
+assert.equal(
+    getParticipationBlockReason(
+        baseUser({ isAdmin: true, isEmailVerified: false, communityGuidelinesAcceptance: undefined }),
+    ),
     null,
     "admin bypass has no participation block reason",
 );
@@ -208,8 +288,8 @@ assert.equal(
 );
 assert.equal(
     getParticipationBlockReason(baseUser({ picture: undefined })),
-    "profile_incomplete",
-    "missing profile image maps to profile completion",
+    null,
+    "missing profile image does not block participation",
 );
 assert.equal(
     getParticipationBlockReason(baseUser({ description: "", content: "" })),
@@ -217,9 +297,62 @@ assert.equal(
     "missing About text maps to profile completion",
 );
 assert.equal(
-    getParticipationBlockReason(baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() })),
+    getParticipationBlockReason(
+        baseUser({ communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() }),
+    ),
     "guidelines_incomplete",
     "incomplete guidelines are identified specifically",
+);
+assert.deepEqual(
+    getParticipationReadiness(baseUser({ picture: undefined, location: undefined })),
+    {
+        ready: true,
+        requirements: {
+            "verified-email": true,
+            introduction: true,
+            "community-guidelines": true,
+        },
+        missingRequirements: [],
+    },
+    "participation readiness excludes optional photo and location improvements",
+);
+assert.deepEqual(
+    getParticipationReadiness(
+        baseUser({
+            isEmailVerified: false,
+            description: "",
+            content: "",
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ).missingRequirements,
+    ["verified-email", "introduction", "community-guidelines"],
+    "readiness reports every independently missing Phase 1 requirement",
+);
+assert.deepEqual(
+    getOptionalProfileImprovements(baseUser({ picture: undefined, location: undefined }), {
+        hasProofOfHumanity: true,
+    }),
+    {
+        completed: { "profile-image": false, location: false, "proof-of-humanity": true },
+        missing: ["profile-image", "location"],
+    },
+    "optional improvements remain separate from participation readiness",
+);
+assert.equal(
+    isPersonalProfileMapEligible(
+        baseUser({
+            description: "",
+            content: "",
+            communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
+        }),
+    ),
+    true,
+    "map eligibility does not require an introduction or guidelines acceptance",
+);
+assert.equal(
+    isPersonalProfileMapEligible(baseUser({ isEmailVerified: false })),
+    false,
+    "unverified accounts cannot qualify for personal-profile map visibility",
 );
 assert.equal(
     getParticipationBlockReason(
@@ -239,8 +372,8 @@ assert.equal(
             communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState(),
         }),
     ),
-    "profile_incomplete",
-    "profile completion takes precedence over guidelines when both fail",
+    "guidelines_incomplete",
+    "optional profile image does not mask a missing guidelines requirement",
 );
 assert.equal(
     getParticipationRequiredMessage("create posts", baseUser({ isEmailVerified: false })),
@@ -248,12 +381,9 @@ assert.equal(
     "participation message points unverified users to email verification",
 );
 assert.equal(
-    getParticipationRequiredMessage(
-        "create posts",
-        baseUser({ isEmailVerified: true, picture: undefined }),
-    ),
+    getParticipationRequiredMessage("create posts", baseUser({ description: "", content: "" })),
     "Complete your profile before you can create posts.",
-    "participation message points verified incomplete users to profile completion",
+    "participation message points users without an introduction to profile completion",
 );
 assert.equal(
     getParticipationRequiredMessage(

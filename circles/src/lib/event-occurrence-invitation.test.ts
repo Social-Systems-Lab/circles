@@ -182,7 +182,7 @@ assert.match(inviteSource, /getAuthenticatedUserDid\(\)/);
 assert.match(inviteSource, /getEligibleInviteCandidatesForCircle/);
 assert.match(inviteSource, /options: \{ resendExisting\?: boolean \} = \{\}/);
 assert.match(inviteSource, /upsertEventOccurrenceInvitation/);
-assert.match(inviteSource, /requestedDids = Array\.from\(new Set/, "one send deduplicates recipient DIDs");
+assert.match(inviteSource, /validateRecipientInput\(userDids\)/, "one send validates and deduplicates recipient DIDs");
 assert.match(inviteSource, /result\.status === "existing"/);
 assert.match(inviteSource, /updatedAndResent\+\+/);
 assert.match(inviteSource, /notifyEventOccurrenceInvitation/);

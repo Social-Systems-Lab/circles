@@ -23,7 +23,7 @@ import { useIsCompact } from "@/components/utils/use-is-compact";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { TbMessage } from "react-icons/tb";
 import { useRouter } from "next/navigation";
-import { findOrCreateDMConversationAction } from "../chat/actions";
+import { openProfileDmComposerAction } from "../chat/draft-actions";
 import { canParticipate } from "@/lib/profile-completion";
 
 type MessageButtonProps = {
@@ -124,9 +124,8 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
 
         setIsOpeningMessage(true);
         try {
-            const result = await findOrCreateDMConversationAction(circle, { source: "profile" });
-            const conversationId = result.chatRoom?._id || result.chatRoom?.handle;
-            if (!result.success || !conversationId) {
+            const result = await openProfileDmComposerAction(circle.did);
+            if (!result.success) {
                 toast({
                     title: "Message",
                     description: result.message || "Could not open the direct message",
@@ -135,7 +134,13 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 return;
             }
 
-            router.push(`/chat/${conversationId}`);
+            if (result.destination === "conversation") {
+                router.push(`/chat/${result.conversationId}`);
+            } else if (result.capability) {
+                router.push(
+                    `/chat/new/${encodeURIComponent(circle.did)}?capability=${encodeURIComponent(result.capability)}`,
+                );
+            }
         } catch (error) {
             console.error("Failed to open profile DM:", error);
             toast({
@@ -160,8 +165,9 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                 {isOpeningMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <TbMessage className="h-4 w-4" />}
                 {isOpeningMessage ? "Opening..." : "Message"}
             </Button>
-            {!resolvedRelationshipState.dmAllowed && resolvedRelationshipState.showConnect && (
-                resolvedRelationshipState.connectLabelReason !== "pending_received" && canSendConnectRequest ? (
+            {!resolvedRelationshipState.dmAllowed &&
+                resolvedRelationshipState.showConnect &&
+                (resolvedRelationshipState.connectLabelReason !== "pending_received" && canSendConnectRequest ? (
                     <Button
                         variant="ghost"
                         size={compact ? "sm" : "default"}
@@ -172,8 +178,7 @@ export const MessageButton = ({ circle, renderCompact }: MessageButtonProps) => 
                     >
                         {isSendingConnect ? "Sending..." : resolvedRelationshipState.connectLabel || "Add Contact"}
                     </Button>
-                ) : null
-            )}
+                ) : null)}
         </div>
     );
 };
@@ -318,23 +323,26 @@ export const useProfileRelationshipState = (circle: Circle, viewerDid?: string) 
         [],
     );
 
-    const loadRelationshipState = useCallback(async (requestId: number, targetDid: string) => {
-        try {
-            const state = await getProfileRelationshipStateAction(targetDid);
-            if (relationshipRequestRef.current !== requestId) {
-                return;
-            }
+    const loadRelationshipState = useCallback(
+        async (requestId: number, targetDid: string) => {
+            try {
+                const state = await getProfileRelationshipStateAction(targetDid);
+                if (relationshipRequestRef.current !== requestId) {
+                    return;
+                }
 
-            setRelationshipState(mapRelationshipState(state));
-        } catch (error) {
-            if (relationshipRequestRef.current !== requestId) {
-                return;
-            }
+                setRelationshipState(mapRelationshipState(state));
+            } catch (error) {
+                if (relationshipRequestRef.current !== requestId) {
+                    return;
+                }
 
-            console.error("Failed to load relationship state:", error);
-            setRelationshipState(null);
-        }
-    }, [mapRelationshipState]);
+                console.error("Failed to load relationship state:", error);
+                setRelationshipState(null);
+            }
+        },
+        [mapRelationshipState],
+    );
 
     const reloadRelationshipState = useCallback(async () => {
         if (!viewerDid || !circle?.did || circle.did === viewerDid || circle.circleType !== "user") {

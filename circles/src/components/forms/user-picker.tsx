@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Circle } from "@/models/models";
+import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,9 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { getEventInviteCandidatesAction } from "@/app/circles/[handle]/events/actions";
 
-type InviteCandidate = Circle & {
-    inviteSources?: ("circle_member" | "contact")[];
-    inviteSourceLabel?: string;
+type InviteCandidate = EventInviteCandidateDto & {
     effectiveOccurrenceRsvpStatus?: "going" | "interested";
 };
 
@@ -105,8 +103,7 @@ export default function UserPicker({
     const withEffectiveStatus = (user: InviteCandidate): InviteCandidate => ({
         ...user,
         effectiveOccurrenceRsvpStatus:
-            (user.did ? effectiveOccurrenceRsvpStatusByDid[user.did] : undefined) ??
-            user.effectiveOccurrenceRsvpStatus,
+            (user.did ? effectiveOccurrenceRsvpStatusByDid[user.did] : undefined) ?? user.effectiveOccurrenceRsvpStatus,
     });
     const visibleResults = results
         .filter((user) => !selected.some((selectedUser) => selectedUser.did === user.did))

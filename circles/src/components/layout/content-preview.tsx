@@ -44,6 +44,7 @@ import { skills } from "@/lib/data/skills";
 import SdgList from "../modules/sdgs/SdgList";
 import SocialLinks from "../modules/home/social-links";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
+import { shouldUnoptimizeCircleAvatar } from "@/lib/utils/circle-avatar-image";
 
 const sdgMap = new Map(sdgs.map((s) => [s.handle, s]));
 const skillMap = new Map(skills.map((s) => [s.handle, s]));
@@ -137,7 +138,9 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                         </Button>
                     </div>
                     <div className="absolute bottom-[-45px] right-2 flex flex-row gap-1">
-                        <InviteButton circle={circle as Circle} renderCompact={true} />
+                        {circle.visibility !== "secret" && (
+                            <InviteButton circle={circle as Circle} renderCompact={true} />
+                        )}
                         {user && <FollowButton circle={circle as Circle} renderCompact={true} />}
                         {user && <BookmarkButton circle={circle as Circle} renderCompact={true} iconOnly={true} />}
                     </div>
@@ -149,6 +152,9 @@ export const CirclePreview = ({ circle, circleType }: CirclePreviewProps) => {
                                 src={circle?.picture?.url ?? "/images/default-picture.png"}
                                 alt="Picture"
                                 fill
+                                unoptimized={shouldUnoptimizeCircleAvatar(
+                                    circle?.picture?.url ?? "/images/default-picture.png",
+                                )}
                                 onClick={() => handleProfilePicClick("Profile Picture", circle?.picture)} // Use updated handler name
                             />
                         </div>

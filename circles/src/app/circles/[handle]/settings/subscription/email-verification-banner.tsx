@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { AlertCircle, Loader2, MailCheck } from "lucide-react";
-import type { Circle } from "@/models/models";
+import type { AccountSettingsClientUser } from "@/lib/data/client-user-dto";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { shouldShowEmailVerificationBanner } from "@/lib/auth/email-verification-recovery";
 import { resendEmailVerificationAction } from "./actions";
 
-export function EmailVerificationBanner({ user }: { user: Circle }) {
+export function EmailVerificationBanner({ user }: { user: AccountSettingsClientUser }) {
     const router = useRouter();
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();

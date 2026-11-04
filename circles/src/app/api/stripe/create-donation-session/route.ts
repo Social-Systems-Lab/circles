@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAppUrl, getStripe } from "@/lib/stripe";
 import { assertPaymentsEnabled } from "@/lib/payments";
+import { readJsonBodyLimited } from "@/lib/security/bounded-input";
 
 const ALLOWED_AMOUNTS = new Set([5, 10, 25, 50, 100]);
 const MIN_DONATION_AMOUNT = 1;
@@ -10,7 +11,12 @@ export async function POST(req: NextRequest) {
     try {
         assertPaymentsEnabled();
 
-        const body = await req.json().catch(() => ({}));
+        const bodyResult = await readJsonBodyLimited(req, 4 * 1024);
+        if (!bodyResult.ok) return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+        const body =
+            bodyResult.value && typeof bodyResult.value === "object" && !Array.isArray(bodyResult.value)
+                ? (bodyResult.value as { amount?: unknown })
+                : {};
         const amount = Number(body?.amount);
         const amountSource = ALLOWED_AMOUNTS.has(amount) ? "preset" : "custom";
 

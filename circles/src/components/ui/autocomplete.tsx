@@ -26,7 +26,7 @@ export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPri
         }, [ref]);
 
         return (
-            <div className="flex items-center rounded-lg border px-3" cmdk-input-wrapper="">
+            <div className="flex min-w-0 items-center rounded-lg border px-3" cmdk-input-wrapper="">
                 {isConfirmed ? (
                     <RiMapPinFill className={"mr-2 h-4 w-4 shrink-0 text-[#e54242]"} />
                 ) : (
@@ -35,14 +35,19 @@ export const LocationInput = React.forwardRef<React.ElementRef<typeof CommandPri
                 <CommandPrimitive.Input
                     ref={ref}
                     className={cn(
-                        "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                        "min-w-0 flex-1 overflow-hidden truncate text-ellipsis whitespace-nowrap rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
                         className,
                     )}
                     {...props}
                     autoComplete="one-time-code"
                 />
                 {showClearButton && (
-                    <button type="button" onClick={onClear} className="ml-2 text-gray-500 hover:text-gray-700">
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        aria-label="Clear selected location"
+                        className="ml-2 flex h-11 w-11 shrink-0 items-center justify-center text-gray-500 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="16"
@@ -165,6 +170,7 @@ export const AutoComplete = ({
                 <LocationInput
                     ref={inputRef}
                     value={inputValue}
+                    title={value?.label || undefined}
                     onValueChange={handleInputChange}
                     onBlur={handleBlur}
                     onFocus={() => setOpen(true)}
@@ -176,6 +182,14 @@ export const AutoComplete = ({
                     className="text-base"
                 />
             </div>
+            {value?.label && (
+                <details className="mt-2 text-sm">
+                    <summary className="min-h-11 cursor-pointer py-3 text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        View full selected location
+                    </summary>
+                    <p className="break-words pb-2 text-foreground">{value.label}</p>
+                </details>
+            )}
             <div className="relative mt-1">
                 <div
                     className={cn(

@@ -11,6 +11,7 @@ export type ConversationAccessSubject = {
     type?: string;
     circleId?: unknown;
     participants?: string[];
+    archivedBy?: string[];
 };
 
 export type ConversationAccessContext = {
@@ -44,7 +45,11 @@ export const evaluateConversationAccess = ({
 
     // A DM is participant-owned. Attaching Circle ownership is contradictory and fails closed.
     if (conversation.type === "dm") {
-        return !hasCircleOwner && Boolean(conversation.participants?.includes(viewerDid));
+        return (
+            !hasCircleOwner &&
+            Boolean(conversation.participants?.includes(viewerDid)) &&
+            (intent === "read" || !conversation.archivedBy?.includes(viewerDid))
+        );
     }
 
     if (hasCircleOwner) {

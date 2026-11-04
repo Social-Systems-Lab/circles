@@ -10,6 +10,7 @@ export type ChatConversationMetadata = {
     senderName?: string;
     senderAvatarUrl?: string;
     contactType?: "offer_help" | "ask_question";
+    dmProvisional?: boolean;
 };
 
 export type ChatAttachment = {
@@ -40,6 +41,7 @@ export type ChatConversation = {
     createdAt: Date;
     updatedAt?: Date;
     archived?: boolean;
+    archivedBy?: string[];
     lastMessageAt?: Date;
     metadata?: ChatConversationMetadata;
 };
@@ -60,6 +62,53 @@ export type ChatMessageDoc = {
     system?: SystemMessageMetadata;
     thread?: ChatThreadMeta;
     threadId?: string;
+    submissionId?: string;
+    draftGeneration?: string;
+    firstTopicNotification?: {
+        state: "pending" | "processing" | "delivered";
+        attempts: number;
+        leaseUntil?: Date;
+        processingToken?: string;
+        lastAttemptAt?: Date;
+        deliveredAt?: Date;
+        lastError?: string;
+        retryAfter?: Date;
+    };
+};
+
+export type ChatTopicDraft = {
+    _id?: any;
+    authorDid: string;
+    recipientDid: string;
+    title: string;
+    body: string;
+    hashtags: string[];
+    entryKind: "composer" | "profile";
+    revision: number;
+    generation: string;
+    state: "active" | "discarded" | "consumed";
+    createdAt: Date;
+    updatedAt: Date;
+};
+
+export type ChatTopicDraftTombstone = {
+    _id?: any;
+    authorDid: string;
+    recipientDid: string;
+    generation: string;
+    reason: "discarded" | "consumed";
+    createdAt: Date;
+};
+
+export type CanonicalDmClaim = {
+    _id?: any;
+    pairKey: string;
+    participants: string[];
+    conversationId: string;
+    firstSubmissionId: string;
+    state?: "creating" | "ready";
+    readyAt?: Date;
+    createdAt: Date;
 };
 
 export type ChatReadState = {
@@ -76,6 +125,16 @@ export type ChatReadState = {
     updatedAt: Date;
 };
 
+export type ChatConversationPreference = {
+    _id?: any;
+    conversationId: string;
+    userDid: string;
+    topicSortOrder?: "latest_activity" | "date_created";
+    notificationsMuted?: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export type ChatTopicReadState = {
     _id?: any;
     conversationId: string;
@@ -83,6 +142,18 @@ export type ChatTopicReadState = {
     userDid: string;
     lastReadMessageId: string | null;
     updatedAt: Date;
+};
+
+export type ChatMessageFollowUp = {
+    _id?: any;
+    ownerDid: string;
+    messageId: string;
+    conversationId: string;
+    topicId?: string;
+    note?: string;
+    createdAt: Date;
+    updatedAt: Date;
+    completedAt?: Date;
 };
 
 export type MessageEmailReminderStatus = "pending" | "processing" | "sent" | "skipped" | "failed";

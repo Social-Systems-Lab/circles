@@ -2,7 +2,9 @@
 
 This is the canonical day-to-day development workflow for Kamooni / Circles.
 
-Use this process for normal local development, documentation patches, bug fixes, and small feature work. Keep changes small, inspect before modifying, and verify before pushing.
+Use this process for normal development, documentation patches, bug fixes, and small feature work. Keep changes small, inspect before modifying, and verify before promotion.
+
+Local Mac is the primary environment for Codex development, Git operations, code review, lightweight automated tests, TypeScript, and lint. Prefer staging for full Docker builds, integration testing, and desktop/mobile browser validation.
 
 ## Current layout
 
@@ -71,7 +73,7 @@ Rules:
 - do not change deployment scripts, Compose files, package files, or environment files unless the task explicitly asks for that
 - review the diff before testing or pushing
 
-## Run locally
+## Test locally, then on staging
 
 Kamooni uses Bun. The app root contains `bun.lock` and `package.json`.
 
@@ -86,6 +88,24 @@ docker compose -f docker-compose.local.yml up -d db minio qdrant
 bun run dev
 ```
 
+The local Docker services above are optional. Use them only when a specific local test genuinely needs them; a local Docker build is not a routine release gate.
+
+For local email testing without external delivery, start the loopback-only Mailpit service:
+
+```bash
+cd ~/circles/circles
+docker compose -f docker-compose.local.yml up -d mailpit
+```
+
+Run the app with an explicit local Mailpit transport and blank Postmark settings:
+
+```bash
+cd ~/circles/circles
+EMAIL_TRANSPORT=mailpit MAILPIT_SMTP_HOST=127.0.0.1 MAILPIT_SMTP_PORT=1025 POSTMARK_API_TOKEN= POSTMARK_SENDER_EMAIL= CIRCLES_URL=http://localhost:3000 bun run dev
+```
+
+Open <http://127.0.0.1:8025> to inspect captured messages. Local development rejects missing email configuration and permits only loopback SMTP; it does not fall back to Postmark.
+
 Useful verified package scripts:
 
 ```bash
@@ -94,7 +114,11 @@ bun run build
 bun run check:chat-actions
 ```
 
-Run the smallest relevant checks for the files changed. For UI work, also test the exact browser flow locally.
+Run the smallest relevant checks for the files changed. Then push the feature branch to GitHub and deploy that remote branch with the [staging deployment workflow](STAGING_DEPLOYMENT.md). Do not routinely hot-edit staging.
+
+Use staging for the full Docker build, integration testing, and the exact desktop and mobile browser flows affected by the change. Preserve staging's isolated MongoDB, MinIO, and email-capture configuration. Tests that require a disposable database must create an isolated test instance; never run destructive integration tests against staging's persistent database.
+
+Never automatically delete Docker volumes, databases, or persistent storage. For local disk maintenance, prefer conservative pruning of unused Docker build cache. Never recommend `docker system prune --volumes` or `docker volume prune`.
 
 ## Review diffs
 
@@ -136,23 +160,23 @@ When staging Next.js dynamic route files in zsh, quote bracketed paths:
 git add -- ':(literal)circles/src/app/circles/[handle]/settings/pages/page.tsx'
 ```
 
-## Push
+## Push to staging
 
-Push to `origin/main` only after local verification and diff review:
+All development changes must originate on a Git branch and reach staging through GitHub. After local checks and diff review, push the feature branch:
 
 ```bash
 cd ~/circles
 git status --short
-git push origin main
+git push -u origin HEAD
 ```
 
-If the push is rejected, stop and inspect. Do not force-push `main`.
+If the push is rejected, stop and inspect. Do not force-push `main`. Deploy the remote branch with the existing staging script, which verifies the deployed Git SHA and maintains the verified-image rollback ledger. Staging-only email-capture configuration must never enter a production release branch.
 
 ## Deploy when needed
 
 Development and deployment are separate steps. Do not run ad-hoc Docker deployment commands from this workflow.
 
-When a verified change needs production deployment, use the canonical guide:
+Only an approved release from `origin/main` that has passed the required checks may be deployed to production. Use the canonical guide and independently verify `/api/version` after deployment:
 
 - [Production deployment](PRODUCTION_DEPLOYMENT.md)
 
@@ -175,4 +199,5 @@ Historical documents may still mention these patterns. Treat them as legacy unle
 - [Architecture overview](../../docs/ARCHITECTURE.md)
 - [Codex project map](CODEX_PROJECT_MAP.md)
 - [Environment reference](../../docs/ENVIRONMENT.md)
+- [Staging deployment](STAGING_DEPLOYMENT.md)
 - [Production deployment](PRODUCTION_DEPLOYMENT.md)

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Circle, Feed, UserPrivate } from "@/models/models";
+import { Circle, Feed } from "@/models/models";
 import { PostForm } from "@/components/modules/feeds/post-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
 // CircleSelector is now inside PostForm
@@ -99,7 +99,7 @@ export const CreatePostDialog: React.FC<CreatePostDialogProps> = ({ isOpen, onOp
 
                 {user && (
                     <PostForm
-                        user={user as UserPrivate}
+                        user={user}
                         onSubmit={internalPostFormSubmit}
                         onCancel={handleCancel}
                         isSubmitting={isSubmittingForm}

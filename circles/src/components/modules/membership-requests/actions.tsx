@@ -69,6 +69,9 @@ export const approveMembershipRequestAction = async (
 
         // get member request
         const request = await getMembershipRequest(requestId);
+        if (request.circleId !== circle._id?.toString() || request.status !== "pending") {
+            return { success: false, message: "Membership request not found" };
+        }
 
         // add member
         await addMember(request.userDid, circle._id ?? "", ["members"], request.questionnaireAnswers);
@@ -108,6 +111,9 @@ export const rejectMembershipRequestAction = async (
 
         // get member request
         const request = await getMembershipRequest(requestId);
+        if (request.circleId !== circle._id?.toString() || request.status !== "pending") {
+            return { success: false, message: "Membership request not found" };
+        }
 
         // Clear page cache
         let circlePath = await getCirclePath(circle);

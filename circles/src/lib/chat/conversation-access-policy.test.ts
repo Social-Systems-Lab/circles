@@ -1,18 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ObjectId } from "mongodb";
-import { buildConversationScopedReplyFilter, CHAT_UNAVAILABLE_MESSAGE, evaluateConversationAccess } from "./conversation-access-policy";
+import {
+    buildConversationScopedReplyFilter,
+    CHAT_UNAVAILABLE_MESSAGE,
+    evaluateConversationAccess,
+} from "./conversation-access-policy";
 
 const viewerDid = "did:viewer";
 const circleId = new ObjectId().toHexString();
 const conversation = { _id: new ObjectId(), type: "group", circleId, participants: [viewerDid] };
 const circle = (visibility: "public" | "secret", moderationStatus = "active") => ({
-    _id: new ObjectId(circleId), circleType: "circle" as const, visibility, moderationStatus: moderationStatus as any,
+    _id: new ObjectId(circleId),
+    circleType: "circle" as const,
+    visibility,
+    moderationStatus: moderationStatus as any,
 });
-const allowed = (overrides: Record<string, unknown> = {}) => evaluateConversationAccess({
-    conversation, viewerDid, intent: "read", ownerCircle: circle("secret"), canonicalMember: true, chatMember: true,
-    ...overrides,
-} as any);
+const allowed = (overrides: Record<string, unknown> = {}) =>
+    evaluateConversationAccess({
+        conversation,
+        viewerDid,
+        intent: "read",
+        ownerCircle: circle("secret"),
+        canonicalMember: true,
+        chatMember: true,
+        ...overrides,
+    } as any);
 
 test("Secret Circle chat requires current canonical and chat-local membership", () => {
     assert.equal(allowed(), true);
@@ -33,27 +46,77 @@ test("Circle lifecycle is evaluated before local membership", () => {
 test("public, DM, standalone and malformed ownership semantics", () => {
     assert.equal(allowed({ ownerCircle: circle("public"), canonicalMember: false }), true);
     assert.equal(allowed({ conversation: { type: "dm", participants: [viewerDid] }, ownerCircle: null }), true);
-    assert.equal(allowed({ conversation: { type: "dm", participants: [viewerDid], circleId }, ownerCircle: circle("public") }), false);
+    assert.equal(
+        allowed({ conversation: { type: "dm", participants: [viewerDid], circleId }, ownerCircle: circle("public") }),
+        false,
+    );
     assert.equal(allowed({ conversation: { type: "group" }, ownerCircle: null, canonicalMember: false }), true);
     assert.equal(allowed({ ownerCircle: null }), false);
     assert.equal(allowed({ ownerCircle: { ...circle("secret"), _id: new ObjectId() } }), false);
     assert.equal(allowed({ ownerCircle: { ...circle("public"), circleType: "user" }, canonicalMember: true }), false);
-    assert.equal(allowed({ ownerCircle: { ...circle("public"), circleType: undefined }, canonicalMember: true }), false);
+    assert.equal(
+        allowed({ ownerCircle: { ...circle("public"), circleType: undefined }, canonicalMember: true }),
+        false,
+    );
     assert.equal(allowed({ ownerCircle: { ...circle("public"), circleType: "project" }, canonicalMember: true }), true);
+});
+
+test("a DM archived by one participant remains readable but is writable only by the other participant", () => {
+    const bob = "did:bob";
+    const archivedDm = { type: "dm", participants: [viewerDid, bob], archivedBy: [viewerDid] };
+    const access = (did: string, intent: "read" | "write") =>
+        allowed({ conversation: archivedDm, viewerDid: did, intent, ownerCircle: null });
+
+    assert.equal(access(viewerDid, "read"), true);
+    assert.equal(access(viewerDid, "write"), false);
+    assert.equal(access(bob, "read"), true);
+    assert.equal(access(bob, "write"), true);
+    assert.equal(access("did:outsider", "read"), false);
 });
 
 test("stale Secret membership denies every browser action family before its effect", () => {
     const actionFamilies = [
-        "recent messages", "polling messages", "topic starters", "thread replies", "unread counts",
-        "topic unread counts", "media metadata", "member count", "participant list", "admin capability",
-        "send", "reply", "create topic", "edit", "delete", "reaction", "conversation read state",
-        "topic read state", "group settings", "avatar", "member add", "member remove", "member promote", "upload",
+        "recent messages",
+        "polling messages",
+        "topic starters",
+        "thread replies",
+        "unread counts",
+        "topic unread counts",
+        "media metadata",
+        "member count",
+        "participant list",
+        "admin capability",
+        "send",
+        "reply",
+        "create topic",
+        "edit",
+        "delete",
+        "reaction",
+        "conversation read state",
+        "topic read state",
+        "group settings",
+        "avatar",
+        "member add",
+        "member remove",
+        "member promote",
+        "upload",
     ];
     let effects = 0;
     for (const family of actionFamilies) {
-        const intent = ["recent messages", "polling messages", "topic starters", "thread replies", "unread counts",
-            "topic unread counts", "media metadata", "member count", "participant list", "admin capability"].includes(family)
-            ? "read" : "write";
+        const intent = [
+            "recent messages",
+            "polling messages",
+            "topic starters",
+            "thread replies",
+            "unread counts",
+            "topic unread counts",
+            "media metadata",
+            "member count",
+            "participant list",
+            "admin capability",
+        ].includes(family)
+            ? "read"
+            : "write";
         const access = allowed({ canonicalMember: false, chatMember: true, intent });
         if (access) effects++;
         assert.equal(access, false, family);

@@ -383,7 +383,7 @@ const TasksList: React.FC<TasksListProps> = ({
     const [searchText, setSearchText] = useState("");
     const isCircleMember =
         circle.did === user?.did ||
-        Boolean(user?.memberships?.some((membership) => String(membership.circle?._id) === String(circle._id)));
+        Boolean(user?.memberships?.some((membership) => membership.circleId === String(circle._id)));
     const [selectedStages, setSelectedStages] = useState<TaskStage[]>(allTaskStages);
     const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>(allTaskPriorities);
     const [contentPreview, setContentPreview] = useAtom(contentPreviewAtom);
@@ -723,12 +723,7 @@ const TasksList: React.FC<TasksListProps> = ({
                 cell: (info) => {
                     const task = info.row.original;
                     if (isShiftTaskItem(task)) {
-                        return (
-                            <ShiftAllocationPreview
-                                task={task}
-                                showPendingHint={permissions.canModerate}
-                            />
-                        );
+                        return <ShiftAllocationPreview task={task} showPendingHint={permissions.canModerate} />;
                     }
 
                     const assignee = info.getValue() as Circle | undefined;
@@ -773,7 +768,10 @@ const TasksList: React.FC<TasksListProps> = ({
                                             onClick={(event) => {
                                                 event.stopPropagation();
                                                 startTransition(async () => {
-                                                    const result = await submitTaskClaimAction(circle.handle!, task._id as string);
+                                                    const result = await submitTaskClaimAction(
+                                                        circle.handle!,
+                                                        task._id as string,
+                                                    );
 
                                                     if (!result.success) {
                                                         toast({
@@ -1522,7 +1520,9 @@ const TasksList: React.FC<TasksListProps> = ({
                                     variant="ghost"
                                     className="flex w-full items-center justify-between rounded-none px-4 py-6 text-left text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                                 >
-                                    <span>Review {copy.completedPluralLower} ({resolvedRows.length})</span>
+                                    <span>
+                                        Review {copy.completedPluralLower} ({resolvedRows.length})
+                                    </span>
                                     <ChevronDown
                                         className={`h-4 w-4 transition-transform ${
                                             resolvedSectionOpen ? "rotate-180" : ""
@@ -1531,7 +1531,9 @@ const TasksList: React.FC<TasksListProps> = ({
                                 </Button>
                             </CollapsibleTrigger>
                             <CollapsibleContent className="border-t border-gray-200 p-4 pt-0">
-                                <div className="pt-4">{renderTaskTable(resolvedRows, `No ${copy.completedPluralLower} found.`)}</div>
+                                <div className="pt-4">
+                                    {renderTaskTable(resolvedRows, `No ${copy.completedPluralLower} found.`)}
+                                </div>
                             </CollapsibleContent>
                         </Collapsible>
                     )}
@@ -1546,8 +1548,8 @@ const TasksList: React.FC<TasksListProps> = ({
                             <DialogHeader>
                                 <DialogTitle>Delete {copy.singularTitle}</DialogTitle> {/* Updated text */}
                                 <DialogDescription>
-                                    Are you sure you want to delete the {copy.singularLower} &quot;{selectedTask?.title}&quot;? This
-                                    action cannot be undone.
+                                    Are you sure you want to delete the {copy.singularLower} &quot;{selectedTask?.title}
+                                    &quot;? This action cannot be undone.
                                 </DialogDescription>
                             </DialogHeader>
                             <DialogFooter>

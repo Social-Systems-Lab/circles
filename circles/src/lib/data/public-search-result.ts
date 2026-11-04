@@ -12,6 +12,7 @@ import {
     type SocialLink,
     type WithMetric,
 } from "@/models/models";
+import { projectPublicLocation } from "@/lib/location-privacy";
 
 export const PUBLIC_SEARCH_CIRCLE_PROJECTION = {
     _id: 1,
@@ -87,28 +88,7 @@ const copySocialLinks = (value: unknown): SocialLink[] | undefined => {
     return links.length > 0 ? links : undefined;
 };
 
-export const buildPublicSearchLocation = (value: unknown): Location | undefined => {
-    if (!value || typeof value !== "object") return undefined;
-    const source = value as Record<string, unknown>;
-    const precision = source.precision;
-    if (!Number.isInteger(precision) || typeof precision !== "number" || precision < 0 || precision > 4) {
-        return undefined;
-    }
-
-    const location: Location = { precision };
-    if (typeof source.country === "string") location.country = source.country;
-    if (precision >= 1 && typeof source.region === "string") location.region = source.region;
-    if (precision >= 2 && typeof source.city === "string") location.city = source.city;
-    if (precision >= 3 && typeof source.street === "string") location.street = source.street;
-    if (precision === 4 && source.lngLat && typeof source.lngLat === "object") {
-        const lngLat = source.lngLat as Record<string, unknown>;
-        if (Number.isFinite(lngLat.lng) && Number.isFinite(lngLat.lat)) {
-            location.lngLat = { lng: lngLat.lng as number, lat: lngLat.lat as number };
-        }
-    }
-
-    return location;
-};
+export const buildPublicSearchLocation = projectPublicLocation;
 
 const copyPublicOffers = (value: unknown): Circle["offers"] => {
     if (!value || typeof value !== "object") return undefined;

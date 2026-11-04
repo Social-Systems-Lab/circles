@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { UserPrivate } from "@/models/models"; // Circle removed
 import { ProposalForm } from "@/components/modules/proposals/proposal-form";
 import { CreatableItemDetail, CreatableItemKey, creatableItemsList } from "./global-create-dialog-content";
 // CircleSelector import removed
@@ -60,7 +59,7 @@ export const CreateProposalDialog: React.FC<CreateProposalDialogProps> = ({
                 {!user && <p className="p-4 text-red-500">Please log in to create a proposal.</p>}
                 {user && itemDetail && (
                     <ProposalForm
-                        user={user as UserPrivate}
+                        user={user}
                         itemDetail={itemDetail}
                         initialSelectedCircleId={initialSelectedCircleId} // Pass down
                         onFormSubmitSuccess={handleFormSuccess}

@@ -9,6 +9,7 @@ Last updated: March 2026
 This file defines how AI agents (Codex, ChatGPT) must operate when working on the Circles / Kamooni codebase.
 
 Goals:
+
 - Safe changes
 - Fast iteration
 - Minimal breakage
@@ -27,11 +28,13 @@ Always ask:
 > What is the smallest possible fix?
 
 Avoid:
+
 - large refactors
 - renaming files unnecessarily
 - changing unrelated code
 
 Prefer:
+
 - 1–10 line patches
 - surgical edits
 - minimal surface area
@@ -44,11 +47,36 @@ Preferred workflow:
 
 1. Investigate (read code first)
 2. Implement using Codex
-3. Test locally
-4. Stop for human local browser check
-5. Only after explicit approval: commit, merge, push, deploy
+3. Run lightweight automated checks locally
+4. Commit, push, and open a pull request when explicitly requested
+5. Deploy to staging only when explicitly authorized, then run the appropriate Docker, integration, and desktop/mobile browser validation
+6. Only after explicit approval: merge to `main` and deploy production
 
-Codex must NOT merge, push, or deploy after local checks until the human has completed a local browser test and explicitly approved proceeding.
+Local Mac remains the primary environment for Codex development, Git operations, code review, lightweight automated tests, TypeScript, and lint. Local Docker builds are optional and are required only when a specific local test genuinely needs one.
+
+Codex must NOT merge to `main` or deploy to staging or production without explicit authorization for that action. Production deployment also requires the approved release, successful checks, and the production procedure below.
+
+### Autonomous execution and approval boundaries
+
+- For work the user has authorized, inspect the relevant code and instructions, make the focused changes, run appropriate local checks, and complete explicitly requested source-control steps without asking the user to perform routine tasks.
+- Do not stop at an intermediate status when safe, authorized work remains. Continue through implementation, verification, and documentation, then report the result together. If one part is blocked, explain the specific blocker and continue independent work.
+- Authorization is limited to the requested scope. Permission to create a branch, commit, push, or open a pull request does not authorize merging or deployment.
+- Never merge, deploy, alter live production or staging services or data, change live credentials or environment configuration, activate security-sensitive feature flags, or perform another externally visible or difficult-to-reverse action without explicit authorization for that action.
+- Read-only inspection and properly isolated disposable tests may proceed when within scope. If isolation cannot be established, stop that operation and report the prerequisite. Do not send external messages or emails unless explicitly authorized.
+- Complete safe, reviewable work before requesting approval that is genuinely required. State the exact action needing approval and why.
+
+### Session continuity and handover
+
+- Recommend a fresh Codex session when moving to an unrelated task or when accumulated context may be unreliable.
+- A new session must not assume it has prior conversation history. On resumption, inspect the branch, working tree, relevant commits, repository instructions, and any handover; preserve applicable decisions and constraints.
+- Verify actual repository state before resuming work. Do not repeat completed work unnecessarily.
+- At the end of substantial work, provide a self-contained handover with the current branch, relevant commits, completed work, checks performed, outstanding issues, and recommended next action.
+- Include enough context for a new session to continue without relying on earlier conversation messages.
+
+### Delegation
+
+- Delegate only when it materially helps and the user or applicable repository instructions authorize it. Coordinate shared-file edits and review delegated findings.
+- The primary agent remains responsible for the complete result, verification, and final report.
 
 Avoid manual editing unless absolutely necessary.
 
@@ -57,24 +85,29 @@ Avoid manual editing unless absolutely necessary.
 ## 3. One Step at a Time
 
 Human operator:
+
 - copy-pastes commands
 - runs them
 - returns output
 
 Therefore:
-- NEVER give multiple steps at once
-- ALWAYS wait for output
+
+- Give one exact, copy-paste-safe action at a time when a human must run a command or make a decision.
+- The agent should run routine authorized commands and inspect their outputs autonomously; do not ask the human to relay routine results.
+- Wait for human output only when the next step depends on an action that genuinely requires their access or judgment.
 
 ---
 
 ## 4. Boring > Clever
 
 Prefer:
+
 - explicit code
 - predictable logic
 - simple patterns
 
 Avoid:
+
 - abstractions
 - overengineering
 - premature optimization
@@ -96,6 +129,7 @@ Before finishing ANY task:
 
 ```bash
 git status --short
+```
 
 Must be clean and correct.
 
@@ -119,17 +153,19 @@ Push
 
 Merge into main ONLY after validation
 
-Local Testing (MANDATORY)
+Testing
 
-Before pushing:
+Before staging:
 
-run build
+run relevant lightweight automated checks locally
 
-test in browser (localhost)
+run TypeScript and lint where relevant
 
-verify feature works
+review the diff
 
-verify nothing broke
+Push feature branches to GitHub and use staging for full Docker builds, integration testing, and desktop/mobile browser validation. Never routinely hot-edit staging. Tests requiring disposable databases must use isolated test instances; never run destructive integration tests against staging's persistent database.
+
+Never automatically delete Docker volumes, databases, or persistent storage. For local disk maintenance, prefer conservative pruning of unused Docker build cache. Never recommend `docker system prune --volumes` or `docker volume prune`.
 
 DEPLOYMENT RULES (CLEURA)
 
@@ -184,6 +220,10 @@ deploy from origin/main
 verify /api/version
 
 sync fixes back to GitHub
+
+require an approved release and successful checks
+
+keep staging-only email capture out of production release branches
 
 DATABASE RULES (CRITICAL)
 Mongo is the source of truth

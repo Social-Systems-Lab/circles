@@ -11,19 +11,24 @@ import {
     WithMetric,
 } from "@/models/models";
 import { getServerSettings } from "./server-settings";
-import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms } from "./db";
+import { Circles, Members, MembershipRequests, Feeds, Posts, ChatRooms, ChatRoomMembers } from "./db";
 import { ObjectId } from "mongodb";
 import { getDefaultAccessRules, defaultUserGroups, getDefaultModules } from "./constants";
 import { getMetrics } from "../utils/metrics";
 import { upsertVbdCircles } from "./vdb";
 import { deleteCircleAfterPublicVectorPurge } from "./derived-vector-reconciliation";
+import { applyPublicMapMetricsAndSort } from "./public-map-metrics";
 import { createDefaultChatRooms, getChatRoomByHandle, updateChatRoom } from "./chat";
 import { createDefaultFeed } from "./feed";
 import path from "path";
 import fs from "fs";
 import { USERS_DIR } from "../auth/auth";
 import { getDefaultHeroImage, hasCircleImages } from "@/lib/default-heroes";
-import { isServerDerivedMapVisibleCircle, markMapEligiblePersonalProfile } from "@/lib/map-visibility";
+import {
+    isServerDerivedMapVisibleCircle,
+    markMapEligiblePersonalProfile,
+    type MapVisibleCircle,
+} from "@/lib/map-visibility";
 import { assertCanonicalUserHandle, assertCanonicalUserHandleChange } from "@/lib/auth/canonical-user-handle";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
@@ -38,10 +43,11 @@ import {
     buildCommunityRelatedCirclesQuery,
     buildDiscoverableCircleIdsQuery,
     buildSwipeCircleQuery,
+    canViewUnpublishedInventoryCircle,
+    getCircleRelationshipToCurrentCircle,
     getPublishedCircleQuery,
     sanitizeCircleDiscoveryResult,
 } from "@/lib/data/circle-discovery-queries";
-
 export {
     buildCircleListQuery,
     buildCommunityRelatedCirclesQuery,
@@ -62,7 +68,6 @@ export const SAFE_CIRCLE_PROJECTION = {
     picture: 1,
     images: 1,
     description: 1,
-    content: 1,
     mission: 1,
     isPublic: 1,
     showAdminsPublicly: 1,
@@ -122,6 +127,7 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     content: 1,
     mission: 1,
     isPublic: 1,
+    isEmailVerified: 1,
     isVerified: 1,
     verificationStatus: 1,
     isMember: 1,
@@ -141,14 +147,14 @@ const DISCOVERY_CIRCLE_PROJECTION = {
     websiteUrl: 1,
     representsOrganization: 1,
     organizationName: 1,
-    communityGuidelinesAcceptance: 1,
 } as const;
 
-const toDiscoveryMapCircle = (circle: Circle): Circle => {
+const toDiscoveryMapCircle = (circle: Circle): MapVisibleCircle => {
     const {
         content: _content,
         communityGuidelinesAcceptance: _communityGuidelinesAcceptance,
         accountStatus: _accountStatus,
+        isEmailVerified: _isEmailVerified,
         ...discoveryCircle
     } = circle;
     return markMapEligiblePersonalProfile(discoveryCircle as Circle);
@@ -218,24 +224,22 @@ export const isCirclePublished = (circle?: Partial<Circle> | null): boolean =>
 
 export { getDiscoverableLifecycleQuery } from "@/lib/data/circle-lifecycle-policy";
 
-export const getSwipeCircles = async (viewerDid?: string): Promise<Circle[]> => {
-    let circles: Circle[] = [];
-
+export const getSwipeCircles = async (viewerDid?: string): Promise<MapVisibleCircle[]> => {
     const discoveryQuery = await getViewerCircleDiscoveryQuery(viewerDid);
 
-    circles = await Circles.find(buildSwipeCircleQuery(discoveryQuery), {
+    const circles = await Circles.find(buildSwipeCircleQuery(discoveryQuery), {
         projection: DISCOVERY_CIRCLE_PROJECTION,
     }).toArray();
 
-    circles = circles.filter(isServerDerivedMapVisibleCircle).map(toDiscoveryMapCircle);
+    const mapCircles = circles.filter(isServerDerivedMapVisibleCircle).map(toDiscoveryMapCircle);
 
-    circles.forEach((circle: Circle) => {
+    mapCircles.forEach((circle) => {
         if (circle._id) {
             circle._id = circle._id.toString();
         }
     });
     //circles = filterLocations(circles) as any[];
-    return circles.map(sanitizeCircleDiscoveryResult);
+    return mapCircles.map(sanitizeCircleDiscoveryResult);
 };
 
 export const getCircles = async (
@@ -339,7 +343,7 @@ export const getCirclesWithMetrics = async (
 
 export type CircleRelationshipToCurrentCircle = "child" | "affiliate";
 export type CircleWithRelationship = WithMetric<Circle> & {
-    relationshipToCurrentCircle: CircleRelationshipToCurrentCircle;
+    relationshipToCurrentCircle?: CircleRelationshipToCurrentCircle;
 };
 
 export const getCommunityCirclesWithRelationships = async (
@@ -347,9 +351,26 @@ export const getCommunityCirclesWithRelationships = async (
     circleId: string,
     sort?: SortingOptions,
     sdgHandles?: string[],
+    includeCreated?: boolean,
+    includeMember?: boolean,
 ): Promise<CircleWithRelationship[]> => {
-    const discoveryQuery = await getViewerCircleDiscoveryQuery(userDid);
-    const query = buildCommunityRelatedCirclesQuery(circleId, discoveryQuery, sdgHandles);
+    const discoveryContext = await getViewerCircleDiscoveryContext(userDid);
+    const user = userDid
+        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
+        : undefined;
+    const isOwnProfile = Boolean(user && user.circleType === "user" && user._id?.toString() === circleId);
+    const includeCreatedBy = isOwnProfile && includeCreated ? userDid : undefined;
+    const includeMemberCircleIds =
+        isOwnProfile && includeMember
+            ? discoveryContext.memberCircleIds.map((memberCircleId) => new ObjectId(memberCircleId))
+            : [];
+    const query = buildCommunityRelatedCirclesQuery(
+        circleId,
+        discoveryContext.query,
+        sdgHandles,
+        includeCreatedBy,
+        includeMemberCircleIds,
+    );
 
     const circles = (await Circles.find(query, {
         projection: SAFE_CIRCLE_PROJECTION,
@@ -366,22 +387,31 @@ export const getCommunityCirclesWithRelationships = async (
             continue;
         }
 
-        const relationshipToCurrentCircle = circle.parentCircleId === circleId ? "child" : "affiliate";
+        const relationshipToCurrentCircle = getCircleRelationshipToCurrentCircle(circle, circleId);
+
+        if (!isCirclePublished(circle)) {
+            const canViewDraft = await canViewUnpublishedInventoryCircle(circle, userDid, async (draftCircleId) => {
+                const [{ isAuthorized }, { features }] = await Promise.all([
+                    import("@/lib/auth/auth"),
+                    import("@/lib/data/constants"),
+                ]);
+                return isAuthorized(userDid, draftCircleId, features.settings.edit_about);
+            });
+            if (!canViewDraft) continue;
+        }
+
         const existing = dedupedById.get(id);
 
         if (!existing || relationshipToCurrentCircle === "child") {
             dedupedById.set(id, {
                 ...sanitizeCircleDiscoveryResult(circle),
-                relationshipToCurrentCircle,
+                ...(relationshipToCurrentCircle ? { relationshipToCurrentCircle } : {}),
             });
         }
     }
 
     const relatedCircles = Array.from(dedupedById.values());
     const currentDate = new Date();
-    const user = userDid
-        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
-        : undefined;
 
     for (const circle of relatedCircles) {
         circle.metrics = await getMetrics(user, circle, currentDate, sort);
@@ -445,6 +475,17 @@ export const getMetricsForCircles = async (
     return circles;
 };
 
+export const getPublicMapMetricsForCircles = async (
+    circles: WithMetric<Circle>[],
+    userDid: string | undefined,
+    sort?: SortingOptions,
+) => {
+    const user = userDid
+        ? ((await Circles.findOne({ did: userDid }, { projection: SAFE_CIRCLE_PROJECTION })) ?? undefined)
+        : undefined;
+    return applyPublicMapMetricsAndSort(circles, user, new Date(), getMetrics, sort);
+};
+
 export const createDefaultCircle = (): Circle => {
     let circle: Circle = {
         name: "Kamooni",
@@ -464,7 +505,29 @@ export const createDefaultCircle = (): Circle => {
     return circle;
 };
 
-export const createCircle = async (circle: Circle, authenticatedUserDid: string): Promise<Circle> => {
+export type CreateCircleDependencies = {
+    assertCanSetCircleVisibility: typeof assertCanSetCircleVisibility;
+    findCircleByHandle: (handle: string) => Promise<Circle | null>;
+    insertCircle: (circle: Circle) => Promise<{ insertedId: ObjectId }>;
+    upsertVbdCircles: typeof upsertVbdCircles;
+    createDefaultChatRooms: typeof createDefaultChatRooms;
+    createDefaultFeed: typeof createDefaultFeed;
+};
+
+const getDefaultCreateCircleDependencies = (): CreateCircleDependencies => ({
+    assertCanSetCircleVisibility,
+    findCircleByHandle: (handle) => Circles.findOne({ handle }, { projection: SAFE_CIRCLE_PROJECTION }),
+    insertCircle: (circle) => Circles.insertOne(circle),
+    upsertVbdCircles,
+    createDefaultChatRooms,
+    createDefaultFeed,
+});
+
+export const createCircle = async (
+    circle: Circle,
+    authenticatedUserDid: string,
+    dependencies: CreateCircleDependencies = getDefaultCreateCircleDependencies(),
+): Promise<Circle> => {
     if (!circle?.name || !circle?.handle) {
         throw new Error("Missing required fields");
     }
@@ -472,20 +535,18 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
         // Ensure we have the creator's DID
         throw new Error("Authenticated user DID is required to create a circle.");
     }
-    if (circle.circleType === "user") {
-        assertCanonicalUserHandle(circle.handle);
-    }
-    if (circle.visibility === "secret") {
-        throw new Error("Secret Circle creation remains disabled.");
-    }
-    await assertCanSetCircleVisibility({
+    circle.visibility = circle.visibility ?? "public";
+    await dependencies.assertCanSetCircleVisibility({
         actorDid: authenticatedUserDid,
         circleType: circle.circleType ?? "circle",
         visibility: circle.visibility,
     });
+    if (circle.circleType === "user") {
+        assertCanonicalUserHandle(circle.handle);
+    }
 
     // check if handle is already in use
-    let existingCircle = await Circles.findOne({ handle: circle.handle }, { projection: SAFE_CIRCLE_PROJECTION });
+    let existingCircle = await dependencies.findCircleByHandle(circle.handle);
     if (existingCircle) {
         throw new Error("Handle already in use");
     }
@@ -506,30 +567,30 @@ export const createCircle = async (circle: Circle, authenticatedUserDid: string)
     circle.circleLevel = circle.circleLevel || (circle.parentCircleId ? "profile_child" : "top_level");
     circle.publishStatus = circle.publishStatus || (circle.circleType === "user" ? "published" : "draft");
     circle.showAdminsPublicly = circle.showAdminsPublicly ?? false;
-    if (!hasCircleImages(circle.images)) {
+    if (circle.visibility !== "secret" && !hasCircleImages(circle.images)) {
         circle.images = [getDefaultHeroImage(circle.handle || circle.did || circle.name)];
     }
 
-    let result = await Circles.insertOne(circle);
+    let result = await dependencies.insertCircle(circle);
     circle._id = result.insertedId.toString();
 
     // update circle embedding
     try {
-        await upsertVbdCircles([circle]);
+        await dependencies.upsertVbdCircles([circle]);
     } catch (e) {
         console.error("Failed to upsert circle embedding", e);
     }
 
     // create circle chat room, passing the creator's DID
     try {
-        await createDefaultChatRooms(circle._id, authenticatedUserDid);
+        await dependencies.createDefaultChatRooms(circle._id, authenticatedUserDid);
     } catch (e) {
         console.error("Failed to create chat rooms", e);
     }
 
     // create default feed
     try {
-        await createDefaultFeed(circle._id);
+        await dependencies.createDefaultFeed(circle._id);
     } catch (e) {
         console.error("Failed to create default feed", e);
     }
@@ -618,6 +679,32 @@ export const updateCircle = async (
             assertCanonicalUserHandleChange(existingCircle.handle, circleWithoutId.handle);
         } else {
             delete circleWithoutId.handle;
+        }
+
+        // These fields are written only by trusted pending-registration flows.
+        // Public profile editors can submit arbitrary FormData keys (including
+        // dotted Mongo paths), so preserve the current values and reject attempts
+        // to add, replace, or remove either marker through this shared update path.
+        const protectedMetadataKeys = ["pendingRegistrationId", "pendingRegistrationFinalizationVersion"] as const;
+        for (const key of protectedMetadataKeys) {
+            delete (circleWithoutId as Record<string, unknown>)[`metadata.${key}`];
+        }
+        if (Object.prototype.hasOwnProperty.call(circleWithoutId, "metadata")) {
+            const submittedMetadata = circleWithoutId.metadata;
+            if (!submittedMetadata || typeof submittedMetadata !== "object" || Array.isArray(submittedMetadata)) {
+                delete circleWithoutId.metadata;
+            } else {
+                const safeMetadata = { ...submittedMetadata } as Record<string, unknown>;
+                const currentMetadata = existingCircle.metadata ?? {};
+                for (const key of protectedMetadataKeys) {
+                    if (Object.prototype.hasOwnProperty.call(currentMetadata, key)) {
+                        safeMetadata[key] = currentMetadata[key];
+                    } else {
+                        delete safeMetadata[key];
+                    }
+                }
+                circleWithoutId.metadata = safeMetadata;
+            }
         }
     } else {
         await dependencies.assertCircleWritesAllowed(_id.toString());
@@ -740,21 +827,51 @@ export const findProjectByShadowPostId = async (postId: string): Promise<Circle 
     return project || null;
 };
 
+type DeleteManyFilter = Record<string, unknown>;
+
+export type DeleteCircleDependencies = {
+    getCircle: (circleId: string) => Promise<Circle | null>;
+    deleteCircleDocument: (filter: { _id: ObjectId }) => Promise<{ deletedCount: number }>;
+    deleteMembers: (filter: DeleteManyFilter) => Promise<unknown>;
+    deleteMembershipRequests: (filter: DeleteManyFilter) => Promise<unknown>;
+    findFeeds: (filter: DeleteManyFilter) => Promise<Array<{ _id: unknown }>>;
+    deleteFeeds: (filter: DeleteManyFilter) => Promise<unknown>;
+    deletePosts: (filter: DeleteManyFilter) => Promise<unknown>;
+    deleteChatRooms: (filter: DeleteManyFilter) => Promise<unknown>;
+    vectorCleanup?: Parameters<typeof deleteCircleAfterPublicVectorPurge>[2];
+};
+
+const getDeleteCircleDependencies = (): DeleteCircleDependencies => ({
+    getCircle: (circleId) => getCircleById(circleId),
+    deleteCircleDocument: (filter) => Circles.deleteOne(filter),
+    deleteMembers: (filter) => Members.deleteMany(filter),
+    deleteMembershipRequests: (filter) => MembershipRequests.deleteMany(filter),
+    findFeeds: (filter) => Feeds.find(filter).toArray(),
+    deleteFeeds: (filter) => Feeds.deleteMany(filter),
+    deletePosts: (filter) => Posts.deleteMany(filter),
+    deleteChatRooms: (filter) => ChatRooms.deleteMany(filter),
+});
+
 /**
  * Delete a circle and all associated data
  * @param circleId The ID of the circle to delete
  */
-export const deleteCircle = async (circleId: string): Promise<void> => {
+export const deleteCircle = async (
+    circleId: string,
+    dependencies: DeleteCircleDependencies = getDeleteCircleDependencies(),
+): Promise<void> => {
     console.log("🗑️ [DB] Deleting circle:", circleId);
 
     // Get the circle to be deleted
-    const circle = await getCircleById(circleId);
+    const circle = await dependencies.getCircle(circleId);
     if (!circle) {
         throw new Error("Circle not found");
     }
 
-    const result = await deleteCircleAfterPublicVectorPurge(circleId, () =>
-        Circles.deleteOne({ _id: new ObjectId(circleId) }),
+    const result = await deleteCircleAfterPublicVectorPurge(
+        circleId,
+        () => dependencies.deleteCircleDocument({ _id: new ObjectId(circleId) }),
+        dependencies.vectorCleanup,
     );
 
     if (result.deletedCount === 0) {
@@ -762,23 +879,23 @@ export const deleteCircle = async (circleId: string): Promise<void> => {
     }
 
     // Delete all members of the circle
-    await Members.deleteMany({ circleId: circleId });
+    await dependencies.deleteMembers({ circleId: circleId });
 
     // Delete all membership requests for the circle
-    await MembershipRequests.deleteMany({ circleId: circleId });
+    await dependencies.deleteMembershipRequests({ circleId: circleId });
 
     // Delete all feeds associated with the circle
-    const feeds = await Feeds.find({ circleId: circleId }).toArray();
-    const feedIds = feeds.map((feed) => feed._id.toString());
+    const feeds = await dependencies.findFeeds({ circleId: circleId });
+    const feedIds = feeds.map((feed) => String(feed._id));
 
-    await Feeds.deleteMany({ circleId: circleId });
+    await dependencies.deleteFeeds({ circleId: circleId });
 
     for (const feedId of feedIds) {
-        await Posts.deleteMany({ feedId: feedId });
+        await dependencies.deletePosts({ feedId: feedId });
     }
 
     // Delete all chat rooms associated with the circle
-    await ChatRooms.deleteMany({ circleId: circleId });
+    await dependencies.deleteChatRooms({ circleId: circleId });
 
     // If the circle is a user, delete the user files
     if (circle.circleType === "user" && circle.did) {
@@ -794,6 +911,31 @@ export const deleteCircle = async (circleId: string): Promise<void> => {
     }
 
     console.log("🗑️ [DB] Circle deleted successfully:", circleId);
+};
+
+export type DeleteNewlyCreatedCircleDependencies = DeleteCircleDependencies & {
+    findChatRooms: (filter: DeleteManyFilter, options: { projection: { _id: 1 } }) => Promise<Array<{ _id: unknown }>>;
+    deleteChatRoomMembers: (filter: DeleteManyFilter) => Promise<unknown>;
+};
+
+const getDeleteNewlyCreatedCircleDependencies = (): DeleteNewlyCreatedCircleDependencies => ({
+    ...getDeleteCircleDependencies(),
+    findChatRooms: (filter, options) => ChatRooms.find(filter, options).toArray(),
+    deleteChatRoomMembers: (filter) => ChatRoomMembers.deleteMany(filter),
+});
+
+/** Complete compensation for artifacts createCircle can generate before creator membership exists. */
+export const deleteNewlyCreatedCircle = async (
+    circleId: string,
+    dependencies: DeleteNewlyCreatedCircleDependencies = getDeleteNewlyCreatedCircleDependencies(),
+): Promise<void> => {
+    const chatRoomIds = (await dependencies.findChatRooms({ circleId }, { projection: { _id: 1 } })).map((room) =>
+        room._id!.toString(),
+    );
+    await deleteCircle(circleId, dependencies);
+    if (chatRoomIds.length > 0) {
+        await dependencies.deleteChatRoomMembers({ chatRoomId: { $in: chatRoomIds } });
+    }
 };
 
 /**

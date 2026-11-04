@@ -45,6 +45,7 @@ import { useToast } from "../ui/use-toast";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
+import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
 
 type Milestone = {
     id: string;
@@ -319,7 +320,7 @@ export const UserToolbox = () => {
                                 : circle.circleType === "project"
                                   ? "Project"
                                   : "Circle",
-                        href: getCircleDefaultPath(circle),
+                        href: circle.href,
                         pinned: pinnedIds.includes(circle._id?.toString() ?? ""),
                         description: circle.description ?? circle.mission,
                     })),
@@ -530,7 +531,11 @@ export const UserToolbox = () => {
                     return;
                 }
 
-                setUser(updatedUser);
+                setUser({
+                    ...previousUser,
+                    pinnedCircles: updatedUser.pinnedCircles,
+                    bookmarkedCircles: updatedUser.bookmarkedCircles,
+                });
             } catch (error) {
                 console.error("Failed to toggle bookmark pin", error);
                 setUser(previousUser);
@@ -768,7 +773,26 @@ export const UserToolbox = () => {
                         {/* ... other tabs */}
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
-                        <ChatList chats={chatRooms} onChatClick={closeToolbox} />
+                        <ChatList
+                            chats={chatRooms}
+                            onChatClick={closeToolbox}
+                            onRetryMutePreferences={() => chatRoomsRefreshRunner.run()}
+                            onArchive={async (chat) => {
+                                const conversationId = String(chat._id);
+                                const { archiveDmConversationAction } = await import("../modules/chat/actions");
+                                const result = await archiveDmConversationAction(conversationId);
+                                if (result.success) {
+                                    const navigationTarget = getPostArchiveNavigationTarget(pathname, conversationId);
+                                    if (navigationTarget) {
+                                        closeToolbox();
+                                        router.replace(navigationTarget);
+                                    }
+                                    await chatRoomsRefreshRunner.run();
+                                } else {
+                                    alert(result.message || "Failed to archive conversation");
+                                }
+                            }}
+                        />
                     </TabsContent>
                     <TabsContent value="notifications" className="m-0 flex-grow overflow-auto pt-1">
                         <Notifications onNavigate={closeToolbox} />

@@ -11,17 +11,8 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-    Circle,
-    Media,
-    Task,
-    Location,
-    GoalDisplay,
-    EventDisplay,
-    UserPrivate,
-    TaskPriority,
-    type TaskType,
-} from "@/models/models"; // Added UserPrivate
+import { Circle, Media, Task, Location, GoalDisplay, EventDisplay, TaskPriority, type TaskType } from "@/models/models"; // Added UserPrivate
+import type { AuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, MapPinIcon, MapPin, CalendarIcon } from "lucide-react";
 import { MultiImageUploader, ImageItem } from "@/components/forms/controls/multi-image-uploader";
@@ -58,37 +49,43 @@ const taskFormSchema = z
         goalId: z.string().optional().nullable(), // Allow null or undefined
         eventId: z.string().optional().nullable(), // Allow null or undefined
         taskType: z.enum(["outcome", "shift"]).default("outcome"),
-        slots: z.preprocess((value) => {
-            if (value === "" || value == null) {
-                return undefined;
-            }
-            if (typeof value === "string") {
-                const parsedValue = Number(value);
-                return Number.isFinite(parsedValue) ? parsedValue : value;
-            }
-            return value;
-        }, z.number().int().positive("Slots must be at least 1").optional()),
-        shiftStartTime: z.preprocess(
-            (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-            z
-                .string()
-                .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format")
-                .optional(),
-        ),
-        shiftDurationMinutes: z.preprocess((value) => {
-            if (value === "" || value == null) {
-                return undefined;
-            }
-            if (typeof value === "string") {
-                const parsedValue = Number(value);
-                return Number.isFinite(parsedValue) ? parsedValue : value;
-            }
-            return value;
-        }, z.number().int().positive("Duration must be at least 1 minute").optional()),
-        participantNotes: z.preprocess(
-            (value) => (typeof value === "string" ? value.trim() || undefined : undefined),
-            z.string().max(1000, "Participant notes must be 1000 characters or fewer").optional(),
-        ),
+        slots: z
+            .union([z.string(), z.number(), z.null(), z.undefined()])
+            .transform((value) => {
+                if (value === "" || value == null) return undefined;
+                if (typeof value === "string") {
+                    const parsedValue = Number(value);
+                    return Number.isFinite(parsedValue) ? parsedValue : value;
+                }
+                return value;
+            })
+            .pipe(z.number().int().positive("Slots must be at least 1").optional()),
+        shiftStartTime: z
+            .string()
+            .optional()
+            .transform((value) => (value?.trim() === "" ? undefined : value))
+            .pipe(
+                z
+                    .string()
+                    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format")
+                    .optional(),
+            ),
+        shiftDurationMinutes: z
+            .union([z.string(), z.number(), z.null(), z.undefined()])
+            .transform((value) => {
+                if (value === "" || value == null) return undefined;
+                if (typeof value === "string") {
+                    const parsedValue = Number(value);
+                    return Number.isFinite(parsedValue) ? parsedValue : value;
+                }
+                return value;
+            })
+            .pipe(z.number().int().positive("Duration must be at least 1 minute").optional()),
+        participantNotes: z
+            .string()
+            .optional()
+            .transform((value) => value?.trim() || undefined)
+            .pipe(z.string().max(1000, "Participant notes must be 1000 characters or fewer").optional()),
         publishToNoticeboard: z.boolean().default(false),
         priority: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
         taskGroup: z.string().max(80, "Group/category must be 80 characters or fewer").optional(),
@@ -148,9 +145,10 @@ type TaskFormValues = Omit<z.infer<typeof taskFormSchema>, "images" | "location"
     priority?: TaskPriority | null;
     taskGroup?: string;
 };
+type TaskFormInputValues = z.input<typeof taskFormSchema>;
 
 interface TaskFormProps {
-    user: UserPrivate; // Added user
+    user: AuthenticatedClientUser;
     itemDetail: CreatableItemDetail; // Added itemDetail
     task?: Task;
     taskId?: string;
@@ -228,7 +226,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     }
     const initialOutcomeTaskType = initialTaskType === "outcome" ? initialTaskType : "outcome";
 
-    const form = useForm<TaskFormValues>({
+    const form = useForm<TaskFormInputValues, unknown, TaskFormValues>({
         resolver: zodResolver(taskFormSchema),
         defaultValues: {
             title: task?.title || "",
@@ -258,9 +256,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     const handleCircleSelected = useCallback(
         (circle: Circle | null) => {
             const previousCircle = selectedCircleRef.current;
-            const isDifferentCircle = Boolean(
-                previousCircle?._id && circle?._id && previousCircle._id !== circle._id,
-            );
+            const isDifferentCircle = Boolean(previousCircle?._id && circle?._id && previousCircle._id !== circle._id);
             selectedCircleRef.current = circle;
             setSelectedCircle(circle);
             setGoals([]);
@@ -686,16 +682,18 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                             control={form.control}
                                             name="shiftDurationMinutes"
                                             render={({ field }) => {
+                                                const selectedDuration =
+                                                    typeof field.value === "number" ? field.value : undefined;
                                                 const durationOptions =
-                                                    field.value &&
+                                                    selectedDuration &&
                                                     !SHIFT_DURATION_OPTIONS.some(
-                                                        (option) => option.value === field.value,
+                                                        (option) => option.value === selectedDuration,
                                                     )
                                                         ? [
                                                               ...SHIFT_DURATION_OPTIONS,
                                                               {
-                                                                  value: field.value,
-                                                                  label: `${field.value} minutes`,
+                                                                  value: selectedDuration,
+                                                                  label: `${selectedDuration} minutes`,
                                                               },
                                                           ].sort((left, right) => left.value - right.value)
                                                         : SHIFT_DURATION_OPTIONS;
@@ -705,7 +703,9 @@ export const TaskForm: React.FC<TaskFormProps> = ({
                                                         <FormLabel>Duration</FormLabel>
                                                         <Select
                                                             onValueChange={(value) => field.onChange(Number(value))}
-                                                            value={field.value ? String(field.value) : undefined}
+                                                            value={
+                                                                selectedDuration ? String(selectedDuration) : undefined
+                                                            }
                                                             disabled={isSubmitting}
                                                         >
                                                             <FormControl>

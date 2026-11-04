@@ -5,6 +5,7 @@ import { ObjectId } from "mongodb";
 import { sendUserBecomesMemberNotification } from "@/lib/data/notifications";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendEmail } from "@/lib/data/email";
+import { readTextBodyLimited } from "@/lib/security/bounded-input";
 
 const DONORBOX_WEBHOOK_SECRET = process.env.DONORBOX_WEBHOOK_SECRET;
 
@@ -20,7 +21,9 @@ export async function POST(req: NextRequest) {
     }
 
     const [timestamp, signature] = signatureHeader.split(",");
-    const body = await req.text();
+    const bodyResult = await readTextBodyLimited(req, 1024 * 1024);
+    if (!bodyResult.ok) return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+    const body = bodyResult.value;
 
     const expectedSignature = crypto
         .createHmac("sha256", DONORBOX_WEBHOOK_SECRET)
@@ -35,6 +38,7 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(events)) {
         events = [events];
     }
+    if (events.length > 100) return NextResponse.json({ error: "Too many events" }, { status: 400 });
 
     try {
         console.log("--- Donorbox Webhook Received ---");

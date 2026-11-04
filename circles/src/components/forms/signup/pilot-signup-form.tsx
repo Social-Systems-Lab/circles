@@ -101,9 +101,15 @@ export function PilotSignupForm() {
     const [hasEditedHandle, setHasEditedHandle] = useState(false);
     const altchaRef = useRef<HTMLElement | null>(null);
     const [altchaPayload, setAltchaPayload] = useState<string | null>(null);
+    const [formToken, setFormToken] = useState<string | null>(null);
+    const [website, setWebsite] = useState("");
 
     useEffect(() => {
         import("altcha");
+        fetch("/api/signup/form-token", { cache: "no-store" })
+            .then((response) => response.json())
+            .then((data) => setFormToken(typeof data.token === "string" ? data.token : null))
+            .catch(() => setFormToken(null));
     }, []);
 
     useEffect(() => {
@@ -163,9 +169,9 @@ export function PilotSignupForm() {
                 _email: state.email.trim(),
                 _password: state.password,
                 altcha: altchaPayload,
-                metadata: {
-                    onboardingFlow: "pilot-quick-signup",
-                },
+                website,
+                formToken,
+                onboardingFlow: "pilot-quick-signup",
             });
 
             if (!result.success) {
@@ -217,14 +223,28 @@ export function PilotSignupForm() {
         <div className="flex min-h-screen items-center justify-center bg-[#f7f2ea] px-4 py-10">
             <Card className="w-full max-w-md border-[#e3d5c2] bg-[#faf6ef] shadow-sm">
                 <CardHeader className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">Kamooni Pilot Signup</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#e8720c]">
+                        Kamooni Pilot Signup
+                    </p>
                     <CardTitle className="text-2xl text-[#181512]">Create your personal account</CardTitle>
                     <p className="text-sm text-[#6b5f52]">
-                        Start with the essentials. You can choose what you want to do first on Kamooni right after signup.
+                        Start with the essentials. You can choose what you want to do first on Kamooni right after
+                        signup.
                     </p>
                 </CardHeader>
                 <CardContent>
                     <form className="space-y-5" onSubmit={onSubmit}>
+                        <div className="hidden" aria-hidden="true">
+                            <Label htmlFor="pilot-signup-website">Website</Label>
+                            <Input
+                                id="pilot-signup-website"
+                                name="website"
+                                value={website}
+                                onChange={(event) => setWebsite(event.target.value)}
+                                autoComplete="off"
+                                tabIndex={-1}
+                            />
+                        </div>
                         <div className="grid gap-5 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="pilot-signup-first-name">First name</Label>
@@ -305,14 +325,19 @@ export function PilotSignupForm() {
                                 placeholder="your-handle"
                             />
                             <p className="text-sm text-[#6b5f52]">
-                                This defaults from your first and last name. You can still edit it before creating your account.
+                                This defaults from your first and last name. You can still edit it before creating your
+                                account.
                             </p>
                             {errors.handle ? <p className="text-sm text-red-600">{errors.handle}</p> : null}
                         </div>
 
                         <altcha-widget ref={altchaRef} challenge="/api/altcha/challenge" />
 
-                        <Button type="submit" disabled={isSubmitting || !altchaPayload} className="w-full">
+                        <Button
+                            type="submit"
+                            disabled={isSubmitting || !altchaPayload || !formToken}
+                            className="w-full"
+                        >
                             {isSubmitting ? "Creating account..." : "Create account"}
                         </Button>
 

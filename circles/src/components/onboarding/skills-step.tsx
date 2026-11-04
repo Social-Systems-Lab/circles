@@ -69,7 +69,7 @@ function SkillsStep({ userData, setUserData, nextStep, prevStep }: OnboardingSte
     const handleNext = async () => {
         startTransition(async () => {
             let selectedSkills = userData.selectedSkills.map((x) => x.handle);
-            const response = await saveSkillsAction(selectedSkills, user?._id);
+            const response = await saveSkillsAction(selectedSkills, user?._id ?? "");
             if (!response.success) {
                 // Handle error
                 console.error(response.message);

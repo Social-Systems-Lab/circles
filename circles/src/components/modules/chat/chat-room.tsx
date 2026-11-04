@@ -1,13 +1,22 @@
 //chat-room.tsx - chat room component, shows chat messages and input
 "use client";
 
-import { Dispatch, KeyboardEvent, SetStateAction, useCallback, useMemo, useTransition } from "react";
+import {
+    Dispatch,
+    DragEvent as ReactDragEvent,
+    Fragment,
+    KeyboardEvent,
+    SetStateAction,
+    useCallback,
+    useMemo,
+    useTransition,
+} from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
 import { replyToMessageAtom, roomMessagesAtom, unreadCountsAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
-import { useIsMobile } from "@/components/utils/use-is-mobile";
+import { useClientMediaQuery, useIsMobile } from "@/components/utils/use-is-mobile";
 import { CirclePicture } from "../circles/circle-picture";
 import RichText from "../feeds/RichText";
 import { Mention, MentionsInput } from "react-mentions";
@@ -17,13 +26,12 @@ import {
     deleteMongoMessageAction,
     editMessageAction,
     getChatRoomMembersAction,
-    sendAttachmentAction,
+    sendComposedMessageAction,
     sendMessageAction,
     toggleMongoReactionAction,
 } from "./actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-    IoArrowBack,
     IoArrowDown,
     IoClose,
     IoChevronDown,
@@ -42,7 +50,9 @@ import { GrEdit, GrTrash } from "react-icons/gr";
 import { HiDotsVertical } from "react-icons/hi";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { generateColorFromString } from "@/lib/utils/color";
+import { selectLoadedDeepLinkTopic } from "@/lib/chat/topic-deep-link";
 import { EmojiClickData } from "emoji-picker-react";
 import LazyEmojiPicker from "./LazyEmojiPicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -61,14 +71,68 @@ import {
     sendConnectRequestAction,
 } from "@/components/modules/home/actions";
 import { useToast } from "@/components/ui/use-toast";
-import { getInitialTopicTitle, getTopicCreationTime, getTopicIndexMessages } from "./chat-topic-utils";
-import { dispatchNotificationRefresh, dispatchNotificationRefreshIfOk } from "@/lib/client/notification-events";
-import { selectGreatestObjectIdHex } from "@/lib/chat/topic-read-state";
+import {
+    getInitialTopicTitle,
+    canApplyTopicReplyLoad,
+    getTopicIndexMessages,
+    getMainFeedTopicMessages,
+    getTopicViewportSnapshot,
+    mergeRefreshedTopicStarters,
+    planTopicReplyLoad,
+    createTopicUnreadIndicator,
+    selectInitialTopicId,
+    selectUnreadTopicIds,
+    resolveTopicUnreadBoundary,
+    selectFollowUpTopicReplySignal,
+    shouldReconcileTopicReplies,
+    shouldScheduleTopicReplyRetry,
+    selectQueuedTopicAcknowledgementBoundary,
+    selectTopicAcknowledgementBoundary,
+    shouldAcknowledgeTopicInteraction,
+    shouldRefreshUnreadAfterReaction,
+    KeyedTaskQueue,
+    canApplyTopicAcknowledgementResult,
+    consumePendingTopicScrollRequest,
+    confirmOptimisticTopicReply,
+    isTopicViewportNearBottom,
+    mergeAuthoritativeTopicReplies,
+    selectTopicReplyScrollTarget,
+    shouldAutoScrollTopicReplies,
+    shouldRenderTopicFeed,
+    reconcileDeferredTopicOrder,
+    TOPIC_SORT_PREFERENCE_EVENT,
+    type TopicSortOrder,
+    type TopicUnreadIndicator,
+} from "./chat-topic-utils";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
+import { ArchiveRestore, ArrowLeft } from "lucide-react";
+import { getConversationListPath } from "@/lib/chat/chat-index-navigation";
+import {
+    MessageFollowUpAction,
+    MessageFollowUpIndicator,
+    MessageFollowUpNoteDialog,
+    useHydrateMessageFollowUpStatuses,
+} from "./message-follow-up-action";
+import { canShowExistingReplyActions, canShowMessageFollowUpAction } from "./message-follow-up-ui";
 import {
     getLegacyLooseMessages,
     shouldFetchLegacyLooseMessagesOnExpand,
     shouldShowLegacyLooseMessageSection,
 } from "@/lib/chat/legacy-messages";
+import {
+    appendFilesToQueue,
+    buildComposedMessageSignature,
+    buildComposedMessageFormData,
+    buildComposerScopeKey,
+    getStableSubmissionId,
+    isFileDrag,
+    removeQueuedAttachment,
+    type QueuedChatAttachment,
+    updateFileDragDepth,
+} from "./chat-attachment-queue";
+import { createDebouncedTopicDraftWriter, getTopicTextDraftKey, readTopicTextDraft } from "./topic-text-drafts";
+
+const getBrowserTopicDraftStorage = () => (typeof window === "undefined" ? null : window.localStorage);
 
 export const renderCircleSuggestion = (
     suggestion: any,
@@ -96,6 +160,7 @@ const CHAT_TOPIC_BACKGROUND_CLASS = "border border-[#DDEBB8] bg-[#F1F6DF]";
 const CHAT_STANDARD_BUBBLE_CLASS = "border border-gray-200 bg-white";
 const CHAT_MESSAGE_ELEMENT_ID_PREFIX = "chat-message-";
 const CHAT_MESSAGE_HIGHLIGHT_CLASSES = ["ring-2", "ring-blue-300", "ring-offset-2", "ring-offset-white"];
+const messageHighlightTimers = new WeakMap<HTMLElement, number>();
 
 const renderMentionsAsDisplayText = (content: string) => content.replace(CHAT_MENTION_MARKUP_REGEX, "$1");
 const isChatMentionLinkHref = (href?: string) => !!href && CHAT_MENTION_LINK_HREF_REGEX.test(href);
@@ -198,7 +263,7 @@ const queryChatMentionSuggestions = (
     );
 };
 
-type DmConnectBannerState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
+type DmConnectControlState = Awaited<ReturnType<typeof getProfileRelationshipStateAction>>;
 
 const isPlatformAnnouncementMessage = (message: ChatMessage): boolean =>
     message.system?.messageType === "system" &&
@@ -304,9 +369,13 @@ const scrollToMessageElement = (messageId?: string) => {
 
     element.scrollIntoView({ behavior: "smooth", block: "center" });
     element.classList.add(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
-    window.setTimeout(() => {
+    const existingTimer = messageHighlightTimers.get(element);
+    if (existingTimer) window.clearTimeout(existingTimer);
+    const timer = window.setTimeout(() => {
         element.classList.remove(...CHAT_MESSAGE_HIGHLIGHT_CLASSES);
+        messageHighlightTimers.delete(element);
     }, 1800);
+    messageHighlightTimers.set(element, timer);
 };
 
 const ReplyReferencePreview: React.FC<{
@@ -401,9 +470,13 @@ const renderChatMessage = (message: ChatMessage, preview?: boolean) => {
     }
 };
 
-const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | null }> = ({ chatRoom, user }) => {
+const DmConnectControl: React.FC<{
+    chatRoom: ChatRoomDisplay;
+    user?: Circle | null;
+    showActions?: boolean;
+}> = ({ chatRoom, user, showActions = true }) => {
     const { toast } = useToast();
-    const [state, setState] = useState<DmConnectBannerState>(null);
+    const [state, setState] = useState<DmConnectControlState>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isActing, setIsActing] = useState(false);
 
@@ -419,7 +492,7 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
     }, [chatRoom, user?.did]);
 
     const loadState = useCallback(async () => {
-        if (!otherParticipant?.did) {
+        if (!otherParticipant?.did || !showActions) {
             setState(null);
             return;
         }
@@ -433,13 +506,13 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
         } finally {
             setIsLoading(false);
         }
-    }, [otherParticipant?.did]);
+    }, [otherParticipant?.did, showActions]);
 
     useEffect(() => {
         void loadState();
     }, [loadState]);
 
-    if (!otherParticipant?.did || !state || state.connectStatus === "accepted") {
+    if (!otherParticipant?.did) {
         return null;
     }
 
@@ -466,61 +539,74 @@ const DmConnectBanner: React.FC<{ chatRoom: ChatRoomDisplay; user?: Circle | nul
     };
 
     const contactName = otherParticipant.name || "this person";
+    const participant = (
+        <div className="flex min-w-0 items-center gap-2">
+            <CirclePicture circle={otherParticipant} size="28px" />
+            <span className="truncate text-sm font-semibold text-gray-900">{contactName}</span>
+        </div>
+    );
 
     return (
-        <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                    {state.connectStatus === "pending_sent"
-                        ? `Contact request sent to ${contactName}.`
-                        : state.connectStatus === "pending_received"
-                          ? `${contactName} sent you a contact request.`
-                          : `You can message ${contactName}. Connect to add them as a contact.`}
-                </span>
-                {state.connectStatus === "pending_received" ? (
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            className="rounded-full"
-                            disabled={isActing || isLoading}
-                            onClick={() =>
-                                void runContactAction(
-                                    () => acceptConnectRequestAction(otherParticipant.did!),
-                                    "Accept contact request",
-                                )
-                            }
-                        >
-                            Accept
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="rounded-full"
-                            disabled={isActing || isLoading}
-                            onClick={() =>
-                                void runContactAction(
-                                    () => declineConnectRequestAction(otherParticipant.did!),
-                                    "Decline contact request",
-                                )
-                            }
-                        >
-                            Decline
-                        </Button>
-                    </div>
-                ) : (
-                    <Button
-                        size="sm"
-                        variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
-                        className="rounded-full"
-                        disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
-                        onClick={() =>
-                            void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
-                        }
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+                {otherParticipant.handle ? (
+                    <Link
+                        href={`/circles/${otherParticipant.handle}`}
+                        className="block min-w-0 rounded-full hover:bg-gray-100"
                     >
-                        {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
-                    </Button>
+                        {participant}
+                    </Link>
+                ) : (
+                    participant
                 )}
             </div>
+            {showActions && state && state.connectStatus !== "accepted" && (
+                <div className="flex shrink-0 items-center gap-1" aria-label={`Connection controls for ${contactName}`}>
+                    {state.connectStatus === "pending_received" ? (
+                        <>
+                            <Button
+                                size="sm"
+                                className="h-8 rounded-full px-2.5 text-xs"
+                                disabled={isActing || isLoading}
+                                onClick={() =>
+                                    void runContactAction(
+                                        () => acceptConnectRequestAction(otherParticipant.did!),
+                                        "Accept contact request",
+                                    )
+                                }
+                            >
+                                Accept
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-full bg-white px-2.5 text-xs"
+                                disabled={isActing || isLoading}
+                                onClick={() =>
+                                    void runContactAction(
+                                        () => declineConnectRequestAction(otherParticipant.did!),
+                                        "Decline contact request",
+                                    )
+                                }
+                            >
+                                Decline
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant={state.connectStatus === "pending_sent" ? "outline" : "default"}
+                            className="h-8 rounded-full px-2.5 text-xs"
+                            disabled={isActing || isLoading || state.connectStatus === "pending_sent"}
+                            onClick={() =>
+                                void runContactAction(() => sendConnectRequestAction(otherParticipant.did!), "Connect")
+                            }
+                        >
+                            {state.connectStatus === "pending_sent" ? "Requested" : "Connect"}
+                        </Button>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -568,7 +654,7 @@ export const MessageRenderer: React.FC<{ message: ChatMessage; preview?: boolean
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 rounded-lg bg-gray-100 p-3 transition-colors hover:bg-gray-200"
                                     >
-                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#315C3D]/10 text-[#315C3D]">
                                             <IoDocumentText className="h-6 w-6" />
                                         </div>
                                         <div className="flex flex-col overflow-hidden">
@@ -644,6 +730,7 @@ const renderSystemMessage = (content: string) => content;
 type ChatMessagesProps = {
     messages: ChatMessage[];
     messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+    scrollViewportRef: React.RefObject<HTMLDivElement | null>;
     onMessagesRendered?: () => void;
     handleDelete: (message: ChatMessage) => Promise<void>;
     handleEdit: (message: ChatMessage) => void;
@@ -660,9 +747,13 @@ type ChatMessagesProps = {
     onCreateTopic?: () => void;
     onTopicActivity?: () => Promise<void> | void;
     topicUnreadCounts?: Record<string, number>;
+    topicReplyChangeSignals?: Record<string, string>;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     topicsLoaded?: boolean;
     mentionCandidates?: Circle[];
+    topicSortOrder?: TopicSortOrder;
+    deferTopicReordering?: boolean;
+    legacyTargetMessageId?: string;
 };
 
 const sameAuthor = (message1: ChatMessage, message2: ChatMessage) => {
@@ -712,6 +803,8 @@ const LegacyReadOnlyMessageRow: React.FC<{
                 </div>
             )}
             <div
+                id={getMessageElementId(message.id)}
+                data-message-id={message.id}
                 className={`mb-1 flex gap-2 ${isFirstInChain ? "mt-3" : "mt-1"} ${isOwnMessage ? "justify-end" : "justify-start"}`}
             >
                 {!isDirect &&
@@ -787,7 +880,8 @@ const EarlierMessagesSection: React.FC<{
     conversationId?: string;
     isDirect?: boolean;
     currentUserDid?: string;
-}> = ({ conversationId, isDirect = false, currentUserDid }) => {
+    targetMessageId?: string;
+}> = ({ conversationId, isDirect = false, currentUserDid, targetMessageId }) => {
     const [count, setCount] = useState<number | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[] | null>(null);
@@ -846,6 +940,18 @@ const EarlierMessagesSection: React.FC<{
         setIsExpanded(false);
         void loadCount();
     }, [loadCount]);
+
+    useEffect(() => {
+        if (!targetMessageId) return;
+        setIsExpanded(true);
+        if (messages === null && !messagesError && !isLoadingMessages) void loadMessages();
+    }, [isLoadingMessages, loadMessages, messages, messagesError, targetMessageId]);
+
+    useEffect(() => {
+        if (!targetMessageId || !messages?.some((message) => message.id === targetMessageId)) return;
+        const frame = requestAnimationFrame(() => scrollToMessageElement(targetMessageId));
+        return () => cancelAnimationFrame(frame);
+    }, [messages, targetMessageId]);
 
     const toggleExpanded = () => {
         const nextExpanded = !isExpanded;
@@ -932,6 +1038,7 @@ const EarlierMessagesSection: React.FC<{
 const ChatMessages: React.FC<ChatMessagesProps> = ({
     messages,
     messagesEndRef,
+    scrollViewportRef,
     onMessagesRendered,
     handleDelete,
     handleEdit,
@@ -947,9 +1054,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     onCreateTopic,
     onTopicActivity,
     topicUnreadCounts = {},
+    topicReplyChangeSignals = {},
     onTopicRead,
     topicsLoaded = true,
     mentionCandidates = [],
+    topicSortOrder = "latest_activity",
+    deferTopicReordering = false,
+    legacyTargetMessageId,
 }) => {
     const [user] = useAtom(userAtom);
     const [, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -957,6 +1068,16 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     const [pickerOpenForMessage, setPickerOpenForMessage] = useState<string | null>(null);
     const [, setRoomMessages] = useAtom(roomMessagesAtom);
     const isMobile = useIsMobile();
+    const looseReactionQueueRef = useRef(new KeyedTaskQueue());
+    const looseReactionMountedRef = useRef(false);
+    const looseReactionScopeRef = useRef("");
+    looseReactionScopeRef.current = `${user?.did || ""}\u0000${conversationId || ""}`;
+    useEffect(() => {
+        looseReactionMountedRef.current = true;
+        return () => {
+            looseReactionMountedRef.current = false;
+        };
+    }, []);
     const handleReply = (message: ChatMessage) => {
         if (!canReply) return;
         setReplyToMessage(message);
@@ -969,12 +1090,6 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
         if (!user.did) return;
 
         const reactionSender = user.did;
-        const anyExistingReaction = Object.entries(message.reactions || {})
-            .map(([key, reactions]) => {
-                const userReaction = reactions.find((r) => r.sender === reactionSender);
-                return userReaction ? { ...userReaction, key } : null;
-            })
-            .find((r) => r !== null);
 
         // Optimistic UI Update
         setRoomMessages((prev) => {
@@ -985,6 +1100,12 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
             const updatedMessage = { ...roomMessages[messageIndex] };
             const reactions = { ...(updatedMessage.reactions || {}) };
+            const anyExistingReaction = Object.entries(reactions)
+                .map(([key, entries]) => {
+                    const userReaction = entries.find((reaction) => reaction.sender === reactionSender);
+                    return userReaction ? { ...userReaction, key } : null;
+                })
+                .find((reaction) => reaction !== null);
 
             // Remove any existing reaction from the user
             if (anyExistingReaction) {
@@ -1011,23 +1132,29 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
             return newRooms;
         });
 
-        try {
-            const result = await toggleMongoReactionAction(message.id, emoji);
-            if (result.success && result.reactions) {
-                setRoomMessages((prev) => {
-                    const newRooms = { ...prev };
-                    const roomMessages = [...(newRooms[message.roomId] || [])];
-                    const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
-                    if (messageIndex === -1) return prev;
-                    roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
-                    newRooms[message.roomId] = roomMessages;
-                    return newRooms;
-                });
+        const scope = looseReactionScopeRef.current;
+        const queueKey = `${reactionSender}\u0000${message.roomId}\u0000${message.id}`;
+        await looseReactionQueueRef.current.enqueue(queueKey, async () => {
+            try {
+                const result = await toggleMongoReactionAction(message.id, emoji);
+                const canApply = looseReactionMountedRef.current && looseReactionScopeRef.current === scope;
+                if (canApply && result.success && result.reactions) {
+                    setRoomMessages((prev) => {
+                        const newRooms = { ...prev };
+                        const roomMessages = [...(newRooms[message.roomId] || [])];
+                        const messageIndex = roomMessages.findIndex((m) => m.id === message.id);
+                        if (messageIndex === -1) return prev;
+                        roomMessages[messageIndex] = { ...roomMessages[messageIndex], reactions: result.reactions };
+                        newRooms[message.roomId] = roomMessages;
+                        return newRooms;
+                    });
+                }
+                if (canApply && shouldRefreshUnreadAfterReaction(result)) await onTopicRead?.(message.id);
+            } catch (error) {
+                console.error("Failed to update reaction:", error);
+                // On failure, the state will be corrected by the next sync
             }
-        } catch (error) {
-            console.error("Failed to update reaction:", error);
-            // On failure, the state will be corrected by the next sync
-        }
+        });
     };
 
     const handleTouchStart = (message: ChatMessage) => {
@@ -1069,7 +1196,25 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
     };
 
     const topicMessages = getTopicIndexMessages(messages);
-    const orderedMessages = topicMessages;
+    const desiredMessages = useMemo(
+        () => getMainFeedTopicMessages(messages, topicSortOrder),
+        [messages, topicSortOrder],
+    );
+    const desiredTopicIds = useMemo(() => desiredMessages.map((message) => message.id), [desiredMessages]);
+    const [displayedTopicIds, setDisplayedTopicIds] = useState<string[]>(() => desiredTopicIds);
+
+    useEffect(() => {
+        setDisplayedTopicIds((current) => reconcileDeferredTopicOrder(current, desiredTopicIds, deferTopicReordering));
+    }, [deferTopicReordering, desiredTopicIds]);
+
+    const topicById = new Map(desiredMessages.map((message) => [message.id, message]));
+    const orderedMessages = displayedTopicIds
+        .map((topicId) => topicById.get(topicId))
+        .filter((message): message is ChatMessage => !!message);
+    useHydrateMessageFollowUpStatuses(
+        user?.did || currentUser?.did || "",
+        orderedMessages.filter(canShowMessageFollowUpAction).map((message) => message.id),
+    );
 
     const emptyTopicState =
         topicsLoaded && topicMessages.length === 0 ? (
@@ -1098,6 +1243,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 conversationId={conversationId}
                 isDirect={isDirect}
                 currentUserDid={user?.did || currentUser?.did}
+                targetMessageId={legacyTargetMessageId}
             />
             {emptyTopicState}
             {orderedMessages.reduce<React.ReactNode[]>((acc, message, index) => {
@@ -1115,8 +1261,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                             onToggleTopic={onToggleTopic}
                             onTopicActivity={onTopicActivity}
                             serverUnreadCount={topicUnreadCounts[message.id] || 0}
+                            replyChangeSignal={topicReplyChangeSignals[message.id]}
                             onTopicRead={onTopicRead}
                             mentionCandidates={mentionCandidates}
+                            canReply={canReply}
+                            scrollViewportRef={scrollViewportRef}
                         />,
                     );
                     return acc;
@@ -1148,6 +1297,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                 const bubbleRadius = "12px";
                 const canEditMessage = isOwnMessage && !message.status;
                 const canDeleteMessage = isOwnMessage && message.status !== "pending";
+                const canFollowUpMessage = canShowMessageFollowUpAction(message);
                 const bubbleStatusClasses =
                     message.status === "pending"
                         ? "opacity-70"
@@ -1206,9 +1356,11 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                             </div>
                                         )}
                                         <MessageRenderer message={message} />
-                                        {isLastInChain && (
+                                        {(isLastInChain || canFollowUpMessage) && (
                                             <div className="mt-0 flex items-center justify-end gap-1 text-[9px] text-gray-400">
-                                                <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                {isLastInChain && (
+                                                    <span>{formatChatDate(new Date(message.createdAt))}</span>
+                                                )}
                                                 {isOwnMessage && message.status === "pending" && (
                                                     <span className="flex items-center gap-1 text-blue-400">
                                                         <IoTimeOutline className="h-2.5 w-2.5" />
@@ -1219,12 +1371,18 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                         <IoWarningOutline className="h-2.5 w-2.5" />
                                                     </span>
                                                 )}
+                                                {canFollowUpMessage && (
+                                                    <MessageFollowUpIndicator
+                                                        messageId={message.id}
+                                                        viewerDid={user?.did || currentUser?.did || ""}
+                                                    />
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                     {message.reactions && Object.keys(message.reactions).length > 0 && (
                                         <div
-                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                                            className={`relative z-10 -mt-3 flex flex-wrap gap-1 px-1 ${isOwnMessage ? "justify-end" : "justify-start"} ${canFollowUpMessage && isOwnMessage ? "pr-9" : ""}`}
                                         >
                                             {Object.entries(message.reactions).map(([reaction, reactions]) => (
                                                 <div
@@ -1234,7 +1392,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                                             ? "border-gray-200"
                                                             : "border-gray-200"
                                                     }`}
-                                                    onClick={() => handleReaction(message, reaction)}
+                                                    onClick={
+                                                        canReply ? () => handleReaction(message, reaction) : undefined
+                                                    }
                                                 >
                                                     <span>{reaction}</span>
                                                     {reactions.length > 1 && (
@@ -1245,67 +1405,78 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
                                         </div>
                                     )}
 
-                                    {(hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
-                                        <div
-                                            className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {isOwnMessage && (
-                                                <>
-                                                    {canEditMessage && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6"
-                                                            onClick={() => handleEdit(message)}
-                                                        >
-                                                            <GrEdit className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    {canDeleteMessage && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6"
-                                                            onClick={() => handleDelete(message)}
-                                                        >
-                                                            <GrTrash className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </>
-                                            )}
-                                            {canReply && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => handleReply(message)}
-                                                >
-                                                    <MdReply className="h-4 w-4" />
-                                                </Button>
-                                            )}
-                                            <Popover
-                                                open={pickerOpenForMessage === message.id}
-                                                onOpenChange={(isOpen) =>
-                                                    setPickerOpenForMessage(isOpen ? message.id : null)
-                                                }
+                                    {(canReply || canFollowUpMessage) &&
+                                        (hoveredMessageId === message.id || pickerOpenForMessage === message.id) && (
+                                            <div
+                                                className={`absolute bottom-1 z-10 flex items-center gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm ${isOwnMessage ? "left-0" : "right-0"}`}
+                                                onClick={(e) => e.stopPropagation()}
                                             >
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                                                        <BsEmojiSmile className="h-4 w-4" />
+                                                {isOwnMessage && canReply && (
+                                                    <>
+                                                        {canEditMessage && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6"
+                                                                onClick={() => handleEdit(message)}
+                                                            >
+                                                                <GrEdit className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                        {canDeleteMessage && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6"
+                                                                onClick={() => handleDelete(message)}
+                                                            >
+                                                                <GrTrash className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {canReply && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleReply(message)}
+                                                    >
+                                                        <MdReply className="h-4 w-4" />
                                                     </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                    <LazyEmojiPicker
-                                                        onEmojiClick={(emojiData: EmojiClickData) => {
-                                                            handleReaction(message, emojiData.emoji);
-                                                            setPickerOpenForMessage(null);
-                                                        }}
+                                                )}
+                                                {canFollowUpMessage && (
+                                                    <MessageFollowUpAction
+                                                        messageId={message.id}
+                                                        viewerDid={user?.did || currentUser?.did || ""}
+                                                        variant="icon"
+                                                        iconSize="compact"
                                                     />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                    )}
+                                                )}
+                                                {canReply && (
+                                                    <Popover
+                                                        open={pickerOpenForMessage === message.id}
+                                                        onOpenChange={(isOpen) =>
+                                                            setPickerOpenForMessage(isOpen ? message.id : null)
+                                                        }
+                                                    >
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                                <BsEmojiSmile className="h-4 w-4" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                            <LazyEmojiPicker
+                                                                onEmojiClick={(emojiData: EmojiClickData) => {
+                                                                    handleReaction(message, emojiData.emoji);
+                                                                    setPickerOpenForMessage(null);
+                                                                }}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                )}
+                                            </div>
+                                        )}
                                 </div>
                             )}
 
@@ -1327,6 +1498,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
 
                 return acc;
             }, [])}
+            <MessageFollowUpNoteDialog viewerDid={user?.did || currentUser?.did || ""} />
             <div ref={messagesEndRef} style={{ overflowAnchor: "none" }} />
         </div>
     );
@@ -1366,6 +1538,120 @@ type ChatInputProps = {
     onMobileComposerExpandedChange?: (expanded: boolean) => void;
 };
 
+const formatAttachmentSize = (size: number): string =>
+    size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.ceil(size / 1024))} KB`;
+
+const QueuedAttachmentPreviews = ({
+    attachments,
+    disabled,
+    onRemove,
+}: {
+    attachments: QueuedChatAttachment[];
+    disabled: boolean;
+    onRemove: (attachmentId: string) => void;
+}) => {
+    if (!attachments.length) return null;
+    return (
+        <div className="mb-2 flex max-w-full flex-wrap gap-2" aria-label="Queued attachments">
+            {attachments.map((attachment) => (
+                <div
+                    key={attachment.id}
+                    className="flex max-w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs shadow-sm"
+                >
+                    {attachment.previewUrl ? (
+                        <Image
+                            src={attachment.previewUrl}
+                            alt=""
+                            width={40}
+                            height={40}
+                            unoptimized
+                            className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                    ) : (
+                        <IoDocumentText className="h-5 w-5 shrink-0 text-[#315C3D]" aria-hidden="true" />
+                    )}
+                    <span className="min-w-0">
+                        <span className="block max-w-40 truncate font-medium text-gray-700">
+                            {attachment.file.name}
+                        </span>
+                        <span className="text-gray-500">{formatAttachmentSize(attachment.file.size)}</span>
+                    </span>
+                    <button
+                        type="button"
+                        className="rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
+                        onClick={() => onRemove(attachment.id)}
+                        disabled={disabled}
+                        aria-label={`Remove ${attachment.file.name}`}
+                    >
+                        <IoClose className="h-4 w-4" />
+                    </button>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const createComposerSubmissionId = (): string =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const enqueueChatFiles = (
+    selectedFiles: File[],
+    queueRef: { current: QueuedChatAttachment[] },
+    setQueue: Dispatch<SetStateAction<QueuedChatAttachment[]>>,
+    disabled: boolean,
+) => {
+    if (!selectedFiles.length || disabled) return;
+    const result = appendFilesToQueue(queueRef.current, selectedFiles, createComposerSubmissionId, (file) =>
+        URL.createObjectURL(file),
+    );
+    if (result.error) {
+        alert(result.error);
+        return;
+    }
+    queueRef.current = result.attachments;
+    setQueue(result.attachments);
+};
+
+const useChatFileDrop = (onFiles: (files: File[]) => void, disabled: boolean) => {
+    const [isFileDragActive, setIsFileDragActive] = useState(false);
+    const dragDepthRef = useRef(0);
+
+    const onDragEnter = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer)) return;
+        event.preventDefault();
+        if (disabled) return;
+        dragDepthRef.current = updateFileDragDepth(dragDepthRef.current, "enter");
+        setIsFileDragActive(true);
+    };
+    const onDragOver = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = disabled ? "none" : "copy";
+    };
+    const onDragLeave = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer) && dragDepthRef.current === 0) return;
+        event.preventDefault();
+        dragDepthRef.current = updateFileDragDepth(dragDepthRef.current, "leave");
+        if (dragDepthRef.current === 0) setIsFileDragActive(false);
+    };
+    const onDrop = (event: ReactDragEvent<HTMLElement>) => {
+        if (!isFileDrag(event.dataTransfer) && dragDepthRef.current === 0 && event.dataTransfer.files.length === 0)
+            return;
+        event.preventDefault();
+        dragDepthRef.current = updateFileDragDepth(dragDepthRef.current, "drop");
+        setIsFileDragActive(false);
+        if (!disabled) onFiles(Array.from(event.dataTransfer.files));
+    };
+
+    return { isFileDragActive, onDragEnter, onDragOver, onDragLeave, onDrop };
+};
+
+const preventFileDropNavigation = (event: ReactDragEvent<HTMLElement>) => {
+    if (isFileDrag(event.dataTransfer) || event.dataTransfer.files.length > 0) event.preventDefault();
+};
+
 const ChatInput = ({
     roomId,
     editingMessage,
@@ -1381,7 +1667,43 @@ const ChatInput = ({
     const isMobile = useIsMobile();
     const [isComposerFocused, setIsComposerFocused] = useState(false);
     const [isMobileActionMenuOpen, setIsMobileActionMenuOpen] = useState(false);
+    const [queuedAttachments, setQueuedAttachments] = useState<QueuedChatAttachment[]>([]);
+    const [isSendingComposed, setIsSendingComposed] = useState(false);
+    const queuedAttachmentsRef = useRef<QueuedChatAttachment[]>([]);
+    const composedSubmissionRef = useRef<{ signature: string; submissionId: string } | null>(null);
+    const currentRoomIdRef = useRef(roomId);
+    const composerRoomRef = useRef(roomId);
+    const newMessageRef = useRef(newMessage);
+    const replyToMessageRef = useRef(replyToMessage);
+    newMessageRef.current = newMessage;
+    replyToMessageRef.current = replyToMessage;
+    currentRoomIdRef.current = roomId;
     const isExpandedMobileComposer = !!isMobile && (isComposerFocused || isMobileActionMenuOpen);
+
+    useEffect(() => {
+        queuedAttachmentsRef.current = queuedAttachments;
+    }, [queuedAttachments]);
+
+    useEffect(() => {
+        if (composerRoomRef.current === roomId) return;
+        for (const attachment of queuedAttachmentsRef.current) {
+            if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        }
+        queuedAttachmentsRef.current = [];
+        setQueuedAttachments([]);
+        setNewMessage("");
+        composedSubmissionRef.current = null;
+        composerRoomRef.current = roomId;
+    }, [roomId]);
+
+    useEffect(
+        () => () => {
+            for (const attachment of queuedAttachmentsRef.current) {
+                if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+            }
+        },
+        [],
+    );
 
     const chatMentionsInputStyle = useMemo(() => {
         if (!isMobile) {
@@ -1455,7 +1777,7 @@ const ChatInput = ({
             return;
         }
 
-        if (!trimmedMessage) {
+        if (!trimmedMessage && queuedAttachments.length === 0) {
             return;
         }
 
@@ -1463,6 +1785,65 @@ const ChatInput = ({
         if (editingMessage) {
             console.log("📤 [Send] Routing to handleEditSubmit...");
             await handleEditSubmit();
+            return;
+        }
+
+        if (queuedAttachments.length > 0) {
+            if (isSendingComposed) return;
+            const sendRoomId = roomId;
+            const replyTarget = replyToMessage;
+            const attachmentsSnapshot = queuedAttachments;
+            const signature = buildComposedMessageSignature({
+                scopeKey: buildComposerScopeKey(sendRoomId),
+                body: trimmedMessage,
+                replyToMessageId: replyTarget?.id,
+                attachments: attachmentsSnapshot,
+            });
+            const submission = getStableSubmissionId(
+                composedSubmissionRef.current,
+                signature,
+                createComposerSubmissionId,
+            );
+            composedSubmissionRef.current = submission;
+            const formData = buildComposedMessageFormData({
+                conversationId: sendRoomId,
+                body: trimmedMessage,
+                replyToMessageId: replyTarget?.id,
+                submissionId: submission.submissionId,
+                attachments: attachmentsSnapshot,
+            });
+
+            setIsSendingComposed(true);
+            try {
+                const result = await sendComposedMessageAction(formData);
+                if (!result.success) {
+                    alert(`Failed to send message: ${result.message || "Please try again."}`);
+                    return;
+                }
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: sendRoomId });
+                const currentSignature = buildComposedMessageSignature({
+                    scopeKey: buildComposerScopeKey(sendRoomId),
+                    body: newMessageRef.current.trim(),
+                    replyToMessageId: replyToMessageRef.current?.id,
+                    attachments: queuedAttachmentsRef.current,
+                });
+                if (currentRoomIdRef.current === sendRoomId && currentSignature === signature) {
+                    for (const attachment of attachmentsSnapshot) {
+                        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+                    }
+                    queuedAttachmentsRef.current = [];
+                    setQueuedAttachments([]);
+                    setNewMessage("");
+                    setReplyToMessage(null);
+                    composedSubmissionRef.current = null;
+                    onMessageSent?.();
+                }
+            } catch (error) {
+                console.error("Failed to send composed message:", error);
+                alert("Failed to send message. Please try again.");
+            } finally {
+                setIsSendingComposed(false);
+            }
             return;
         }
 
@@ -1639,53 +2020,20 @@ const ChatInput = ({
     };
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [isUploading, setIsUploading] = useState(false);
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        // Reset input so the same file can be selected again
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = Array.from(e.target.files || []);
         e.target.value = "";
+        enqueueChatFiles(selectedFiles, queuedAttachmentsRef, setQueuedAttachments, isSendingComposed);
+    };
 
-        if (!user) return;
-
-        // Check size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            alert("File size exceeds 5MB limit.");
-            return;
-        }
-
-        setIsUploading(true);
-        try {
-            const formData = new FormData();
-            if (!roomId) {
-                console.error("Chat room does not have a room ID");
-                return;
-            }
-            formData.append("roomId", roomId);
-            formData.append("file", file);
-
-            if (replyToMessage) {
-                formData.append("replyToEventId", replyToMessage.id);
-            }
-
-            const result = await sendAttachmentAction(formData);
-
-            if (result.success) {
-                dispatchNotificationRefresh({ reason: "chat-sent", roomId });
-                setReplyToMessage(null);
-                onMessageSent?.();
-            } else {
-                console.error("Failed to send attachment:", result.message);
-                alert(`Failed to send attachment: ${result.message}`);
-            }
-        } catch (error) {
-            console.error("Failed to send attachment:", error);
-            alert("An error occurred while uploading the file.");
-        } finally {
-            setIsUploading(false);
-        }
+    const handleRemoveAttachment = (attachmentId: string) => {
+        if (isSendingComposed) return;
+        setQueuedAttachments((current) => {
+            const result = removeQueuedAttachment(current, attachmentId);
+            if (result.removed?.previewUrl) URL.revokeObjectURL(result.removed.previewUrl);
+            queuedAttachmentsRef.current = result.attachments;
+            return result.attachments;
+        });
     };
 
     const handleCommentKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -1698,15 +2046,15 @@ const ChatInput = ({
     return (
         <div className="flex w-full flex-col">
             <div className={`flex w-full items-end gap-2 ${isMobile ? "gap-1.5" : ""}`}>
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                <input type="file" multiple ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
                 <Button
                     variant="ghost"
                     size="icon"
                     className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
+                    disabled={isSendingComposed || !!editingMessage}
                 >
-                    {isUploading ? (
+                    {isSendingComposed ? (
                         <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
                     ) : (
                         <IoAttach className="h-6 w-6" />
@@ -1719,6 +2067,7 @@ const ChatInput = ({
                             variant="ghost"
                             size="icon"
                             className={`shrink-0 rounded-full text-gray-500 hover:bg-gray-200 ${isExpandedMobileComposer ? "hidden" : "inline-flex"} ${isMobile ? "h-9 w-9" : "h-10 w-10"}`}
+                            disabled={isSendingComposed}
                         >
                             <BsEmojiSmile className="h-5 w-5" />
                         </Button>
@@ -1731,6 +2080,11 @@ const ChatInput = ({
                 </Popover>
 
                 <div className="min-w-0 flex-1">
+                    <QueuedAttachmentPreviews
+                        attachments={queuedAttachments}
+                        disabled={isSendingComposed}
+                        onRemove={handleRemoveAttachment}
+                    />
                     {editingMessage && (
                         <div className="mb-2 rounded-lg bg-blue-100 p-2">
                             <div className="flex items-start justify-between gap-2">
@@ -1776,13 +2130,19 @@ const ChatInput = ({
                                     {replyToMessage.content.body as string}
                                 </p>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => setReplyToMessage(null)}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setReplyToMessage(null)}
+                                disabled={isSendingComposed}
+                            >
                                 <IoClose className="h-5 w-5" />
                             </Button>
                         </div>
                     )}
                     <MentionsInput
                         value={newMessage}
+                        disabled={isSendingComposed}
                         onChange={(e) => setNewMessage(e.target.value)}
                         onKeyDown={handleCommentKeyDown}
                         onFocus={() => setIsComposerFocused(true)}
@@ -1813,6 +2173,7 @@ const ChatInput = ({
                                 className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:bg-gray-200"
                                 title="More actions"
                                 aria-label="More actions"
+                                disabled={isSendingComposed}
                             >
                                 <IoAddCircleOutline className="h-6 w-6" />
                             </Button>
@@ -1827,7 +2188,7 @@ const ChatInput = ({
                                         setIsMobileActionMenuOpen(false);
                                         fileInputRef.current?.click();
                                     }}
-                                    disabled={isUploading}
+                                    disabled={isSendingComposed || !!editingMessage}
                                 >
                                     <IoAttach className="mr-2 h-4 w-4" />
                                     Attach file
@@ -1847,7 +2208,7 @@ const ChatInput = ({
                     size="icon"
                     className="hidden h-10 w-10 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] md:inline-flex"
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim()}
+                    disabled={(!newMessage.trim() && queuedAttachments.length === 0) || isSendingComposed}
                     title={editingMessage ? "Save edit" : "Send message"}
                     aria-label={editingMessage ? "Save edit" : "Send message"}
                 >
@@ -1856,6 +2217,7 @@ const ChatInput = ({
                 {isMobile && (
                     <Button
                         onClick={handleSendMessage}
+                        disabled={(!newMessage.trim() && queuedAttachments.length === 0) || isSendingComposed}
                         className="ml-1 shrink-0 rounded-full text-white"
                         aria-label={editingMessage ? "Save edit" : "Send message"}
                     >
@@ -1870,10 +2232,13 @@ const ChatInput = ({
 // ─── Topic inline card (self-contained, expands in place) ──────────────────
 
 const getTopicStorageKey = (conversationId: string) => `kamooni_open_topics_${conversationId}`;
+const getTopicUnreadIndicatorStorageKey = (conversationId: string) =>
+    `kamooni_topic_unread_indicators_${conversationId}`;
 const OPEN_TOPIC_EVENT = "kamooni:open-topic";
 
 type TopicNavigationRequest = {
     topicId: string;
+    targetMessageId?: string;
     nonce: number;
 };
 
@@ -1894,6 +2259,33 @@ const setOpenTopicIds = (conversationId: string, ids: Set<string>) => {
     }
 };
 
+const getTopicUnreadIndicators = (conversationId: string): Record<string, TopicUnreadIndicator> => {
+    try {
+        const raw = sessionStorage.getItem(getTopicUnreadIndicatorStorageKey(conversationId));
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as Record<string, TopicUnreadIndicator>;
+        return Object.fromEntries(
+            Object.entries(parsed).filter(
+                ([, indicator]) => Number.isFinite(indicator?.unreadCount) && indicator.unreadCount > 0,
+            ),
+        );
+    } catch {
+        return {};
+    }
+};
+
+const setTopicUnreadIndicators = (conversationId: string, indicators: Record<string, TopicUnreadIndicator>) => {
+    try {
+        if (Object.keys(indicators).length === 0) {
+            sessionStorage.removeItem(getTopicUnreadIndicatorStorageKey(conversationId));
+            return;
+        }
+        sessionStorage.setItem(getTopicUnreadIndicatorStorageKey(conversationId), JSON.stringify(indicators));
+    } catch {
+        // sessionStorage unavailable — keep the in-memory indicator for this mount
+    }
+};
+
 const TopicCard: React.FC<{
     message: any;
     conversationId: string;
@@ -1905,8 +2297,11 @@ const TopicCard: React.FC<{
     onToggleTopic?: (topicId: string) => void;
     onTopicActivity?: () => Promise<void> | void;
     serverUnreadCount: number;
+    replyChangeSignal?: string;
     onTopicRead?: (topicId: string) => Promise<void> | void;
     mentionCandidates?: Circle[];
+    canReply?: boolean;
+    scrollViewportRef: React.RefObject<HTMLDivElement | null>;
 }> = ({
     message,
     conversationId,
@@ -1918,12 +2313,16 @@ const TopicCard: React.FC<{
     onToggleTopic,
     onTopicActivity,
     serverUnreadCount,
+    replyChangeSignal,
     onTopicRead,
     mentionCandidates = [],
+    canReply = true,
+    scrollViewportRef,
 }) => {
     const thread = message.thread;
     const messageId = message.id || message._id;
     const cardRef = useRef<HTMLDivElement>(null);
+    const topicToggleRef = useRef<HTMLDivElement>(null);
 
     const [isOpen, setIsOpen] = useState<boolean>(() => {
         if (isSelected) return true;
@@ -1932,12 +2331,21 @@ const TopicCard: React.FC<{
     });
 
     const [replies, setReplies] = useState<ChatMessage[]>([]);
+    useHydrateMessageFollowUpStatuses(
+        user?.did || "",
+        replies.filter(canShowMessageFollowUpAction).map((reply) => reply.id),
+    );
     const [isLoading, setIsLoading] = useState(false);
-    const [replyText, setReplyText] = useState("");
+    const topicTextDraftKey = getTopicTextDraftKey(user?.did, conversationId, messageId);
+    const [replyDraftState, setReplyDraftState] = useState<{ key: string | null; text: string }>({
+        key: null,
+        text: "",
+    });
+    const replyText = replyDraftState.key === topicTextDraftKey ? replyDraftState.text : "";
+    const isTopicDraftReady = !!topicTextDraftKey && replyDraftState.key === topicTextDraftKey;
     const [isSending, setIsSending] = useState(false);
     const [unreadCount, setUnreadCount] = useState<number>(serverUnreadCount);
     const readRequestRef = useRef(0);
-    const suppressServerUnreadRef = useRef(false);
     const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editingReplyText, setEditingReplyText] = useState("");
@@ -1948,13 +2356,156 @@ const TopicCard: React.FC<{
     const [topicMutationError, setTopicMutationError] = useState("");
     const [isMutatingTopic, setIsMutatingTopic] = useState(false);
     const [pickerOpenForReply, setPickerOpenForReply] = useState<string | null>(null);
-    const [isUploading, setIsUploading] = useState(false);
+    const [queuedAttachments, setQueuedAttachments] = useState<QueuedChatAttachment[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
-    const replyTextRef = useRef("");
+    const repliesEndRef = useRef<HTMLDivElement>(null);
+    const replyComposerRef = useRef<HTMLDivElement>(null);
+    const topicEndRef = useRef<HTMLDivElement>(null);
+    const replyTextRef = useRef(replyText);
+    const replyDraftStateRef = useRef(replyDraftState);
+    const topicTextDraftWriterRef = useRef<ReturnType<typeof createDebouncedTopicDraftWriter> | null>(null);
+    const currentTopicTextDraftKeyRef = useRef(topicTextDraftKey);
+    const latestTopicDraftRef = useRef<{ key: string | null; text: string }>({ key: null, text: "" });
+    const pendingTextOnlyDraftRef = useRef<{ key: string; text: string } | null>(null);
+    const isSendingRef = useRef(isSending);
+    if (!topicTextDraftWriterRef.current) {
+        topicTextDraftWriterRef.current = createDebouncedTopicDraftWriter(getBrowserTopicDraftStorage);
+    }
+    if (replyDraftState.key === topicTextDraftKey) {
+        replyTextRef.current = replyText;
+        latestTopicDraftRef.current = { key: topicTextDraftKey, text: replyText };
+    }
+    replyDraftStateRef.current = replyDraftState;
+    currentTopicTextDraftKeyRef.current = topicTextDraftKey;
+    isSendingRef.current = isSending;
     const pendingScrollIntoViewRef = useRef(false);
+    const exactNavigationPendingRef = useRef(false);
+    const exactNavigationFrameRef = useRef<number | null>(null);
+    const topicAutoScrollFrameRef = useRef<number | null>(null);
+    const topicAutoScrollInnerFrameRef = useRef<number | null>(null);
+    const pendingScrollToLatestRef = useRef(false);
+    const pendingIncomingAutoScrollRef = useRef(false);
+    const incomingAutoScrollTopRef = useRef(0);
+    const pendingOutgoingScrollRef = useRef(false);
+    const hasLoadedRepliesRef = useRef(false);
+    const isTopicOpenRef = useRef(false);
+    const replyLoadInFlightRef = useRef(false);
+    const pendingReplyRefreshSignalRef = useRef<string | null>(null);
+    const appliedReplyRefreshSignalRef = useRef<string | null>(null);
+    const replyRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const replyRetryKeyRef = useRef<string | null>(null);
+    const replyLoadScopeRef = useRef(0);
+    const currentConversationIdRef = useRef(conversationId);
+    const currentTopicIdRef = useRef(messageId);
+    const acknowledgementInFlightRef = useRef<string | null>(null);
+    const queuedAcknowledgementRef = useRef<string | null>(null);
+    const persistedAcknowledgementRef = useRef<string | null>(null);
+    const acknowledgementRequestRef = useRef(0);
+    const suppressProgrammaticFocusRef = useRef(false);
+    const queuedAttachmentsRef = useRef<QueuedChatAttachment[]>([]);
+    const composedSubmissionRef = useRef<{ signature: string; submissionId: string } | null>(null);
+    const replyToMessageRef = useRef(replyToMessage);
+    const composerScopeRef = useRef(buildComposerScopeKey(conversationId, messageId));
+    const [acknowledgementInFlight, setAcknowledgementInFlight] = useState(false);
+    replyToMessageRef.current = replyToMessage;
+    currentConversationIdRef.current = conversationId;
+    currentTopicIdRef.current = messageId;
     const isMobile = useIsMobile();
     const isTopicOpen = isSelected === undefined ? isOpen : isSelected === true;
+    isTopicOpenRef.current = isTopicOpen;
+
+    useEffect(() => {
+        queuedAttachmentsRef.current = queuedAttachments;
+    }, [queuedAttachments]);
+
+    useEffect(() => {
+        const scopeKey = buildComposerScopeKey(conversationId, messageId);
+        if (composerScopeRef.current === scopeKey) return;
+        for (const attachment of queuedAttachmentsRef.current) {
+            if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        }
+        queuedAttachmentsRef.current = [];
+        setQueuedAttachments([]);
+        setReplyToMessage(null);
+        composedSubmissionRef.current = null;
+        composerScopeRef.current = scopeKey;
+    }, [conversationId, messageId]);
+
+    useEffect(() => {
+        const pendingTextOnlyDraft = pendingTextOnlyDraftRef.current;
+        if (pendingTextOnlyDraft && pendingTextOnlyDraft.key !== topicTextDraftKey) {
+            topicTextDraftWriterRef.current?.schedule(pendingTextOnlyDraft.key, pendingTextOnlyDraft.text);
+        } else {
+            const latestDraft = latestTopicDraftRef.current;
+            if (latestDraft.key && latestDraft.key !== topicTextDraftKey) {
+                topicTextDraftWriterRef.current?.schedule(latestDraft.key, latestDraft.text);
+            }
+        }
+        topicTextDraftWriterRef.current?.flush();
+        if (!topicTextDraftKey) {
+            replyTextRef.current = "";
+            latestTopicDraftRef.current = { key: null, text: "" };
+            setReplyDraftState({ key: null, text: "" });
+            return;
+        }
+
+        const currentDraft = replyDraftStateRef.current;
+        if (currentDraft.key === topicTextDraftKey && currentDraft.text) return;
+        const text = readTopicTextDraft(getBrowserTopicDraftStorage, topicTextDraftKey);
+        const restoredDraft = { key: topicTextDraftKey, text };
+        replyTextRef.current = text;
+        latestTopicDraftRef.current = restoredDraft;
+        replyDraftStateRef.current = restoredDraft;
+        setReplyDraftState(restoredDraft);
+    }, [topicTextDraftKey]);
+
+    useEffect(() => {
+        if (isSending || !topicTextDraftKey || replyDraftState.key !== topicTextDraftKey) return;
+        topicTextDraftWriterRef.current?.schedule(topicTextDraftKey, replyText);
+    }, [isSending, replyDraftState.key, replyText, topicTextDraftKey]);
+
+    useEffect(
+        () => () => {
+            const pendingTextOnlyDraft = pendingTextOnlyDraftRef.current;
+            if (pendingTextOnlyDraft) {
+                topicTextDraftWriterRef.current?.schedule(pendingTextOnlyDraft.key, pendingTextOnlyDraft.text);
+            } else {
+                const latestDraft = latestTopicDraftRef.current;
+                if (latestDraft.key && (!isSendingRef.current || latestDraft.text)) {
+                    topicTextDraftWriterRef.current?.schedule(latestDraft.key, latestDraft.text);
+                }
+            }
+            topicTextDraftWriterRef.current?.dispose();
+        },
+        [],
+    );
+
+    useEffect(
+        () => () => {
+            for (const attachment of queuedAttachmentsRef.current) {
+                if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+            }
+        },
+        [],
+    );
+    const expectedReplyCount = Number(thread?.replyCount);
+    const persistedReplies = useMemo(
+        () => replies.filter((reply) => reply.status !== "pending" && reply.status !== "failed"),
+        [replies],
+    );
+    const unreadBoundary = useMemo(
+        () =>
+            resolveTopicUnreadBoundary({
+                starter: { id: messageId, createdBy: message.createdBy },
+                replies: persistedReplies,
+                unreadCount,
+                currentUserDid: user?.did,
+                expectedReplyCount,
+            }),
+        [expectedReplyCount, message.createdBy, messageId, persistedReplies, unreadCount, user?.did],
+    );
+    const firstUnreadMessageId = unreadBoundary.firstUnreadMessageId;
     const mentionSuggestions = useMemo(() => getChatMentionSuggestions(mentionCandidates), [mentionCandidates]);
     const topicReplyMentionsInputStyle = useMemo(() => {
         const minHeight = isMobile ? "96px" : "44px";
@@ -2005,11 +2556,37 @@ const TopicCard: React.FC<{
         },
         [mentionSuggestions],
     );
-    const setTopicReplyText = useCallback((value: string | ((currentValue: string) => string)) => {
-        const nextValue = typeof value === "function" ? value(replyTextRef.current) : value;
-        replyTextRef.current = nextValue;
-        setReplyText(nextValue);
-    }, []);
+    const setTopicReplyText = useCallback(
+        (value: string | ((currentValue: string) => string)) => {
+            const currentValue = replyDraftStateRef.current.key === topicTextDraftKey ? replyTextRef.current : "";
+            const nextValue = typeof value === "function" ? value(currentValue) : value;
+            const nextDraft = { key: topicTextDraftKey, text: nextValue };
+            replyTextRef.current = nextValue;
+            latestTopicDraftRef.current = nextDraft;
+            replyDraftStateRef.current = nextDraft;
+            setReplyDraftState(nextDraft);
+        },
+        [topicTextDraftKey],
+    );
+
+    const clearSentTopicTextDraft = (draftKey: string | null, sentText: string) => {
+        if (!draftKey) return;
+        const pendingTextOnlyDraft = pendingTextOnlyDraftRef.current;
+        const pendingDraftMatches =
+            pendingTextOnlyDraft?.key === draftKey && pendingTextOnlyDraft.text.trim() === sentText.trim();
+        const currentDraftMatches =
+            currentTopicTextDraftKeyRef.current === draftKey && replyTextRef.current.trim() === sentText.trim();
+        if (!pendingDraftMatches && !currentDraftMatches && currentTopicTextDraftKeyRef.current === draftKey) return;
+        if (pendingTextOnlyDraft?.key === draftKey) {
+            topicTextDraftWriterRef.current?.schedule(draftKey, pendingTextOnlyDraft.text);
+        }
+        topicTextDraftWriterRef.current?.flush();
+        const savedText = readTopicTextDraft(getBrowserTopicDraftStorage, draftKey);
+        if (savedText.trim() === sentText.trim()) {
+            topicTextDraftWriterRef.current?.clear(draftKey);
+            if (pendingTextOnlyDraftRef.current?.key === draftKey) pendingTextOnlyDraftRef.current = null;
+        }
+    };
 
     const autoGrowReplyTextarea = useCallback(() => {
         const textarea = replyTextareaRef.current;
@@ -2018,25 +2595,16 @@ const TopicCard: React.FC<{
         textarea.style.height = `${Math.min(textarea.scrollHeight, isMobile ? 260 : 224)}px`;
     }, [isMobile]);
 
-    // Load replies on mount if topic starts open
-    useEffect(() => {
-        if (isTopicOpen) {
-            void loadReplies();
-            onTopicOpen?.();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     useEffect(() => {
         if (!isTopicOpen) return;
         setIsOpen(true);
-        void loadReplies();
+        void loadReplies(replyChangeSignal);
         onTopicOpen?.();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isTopicOpen, messageId]);
 
     useEffect(() => {
-        if (!suppressServerUnreadRef.current) setUnreadCount(serverUnreadCount);
+        setUnreadCount(serverUnreadCount);
     }, [serverUnreadCount]);
 
     useEffect(() => {
@@ -2048,26 +2616,68 @@ const TopicCard: React.FC<{
         const textarea = replyTextareaRef.current;
         if (!textarea) return;
 
+        suppressProgrammaticFocusRef.current = true;
         try {
             textarea.focus({ preventScroll: true });
         } catch {
             textarea.focus();
         }
+        queueMicrotask(() => {
+            suppressProgrammaticFocusRef.current = false;
+        });
 
         const caretPosition = textarea.value.length;
         textarea.setSelectionRange(caretPosition, caretPosition);
     }, [replyToMessage?.id]);
 
-    const loadReplies = async () => {
+    const loadReplies = async (backgroundSignal?: string) => {
+        const loadPlan = planTopicReplyLoad({
+            isTopicOpen: isTopicOpenRef.current,
+            isInFlight: replyLoadInFlightRef.current,
+            pendingSignal: pendingReplyRefreshSignalRef.current,
+            requestedSignal: backgroundSignal,
+        });
+        pendingReplyRefreshSignalRef.current = loadPlan.pendingSignal;
+        if (!loadPlan.shouldStart) return;
+        backgroundSignal = loadPlan.activeSignal;
+        const shouldAutoScrollIncoming =
+            !!backgroundSignal && isTopicViewportNearBottom(scrollViewportRef.current, CHAT_BOTTOM_THRESHOLD_PX);
+        if (shouldAutoScrollIncoming) incomingAutoScrollTopRef.current = scrollViewportRef.current?.scrollTop || 0;
+
         const readRequestId = ++readRequestRef.current;
-        let persistedRead = false;
-        suppressServerUnreadRef.current = true;
-        setUnreadCount(0);
+        const loadScope = replyLoadScopeRef.current;
+        replyLoadInFlightRef.current = true;
         setIsLoading(true);
+        const scheduleRetry = () => {
+            if (
+                !shouldScheduleTopicReplyRetry({
+                    signal: backgroundSignal,
+                    lastRetriedSignal: replyRetryKeyRef.current,
+                    isTopicOpen: isTopicOpenRef.current,
+                    loadScope,
+                    currentLoadScope: replyLoadScopeRef.current,
+                })
+            )
+                return;
+
+            replyRetryKeyRef.current = backgroundSignal!;
+            if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
+            replyRetryTimerRef.current = setTimeout(() => {
+                replyRetryTimerRef.current = null;
+                if (isTopicOpenRef.current) void loadReplies(backgroundSignal);
+            }, 1000);
+        };
         try {
             const { fetchThreadRepliesAction } = await import("./mongo-actions");
             const result = await fetchThreadRepliesAction(messageId, conversationId);
-            if (result.success && result.replies) {
+            const canApply = canApplyTopicReplyLoad({
+                requestId: readRequestId,
+                currentRequestId: readRequestRef.current,
+                loadScope,
+                currentLoadScope: replyLoadScopeRef.current,
+                isTopicOpen: isTopicOpenRef.current,
+            });
+            if (canApply && result.success && result.replies) {
                 const mapped = result.replies.map((r: any) => {
                     // Convert raw reactions array [{emoji, userDid}] to keyed map {emoji: [{sender, eventId}]}
                     const rawReactions = Array.isArray(r.reactions) ? r.reactions : [];
@@ -2100,44 +2710,186 @@ const TopicCard: React.FC<{
                             picture: r.authorPicture ? { url: r.authorPicture } : { url: "/placeholder.svg" },
                         } as Circle,
                         replyTo: r.replyTo,
+                        submissionId: r.submissionId,
                     };
                 });
-                setReplies(mapped);
-                const greatestVisibleMessageId = selectGreatestObjectIdHex([
-                    messageId,
-                    ...result.replies.map((reply: any) => reply._id?.toString()),
-                ]);
-                if (!greatestVisibleMessageId) throw new Error("Topic returned no valid message boundary");
-                const { markTopicReadAction } = await import("./actions");
-                const markResult = await markTopicReadAction(conversationId, messageId, greatestVisibleMessageId);
-                if (markResult.success && readRequestRef.current === readRequestId) {
-                    persistedRead = true;
-                    await onTopicRead?.(messageId);
-                }
-            }
+                setReplies((current) => mergeAuthoritativeTopicReplies(current, mapped));
+                hasLoadedRepliesRef.current = true;
+                if (shouldAutoScrollIncoming) pendingIncomingAutoScrollRef.current = true;
+                setIsLoading(false);
+                if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
+                replyRetryTimerRef.current = null;
+                replyRetryKeyRef.current = null;
+                if (backgroundSignal) appliedReplyRefreshSignalRef.current = backgroundSignal;
+            } else if (canApply) scheduleRetry();
         } catch (e) {
             console.error("Failed to load topic replies:", e);
+            scheduleRetry();
         } finally {
-            if (readRequestRef.current === readRequestId) {
-                suppressServerUnreadRef.current = false;
-                if (!persistedRead) setUnreadCount(serverUnreadCount);
+            const isCurrentLoad = replyLoadScopeRef.current === loadScope && readRequestRef.current === readRequestId;
+            if (isCurrentLoad) {
+                replyLoadInFlightRef.current = false;
             }
-            setIsLoading(false);
-            if (pendingScrollIntoViewRef.current) {
-                pendingScrollIntoViewRef.current = false;
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                });
+            if (isCurrentLoad) setIsLoading(false);
+            if (isCurrentLoad) onTopicLoaded?.();
+
+            const followUpSignal = selectFollowUpTopicReplySignal({
+                pendingSignal: pendingReplyRefreshSignalRef.current,
+                appliedSignal: appliedReplyRefreshSignalRef.current,
+                isTopicOpen: isCurrentLoad && isTopicOpenRef.current,
+            });
+            if (followUpSignal) {
+                void loadReplies(followUpSignal);
             }
-            onTopicLoaded?.();
         }
     };
+
+    const persistCapturedAcknowledgement = async (
+        boundary: string,
+        expectedConversationId: string,
+        expectedTopicId: string,
+        expectedLoadScope: number,
+    ) => {
+        const plan = selectQueuedTopicAcknowledgementBoundary({
+            capturedBoundary: boundary,
+            inFlightBoundary: acknowledgementInFlightRef.current,
+            queuedBoundary: queuedAcknowledgementRef.current,
+            persistedBoundary: persistedAcknowledgementRef.current,
+        });
+        queuedAcknowledgementRef.current = plan.queuedBoundary;
+        if (!plan.shouldStart) return;
+
+        const requestId = ++acknowledgementRequestRef.current;
+        acknowledgementInFlightRef.current = boundary;
+        setAcknowledgementInFlight(true);
+        try {
+            const { markTopicReadAction } = await import("./actions");
+            const result = await markTopicReadAction(expectedConversationId, expectedTopicId, boundary);
+            const isCurrentRequest = canApplyTopicAcknowledgementResult({
+                requestId,
+                currentRequestId: acknowledgementRequestRef.current,
+                expectedConversationId,
+                currentConversationId: currentConversationIdRef.current,
+                expectedTopicId,
+                currentTopicId: currentTopicIdRef.current,
+                expectedLoadScope,
+                currentLoadScope: replyLoadScopeRef.current,
+            });
+            if (result.success && isCurrentRequest) {
+                persistedAcknowledgementRef.current = boundary;
+                await onTopicRead?.(expectedTopicId);
+            }
+        } catch (error) {
+            console.error("Failed to acknowledge topic:", error);
+        } finally {
+            if (requestId !== acknowledgementRequestRef.current) return;
+            acknowledgementInFlightRef.current = null;
+            setAcknowledgementInFlight(false);
+            const queuedBoundary = queuedAcknowledgementRef.current;
+            queuedAcknowledgementRef.current = null;
+            if (
+                queuedBoundary &&
+                expectedConversationId === currentConversationIdRef.current &&
+                expectedTopicId === currentTopicIdRef.current &&
+                expectedLoadScope === replyLoadScopeRef.current
+            ) {
+                void persistCapturedAcknowledgement(
+                    queuedBoundary,
+                    expectedConversationId,
+                    expectedTopicId,
+                    expectedLoadScope,
+                );
+            }
+        }
+    };
+
+    const acknowledgeLoadedTopic = (
+        interaction: Parameters<typeof shouldAcknowledgeTopicInteraction>[0],
+        isProgrammaticFocus = false,
+    ) => {
+        if (!shouldAcknowledgeTopicInteraction(interaction, isProgrammaticFocus)) return;
+        if (!isTopicOpenRef.current || !unreadBoundary.isComplete) return;
+        const boundary = selectTopicAcknowledgementBoundary({
+            topicId: messageId,
+            topicCreatedAt: message.createdAt,
+            replies: persistedReplies.map((reply) => ({ id: reply.id, createdAt: reply.createdAt })),
+            expectedReplyCount,
+        });
+        if (!boundary) return;
+        void persistCapturedAcknowledgement(boundary, conversationId, messageId, replyLoadScopeRef.current);
+    };
+
+    const handleFilesDropped = (files: File[]) => {
+        if (!files.length || isSending) return;
+        acknowledgeLoadedTopic("attachment");
+        enqueueChatFiles(files, queuedAttachmentsRef, setQueuedAttachments, isSending);
+    };
+    const topicFileDrop = useChatFileDrop(handleFilesDropped, isSending);
+
+    useEffect(() => {
+        if (!replyChangeSignal || !isTopicOpen) return;
+        if (replyChangeSignal === appliedReplyRefreshSignalRef.current) return;
+        void loadReplies(replyChangeSignal);
+        // loadReplies intentionally reads the latest open/load refs to serialize background refreshes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isTopicOpen, replyChangeSignal]);
+
+    useEffect(() => {
+        if (
+            !shouldReconcileTopicReplies({
+                isTopicOpen,
+                expectedReplyCount,
+                loadedReplyCount: persistedReplies.length,
+            })
+        )
+            return;
+        void loadReplies(`reply-count:${expectedReplyCount}`);
+        // loadReplies uses refs to serialize this reconciliation with signal-driven and local refreshes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [expectedReplyCount, isTopicOpen, persistedReplies.length]);
+
+    useEffect(() => {
+        return () => {
+            replyLoadScopeRef.current += 1;
+            readRequestRef.current += 1;
+            replyLoadInFlightRef.current = false;
+            pendingReplyRefreshSignalRef.current = null;
+            if (replyRetryTimerRef.current) clearTimeout(replyRetryTimerRef.current);
+            replyRetryTimerRef.current = null;
+            acknowledgementRequestRef.current += 1;
+            acknowledgementInFlightRef.current = null;
+            queuedAcknowledgementRef.current = null;
+            persistedAcknowledgementRef.current = null;
+            hasLoadedRepliesRef.current = false;
+            if (exactNavigationFrameRef.current !== null) cancelAnimationFrame(exactNavigationFrameRef.current);
+            if (topicAutoScrollFrameRef.current !== null) cancelAnimationFrame(topicAutoScrollFrameRef.current);
+            if (topicAutoScrollInnerFrameRef.current !== null)
+                cancelAnimationFrame(topicAutoScrollInnerFrameRef.current);
+            exactNavigationFrameRef.current = null;
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = null;
+            exactNavigationPendingRef.current = false;
+        };
+    }, [conversationId, messageId]);
 
     useEffect(() => {
         if (navigationRequest?.topicId !== messageId) {
             return;
         }
 
+        if (exactNavigationFrameRef.current !== null) cancelAnimationFrame(exactNavigationFrameRef.current);
+        exactNavigationFrameRef.current = null;
+        exactNavigationPendingRef.current = !!navigationRequest?.targetMessageId;
+        if (exactNavigationPendingRef.current) {
+            if (topicAutoScrollFrameRef.current !== null) cancelAnimationFrame(topicAutoScrollFrameRef.current);
+            if (topicAutoScrollInnerFrameRef.current !== null)
+                cancelAnimationFrame(topicAutoScrollInnerFrameRef.current);
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = null;
+            pendingIncomingAutoScrollRef.current = false;
+            pendingScrollToLatestRef.current = false;
+            pendingOutgoingScrollRef.current = false;
+        }
         pendingScrollIntoViewRef.current = true;
 
         if (!isOpen) {
@@ -2145,68 +2897,325 @@ const TopicCard: React.FC<{
             const openIds = getOpenTopicIds(conversationId);
             openIds.add(messageId);
             setOpenTopicIds(conversationId, openIds);
-            setUnreadCount(0);
-            void loadReplies();
             onTopicOpen?.();
             return;
         }
 
         if (replies.length === 0 && !isLoading) {
-            void loadReplies();
+            void loadReplies(replyChangeSignal);
+            return;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navigationRequest?.nonce]);
+
+    useEffect(() => {
+        if (navigationRequest?.topicId !== messageId || !isTopicOpen || isLoading) return;
+        if (!pendingScrollIntoViewRef.current) return;
+        if (Number.isSafeInteger(expectedReplyCount) && expectedReplyCount > replies.length) return;
+
+        const targetMessageId = navigationRequest?.targetMessageId;
+        if (targetMessageId && !consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) return;
+        if (targetMessageId) {
+            const frame = requestAnimationFrame(() => {
+                exactNavigationFrameRef.current = null;
+                scrollToMessageElement(targetMessageId);
+                exactNavigationPendingRef.current = false;
+            });
+            exactNavigationFrameRef.current = frame;
+            return () => {
+                if (exactNavigationFrameRef.current === frame) {
+                    cancelAnimationFrame(frame);
+                    exactNavigationFrameRef.current = null;
+                    exactNavigationPendingRef.current = false;
+                }
+            };
+        }
+
+        const boundaryElementId = firstUnreadMessageId ? `topic-unread-boundary-${firstUnreadMessageId}` : undefined;
+        const boundaryTarget =
+            unreadBoundary.isComplete && firstUnreadMessageId
+                ? document.getElementById(boundaryElementId || getMessageElementId(firstUnreadMessageId) || "")
+                : null;
+        const scrollRoot = scrollViewportRef.current;
+        const target = boundaryTarget && scrollRoot?.contains(boundaryTarget) ? boundaryTarget : cardRef.current;
+        if (!target || !consumePendingTopicScrollRequest(pendingScrollIntoViewRef)) return;
+
+        requestAnimationFrame(() => {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    }, [
+        firstUnreadMessageId,
+        isLoading,
+        isTopicOpen,
+        messageId,
+        navigationRequest?.nonce,
+        navigationRequest?.topicId,
+        navigationRequest?.targetMessageId,
+        expectedReplyCount,
+        replies.length,
+        scrollViewportRef,
+        unreadBoundary.isComplete,
+    ]);
+
+    useEffect(() => {
+        if (!isTopicOpen || isLoading || (!hasLoadedRepliesRef.current && !pendingOutgoingScrollRef.current)) return;
+        if (exactNavigationPendingRef.current) return;
+        const openedNormally = pendingScrollToLatestRef.current;
+        const sentReply = pendingOutgoingScrollRef.current;
+        const shouldScroll = shouldAutoScrollTopicReplies({
+            openedNormally,
+            sentReply,
+            incomingWasNearBottom: pendingIncomingAutoScrollRef.current,
+            incomingCapturedScrollTop: incomingAutoScrollTopRef.current,
+            currentScrollTop: scrollViewportRef.current?.scrollTop || 0,
+        });
+        if (!shouldScroll) {
+            pendingIncomingAutoScrollRef.current = false;
             return;
         }
 
-        requestAnimationFrame(() => {
-            cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        pendingOutgoingScrollRef.current = false;
+        pendingScrollToLatestRef.current = false;
+        pendingIncomingAutoScrollRef.current = false;
+        topicAutoScrollFrameRef.current = requestAnimationFrame(() => {
+            topicAutoScrollFrameRef.current = null;
+            topicAutoScrollInnerFrameRef.current = requestAnimationFrame(() => {
+                topicAutoScrollInnerFrameRef.current = null;
+                selectTopicReplyScrollTarget({
+                    openedNormally,
+                    sentReply,
+                    topicEnd: topicEndRef.current,
+                    composer: replyComposerRef.current,
+                    repliesEnd: repliesEndRef.current,
+                })?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            });
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [navigationRequest?.nonce]);
+    }, [isLoading, isTopicOpen, replies, scrollViewportRef]);
 
     if (!thread) return null;
 
     const handleToggle = () => {
         if (onToggleTopic) {
+            if (!isTopicOpen) pendingScrollToLatestRef.current = true;
             onToggleTopic(messageId);
             return;
         }
         const next = !isOpen;
         if (next) {
-            void loadReplies();
+            pendingScrollToLatestRef.current = true;
+            void loadReplies(replyChangeSignal);
             onTopicOpen?.();
         }
         setIsOpen(next);
         const openIds = getOpenTopicIds(conversationId);
         if (next) {
             openIds.add(messageId);
-            setUnreadCount(0);
         } else {
             openIds.delete(messageId);
         }
         setOpenTopicIds(conversationId, openIds);
     };
 
-    const handleSendReply = async () => {
-        const trimmed = replyTextRef.current.trim();
-        if (!trimmed || isSending) return;
+    const handleCloseFromEnd = () => {
+        if (!isTopicOpen) return;
+        handleToggle();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                topicToggleRef.current?.focus({ preventScroll: true });
+            });
+        });
+    };
+
+    const submitTopicReply = async (
+        optimisticReply: ChatMessage,
+        outgoingDraftKey: string | null = topicTextDraftKey,
+        textToRestoreOnFailure?: string,
+    ) => {
+        if (isSending || !optimisticReply.submissionId) return;
         setIsSending(true);
+        setReplies((current) =>
+            current.map((reply) =>
+                reply.id === optimisticReply.id ? { ...reply, status: "pending", errorMessage: undefined } : reply,
+            ),
+        );
+        pendingOutgoingScrollRef.current = true;
         try {
             const { sendThreadReplyAction } = await import("./mongo-actions");
-            const result = await sendThreadReplyAction(messageId, conversationId, trimmed, replyToMessage?.id);
+            const result = await sendThreadReplyAction(
+                messageId,
+                conversationId,
+                optimisticReply.content.body as string,
+                optimisticReply.replyTo?.id,
+                optimisticReply.submissionId,
+            );
             if (result.success) {
+                if (!result.messageId) throw new Error("Reply confirmation did not include a message ID");
+                const sentText = optimisticReply.content.body as string;
+                const shouldClearCurrentDraft =
+                    currentTopicTextDraftKeyRef.current === outgoingDraftKey &&
+                    replyTextRef.current.trim() === sentText.trim();
+                clearSentTopicTextDraft(outgoingDraftKey, sentText);
+                if (shouldClearCurrentDraft) setTopicReplyText("");
+                setReplies((current) =>
+                    confirmOptimisticTopicReply(
+                        current,
+                        optimisticReply.id,
+                        optimisticReply.submissionId!,
+                        result.messageId!,
+                        result.createdAt,
+                    ),
+                );
                 dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
-                setTopicReplyText("");
-                setReplyToMessage(null);
-                await onTopicActivity?.();
-                await loadReplies();
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                });
+                void onTopicActivity?.();
+                void loadReplies(result.messageId);
+            } else {
+                setReplies((current) =>
+                    current.map((reply) =>
+                        reply.id === optimisticReply.id
+                            ? { ...reply, status: "failed", errorMessage: result.message || "Failed to send" }
+                            : reply,
+                    ),
+                );
+                if (textToRestoreOnFailure && currentTopicTextDraftKeyRef.current === outgoingDraftKey) {
+                    setTopicReplyText(textToRestoreOnFailure);
+                }
             }
         } catch (e) {
             console.error("Failed to send topic reply:", e);
+            setReplies((current) =>
+                current.map((reply) =>
+                    reply.id === optimisticReply.id
+                        ? {
+                              ...reply,
+                              status: "failed",
+                              errorMessage: e instanceof Error ? e.message : "Failed to send",
+                          }
+                        : reply,
+                ),
+            );
+            if (textToRestoreOnFailure && currentTopicTextDraftKeyRef.current === outgoingDraftKey) {
+                setTopicReplyText(textToRestoreOnFailure);
+            }
         } finally {
+            if (textToRestoreOnFailure && pendingTextOnlyDraftRef.current?.key === outgoingDraftKey) {
+                pendingTextOnlyDraftRef.current = null;
+            }
             setIsSending(false);
         }
+    };
+
+    const handleSendReply = async () => {
+        const trimmed = replyTextRef.current.trim();
+        if ((!trimmed && queuedAttachments.length === 0) || isSending || !user) return;
+        acknowledgeLoadedTopic("send");
+
+        if (queuedAttachments.length > 0) {
+            const sendConversationId = conversationId;
+            const sendTopicId = messageId;
+            const sendDraftKey = topicTextDraftKey;
+            const replyTarget = replyToMessage;
+            const attachmentsSnapshot = queuedAttachments;
+            const signature = buildComposedMessageSignature({
+                scopeKey: buildComposerScopeKey(sendConversationId, sendTopicId),
+                body: trimmed,
+                replyToMessageId: replyTarget?.id,
+                attachments: attachmentsSnapshot,
+            });
+            const submission = getStableSubmissionId(
+                composedSubmissionRef.current,
+                signature,
+                createComposerSubmissionId,
+            );
+            composedSubmissionRef.current = submission;
+            const formData = buildComposedMessageFormData({
+                conversationId: sendConversationId,
+                topicId: sendTopicId,
+                body: trimmed,
+                replyToMessageId: replyTarget?.id,
+                submissionId: submission.submissionId,
+                attachments: attachmentsSnapshot,
+            });
+
+            setIsSending(true);
+            pendingOutgoingScrollRef.current = true;
+            try {
+                const result = await sendComposedMessageAction(formData);
+                if (!result.success) {
+                    alert(`Failed to send reply: ${result.message || "Please try again."}`);
+                    return;
+                }
+                clearSentTopicTextDraft(sendDraftKey, trimmed);
+                dispatchNotificationRefresh({ reason: "chat-sent", roomId: sendConversationId });
+                const currentSignature = buildComposedMessageSignature({
+                    scopeKey: buildComposerScopeKey(sendConversationId, sendTopicId),
+                    body: replyTextRef.current.trim(),
+                    replyToMessageId: replyToMessageRef.current?.id,
+                    attachments: queuedAttachmentsRef.current,
+                });
+                if (
+                    currentConversationIdRef.current === sendConversationId &&
+                    currentTopicIdRef.current === sendTopicId &&
+                    currentSignature === signature
+                ) {
+                    for (const attachment of attachmentsSnapshot) {
+                        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+                    }
+                    queuedAttachmentsRef.current = [];
+                    setQueuedAttachments([]);
+                    setTopicReplyText("");
+                    setReplyToMessage(null);
+                    composedSubmissionRef.current = null;
+                }
+                await onTopicActivity?.();
+                await loadReplies(result.messageId);
+                requestAnimationFrame(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            } catch (error) {
+                console.error("Failed to send composed topic reply:", error);
+                alert("Failed to send reply. Please try again.");
+            } finally {
+                setIsSending(false);
+            }
+            return;
+        }
+
+        const submissionId =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const optimisticReply: ChatMessage = {
+            id: `temp-${submissionId}`,
+            roomId: conversationId,
+            type: "m.room.message",
+            content: { msgtype: "m.text", body: trimmed },
+            createdBy: user.did,
+            createdAt: new Date(),
+            author: user,
+            reactions: {},
+            replyTo: replyToMessage
+                ? {
+                      id: replyToMessage.id,
+                      author: replyToMessage.author,
+                      content: replyToMessage.content,
+                      attachments: replyToMessage.attachments,
+                  }
+                : undefined,
+            submissionId,
+            status: "pending",
+        };
+
+        const outgoingDraftText = replyTextRef.current;
+        const outgoingDraftKey = topicTextDraftKey;
+        if (outgoingDraftKey) {
+            pendingTextOnlyDraftRef.current = { key: outgoingDraftKey, text: outgoingDraftText };
+        }
+        setReplies((current) => [...current, optimisticReply]);
+        pendingOutgoingScrollRef.current = true;
+        setTopicReplyText("");
+        setReplyToMessage(null);
+        void submitTopicReply(optimisticReply, outgoingDraftKey, outgoingDraftText);
     };
 
     const handleEditSubmit = async (replyId: string) => {
@@ -2279,8 +3288,11 @@ const TopicCard: React.FC<{
     const handleReaction = async (replyId: string, emoji: string) => {
         try {
             const { toggleMongoReactionAction } = await import("./actions");
-            await toggleMongoReactionAction(replyId, emoji);
-            await loadReplies();
+            const result = await toggleMongoReactionAction(replyId, emoji);
+            await Promise.all([
+                loadReplies(),
+                shouldRefreshUnreadAfterReaction(result) ? onTopicRead?.(messageId) : undefined,
+            ]);
         } catch (e) {
             console.error("Failed to toggle reaction:", e);
         }
@@ -2297,6 +3309,7 @@ const TopicCard: React.FC<{
                 if (replyToMessage?.id === replyId) {
                     setReplyToMessage(null);
                 }
+                await onTopicActivity?.();
                 await loadReplies();
                 return;
             }
@@ -2308,65 +3321,88 @@ const TopicCard: React.FC<{
         }
     };
 
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFiles = Array.from(e.target.files || []);
         e.target.value = "";
-        if (file.size > 5 * 1024 * 1024) {
-            alert("File size exceeds 5MB limit.");
-            return;
-        }
-        setIsUploading(true);
-        try {
-            const { sendAttachmentAction } = await import("./actions");
-            const formData = new FormData();
-            formData.append("roomId", conversationId);
-            formData.append("file", file);
-            // Pass threadId so the attachment reply is linked to this topic
-            formData.append("threadId", messageId);
-            if (replyToMessage?.id) {
-                formData.append("replyToMessageId", replyToMessage.id);
-            }
-            const result = await sendAttachmentAction(formData);
-            if (result.success) {
-                dispatchNotificationRefresh({ reason: "chat-sent", roomId: conversationId });
-                setReplyToMessage(null);
-                await onTopicActivity?.();
-                await loadReplies();
-                requestAnimationFrame(() => {
-                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                });
-            } else {
-                alert(`Failed to send attachment: ${result.message}`);
-            }
-        } catch (e) {
-            console.error("Failed to send attachment:", e);
-            alert("An error occurred while uploading the file.");
-        } finally {
-            setIsUploading(false);
-        }
+        if (!selectedFiles.length || isSending) return;
+        acknowledgeLoadedTopic("attachment");
+        enqueueChatFiles(selectedFiles, queuedAttachmentsRef, setQueuedAttachments, isSending);
+    };
+
+    const handleRemoveAttachment = (attachmentId: string) => {
+        if (isSending) return;
+        setQueuedAttachments((current) => {
+            const result = removeQueuedAttachment(current, attachmentId);
+            if (result.removed?.previewUrl) URL.revokeObjectURL(result.removed.previewUrl);
+            queuedAttachmentsRef.current = result.attachments;
+            return result.attachments;
+        });
     };
 
     const topicDescription = typeof message.content?.body === "string" ? message.content.body.trim() : "";
     const effectiveStarterBody = topicDescription;
     const isOwnStarter = !!user?.did && message.createdBy === user.did;
+    const canFollowUpStarter = canShowMessageFollowUpAction(message);
     const topicCreatorName = formatCompactDisplayName(message.author?.name, message.createdBy);
     const starterCreatedAt = new Date(message.createdAt);
+    const renderUnreadBoundary = (boundaryMessageId: string) =>
+        firstUnreadMessageId === boundaryMessageId ? (
+            <div
+                id={`topic-unread-boundary-${boundaryMessageId}`}
+                className="flex items-center gap-2 py-1 text-xs font-medium text-red-600"
+            >
+                <span className="h-px flex-1 bg-red-200" />
+                <span>New messages</span>
+                <button
+                    type="button"
+                    className="rounded px-1.5 py-0.5 font-semibold underline underline-offset-2 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-wait disabled:opacity-60"
+                    disabled={acknowledgementInFlight}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        acknowledgeLoadedTopic("mark-read");
+                    }}
+                >
+                    Mark as read
+                </button>
+                <span className="h-px flex-1 bg-red-200" />
+            </div>
+        ) : null;
 
     return (
         <div
             ref={cardRef}
             id={getMessageElementId(messageId)}
             data-message-id={messageId}
-            className={`my-3 w-full rounded-xl shadow-sm transition-all ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
+            className={`my-3 w-full scroll-mt-36 rounded-xl shadow-sm transition-all sm:scroll-mt-24 ${CHAT_TOPIC_BACKGROUND_CLASS} ${isTopicOpen ? "" : "hover:border-[#cddda2] hover:shadow-md"}`}
         >
             {/* Header row — always visible, click to toggle */}
             <div
+                ref={topicToggleRef}
                 className={`flex cursor-pointer flex-col gap-2 px-3 text-left sm:flex-row sm:items-start sm:justify-between ${isTopicOpen ? "py-3" : "py-4"}`}
                 onClick={handleToggle}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isTopicOpen}
+                aria-label={`${isTopicOpen ? "Close" : "Open"} topic: ${thread.title}`}
+                onKeyDown={(event) => {
+                    if (event.currentTarget === event.target && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        handleToggle();
+                    }
+                }}
             >
                 <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900">{thread.title}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-gray-900">{thread.title}</p>
+                        {isTopicOpen && unreadCount > 0 && (
+                            <span
+                                className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white"
+                                aria-label={`${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"} in this topic`}
+                            >
+                                {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
+                            </span>
+                        )}
+                    </div>
                     {thread.hashtags && thread.hashtags.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                             {thread.hashtags.map((tag: string) => (
@@ -2381,6 +3417,9 @@ const TopicCard: React.FC<{
                     )}
                     {!isTopicOpen && effectiveStarterBody && (
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{effectiveStarterBody}</p>
+                    )}
+                    {isTopicOpen && firstUnreadMessageId === messageId && (
+                        <div className="mt-2">{renderUnreadBoundary(messageId)}</div>
                     )}
                     {isTopicOpen && effectiveStarterBody && (
                         <div className="mt-2 text-sm leading-relaxed text-gray-700">
@@ -2397,18 +3436,27 @@ const TopicCard: React.FC<{
                         <div>{topicCreatorName}</div>
                     </div>
                     <div className="flex items-center gap-2 text-gray-400">
+                        {canFollowUpStarter && (
+                            <MessageFollowUpIndicator messageId={messageId} viewerDid={user?.did || ""} />
+                        )}
                         <div className="relative">
-                            <HiLightBulb className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`} />
+                            <HiLightBulb
+                                className={`h-5 w-5 ${isTopicOpen ? "text-amber-500" : "text-gray-400"}`}
+                                aria-hidden="true"
+                            />
                             {!isTopicOpen && unreadCount > 0 && (
-                                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white">
+                                <span
+                                    className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold text-white"
+                                    aria-label={`${unreadCount} unread ${unreadCount === 1 ? "message" : "messages"} in this topic`}
+                                >
                                     {unreadCount}
                                 </span>
                             )}
                         </div>
-                        <span>
+                        <span className="border-l border-gray-300 pl-2">
                             {thread.replyCount} {thread.replyCount === 1 ? "reply" : "replies"}
                         </span>
-                        {isOwnStarter && (
+                        {(canFollowUpStarter || (canReply && isOwnStarter)) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -2424,25 +3472,36 @@ const TopicCard: React.FC<{
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-                                    <DropdownMenuItem
-                                        onSelect={() => {
-                                            setEditingTopicTitle(thread.title || "");
-                                            setEditingTopicBody(effectiveStarterBody);
-                                            setTopicMutationError("");
-                                            setIsEditingTopic(true);
-                                        }}
-                                    >
-                                        <GrEdit className="mr-2 h-4 w-4" />
-                                        Edit topic
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        className="text-red-600 focus:text-red-600"
-                                        disabled={isMutatingTopic}
-                                        onSelect={() => void handleDeleteTopic()}
-                                    >
-                                        <GrTrash className="mr-2 h-4 w-4" />
-                                        Delete topic
-                                    </DropdownMenuItem>
+                                    {canFollowUpStarter && (
+                                        <MessageFollowUpAction
+                                            messageId={messageId}
+                                            viewerDid={user?.did || ""}
+                                            variant="menu"
+                                        />
+                                    )}
+                                    {canReply && isOwnStarter && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onSelect={() => {
+                                                    setEditingTopicTitle(thread.title || "");
+                                                    setEditingTopicBody(effectiveStarterBody);
+                                                    setTopicMutationError("");
+                                                    setIsEditingTopic(true);
+                                                }}
+                                            >
+                                                <GrEdit className="mr-2 h-4 w-4" />
+                                                Edit topic
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="text-red-600 focus:text-red-600"
+                                                disabled={isMutatingTopic}
+                                                onSelect={() => void handleDeleteTopic()}
+                                            >
+                                                <GrTrash className="mr-2 h-4 w-4" />
+                                                Delete topic
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}
@@ -2461,6 +3520,8 @@ const TopicCard: React.FC<{
                         )}
                         {replies.map((reply, replyIndex) => {
                             const isOwn = reply.createdBy === user?.did;
+                            const canFollowUpReply = canShowMessageFollowUpAction(reply);
+                            const canShowReplyActions = canShowExistingReplyActions(reply, canReply);
                             const isEditing = editingReplyId === reply.id;
                             const replyCreatedAt = new Date(reply.createdAt);
                             const previousVisibleCreatedAt =
@@ -2476,285 +3537,404 @@ const TopicCard: React.FC<{
                                     new Date(replies[replyIndex - 1].createdAt).getTime() >
                                     5 * 60 * 1000;
                             return (
-                                <div
-                                    key={reply.id}
-                                    id={getMessageElementId(reply.id)}
-                                    data-message-id={reply.id}
-                                    className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
-                                    onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
-                                    onMouseLeave={() => {
-                                        if (!isMobile) {
-                                            setHoveredReplyId(null);
-                                        }
-                                    }}
-                                    onClick={() => {
-                                        if (isMobile && !isEditing) {
-                                            setHoveredReplyId((current) => (current === reply.id ? null : reply.id));
-                                            setPickerOpenForReply((current) => (current === reply.id ? current : null));
-                                        }
-                                    }}
-                                >
+                                <Fragment key={reply.id}>
+                                    {renderUnreadBoundary(reply.id)}
                                     <div
-                                        className={`relative flex w-[96%] flex-col overflow-visible shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
-                                        style={{ borderRadius: "12px" }}
+                                        id={getMessageElementId(reply.id)}
+                                        data-message-id={reply.id}
+                                        className={`relative flex w-full ${isFirstInChain ? "mt-3" : "mt-px"} ${isOwn ? "justify-end" : "justify-start"}`}
+                                        onMouseEnter={() => !isMobile && setHoveredReplyId(reply.id)}
+                                        onMouseLeave={() => {
+                                            if (!isMobile) setHoveredReplyId(null);
+                                        }}
+                                        onClick={() => {
+                                            if (isMobile && !isEditing) {
+                                                setHoveredReplyId((current) =>
+                                                    current === reply.id ? null : reply.id,
+                                                );
+                                                setPickerOpenForReply((current) =>
+                                                    current === reply.id ? current : null,
+                                                );
+                                            }
+                                        }}
                                     >
-                                        <div className="px-3 py-1.5">
-                                            <div className="mb-2 text-right text-[10px] leading-none text-gray-400">
-                                                {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
-                                            </div>
-                                            {isEditing ? (
-                                                <div className="flex flex-col gap-1">
-                                                    <textarea
-                                                        value={editingReplyText}
-                                                        onChange={(e) => setEditingReplyText(e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Escape") {
-                                                                setEditingReplyId(null);
-                                                                setEditingReplyText("");
-                                                            }
-                                                        }}
-                                                        rows={5}
-                                                        className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
-                                                    />
-                                                    <div className="flex justify-end gap-1">
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingReplyId(null);
-                                                                setEditingReplyText("");
-                                                            }}
-                                                            className="text-xs text-gray-500 hover:text-gray-700"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                        <button
-                                                            onClick={() => void handleEditSubmit(reply.id)}
-                                                            className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
-                                                        >
-                                                            Save
-                                                        </button>
-                                                    </div>
+                                        <div
+                                            className={`relative flex w-[96%] flex-col overflow-visible shadow-sm sm:max-w-[92%] ${CHAT_STANDARD_BUBBLE_CLASS}`}
+                                            style={{ borderRadius: "12px" }}
+                                        >
+                                            <div className="px-3 py-1.5">
+                                                <div className="mb-2 flex items-center justify-end gap-1 text-[10px] leading-none text-gray-400">
+                                                    <span>
+                                                        {formatTopicPostTimestamp(replyCreatedAt, includeReplyDate)}
+                                                    </span>
+                                                    {canFollowUpReply && (
+                                                        <MessageFollowUpIndicator
+                                                            messageId={reply.id}
+                                                            viewerDid={user?.did || ""}
+                                                        />
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <MessageRenderer message={reply} />
-                                            )}
-                                            {(hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
-                                                !isEditing && (
-                                                    <div
-                                                        className="absolute -bottom-3 right-2 z-10"
-                                                        onClick={(event) => event.stopPropagation()}
-                                                    >
-                                                        <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
-                                                            {isOwn && (
-                                                                <>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                        onClick={() => {
-                                                                            setEditingReplyId(reply.id);
-                                                                            setEditingReplyText(
-                                                                                (reply.content?.body as string) || "",
-                                                                            );
-                                                                        }}
-                                                                    >
-                                                                        <GrEdit className="h-4 w-4" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                        onClick={() => void handleDeleteReply(reply.id)}
-                                                                    >
-                                                                        <GrTrash className="h-4 w-4" />
-                                                                    </Button>
-                                                                </>
-                                                            )}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8"
-                                                                onClick={() => setReplyToMessage(reply)}
-                                                            >
-                                                                <MdReply className="h-4 w-4" />
-                                                            </Button>
-                                                            <Popover
-                                                                open={pickerOpenForReply === reply.id}
-                                                                onOpenChange={(open) =>
-                                                                    setPickerOpenForReply(open ? reply.id : null)
+                                                {isEditing ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <textarea
+                                                            value={editingReplyText}
+                                                            onChange={(e) => setEditingReplyText(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Escape") {
+                                                                    setEditingReplyId(null);
+                                                                    setEditingReplyText("");
                                                                 }
+                                                            }}
+                                                            rows={5}
+                                                            className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                                        />
+                                                        <div className="flex justify-end gap-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingReplyId(null);
+                                                                    setEditingReplyText("");
+                                                                }}
+                                                                className="text-xs text-gray-500 hover:text-gray-700"
                                                             >
-                                                                <PopoverTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                    >
-                                                                        <BsEmojiSmile className="h-4 w-4" />
-                                                                    </Button>
-                                                                </PopoverTrigger>
-                                                                <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                                                    <LazyEmojiPicker
-                                                                        onEmojiClick={(data: EmojiClickData) => {
-                                                                            void handleReaction(reply.id, data.emoji);
-                                                                            setPickerOpenForReply(null);
-                                                                        }}
-                                                                    />
-                                                                </PopoverContent>
-                                                            </Popover>
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => void handleEditSubmit(reply.id)}
+                                                                className="text-xs font-medium text-[hsl(var(--task-link))] hover:text-[hsl(var(--task-link-hover))]"
+                                                            >
+                                                                Save
+                                                            </button>
                                                         </div>
                                                     </div>
+                                                ) : (
+                                                    <MessageRenderer message={reply} />
                                                 )}
-                                            <div className="mt-2 text-right text-xs font-medium text-gray-500">
-                                                {formatCompactDisplayName(reply.author?.name, reply.createdBy)}
-                                            </div>
-                                        </div>
-                                        {reply.reactions && Object.keys(reply.reactions).length > 0 && (
-                                            <div className="-mb-1 flex flex-wrap justify-end gap-1 px-2 pb-1">
-                                                {Object.entries(reply.reactions as Record<string, any>).map(
-                                                    ([emoji, reactors]) => {
-                                                        const reactorList = Array.isArray(reactors) ? reactors : [];
-                                                        return (
-                                                            <button
-                                                                key={emoji}
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    void handleReaction(reply.id, emoji);
-                                                                }}
-                                                                className="flex min-h-6 items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none"
-                                                            >
-                                                                {emoji}{" "}
-                                                                {reactorList.length > 1 && (
-                                                                    <span className="ml-0.5 text-gray-500">
-                                                                        {reactorList.length}
-                                                                    </span>
+                                                {(canShowReplyActions || canFollowUpReply) &&
+                                                    (hoveredReplyId === reply.id || pickerOpenForReply === reply.id) &&
+                                                    !isEditing && (
+                                                        <div
+                                                            className="absolute -bottom-3 right-2 z-10"
+                                                            onClick={(event) => event.stopPropagation()}
+                                                        >
+                                                            <div className="flex flex-wrap items-center justify-end gap-0.5 rounded-full border border-gray-200 bg-white p-0.5 shadow-sm">
+                                                                {isOwn && canShowReplyActions && (
+                                                                    <>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                            onClick={() => {
+                                                                                setEditingReplyId(reply.id);
+                                                                                setEditingReplyText(
+                                                                                    (reply.content?.body as string) ||
+                                                                                        "",
+                                                                                );
+                                                                            }}
+                                                                        >
+                                                                            <GrEdit className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                            onClick={() =>
+                                                                                void handleDeleteReply(reply.id)
+                                                                            }
+                                                                        >
+                                                                            <GrTrash className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </>
                                                                 )}
-                                                            </button>
-                                                        );
-                                                    },
+                                                                {canShowReplyActions && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                        onClick={() => setReplyToMessage(reply)}
+                                                                    >
+                                                                        <MdReply className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                                {canFollowUpReply && (
+                                                                    <MessageFollowUpAction
+                                                                        messageId={reply.id}
+                                                                        viewerDid={user?.did || ""}
+                                                                        variant="icon"
+                                                                    />
+                                                                )}
+                                                                {canShowReplyActions && (
+                                                                    <Popover
+                                                                        open={pickerOpenForReply === reply.id}
+                                                                        onOpenChange={(open) =>
+                                                                            setPickerOpenForReply(
+                                                                                open ? reply.id : null,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8"
+                                                                            >
+                                                                                <BsEmojiSmile className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                                                            <LazyEmojiPicker
+                                                                                onEmojiClick={(
+                                                                                    data: EmojiClickData,
+                                                                                ) => {
+                                                                                    void handleReaction(
+                                                                                        reply.id,
+                                                                                        data.emoji,
+                                                                                    );
+                                                                                    setPickerOpenForReply(null);
+                                                                                }}
+                                                                            />
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                <div className="mt-2 text-right text-xs font-medium text-gray-500">
+                                                    {formatCompactDisplayName(reply.author?.name, reply.createdBy)}
+                                                </div>
+                                                {isOwn && reply.status === "pending" && (
+                                                    <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-400">
+                                                        <IoTimeOutline className="h-3 w-3" aria-hidden="true" />
+                                                        Sending…
+                                                    </div>
+                                                )}
+                                                {isOwn && reply.status === "sent" && (
+                                                    <div className="mt-1 text-right text-[11px] text-gray-400">
+                                                        Sent
+                                                    </div>
+                                                )}
+                                                {isOwn && reply.status === "failed" && (
+                                                    <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-red-600">
+                                                        <span className="flex items-center gap-1">
+                                                            <IoWarningOutline className="h-3 w-3" aria-hidden="true" />
+                                                            {reply.errorMessage || "Failed to send"}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className="font-semibold underline underline-offset-2 disabled:opacity-50"
+                                                            disabled={isSending}
+                                                            onClick={() => {
+                                                                acknowledgeLoadedTopic("send");
+                                                                void submitTopicReply(reply);
+                                                            }}
+                                                        >
+                                                            Retry
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
-                                        )}
+                                            {reply.reactions && Object.keys(reply.reactions).length > 0 && (
+                                                <div className="-mb-1 flex flex-wrap justify-end gap-1 px-2 pb-1">
+                                                    {Object.entries(reply.reactions as Record<string, any>).map(
+                                                        ([emoji, reactors]) => {
+                                                            const reactorList = Array.isArray(reactors) ? reactors : [];
+                                                            return (
+                                                                <button
+                                                                    key={emoji}
+                                                                    onClick={
+                                                                        canReply
+                                                                            ? (event) => {
+                                                                                  event.stopPropagation();
+                                                                                  void handleReaction(reply.id, emoji);
+                                                                              }
+                                                                            : undefined
+                                                                    }
+                                                                    className="flex min-h-6 items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-sm leading-none"
+                                                                >
+                                                                    {emoji}{" "}
+                                                                    {reactorList.length > 1 && (
+                                                                        <span className="ml-0.5 text-gray-500">
+                                                                            {reactorList.length}
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        },
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
+                                </Fragment>
                             );
                         })}
+                        <div ref={repliesEndRef} aria-hidden="true" />
                     </div>
 
                     {/* Reply input */}
-                    <div className="flex flex-col gap-1 px-3 pb-3 sm:flex-row sm:items-end">
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-                        <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
-                            <div className="flex items-center gap-1 sm:contents">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={isUploading}
-                                    title="Attach file"
-                                    aria-label="Attach file"
-                                >
-                                    {isUploading ? (
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                                    ) : (
-                                        <IoAttach className="h-4 w-4" />
-                                    )}
-                                </Button>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
-                                            title="Add emoji"
-                                            aria-label="Add emoji"
-                                        >
-                                            <BsEmojiSmile className="h-4 w-4" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto border-none bg-transparent p-0">
-                                        <LazyEmojiPicker
-                                            onEmojiClick={(data: EmojiClickData) =>
-                                                setTopicReplyText((prev) => prev + data.emoji)
-                                            }
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
-                                onClick={() => void handleSendReply()}
-                                disabled={!replyText.trim() || isSending}
-                                title="Send reply"
-                                aria-label="Send reply"
-                            >
-                                <IoSend className="h-4 w-4" />
-                            </Button>
-                        </div>
-                        <div className="order-1 min-w-0 flex-1 sm:order-2">
-                            {replyToMessage && (
-                                <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="font-semibold text-gray-700">
-                                                Replying to {replyToMessage.author?.name || "message"}
-                                            </div>
-                                            <div className="truncate">
-                                                {renderMentionsAsDisplayText(
-                                                    (replyToMessage.content?.body as string) || "",
-                                                )}
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="text-gray-400 hover:text-gray-600"
-                                            onClick={() => setReplyToMessage(null)}
-                                        >
-                                            <IoClose className="h-4 w-4" />
-                                        </button>
-                                    </div>
+                    {canReply && (
+                        <div
+                            ref={replyComposerRef}
+                            className={`flex flex-col gap-1 rounded-lg px-3 pb-3 transition-colors sm:flex-row sm:items-end ${topicFileDrop.isFileDragActive ? "bg-[#315C3D]/[0.04] ring-2 ring-[#315C3D]/25" : ""}`}
+                            onDragEnter={topicFileDrop.onDragEnter}
+                            onDragOver={topicFileDrop.onDragOver}
+                            onDragLeave={topicFileDrop.onDragLeave}
+                            onDrop={topicFileDrop.onDrop}
+                        >
+                            <input
+                                type="file"
+                                multiple
+                                ref={fileInputRef}
+                                className="hidden"
+                                onChange={handleFileSelect}
+                            />
+                            <div className="order-2 flex items-center justify-between gap-2 sm:order-1 sm:contents">
+                                <div className="flex items-center gap-1 sm:contents">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isSending}
+                                        title="Attach file"
+                                        aria-label="Attach file"
+                                    >
+                                        {isSending ? (
+                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                                        ) : (
+                                            <IoAttach className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 sm:h-8 sm:w-8"
+                                                title="Add emoji"
+                                                aria-label="Add emoji"
+                                            >
+                                                <BsEmojiSmile className="h-4 w-4" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto border-none bg-transparent p-0">
+                                            <LazyEmojiPicker
+                                                onEmojiClick={(data: EmojiClickData) => {
+                                                    acknowledgeLoadedTopic("emoji");
+                                                    setTopicReplyText((prev) => prev + data.emoji);
+                                                }}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
-                            )}
-                            <div className="flex items-end gap-1">
-                                <MentionsInput
-                                    inputRef={replyTextareaRef}
-                                    value={replyText}
-                                    onChange={(_event, newValue) => {
-                                        setTopicReplyText(newValue);
-                                        autoGrowReplyTextarea();
-                                    }}
-                                    placeholder={`Reply to ${thread.title}. Use return for a new line.`}
-                                    aria-label={`Reply to ${thread.title}`}
-                                    className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
-                                    style={topicReplyMentionsInputStyle}
-                                    allowSuggestionsAboveCursor={true}
-                                    forceSuggestionsAboveCursor={true}
-                                >
-                                    <Mention
-                                        trigger="@"
-                                        data={handleTopicMentionQuery}
-                                        style={defaultMentionStyle}
-                                        displayTransform={(id, display) => `${display}`}
-                                        renderSuggestion={renderCircleSuggestion}
-                                        markup="[__display__](/circles/__id__)"
-                                    />
-                                </MentionsInput>
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
+                                    className="h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:hidden"
                                     onClick={() => void handleSendReply()}
-                                    disabled={!replyText.trim() || isSending}
+                                    disabled={
+                                        !isTopicDraftReady ||
+                                        (!replyText.trim() && queuedAttachments.length === 0) ||
+                                        isSending
+                                    }
                                     title="Send reply"
                                     aria-label="Send reply"
                                 >
                                     <IoSend className="h-4 w-4" />
                                 </Button>
                             </div>
+                            <div className="order-1 min-w-0 flex-1 sm:order-2">
+                                <QueuedAttachmentPreviews
+                                    attachments={queuedAttachments}
+                                    disabled={isSending}
+                                    onRemove={handleRemoveAttachment}
+                                />
+                                {replyToMessage && (
+                                    <div className="mb-2 rounded-lg border border-l-4 border-slate-200 border-l-slate-300 bg-white/80 px-3 py-2 text-xs text-gray-600">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-gray-700">
+                                                    Replying to {replyToMessage.author?.name || "message"}
+                                                </div>
+                                                <div className="truncate">
+                                                    {renderMentionsAsDisplayText(
+                                                        (replyToMessage.content?.body as string) || "",
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="text-gray-400 hover:text-gray-600"
+                                                onClick={() => setReplyToMessage(null)}
+                                                disabled={isSending}
+                                            >
+                                                <IoClose className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex items-end gap-1">
+                                    <MentionsInput
+                                        inputRef={replyTextareaRef}
+                                        value={replyText}
+                                        disabled={!isTopicDraftReady || isSending}
+                                        onChange={(_event, newValue) => {
+                                            acknowledgeLoadedTopic("typing");
+                                            setTopicReplyText(newValue);
+                                            autoGrowReplyTextarea();
+                                        }}
+                                        onFocus={() =>
+                                            acknowledgeLoadedTopic("focus", suppressProgrammaticFocusRef.current)
+                                        }
+                                        onPointerDown={() => acknowledgeLoadedTopic("focus")}
+                                        placeholder={`Reply to ${thread.title}. Use return for a new line.`}
+                                        aria-label={`Reply to ${thread.title}`}
+                                        className="min-w-0 flex-1 rounded-2xl bg-gray-50 text-base focus-within:ring-1 focus-within:ring-gray-300"
+                                        style={topicReplyMentionsInputStyle}
+                                        allowSuggestionsAboveCursor={true}
+                                        forceSuggestionsAboveCursor={true}
+                                    >
+                                        <Mention
+                                            trigger="@"
+                                            data={handleTopicMentionQuery}
+                                            style={defaultMentionStyle}
+                                            displayTransform={(id, display) => `${display}`}
+                                            renderSuggestion={renderCircleSuggestion}
+                                            markup="[__display__](/circles/__id__)"
+                                        />
+                                    </MentionsInput>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="hidden h-9 w-9 shrink-0 rounded-full text-[hsl(var(--task-link))] hover:bg-[hsl(var(--founding-member-bg))] sm:flex"
+                                        onClick={() => void handleSendReply()}
+                                        disabled={
+                                            !isTopicDraftReady ||
+                                            (!replyText.trim() && queuedAttachments.length === 0) ||
+                                            isSending
+                                        }
+                                        title="Send reply"
+                                        aria-label="Send reply"
+                                    >
+                                        <IoSend className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
+                    )}
+                    <div className="flex justify-center border-t border-[#DDEBB8] px-3 py-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full bg-white px-4"
+                            onClick={handleCloseFromEnd}
+                            aria-label={`Close topic: ${thread.title}`}
+                        >
+                            <IoChevronDown className="mr-1.5 h-4 w-4 rotate-180" aria-hidden="true" />
+                            Close topic
+                        </Button>
                     </div>
+                    <div ref={topicEndRef} aria-hidden="true" />
                 </div>
             )}
             {isEditingTopic && (
@@ -2955,21 +4135,53 @@ export const ChatRoomComponent: React.FC<{
     circle?: Circle;
     inToolbox?: boolean;
     chatProvider?: "matrix" | "mongo";
-}> = ({ chatRoom, setSelectedChat, circle, inToolbox, chatProvider }) => {
+    initialTopicId?: string;
+    initialMessageId?: string;
+    suppressAutoRead?: boolean;
+    archivedReadOnly?: boolean;
+}> = ({
+    chatRoom,
+    setSelectedChat,
+    circle,
+    inToolbox,
+    chatProvider,
+    initialTopicId,
+    initialMessageId,
+    suppressAutoRead = false,
+    archivedReadOnly = false,
+}) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const hasInitiallyScrolledRef = useRef(false);
+    const bottomScrollFrameRef = useRef<number | null>(null);
+    const bottomScrollInnerFrameRef = useRef<number | null>(null);
     const userHasScrolledUpRef = useRef(false);
     const lastRenderedMessageRef = useRef<{ count: number; latestCreatedAt: number | null }>({
         count: 0,
         latestCreatedAt: null,
     });
+    useEffect(() => {
+        if (!initialMessageId) return;
+        hasInitiallyScrolledRef.current = true;
+        if (bottomScrollFrameRef.current !== null) cancelAnimationFrame(bottomScrollFrameRef.current);
+        if (bottomScrollInnerFrameRef.current !== null) cancelAnimationFrame(bottomScrollInnerFrameRef.current);
+        bottomScrollFrameRef.current = null;
+        bottomScrollInnerFrameRef.current = null;
+    }, [initialMessageId]);
+
+    useEffect(
+        () => () => {
+            if (bottomScrollFrameRef.current !== null) cancelAnimationFrame(bottomScrollFrameRef.current);
+            if (bottomScrollInnerFrameRef.current !== null) cancelAnimationFrame(bottomScrollInnerFrameRef.current);
+        },
+        [],
+    );
     const isCompact = useIsCompact();
-    const [pillStyle, setPillStyle] = useState<React.CSSProperties>({});
     const [jumpButtonRight, setJumpButtonRight] = useState(16);
+    const [newTopicButtonLeft, setNewTopicButtonLeft] = useState<number | null>(null);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-    const isMobile = useIsMobile();
+    const isChatMobile = useClientMediaQuery("(max-width: 767px)");
     const [isLoadingMessages, startLoadingMessagesTransition] = useTransition();
     const inputRef = useRef<HTMLDivElement>(null);
     const [user] = useAtom(userAtom);
@@ -2984,6 +4196,10 @@ export const ChatRoomComponent: React.FC<{
     const [hasLoadedTopics, setHasLoadedTopics] = useState(false);
     const [isLoadingTopics, setIsLoadingTopics] = useState(false);
     const [topicUnreadCounts, setTopicUnreadCounts] = useState<Record<string, number>>({});
+    const [topicSortOrder, setTopicSortOrder] = useState<TopicSortOrder>("latest_activity");
+    const [hasLoadedTopicSortOrder, setHasLoadedTopicSortOrder] = useState(false);
+    const [hasLoadedTopicUnreadCounts, setHasLoadedTopicUnreadCounts] = useState(false);
+    const [, setTopicUnreadIndicatorsState] = useState<Record<string, TopicUnreadIndicator>>({});
     const [isMobileComposerExpanded, setIsMobileComposerExpanded] = useState(false);
     const [mentionCandidates, setMentionCandidates] = useState<Circle[]>([]);
     const [replyToMessage, setReplyToMessage] = useAtom(replyToMessageAtom);
@@ -2992,15 +4208,54 @@ export const ChatRoomComponent: React.FC<{
     const routeHandleParam = params?.handle;
     const routeHandle = Array.isArray(routeHandleParam) ? routeHandleParam[0] : routeHandleParam;
     const provider: "mongo" = "mongo";
+    const [isUnarchiving, setIsUnarchiving] = useState(false);
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
     const activeRoomIdRef = useRef<string | null>(roomId);
     const topicLoadRequestRef = useRef(0);
     const topicUnreadRequestRef = useRef(0);
+    const topicsLoadedRoomRef = useRef<string | null>(null);
+    const topicUnreadCountsLoadedRoomRef = useRef<string | null>(null);
+    const topicUnreadIndicatorsLoadedRoomRef = useRef<string | null>(null);
+    const openedDeepLinkTopicRef = useRef<string | null>(null);
+    const initialTopicEntryHandledRef = useRef(false);
     const conversationType = (chatRoom as any)?.conversationType || (chatRoom as any)?.metadata?.conversationType;
     const repliesDisabled =
         (chatRoom as any)?.repliesDisabled === true || (chatRoom as any)?.metadata?.repliesDisabled === true;
     const isAnnouncementConversation = conversationType === "announcement" || repliesDisabled;
+    const canChangeContent = !isAnnouncementConversation && !archivedReadOnly;
+    const showFloatingNewTopic = !inToolbox && canChangeContent;
+
+    const handleUnarchive = useCallback(async () => {
+        if (!roomId || isUnarchiving) return;
+        setIsUnarchiving(true);
+        try {
+            const { unarchiveDmConversationAction } = await import("./actions");
+            const result = await unarchiveDmConversationAction(roomId);
+            if (!result.success) {
+                alert(result.message || "Failed to unarchive conversation");
+                return;
+            }
+            router.replace(`/chat/${roomId}`);
+            router.refresh();
+        } finally {
+            setIsUnarchiving(false);
+        }
+    }, [isUnarchiving, roomId, router]);
+
+    useEffect(() => {
+        if (!archivedReadOnly || !roomId) return;
+        const checkArchivedState = async () => {
+            const { listArchivedChatRoomsAction } = await import("./actions");
+            const result = await listArchivedChatRoomsAction();
+            if (result.success && !(result.rooms || []).some((room) => String(room._id) === roomId)) {
+                router.replace(`/chat/${roomId}`);
+                router.refresh();
+            }
+        };
+        const interval = window.setInterval(() => void checkArchivedState(), 5000);
+        return () => window.clearInterval(interval);
+    }, [archivedReadOnly, roomId, router]);
 
     useEffect(() => {
         if (!replyToMessage) return;
@@ -3089,10 +4344,11 @@ export const ChatRoomComponent: React.FC<{
         console.log("CHAT DEBUG roomMessages keys:", Object.keys(roomMessages));
     }, [provider, routeHandle, roomId, roomMessages]);
 
-    const { isLoading: isLoadingMongo } = useMongoChat({
+    const { isLoading: isLoadingMongo, polledTopicReplySignals } = useMongoChat({
         roomId,
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
+        suppressAutoRead,
     });
 
     const hasLoadedTopicsRef = useRef(false);
@@ -3105,7 +4361,98 @@ export const ChatRoomComponent: React.FC<{
         setHasLoadedTopics(false);
         setIsLoadingTopics(false);
         setTopicUnreadCounts({});
+        setHasLoadedTopicUnreadCounts(false);
+        topicsLoadedRoomRef.current = null;
+        topicUnreadCountsLoadedRoomRef.current = null;
+        const restoredIndicators = roomId ? getTopicUnreadIndicators(roomId) : {};
+        topicUnreadIndicatorsLoadedRoomRef.current = roomId;
+        setTopicUnreadIndicatorsState(restoredIndicators);
+        openedDeepLinkTopicRef.current = null;
+        initialTopicEntryHandledRef.current = false;
+        setTopicSortOrder("latest_activity");
+        setHasLoadedTopicSortOrder(false);
     }, [roomId]);
+
+    useEffect(() => {
+        if (!roomId) return;
+        let cancelled = false;
+        const loadTopicSortOrder = async () => {
+            try {
+                const { getTopicSortPreferenceAction } = await import("./mongo-actions");
+                const result = await getTopicSortPreferenceAction(roomId);
+                if (!cancelled && result.success && result.sortOrder) setTopicSortOrder(result.sortOrder);
+            } catch (error) {
+                console.error("Failed to load topic sort preference:", error);
+            } finally {
+                if (!cancelled) setHasLoadedTopicSortOrder(true);
+            }
+        };
+        void loadTopicSortOrder();
+        return () => {
+            cancelled = true;
+        };
+    }, [roomId]);
+
+    useEffect(() => {
+        const handlePreference = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string; sortOrder?: TopicSortOrder }>).detail;
+            if (detail?.conversationId === roomId && detail.sortOrder) {
+                setTopicSortOrder(detail.sortOrder);
+                setHasLoadedTopicSortOrder(true);
+            }
+        };
+        window.addEventListener(TOPIC_SORT_PREFERENCE_EVENT, handlePreference);
+        return () => window.removeEventListener(TOPIC_SORT_PREFERENCE_EVENT, handlePreference);
+    }, [roomId]);
+
+    const navigateToTopic = useCallback((topicId: string, targetMessageId?: string) => {
+        setOpenTopicIds((previous) => new Set(previous).add(topicId));
+        setTopicNavigationRequest({ topicId, targetMessageId, nonce: Date.now() });
+    }, []);
+
+    useEffect(() => {
+        if (!initialMessageId) openedDeepLinkTopicRef.current = null;
+    }, [initialMessageId]);
+
+    const updateTopicUnreadIndicators = useCallback(
+        (update: (current: Record<string, TopicUnreadIndicator>) => Record<string, TopicUnreadIndicator>) => {
+            if (!roomId) return;
+            setTopicUnreadIndicatorsState((current) => {
+                const next = update(current);
+                setTopicUnreadIndicators(roomId, next);
+                return next;
+            });
+        },
+        [roomId],
+    );
+
+    const captureTopicUnreadIndicator = useCallback(
+        (topicId: string) => {
+            const indicator = createTopicUnreadIndicator(topicUnreadCounts[topicId] || 0);
+            if (!indicator) return;
+            updateTopicUnreadIndicators((current) =>
+                current[topicId] ? current : { ...current, [topicId]: indicator },
+            );
+        },
+        [topicUnreadCounts, updateTopicUnreadIndicators],
+    );
+
+    useEffect(() => {
+        if (
+            !initialTopicId ||
+            !roomId ||
+            !hasLoadedTopics ||
+            topicsLoadedRoomRef.current !== roomId ||
+            openedDeepLinkTopicRef.current === `${initialTopicId}:${initialMessageId || ""}`
+        )
+            return;
+        const topicToOpen = selectLoadedDeepLinkTopic(initialTopicId, roomMessages[roomId] || []);
+        if (!topicToOpen) return;
+        openedDeepLinkTopicRef.current = `${topicToOpen}:${initialMessageId || ""}`;
+        initialTopicEntryHandledRef.current = true;
+        hasInitiallyScrolledRef.current = true;
+        navigateToTopic(topicToOpen, initialMessageId);
+    }, [hasLoadedTopics, initialMessageId, initialTopicId, navigateToTopic, roomId, roomMessages]);
 
     const refreshTopicUnreadCounts = useCallback(async () => {
         const targetRoomId = roomId;
@@ -3117,6 +4464,8 @@ export const ChatRoomComponent: React.FC<{
             if (activeRoomIdRef.current !== targetRoomId || topicUnreadRequestRef.current !== requestId) return;
             if (result.success && result.counts) {
                 setTopicUnreadCounts(result.counts);
+                topicUnreadCountsLoadedRoomRef.current = targetRoomId;
+                setHasLoadedTopicUnreadCounts(true);
                 if (typeof result.conversationUnreadCount === "number") {
                     setUnreadCounts((previous) => ({
                         ...previous,
@@ -3129,6 +4478,42 @@ export const ChatRoomComponent: React.FC<{
         }
     }, [roomId, setUnreadCounts]);
 
+    useEffect(() => {
+        if (
+            !roomId ||
+            !hasLoadedTopics ||
+            !hasLoadedTopicUnreadCounts ||
+            topicsLoadedRoomRef.current !== roomId ||
+            topicUnreadCountsLoadedRoomRef.current !== roomId ||
+            topicUnreadIndicatorsLoadedRoomRef.current !== roomId ||
+            initialTopicEntryHandledRef.current
+        )
+            return;
+
+        const topicId = selectInitialTopicId({
+            explicitTopicId: initialTopicId,
+            initialEntryHandled: initialTopicEntryHandledRef.current,
+            messages: roomMessages[roomId] || [],
+            unreadCounts: topicUnreadCounts,
+        });
+
+        if (initialTopicId) return;
+        initialTopicEntryHandledRef.current = true;
+        if (topicId) {
+            captureTopicUnreadIndicator(topicId);
+            navigateToTopic(topicId);
+        }
+    }, [
+        hasLoadedTopicUnreadCounts,
+        hasLoadedTopics,
+        initialTopicId,
+        captureTopicUnreadIndicator,
+        navigateToTopic,
+        roomId,
+        roomMessages,
+        topicUnreadCounts,
+    ]);
+
     const handleTopicRead = useCallback(
         async (_topicId: string) => {
             await refreshTopicUnreadCounts();
@@ -3137,40 +4522,46 @@ export const ChatRoomComponent: React.FC<{
         [refreshTopicUnreadCounts, roomId],
     );
 
-    const refreshTopicStarters = useCallback(async () => {
-        const targetRoomId = roomId;
-        if (!targetRoomId) return;
+    const refreshTopicStarters = useCallback(
+        async (refreshUnreadCounts = true) => {
+            const targetRoomId = roomId;
+            if (!targetRoomId) return;
 
-        const requestId = ++topicLoadRequestRef.current;
-        setIsLoadingTopics(true);
+            const requestId = ++topicLoadRequestRef.current;
+            setIsLoadingTopics(true);
 
-        try {
-            const { fetchTopicStartersAction } = await import("./mongo-actions");
-            const result = await fetchTopicStartersAction(targetRoomId);
-            if (activeRoomIdRef.current !== targetRoomId || topicLoadRequestRef.current !== requestId) {
-                return;
-            }
-            if (!result.success || !result.messages) {
-                return;
-            }
+            try {
+                const { fetchTopicStartersAction } = await import("./mongo-actions");
+                const result = await fetchTopicStartersAction(targetRoomId);
+                if (activeRoomIdRef.current !== targetRoomId || topicLoadRequestRef.current !== requestId) {
+                    return;
+                }
+                if (!result.success || !result.messages) {
+                    return;
+                }
 
-            setRoomMessages((prev) => {
-                const existingLooseMessages = (prev[targetRoomId] || []).filter((message) => !(message as any).thread);
-                const merged = [...existingLooseMessages, ...result.messages!].sort(
-                    (a, b) => getTopicCreationTime(a as any) - getTopicCreationTime(b as any),
-                );
-                return { ...prev, [targetRoomId]: merged };
-            });
-            setHasLoadedTopics(true);
-            void refreshTopicUnreadCounts();
-        } catch (error) {
-            console.error("Failed to refresh topic starters:", error);
-        } finally {
-            if (activeRoomIdRef.current === targetRoomId && topicLoadRequestRef.current === requestId) {
-                setIsLoadingTopics(false);
+                setRoomMessages((prev) => {
+                    const merged = mergeRefreshedTopicStarters(prev[targetRoomId] || [], result.messages!);
+                    return { ...prev, [targetRoomId]: merged };
+                });
+                topicsLoadedRoomRef.current = targetRoomId;
+                setHasLoadedTopics(true);
+                if (refreshUnreadCounts) void refreshTopicUnreadCounts();
+            } catch (error) {
+                console.error("Failed to refresh topic starters:", error);
+            } finally {
+                if (activeRoomIdRef.current === targetRoomId && topicLoadRequestRef.current === requestId) {
+                    setIsLoadingTopics(false);
+                }
             }
-        }
-    }, [refreshTopicUnreadCounts, roomId, setRoomMessages]);
+        },
+        [refreshTopicUnreadCounts, roomId, setRoomMessages],
+    );
+
+    useEffect(() => {
+        if (!roomId || !hasLoadedTopics || Object.keys(polledTopicReplySignals).length === 0) return;
+        void refreshTopicStarters(false);
+    }, [hasLoadedTopics, polledTopicReplySignals, refreshTopicStarters, roomId]);
 
     const latestRoomMessageId = roomId ? roomMessages[roomId]?.[roomMessages[roomId].length - 1]?.id : undefined;
     useEffect(() => {
@@ -3187,28 +4578,20 @@ export const ChatRoomComponent: React.FC<{
                 return;
             }
 
-            setOpenTopicIds((prev) => {
-                const next = new Set(prev);
-                next.add(topicId);
-                return next;
-            });
-            setTopicNavigationRequest({
-                topicId,
-                nonce: Date.now(),
-            });
+            navigateToTopic(topicId);
         };
 
         window.addEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
         return () => {
             window.removeEventListener(OPEN_TOPIC_EVENT, handleOpenTopic as EventListener);
         };
-    }, [roomId]);
+    }, [navigateToTopic, roomId]);
 
     useEffect(() => {
-        if (isLoadingMongo || !roomId || hasLoadedTopicsRef.current) return;
+        if (!roomId || hasLoadedTopicsRef.current) return;
         hasLoadedTopicsRef.current = true;
         void refreshTopicStarters();
-    }, [isLoadingMongo, roomId, refreshTopicStarters]);
+    }, [roomId, refreshTopicStarters]);
 
     const loadOlderMessages = async () => {
         if (!roomId || isLoadingOlder || !hasOlderMessages) return;
@@ -3305,31 +4688,6 @@ export const ChatRoomComponent: React.FC<{
         setReplyToMessage(null); // Clear reply when editing
     };
 
-    const lastReadMessageIdRef = useRef<string | null>(null);
-
-    const markLatestMessageAsRead = useCallback(async () => {
-        if (!roomId || messages.length === 0) {
-            return;
-        }
-
-        const latestMessage = messages[messages.length - 1];
-        if (lastReadMessageIdRef.current === latestMessage.id) {
-            return;
-        }
-
-        lastReadMessageIdRef.current = latestMessage.id;
-        try {
-            const response = await fetch("/api/notifications/mark-pms-as-read", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ roomId }),
-            });
-            dispatchNotificationRefreshIfOk(response, { reason: "pm-notifications-read", roomId });
-        } catch (error) {
-            console.error("Failed to mark PM notifications as read:", error);
-        }
-    }, [messages, roomId]);
-
     const scrollToBottom = (behavior: "smooth" | "auto" = "auto") => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior });
@@ -3360,23 +4718,30 @@ export const ChatRoomComponent: React.FC<{
     };
 
     useEffect(() => {
-        if (messages.length === 0) return;
+        if (!hasLoadedTopicSortOrder) return;
+        const nextSnapshot = getTopicViewportSnapshot(messages);
+        if (nextSnapshot.count === 0) return;
 
-        const latestMessage = messages[messages.length - 1];
-        const latestCreatedAt =
-            latestMessage.createdAt instanceof Date
-                ? latestMessage.createdAt.getTime()
-                : new Date(latestMessage.createdAt).getTime();
+        if (initialMessageId) {
+            hasInitiallyScrolledRef.current = true;
+            lastRenderedMessageRef.current = nextSnapshot;
+            return;
+        }
+
         const previousSnapshot = lastRenderedMessageRef.current;
         const hasNewLatestMessage =
             previousSnapshot.count > 0 &&
-            (messages.length > previousSnapshot.count ||
-                (previousSnapshot.latestCreatedAt !== null && latestCreatedAt > previousSnapshot.latestCreatedAt));
+            (nextSnapshot.count > previousSnapshot.count ||
+                (previousSnapshot.latestCreatedAt !== null &&
+                    nextSnapshot.latestCreatedAt !== null &&
+                    nextSnapshot.latestCreatedAt > previousSnapshot.latestCreatedAt));
 
         if (!hasInitiallyScrolledRef.current) {
             hasInitiallyScrolledRef.current = true;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
+            bottomScrollFrameRef.current = requestAnimationFrame(() => {
+                bottomScrollFrameRef.current = null;
+                bottomScrollInnerFrameRef.current = requestAnimationFrame(() => {
+                    bottomScrollInnerFrameRef.current = null;
                     scrollToBottom("auto");
                 });
             });
@@ -3384,11 +4749,8 @@ export const ChatRoomComponent: React.FC<{
             scrollToBottom("smooth");
         }
 
-        lastRenderedMessageRef.current = {
-            count: messages.length,
-            latestCreatedAt,
-        };
-    }, [messages]);
+        lastRenderedMessageRef.current = nextSnapshot;
+    }, [hasLoadedTopicSortOrder, initialMessageId, messages]);
 
     useEffect(() => {
         hasInitiallyScrolledRef.current = false;
@@ -3423,6 +4785,18 @@ export const ChatRoomComponent: React.FC<{
     }, []);
 
     const topicCount = useMemo(() => getTopicIndexMessages(messages).length, [messages]);
+    const remainingUnreadTopicIds = useMemo(
+        () => selectUnreadTopicIds(messages, topicUnreadCounts),
+        [messages, topicUnreadCounts],
+    );
+
+    const navigateToNextUnreadTopic = useCallback(() => {
+        const nextTopicId = remainingUnreadTopicIds[0];
+        if (nextTopicId) {
+            captureTopicUnreadIndicator(nextTopicId);
+            navigateToTopic(nextTopicId);
+        }
+    }, [captureTopicUnreadIndicator, navigateToTopic, remainingUnreadTopicIds]);
 
     const openNewTopicModal = useCallback(
         (useFirstTopicDefault = false) => {
@@ -3461,19 +4835,12 @@ export const ChatRoomComponent: React.FC<{
     }, [messages]);
 
     useEffect(() => {
-        markLatestMessageAsRead(); // Mark the latest message as read when messages update
-    }, [messages, markLatestMessageAsRead]);
-
-    useEffect(() => {
         const calculatePillPosition = () => {
             const container = inputRef.current;
             if (container) {
                 const rect = container.getBoundingClientRect();
-                setPillStyle({
-                    left: `${rect.left + rect.width / 2}px`,
-                    transform: "translateX(-50%)",
-                });
                 setJumpButtonRight(Math.max(16, window.innerWidth - rect.right + 16));
+                setNewTopicButtonLeft(rect.left + rect.width / 2);
             }
         };
 
@@ -3483,7 +4850,93 @@ export const ChatRoomComponent: React.FC<{
     }, [messages]);
 
     const handleMessagesRendered = () => {};
-    const scrollBottomPadding = isMobile ? 96 : 16;
+    const scrollBottomPadding = isChatMobile ? 96 : 16;
+    const nextUnreadTopicControl =
+        remainingUnreadTopicIds.length > 0 ? (
+            <div
+                className={`sticky z-10 flex justify-center pb-2 ${
+                    inToolbox ? "top-2" : isChatMobile ? "top-8" : showFloatingNewTopic ? "top-[8rem]" : "top-[4.5rem]"
+                }`}
+            >
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full bg-white shadow-sm"
+                    onClick={navigateToNextUnreadTopic}
+                >
+                    Next unread topic
+                    {remainingUnreadTopicIds.length > 1 ? ` (${remainingUnreadTopicIds.length})` : ""}
+                </Button>
+            </div>
+        ) : null;
+    const conversationToolbar = !inToolbox ? (
+        <div
+            className={
+                isChatMobile
+                    ? "relative z-20 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white px-4 py-2 shadow-sm"
+                    : "sticky top-0 z-20 -mx-4 mb-3 flex min-h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-sm"
+            }
+        >
+            {isChatMobile && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
+                    onClick={() => router.push(getConversationListPath(archivedReadOnly))}
+                    aria-label="Back to conversations"
+                >
+                    <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+                </Button>
+            )}
+            {(chatRoom as any)?.isDirect ? (
+                <DmConnectControl chatRoom={chatRoom} user={user} showActions={!archivedReadOnly} />
+            ) : (
+                !isChatMobile &&
+                circle && (
+                    <Link href={`/circles/${circle.handle}`} className="min-w-0 cursor-pointer">
+                        <div className="flex items-center gap-2 rounded-full bg-white p-2 hover:bg-gray-100">
+                            <CirclePicture circle={circle} size="24px" />
+                            <span className="truncate text-sm font-semibold">{circle.name}</span>
+                        </div>
+                    </Link>
+                )
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+                {archivedReadOnly ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-10 rounded-full bg-white px-3 text-sm"
+                        onClick={() => void handleUnarchive()}
+                        disabled={isUnarchiving}
+                    >
+                        <ArchiveRestore className="mr-1.5 h-4 w-4" />
+                        {isUnarchiving ? "Unarchiving..." : isChatMobile ? "Unarchive" : "Unarchive conversation"}
+                    </Button>
+                ) : null}
+            </div>
+        </div>
+    ) : null;
+    const newTopicControl = showFloatingNewTopic ? (
+        <Button
+            type="button"
+            size="sm"
+            className={
+                isChatMobile
+                    ? "h-10 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+                    : "fixed top-[4.5rem] z-30 h-10 -translate-x-1/2 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-lg hover:bg-[hsl(var(--task-link-hover))]"
+            }
+            style={isChatMobile ? undefined : { left: newTopicButtonLeft === null ? "50%" : `${newTopicButtonLeft}px` }}
+            onClick={isChatMobile ? openTopicComposerFromMobile : () => openNewTopicModal(false)}
+            title="New topic"
+            aria-label="New topic"
+        >
+            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
+            <span className="max-w-[6.5rem] truncate">New topic</span>
+        </Button>
+    ) : null;
 
     return (
         <>
@@ -3492,37 +4945,36 @@ export const ChatRoomComponent: React.FC<{
                 style={{
                     flexGrow: isCompact || inToolbox ? "1" : "3",
                     maxWidth: isCompact || inToolbox ? "none" : "700px",
+                    minHeight:
+                        isChatMobile && !inToolbox
+                            ? "calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))"
+                            : undefined,
+                    height:
+                        isChatMobile && !inToolbox
+                            ? "calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))"
+                            : undefined,
                 }}
             >
-                <div ref={inputRef} className="relative flex h-full w-full flex-col">
-                    {!inToolbox && (
-                        <div className="fixed top-4 z-[20] flex items-center gap-2" style={pillStyle}>
-                            {circle && (
-                                <Link href={`/circles/${circle.handle}`} className="cursor-pointer">
-                                    <div className="flex items-center gap-2 rounded-full bg-white p-2 shadow-lg hover:bg-gray-100">
-                                        <CirclePicture circle={circle} size="24px" />
-                                        <span className="text-sm font-semibold">{circle.name}</span>
-                                    </div>
-                                </Link>
-                            )}
-                            {!isMobile && !isAnnouncementConversation && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                                    onClick={() => openNewTopicModal(false)}
-                                    title="New topic"
-                                >
-                                    <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                                    New topic
-                                </Button>
+                <div
+                    ref={inputRef}
+                    className="relative flex h-full w-full flex-col"
+                    onDragOverCapture={preventFileDropNavigation}
+                    onDropCapture={preventFileDropNavigation}
+                >
+                    {!inToolbox && isChatMobile && (
+                        <div className="relative z-30 shrink-0 pt-16">
+                            {conversationToolbar}
+                            {newTopicControl && (
+                                <div className="absolute left-1/2 top-full z-30 -translate-x-1/2 -translate-y-1/2">
+                                    {newTopicControl}
+                                </div>
                             )}
                         </div>
                     )}
                     {inToolbox ? (
                         <div
                             ref={scrollContainerRef}
+                            data-chat-scroll-viewport="true"
                             onScroll={handleScroll}
                             className="overflow-y-auto p-4"
                             style={{
@@ -3531,7 +4983,11 @@ export const ChatRoomComponent: React.FC<{
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!archivedReadOnly && (chatRoom as any)?.isDirect && (
+                                <div className="mb-3 flex rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                                    <DmConnectControl chatRoom={chatRoom} user={user} />
+                                </div>
+                            )}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3543,17 +4999,19 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
+                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics || !hasLoadedTopicSortOrder) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
-                            {!isLoadingMessages && (
+                            {nextUnreadTopicControl}
+                            {shouldRenderTopicFeed(hasLoadedTopicSortOrder, isLoadingMessages) && (
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
+                                    scrollViewportRef={scrollContainerRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    canReply={!isAnnouncementConversation}
+                                    canReply={canChangeContent}
                                     chatProvider={provider}
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
@@ -3566,24 +5024,28 @@ export const ChatRoomComponent: React.FC<{
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
                                     topicUnreadCounts={topicUnreadCounts}
+                                    topicReplyChangeSignals={polledTopicReplySignals}
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
+                                    topicSortOrder={topicSortOrder}
+                                    deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
+                                    legacyTargetMessageId={!initialTopicId ? initialMessageId : undefined}
                                 />
                             )}
                         </div>
                     ) : (
                         <div
                             ref={scrollContainerRef}
+                            data-chat-scroll-viewport="true"
                             onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto p-4"
+                            className="min-h-0 flex-grow overflow-y-auto px-4 pb-4 pt-7 md:p-4"
                             style={{
                                 overflowAnchor: "auto",
-                                paddingTop: isMobile ? 16 : 64,
                                 paddingBottom: scrollBottomPadding,
                             }}
                         >
-                            <DmConnectBanner chatRoom={chatRoom} user={user} />
+                            {!isChatMobile && conversationToolbar}
                             {!isLoadingMongo && hasOlderMessages && (
                                 <div className="flex justify-center py-2">
                                     <button
@@ -3595,17 +5057,19 @@ export const ChatRoomComponent: React.FC<{
                                     </button>
                                 </div>
                             )}
-                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics) && (
+                            {(isLoadingMessages || isLoadingMongo || isLoadingTopics || !hasLoadedTopicSortOrder) && (
                                 <div className="text-center text-gray-500">Loading messages...</div>
                             )}
-                            {!isLoadingMessages && (
+                            {nextUnreadTopicControl}
+                            {shouldRenderTopicFeed(hasLoadedTopicSortOrder, isLoadingMessages) && (
                                 <ChatMessages
                                     messages={messages}
                                     messagesEndRef={messagesEndRef}
+                                    scrollViewportRef={scrollContainerRef}
                                     onMessagesRendered={handleMessagesRendered}
                                     handleDelete={handleDelete}
                                     handleEdit={handleEdit}
-                                    canReply={!isAnnouncementConversation}
+                                    canReply={canChangeContent}
                                     chatProvider={provider}
                                     isDirect={!!(chatRoom as any)?.isDirect}
                                     conversationId={roomId || ""}
@@ -3618,13 +5082,19 @@ export const ChatRoomComponent: React.FC<{
                                     onCreateTopic={() => openNewTopicModal(true)}
                                     onTopicActivity={refreshTopicStarters}
                                     topicUnreadCounts={topicUnreadCounts}
+                                    topicReplyChangeSignals={polledTopicReplySignals}
                                     onTopicRead={handleTopicRead}
                                     topicsLoaded={hasLoadedTopics}
                                     mentionCandidates={mentionCandidates}
+                                    topicSortOrder={topicSortOrder}
+                                    deferTopicReordering={openTopicIds.size > 0 || showJumpToLatest}
+                                    legacyTargetMessageId={!initialTopicId ? initialMessageId : undefined}
                                 />
                             )}
                         </div>
                     )}
+
+                    {!isChatMobile && newTopicControl}
 
                     {showJumpToLatest && (
                         <Button
@@ -3638,7 +5108,7 @@ export const ChatRoomComponent: React.FC<{
                             className="fixed z-20 h-10 w-10 rounded-full border border-[hsl(var(--task-priority-low-bg))] bg-[hsl(var(--founding-member-bg))] text-[hsl(var(--task-link))] shadow-lg hover:bg-[hsl(var(--task-priority-low-bg))]"
                             style={{
                                 right: `${jumpButtonRight}px`,
-                                bottom: `${isMobile ? 84 : 20}px`,
+                                bottom: `${isChatMobile ? 84 : 20}px`,
                             }}
                             title="Jump to latest"
                             aria-label="Jump to latest"
@@ -3648,31 +5118,7 @@ export const ChatRoomComponent: React.FC<{
                     )}
                 </div>
             </div>
-            {isMobile && !inToolbox && (
-                <div className="fixed left-4 top-4 z-20 flex items-center gap-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 rounded-full bg-[#f1f1f1] hover:bg-[#cecece]"
-                        onClick={() => router.push("/chat")}
-                        aria-label="Back to conversations"
-                    >
-                        <IoArrowBack className="h-5 w-5" />
-                    </Button>
-                    {!isAnnouncementConversation && (
-                        <Button
-                            type="button"
-                            className="h-9 rounded-full bg-[hsl(var(--task-link))] px-3 text-sm text-white shadow-sm hover:bg-[hsl(var(--task-link-hover))]"
-                            onClick={openTopicComposerFromMobile}
-                            title="New topic"
-                        >
-                            <IoAddCircleOutline className="mr-1.5 h-4 w-4" />
-                            <span className="max-w-[6.5rem] truncate">New topic</span>
-                        </Button>
-                    )}
-                </div>
-            )}
-            {showNewThreadModal && roomId && (
+            {showNewThreadModal && roomId && canChangeContent && (
                 <NewThreadModal
                     conversationId={roomId}
                     initialTitle={newThreadInitialTitle}

@@ -180,7 +180,7 @@ export const moduleSchema = z.object({
     name: z.string(),
     handle: handleSchema,
     description: z.string(),
-    component: z.any(),
+    component: z.any().optional(),
     layoutComponent: z.any().optional(),
     excludeFromMenu: z.boolean().optional(),
     defaultIcon: z.string().optional(),
@@ -258,7 +258,13 @@ export const postSchema = z.object({
 export type Post = z.infer<typeof postSchema>;
 
 export type InternalPreviewData =
-    | { name: string; picture?: Circle["picture"]; description?: string; mission?: string; circleType?: Circle["circleType"] }
+    | {
+          name: string;
+          picture?: Circle["picture"];
+          description?: string;
+          mission?: string;
+          circleType?: Circle["circleType"];
+      }
     | { content: string; author: { name: string; picture?: Circle["picture"] } }
     | { title: string; taskType?: Task["taskType"]; stage: Task["stage"]; images?: Task["images"] }
     | { title: string; startAt: Event["startAt"]; images?: Event["images"] }
@@ -349,6 +355,7 @@ export const chatRoomSchema = z.object({
     handle: handleSchema,
     circleId: z.string().optional(),
     createdAt: z.date(),
+    updatedAt: z.date().optional(),
     userGroups: z.array(z.string()).default([]),
     picture: fileInfoSchema.optional(),
     isDirect: z.boolean().optional(),
@@ -362,6 +369,8 @@ export type ChatRoom = z.infer<typeof chatRoomSchema>;
 export type ChatRoomDisplay = ChatRoom & {
     circle?: Circle;
     unreadCount?: number;
+    notificationsMuted?: boolean;
+    notificationsMutePreferenceAvailable?: boolean;
 };
 
 export type MatrixMessageContent =
@@ -401,6 +410,7 @@ export interface ChatMessage {
     isRedacted?: boolean;
     status?: "pending" | "sent" | "failed";
     errorMessage?: string;
+    submissionId?: string;
     system?: SystemMessageMetadata;
 }
 
@@ -513,6 +523,26 @@ export const communityGuidelineAgreementStateSchema = z.object({
     responsibility: communityGuidelineAgreementSchema,
 });
 
+export const onboardingCardIdSchema = z.enum([
+    "email-verification",
+    "introduction",
+    "community-guidelines",
+    "location",
+    "profile-photo",
+    "proof-of-humanity",
+]);
+export type OnboardingCardId = z.infer<typeof onboardingCardIdSchema>;
+
+export const resumableOnboardingStateSchema = z.object({
+    version: z.literal(1),
+    currentCard: onboardingCardIdSchema,
+    startedAt: z.date(),
+    lastSeenAt: z.date(),
+    skippedCards: z.array(onboardingCardIdSchema).default([]),
+    completionAcknowledgedAt: z.date().nullable().optional(),
+});
+export type ResumableOnboardingState = z.infer<typeof resumableOnboardingStateSchema>;
+
 export const circleSchema = z.object({
     _id: z.any().optional(),
     did: didSchema.optional(),
@@ -558,6 +588,7 @@ export const circleSchema = z.object({
     organizationName: z.string().optional(),
     officialEmail: z.string().email().optional(),
     completedOnboardingSteps: z.array(z.string()).optional(),
+    onboardingState: resumableOnboardingStateSchema.optional(),
     matrixAccessToken: z.string().optional(),
     matrixUsername: z.string().optional(),
     matrixPassword: z.string().optional(),
@@ -1239,6 +1270,7 @@ export type NotificationType =
     | "event_approved"
     | "event_status_changed"
     | "event_invitation"
+    | "secret_circle_invitation"
     // Ranking Notifications
     | "ranking_stale_reminder" // User's ranking list is stale, reminder sent
     | "ranking_grace_period_ended" // User's ranking list is past grace period
@@ -1251,6 +1283,7 @@ export type NotificationType =
     | "user_becomes_member" // User becomes a platform member
     | "proof_of_humanity_verified" // A user received a public proof of humanity verification
     | "pm_received" // A private message has been received
+    | "circle_moderation_update" // A private Circle moderation topic is ready for review
     | "chat_mention" // A user was mentioned in a chat message
     | "contact_request_received" // A user received a contact request
     // Consolidated Summary Notification Types
@@ -1312,6 +1345,7 @@ export const notificationTypeValues = [
     "event_approved",
     "event_status_changed",
     "event_invitation",
+    "secret_circle_invitation",
     "ranking_stale_reminder",
     "ranking_grace_period_ended",
     "user_verified",
@@ -1322,6 +1356,7 @@ export const notificationTypeValues = [
     "user_becomes_member",
     "proof_of_humanity_verified",
     "pm_received",
+    "circle_moderation_update",
     "chat_mention",
     "contact_request_received",
     // Summary Types (for user configuration)
@@ -1803,7 +1838,7 @@ export const eventSchema = z.object({
     location: locationSchema.optional(),
     commentPostId: z.string().optional(), // Optional link to a shadow post for comments
     noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
-    noticeboardPostIdsByCircleId: z.record(z.string()).optional(), // Linked noticeboard posts by host circle
+    noticeboardPostIdsByCircleId: z.record(z.string(), z.string()).optional(), // Linked noticeboard posts by host circle
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
     // Format
     isVirtual: z.boolean().optional(),
@@ -1921,6 +1956,21 @@ export const eventInvitationSchema = z.object({
     updatedAt: z.date(),
 });
 export type EventInvitation = z.infer<typeof eventInvitationSchema>;
+
+export const secretCircleInvitationSchema = z.object({
+    _id: z.any().optional(),
+    circleId: z.string(),
+    recipientDid: didSchema,
+    invitedByDid: didSchema,
+    status: z.enum(["pending", "accepted", "revoked"]),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    acceptedAt: z.date().optional(),
+    revokedAt: z.date().optional(),
+    processingBy: z.string().optional(),
+    processingAt: z.date().optional(),
+});
+export type SecretCircleInvitation = z.infer<typeof secretCircleInvitationSchema>;
 
 /** A sparse invitation to one generated occurrence of a recurring event. */
 export const eventOccurrenceInvitationSchema = z.object({

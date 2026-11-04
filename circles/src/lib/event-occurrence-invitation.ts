@@ -1,4 +1,5 @@
-import type { Circle, EventInvitation, EventOccurrenceInvitation, EventOccurrenceRsvp } from "@/models/models";
+import type { EventInvitation, EventOccurrenceInvitation, EventOccurrenceRsvp } from "@/models/models";
+import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
 
 export type EventOccurrenceInviteeResponse = "pending" | "going" | "interested" | "not_attending";
 export type EffectiveEventOccurrenceRsvpStatus = "going" | "interested";
@@ -51,10 +52,12 @@ export function mergeEventOccurrenceInvitees(
 }
 
 export function mergeEventOccurrenceInviteCandidates(
-    current: Circle[],
-    additions: Circle[],
-): Circle[] {
-    const candidatesByDid = new Map(current.filter((candidate) => candidate.did).map((candidate) => [candidate.did!, candidate]));
+    current: EventInviteCandidateDto[],
+    additions: EventInviteCandidateDto[],
+): EventInviteCandidateDto[] {
+    const candidatesByDid = new Map(
+        current.filter((candidate) => candidate.did).map((candidate) => [candidate.did!, candidate]),
+    );
     for (const candidate of additions) {
         if (candidate.did) candidatesByDid.set(candidate.did, candidate);
     }

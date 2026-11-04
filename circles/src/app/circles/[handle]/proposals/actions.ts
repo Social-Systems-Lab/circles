@@ -2,6 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod"; // Add zod import
+import {
+    boundedSafeParse,
+    INPUT_LIMITS,
+    inspectFormDataBounds,
+    inspectRepeatedStringFieldBounds,
+} from "@/lib/security/bounded-input";
 import { Feeds, Posts, Proposals, RankedLists } from "@/lib/data/db"; // Import DB collections // Added RankedLists
 import { Post } from "@/models/models"; // Import Post type
 import { createPost } from "@/lib/data/feed"; // Import createPost
@@ -192,11 +198,11 @@ export async function getProposalAction(circleHandle: string, proposalId: string
 
 // Define schema for input validation
 const createProposalSchema = z.object({
-    name: z.string().min(1),
-    background: z.string().min(1),
-    decisionText: z.string().min(1),
-    images: z.array(z.any()).optional(), // Allow files or existing Media objects initially
-    location: z.string().optional(), // Added location (as JSON string)
+    name: z.string().trim().min(1).max(200),
+    background: z.string().min(1).max(100_000),
+    decisionText: z.string().min(1).max(100_000),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects initially
+    location: z.string().max(100_000).optional(), // Added location (as JSON string)
 });
 
 export async function createProposalAction(
@@ -204,8 +210,10 @@ export async function createProposalAction(
     formData: FormData, // Use FormData for file uploads
 ): Promise<{ success: boolean; message?: string; proposalId?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data against schema
-        const validatedData = createProposalSchema.safeParse({
+        const validatedData = boundedSafeParse(createProposalSchema, {
             name: formData.get("name"),
             background: formData.get("background"),
             decisionText: formData.get("decisionText"),
@@ -214,10 +222,10 @@ export async function createProposalAction(
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -420,11 +428,11 @@ export async function createProposalDraftAction(
 
 // Define schema for update input validation
 const updateProposalSchema = z.object({
-    name: z.string().min(1),
-    background: z.string().min(1),
-    decisionText: z.string().min(1),
-    images: z.array(z.any()).optional(), // Allow files or existing Media objects
-    location: z.string().optional(), // Added location (as JSON string)
+    name: z.string().trim().min(1).max(200),
+    background: z.string().min(1).max(100_000),
+    decisionText: z.string().min(1).max(100_000),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // Allow files or existing Media objects
+    location: z.string().max(100_000).optional(), // Added location (as JSON string)
 });
 
 export async function updateProposalAction(
@@ -433,8 +441,10 @@ export async function updateProposalAction(
     formData: FormData, // Use FormData for file uploads
 ): Promise<{ success: boolean; message?: string }> {
     try {
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
         // Validate form data
-        const validatedData = updateProposalSchema.safeParse({
+        const validatedData = boundedSafeParse(updateProposalSchema, {
             name: formData.get("name"),
             background: formData.get("background"),
             decisionText: formData.get("decisionText"),
@@ -443,10 +453,10 @@ export async function updateProposalAction(
         });
 
         if (!validatedData.success) {
-            console.error("Validation Error:", validatedData.error.errors);
+            console.error("Validation Error:", validatedData.error.issues);
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;
@@ -969,7 +979,7 @@ export async function getUserRankedProposalsAction(
 }
 
 const saveRankedProposalsSchema = z.object({
-    rankedItemIds: z.array(z.string()),
+    rankedItemIds: z.array(z.string().max(128)).max(10_000),
 });
 
 /**
@@ -986,9 +996,17 @@ export async function saveUserRankedProposalsAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string }> {
     try {
-        const validatedData = saveRankedProposalsSchema.safeParse({
-            rankedItemIds: formData.getAll("rankedItemIds"),
-        });
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
+        const rankBounds = inspectRepeatedStringFieldBounds(formData, "rankedItemIds", 10_000);
+        if (rankBounds) return { success: false, message: "Invalid input data for ranked list." };
+        const validatedData = boundedSafeParse(
+            saveRankedProposalsSchema,
+            {
+                rankedItemIds: formData.getAll("rankedItemIds"),
+            },
+            { ...INPUT_LIMITS, maxArrayItems: 10_000 },
+        );
 
         if (!validatedData.success) {
             return { success: false, message: "Invalid input data for ranked list." };
@@ -1127,11 +1145,11 @@ export async function invalidateUserProposalRankingsIfNeededAction(circleId: str
 // --- Create Goal from Proposal Action ---
 
 const createGoalFromProposalSchema = z.object({
-    title: z.string().min(1, { message: "Goal title is required" }),
-    description: z.string().min(1, { message: "Description is required" }),
-    proposalId: z.string().min(1, { message: "Proposal ID is required" }),
-    images: z.array(z.any()).optional(), // For potential image uploads for the goal
-    location: z.string().optional(), // Location for the goal (as JSON string)
+    title: z.string().min(1, { message: "Goal title is required" }).max(200),
+    description: z.string().min(1, { message: "Description is required" }).max(100_000),
+    proposalId: z.string().min(1, { message: "Proposal ID is required" }).max(128),
+    images: z.array(z.any()).max(20, "Add at most 20 images").optional(), // For potential image uploads for the goal
+    location: z.string().max(100_000).optional(), // Location for the goal (as JSON string)
     targetDate: z.string().optional(), // Target date for the goal (as ISO string)
 });
 
@@ -1140,7 +1158,9 @@ export async function createGoalFromProposalAction(
     formData: FormData,
 ): Promise<{ success: boolean; message?: string; goalId?: string }> {
     try {
-        const validatedData = createGoalFromProposalSchema.safeParse({
+        const inputBounds = inspectFormDataBounds(formData);
+        if (inputBounds) return { success: false, message: `Invalid input: ${inputBounds.message}` };
+        const validatedData = boundedSafeParse(createGoalFromProposalSchema, {
             title: formData.get("title"),
             description: formData.get("description"),
             proposalId: formData.get("proposalId"),
@@ -1152,11 +1172,11 @@ export async function createGoalFromProposalAction(
         if (!validatedData.success) {
             console.error(
                 "[proposals/actions] Validation Error (createGoalFromProposalAction):",
-                validatedData.error.errors,
+                validatedData.error.issues,
             );
             return {
                 success: false,
-                message: `Invalid input: ${validatedData.error.errors.map((e) => e.message).join(", ")}`,
+                message: `Invalid input: ${validatedData.error.issues.map((e) => e.message).join(", ")}`,
             };
         }
         const data = validatedData.data;

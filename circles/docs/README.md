@@ -52,6 +52,7 @@ Use [Production deployment](PRODUCTION_DEPLOYMENT.md) as the authoritative deplo
 
 These files are retained for context, incident history, or migration archaeology. Do not treat them as current onboarding or architecture guidance unless an active document links to a specific section.
 
+- [Sanitized 2026-10-16 signup-bomb incident record](INCIDENT_2026-10-16_SIGNUP_BOMB.md)
 - [Legacy dev onboarding](../../docs/dev-onboarding.md)
 - [Legacy Matrix chat and DM archiving note](chat.md)
 - [Old deployment overview](../../docs/DEPLOYMENT.md)
