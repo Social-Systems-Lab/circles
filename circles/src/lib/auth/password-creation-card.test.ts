@@ -31,6 +31,6 @@ assert.match(completionAction, /validatePendingRedirect\(authorized\.redirectTo\
 assert.match(completionAction, /validatePendingRedirect\(authorized\.redirectTo\) \|\| "\/onboarding"/);
 assert.match(completionAction, /jar\.delete\(VERIFIED_COOKIE\)/);
 assert.match(completionAction, /jar\.delete\(PENDING_COOKIE\)/);
-assert.match(runtime, /await createUserSession\(user, did\)/);
+assert.match(runtime, /await createUserSession\(user, account\.did\)/);
 
 console.log("password creation card contract tests passed");

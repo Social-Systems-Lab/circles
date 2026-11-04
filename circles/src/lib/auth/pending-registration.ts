@@ -141,8 +141,10 @@ export async function beginPendingRegistration(
 const pendingSecret = (): string => crypto.randomBytes(32).toString("base64url");
 
 function tokenSecret(): string {
-    const secret = process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY || process.env.SIGNUP_FORM_HMAC_KEY;
-    if (!secret) throw new Error("Pending registration token hashing is not configured");
+    const secret = process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY;
+    if (!secret || Buffer.byteLength(secret, "utf8") < 32) {
+        throw new Error("Pending registration token hashing is not configured");
+    }
     return secret;
 }
 
