@@ -16,7 +16,7 @@ Token hashing also requires a distinct server secret:
 PENDING_REGISTRATION_TOKEN_HMAC_KEY=<independent random secret>
 ```
 
-`SIGNUP_FORM_HMAC_KEY` is a compatibility fallback for non-production development, but staging and production should configure the dedicated key. Neither setting is exposed through `NEXT_PUBLIC_*` variables.
+There is no fallback to another application secret. All environments that exercise pending registration must configure this dedicated key with at least 32 bytes. It must never be exposed through a `NEXT_PUBLIC_*` variable.
 
 Setting `PENDING_REGISTRATION_ENABLED=false` or removing it disables the guarded backend immediately and does not affect pending records or existing accounts. Because no public endpoint exists yet, guessed URLs cannot enter this flow.
 

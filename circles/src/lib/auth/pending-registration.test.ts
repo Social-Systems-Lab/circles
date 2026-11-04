@@ -294,6 +294,25 @@ async function createPending(harness: ReturnType<typeof createHarness>, override
 }
 
 async function main() {
+    {
+        const dedicatedSecret = process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY;
+        process.env.SIGNUP_FORM_HMAC_KEY = "must-not-authorize-pending-registration";
+        delete process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY;
+        assert.throws(
+            () => hashPendingRegistrationSecret("email-verification", "test-token"),
+            /token hashing is not configured/,
+            "pending registration fails closed without its dedicated HMAC key",
+        );
+        process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY = "too-short";
+        assert.throws(
+            () => hashPendingRegistrationSecret("email-verification", "test-token"),
+            /token hashing is not configured/,
+            "pending registration fails closed with a weak dedicated HMAC key",
+        );
+        process.env.PENDING_REGISTRATION_TOKEN_HMAC_KEY = dedicatedSecret;
+        delete process.env.SIGNUP_FORM_HMAC_KEY;
+    }
+
     const activeSignupSource = readFileSync("src/components/forms/signup/actions.ts", "utf8");
     const verificationRouteFile = "src/app/(auth)/signup/verify/route.ts";
     const verificationRouteSource = readFileSync(verificationRouteFile, "utf8");
