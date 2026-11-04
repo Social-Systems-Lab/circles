@@ -35,9 +35,15 @@ values["MONGODB_URI"] = (
 lines = []
 for line in path.read_text(encoding="utf-8").splitlines():
     key, separator, _ = line.partition("=")
+    # Existing staging environments predate these keys. The Compose override
+    # must supply the fail-closed values without requiring a live env-file edit.
+    if key in {"PENDING_REGISTRATION_ENABLED", "PENDING_REGISTRATION_JOURNEY_READY"}:
+        continue
     lines.append(f"{key}={values[key]}" if separator and key in values else line)
 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
+
+python3 "$APP_DIR/scripts/validate-staging-environment.py" env-file "$TEMP_DIR/.env.staging"
 
 export STAGING_INFRA_APP_DIR="$TEMP_DIR"
 export STAGING_TARGET_APP_DIR="$APP_DIR"

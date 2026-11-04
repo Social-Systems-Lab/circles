@@ -115,9 +115,10 @@ def validate_mongodb_uri(uri: str, username: str, password: str) -> list[str]:
 
 def validate(values: dict[str, str], *, require_forced_empty: bool = False) -> None:
     errors: list[str] = []
-    for key in REQUIRED_DISABLED:
-        if values.get(key, "").lower() != "false":
-            errors.append(f"{key} must be exactly 'false'")
+    if require_forced_empty:
+        for key in REQUIRED_DISABLED:
+            if values.get(key, "").lower() != "false":
+                errors.append(f"{key} must be exactly 'false'")
     for key in REQUIRED:
         value = values.get(key, "")
         if not value:

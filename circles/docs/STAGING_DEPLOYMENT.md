@@ -8,7 +8,7 @@ Staging is the preferred environment for full Docker builds, integration testing
 
 The staging environment and its `/api/version` response were verified at commit `e742a7898395c73ea6080af4139aa1def7eb54d7`. The infrastructure checkout remains at `/home/ubuntu/kamooni` on branch `infra/kamooni-staging`; the deployment target worktree is `/home/ubuntu/kamooni-target`, detached at the exact requested SHA. The Docker Compose project is `kamooni_staging`.
 
-The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
+The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), Mailpit (`mailpit`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
 
 Staging MongoDB and MinIO use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. The staging Compose changes add an ephemeral Mailpit sink; the current live staging host has not been changed or verified with Mailpit yet. Never use production deployment scripts, credentials, data, or volumes for staging. Mailpit is absent from production Compose, and the production image rejects its transport.
 
@@ -86,7 +86,7 @@ While that command remains open, visit <http://127.0.0.1:8025> in the local brow
 
 Pending registration remains disabled unless its separately reviewed flags and coordinated routing state are deliberately enabled for a staging test. Before rollback, disable pending registration and return registration routing to `legacy`. Delete captured messages using Mailpit’s **Delete all** control after testing; restarting the service also removes its ephemeral database. Do not remove staging MongoDB or MinIO volumes as part of email cleanup.
 
-The staging Compose override and validator force both `PENDING_REGISTRATION_ENABLED=false` and `PENDING_REGISTRATION_JOURNEY_READY=false`. Changing either value, or the MongoDB registration routing mode, requires a separate authorization and deployment review.
+The staging Compose override and rendered-configuration validator force both `PENDING_REGISTRATION_ENABLED=false` and `PENDING_REGISTRATION_JOURNEY_READY=false`. Existing `.env.staging` files may omit these previously unnecessary keys; no live secrets-file edit is required for this infrastructure upgrade because the effective Compose values remain explicitly disabled. Changing either effective value, or the MongoDB registration routing mode, requires a separate authorization and deployment review.
 
 ## TLS bootstrap (must happen before first deployment)
 
@@ -170,7 +170,7 @@ After deployment, show the ports published by only the `kamooni_staging` Compose
 docker ps --filter label=com.docker.compose.project=kamooni_staging --format 'table {{.Names}}\t{{.Ports}}'
 ```
 
-The only host bindings in the output must be staging NGINX on ports `80` and `443`. Entries such as `3000/tcp`, `27017/tcp`, or `9000/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other `0.0.0.0:PORT->...` or `[::]:PORT->...` bindings may appear.
+The only host bindings in the output must be staging NGINX on ports `80` and `443`, plus Mailpit on `127.0.0.1:8025`. Mailpit must never bind `8025` or SMTP port `1025` to `0.0.0.0` or `[::]`. Entries such as `3000/tcp`, `27017/tcp`, `9000/tcp`, or `1025/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other host bindings may appear.
 
 ## Conservative disk maintenance
 
@@ -208,4 +208,4 @@ cd /home/ubuntu/kamooni-target/circles && STAGING_INFRA_APP_DIR=/home/ubuntu/kam
 
 Success prints the stored URL array and exits zero; every URL must begin `/storage/`. A nonzero result is a deployment blocker. This query reads only the isolated staging `circles` database and does not modify or delete the test record.
 
-The default services are exactly `circles`, `db`, `minio`, and `nginx`. Only host ports 80 and 443 are published. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.
+The default services are exactly `circles`, `db`, `minio`, `mailpit`, and `nginx`. NGINX publishes host ports `80` and `443`; Mailpit publishes only `127.0.0.1:8025`. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.
