@@ -9,6 +9,7 @@ mkdir -p "$TEMP_DIR/nginx"
 cp "$APP_DIR/.env.staging.example" "$TEMP_DIR/.env.staging"
 cp "$APP_DIR/docker-compose.staging.yml" "$TEMP_DIR/docker-compose.staging.yml"
 cp "$APP_DIR/nginx/nginx.staging.conf" "$TEMP_DIR/nginx/nginx.staging.conf"
+cp "$APP_DIR/nginx/mailpit-ui.staging.conf" "$TEMP_DIR/nginx/mailpit-ui.staging.conf"
 
 # The validator intentionally rejects placeholders. Generate disposable,
 # process-local test values so this check never reads a real environment file.
@@ -63,4 +64,5 @@ docker compose --project-name kamooni_staging --project-directory "$APP_DIR" \
 
 python3 "$APP_DIR/scripts/validate-staging-environment.py" compose-json "$TEMP_DIR/default.json"
 python3 "$APP_DIR/scripts/validate-staging-compose.py" \
-    "$TEMP_DIR/default.json" "$TEMP_DIR/all.json" kamooni_staging "$TEMP_DIR/nginx/nginx.staging.conf"
+    "$TEMP_DIR/default.json" "$TEMP_DIR/all.json" kamooni_staging \
+    "$TEMP_DIR/nginx/nginx.staging.conf" "$TEMP_DIR/nginx/mailpit-ui.staging.conf"

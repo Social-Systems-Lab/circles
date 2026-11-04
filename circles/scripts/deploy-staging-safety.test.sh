@@ -15,7 +15,8 @@ assert_contains "$DEPLOY" 'MAINTENANCE_LOCK="${KAMOONI_STAGING_LOCK_FILE:-/run/l
 assert_contains "$DEPLOY" 'flock -x 9'
 assert_contains "$DEPLOY" 'scripts/validate-staging-compose.py'
 assert_contains "$DEPLOY" 'compose up -d db minio mailpit'
-assert_contains "$DEPLOY" 'compose up -d --no-deps db minio mailpit nginx'
+assert_contains "$DEPLOY" 'compose up -d --no-deps db minio mailpit mailpit_ui_proxy nginx'
+assert_contains "$DEPLOY" 'compose stop mailpit_ui_proxy'
 assert_contains "$DEPLOY" '[[ "$DEPLOY_CONTAINER_IMAGE_ID" == "$DEPLOY_IMAGE_ID" ]]'
 assert_contains "$DEPLOY" 'mv -f "$LEDGER_TMP" "$IMAGE_LEDGER"'
 

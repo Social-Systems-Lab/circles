@@ -69,7 +69,7 @@ def configuration():
         "nginx": {"ports": [{"published": "80", "target": 80}, {"published": "443", "target": 443}], "networks": {"webnet": {}}},
         "mailpit": {
             "image": "axllent/mailpit:v1.33.0",
-            "ports": [{"host_ip": "127.0.0.1", "published": "8025", "target": 8025, "protocol": "tcp"}],
+            "ports": [],
             "networks": {"mailpit_internal": {}},
             "environment": {
                 "MP_UI_BIND_ADDR": "0.0.0.0:8025",
@@ -85,6 +85,24 @@ def configuration():
                 "MP_SMTP_FORWARD_CONFIG": "",
             },
         },
+        "mailpit_ui_proxy": {
+            "image": "nginx:1.27.4-alpine@sha256:4ff102c5d78d254a6f0da062b3cf39eaf07f01eec0927fd21e219d0af8bc0591",
+            "ports": [{"host_ip": "127.0.0.1", "published": "8025", "target": 8025, "protocol": "tcp"}],
+            "networks": {"mailpit_internal": {"gw_priority": 0}, "mailpit_ui_loopback": {"gw_priority": 1}},
+            "read_only": True,
+            "user": "101:101",
+            "tmpfs": ["/tmp"],
+            "cap_drop": ["ALL"],
+            "security_opt": ["no-new-privileges:true"],
+            "volumes": [
+                {
+                    "type": "bind",
+                    "source": "/staging/nginx/mailpit-ui.staging.conf",
+                    "target": "/etc/nginx/nginx.conf",
+                    "read_only": True,
+                }
+            ],
+        },
         "qdrant": {"profiles": ["vdb"]},
         "cron": {"profiles": ["cron"]},
         "watchtower": {"profiles": ["watchtower"]},
@@ -97,8 +115,20 @@ def configuration():
         f"kamooni_staging_{name}": {"name": f"kamooni_staging_{name}"}
         for name in ("db", "storage", "circles", "circles_users")
     }
-    networks = {"webnet": {}, "mailpit_internal": {"internal": True}}
-    config = {"name": "kamooni_staging", "services": {name: services[name] for name in ("circles", "db", "minio", "mailpit", "nginx")}}
+    networks = {
+        "webnet": {},
+        "mailpit_internal": {"internal": True},
+        "mailpit_ui_loopback": {
+            "driver_opts": {"com.docker.network.bridge.enable_ip_masquerade": "false"}
+        },
+    }
+    config = {
+        "name": "kamooni_staging",
+        "services": {
+            name: services[name]
+            for name in ("circles", "db", "minio", "mailpit", "mailpit_ui_proxy", "nginx")
+        },
+    }
     all_config = {"name": "kamooni_staging", "services": services, "networks": networks, "volumes": volumes}
     return config, all_config
 
@@ -107,7 +137,17 @@ class StagingComposeValidationTests(unittest.TestCase):
     def errors(self, mutate):
         config, all_config = configuration()
         mutate(config, all_config)
-        return MODULE.validate(config, all_config, "kamooni_staging", "server { server_name staging.kamooni.org; }")
+        return MODULE.validate(
+            config,
+            all_config,
+            "kamooni_staging",
+            "server { server_name staging.kamooni.org; }",
+            """server {
+                listen 8025;
+                proxy_pass http://mailpit:8025;
+                proxy_set_header Host localhost;
+            }""",
+        )
 
     def test_safe_staging_configuration_passes(self):
         self.assertEqual(self.errors(lambda _config, _all: None), [])
@@ -127,14 +167,14 @@ class StagingComposeValidationTests(unittest.TestCase):
             )
 
         errors = self.errors(mutate)
-        self.assertTrue(any("Mailpit ports" in error for error in errors))
+        self.assertTrue(any("Mailpit publishes host ports directly" in error for error in errors))
 
     def test_public_mailpit_ui_binding_is_rejected(self):
         def mutate(_config, all_config):
-            all_config["services"]["mailpit"]["ports"][0]["host_ip"] = "0.0.0.0"
+            all_config["services"]["mailpit_ui_proxy"]["ports"][0]["host_ip"] = "0.0.0.0"
 
         errors = self.errors(mutate)
-        self.assertTrue(any("Mailpit ports" in error for error in errors))
+        self.assertTrue(any("Mailpit UI proxy ports" in error for error in errors))
 
     def test_external_relay_and_forwarding_are_rejected(self):
         def mutate(_config, all_config):
@@ -170,6 +210,34 @@ class StagingComposeValidationTests(unittest.TestCase):
     def test_mailpit_network_must_be_internal(self):
         errors = self.errors(lambda _config, all_config: all_config["networks"]["mailpit_internal"].update(internal=False))
         self.assertTrue(any("network is not internal" in error for error in errors))
+
+    def test_mailpit_cannot_attach_directly_to_loopback_network(self):
+        errors = self.errors(
+            lambda _config, all_config: all_config["services"]["mailpit"]["networks"].update(
+                mailpit_ui_loopback={}
+            )
+        )
+        self.assertTrue(any("Mailpit is attached" in error for error in errors))
+
+    def test_ui_proxy_hardening_is_required(self):
+        def mutate(_config, all_config):
+            proxy = all_config["services"]["mailpit_ui_proxy"]
+            proxy["read_only"] = False
+            proxy["cap_drop"] = []
+            proxy["security_opt"] = []
+
+        errors = self.errors(mutate)
+        self.assertTrue(any("read-only" in error for error in errors))
+        self.assertTrue(any("drop all capabilities" in error for error in errors))
+        self.assertTrue(any("no-new-privileges" in error for error in errors))
+
+    def test_ui_proxy_network_masquerading_is_rejected(self):
+        errors = self.errors(
+            lambda _config, all_config: all_config["networks"]["mailpit_ui_loopback"]["driver_opts"].update(
+                {"com.docker.network.bridge.enable_ip_masquerade": "true"}
+            )
+        )
+        self.assertTrue(any("unrestricted masquerading" in error for error in errors))
 
     def test_production_role_is_rejected(self):
         errors = self.errors(
