@@ -55,6 +55,43 @@ Workflow:
 
 Do not give multi‑step blocks unless explicitly requested.
 
+This rule applies when a human must perform an action. It does not require the agent to pause between routine investigation, edits, commands, or checks that are already authorized. Prefer completing authorized work autonomously and report the result together. Ask the human to run commands only when the action requires their access or judgment.
+
+---
+
+# Autonomous Execution, Approval Boundaries, and Handover
+
+## Autonomous execution
+
+- For work the user has authorized, inspect the relevant code and instructions, make the necessary focused changes, run appropriate local checks, and complete any explicitly requested source-control steps without asking the user to perform routine tasks.
+- Do not stop at an intermediate status when safe, authorized work remains. Continue through implementation, verification, and documentation, then provide a consolidated report.
+- If a decision or access dependency blocks part of the task, explain the specific blocker. Continue independent work that does not depend on it.
+- Keep the user informed with concise progress updates during longer work. Do not use progress updates to ask for approval; use the required approval mechanism for actions that need it.
+
+## Approval boundaries
+
+- Authorization is limited to the actions and scope the user requested. Permission to create a branch, commit, push, or open a pull request does not authorize merging or deployment.
+- Never merge or deploy, alter live production or staging services or data, change live credentials or environment configuration, activate registration or security-sensitive feature flags, or perform another externally visible or difficult-to-reverse action without explicit authorization for that action.
+- Read-only inspection and appropriately isolated disposable tests may proceed when they are within the task scope. If environment or data isolation cannot be established, stop that operation and report what approval or prerequisite is needed.
+- Do not send messages, emails, or other external communications unless explicitly authorized. Use test transports and synthetic identities for tests.
+- Complete safe, reviewable work before requesting an approval that is genuinely required. State what action needs approval and why.
+
+## Session continuity
+
+- Recommend starting a fresh Codex session when the user moves to an unrelated task or accumulated context may no longer be reliable.
+- A new session must not assume it has the previous session's history. On resumption, inspect the current branch, working tree, relevant commits, repository instructions, and any handover before continuing. Preserve prior decisions, constraints, and unfinished objectives that remain applicable.
+- Do not restart completed work unnecessarily. Verify the current state first and continue from the actual repository state.
+
+## Delegation
+
+- Delegate only when parallel work materially helps and the user or applicable repository instructions authorize delegation. Keep shared-file edits coordinated, and review delegated findings before relying on them.
+- The primary agent remains responsible for the complete result, verification, and final report.
+
+## Handover
+
+- At the end of substantial work, provide a self-contained handover summary with the current branch, relevant commit(s), completed work, checks performed, outstanding issues, and the recommended next action.
+- Include enough context for a new session to continue without relying on earlier conversation messages.
+
 ---
 
 # Production Environment
@@ -101,12 +138,15 @@ Preferred workflow:
 
 1. Investigate using Codex
 2. Implement change using Codex
-3. Test locally or in staging
-4. Merge to main
-5. Deploy on `kamooniorg`
-6. Verify deployment
+3. Run relevant local checks and tests
+4. Perform local browser or staging verification when appropriate and authorized
+5. Commit, push, and open a pull request when explicitly requested
+6. Merge only after explicit approval
+7. Deploy only after separate explicit approval, using the deployment procedure below
 
 Follow the Dev → Main checklist when promoting changes.
+
+Steps that require live infrastructure or external side effects remain subject to the approval boundaries above. A request to prepare or open a pull request does not authorize merging or deploying it.
 
 Golden rules:
 
