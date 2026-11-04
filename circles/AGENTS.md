@@ -48,13 +48,35 @@ Preferred workflow:
 1. Investigate (read code first)
 2. Implement using Codex
 3. Run lightweight automated checks locally
-4. Push the feature branch to GitHub and deploy it to staging
-5. Run full Docker, integration, and desktop/mobile browser validation on staging
+4. Commit, push, and open a pull request when explicitly requested
+5. Deploy to staging only when explicitly authorized, then run the appropriate Docker, integration, and desktop/mobile browser validation
 6. Only after explicit approval: merge to `main` and deploy production
 
 Local Mac remains the primary environment for Codex development, Git operations, code review, lightweight automated tests, TypeScript, and lint. Local Docker builds are optional and are required only when a specific local test genuinely needs one.
 
-Codex must NOT merge to `main` or deploy production until the human has completed staging validation and explicitly approved proceeding.
+Codex must NOT merge to `main` or deploy to staging or production without explicit authorization for that action. Production deployment also requires the approved release, successful checks, and the production procedure below.
+
+### Autonomous execution and approval boundaries
+
+- For work the user has authorized, inspect the relevant code and instructions, make the focused changes, run appropriate local checks, and complete explicitly requested source-control steps without asking the user to perform routine tasks.
+- Do not stop at an intermediate status when safe, authorized work remains. Continue through implementation, verification, and documentation, then report the result together. If one part is blocked, explain the specific blocker and continue independent work.
+- Authorization is limited to the requested scope. Permission to create a branch, commit, push, or open a pull request does not authorize merging or deployment.
+- Never merge, deploy, alter live production or staging services or data, change live credentials or environment configuration, activate security-sensitive feature flags, or perform another externally visible or difficult-to-reverse action without explicit authorization for that action.
+- Read-only inspection and properly isolated disposable tests may proceed when within scope. If isolation cannot be established, stop that operation and report the prerequisite. Do not send external messages or emails unless explicitly authorized.
+- Complete safe, reviewable work before requesting approval that is genuinely required. State the exact action needing approval and why.
+
+### Session continuity and handover
+
+- Recommend a fresh Codex session when moving to an unrelated task or when accumulated context may be unreliable.
+- A new session must not assume it has prior conversation history. On resumption, inspect the branch, working tree, relevant commits, repository instructions, and any handover; preserve applicable decisions and constraints.
+- Verify actual repository state before resuming work. Do not repeat completed work unnecessarily.
+- At the end of substantial work, provide a self-contained handover with the current branch, relevant commits, completed work, checks performed, outstanding issues, and recommended next action.
+- Include enough context for a new session to continue without relying on earlier conversation messages.
+
+### Delegation
+
+- Delegate only when it materially helps and the user or applicable repository instructions authorize it. Coordinate shared-file edits and review delegated findings.
+- The primary agent remains responsible for the complete result, verification, and final report.
 
 Avoid manual editing unless absolutely necessary.
 
@@ -70,8 +92,9 @@ Human operator:
 
 Therefore:
 
-- NEVER give multiple steps at once
-- ALWAYS wait for output
+- Give one exact, copy-paste-safe action at a time when a human must run a command or make a decision.
+- The agent should run routine authorized commands and inspect their outputs autonomously; do not ask the human to relay routine results.
+- Wait for human output only when the next step depends on an action that genuinely requires their access or judgment.
 
 ---
 
