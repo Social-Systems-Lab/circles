@@ -78,10 +78,33 @@ services:
             MP_SMTP_RELAY_MATCHING: ""
             MP_SMTP_RELAY_CONFIG: ""
             MP_SMTP_FORWARD_CONFIG: ""
-        ports: !override
-            - "127.0.0.1:8025:8025"
+        ports: !override []
         networks:
             - mailpit_internal
+        restart: unless-stopped
+
+    mailpit_ui_proxy:
+        image: nginx:1.27.4-alpine@sha256:4ff102c5d78d254a6f0da062b3cf39eaf07f01eec0927fd21e219d0af8bc0591
+        depends_on:
+            mailpit:
+                condition: service_healthy
+        volumes:
+            - ${STAGING_INFRA_APP_DIR}/nginx/mailpit-ui.staging.conf:/etc/nginx/nginx.conf:ro
+        ports:
+            - "127.0.0.1:8025:8025"
+        networks:
+            mailpit_internal:
+                gw_priority: 0
+            mailpit_ui_loopback:
+                gw_priority: 1
+        user: "101:101"
+        read_only: true
+        tmpfs:
+            - /tmp
+        cap_drop:
+            - ALL
+        security_opt:
+            - no-new-privileges:true
         restart: unless-stopped
 
     db:
@@ -157,3 +180,6 @@ networks:
     webnet:
     mailpit_internal:
         internal: true
+    mailpit_ui_loopback:
+        driver_opts:
+            com.docker.network.bridge.enable_ip_masquerade: "false"

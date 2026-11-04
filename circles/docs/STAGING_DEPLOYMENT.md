@@ -8,7 +8,7 @@ Staging is the preferred environment for full Docker builds, integration testing
 
 The staging environment and its `/api/version` response were verified at commit `e742a7898395c73ea6080af4139aa1def7eb54d7`. The infrastructure checkout remains at `/home/ubuntu/kamooni` on branch `infra/kamooni-staging`; the deployment target worktree is `/home/ubuntu/kamooni-target`, detached at the exact requested SHA. The Docker Compose project is `kamooni_staging`.
 
-The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), Mailpit (`mailpit`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
+The default running services are `circles`, MongoDB (`db`), MinIO (`minio`), Mailpit (`mailpit`), the hardened localhost-only Mailpit UI proxy (`mailpit_ui_proxy`), and NGINX (`nginx`). Qdrant is initially disabled. Synapse and PostgreSQL are disabled and are not required for the current Mongo-native chat architecture. Payments and external integrations are disabled by default.
 
 Staging MongoDB and MinIO use data, volumes, credentials, and secrets that are separate from production. Verified staging volumes include `kamooni_staging_db` and `kamooni_staging_storage`. The staging Compose changes add an ephemeral Mailpit sink; the current live staging host has not been changed or verified with Mailpit yet. Never use production deployment scripts, credentials, data, or volumes for staging. Mailpit is absent from production Compose, and the production image rejects its transport.
 
@@ -68,12 +68,12 @@ Initial staging forcibly disables the registry, OpenAI, Postmark, Telegram bot, 
 
 The staging Compose override selects Mailpit explicitly for email and continues to force `POSTMARK_API_TOKEN` and `POSTMARK_SENDER_EMAIL` empty. The app image is marked as a staging build; it accepts Mailpit only when that immutable image role, transport, staging URL, and internal Mailpit host/port all agree. Staging supports the pending-registration verification link and the existing `/verify-email` compatibility link; other email templates and verification destinations fail closed. There is no Postmark fallback.
 
-Mailpit is attached only to an internal Docker network shared by the app. SMTP port `1025` is not published on the host. The web UI/API port `8025` is published only as `127.0.0.1:8025`; it is not routed through public NGINX. Mailpit has no relay or forwarding configuration, is isolated from external network egress, stores no persistent volume, and prunes messages after 72 hours or when the 100-message bound is exceeded. Captured verification links are credentials: use staging test identities only and restrict UI access to staging SSH operators.
+Mailpit is attached only to an internal Docker network shared by the app. SMTP port `1025` is not published on the host. Docker cannot publish a working host port directly from a container attached exclusively to an `internal: true` bridge because that bridge has no gateway. A separate, capability-free, read-only NGINX proxy therefore joins the internal Mailpit network and a UI-only bridge with IP masquerading disabled. Only the proxy publishes `127.0.0.1:8025`; it forwards HTTP to Mailpit with the reviewed `Host: localhost` header and is not routed through public NGINX. Mailpit itself never joins the UI bridge and retains no external route. Mailpit has no relay or forwarding configuration, stores no persistent volume, and prunes messages after 72 hours or when the 100-message bound is exceeded. Captured verification links are credentials: use staging test identities only and restrict UI access to staging SSH operators.
 
 Once the reviewed infrastructure change is present in the staging infrastructure checkout, deploy the reviewed application branch with the existing staging deployment script. It starts Mailpit with the other required services. On the staging VM, check service status with:
 
 ```bash
-docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml ps circles db minio mailpit nginx
+docker compose --project-name kamooni_staging --project-directory /home/ubuntu/kamooni-target/circles --env-file /home/ubuntu/kamooni/circles/.env.staging -f /home/ubuntu/kamooni-target/circles/docker-compose.yml -f /home/ubuntu/kamooni/circles/docker-compose.staging.yml ps circles db minio mailpit mailpit_ui_proxy nginx
 ```
 
 From the local Mac terminal, open a private SSH tunnel:
@@ -156,7 +156,7 @@ Rollback is an explicitly authorized staging operation; preparing this procedure
 
 Use only a record already present in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv`. Under the same exclusive `/run/lock/kamooni-staging-docker.lock` used by deployment, verify that the selected record has four valid fields, its tag is `kamooni-staging-circles:<first-eight-git-characters>`, `docker image inspect` returns the ledger's immutable image ID, and the target Git commit exists locally. Keep the infrastructure checkout on `infra/kamooni-staging`, detach `/home/ubuntu/kamooni-target` at that exact full Git SHA, and render and run both staging validators before changing services.
 
-With `STAGING_IMAGE_TAG` set to the selected eight-character tag and the standard staging Compose command, stop only `circles` and `nginx`, then recreate `circles` from the verified image and start `db`, `minio`, `mailpit`, and `nginx` without rebuilding or removing volumes. Verify `https://staging.kamooni.org/api/version` reports the selected full Git SHA and verify the running `circles` container's immutable image ID still matches the ledger. If either check fails, stop `nginx` and `circles`; leave MongoDB, MinIO, Mailpit, all volumes, the backup archive, and the ledger untouched. Never use `docker compose down -v`, restore the database, delete images, or change registration routing as part of this rollback.
+With `STAGING_IMAGE_TAG` set to the selected eight-character tag and the standard staging Compose command, stop only `circles`, `mailpit_ui_proxy`, and `nginx`, then recreate `circles` from the verified image and start `db`, `minio`, `mailpit`, `mailpit_ui_proxy`, and `nginx` without rebuilding or removing volumes. Verify `https://staging.kamooni.org/api/version` reports the selected full Git SHA and verify the running `circles` container's immutable image ID still matches the ledger. If either check fails, stop `nginx`, `mailpit_ui_proxy`, and `circles`; leave MongoDB, MinIO, Mailpit, all volumes, the backup archive, and the ledger untouched. Never use `docker compose down -v`, restore the database, delete images, or change registration routing as part of this rollback.
 
 Manual version verification, run anywhere with network access:
 
@@ -170,7 +170,7 @@ After deployment, show the ports published by only the `kamooni_staging` Compose
 docker ps --filter label=com.docker.compose.project=kamooni_staging --format 'table {{.Names}}\t{{.Ports}}'
 ```
 
-The only host bindings in the output must be staging NGINX on ports `80` and `443`, plus Mailpit on `127.0.0.1:8025`. Mailpit must never bind `8025` or SMTP port `1025` to `0.0.0.0` or `[::]`. Entries such as `3000/tcp`, `27017/tcp`, `9000/tcp`, or `1025/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other host bindings may appear.
+The only host bindings in the output must be staging NGINX on ports `80` and `443`, plus `mailpit_ui_proxy` on `127.0.0.1:8025`. Mailpit itself must have no host bindings, and neither UI port `8025` nor SMTP port `1025` may bind to `0.0.0.0` or `[::]`. Entries such as `3000/tcp`, `27017/tcp`, `9000/tcp`, or `1025/tcp` without a host-side `->` mapping are internal-only exposed ports and are expected. No other host bindings may appear.
 
 ## Conservative disk maintenance
 
@@ -208,4 +208,4 @@ cd /home/ubuntu/kamooni-target/circles && STAGING_INFRA_APP_DIR=/home/ubuntu/kam
 
 Success prints the stored URL array and exits zero; every URL must begin `/storage/`. A nonzero result is a deployment blocker. This query reads only the isolated staging `circles` database and does not modify or delete the test record.
 
-The default services are exactly `circles`, `db`, `minio`, `mailpit`, and `nginx`. NGINX publishes host ports `80` and `443`; Mailpit publishes only `127.0.0.1:8025`. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.
+The default services are exactly `circles`, `db`, `minio`, `mailpit`, `mailpit_ui_proxy`, and `nginx`. NGINX publishes host ports `80` and `443`; the hardened UI proxy publishes only `127.0.0.1:8025`; Mailpit publishes no host ports. Qdrant, cron, Watchtower, both loopback helpers, PostgreSQL, and Synapse are profile-disabled. All volumes are Compose-managed under `kamooni_staging_`. The application lazily creates the `circles` and `circles-private` MinIO buckets; no bootstrap container is needed.
