@@ -154,11 +154,21 @@ Before starting anything it validates `.env.staging`, renders both default and a
 
 Rollback is an explicitly authorized staging operation; preparing this procedure does not authorize running it. It does not restore or migrate MongoDB. Before rollback, confirm that the database remains compatible with the selected application revision and that registration routing is `legacy` with both pending-registration flags disabled.
 
-The verified image and the staging override used to start it must implement the same email transport. In particular, the pre-Mailpit `0013e90a47ea2933ffcac1578a12d66f0454eed1` image uses the earlier `capture` transport and cannot be recreated with the promoted Mailpit override. Do not attempt to roll that image back with the standard Mailpit Compose command. Before the first Mailpit deployment, prepare and review a capture-compatible rollback bundle pinned to the verified image and its matching infrastructure revision, or treat the missing executable rollback as a deployment blocker.
+The verified image and the staging override used to start it must implement the same email transport. In particular, the pre-Mailpit `0013e90a47ea2933ffcac1578a12d66f0454eed1` image uses the earlier `capture` transport and cannot be recreated with the promoted Mailpit override. Do not attempt to roll that image back with the standard Mailpit Compose command.
+
+The executable compatibility bundle for that image is `scripts/rollback-staging-capture-0013e90a.sh`. It is pinned to application SHA `0013e90a47ea2933ffcac1578a12d66f0454eed1`, infrastructure SHA `b39e2169537de7e08c41ad0affa00da12a9fd9ca`, the reviewed capture override and application contract Git blobs, image tag `kamooni-staging-circles:0013e90a`, and immutable image ID `sha256:0db0d222aab99763e63e08c2fb1721d25327935c2d238bf8e73a3d18e8f73ec6`. It reads the old override directly from the pinned Git object and never reverts or switches the infrastructure checkout.
+
+Only after separate rollback authorization and confirmation that the current database remains compatible, run on the staging VM:
+
+```bash
+cd /home/ubuntu/kamooni/circles && ./scripts/rollback-staging-capture-0013e90a.sh --confirm-database-compatible
+```
+
+The script acquires the same exclusive lock as deployment and maintenance; requires a clean `infra/kamooni-staging` checkout; verifies every pinned Git object, the unique ledger record, local image tag, and immutable image ID; validates the fully rendered capture Compose model; uses `--no-build`; and verifies both `/api/version` and the running container image ID. It performs no MongoDB query, migration, restore, volume operation, or image deletion. On failure after service mutation, it stops only staging NGINX and the application while preserving MongoDB, MinIO, and all volumes.
 
 Use only a record already present in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv`. Under the same exclusive `/run/lock/kamooni-staging-docker.lock` used by deployment, verify that the selected record has four valid fields, its tag is `kamooni-staging-circles:<first-eight-git-characters>`, `docker image inspect` returns the ledger's immutable image ID, and the target Git commit exists locally. Keep the infrastructure checkout on `infra/kamooni-staging`, detach `/home/ubuntu/kamooni-target` at that exact full Git SHA, and render and run both staging validators before changing services.
 
-For a transport-compatible verified image, set `STAGING_IMAGE_TAG` to the selected eight-character tag and use its reviewed matching staging override. Stop only `circles` and `nginx`, recreate `circles` without a build, and start only the services defined by that matching revision. Verify `https://staging.kamooni.org/api/version` reports the selected full Git SHA and verify the running `circles` container's immutable image ID still matches the ledger. If either check fails, stop `nginx` and `circles`; leave MongoDB, MinIO, Mailpit, all volumes, the backup archive, and the ledger untouched. Never use `docker compose down -v`, restore the database, delete images, or change registration routing as part of rollback.
+For any other verified image, use only a separately reviewed transport-compatible override. Never use `docker compose down -v`, restore the database, delete images, or change registration routing as part of application rollback.
 
 Deployment and Docker maintenance share an exclusive lock at `/run/lock/kamooni-staging-docker.lock`. A successful deployment atomically records its full Git SHA, immutable image ID, tag, and build time in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv` only after exact version and running-image verification.
 
