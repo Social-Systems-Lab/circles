@@ -174,7 +174,31 @@ else
 fi
 
 compose up -d --no-deps --force-recreate circles || fail_public_services "circles startup failed"
-compose up -d --no-deps db minio mailpit mailpit_ui_proxy nginx || fail_public_services "public services startup failed"
+DEPLOY_CONTAINER_ID="$(compose ps -q circles)" || fail_public_services "could not resolve the new circles container"
+[[ -n "$DEPLOY_CONTAINER_ID" ]] || fail_public_services "new circles container is missing"
+APP_WEBNET_IP="$(docker inspect --format "{{with index .NetworkSettings.Networks \"${PROJECT_NAME}_webnet\"}}{{.IPAddress}}{{end}}" "$DEPLOY_CONTAINER_ID")" \
+    || fail_public_services "could not inspect the new circles web network address"
+[[ "$APP_WEBNET_IP" =~ ^[0-9]+(\.[0-9]+){3}$ ]] || fail_public_services "new circles web network address is missing or invalid"
+
+echo "Waiting up to 60 seconds for circles on its NGINX-shared network..."
+app_ready=false
+for attempt in $(seq 1 30); do
+    if docker exec "$DEPLOY_CONTAINER_ID" node -e '
+const [url, expectedSha] = process.argv.slice(1);
+fetch(url)
+  .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+  .then((body) => process.exit(body.gitSha === expectedSha ? 0 : 1))
+  .catch(() => process.exit(1));
+' "http://$APP_WEBNET_IP:3000/api/version" "$DEPLOY_SHA"; then
+        app_ready=true
+        break
+    fi
+    sleep 2
+done
+[[ "$app_ready" == true ]] || fail_public_services "circles did not serve the exact target on its NGINX-shared network"
+
+compose up -d --no-deps db minio mailpit mailpit_ui_proxy || fail_public_services "supporting services startup failed"
+compose up -d --no-deps --force-recreate nginx || fail_public_services "NGINX startup failed"
 VERSION_URL="https://staging.kamooni.org/api/version"
 VERSION_OUTPUT=""
 for attempt in $(seq 1 30); do
