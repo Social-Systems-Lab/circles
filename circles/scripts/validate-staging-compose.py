@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 
-def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[str]:
+def validate(config: dict, all_config: dict, project: str, nginx: str, mailpit_proxy: str) -> list[str]:
     errors: list[str] = []
     if config.get("name") != project or all_config.get("name") != project:
         errors.append("Compose project name is not kamooni_staging")
@@ -36,7 +36,7 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
             errors.append(f"staging NGINX contains {label}")
 
     default_services = config.get("services", {})
-    expected_default = {"circles", "db", "minio", "mailpit", "nginx"}
+    expected_default = {"circles", "db", "minio", "mailpit", "mailpit_ui_proxy", "nginx"}
     if set(default_services) != expected_default:
         errors.append(f"default services are {sorted(default_services)!r}")
 
@@ -66,7 +66,7 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
             errors.append(f"{service} lacks profile {profile}")
 
     for service, definition in services.items():
-        if service not in {"nginx", "mailpit"} and definition.get("ports"):
+        if service not in {"nginx", "mailpit_ui_proxy"} and definition.get("ports"):
             errors.append(f"{service} publishes host ports")
     nginx_ports = sorted(
         (int(port["published"]), int(port["target"])) for port in services.get("nginx", {}).get("ports", [])
@@ -74,7 +74,10 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
     if nginx_ports != [(80, 80), (443, 443)]:
         errors.append(f"NGINX ports are {nginx_ports!r}")
 
-    mailpit_ports = services.get("mailpit", {}).get("ports", [])
+    if services.get("mailpit", {}).get("ports"):
+        errors.append("Mailpit publishes host ports directly")
+
+    mailpit_ports = services.get("mailpit_ui_proxy", {}).get("ports", [])
     try:
         mailpit_ui_ports = [
             (port.get("host_ip"), int(port["published"]), int(port["target"]), port.get("protocol", "tcp"))
@@ -83,7 +86,7 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
     except (KeyError, TypeError, ValueError):
         mailpit_ui_ports = []
     if mailpit_ui_ports != [("127.0.0.1", 8025, 8025, "tcp")]:
-        errors.append(f"Mailpit ports are {mailpit_ui_ports!r}")
+        errors.append(f"Mailpit UI proxy ports are {mailpit_ui_ports!r}")
 
     env = default_services.get("circles", {}).get("environment", {})
     for key in ("PAYMENTS_ENABLED", "VDB_ENABLED"):
@@ -147,14 +150,55 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
         errors.append("Mailpit must not have persistent volumes")
     if set(mailpit.get("networks", {})) != {"mailpit_internal"}:
         errors.append("Mailpit is attached to an unexpected network")
+    mailpit_ui_proxy = services.get("mailpit_ui_proxy", {})
+    if mailpit_ui_proxy.get("image") != (
+        "nginx:1.27.4-alpine@sha256:4ff102c5d78d254a6f0da062b3cf39eaf07f01eec0927fd21e219d0af8bc0591"
+    ):
+        errors.append("Mailpit UI proxy image is not pinned to the reviewed version")
+    if set(mailpit_ui_proxy.get("networks", {})) != {"mailpit_internal", "mailpit_ui_loopback"}:
+        errors.append("Mailpit UI proxy has unexpected network attachments")
+    if mailpit_ui_proxy.get("networks", {}).get("mailpit_ui_loopback", {}).get("gw_priority") != 1:
+        errors.append("Mailpit UI proxy does not prefer its publishable loopback gateway")
+    if mailpit_ui_proxy.get("environment") or mailpit_ui_proxy.get("secrets") or mailpit_ui_proxy.get("configs"):
+        errors.append("Mailpit UI proxy must not receive environment, secrets, or external configs")
+    if mailpit_ui_proxy.get("read_only") is not True:
+        errors.append("Mailpit UI proxy root filesystem is not read-only")
+    if str(mailpit_ui_proxy.get("user")) != "101:101":
+        errors.append("Mailpit UI proxy does not run as the unprivileged nginx user")
+    if mailpit_ui_proxy.get("tmpfs") != ["/tmp"]:
+        errors.append("Mailpit UI proxy has unexpected writable temporary filesystems")
+    if mailpit_ui_proxy.get("cap_drop") != ["ALL"]:
+        errors.append("Mailpit UI proxy does not drop all capabilities")
+    if mailpit_ui_proxy.get("security_opt") != ["no-new-privileges:true"]:
+        errors.append("Mailpit UI proxy does not enforce no-new-privileges")
+    proxy_mounts = mailpit_ui_proxy.get("volumes", [])
+    if len(proxy_mounts) != 1 or not isinstance(proxy_mounts[0], dict) or (
+        proxy_mounts[0].get("type"), proxy_mounts[0].get("target"), proxy_mounts[0].get("read_only")
+    ) != ("bind", "/etc/nginx/nginx.conf", True) or not str(proxy_mounts[0].get("source", "")).endswith(
+        "/nginx/mailpit-ui.staging.conf"
+    ):
+        errors.append("Mailpit UI proxy configuration mount is unsafe")
+    if "listen 8025;" not in mailpit_proxy or "proxy_pass http://mailpit:8025;" not in mailpit_proxy:
+        errors.append("Mailpit UI proxy does not target the internal Mailpit UI")
+    if "proxy_set_header Host localhost;" not in mailpit_proxy:
+        errors.append("Mailpit UI proxy does not force the reviewed Host header")
+    proxy_targets = re.findall(r"(?m)^\s*proxy_pass\s+([^;]+);", mailpit_proxy)
+    if proxy_targets != ["http://mailpit:8025"]:
+        errors.append("Mailpit UI proxy has unexpected upstream targets")
     if set(services.get("nginx", {}).get("networks", {})) != {"webnet"}:
         errors.append("NGINX is attached to an unexpected network")
     networks = all_config.get("networks", {})
-    expected_networks = {"webnet", "mailpit_internal"}
+    expected_networks = {"webnet", "mailpit_internal", "mailpit_ui_loopback"}
     if set(networks) != expected_networks:
         errors.append(f"staging networks are {sorted(networks)!r}")
     if networks.get("mailpit_internal", {}).get("internal") is not True:
         errors.append("Mailpit network is not internal")
+    if networks.get("mailpit_ui_loopback", {}).get("internal") is True:
+        errors.append("Mailpit UI loopback network cannot publish a host port")
+    if networks.get("mailpit_ui_loopback", {}).get("driver_opts") != {
+        "com.docker.network.bridge.enable_ip_masquerade": "false"
+    }:
+        errors.append("Mailpit UI loopback network permits unrestricted masquerading")
 
     forced_empty = (
         "CIRCLES_REGISTRY_URL",
@@ -194,14 +238,18 @@ def validate(config: dict, all_config: dict, project: str, nginx: str) -> list[s
 
 
 def main() -> None:
-    if len(sys.argv) != 5:
-        print("usage: validate-staging-compose.py DEFAULT_JSON ALL_JSON PROJECT NGINX_CONFIG", file=sys.stderr)
+    if len(sys.argv) != 6:
+        print(
+            "usage: validate-staging-compose.py DEFAULT_JSON ALL_JSON PROJECT NGINX_CONFIG MAILPIT_PROXY_CONFIG",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
-    default_path, all_path, project, nginx_path = sys.argv[1:]
+    default_path, all_path, project, nginx_path, mailpit_proxy_path = sys.argv[1:]
     config = json.loads(Path(default_path).read_text(encoding="utf-8"))
     all_config = json.loads(Path(all_path).read_text(encoding="utf-8"))
     nginx = Path(nginx_path).read_text(encoding="utf-8")
-    errors = validate(config, all_config, project, nginx)
+    mailpit_proxy = Path(mailpit_proxy_path).read_text(encoding="utf-8")
+    errors = validate(config, all_config, project, nginx, mailpit_proxy)
     if errors:
         print("Error: unsafe staging Compose configuration:", file=sys.stderr)
         for error in errors:

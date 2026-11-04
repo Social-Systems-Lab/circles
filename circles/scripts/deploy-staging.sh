@@ -39,7 +39,7 @@ if [[ -n "$(git -C "$INFRA_REPO_DIR" status --porcelain --untracked-files=normal
     git -C "$INFRA_REPO_DIR" status --short >&2
     exit 1
 fi
-for required in "$ENV_FILE" "$VALIDATOR" "$STAGING_COMPOSE_FILE" "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf"; do
+for required in "$ENV_FILE" "$VALIDATOR" "$STAGING_COMPOSE_FILE" "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf" "$STAGING_INFRA_APP_DIR/nginx/mailpit-ui.staging.conf"; do
     [[ -f "$required" ]] || { echo "Error: required staging file is missing: $required" >&2; exit 1; }
 done
 
@@ -105,7 +105,8 @@ compose --profile "*" config --format json >"$RENDERED_ALL_CONFIG"
 python3 "$VALIDATOR" compose-json "$RENDERED_CONFIG"
 python3 "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" \
     "$RENDERED_CONFIG" "$RENDERED_ALL_CONFIG" "$PROJECT_NAME" \
-    "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf"
+    "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf" \
+    "$STAGING_INFRA_APP_DIR/nginx/mailpit-ui.staging.conf"
 
 if [[ ! -f /etc/letsencrypt/live/staging.kamooni.org/fullchain.pem || ! -f /etc/letsencrypt/live/staging.kamooni.org/privkey.pem ]]; then
     echo "Error: staging-only TLS certificate is missing; complete TLS bootstrap first." >&2
@@ -149,14 +150,15 @@ get_migration_completion_count() {
 }
 fail_offline() { echo "Error: $1. Staging circles remains stopped." >&2; exit 1; }
 fail_public_services() {
-    echo "Error: $1. Stopping unverified staging nginx and circles; db, minio, and all volumes are preserved." >&2
+    echo "Error: $1. Stopping unverified staging nginx, Mailpit UI proxy, and circles; db, minio, and all volumes are preserved." >&2
     local stop_failed=false
     compose stop nginx || stop_failed=true
+    compose stop mailpit_ui_proxy || stop_failed=true
     compose stop circles || stop_failed=true
-    if [[ "$stop_failed" == true ]] || [[ -n "$(compose ps --status running -q nginx circles 2>/dev/null || true)" ]]; then
-        echo "Error: could not confirm that both staging nginx and circles stopped; operator intervention is required." >&2
+    if [[ "$stop_failed" == true ]] || [[ -n "$(compose ps --status running -q nginx mailpit_ui_proxy circles 2>/dev/null || true)" ]]; then
+        echo "Error: could not confirm that staging nginx, Mailpit UI proxy, and circles stopped; operator intervention is required." >&2
     else
-        echo "Unverified staging nginx and circles are stopped. Staging db, minio, and volumes were preserved." >&2
+        echo "Unverified staging nginx, Mailpit UI proxy, and circles are stopped. Staging db, minio, and volumes were preserved." >&2
     fi
     exit 1
 }
@@ -172,7 +174,7 @@ else
 fi
 
 compose up -d --no-deps --force-recreate circles || fail_public_services "circles startup failed"
-compose up -d --no-deps db minio mailpit nginx || fail_public_services "public services startup failed"
+compose up -d --no-deps db minio mailpit mailpit_ui_proxy nginx || fail_public_services "public services startup failed"
 VERSION_URL="https://staging.kamooni.org/api/version"
 VERSION_OUTPUT=""
 for attempt in $(seq 1 30); do
