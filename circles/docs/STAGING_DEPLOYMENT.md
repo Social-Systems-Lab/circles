@@ -86,6 +86,8 @@ While that command remains open, visit <http://127.0.0.1:8025> in the local brow
 
 Pending registration remains disabled unless its separately reviewed flags and coordinated routing state are deliberately enabled for a staging test. Before rollback, disable pending registration and return registration routing to `legacy`. Delete captured messages using Mailpit’s **Delete all** control after testing; restarting the service also removes its ephemeral database. Do not remove staging MongoDB or MinIO volumes as part of email cleanup.
 
+The staging Compose override and validator force both `PENDING_REGISTRATION_ENABLED=false` and `PENDING_REGISTRATION_JOURNEY_READY=false`. Changing either value, or the MongoDB registration routing mode, requires a separate authorization and deployment review.
+
 ## TLS bootstrap (must happen before first deployment)
 
 DNS must point only `staging.kamooni.org` at the staging VM. Do not request `www.staging.kamooni.org`.
@@ -147,6 +149,14 @@ cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh main
 ```
 
 Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then starts the app and NGINX. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA. Use the script rather than ad-hoc deployment commands so the verified-image rollback ledger is maintained.
+
+## Roll back to a verified staging image
+
+Rollback is an explicitly authorized staging operation; preparing this procedure does not authorize running it. It does not restore or migrate MongoDB. Before rollback, confirm that the database remains compatible with the selected application revision and that registration routing is `legacy` with both pending-registration flags disabled.
+
+Use only a record already present in `/home/ubuntu/.local/state/kamooni-staging/verified-images.tsv`. Under the same exclusive `/run/lock/kamooni-staging-docker.lock` used by deployment, verify that the selected record has four valid fields, its tag is `kamooni-staging-circles:<first-eight-git-characters>`, `docker image inspect` returns the ledger's immutable image ID, and the target Git commit exists locally. Keep the infrastructure checkout on `infra/kamooni-staging`, detach `/home/ubuntu/kamooni-target` at that exact full Git SHA, and render and run both staging validators before changing services.
+
+With `STAGING_IMAGE_TAG` set to the selected eight-character tag and the standard staging Compose command, stop only `circles` and `nginx`, then recreate `circles` from the verified image and start `db`, `minio`, `mailpit`, and `nginx` without rebuilding or removing volumes. Verify `https://staging.kamooni.org/api/version` reports the selected full Git SHA and verify the running `circles` container's immutable image ID still matches the ledger. If either check fails, stop `nginx` and `circles`; leave MongoDB, MinIO, Mailpit, all volumes, the backup archive, and the ledger untouched. Never use `docker compose down -v`, restore the database, delete images, or change registration routing as part of this rollback.
 
 Manual version verification, run anywhere with network access:
 

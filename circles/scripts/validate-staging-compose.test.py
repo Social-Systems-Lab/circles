@@ -24,6 +24,8 @@ def configuration():
         "MAILPIT_SMTP_PORT": "1025",
         "PAYMENTS_ENABLED": "false",
         "VDB_ENABLED": "false",
+        "PENDING_REGISTRATION_ENABLED": "false",
+        "PENDING_REGISTRATION_JOURNEY_READY": "false",
     }
     for key in (
         "CIRCLES_REGISTRY_URL",
@@ -57,6 +59,10 @@ def configuration():
             "environment": circles_env,
             "build": {"args": {"KAMOONI_DEPLOYMENT_ROLE": "staging"}},
             "networks": {"webnet": {}, "mailpit_internal": {}},
+            "volumes": [
+                {"type": "volume", "source": "circles", "target": "/circles"},
+                {"type": "volume", "source": "circles_users", "target": "/circles/users"},
+            ],
         },
         "db": {"ports": []},
         "minio": {"ports": []},
@@ -87,7 +93,10 @@ def configuration():
         "postgres": {"profiles": ["matrix"]},
         "synapse": {"profiles": ["matrix"]},
     }
-    volumes = {f"kamooni_staging_{name}": {"name": f"kamooni_staging_{name}"} for name in ("db", "storage")}
+    volumes = {
+        f"kamooni_staging_{name}": {"name": f"kamooni_staging_{name}"}
+        for name in ("db", "storage", "circles", "circles_users")
+    }
     networks = {"webnet": {}, "mailpit_internal": {"internal": True}}
     config = {"name": "kamooni_staging", "services": {name: services[name] for name in ("circles", "db", "minio", "mailpit", "nginx")}}
     all_config = {"name": "kamooni_staging", "services": services, "networks": networks, "volumes": volumes}
@@ -167,6 +176,21 @@ class StagingComposeValidationTests(unittest.TestCase):
             lambda config, _all: config["services"]["circles"]["build"]["args"].update(KAMOONI_DEPLOYMENT_ROLE="production")
         )
         self.assertTrue(any("not marked as a staging build" in error for error in errors))
+
+    def test_pending_registration_flags_must_remain_disabled(self):
+        for key in ("PENDING_REGISTRATION_ENABLED", "PENDING_REGISTRATION_JOURNEY_READY"):
+            with self.subTest(key=key):
+                errors = self.errors(
+                    lambda config, _all, key=key: config["services"]["circles"]["environment"].update({key: "true"})
+                )
+                self.assertTrue(any(key in error for error in errors))
+
+    def test_application_and_credential_mounts_must_use_staging_volumes(self):
+        def mutate(config, _all):
+            config["services"]["circles"]["volumes"][1]["source"] = "production_users"
+
+        errors = self.errors(mutate)
+        self.assertTrue(any("application and credential mounts" in error for error in errors))
 
 
 if __name__ == "__main__":

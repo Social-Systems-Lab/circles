@@ -30,6 +30,10 @@ SECRET_KEYS = (
 )
 PLACEHOLDER = re.compile(r"(?:GENERATE_STAGING_ONLY|CHANGE[ _-]?ME|PLACEHOLDER|REPLACE[ _-]?ME|EXAMPLE|TODO)", re.I)
 GENERATED_SECRET = re.compile(r"[0-9a-fA-F]{64}")
+REQUIRED_DISABLED = (
+    "PENDING_REGISTRATION_ENABLED",
+    "PENDING_REGISTRATION_JOURNEY_READY",
+)
 FORCED_EMPTY = (
     "CIRCLES_REGISTRY_URL",
     "OPENAI_API_KEY",
@@ -111,6 +115,9 @@ def validate_mongodb_uri(uri: str, username: str, password: str) -> list[str]:
 
 def validate(values: dict[str, str], *, require_forced_empty: bool = False) -> None:
     errors: list[str] = []
+    for key in REQUIRED_DISABLED:
+        if values.get(key, "").lower() != "false":
+            errors.append(f"{key} must be exactly 'false'")
     for key in REQUIRED:
         value = values.get(key, "")
         if not value:
