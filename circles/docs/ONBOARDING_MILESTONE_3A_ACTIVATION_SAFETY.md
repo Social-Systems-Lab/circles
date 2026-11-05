@@ -35,7 +35,7 @@ Activation remains blocked until Milestone 3 provides reviewed public actions an
 4. Compare-and-set `legacy` to `paused`:
 
     ```bash
-    docker run --rm OPERATOR_IMAGE route-set --expected legacy --to paused --deployment-id none --actor OPERATOR --confirm SET_REGISTRATION_ROUTE --operator-token "$REGISTRATION_ROUTING_OPERATOR_TOKEN"
+    printf '%s\n' "$REGISTRATION_ROUTING_OPERATOR_TOKEN" | docker run --rm -i -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256 OPERATOR_IMAGE route-set --expected legacy --to paused --deployment-id none --actor OPERATOR --confirm SET_REGISTRATION_ROUTE
     ```
 
 5. Wait at least five minutes, verify signup email reservations and provisioning locks are empty/expired, and confirm both registration paths reject new work.
@@ -45,9 +45,11 @@ Activation remains blocked until Milestone 3 provides reviewed public actions an
 
 The `route-status`, `operations-status`, and `inspect` commands use a dedicated
 Mongo client and are read-only; they do not initialize application indexes.
-The route-set command requires `REGISTRATION_ROUTING_OPERATOR_TOKEN` in the
-operator shell, the matching `--operator-token`, and an explicit confirmation
-phrase. Store this operator-only token outside source control and shell history.
+The route-set command reads the raw `REGISTRATION_ROUTING_OPERATOR_TOKEN` only
+from closed standard input, compares its hash to
+`REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256`, and requires an explicit
+confirmation phrase. The raw token must never be placed in container
+environment or argv metadata. Store it outside source control and shell history.
 Authorization is checked before the routing record is initialized. The
 transition is compare-and-set, only `legacy -> paused -> pending -> paused ->
 legacy` transitions are supported, and a stale expected mode is rejected.

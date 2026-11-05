@@ -6,6 +6,7 @@ import {
     type RegistrationMode,
 } from "@/lib/auth/registration-routing";
 import crypto from "crypto";
+import fs from "fs";
 import { MongoClient, type Db } from "mongodb";
 
 const command = process.argv[2];
@@ -18,6 +19,21 @@ for (let index = 3; index < process.argv.length; index += 2) {
 }
 
 const allowedTransitions = new Set(["legacy:paused", "paused:pending", "pending:paused", "paused:legacy"]);
+
+function authenticateRoutingOperator() {
+    const expectedHex = process.env.REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256 || "";
+    if (!/^[a-f0-9]{64}$/i.test(expectedHex)) {
+        throw new Error("Routing operator authorization verifier is not configured");
+    }
+    const input = fs.readFileSync(0, "utf8");
+    const suppliedToken = input.endsWith("\r\n") ? input.slice(0, -2) : input.endsWith("\n") ? input.slice(0, -1) : input;
+    if (!suppliedToken || suppliedToken.length > 1024 || /[\r\n]/.test(suppliedToken)) {
+        throw new Error("Routing operator authorization input is invalid");
+    }
+    const expected = Buffer.from(expectedHex, "hex");
+    const supplied = crypto.createHash("sha256").update(suppliedToken).digest();
+    if (!crypto.timingSafeEqual(expected, supplied)) throw new Error("Routing operator authorization failed");
+}
 
 async function getOperationsStatus(db: Db) {
     const now = new Date();
@@ -63,12 +79,7 @@ async function run(db: Db) {
     }
     if (command === "route-set") {
         if (args.get("confirm") !== "SET_REGISTRATION_ROUTE") throw new Error("Explicit confirmation is required");
-        const operatorToken = process.env.REGISTRATION_ROUTING_OPERATOR_TOKEN;
-        const suppliedToken = args.get("operator-token");
-        if (!operatorToken || !suppliedToken) throw new Error("Routing operator authorization is not configured");
-        const expected = crypto.createHash("sha256").update(operatorToken).digest();
-        const supplied = crypto.createHash("sha256").update(suppliedToken).digest();
-        if (!crypto.timingSafeEqual(expected, supplied)) throw new Error("Routing operator authorization failed");
+        authenticateRoutingOperator();
         const routing = await ensureRegistrationRoutingRecord(db, args.get("actor") || "operator-cli");
         const expectedMode = args.get("expected") as RegistrationMode;
         const mode = args.get("to") as RegistrationMode;

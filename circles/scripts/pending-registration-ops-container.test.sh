@@ -19,5 +19,15 @@ fi
 grep -Fq 'operations-status' "$script"
 grep -Fq 'Pending routing deployment id does not match REGISTRATION_DEPLOYMENT_ID' "$script"
 grep -Fq 'Unsupported routing transition' "$script"
+grep -Fq 'REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256' "$script"
+grep -Fq 'fs.readFileSync(0, "utf8")' "$script"
+if grep -Fq -- '--operator-token' "$script"; then
+    echo "Operator token must never be accepted through argv." >&2
+    exit 1
+fi
+if grep -Fq 'REGISTRATION_ROUTING_OPERATOR_TOKEN;' "$script"; then
+    echo "Raw operator token must not be accepted through container environment metadata." >&2
+    exit 1
+fi
 
 echo "pending registration operator container contract passed"
