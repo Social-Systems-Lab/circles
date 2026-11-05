@@ -1,0 +1,7 @@
+{
+    "name": "kamooni-registration-ops",
+    "private": true,
+    "dependencies": {
+        "mongodb": "6.16.0"
+    }
+}

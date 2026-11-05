@@ -5,8 +5,9 @@ import {
     setRegistrationMode,
     type RegistrationMode,
 } from "@/lib/auth/registration-routing";
-import { getDb } from "@/lib/data/db";
 import crypto from "crypto";
+import fs from "fs";
+import { MongoClient, type Db } from "mongodb";
 
 const command = process.argv[2];
 const args = new Map<string, string>();
@@ -17,8 +18,47 @@ for (let index = 3; index < process.argv.length; index += 2) {
     args.set(key.slice(2), value);
 }
 
-async function main() {
-    const db = await getDb();
+const allowedTransitions = new Set(["legacy:paused", "paused:pending", "pending:paused", "paused:legacy"]);
+
+function authenticateRoutingOperator() {
+    const expectedHex = process.env.REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256 || "";
+    if (!/^[a-f0-9]{64}$/i.test(expectedHex)) {
+        throw new Error("Routing operator authorization verifier is not configured");
+    }
+    const input = fs.readFileSync(0, "utf8");
+    const suppliedToken = input.endsWith("\r\n") ? input.slice(0, -2) : input.endsWith("\n") ? input.slice(0, -1) : input;
+    if (!suppliedToken || suppliedToken.length > 1024 || /[\r\n]/.test(suppliedToken)) {
+        throw new Error("Routing operator authorization input is invalid");
+    }
+    const expected = Buffer.from(expectedHex, "hex");
+    const supplied = crypto.createHash("sha256").update(suppliedToken).digest();
+    if (!crypto.timingSafeEqual(expected, supplied)) throw new Error("Routing operator authorization failed");
+}
+
+async function getOperationsStatus(db: Db) {
+    const now = new Date();
+    const collectionNames = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map(({ name }) => name));
+    const count = (name: string, filter: Record<string, unknown> = {}) =>
+        collectionNames.has(name) ? db.collection(name).countDocuments(filter) : Promise.resolve(0);
+    const routing = await getRegistrationRouting(db.collection("registrationRouting"));
+    const configuredDeploymentId = process.env.REGISTRATION_DEPLOYMENT_ID || null;
+    return {
+        routing,
+        configuredDeploymentId,
+        deploymentIdMatches:
+            routing.mode !== "pending" ||
+            Boolean(configuredDeploymentId && routing.deploymentId === configuredDeploymentId),
+        pendingRegistrations: await count("pendingRegistrations", { status: { $ne: "provisioned" } }),
+        reconciliationRequired: await count("pendingRegistrations", {
+            reconciliationRequiredAt: { $ne: null },
+            provisionedAt: { $exists: false },
+        }),
+        activeProvisioningLocks: await count("pendingRegistrationProvisioningLocks", { expiresAt: { $gt: now } }),
+        activeFinalizationLocks: await count("pendingRegistrationFinalizationLocks", { expiresAt: { $gt: now } }),
+    };
+}
+
+async function run(db: Db) {
     if (command === "inspect") {
         const usersDirectory = args.get("users-dir");
         if (!usersDirectory) throw new Error("--users-dir is required");
@@ -33,14 +73,13 @@ async function main() {
         console.log(JSON.stringify(await getRegistrationRouting(db.collection("registrationRouting")), null, 2));
         return;
     }
+    if (command === "operations-status") {
+        console.log(JSON.stringify(await getOperationsStatus(db), null, 2));
+        return;
+    }
     if (command === "route-set") {
         if (args.get("confirm") !== "SET_REGISTRATION_ROUTE") throw new Error("Explicit confirmation is required");
-        const operatorToken = process.env.REGISTRATION_ROUTING_OPERATOR_TOKEN;
-        const suppliedToken = args.get("operator-token");
-        if (!operatorToken || !suppliedToken) throw new Error("Routing operator authorization is not configured");
-        const expected = crypto.createHash("sha256").update(operatorToken).digest();
-        const supplied = crypto.createHash("sha256").update(suppliedToken).digest();
-        if (!crypto.timingSafeEqual(expected, supplied)) throw new Error("Routing operator authorization failed");
+        authenticateRoutingOperator();
         const routing = await ensureRegistrationRoutingRecord(db, args.get("actor") || "operator-cli");
         const expectedMode = args.get("expected") as RegistrationMode;
         const mode = args.get("to") as RegistrationMode;
@@ -50,8 +89,19 @@ async function main() {
         ) {
             throw new Error("Invalid routing mode");
         }
+        if (!allowedTransitions.has(`${expectedMode}:${mode}`)) {
+            throw new Error(`Unsupported routing transition: ${expectedMode} -> ${mode}`);
+        }
         const deploymentArgument = args.get("deployment-id");
         const deploymentId = !deploymentArgument || deploymentArgument === "none" ? null : deploymentArgument;
+        if (mode === "pending") {
+            const configuredDeploymentId = process.env.REGISTRATION_DEPLOYMENT_ID;
+            if (!configuredDeploymentId || deploymentId !== configuredDeploymentId) {
+                throw new Error("Pending routing deployment id does not match REGISTRATION_DEPLOYMENT_ID");
+            }
+        } else if (deploymentId) {
+            throw new Error(`${mode} routing requires --deployment-id none`);
+        }
         const changed = await setRegistrationMode(
             { expectedMode, mode, deploymentId, updatedBy: args.get("actor") || "operator-cli" },
             db.collection("registrationRouting"),
@@ -60,7 +110,19 @@ async function main() {
         console.log(JSON.stringify(await getRegistrationRouting(db.collection("registrationRouting")), null, 2));
         return;
     }
-    throw new Error("Usage: inspect, route-status, or route-set");
+    throw new Error("Usage: inspect, route-status, operations-status, or route-set");
+}
+
+async function main() {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) throw new Error("MONGODB_URI is required");
+    const client = new MongoClient(uri);
+    try {
+        await client.connect();
+        await run(client.db(process.env.CIRCLES_MONGODB_DATABASE || "circles"));
+    } finally {
+        await client.close();
+    }
 }
 
 main().catch((error) => {
