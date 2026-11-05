@@ -30,6 +30,7 @@ yarn-error.log*
 .env*.local
 .env.staging
 .env.staging.activation
+.registration-routing-operator.sha256
 
 # vercel
 .vercel

@@ -18,6 +18,7 @@ ACTIVATION_ENV_FILE="$STAGING_INFRA_APP_DIR/.env.staging.activation"
 STAGING_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging.yml"
 ACTIVATION_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging-activation.yml"
 OPS_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging-ops.yml"
+ROUTING_OPERATOR_VERIFIER_FILE="$STAGING_INFRA_APP_DIR/.registration-routing-operator.sha256"
 
 usage() {
     cat >&2 <<'EOF'
@@ -57,6 +58,10 @@ require_activation_file() {
     mode="$(stat -c '%a' "$ACTIVATION_ENV_FILE")"
     [[ "$mode" == "600" ]] || { echo "Error: activation environment file mode must be 600." >&2; exit 1; }
     python3 "$STAGING_INFRA_APP_DIR/scripts/validate-staging-activation.py" env-file "$ACTIVATION_ENV_FILE"
+}
+
+require_operator_verifier() {
+    python3 "$STAGING_INFRA_APP_DIR/scripts/validate-routing-operator-verifier.py" "$ROUTING_OPERATOR_VERIFIER_FILE"
 }
 
 activation_compose_array() {
@@ -217,15 +222,12 @@ case "$command_name" in
         ;;
     route-set)
         [[ "$#" -eq 4 ]] || usage
-        operator_token="${REGISTRATION_ROUTING_OPERATOR_TOKEN:-}"
-        if [[ -z "$operator_token" ]]; then
-            [[ -r /dev/tty ]] || { echo "Error: an interactive terminal is required to read the routing operator token." >&2; exit 1; }
-            read -r -s -p 'Routing operator token: ' operator_token </dev/tty
-            printf '\n' >/dev/tty
-        fi
+        operator_hash="$(require_operator_verifier)"
+        [[ -r /dev/tty ]] || { echo "Error: an interactive terminal is required to read the routing operator token." >&2; exit 1; }
+        read -r -s -p 'Routing operator token: ' operator_token </dev/tty
+        printf '\n' >/dev/tty
         [[ -n "$operator_token" ]] || { echo "Error: routing operator token is empty." >&2; exit 1; }
         expected="$1"; target="$2"; deployment_id="$3"; actor="$4"
-        operator_hash="$(printf '%s' "$operator_token" | sha256sum | awk '{print $1}')"
         if [[ "$target" == "pending" ]]; then
             [[ "$deployment_id" == "activation" ]] || { echo "Error: pending transition requires deployment ID selector 'activation'." >&2; exit 1; }
             require_activation_file

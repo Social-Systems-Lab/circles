@@ -70,6 +70,8 @@ It should be committed or supplied by the reviewed deployment mechanism, not ind
 
 The routing-operator token is a third, separate operator-only secret. It must not be placed in application or container environment configuration and must never appear in Docker argv. The control script reads it silently from the operator terminal, sends the raw token only over closed standard input, and passes only its SHA-256 verifier in ephemeral container metadata.
 
+The verifier is an independent authentication anchor, installed after separate authorization as one lowercase SHA-256 line in the mode-600, untracked `.registration-routing-operator.sha256` file. The control script must read this stored verifier; it must never calculate the expected verifier from the token supplied for the same routing operation. Retain the raw token only in the approved operator password manager.
+
 ## Required changes before activation
 
 The focused implementation PRs provide the following; reviewers must confirm each item before merge:

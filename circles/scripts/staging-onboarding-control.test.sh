@@ -3,6 +3,7 @@ set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 control="$root/scripts/staging-onboarding-control.sh"
+verifier_validator="$root/scripts/validate-routing-operator-verifier.py"
 activation="$root/docker-compose.staging-activation.yml"
 ops="$root/docker-compose.staging-ops.yml"
 production="$root/docker-compose.yml"
@@ -15,7 +16,9 @@ for required in \
     'operations-status' \
     'verify-staging-onboarding-runtime.py' \
     '${PROJECT_NAME}_webnet' \
-    'REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256'; do
+    'REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256' \
+    '.registration-routing-operator.sha256' \
+    'require_operator_verifier'; do
     grep -Fq -- "$required" "$control" || { echo "missing control contract: $required" >&2; exit 1; }
 done
 
@@ -23,6 +26,28 @@ if grep -Fq -- '--operator-token' "$control" || grep -Fq -- '-e REGISTRATION_ROU
     echo "raw routing operator token is passed through Docker argv or environment metadata" >&2
     exit 1
 fi
+if grep -Fq 'operator_hash="$(printf' "$control" || grep -Fq 'REGISTRATION_ROUTING_OPERATOR_TOKEN:-' "$control"; then
+    echo "routing authentication verifier is derived from the supplied token or accepts the raw token from environment" >&2
+    exit 1
+fi
+grep -Fq 'validate-routing-operator-verifier.py' "$control"
+
+verifier_tmp="$(mktemp -d)"
+trap 'rm -rf "$verifier_tmp"' EXIT
+verifier_file="$verifier_tmp/verifier"
+verifier='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+printf '%s\n' "$verifier" >"$verifier_file"
+chmod 600 "$verifier_file"
+[[ "$(python3 "$verifier_validator" "$verifier_file")" == "$verifier" ]]
+chmod 644 "$verifier_file"
+! python3 "$verifier_validator" "$verifier_file" >/dev/null 2>&1
+chmod 600 "$verifier_file"
+printf '%s\n%s\n' "$verifier" "$verifier" >"$verifier_file"
+! python3 "$verifier_validator" "$verifier_file" >/dev/null 2>&1
+printf '%s\n' '0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF' >"$verifier_file"
+! python3 "$verifier_validator" "$verifier_file" >/dev/null 2>&1
+ln -s "$verifier_file" "$verifier_tmp/symlink"
+! python3 "$verifier_validator" "$verifier_tmp/symlink" >/dev/null 2>&1
 
 assert_order() {
     local first="$1" second="$2" first_line second_line
