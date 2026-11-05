@@ -88,6 +88,67 @@ Pending registration remains disabled unless its separately reviewed flags and c
 
 The staging Compose override and rendered-configuration validator force both `PENDING_REGISTRATION_ENABLED=false` and `PENDING_REGISTRATION_JOURNEY_READY=false`. Existing `.env.staging` files may omit these previously unnecessary keys; no live secrets-file edit is required for this infrastructure upgrade because the effective Compose values remain explicitly disabled. Changing either effective value, or the MongoDB registration routing mode, requires a separate authorization and deployment review.
 
+## Controlled onboarding activation
+
+Normal deployment never selects `docker-compose.staging-activation.yml`; it
+continues to force both pending-registration gates false and supplies neither
+activation credential. The deployment builds a private operator image from the
+exact target application SHA through `docker-compose.staging-ops.yml`. The
+operator image exposes no port, runs unprivileged with a read-only root
+filesystem, mounts `circles_users` read-only, and connects only to the staging
+database network. It reuses the application's routing and reconciliation logic.
+
+The activation overlay additionally requires the fixed confirmation injected by
+`scripts/staging-onboarding-control.sh`, a mode-600
+`.env.staging.activation`, a unique 64-hex-character staging HMAC key, and a
+non-placeholder deployment ID matching
+`staging-onboarding-<date>-<sha>-<sequence>`. Never add the operator token to
+either environment file. Never commit, print, or shell-trace the HMAC or token.
+
+Before the first live change, obtain explicit authorization for routing changes,
+secret installation, service recreation, and synthetic staging identities.
+Then run only these commands from `/home/ubuntu/kamooni/circles` on the staging
+VM, one authorized step at a time:
+
+```bash
+./scripts/staging-onboarding-control.sh status
+./scripts/staging-onboarding-control.sh inspect
+read -r -s -p 'Routing operator token: ' REGISTRATION_ROUTING_OPERATOR_TOKEN; echo; export REGISTRATION_ROUTING_OPERATOR_TOKEN
+./scripts/staging-onboarding-control.sh route-set legacy paused none STAGING_RELEASE_OPERATOR
+sleep 300
+./scripts/staging-onboarding-control.sh status
+./scripts/staging-onboarding-control.sh inspect
+./scripts/staging-onboarding-control.sh activate-services
+./scripts/staging-onboarding-control.sh route-set paused pending activation STAGING_RELEASE_OPERATOR
+```
+
+The separately authorized operator must create `.env.staging.activation`
+directly from the reviewed example without displaying its values. Secret
+generation and installation are intentionally not automated by the repository.
+The service activation command refuses a symlink, requires file mode 600,
+validates both rendered Compose configurations, requires routing already
+`paused`, recreates only `circles`, and verifies its exact SHA/image before
+reporting status.
+
+Deactivate in this order:
+
+```bash
+./scripts/staging-onboarding-control.sh route-set pending paused none STAGING_ROLLBACK_OPERATOR
+sleep 300
+./scripts/staging-onboarding-control.sh status
+./scripts/staging-onboarding-control.sh inspect
+./scripts/staging-onboarding-control.sh deactivate-services
+./scripts/staging-onboarding-control.sh route-set paused legacy none STAGING_ROLLBACK_OPERATOR
+./scripts/staging-onboarding-control.sh status
+./scripts/staging-onboarding-control.sh inspect
+```
+
+These commands acquire the same exclusive lock as deployment and maintenance.
+They never delete pending registrations, accounts, DIDs, credential files,
+volumes, Mailpit data, or synthetic identities. Routing rollback retains the
+current image. Application-image rollback remains the separate verified-ledger
+procedure below and requires its own authorization.
+
 ## TLS bootstrap (must happen before first deployment)
 
 DNS must point only `staging.kamooni.org` at the staging VM. Do not request `www.staging.kamooni.org`.

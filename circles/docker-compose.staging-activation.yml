@@ -1,0 +1,11 @@
+# Deliberately excluded from normal staging deployment. Use only through the
+# reviewed staging-onboarding-control.sh activation path.
+x-kamooni-staging-activation-confirm: ${KAMOONI_STAGING_ACTIVATION_CONFIRM:?Use the reviewed staging onboarding control script}
+
+services:
+    circles:
+        environment:
+            PENDING_REGISTRATION_ENABLED: "true"
+            PENDING_REGISTRATION_JOURNEY_READY: "true"
+            PENDING_REGISTRATION_TOKEN_HMAC_KEY: ${PENDING_REGISTRATION_TOKEN_HMAC_KEY:?PENDING_REGISTRATION_TOKEN_HMAC_KEY is required}
+            REGISTRATION_DEPLOYMENT_ID: ${REGISTRATION_DEPLOYMENT_ID:?REGISTRATION_DEPLOYMENT_ID is required}

@@ -22,6 +22,12 @@ assert_contains "$DEPLOY" 'compose up -d --no-deps --force-recreate nginx'
 assert_contains "$DEPLOY" 'compose stop mailpit_ui_proxy'
 assert_contains "$DEPLOY" '[[ "$DEPLOY_CONTAINER_IMAGE_ID" == "$DEPLOY_IMAGE_ID" ]]'
 assert_contains "$DEPLOY" 'mv -f "$LEDGER_TMP" "$IMAGE_LEDGER"'
+assert_contains "$DEPLOY" 'ops_compose --profile onboarding-ops build registration_ops'
+
+if grep -F -- 'docker-compose.staging-activation.yml' "$DEPLOY" >/dev/null; then
+    echo "FAIL: normal staging deployment must never select the onboarding activation overlay" >&2
+    exit 1
+fi
 
 version_line="$(grep -nF 'Version check passed for exact target' "$DEPLOY" | cut -d: -f1)"
 ledger_line="$(grep -nF 'Recorded verified deployment' "$DEPLOY" | cut -d: -f1)"

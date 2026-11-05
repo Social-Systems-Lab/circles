@@ -9,7 +9,14 @@ import sys
 from pathlib import Path
 
 
-def validate(config: dict, all_config: dict, project: str, nginx: str, mailpit_proxy: str) -> list[str]:
+def validate(
+    config: dict,
+    all_config: dict,
+    project: str,
+    nginx: str,
+    mailpit_proxy: str,
+    mode: str = "default",
+) -> list[str]:
     errors: list[str] = []
     if config.get("name") != project or all_config.get("name") != project:
         errors.append("Compose project name is not kamooni_staging")
@@ -102,9 +109,14 @@ def validate(config: dict, all_config: dict, project: str, nginx: str, mailpit_p
         errors.append("staging URL is not fixed to staging.kamooni.org")
     if str(env.get("POSTMARK_API_TOKEN", "")) or str(env.get("POSTMARK_SENDER_EMAIL", "")):
         errors.append("Postmark credentials are not forced empty")
+    expected_pending_value = "true" if mode == "activation" else "false"
     for key in ("PENDING_REGISTRATION_ENABLED", "PENDING_REGISTRATION_JOURNEY_READY"):
-        if str(env.get(key, "")).lower() != "false":
-            errors.append(f"{key} is not forced false")
+        if str(env.get(key, "")).lower() != expected_pending_value:
+            errors.append(f"{key} is not forced {expected_pending_value}")
+    if mode == "default":
+        for key in ("PENDING_REGISTRATION_TOKEN_HMAC_KEY", "REGISTRATION_DEPLOYMENT_ID"):
+            if env.get(key) not in (None, ""):
+                errors.append(f"default staging unexpectedly contains {key}")
     build_args = default_services.get("circles", {}).get("build", {}).get("args", {})
     if build_args.get("KAMOONI_DEPLOYMENT_ROLE") != "staging":
         errors.append("circles image is not marked as a staging build")
@@ -240,18 +252,21 @@ def validate(config: dict, all_config: dict, project: str, nginx: str, mailpit_p
 
 
 def main() -> None:
-    if len(sys.argv) != 6:
+    if len(sys.argv) not in {6, 7}:
         print(
-            "usage: validate-staging-compose.py DEFAULT_JSON ALL_JSON PROJECT NGINX_CONFIG MAILPIT_PROXY_CONFIG",
+            "usage: validate-staging-compose.py DEFAULT_JSON ALL_JSON PROJECT NGINX_CONFIG MAILPIT_PROXY_CONFIG [default|activation]",
             file=sys.stderr,
         )
         raise SystemExit(2)
-    default_path, all_path, project, nginx_path, mailpit_proxy_path = sys.argv[1:]
+    default_path, all_path, project, nginx_path, mailpit_proxy_path = sys.argv[1:6]
+    mode = sys.argv[6] if len(sys.argv) == 7 else "default"
+    if mode not in {"default", "activation"}:
+        raise SystemExit("mode must be default or activation")
     config = json.loads(Path(default_path).read_text(encoding="utf-8"))
     all_config = json.loads(Path(all_path).read_text(encoding="utf-8"))
     nginx = Path(nginx_path).read_text(encoding="utf-8")
     mailpit_proxy = Path(mailpit_proxy_path).read_text(encoding="utf-8")
-    errors = validate(config, all_config, project, nginx, mailpit_proxy)
+    errors = validate(config, all_config, project, nginx, mailpit_proxy, mode)
     if errors:
         print("Error: unsafe staging Compose configuration:", file=sys.stderr)
         for error in errors:

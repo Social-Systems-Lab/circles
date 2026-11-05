@@ -20,6 +20,7 @@ STAGING_TARGET_APP_DIR="$STAGING_TARGET_REPO_DIR/circles"
 ENV_FILE="$STAGING_INFRA_APP_DIR/.env.staging"
 VALIDATOR="$STAGING_INFRA_APP_DIR/scripts/validate-staging-environment.py"
 STAGING_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging.yml"
+OPS_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging-ops.yml"
 
 [[ "$#" -eq 1 ]] || { echo "Usage: $0 <remote-branch>" >&2; exit 1; }
 BRANCH="$1"
@@ -39,7 +40,7 @@ if [[ -n "$(git -C "$INFRA_REPO_DIR" status --porcelain --untracked-files=normal
     git -C "$INFRA_REPO_DIR" status --short >&2
     exit 1
 fi
-for required in "$ENV_FILE" "$VALIDATOR" "$STAGING_COMPOSE_FILE" "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf" "$STAGING_INFRA_APP_DIR/nginx/mailpit-ui.staging.conf"; do
+for required in "$ENV_FILE" "$VALIDATOR" "$STAGING_COMPOSE_FILE" "$OPS_COMPOSE_FILE" "$STAGING_INFRA_APP_DIR/scripts/validate-staging-compose.py" "$STAGING_INFRA_APP_DIR/nginx/nginx.staging.conf" "$STAGING_INFRA_APP_DIR/nginx/mailpit-ui.staging.conf"; do
     [[ -f "$required" ]] || { echo "Error: required staging file is missing: $required" >&2; exit 1; }
 done
 
@@ -77,7 +78,7 @@ else
 fi
 [[ "$(git -C "$STAGING_TARGET_REPO_DIR" rev-parse HEAD)" == "$DEPLOY_SHA" ]] || { echo "Error: target worktree SHA mismatch." >&2; exit 1; }
 
-for required in docker-compose.yml Dockerfile scripts/migrate-chat-read-state-v2.mongo.js scripts/verify-chat-read-state-v2.mongo.js; do
+for required in docker-compose.yml Dockerfile Dockerfile.registration-ops scripts/migrate-chat-read-state-v2.mongo.js scripts/verify-chat-read-state-v2.mongo.js; do
     [[ -f "$STAGING_TARGET_APP_DIR/$required" ]] || { echo "Error: compatible target lacks $required." >&2; exit 1; }
 done
 
@@ -89,6 +90,11 @@ export GIT_SHA STAGING_IMAGE_TAG BUILD_TIME STAGING_INFRA_APP_DIR STAGING_TARGET
 compose() {
     docker compose --project-name "$PROJECT_NAME" --project-directory "$STAGING_TARGET_APP_DIR" \
         --env-file "$ENV_FILE" -f "$STAGING_TARGET_APP_DIR/docker-compose.yml" -f "$STAGING_COMPOSE_FILE" "$@"
+}
+ops_compose() {
+    docker compose --project-name "$PROJECT_NAME" --project-directory "$STAGING_TARGET_APP_DIR" \
+        --env-file "$ENV_FILE" -f "$STAGING_TARGET_APP_DIR/docker-compose.yml" -f "$STAGING_COMPOSE_FILE" \
+        -f "$OPS_COMPOSE_FILE" "$@"
 }
 
 RENDERED_CONFIG="$(mktemp /tmp/kamooni-staging-compose.XXXXXX.json)"
@@ -115,6 +121,8 @@ fi
 
 echo "Building exact target $DEPLOY_SHA as kamooni-staging-circles:$STAGING_IMAGE_TAG..."
 compose build circles
+echo "Building the private registration operator image from exact target $DEPLOY_SHA..."
+ops_compose --profile onboarding-ops build registration_ops
 echo "Stopping staging writers and proxy before readiness and migration checks..."
 compose stop circles nginx
 echo "Starting staging Mongo, MinIO, and the internal Mailpit sink..."
