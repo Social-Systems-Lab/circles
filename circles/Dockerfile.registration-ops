@@ -5,7 +5,7 @@ WORKDIR /app
 COPY registration-ops/package.json registration-ops/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-COPY tsconfig.json next-env.d.ts ./
+COPY tsconfig.json ./
 COPY scripts/pending-registration-ops.ts ./scripts/pending-registration-ops.ts
 COPY src/lib/auth/email-normalization.ts ./src/lib/auth/email-normalization.ts
 COPY src/lib/auth/pending-registration.ts ./src/lib/auth/pending-registration.ts
