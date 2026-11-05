@@ -68,7 +68,7 @@ staging-onboarding-20261105-f3619937-01
 
 It should be committed or supplied by the reviewed deployment mechanism, not independently typed into multiple containers. A mixed or missing value fails pending routing closed and is a stop condition. The route record stores this ID in Mongo; changing the application value without a coordinated route transition makes pending registration unavailable.
 
-The routing-operator token is a third, separate operator-only secret. It must not be placed in application environment configuration. The CLI requires it both in `REGISTRATION_ROUTING_OPERATOR_TOKEN` and `--operator-token`; read it silently into the operator shell and pass only the variable reference so the value is absent from shell history.
+The routing-operator token is a third, separate operator-only secret. It must not be placed in application or container environment configuration and must never appear in Docker argv. The control script reads it silently from the operator terminal, sends the raw token only over closed standard input, and passes only its SHA-256 verifier in ephemeral container metadata.
 
 ## Required changes before activation
 
@@ -134,13 +134,7 @@ Baseline acceptance must show the expected SHAs/image, both flags false, route `
 
 **Stop here.** Obtain explicit authorization covering all of: staging secret/configuration installation, route mutations, application recreation/restart, enabling both flags, and creation of synthetic staging accounts/data. Authorization to test does not authorize image rollback, database repair, record deletion, merge, production changes, or deployment to production.
 
-After authorization, the release operator silently loads the separate operator token without echoing it:
-
-```bash
-read -r -s -p 'Routing operator token: ' REGISTRATION_ROUTING_OPERATOR_TOKEN; echo; export REGISTRATION_ROUTING_OPERATOR_TOKEN
-```
-
-CAS `legacy -> paused` with the packaged runner:
+After authorization, CAS `legacy -> paused` with the packaged runner. The control script prompts for the separate operator token without echoing it:
 
 ```bash
 ./scripts/staging-onboarding-control.sh route-set legacy paused none STAGING_RELEASE_OPERATOR

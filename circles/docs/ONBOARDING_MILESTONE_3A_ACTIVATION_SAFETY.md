@@ -41,7 +41,7 @@ Activation remains blocked until Milestone 3 provides reviewed public actions an
 7. Restart all instances, verify identical Git SHA and `REGISTRATION_DEPLOYMENT_ID`, then compare-and-set `paused` to `pending` with the exact deployment id.
 8. Monitor pending starts, ALTCHA failures, rate limits, email delivery, provisioning interruptions, reconciliation-required records and duplicate-key errors.
 
-The route-status command is read-only and does not bootstrap or mutate routing state. The route-set command requires `REGISTRATION_ROUTING_OPERATOR_TOKEN` in the operator shell, the matching `--operator-token`, and an explicit confirmation phrase. Store this operator-only token outside source control and shell history. Authorization is checked before the routing record is initialized. The transition is compare-and-set and a stale expected mode is rejected. No operator token should be added to application environment configuration.
+The route-status command is read-only and does not bootstrap or mutate routing state. The route-set command reads the raw `REGISTRATION_ROUTING_OPERATOR_TOKEN` only from closed standard input, compares it with a SHA-256 verifier, and requires an explicit confirmation phrase. The raw token must never appear in container environment or argv metadata. Store it outside source control and shell history. Authorization is checked before the routing record is initialized. The transition is compare-and-set and a stale expected mode is rejected. No operator token should be added to application environment configuration.
 
 ## Rollback
 

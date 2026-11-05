@@ -113,7 +113,6 @@ VM, one authorized step at a time:
 ```bash
 ./scripts/staging-onboarding-control.sh status
 ./scripts/staging-onboarding-control.sh inspect
-read -r -s -p 'Routing operator token: ' REGISTRATION_ROUTING_OPERATOR_TOKEN; echo; export REGISTRATION_ROUTING_OPERATOR_TOKEN
 ./scripts/staging-onboarding-control.sh route-set legacy paused none STAGING_RELEASE_OPERATOR
 sleep 300
 ./scripts/staging-onboarding-control.sh status
@@ -127,8 +126,14 @@ directly from the reviewed example without displaying its values. Secret
 generation and installation are intentionally not automated by the repository.
 The service activation command refuses a symlink, requires file mode 600,
 validates both rendered Compose configurations, requires routing already
-`paused`, recreates only `circles`, and verifies its exact SHA/image before
-reporting status.
+`paused`, and stops public NGINX before recreating `circles`. It resolves and
+probes every application's actual `kamooni_staging_webnet` address, verifies
+the exact SHA/image, flags, deployment ID, HMAC presence, staging-only email
+settings, live Mailpit isolation, and internal SMTP connectivity, then
+force-recreates NGINX and performs a bounded external version check. Any
+failure after public service mutation stops both NGINX and `circles` while
+preserving support services and volumes. Deactivation follows the same network
+refresh and fail-closed procedure with the default-off runtime contract.
 
 Deactivate in this order:
 
