@@ -1,0 +1,24 @@
+services:
+    registration_ops:
+        image: kamooni-staging-registration-ops:${STAGING_IMAGE_TAG:?STAGING_IMAGE_TAG is required}
+        build:
+            context: ${STAGING_TARGET_APP_DIR:?STAGING_TARGET_APP_DIR is required}
+            dockerfile: Dockerfile.registration-ops
+        env_file:
+            - ${STAGING_INFRA_APP_DIR:?STAGING_INFRA_APP_DIR is required}/.env.staging
+        environment:
+            CIRCLES_MONGODB_DATABASE: circles
+            REGISTRATION_DEPLOYMENT_ID: ${REGISTRATION_DEPLOYMENT_ID:-}
+        volumes:
+            - circles_users:/circles/users:ro
+        networks:
+            - webnet
+        read_only: true
+        tmpfs:
+            - /tmp
+        cap_drop:
+            - ALL
+        security_opt:
+            - no-new-privileges:true
+        profiles: ["onboarding-ops"]
+        restart: "no"

@@ -258,6 +258,47 @@ class StagingComposeValidationTests(unittest.TestCase):
                 )
                 self.assertTrue(any(key in error for error in errors))
 
+    def test_default_configuration_rejects_activation_credentials(self):
+        for key in ("PENDING_REGISTRATION_TOKEN_HMAC_KEY", "REGISTRATION_DEPLOYMENT_ID"):
+            with self.subTest(key=key):
+                errors = self.errors(
+                    lambda config, _all, key=key: config["services"]["circles"]["environment"].update({key: "unexpected"})
+                )
+                self.assertTrue(any(key in error for error in errors))
+
+    def test_activation_mode_requires_both_flags(self):
+        config, all_config = configuration()
+        env = config["services"]["circles"]["environment"]
+        env["PENDING_REGISTRATION_ENABLED"] = "true"
+        env["PENDING_REGISTRATION_JOURNEY_READY"] = "true"
+        errors = MODULE.validate(
+            config,
+            all_config,
+            "kamooni_staging",
+            "server { server_name staging.kamooni.org; }",
+            """server {
+                listen 8025;
+                proxy_pass http://mailpit:8025;
+                proxy_set_header Host localhost;
+            }""",
+            "activation",
+        )
+        self.assertEqual(errors, [])
+        env["PENDING_REGISTRATION_JOURNEY_READY"] = "false"
+        errors = MODULE.validate(
+            config,
+            all_config,
+            "kamooni_staging",
+            "server { server_name staging.kamooni.org; }",
+            """server {
+                listen 8025;
+                proxy_pass http://mailpit:8025;
+                proxy_set_header Host localhost;
+            }""",
+            "activation",
+        )
+        self.assertTrue(any("JOURNEY_READY" in error for error in errors))
+
     def test_application_and_credential_mounts_must_use_staging_volumes(self):
         def mutate(config, _all):
             config["services"]["circles"]["volumes"][1]["source"] = "production_users"

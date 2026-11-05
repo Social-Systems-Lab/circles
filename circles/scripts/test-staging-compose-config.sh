@@ -8,6 +8,8 @@ trap 'rm -rf -- "$TEMP_DIR"' EXIT
 mkdir -p "$TEMP_DIR/nginx"
 cp "$APP_DIR/.env.staging.example" "$TEMP_DIR/.env.staging"
 cp "$APP_DIR/docker-compose.staging.yml" "$TEMP_DIR/docker-compose.staging.yml"
+cp "$APP_DIR/docker-compose.staging-activation.yml" "$TEMP_DIR/docker-compose.staging-activation.yml"
+cp "$APP_DIR/docker-compose.staging-ops.yml" "$TEMP_DIR/docker-compose.staging-ops.yml"
 cp "$APP_DIR/nginx/nginx.staging.conf" "$TEMP_DIR/nginx/nginx.staging.conf"
 cp "$APP_DIR/nginx/mailpit-ui.staging.conf" "$TEMP_DIR/nginx/mailpit-ui.staging.conf"
 
@@ -44,6 +46,12 @@ for line in path.read_text(encoding="utf-8").splitlines():
 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 
+cat >"$TEMP_DIR/.env.staging.activation" <<'EOF'
+PENDING_REGISTRATION_TOKEN_HMAC_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdea
+REGISTRATION_DEPLOYMENT_ID=staging-onboarding-20261105-compose01
+EOF
+chmod 600 "$TEMP_DIR/.env.staging.activation"
+
 python3 "$APP_DIR/scripts/validate-staging-environment.py" env-file "$TEMP_DIR/.env.staging"
 
 export STAGING_INFRA_APP_DIR="$TEMP_DIR"
@@ -51,6 +59,7 @@ export STAGING_TARGET_APP_DIR="$APP_DIR"
 export STAGING_IMAGE_TAG=compose-validation
 export GIT_SHA=compose-validation
 export BUILD_TIME=compose-validation
+export KAMOONI_STAGING_ACTIVATION_CONFIRM=AUTHORIZED_STAGING_ONBOARDING_CONTROL
 
 docker compose --project-name kamooni_staging --project-directory "$APP_DIR" \
     --env-file "$TEMP_DIR/.env.staging" \
@@ -66,3 +75,40 @@ python3 "$APP_DIR/scripts/validate-staging-environment.py" compose-json "$TEMP_D
 python3 "$APP_DIR/scripts/validate-staging-compose.py" \
     "$TEMP_DIR/default.json" "$TEMP_DIR/all.json" kamooni_staging \
     "$TEMP_DIR/nginx/nginx.staging.conf" "$TEMP_DIR/nginx/mailpit-ui.staging.conf"
+
+docker compose --project-name kamooni_staging --project-directory "$APP_DIR" \
+    --env-file "$TEMP_DIR/.env.staging" --env-file "$TEMP_DIR/.env.staging.activation" \
+    -f "$APP_DIR/docker-compose.yml" -f "$TEMP_DIR/docker-compose.staging.yml" \
+    -f "$TEMP_DIR/docker-compose.staging-activation.yml" \
+    config --format json >"$TEMP_DIR/activation.json"
+
+docker compose --project-name kamooni_staging --project-directory "$APP_DIR" \
+    --env-file "$TEMP_DIR/.env.staging" --env-file "$TEMP_DIR/.env.staging.activation" \
+    -f "$APP_DIR/docker-compose.yml" -f "$TEMP_DIR/docker-compose.staging.yml" \
+    -f "$TEMP_DIR/docker-compose.staging-activation.yml" \
+    --profile "*" config --format json >"$TEMP_DIR/activation-all.json"
+
+python3 "$APP_DIR/scripts/validate-staging-activation.py" env-file "$TEMP_DIR/.env.staging.activation"
+python3 "$APP_DIR/scripts/validate-staging-activation.py" compose-json "$TEMP_DIR/activation.json"
+python3 "$APP_DIR/scripts/validate-staging-compose.py" \
+    "$TEMP_DIR/activation.json" "$TEMP_DIR/activation-all.json" kamooni_staging \
+    "$TEMP_DIR/nginx/nginx.staging.conf" "$TEMP_DIR/nginx/mailpit-ui.staging.conf" activation
+
+docker compose --project-name kamooni_staging --project-directory "$APP_DIR" \
+    --env-file "$TEMP_DIR/.env.staging" -f "$APP_DIR/docker-compose.yml" \
+    -f "$TEMP_DIR/docker-compose.staging.yml" -f "$TEMP_DIR/docker-compose.staging-ops.yml" \
+    --profile onboarding-ops config --format json >"$TEMP_DIR/ops.json"
+
+python3 - "$TEMP_DIR/ops.json" <<'PY'
+import json, sys
+config = json.load(open(sys.argv[1], encoding="utf-8"))
+service = config["services"]["registration_ops"]
+assert not service.get("ports")
+assert service.get("read_only") is True
+assert service.get("cap_drop") == ["ALL"]
+assert service.get("security_opt") == ["no-new-privileges:true"]
+assert set(service.get("networks", {})) == {"webnet"}
+mounts = service.get("volumes", [])
+assert len(mounts) == 1 and mounts[0]["source"] == "circles_users" and mounts[0]["target"] == "/circles/users" and mounts[0]["read_only"] is True
+assert "REGISTRATION_ROUTING_OPERATOR_TOKEN" not in service.get("environment", {})
+PY
