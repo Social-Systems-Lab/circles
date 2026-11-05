@@ -1,0 +1,19 @@
+FROM imbios/bun-node:1.3.1-20.19.5-slim
+
+WORKDIR /app
+
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+COPY tsconfig.json next-env.d.ts ./
+COPY scripts/pending-registration-ops.ts ./scripts/pending-registration-ops.ts
+COPY src/lib/auth/email-normalization.ts ./src/lib/auth/email-normalization.ts
+COPY src/lib/auth/pending-registration.ts ./src/lib/auth/pending-registration.ts
+COPY src/lib/auth/pending-registration-reconciliation.ts ./src/lib/auth/pending-registration-reconciliation.ts
+COPY src/lib/auth/registration-routing.ts ./src/lib/auth/registration-routing.ts
+
+ENV NODE_ENV=production
+
+USER node
+
+ENTRYPOINT ["bun", "scripts/pending-registration-ops.ts"]

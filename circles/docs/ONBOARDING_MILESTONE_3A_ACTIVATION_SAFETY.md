@@ -24,16 +24,18 @@ Activation remains blocked until Milestone 3 provides reviewed public actions an
 
 1. Deploy the activation-capable build everywhere with routing still `legacy`, `PENDING_REGISTRATION_ENABLED` unset/false, and a deployment-specific `REGISTRATION_DEPLOYMENT_ID`.
 2. Verify every running instance reports the same Git SHA. Drain and remove all older instances.
-3. Inspect routing from the application checkout:
+3. Inspect routing with the packaged operator image. Staging supplies the exact
+   Compose command in its activation runbook; do not install `tsx` on the host
+   or expose an operator HTTP endpoint:
 
     ```bash
-    cd /root/circles/circles/circles && npx tsx scripts/pending-registration-ops.ts route-status
+    docker run --rm OPERATOR_IMAGE route-status
     ```
 
 4. Compare-and-set `legacy` to `paused`:
 
     ```bash
-    cd /root/circles/circles/circles && npx tsx scripts/pending-registration-ops.ts route-set --expected legacy --to paused --deployment-id none --actor OPERATOR --confirm SET_REGISTRATION_ROUTE
+    docker run --rm OPERATOR_IMAGE route-set --expected legacy --to paused --deployment-id none --actor OPERATOR --confirm SET_REGISTRATION_ROUTE --operator-token "$REGISTRATION_ROUTING_OPERATOR_TOKEN"
     ```
 
 5. Wait at least five minutes, verify signup email reservations and provisioning locks are empty/expired, and confirm both registration paths reject new work.
@@ -41,7 +43,17 @@ Activation remains blocked until Milestone 3 provides reviewed public actions an
 7. Restart all instances, verify identical Git SHA and `REGISTRATION_DEPLOYMENT_ID`, then compare-and-set `paused` to `pending` with the exact deployment id.
 8. Monitor pending starts, ALTCHA failures, rate limits, email delivery, provisioning interruptions, reconciliation-required records and duplicate-key errors.
 
-The route-status command is read-only and does not bootstrap or mutate routing state. The route-set command requires `REGISTRATION_ROUTING_OPERATOR_TOKEN` in the operator shell, the matching `--operator-token`, and an explicit confirmation phrase. Store this operator-only token outside source control and shell history. Authorization is checked before the routing record is initialized. The transition is compare-and-set and a stale expected mode is rejected. No operator token should be added to application environment configuration.
+The `route-status`, `operations-status`, and `inspect` commands use a dedicated
+Mongo client and are read-only; they do not initialize application indexes.
+The route-set command requires `REGISTRATION_ROUTING_OPERATOR_TOKEN` in the
+operator shell, the matching `--operator-token`, and an explicit confirmation
+phrase. Store this operator-only token outside source control and shell history.
+Authorization is checked before the routing record is initialized. The
+transition is compare-and-set, only `legacy -> paused -> pending -> paused ->
+legacy` transitions are supported, and a stale expected mode is rejected.
+Transitioning to `pending` additionally requires the supplied deployment ID to
+exactly match `REGISTRATION_DEPLOYMENT_ID` in the operator container. No
+operator token should be added to application environment configuration.
 
 ## Rollback
 
