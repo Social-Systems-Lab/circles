@@ -22,10 +22,15 @@ VALIDATOR="$STAGING_INFRA_APP_DIR/scripts/validate-staging-environment.py"
 STAGING_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging.yml"
 OPS_COMPOSE_FILE="$STAGING_INFRA_APP_DIR/docker-compose.staging-ops.yml"
 
-[[ "$#" -eq 1 ]] || { echo "Usage: $0 <remote-branch>" >&2; exit 1; }
+[[ "$#" -ge 1 && "$#" -le 2 ]] || { echo "Usage: $0 <remote-branch> [expected-commit-sha]" >&2; exit 1; }
 BRANCH="$1"
+EXPECTED_DEPLOY_SHA="${2:-}"
 if ! git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || [[ "$BRANCH" == refs/* ]]; then
     echo "Error: invalid branch name: $BRANCH" >&2
+    exit 1
+fi
+if [[ -n "$EXPECTED_DEPLOY_SHA" && ! "$EXPECTED_DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Error: expected commit SHA must be 40 lowercase hexadecimal characters." >&2
     exit 1
 fi
 
@@ -50,6 +55,10 @@ python3 "$VALIDATOR" env-file "$ENV_FILE"
 echo "Fetching origin/$BRANCH without switching the infrastructure checkout..."
 git -C "$INFRA_REPO_DIR" fetch --no-tags origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
 DEPLOY_SHA="$(git -C "$INFRA_REPO_DIR" rev-parse --verify "refs/remotes/origin/$BRANCH^{commit}")"
+if [[ -n "$EXPECTED_DEPLOY_SHA" && "$DEPLOY_SHA" != "$EXPECTED_DEPLOY_SHA" ]]; then
+    echo "Error: origin/$BRANCH resolved to $DEPLOY_SHA, expected $EXPECTED_DEPLOY_SHA." >&2
+    exit 1
+fi
 if ! git -C "$INFRA_REPO_DIR" merge-base --is-ancestor "$MINIMUM_CHAT_V2_COMMIT" "$DEPLOY_SHA"; then
     echo "Error: target predates chat read-state V2 compatibility floor $MINIMUM_CHAT_V2_COMMIT." >&2
     exit 1

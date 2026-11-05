@@ -23,6 +23,15 @@ assert_contains "$DEPLOY" 'compose stop mailpit_ui_proxy'
 assert_contains "$DEPLOY" '[[ "$DEPLOY_CONTAINER_IMAGE_ID" == "$DEPLOY_IMAGE_ID" ]]'
 assert_contains "$DEPLOY" 'mv -f "$LEDGER_TMP" "$IMAGE_LEDGER"'
 assert_contains "$DEPLOY" 'ops_compose --profile onboarding-ops build registration_ops'
+assert_contains "$DEPLOY" 'Usage: $0 <remote-branch> [expected-commit-sha]'
+assert_contains "$DEPLOY" 'DEPLOY_SHA" != "$EXPECTED_DEPLOY_SHA"'
+
+expected_sha_guard_line="$(grep -nF 'DEPLOY_SHA" != "$EXPECTED_DEPLOY_SHA"' "$DEPLOY" | cut -d: -f1)"
+app_build_line="$(grep -nF 'compose build circles' "$DEPLOY" | cut -d: -f1)"
+if [[ -z "$expected_sha_guard_line" || -z "$app_build_line" || "$expected_sha_guard_line" -ge "$app_build_line" ]]; then
+    echo "FAIL: exact target guard must run before application or operator builds" >&2
+    exit 1
+fi
 
 if grep -F -- 'docker-compose.staging-activation.yml' "$DEPLOY" >/dev/null; then
     echo "FAIL: normal staging deployment must never select the onboarding activation overlay" >&2

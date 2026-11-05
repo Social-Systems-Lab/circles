@@ -105,6 +105,22 @@ non-placeholder deployment ID matching
 `staging-onboarding-<date>-<sha>-<sequence>`. Never add the operator token to
 either environment file. Never commit, print, or shell-trace the HMAC or token.
 
+Routing changes also require the independently installed mode-600 verifier
+`.registration-routing-operator.sha256`. It must contain exactly one lowercase
+SHA-256 hash of the operator token and must not be derived by the routing command
+from the token being presented. After separate authorization, install it on the
+staging VM without placing the raw token in shell history, process arguments,
+Docker metadata, or logs:
+
+```bash
+cd /home/ubuntu/kamooni/circles && umask 077 && read -r -s -p 'Routing operator token from the approved password manager: ' ROUTING_OPERATOR_TOKEN && printf '\n' && printf '%s' "$ROUTING_OPERATOR_TOKEN" | sha256sum | awk '{print $1}' > .registration-routing-operator.sha256 && unset ROUTING_OPERATOR_TOKEN && chmod 600 .registration-routing-operator.sha256
+```
+
+The raw token remains only in the approved password manager and the prompting
+shell's memory for the duration of hashing. Every later `route-set` operation
+reads it silently from `/dev/tty`, sends it only through the operator container's
+closed standard input, and compares it with the independently stored verifier.
+
 Before the first live change, obtain explicit authorization for routing changes,
 secret installation, service recreation, and synthetic staging identities.
 Then run only these commands from `/home/ubuntu/kamooni/circles` on the staging
@@ -203,7 +219,7 @@ This manual method avoids a port-80 conflict and changes no production container
 Run on the staging VM from the infrastructure checkout:
 
 ```bash
-cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh BRANCH_NAME
+cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh BRANCH_NAME EXPECTED_40_CHARACTER_COMMIT_SHA
 ```
 
 The script requires a clean infrastructure checkout on `infra/kamooni-staging`, fetches `origin/BRANCH_NAME`, checks both the V2 schema compatibility floor and the committed application safety baseline, and updates the separate detached target worktree to deploy that branch's exact SHA. It never pushes or merges and never switches the infrastructure checkout. Every staging deployment target must descend from `3101d0eb7590f089d625d8bfc8bbace42447b8e0`, the reviewed Group 1 application safety baseline. Do not casually change this pinned value: changing it requires review because it protects payment and welcome-link staging safety.
@@ -211,7 +227,7 @@ The script requires a clean infrastructure checkout on `infra/kamooni-staging`, 
 For the normal production-equivalent staging deployment, use:
 
 ```bash
-cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh main
+cd /home/ubuntu/kamooni/circles && ./scripts/deploy-staging.sh main APPROVED_MAIN_40_CHARACTER_COMMIT_SHA
 ```
 
 Before starting anything it validates `.env.staging`, renders both default and all-profile Compose models, validates the effective application environment, directly scans staging NGINX, and checks isolation. It builds the exact full target SHA under `kamooni-staging-circles:<short-sha>`. It starts only Mongo and MinIO, waits up to 60 seconds for an authenticated Mongo ping, runs target-worktree migration scripts, and only then recreates the app. The staging override binds Next standalone to every container interface. The script verifies the exact SHA through the app's address on the NGINX-shared network before force-recreating NGINX, which refreshes Docker upstream resolution after every application replacement. Deployment succeeds only when `https://staging.kamooni.org/api/version` returns the exact full target SHA. Use the script rather than ad-hoc deployment commands so the verified-image rollback ledger is maintained.
