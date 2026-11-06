@@ -27,6 +27,7 @@ Usage:
   staging-onboarding-control.sh inspect [PENDING_OBJECT_ID]
   staging-onboarding-control.sh route-set EXPECTED_MODE NEW_MODE DEPLOYMENT_ID ACTOR
   staging-onboarding-control.sh activate-services
+  staging-onboarding-control.sh activate-services-recovery
   staging-onboarding-control.sh deactivate-services
 EOF
     exit 2
@@ -124,6 +125,13 @@ for key in ("pendingRegistrations", "reconciliationRequired", "activeProvisionin
     if status.get(key) != 0:
         raise SystemExit(f"Error: {key} is {status.get(key)!r}; activation requires zero")
 PY
+}
+
+require_single_recoverable_registration() {
+    local operations recovery
+    operations="$(run_ops operations-status)"
+    recovery="$(run_ops recovery-activation-status)"
+    python3 "$STAGING_INFRA_APP_DIR/scripts/validate-staging-recovery-activation.py" "$operations" "$recovery"
 }
 
 fail_public_services() {
@@ -241,11 +249,15 @@ case "$command_name" in
         fi
         unset operator_token
         ;;
-    activate-services)
+    activate-services|activate-services-recovery)
         [[ "$#" -eq 0 ]] || usage
         require_clean_infra
         require_route_mode paused
-        require_clean_operations
+        if [[ "$command_name" == "activate-services-recovery" ]]; then
+            require_single_recoverable_registration
+        else
+            require_clean_operations
+        fi
         activation_compose_array
         rendered="$(mktemp /tmp/kamooni-staging-activation.XXXXXX.json)"
         rendered_all="$(mktemp /tmp/kamooni-staging-activation-all.XXXXXX.json)"

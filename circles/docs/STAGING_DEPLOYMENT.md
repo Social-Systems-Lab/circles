@@ -137,6 +137,8 @@ sleep 300
 ./scripts/staging-onboarding-control.sh route-set paused pending activation STAGING_RELEASE_OPERATOR
 ```
 
+`activate-services` intentionally requires zero unfinished pending registrations. For a reviewed recovery test of one preserved, expired `email_verified` record, use `activate-services-recovery` only after separate authorization and only with the recovery-capable application/operator revision deployed. It requires routing `paused`, exactly one pending registration, exactly one read-only-classified recoverable registration, and zero unsafe, reconciliation, provisioning-lock, or finalization-lock conditions. It does not alter the record or routing, and every normal runtime, webnet, Mailpit, NGINX-ordering, and fail-closed check still runs.
+
 The separately authorized operator must create `.env.staging.activation`
 directly from the reviewed example without displaying its values. Secret
 generation and installation are intentionally not automated by the repository.
