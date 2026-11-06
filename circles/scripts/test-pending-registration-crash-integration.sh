@@ -20,11 +20,20 @@ cleanup() {
         if ! docker stop "$CONTAINER" >/dev/null; then
             echo "Failed to stop disposable MongoDB container $CONTAINER." >&2
             cleanup_status=1
-        elif docker container inspect "$CONTAINER" >/dev/null 2>&1; then
-            echo "Disposable MongoDB container $CONTAINER remains after stop." >&2
-            cleanup_status=1
         else
-            CONTAINER_CREATED=false
+            removed=false
+            for _ in $(seq 1 50); do
+                if ! docker container inspect "$CONTAINER" >/dev/null 2>&1; then
+                    removed=true
+                    CONTAINER_CREATED=false
+                    break
+                fi
+                sleep 0.1
+            done
+            if [[ "$removed" != true ]]; then
+                echo "Disposable MongoDB container $CONTAINER remains after stop." >&2
+                cleanup_status=1
+            fi
         fi
     fi
     case "$TEST_APP_DIR" in

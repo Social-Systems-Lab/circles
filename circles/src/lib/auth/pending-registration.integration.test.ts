@@ -8,8 +8,11 @@ import { MongoClient, ObjectId } from "mongodb";
 import {
     acquirePendingRegistrationProvisioningClaim,
     ensurePendingRegistrationIndexes,
+    getVerifiedPendingRegistration,
     hashPendingRegistrationSecret,
+    requestPendingRegistrationRecovery,
     reservePendingRegistrationDid,
+    verifyPendingRegistrationEmail,
     type PendingRegistration,
 } from "@/lib/auth/pending-registration";
 import { inspectPendingRegistrationReconciliation } from "@/lib/auth/pending-registration-reconciliation";
@@ -59,6 +62,77 @@ async function main() {
             auditEvents: db.collection("pendingRegistrationAuditEvents"),
         } as any;
         await ensurePendingRegistrationIndexes(collections);
+
+        const recoveryId = new ObjectId();
+        const recoveryNow = new Date();
+        const recoveryEmail = "recovery-integration@example.invalid";
+        await collections.registrations.insertOne({
+            _id: recoveryId,
+            name: "Recovery Integration",
+            email: recoveryEmail,
+            normalizedEmail: recoveryEmail,
+            requestedHandle: "recovery-integration",
+            status: "email_verified",
+            continuationSecretHash: hashPendingRegistrationSecret("pending-continuation", "integration-continuation"),
+            verificationTokenHash: null,
+            verificationTokenExpiresAt: null,
+            verificationVersion: 1,
+            verificationLastSentAt: new Date(recoveryNow.getTime() - 60 * 60 * 1000),
+            verifiedContinuationHash: hashPendingRegistrationSecret(
+                "verified-continuation",
+                "expired-integration-continuation",
+            ),
+            verifiedContinuationExpiresAt: new Date(recoveryNow.getTime() - 60_000),
+            verifiedAt: new Date(recoveryNow.getTime() - 31 * 60 * 1000),
+            redirectTo: "/onboarding",
+            provisioningLeaseHash: null,
+            provisioningLeaseExpiresAt: null,
+            provisioningClaimHash: null,
+            provisioningClaimedAt: null,
+            provisioningAttempts: 0,
+            reservedDid: null,
+            reconciliationRequiredAt: null,
+            accountId: null,
+            accountDid: null,
+            provisionedAt: null,
+            createdAt: new Date(recoveryNow.getTime() - 60 * 60 * 1000),
+            updatedAt: new Date(recoveryNow.getTime() - 31 * 60 * 1000),
+            expiresAt: new Date(recoveryNow.getTime() + 60 * 60 * 1000),
+        });
+        const recoveryMessages: Array<{ verificationUrl: string }> = [];
+        const recoveryDeps = {
+            collections,
+            baseUrl: "https://staging.kamooni.invalid",
+            now: () => recoveryNow,
+            sendVerificationEmail: async ({ verificationUrl }: { verificationUrl: string }) => {
+                recoveryMessages.push({ verificationUrl });
+            },
+            permanentAccountExists: async () => false,
+        } as any;
+        await Promise.all([
+            requestPendingRegistrationRecovery({ email: recoveryEmail, clientIp: "192.0.2.120" }, recoveryDeps),
+            requestPendingRegistrationRecovery({ email: recoveryEmail, clientIp: "192.0.2.121" }, recoveryDeps),
+        ]);
+        assert.equal(recoveryMessages.length, 1, "concurrent MongoDB recovery sends one email");
+        assert.equal(await collections.registrations.countDocuments({ normalizedEmail: recoveryEmail }), 1);
+        const recoveryToken = new URL(recoveryMessages[0].verificationUrl).searchParams.get("token")!;
+        const recovered = await verifyPendingRegistrationEmail(recoveryToken, recoveryDeps);
+        assert.equal(recovered.success, true);
+        assert.equal((await verifyPendingRegistrationEmail(recoveryToken, recoveryDeps)).success, false);
+        assert.equal(
+            (
+                await getVerifiedPendingRegistration(
+                    recovered.pendingRegistrationId!,
+                    recovered.verifiedContinuationSecret!,
+                    recoveryDeps,
+                )
+            ).success,
+            true,
+        );
+        assert.equal(await collections.didReservations.countDocuments({ _id: recoveryId.toHexString() }), 0);
+        await collections.registrations.deleteOne({ _id: recoveryId });
+        await collections.rateLimits.deleteMany({});
+        await collections.auditEvents.deleteMany({});
 
         const pendingId = new ObjectId();
         const now = new Date();

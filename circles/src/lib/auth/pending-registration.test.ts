@@ -16,6 +16,7 @@ import {
     provisionPendingRegistration,
     PENDING_REGISTRATION_VERIFICATION_PATH,
     reservePendingRegistrationDid,
+    requestPendingRegistrationRecovery,
     resendPendingRegistrationVerification,
     resumePendingRegistration,
     validatePendingRedirect,
@@ -904,6 +905,143 @@ async function main() {
             false,
             "expired verified continuation cannot expose password setup authorization",
         );
+
+        const originalEmail = expiredContinuation.registrations[0].email;
+        const originalHandle = expiredContinuation.registrations[0].requestedHandle;
+        await requestPendingRegistrationRecovery(
+            { email: originalEmail, clientIp: "192.0.2.90" },
+            expiredContinuation.deps,
+        );
+        assert.equal(expiredContinuation.registrations.length, 1, "recovery reuses the original pending record");
+        assert.equal(expiredContinuation.sent.length, 2, "recovery sends one fresh proof-of-email link");
+        assert.equal(expiredContinuation.registrations[0].status, "pending_email");
+        assert.equal(expiredContinuation.registrations[0].email, originalEmail);
+        assert.equal(expiredContinuation.registrations[0].requestedHandle, originalHandle);
+        assert.equal(
+            expiredContinuation.registrations[0].verifiedContinuationHash,
+            undefined,
+            "recovery removes the expired continuation hash",
+        );
+        assert.equal(
+            (
+                await getVerifiedPendingRegistration(
+                    proof.pendingRegistrationId!,
+                    proof.verifiedContinuationSecret!,
+                    expiredContinuation.deps,
+                )
+            ).success,
+            false,
+            "the expired continuation remains unusable after recovery starts",
+        );
+        const recoveryToken = tokenFrom(expiredContinuation.sent[1].verificationUrl);
+        const recovered = await verifyPendingRegistrationEmail(recoveryToken, expiredContinuation.deps);
+        assert.equal(recovered.success, true, "fresh email proof issues a new verified continuation");
+        assert.equal(
+            (await verifyPendingRegistrationEmail(recoveryToken, expiredContinuation.deps)).success,
+            false,
+            "the recovery verification token is single-use",
+        );
+        assert.equal(
+            (
+                await getVerifiedPendingRegistration(
+                    recovered.pendingRegistrationId!,
+                    recovered.verifiedContinuationSecret!,
+                    expiredContinuation.deps,
+                )
+            ).success,
+            true,
+            "the new short-lived continuation can resume password creation on another device",
+        );
+    }
+
+    {
+        const concurrent = createHarness();
+        await createPending(concurrent, {
+            email: "concurrent-recovery@example.invalid",
+            requestedHandle: "concurrent-recover",
+        });
+        await verifyPendingRegistrationEmail(tokenFrom(concurrent.sent[0].verificationUrl), concurrent.deps);
+        concurrent.advance(31 * 60 * 1000);
+        await Promise.all([
+            requestPendingRegistrationRecovery(
+                { email: "concurrent-recovery@example.invalid", clientIp: "192.0.2.91" },
+                concurrent.deps,
+            ),
+            requestPendingRegistrationRecovery(
+                { email: "concurrent-recovery@example.invalid", clientIp: "192.0.2.92" },
+                concurrent.deps,
+            ),
+        ]);
+        assert.equal(concurrent.sent.length, 2, "concurrent recovery requests issue exactly one new email");
+        assert.equal(concurrent.registrations.length, 1, "concurrent recovery never creates a second record");
+    }
+
+    {
+        const limitedRecovery = createHarness();
+        await createPending(limitedRecovery, {
+            email: "limited-recovery@example.invalid",
+            requestedHandle: "limited-recovery",
+        });
+        await verifyPendingRegistrationEmail(tokenFrom(limitedRecovery.sent[0].verificationUrl), limitedRecovery.deps);
+        limitedRecovery.advance(31 * 60 * 1000);
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+            await requestPendingRegistrationRecovery(
+                { email: "limited-recovery@example.invalid", clientIp: "192.0.2.93" },
+                limitedRecovery.deps,
+            );
+            limitedRecovery.advance(61_000);
+        }
+        assert.equal(limitedRecovery.sent.length, 4, "recovery sends at most three emails per address per hour");
+    }
+
+    {
+        const rejectedRecovery = createHarness();
+        await createPending(rejectedRecovery, {
+            email: "rejected-recovery@example.invalid",
+            requestedHandle: "rejected-recovery",
+        });
+        await verifyPendingRegistrationEmail(
+            tokenFrom(rejectedRecovery.sent[0].verificationUrl),
+            rejectedRecovery.deps,
+        );
+        rejectedRecovery.advance(31 * 60 * 1000);
+        rejectedRecovery.setPermanentExists(true);
+        const accountResponse = await requestPendingRegistrationRecovery(
+            { email: "rejected-recovery@example.invalid", clientIp: "192.0.2.94" },
+            rejectedRecovery.deps,
+        );
+        assert.equal(accountResponse.message, PENDING_REGISTRATION_PUBLIC_MESSAGE);
+        assert.equal(rejectedRecovery.sent.length, 1, "existing accounts receive no pending recovery email");
+
+        rejectedRecovery.setPermanentExists(false);
+        rejectedRecovery.registrations[0].status = "provisioning";
+        rejectedRecovery.registrations[0].reconciliationRequiredAt = new Date();
+        const unsafeResponse = await requestPendingRegistrationRecovery(
+            { email: "rejected-recovery@example.invalid", clientIp: "192.0.2.95" },
+            rejectedRecovery.deps,
+        );
+        assert.equal(unsafeResponse.message, accountResponse.message, "unsafe states retain the generic response");
+        assert.equal(rejectedRecovery.sent.length, 1, "provisioning and reconciliation states cannot recover");
+    }
+
+    {
+        const expiredRecord = createHarness();
+        await createPending(expiredRecord, {
+            email: "expired-record@example.invalid",
+            requestedHandle: "expired-record",
+        });
+        await verifyPendingRegistrationEmail(tokenFrom(expiredRecord.sent[0].verificationUrl), expiredRecord.deps);
+        expiredRecord.advance(PENDING_REGISTRATION_LIFETIME_MS + 1);
+        const response = await requestPendingRegistrationRecovery(
+            { email: "expired-record@example.invalid", clientIp: "192.0.2.96" },
+            expiredRecord.deps,
+        );
+        const missing = await requestPendingRegistrationRecovery(
+            { email: "missing-record@example.invalid", clientIp: "192.0.2.96" },
+            expiredRecord.deps,
+        );
+        assert.equal(response.message, missing.message, "expired and missing records are indistinguishable");
+        assert.equal(expiredRecord.sent.length, 1, "expired records receive no recovery email");
     }
 
     assert.ok(

@@ -102,8 +102,11 @@ export function PasswordCreationCard({
                             </p>
                             <div className="flex flex-col gap-3">
                                 <Button asChild className="min-h-12 w-full">
-                                    <Link href="/login">Sign in</Link>
+                                    <Link href="/signup/recover">Email me a fresh verification link</Link>
                                 </Button>
+                                <Link className="text-center text-sm underline" href="/login">
+                                    Sign in
+                                </Link>
                                 <Link
                                     className="text-center text-sm underline"
                                     href="mailto:hello@socialsystems.io?subject=Kamooni%20signup%20help"

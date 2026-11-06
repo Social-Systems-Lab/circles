@@ -7,6 +7,11 @@ import {
 const stagingOrigin = "https://staging.kamooni.org";
 
 assert.equal(requirePendingRegistrationPublicOrigin(`${stagingOrigin}/`), stagingOrigin);
+assert.equal(
+    requirePendingRegistrationPublicOrigin("http://127.0.0.1:3000", { allowLoopbackHttp: true }),
+    "http://127.0.0.1:3000",
+);
+assert.throws(() => requirePendingRegistrationPublicOrigin("http://127.0.0.1:3000"), /public origin is unsafe/);
 
 const success = buildPendingRegistrationRedirectUrl("/signup/continue", stagingOrigin);
 assert.equal(success.toString(), `${stagingOrigin}/signup/continue`);

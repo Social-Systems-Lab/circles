@@ -17,6 +17,7 @@ if grep -Fq 'getDb' "$script"; then
     exit 1
 fi
 grep -Fq 'operations-status' "$script"
+grep -Fq 'recovery-activation-status' "$script"
 grep -Fq 'Pending routing deployment id does not match REGISTRATION_DEPLOYMENT_ID' "$script"
 grep -Fq 'Unsupported routing transition' "$script"
 grep -Fq 'REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256' "$script"

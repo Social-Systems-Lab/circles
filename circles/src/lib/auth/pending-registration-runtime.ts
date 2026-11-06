@@ -10,6 +10,7 @@ import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
 import { getResolvedWelcomeTemplate } from "@/lib/data/system-message-templates";
 import { ensureProvisionedPersonalMembership } from "@/lib/data/member";
 import { assertRegistrationMode } from "@/lib/auth/registration-routing";
+import { requirePendingRegistrationPublicOrigin } from "@/lib/auth/pending-registration-public-origin";
 import {
     PENDING_PROVISIONED_RETENTION_MS,
     acquirePendingRegistrationProvisioningClaim,
@@ -207,7 +208,10 @@ export async function createPendingRegistrationRuntimeDependencies(): Promise<Pe
 
     return {
         collections,
-        baseUrl: process.env.CIRCLES_URL || "http://localhost:3000",
+        baseUrl: requirePendingRegistrationPublicOrigin(
+            process.env.CIRCLES_URL || (process.env.NODE_ENV === "production" ? undefined : "http://localhost:3000"),
+            { allowLoopbackHttp: process.env.NODE_ENV !== "production" },
+        ),
         sendVerificationEmail: async ({ to, name, verificationUrl }) => {
             await sendEmail({
                 to,
