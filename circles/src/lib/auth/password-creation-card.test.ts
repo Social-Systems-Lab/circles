@@ -18,7 +18,9 @@ assert.doesNotMatch(card, /localStorage|sessionStorage/);
 assert.match(page, /isPendingRegistrationEnabled\(\)/);
 assert.match(page, /isRegistrationModeAllowed\("pending"\)/);
 assert.match(page, /getVerifiedPendingRegistration\(id, secret, deps\)/);
-assert.match(verificationRoute, /new URL\("\/signup\/continue", request\.url\)/);
+assert.match(verificationRoute, /requirePendingRegistrationPublicOrigin\(\)/);
+assert.match(verificationRoute, /buildPendingRegistrationRedirectUrl\("\/signup\/continue", publicOrigin\)/);
+assert.doesNotMatch(verificationRoute, /request\.url/);
 assert.doesNotMatch(verificationRoute, /new URL\("\/signup\/continue\?[^\"]*token/);
 
 const completionAction = actions.slice(actions.indexOf("export async function completePendingRegistrationAction"));

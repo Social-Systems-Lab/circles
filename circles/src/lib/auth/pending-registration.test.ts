@@ -334,6 +334,8 @@ async function main() {
         "verification email links use the route implemented by Next.js",
     );
     assert.match(verificationRouteSource, /searchParams\.get\("token"\)/);
+    assert.match(verificationRouteSource, /requirePendingRegistrationPublicOrigin\(\)/);
+    assert.doesNotMatch(verificationRouteSource, /request\.url/);
     const specialToken = "token+/?=";
     const encodedUrl = buildPendingRegistrationVerificationUrl("https://staging.kamooni.example/", specialToken);
     assert.equal(new URL(encodedUrl).pathname, implementedVerificationPath);
