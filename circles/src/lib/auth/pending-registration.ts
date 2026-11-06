@@ -731,6 +731,95 @@ export async function getVerifiedPendingRegistration(
         : { success: false };
 }
 
+export async function requestPendingRegistrationRecovery(
+    input: { email: string; clientIp: string },
+    deps: PendingRegistrationDependencies,
+): Promise<{ success: true; message: string }> {
+    const now = deps.now?.() ?? new Date();
+    const email = input.email.trim();
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+    }
+    const normalizedEmail = normalizeEmailForComparison(email);
+    const allowed = await Promise.all([
+        consumePendingRegistrationRateLimit(deps.collections, "recovery-ip", input.clientIp, 5, 60 * 60 * 1000, now),
+        consumePendingRegistrationRateLimit(
+            deps.collections,
+            "recovery-email",
+            normalizedEmail,
+            3,
+            60 * 60 * 1000,
+            now,
+        ),
+    ]);
+    if (allowed.some((value) => !value) || (await deps.permanentAccountExists(normalizedEmail, "__email_only__"))) {
+        return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+    }
+
+    const eligibleState: Filter<PendingRegistration> = {
+        normalizedEmail,
+        verifiedAt: { $type: "date" },
+        expiresAt: { $gt: now },
+        reservedDid: null,
+        reconciliationRequiredAt: null,
+        accountId: null,
+        accountDid: null,
+        provisionedAt: null,
+        provisioningClaimHash: null,
+        $or: [{ status: "email_verified", verifiedContinuationExpiresAt: { $lte: now } }, { status: "pending_email" }],
+    };
+    const candidate = await deps.collections.registrations.findOne(eligibleState, { projection: { _id: 1 } });
+    if (!candidate || (await deps.collections.didReservations.findOne({ _id: candidate._id.toHexString() }))) {
+        return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+    }
+
+    const token = pendingSecret();
+    const record = await deps.collections.registrations.findOneAndUpdate(
+        {
+            _id: candidate._id,
+            ...eligibleState,
+            $and: [
+                {
+                    $or: [
+                        { verificationLastSentAt: null },
+                        { verificationLastSentAt: { $lte: new Date(now.getTime() - PENDING_RESEND_COOLDOWN_MS) } },
+                    ],
+                },
+            ],
+        },
+        {
+            $set: {
+                status: "pending_email",
+                verificationTokenHash: hashPendingRegistrationSecret("email-verification", token),
+                verificationTokenExpiresAt: new Date(now.getTime() + PENDING_VERIFICATION_TOKEN_TTL_MS),
+                verificationLastSentAt: now,
+                updatedAt: now,
+            },
+            $unset: {
+                verifiedContinuationHash: "",
+                verifiedContinuationExpiresAt: "",
+                provisioningLeaseHash: "",
+                provisioningLeaseExpiresAt: "",
+            },
+            $inc: { verificationVersion: 1 },
+        },
+        { returnDocument: "after" },
+    );
+    if (!record) return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+
+    try {
+        await deps.sendVerificationEmail({
+            to: record.email,
+            name: record.name,
+            verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, token),
+        });
+        await audit(deps.collections, record._id.toHexString(), "pending_registration.recovery_verification_sent", now);
+    } catch {
+        await audit(deps.collections, record._id.toHexString(), "pending_registration.email_delivery_failed", now);
+    }
+    return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+}
+
 export async function resendPendingRegistrationVerification(
     input: { pendingRegistrationId: string; continuationSecret: string; clientIp: string },
     deps: PendingRegistrationDependencies,

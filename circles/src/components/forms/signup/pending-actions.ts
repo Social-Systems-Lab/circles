@@ -8,6 +8,7 @@ import {
     getVerifiedPendingRegistration,
     isPendingRegistrationEnabled,
     provisionPendingRegistration,
+    requestPendingRegistrationRecovery,
     resendPendingRegistrationVerification,
     resumePendingRegistration,
     validatePendingRedirect,
@@ -100,6 +101,24 @@ export async function resendPendingRegistrationAction() {
 
 export async function correctPendingRegistrationEmailAction(newEmail: string) {
     return pendingMutation("correct", newEmail);
+}
+
+export async function requestPendingRegistrationRecoveryAction(input: { email: string; altcha: string }) {
+    const request = await trustedRequest();
+    if (!request.ok) return { success: true, message: GENERIC };
+    try {
+        const deps = await activeDependencies();
+        if (
+            !deps ||
+            !(await authorizePendingRegistrationChallenge(request.clientIp, deps)) ||
+            !(await verifyAltchaPayload(input.altcha))
+        ) {
+            return { success: true, message: GENERIC };
+        }
+        return await requestPendingRegistrationRecovery({ email: input.email, clientIp: request.clientIp }, deps);
+    } catch {
+        return { success: true, message: GENERIC };
+    }
 }
 
 async function pendingMutation(kind: "resend" | "correct", newEmail?: string): Promise<PendingMutationResponse> {

@@ -188,6 +188,9 @@ export function CheckEmailCard({
                     <p className="text-sm text-muted-foreground">
                         Didn&apos;t get the email? Check your spam folder or request a new link.
                     </p>
+                    <Link className="block text-center text-sm underline" href="/signup/recover">
+                        Recover a previously verified signup
+                    </Link>
                     {message && (
                         <p role="status" className="text-sm text-muted-foreground">
                             {message}

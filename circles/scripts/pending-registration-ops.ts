@@ -26,7 +26,11 @@ function authenticateRoutingOperator() {
         throw new Error("Routing operator authorization verifier is not configured");
     }
     const input = fs.readFileSync(0, "utf8");
-    const suppliedToken = input.endsWith("\r\n") ? input.slice(0, -2) : input.endsWith("\n") ? input.slice(0, -1) : input;
+    const suppliedToken = input.endsWith("\r\n")
+        ? input.slice(0, -2)
+        : input.endsWith("\n")
+          ? input.slice(0, -1)
+          : input;
     if (!suppliedToken || suppliedToken.length > 1024 || /[\r\n]/.test(suppliedToken)) {
         throw new Error("Routing operator authorization input is invalid");
     }
@@ -37,7 +41,9 @@ function authenticateRoutingOperator() {
 
 async function getOperationsStatus(db: Db) {
     const now = new Date();
-    const collectionNames = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map(({ name }) => name));
+    const collectionNames = new Set(
+        (await db.listCollections({}, { nameOnly: true }).toArray()).map(({ name }) => name),
+    );
     const count = (name: string, filter: Record<string, unknown> = {}) =>
         collectionNames.has(name) ? db.collection(name).countDocuments(filter) : Promise.resolve(0);
     const routing = await getRegistrationRouting(db.collection("registrationRouting"));
@@ -58,6 +64,55 @@ async function getOperationsStatus(db: Db) {
     };
 }
 
+async function getRecoveryActivationStatus(db: Db) {
+    const now = new Date();
+    const collectionNames = new Set(
+        (await db.listCollections({}, { nameOnly: true }).toArray()).map(({ name }) => name),
+    );
+    if (!collectionNames.has("pendingRegistrations")) {
+        return { pendingRegistrations: 0, recoverablePendingRegistrations: 0, unsafePendingRegistrations: 0 };
+    }
+    const registrations = db.collection("pendingRegistrations");
+    const pending = await registrations.find({ status: { $ne: "provisioned" } }, { projection: { _id: 1 } }).toArray();
+    const candidates = await registrations
+        .find(
+            {
+                status: "email_verified",
+                verifiedAt: { $type: "date" },
+                verifiedContinuationExpiresAt: { $lte: now },
+                expiresAt: { $gt: now },
+                reservedDid: null,
+                reconciliationRequiredAt: null,
+                accountId: null,
+                accountDid: null,
+                provisionedAt: null,
+                provisioningClaimHash: null,
+            },
+            { projection: { _id: 1 } },
+        )
+        .toArray();
+    let recoverablePendingRegistrations = 0;
+    for (const candidate of candidates) {
+        const pendingRegistrationId = candidate._id.toString();
+        const [reservation, correlatedAccount] = await Promise.all([
+            collectionNames.has("pendingRegistrationDidReservations")
+                ? db
+                      .collection<{ _id: string }>("pendingRegistrationDidReservations")
+                      .findOne({ _id: pendingRegistrationId })
+                : null,
+            collectionNames.has("circles")
+                ? db.collection("circles").findOne({ "metadata.pendingRegistrationId": pendingRegistrationId })
+                : null,
+        ]);
+        if (!reservation && !correlatedAccount) recoverablePendingRegistrations += 1;
+    }
+    return {
+        pendingRegistrations: pending.length,
+        recoverablePendingRegistrations,
+        unsafePendingRegistrations: pending.length - recoverablePendingRegistrations,
+    };
+}
+
 async function run(db: Db) {
     if (command === "inspect") {
         const usersDirectory = args.get("users-dir");
@@ -75,6 +130,10 @@ async function run(db: Db) {
     }
     if (command === "operations-status") {
         console.log(JSON.stringify(await getOperationsStatus(db), null, 2));
+        return;
+    }
+    if (command === "recovery-activation-status") {
+        console.log(JSON.stringify(await getRecoveryActivationStatus(db), null, 2));
         return;
     }
     if (command === "route-set") {
@@ -110,7 +169,7 @@ async function run(db: Db) {
         console.log(JSON.stringify(await getRegistrationRouting(db.collection("registrationRouting")), null, 2));
         return;
     }
-    throw new Error("Usage: inspect, route-status, operations-status, or route-set");
+    throw new Error("Usage: inspect, route-status, operations-status, recovery-activation-status, or route-set");
 }
 
 async function main() {

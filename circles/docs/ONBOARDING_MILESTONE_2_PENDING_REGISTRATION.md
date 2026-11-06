@@ -41,6 +41,8 @@ pending_email
 
 Pending records expire after 48 hours until a DID is reserved or a durable claim is acquired. Both actions remove TTL eligibility. Successfully provisioned records become TTL-eligible after a seven-day operational review window. Email-verification and verified-continuation capabilities expire after 30 minutes. Resend has a one-minute cooldown.
 
+If a verified continuation expires before provisioning begins, the member may request recovery by submitting the verified email address and a fresh ALTCHA proof. The response is always generic. For an eligible, unexpired `email_verified` record with no account, claim, DID reservation or reconciliation condition, recovery atomically rotates the record back to `pending_email` and sends a new single-use verification link. Clicking that link—not the expired cookie or token—issues a new 30-minute verified continuation. The original pending id, normalized email and requested handle are retained.
+
 ## MongoDB collections and indexes
 
 ### `pendingRegistrations`
@@ -58,7 +60,7 @@ The atomic lease-to-claim update sets `status: provisioning_claimed`, a purpose-
 - Atomic counters keyed by purpose-scoped HMAC hashes.
 - TTL: `{ expiresAt: 1 }`.
 
-Scopes cover start IP/email, resend and correction. The same helper is available for challenge-issuance throttling when Milestone 3 adds the endpoint.
+Scopes cover start IP/email, resend, correction and recovery IP/email. The same helper is available for challenge-issuance throttling when Milestone 3 adds the endpoint.
 
 ### `pendingRegistrationProvisioningLocks`
 
@@ -84,6 +86,8 @@ Scopes cover start IP/email, resend and correction. The same helper is available
 - Verification is expiring, atomic and single-use.
 - Email correction atomically rotates the token, invalidating previous links.
 - Public start, resend and correction responses are generic.
+- Recovery requests are ALTCHA-protected, limited per IP and normalized email, and return one generic response for eligible, missing, expired, unsafe and existing-account states.
+- Recovery never authorizes password creation directly. It sends a fresh email-verification token and retains all existing uniqueness, provisioning-claim, DID-reservation and reconciliation boundaries.
 - Duplicate permanent emails/handles return the same public start response.
 - Redirects must be relative same-site paths; absolute, protocol-relative and backslash-containing values are discarded.
 - Rate limits and provisioning locks live in MongoDB and work across application instances.
