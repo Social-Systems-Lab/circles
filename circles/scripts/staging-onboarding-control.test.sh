@@ -3,6 +3,7 @@ set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 control="$root/scripts/staging-onboarding-control.sh"
+recovery_validator="$root/scripts/validate-staging-recovery-activation.py"
 verifier_validator="$root/scripts/validate-routing-operator-verifier.py"
 activation="$root/docker-compose.staging-activation.yml"
 ops="$root/docker-compose.staging-ops.yml"
@@ -21,6 +22,18 @@ for required in \
     'require_operator_verifier'; do
     grep -Fq -- "$required" "$control" || { echo "missing control contract: $required" >&2; exit 1; }
 done
+
+for required in \
+    'activate-services-recovery' \
+    'require_single_recoverable_registration' \
+    'run_ops recovery-activation-status' \
+    'validate-staging-recovery-activation.py'; do
+    grep -Fq -- "$required" "$control" || { echo "missing recovery activation contract: $required" >&2; exit 1; }
+done
+
+[[ -x "$recovery_validator" ]] || { echo "recovery activation validator is missing or not executable" >&2; exit 1; }
+grep -Fq 'require_clean_operations' "$control"
+python3 "$root/scripts/validate-staging-recovery-activation.test.py"
 
 if grep -Fq -- '--operator-token' "$control" || grep -Fq -- '-e REGISTRATION_ROUTING_OPERATOR_TOKEN ' "$control"; then
     echo "raw routing operator token is passed through Docker argv or environment metadata" >&2

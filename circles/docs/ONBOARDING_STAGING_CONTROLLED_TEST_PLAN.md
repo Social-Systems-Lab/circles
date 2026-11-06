@@ -152,6 +152,14 @@ Run `route-status` and read-only reconciliation again; require zero active locks
 
 Install the HMAC key and deployment ID in mode-600 `.env.staging.activation` through the reviewed secret procedure. Enable both flags and recreate every application instance with `./scripts/staging-onboarding-control.sh activate-services`. This step validates the complete activated Compose model before changing services. Do not hand-edit the running container. Verify every instance has the expected full SHA/image, both flags true, HMAC present with acceptable length (value redacted), and the identical deployment ID.
 
+The ordinary activation command continues to require zero unfinished pending registrations. A preserved, expired `email_verified` registration may be tested only through the separately reviewed and explicitly authorized `activate-services-recovery` command. That command remains fail closed: routing must be `paused`; operation inspection must show exactly one pending registration and zero reconciliation, provisioning-lock, or finalization-lock conditions; and the application operator must classify that same sole record as recoverable with zero unsafe records. It does not mutate, delete, reconcile, or renew the record. After the recovery-capable application revision is deployed, the operator may activate services with:
+
+```bash
+./scripts/staging-onboarding-control.sh activate-services-recovery
+```
+
+This exceptional path requires the application operator image to include `recovery-activation-status`. It does not change routing; the separately authenticated `paused -> pending` transition remains required. If the record expires, gains a reservation or claim, correlates with an account, enters reconciliation, or becomes otherwise ambiguous, activation is rejected rather than weakening the normal guard.
+
 CAS `paused -> pending`:
 
 ```bash
