@@ -2,13 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { isPendingRegistrationEnabled, verifyPendingRegistrationEmail } from "@/lib/auth/pending-registration";
 import { createPendingRegistrationRuntimeDependencies } from "@/lib/auth/pending-registration-runtime";
 import { isRegistrationModeAllowed } from "@/lib/auth/registration-routing";
+import {
+    buildPendingRegistrationRedirectUrl,
+    requirePendingRegistrationPublicOrigin,
+} from "@/lib/auth/pending-registration-public-origin";
 
 const VERIFIED_COOKIE = "__Host-kamooni-verified-registration";
 
 export async function GET(request: NextRequest) {
+    let publicOrigin: string;
+    try {
+        publicOrigin = requirePendingRegistrationPublicOrigin();
+    } catch {
+        const response = new NextResponse(null, { status: 500 });
+        setPrivateHeaders(response);
+        response.cookies.set(VERIFIED_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+        return response;
+    }
     const token = request.nextUrl.searchParams.get("token");
     const safeFailure = () => {
-        const response = NextResponse.redirect(new URL("/signup?verification=invalid", request.url), 303);
+        const response = NextResponse.redirect(
+            buildPendingRegistrationRedirectUrl("/signup?verification=invalid", publicOrigin),
+            303,
+        );
         setPrivateHeaders(response);
         response.cookies.set(VERIFIED_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
         return response;
@@ -26,7 +42,10 @@ export async function GET(request: NextRequest) {
         const result = await verifyPendingRegistrationEmail(token, deps);
         if (!result.success || !result.pendingRegistrationId || !result.verifiedContinuationSecret)
             return safeFailure();
-        const response = NextResponse.redirect(new URL("/signup/continue", request.url), 303);
+        const response = NextResponse.redirect(
+            buildPendingRegistrationRedirectUrl("/signup/continue", publicOrigin),
+            303,
+        );
         setPrivateHeaders(response);
         response.cookies.set(VERIFIED_COOKIE, `${result.pendingRegistrationId}.${result.verifiedContinuationSecret}`, {
             httpOnly: true,
