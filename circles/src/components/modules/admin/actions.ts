@@ -1228,6 +1228,7 @@ export async function sendReminderEmailForHandle(handle: string) {
 
 export async function refreshSubscriptionStatus(userId: string) {
     try {
+        await requireSuperAdmin();
         const user = await Circles.findOne({ _id: new ObjectId(userId) });
         if (!user) {
             return { success: false, message: "User not found" };
