@@ -74,9 +74,10 @@ test("successful verification redirects from an internal request URL to the conf
     assert.match(cookie, /__Host-kamooni-verified-registration=/);
     assert.match(cookie, /HttpOnly/i);
     assert.match(cookie, /Secure/i);
-    assert.match(cookie, /SameSite=strict/i);
+    assert.match(cookie, /SameSite=lax/i);
     assert.match(cookie, /Path=\//i);
     assert.match(cookie, /Max-Age=1800/i);
+    assert.doesNotMatch(cookie, /Domain=/i);
 });
 
 for (const condition of ["invalid", "expired", "replayed"]) {
@@ -86,6 +87,8 @@ for (const condition of ["invalid", "expired", "replayed"]) {
         assert.equal(response.status, 303);
         assert.equal(response.headers.get("location"), "https://staging.kamooni.org/signup?verification=invalid");
         assert.doesNotMatch(response.headers.get("location") || "", /token/i);
+        assert.equal(state.verificationCalls, 1);
+        assertClearsVerifiedCookie(response.headers.get("set-cookie") || "");
     });
 }
 
@@ -103,5 +106,20 @@ for (const configuredOrigin of [undefined, "not a URL", "http://staging.kamooni.
         assert.equal(response.headers.get("location"), null);
         assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
         assert.equal(state.verificationCalls, 0);
+        assertClearsVerifiedCookie(response.headers.get("set-cookie") || "");
     });
+}
+
+function assertClearsVerifiedCookie(cookie: string) {
+    assert.match(cookie, /__Host-kamooni-verified-registration=;/i);
+    assert.match(cookie, /HttpOnly/i);
+    assert.match(cookie, /Secure/i);
+    assert.match(cookie, /SameSite=lax/i);
+    assert.match(cookie, /Path=\//i);
+    assert.match(cookie, /Max-Age=0/i);
+    assert.doesNotMatch(cookie, /Domain=/i);
+    assert.doesNotMatch(
+        cookie,
+        /synthetic-verification-token|invalid-synthetic-token|expired-synthetic-token|replayed-synthetic-token/i,
+    );
 }
