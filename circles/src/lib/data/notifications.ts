@@ -28,7 +28,7 @@ import {
 import { filterMutedConversationRecipients } from "@/lib/chat/conversation-notification-mute";
 import { sanitizeObjectForJSON } from "../utils/sanitize";
 import { getUser, getUserPrivate } from "./user";
-import { getFeed, getPost } from "./feed";
+import { canUserViewPost, getFeed, getPost } from "./feed";
 import { getCircleById, findProjectByShadowPostId, getCirclesByDids } from "./circle";
 import { getMembers } from "./member";
 import { getProposalById, getProposalReactions } from "./proposal"; // Use getProposalReactions
@@ -40,6 +40,13 @@ import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 import { dispatchExternalNotifications } from "./external-notifications";
 import { getNotificationIdempotencyId } from "./notification-read";
+import {
+    filterNotificationRecipientsWhoCanViewPost,
+    shapeNotificationContent,
+    shapeStoredNotifications,
+} from "./notification-content";
+
+export { shapeNotificationContent } from "./notification-content";
 
 Notifications?.createIndex({ userId: 1, isRead: 1, createdAt: -1 });
 Notifications?.createIndex({ userId: 1, type: 1, "content.roomId": 1, isRead: 1, createdAt: -1 });
@@ -275,10 +282,12 @@ export async function sendNotifications(
     if (uniqueRecipients.length === 0) return [];
 
     const createdAt = new Date();
-    const notificationContent = sanitizeObjectForJSON({
-        ...(payload || {}),
-        body: payload?.body || payload?.messageBody || buildNotificationBody(type, payload),
-    });
+    const notificationContent = sanitizeObjectForJSON(
+        shapeNotificationContent({
+            ...(payload || {}),
+            body: payload?.body || payload?.messageBody || buildNotificationBody(type, payload),
+        }),
+    );
 
     const docs = [];
     for (const recipient of uniqueRecipients) {
@@ -339,10 +348,11 @@ export async function listNotificationsForUser(
     limit: number = 50,
     options?: NotificationQueryOptions,
 ) {
-    return await Notifications.find(buildNotificationQuery(userDid, options))
+    const notifications = await Notifications.find(buildNotificationQuery(userDid, options))
         .sort({ createdAt: -1, _id: -1 })
         .limit(limit)
         .toArray();
+    return shapeStoredNotifications(notifications);
 }
 
 export async function getUnreadNotificationCountForUser(userDid: string, options?: NotificationQueryOptions) {
@@ -1040,7 +1050,12 @@ export async function notifyPostMentions(post: Post, author: Circle, mentionedCi
         (up): up is UserPrivate => up !== null,
     );
 
-    if (mentionedUserPrivates.length === 0) return;
+    const allowedRecipients = await filterNotificationRecipientsWhoCanViewPost(
+        post,
+        mentionedUserPrivates,
+        canUserViewPost,
+    );
+    if (allowedRecipients.length === 0) return;
 
     // Get post circle
     let feed = await getFeed(post.feedId);
@@ -1049,7 +1064,7 @@ export async function notifyPostMentions(post: Post, author: Circle, mentionedCi
     // Send notifications to all mentioned users
     await sendNotifications(
         "post_mention",
-        mentionedUserPrivates,
+        allowedRecipients,
         sanitizeObjectForJSON({
             circle,
             user: author,
@@ -1080,7 +1095,12 @@ export async function notifyCommentMentions(
         (up): up is UserPrivate => up !== null,
     );
 
-    if (mentionedUserPrivates.length === 0) return;
+    const allowedRecipients = await filterNotificationRecipientsWhoCanViewPost(
+        post,
+        mentionedUserPrivates,
+        canUserViewPost,
+    );
+    if (allowedRecipients.length === 0) return;
 
     // TODO: Enhance mention notifications for parent items (Goals, Tasks, etc.)?
     // Currently, it links to the shadow post. We might want it to link to the parent item.
@@ -1126,7 +1146,7 @@ export async function notifyCommentMentions(
     // Send notifications to all mentioned users
     await sendNotifications(
         "comment_mention",
-        mentionedUserPrivates,
+        allowedRecipients,
         sanitizeObjectForJSON({
             circle,
             user: author,
