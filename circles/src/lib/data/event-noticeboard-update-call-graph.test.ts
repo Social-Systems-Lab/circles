@@ -114,7 +114,7 @@ assert.ok(actions.includes("if (result.sourceMutationPossible)"), "action wordin
 const directDelete = section("const deleteAuthorizedEvent", "export async function deleteEventAction");
 const directCleanup = directDelete.indexOf("cleanupEventNoticeboardPosts(event)");
 const linkedResourceCleanup = directDelete.indexOf("executePreparedEventDeletionCleanup(prepared)");
-const sourceDelete = directDelete.indexOf("deleteEventDb(canonicalEventId)");
+const sourceDelete = directDelete.indexOf("deleteEventDb(canonicalEventId, deletionClaimToken)");
 const directLifecycle = directDelete.indexOf("orchestrateEventDestructiveLifecycle({");
 for (const marker of [directLifecycle, directCleanup, linkedResourceCleanup, sourceDelete]) assert.ok(marker >= 0);
 assert.ok(directLifecycle < directCleanup && directCleanup < sourceDelete && sourceDelete < linkedResourceCleanup);

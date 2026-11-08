@@ -16,20 +16,21 @@ const section = (source: string, startText: string, endText: string) => {
 };
 
 const helper = section(actions, "const deleteAuthorizedEvent", "// ----- Actions -----");
-const eligibility = helper.indexOf("evaluateEventDeletionEligibilityForAction(");
+const claim = helper.indexOf("startClaimedEventDeletion(");
 const preparation = helper.indexOf("prepareEventDeletionCleanup(event)");
 const lifecycle = helper.indexOf("orchestrateEventDestructiveLifecycle({");
 const cleanup = helper.indexOf("cleanupEventNoticeboardPosts(event)");
 const preparedCleanup = helper.indexOf("executePreparedEventDeletionCleanup(prepared)");
-const sourceDelete = helper.indexOf("deleteEventDb(canonicalEventId)");
-for (const marker of [eligibility, preparation, lifecycle, cleanup, preparedCleanup, sourceDelete]) {
+const sourceDelete = helper.indexOf("deleteEventDb(canonicalEventId, deletionClaimToken)");
+const claimRelease = helper.indexOf("releaseEventDeletionClaim(");
+for (const marker of [claim, preparation, lifecycle, cleanup, preparedCleanup, sourceDelete, claimRelease]) {
     assert.ok(marker >= 0, "safe deletion helper contains the required seam");
 }
-assert.ok(eligibility < preparation, "eligibility is checked before ownership preparation");
+assert.ok(claim < preparation, "the deletion claim and post-claim eligibility precede ownership preparation");
 assert.match(
     helper,
-    /eligibility\.status === "preflight-failed"[\s\S]*?return \{[\s\S]*?status: "preflight-failed"/,
-    "eligibility lookup errors are classified as read-only preflight failures",
+    /claimStart\.status === "preflight-failed"[\s\S]*?return \{\s*status: "preflight-failed"/,
+    "claim-time eligibility lookup errors are classified as read-only preflight failures",
 );
 assert.ok(preparation < lifecycle, "ownership validation precedes destructive lifecycle work");
 assert.ok(cleanup < sourceDelete && sourceDelete < preparedCleanup, "post/media cleanup follows source deletion");
@@ -49,10 +50,18 @@ assert.ok(
 );
 
 const dataDelete = section(eventData, "export const deleteEvent", "/**\n * Change the stage of an event.");
+const dataClaim = dataDelete.indexOf('"deletionClaim.token": deletionClaimToken');
 const dataPolicy = dataDelete.indexOf("evaluateEventDeletionEligibility(");
 const dataVectorDelete = dataDelete.indexOf("runDerivedResourceVectorSafeMutation(");
 const dataMutation = dataDelete.indexOf("EventRsvps.deleteMany(");
-assert.ok(dataPolicy >= 0 && dataPolicy < dataVectorDelete && dataPolicy < dataMutation);
+const dataSourceDelete = dataDelete.indexOf("deleteEventRecordWithClaim(eventId, deletionClaimToken)");
+assert.ok(
+    dataClaim >= 0 &&
+        dataClaim < dataPolicy &&
+        dataPolicy < dataVectorDelete &&
+        dataPolicy < dataMutation &&
+        dataSourceDelete >= 0,
+);
 
 const stage = section(
     actions,
@@ -78,7 +87,18 @@ assert.equal(
     "the old event-level-only withdrawal guard is removed",
 );
 
-assert.match(helper, /deleteEventDb\(canonicalEventId\)/);
+assert.match(helper, /Phase 1 narrows the race but does not close it/);
+assert.match(helper, /deleteEventDb\(canonicalEventId, deletionClaimToken\)/);
+assert.match(
+    helper,
+    /postFailureEligibility[\s\S]*?shouldReleaseEventDeletionClaim\(failureKind\)/,
+    "post-claim participation blocks release only after verification",
+);
+assert.match(
+    helper,
+    /The deletion claim was retained; operator reconciliation may be required/,
+    "ambiguous failures retain the claim and report reconciliation",
+);
 assert.match(helper, /afterSourceMutation:[\s\S]*?executePreparedEventDeletionCleanup\(prepared\)/);
 assert.match(helper, /deleted-cleanup-incomplete/);
 assert.match(cleanupData, /if \(classified\.kind === "public"\) return false/);

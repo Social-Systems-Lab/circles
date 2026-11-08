@@ -60,7 +60,13 @@ import {
     normalizeEventHostCircleIds,
 } from "@/lib/data/event";
 import { getCirclesByDids, getCirclesByIds } from "@/lib/data/circle";
-import { upsertRsvp, cancelRsvp, listAttendees } from "@/lib/data/eventRsvp";
+import {
+    upsertRsvp,
+    cancelRsvp,
+    listAttendees,
+    type CancelRsvpResult,
+    type UpsertRsvpResult,
+} from "@/lib/data/eventRsvp";
 import { listAttendeesWithDetails } from "@/lib/data/eventRsvp";
 import {
     notifyEventSubmittedForReview,
@@ -89,7 +95,7 @@ import {
 } from "@/lib/event-external-invite";
 import { notifyEventInvitation, notifyEventOccurrenceInvitation } from "@/lib/data/notifications";
 import { cancelEventOccurrence } from "@/lib/data/eventOccurrence";
-import { upsertEventOccurrenceRsvp } from "@/lib/data/eventOccurrenceRsvp";
+import { upsertEventOccurrenceRsvp, type EventOccurrenceRsvpResult } from "@/lib/data/eventOccurrenceRsvp";
 import { formatEventOccurrenceId, isGeneratedEventOccurrence, isValidEventOccurrenceKey } from "@/lib/event-occurrence";
 import { upsertEventOccurrenceInvitation } from "@/lib/data/eventOccurrenceInvitation";
 import {
@@ -117,6 +123,12 @@ import {
     shouldRunOrdinaryEventCancellation,
 } from "@/lib/data/event-deletion-policy";
 import { executePreparedEventDeletionCleanup, prepareEventDeletionCleanup } from "@/lib/data/event-deletion-cleanup";
+import {
+    claimFailureKindAfterEligibility,
+    releaseEventDeletionClaim,
+    shouldReleaseEventDeletionClaim,
+    startClaimedEventDeletion,
+} from "@/lib/data/event-deletion-claim";
 import {
     EVENT_NOTICEBOARD_UNAVAILABLE_MESSAGE,
     hasStoredEventNoticeboardReferences,
@@ -607,23 +619,48 @@ const deleteAuthorizedEvent = async (
         return { status: "failed", message: "Event not found" };
     }
 
-    const eligibility = await evaluateEventDeletionEligibilityForAction(canonicalEventId, event.invitations);
-    if (eligibility.status === "preflight-failed") {
-        console.error("Event deletion eligibility lookup failed:", eligibility.error);
+    // Phase 1 narrows the race but does not close it: participation writers do not yet check deletion claims.
+    const claimStart = await startClaimedEventDeletion(canonicalEventId, event.invitations);
+    if (claimStart.status === "not-acquired") {
         return {
-            status: "preflight-failed",
-            message: "Event deletion could not be verified safely.",
+            status: "failed",
+            message: "Event deletion is already in progress or the event is unavailable.",
         };
     }
-    if (!eligibility.eligibility.allowed) {
+    if (claimStart.status === "preflight-failed") {
+        console.error("Event deletion eligibility lookup failed:", claimStart.error);
+        if (!claimStart.released) {
+            return {
+                status: "failed",
+                message: "Event deletion could not be verified safely; the deletion claim was retained.",
+            };
+        }
+        return { status: "preflight-failed", message: "Event deletion could not be verified safely." };
+    }
+    if (claimStart.status === "participation-blocked") {
+        if (!claimStart.released) {
+            return {
+                status: "failed",
+                message: `${eventDeletionBlockedMessage} The deletion claim was retained.`,
+            };
+        }
         return { status: "blocked", message: eventDeletionBlockedMessage };
     }
+    const deletionClaimToken = claimStart.token;
 
     let prepared;
     try {
         prepared = await prepareEventDeletionCleanup(event);
     } catch (error) {
         console.error("Event deletion ownership validation failed:", error);
+        const released = await releaseEventDeletionClaim(canonicalEventId, deletionClaimToken);
+        if (!released) {
+            return {
+                status: "failed",
+                message:
+                    "Event deletion could not be verified safely; the deletion claim was retained and operator reconciliation may be required.",
+            };
+        }
         return {
             status: "preflight-failed",
             message: "Event deletion could not continue because linked comments or media could not be verified safely.",
@@ -632,7 +669,7 @@ const deleteAuthorizedEvent = async (
 
     const lifecycle = await orchestrateEventDestructiveLifecycle({
         cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
-        mutateSource: () => deleteEventDb(canonicalEventId),
+        mutateSource: () => deleteEventDb(canonicalEventId, deletionClaimToken),
         afterSourceMutation: () => executePreparedEventDeletionCleanup(prepared),
         revalidate: () => {
             revalidateEventHostPaths(hostCircles, canonicalEventId);
@@ -640,6 +677,14 @@ const deleteAuthorizedEvent = async (
         },
     });
     if (lifecycle.status === "noticeboard-unavailable") {
+        const released = await releaseEventDeletionClaim(canonicalEventId, deletionClaimToken);
+        if (!released) {
+            return {
+                status: "failed",
+                message:
+                    "Event deletion could not be verified safely; the deletion claim was retained and operator reconciliation may be required.",
+            };
+        }
         return { status: "preflight-failed", message: eventDestructiveLifecycleFailureMessage(lifecycle) };
     }
     if (lifecycle.status === "partial-success") {
@@ -665,9 +710,62 @@ const deleteAuthorizedEvent = async (
         } else if (lifecycle.status === "post-cleanup-operation-failed") {
             console.error("Event delete operation failed after Noticeboard cleanup:", lifecycle.error);
         }
-        return { status: "failed", message: eventDestructiveLifecycleFailureMessage(lifecycle) };
+        if (
+            lifecycle.status === "post-cleanup-operation-failed" &&
+            lifecycle.phase === "source" &&
+            !lifecycle.sourceMutationCompleted
+        ) {
+            const postFailureEligibility = await evaluateEventDeletionEligibilityForAction(
+                canonicalEventId,
+                event.invitations,
+            );
+            const failureKind = claimFailureKindAfterEligibility(
+                postFailureEligibility.status === "evaluated" ? postFailureEligibility.eligibility : undefined,
+            );
+            if (shouldReleaseEventDeletionClaim(failureKind)) {
+                const released = await releaseEventDeletionClaim(canonicalEventId, deletionClaimToken);
+                if (released) {
+                    return {
+                        status: failureKind === "participation-blocked" ? "blocked" : "failed",
+                        message:
+                            failureKind === "participation-blocked"
+                                ? eventDeletionBlockedMessage
+                                : eventDestructiveLifecycleFailureMessage(lifecycle),
+                    };
+                }
+            }
+        }
+        return {
+            status: "failed",
+            message: `${eventDestructiveLifecycleFailureMessage(lifecycle)} The deletion claim was retained; operator reconciliation may be required.`,
+        };
     }
     return { status: "success", message: "Event deleted successfully" };
+};
+
+const eventRsvpMutationFailureMessage = (
+    status: Exclude<UpsertRsvpResult["status"] | CancelRsvpResult["status"], "success">,
+): string => {
+    if (status === "temporarily-busy") return "Another event participation update is in progress. Please try again.";
+    if (status === "deletion-in-progress") return "This event is being deleted.";
+    if (status === "not-found") return "No active RSVP was found.";
+    if (status === "event-unavailable") return "Event not found or unavailable.";
+    if (status === "release-failed") {
+        return "The RSVP was saved, but the event participation lock could not be released. Operator reconciliation is required.";
+    }
+    return "The RSVP may have been saved, but its outcome could not be confirmed. Operator reconciliation is required.";
+};
+
+const eventOccurrenceRsvpFailureMessage = (status: Exclude<EventOccurrenceRsvpResult["status"], "success">): string => {
+    if (status === "temporarily-busy") return "Another event participation update is in progress. Please try again.";
+    if (status === "deletion-in-progress") return "This event is being deleted.";
+    if (status === "event-unavailable") return "Event not found or unavailable.";
+    if (status === "occurrence-unavailable") return "This occurrence is no longer available.";
+    if (status === "occurrence-cancelled") return "This occurrence is cancelled.";
+    if (status === "release-failed") {
+        return "The occurrence RSVP was saved, but the event participation lock could not be released. Operator reconciliation is required.";
+    }
+    return "The occurrence RSVP may have been saved, but its outcome could not be confirmed. Operator reconciliation is required.";
 };
 
 // ----- Actions -----
@@ -1630,8 +1728,10 @@ export async function rsvpEventOccurrenceAction(
         const target = await resolveEventOccurrenceRsvpTarget(circleHandle, seriesId, occurrenceKey, userDid);
         if (!target.success) return target;
 
-        const ok = await upsertEventOccurrenceRsvp(seriesId, occurrenceKey, userDid, status);
-        if (!ok) return { success: false, message: "Failed to RSVP" };
+        const result = await upsertEventOccurrenceRsvp(seriesId, occurrenceKey, userDid, status);
+        if (result.status !== "success") {
+            return { success: false, message: eventOccurrenceRsvpFailureMessage(result.status) };
+        }
 
         const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(target.event));
         revalidateEventHostPaths(hostCircles, target.occurrenceId);
@@ -1655,8 +1755,10 @@ export async function cancelEventOccurrenceRsvpAction(
         if (!target.success) return target;
 
         // "none" is an explicit tombstone so a legacy series RSVP does not reappear as a fallback.
-        const ok = await upsertEventOccurrenceRsvp(seriesId, occurrenceKey, userDid, "none");
-        if (!ok) return { success: false, message: "Failed to cancel RSVP" };
+        const result = await upsertEventOccurrenceRsvp(seriesId, occurrenceKey, userDid, "none");
+        if (result.status !== "success") {
+            return { success: false, message: eventOccurrenceRsvpFailureMessage(result.status) };
+        }
 
         const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(target.event));
         revalidateEventHostPaths(hostCircles, target.occurrenceId);
@@ -1693,8 +1795,10 @@ export async function rsvpEventAction(
             return { success: false, message: "Event not found" };
         }
 
-        const ok = await upsertRsvp(eventId, circle._id!.toString(), userDid, status);
-        if (!ok) return { success: false, message: "Failed to RSVP" };
+        const result = await upsertRsvp(eventId, circle._id!.toString(), userDid, status);
+        if (result.status !== "success") {
+            return { success: false, message: eventRsvpMutationFailureMessage(result.status) };
+        }
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
@@ -1727,8 +1831,10 @@ export async function cancelRsvpAction(
             return { success: false, message: "Event not found" };
         }
 
-        const ok = await cancelRsvp(eventId, userDid);
-        if (!ok) return { success: false, message: "Failed to cancel RSVP" };
+        const result = await cancelRsvp(eventId, userDid);
+        if (result.status !== "success") {
+            return { success: false, message: eventRsvpMutationFailureMessage(result.status) };
+        }
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
@@ -2363,7 +2469,7 @@ export async function rsvpEventWithOptionsAction(
             return { success: false, message: "Event not found" };
         }
 
-        const ok = await upsertRsvp(
+        const result = await upsertRsvp(
             eventId,
             circle._id!.toString(),
             userDid,
@@ -2372,7 +2478,9 @@ export async function rsvpEventWithOptionsAction(
             options?.isPublic,
             options?.message,
         );
-        if (!ok) return { success: false, message: "Failed to RSVP" };
+        if (result.status !== "success") {
+            return { success: false, message: eventRsvpMutationFailureMessage(result.status) };
+        }
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);

@@ -46,6 +46,7 @@ import {
     type EventReaderHostPolicyDependencies,
 } from "./event-host-read-policy";
 import { evaluateEventDeletionEligibility } from "./event-deletion-policy";
+import { deleteEventRecordWithClaim } from "./event-deletion-claim";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -1107,15 +1108,18 @@ export const updateEvent = async (eventId: string, updates: Partial<Event>, invi
 /**
  * Delete an event and (optionally) its RSVPs.
  */
-export const deleteEvent = async (requestedEventId: string): Promise<boolean> => {
+export const deleteEvent = async (requestedEventId: string, deletionClaimToken: string): Promise<boolean> => {
     try {
-        if (!ObjectId.isValid(requestedEventId)) {
+        if (!ObjectId.isValid(requestedEventId) || !deletionClaimToken) {
             console.error("Invalid eventId provided for delete:", requestedEventId);
             return false;
         }
 
         const eventId = new ObjectId(requestedEventId).toHexString();
-        const event = await Events.findOne({ _id: new ObjectId(eventId) }, { projection: { invitations: 1 } });
+        const event = await Events.findOne(
+            { _id: new ObjectId(eventId), "deletionClaim.token": deletionClaimToken },
+            { projection: { invitations: 1 } },
+        );
         if (!event) return false;
         const eligibility = await evaluateEventDeletionEligibility(eventId, event.invitations);
         if (!eligibility.allowed) return false;
@@ -1130,10 +1134,10 @@ export const deleteEvent = async (requestedEventId: string): Promise<boolean> =>
                 await EventOccurrenceRsvps.deleteMany({ seriesId: eventId });
                 await EventOccurrenceInvitations.deleteMany({ seriesId: eventId });
             },
-            mutate: () => Events.deleteOne({ _id: new ObjectId(eventId) }),
-            didMutate: (deleteResult) => deleteResult.deletedCount > 0,
+            mutate: () => deleteEventRecordWithClaim(eventId, deletionClaimToken),
+            didMutate: (deleted) => deleted,
         });
-        return result.deletedCount > 0;
+        return result;
     } catch (error) {
         console.error(`Error deleting event (${requestedEventId}):`, error);
         return false;

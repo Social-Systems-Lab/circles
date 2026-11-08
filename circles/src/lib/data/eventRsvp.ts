@@ -2,6 +2,52 @@ import { EventRsvps, Circles } from "./db";
 import { ObjectId } from "mongodb";
 import { EventRsvp, Circle } from "@/models/models";
 import { SAFE_CIRCLE_PROJECTION } from "./circle";
+import {
+    acquireEventParticipationLock,
+    releaseEventParticipationLock,
+    type AcquireEventParticipationLockResult,
+    type EventParticipationLockStore,
+    type ReleaseEventParticipationLockResult,
+} from "./event-participation-lock";
+
+type RsvpWriteResult = { acknowledged: boolean; deletedCount?: number };
+
+export type EventRsvpMutationDependencies = {
+    lockStore?: EventParticipationLockStore;
+    lockToken?: string;
+    writeRsvp?: (filter: Record<string, unknown>, update: Record<string, unknown>) => Promise<RsvpWriteResult>;
+    deleteRsvp?: (filter: Record<string, unknown>) => Promise<RsvpWriteResult>;
+};
+
+type EventRsvpLockFailure =
+    | { status: "temporarily-busy" }
+    | { status: "deletion-in-progress" }
+    | { status: "event-unavailable" }
+    | { status: "mutation-uncertain"; error?: unknown }
+    | { status: "release-failed"; error?: unknown };
+
+export type UpsertRsvpResult = { status: "success" } | EventRsvpLockFailure;
+export type CancelRsvpResult = { status: "success" } | { status: "not-found" } | EventRsvpLockFailure;
+
+const mapAcquireFailure = (
+    result: Exclude<AcquireEventParticipationLockResult, { status: "acquired" }>,
+): EventRsvpLockFailure => {
+    if (result.status === "participation-busy") return { status: "temporarily-busy" };
+    if (result.status === "deletion-in-progress") return { status: "deletion-in-progress" };
+    return { status: "event-unavailable" };
+};
+
+const releaseLock = async (
+    eventId: string,
+    token: string,
+    store: EventParticipationLockStore | undefined,
+): Promise<ReleaseEventParticipationLockResult> => {
+    try {
+        return await releaseEventParticipationLock(eventId, token, store);
+    } catch (error) {
+        return { status: "release-failed" };
+    }
+};
 
 /**
  * Get a user's RSVP for an event.
@@ -30,43 +76,79 @@ export const upsertRsvp = async (
     selectedRoles?: string[],
     isPublic?: boolean,
     message?: string,
-): Promise<boolean> => {
+    dependencies: EventRsvpMutationDependencies = {},
+): Promise<UpsertRsvpResult> => {
+    if (!ObjectId.isValid(eventId)) return { status: "event-unavailable" };
+    const canonicalEventId = new ObjectId(eventId).toHexString();
+    const now = new Date();
+    const update: Record<string, unknown> = {
+        eventId: canonicalEventId,
+        circleId,
+        userDid,
+        status,
+        selectedRoles: selectedRoles || [],
+        isPublic: typeof isPublic === "boolean" ? isPublic : true,
+        message: message && message.trim().length > 0 ? message.trim() : undefined,
+        updatedAt: now,
+    };
+    const filter = { eventId: canonicalEventId, userDid };
+    const lock = await acquireEventParticipationLock(canonicalEventId, userDid, "event-rsvp-upsert", {
+        store: dependencies.lockStore,
+        token: dependencies.lockToken,
+    });
+    if (lock.status !== "acquired") return mapAcquireFailure(lock);
+
     try {
-        const now = new Date();
-        const update: any = {
-            eventId,
-            circleId,
-            userDid,
-            status,
-            selectedRoles: selectedRoles || [],
-            // default to true if not provided to preserve existing public behavior
-            isPublic: typeof isPublic === "boolean" ? isPublic : true,
-            message: message && message.trim().length > 0 ? message.trim() : undefined,
-            updatedAt: now,
-        };
-        const result = await EventRsvps.updateOne(
-            { eventId, userDid },
-            { $set: update, $setOnInsert: { createdAt: now } },
-            { upsert: true },
-        );
-        return result.acknowledged === true;
+        const result = await (dependencies.writeRsvp
+            ? dependencies.writeRsvp(filter, update)
+            : EventRsvps.updateOne(filter, { $set: update, $setOnInsert: { createdAt: now } }, { upsert: true }));
+        if (!result.acknowledged) return { status: "mutation-uncertain" };
     } catch (error) {
-        console.error("Error upserting RSVP:", error);
-        return false;
+        console.error("RSVP mutation outcome is uncertain:", error);
+        return { status: "mutation-uncertain", error };
     }
+
+    const released = await releaseLock(canonicalEventId, lock.token, dependencies.lockStore);
+    if (released.status !== "released") {
+        console.error("RSVP mutation succeeded but Event participation lock release failed:", released.status);
+        return { status: "release-failed" };
+    }
+    return { status: "success" };
 };
 
 /**
  * Cancel a user's RSVP (delete document).
  */
-export const cancelRsvp = async (eventId: string, userDid: string): Promise<boolean> => {
+export const cancelRsvp = async (
+    eventId: string,
+    userDid: string,
+    dependencies: EventRsvpMutationDependencies = {},
+): Promise<CancelRsvpResult> => {
+    if (!ObjectId.isValid(eventId)) return { status: "event-unavailable" };
+    const canonicalEventId = new ObjectId(eventId).toHexString();
+    const filter = { eventId: canonicalEventId, userDid };
+    const lock = await acquireEventParticipationLock(canonicalEventId, userDid, "event-rsvp-cancel", {
+        store: dependencies.lockStore,
+        token: dependencies.lockToken,
+    });
+    if (lock.status !== "acquired") return mapAcquireFailure(lock);
+
+    let deletedCount: number;
     try {
-        const result = await EventRsvps.deleteOne({ eventId, userDid });
-        return result.deletedCount > 0;
+        const result = await (dependencies.deleteRsvp ? dependencies.deleteRsvp(filter) : EventRsvps.deleteOne(filter));
+        if (!result.acknowledged) return { status: "mutation-uncertain" };
+        deletedCount = result.deletedCount ?? 0;
     } catch (error) {
-        console.error("Error cancelling RSVP:", error);
-        return false;
+        console.error("RSVP cancellation outcome is uncertain:", error);
+        return { status: "mutation-uncertain", error };
     }
+
+    const released = await releaseLock(canonicalEventId, lock.token, dependencies.lockStore);
+    if (released.status !== "released") {
+        console.error("RSVP cancellation succeeded but Event participation lock release failed:", released.status);
+        return { status: "release-failed" };
+    }
+    return deletedCount > 0 ? { status: "success" } : { status: "not-found" };
 };
 
 /**

@@ -1840,6 +1840,21 @@ export const eventSchema = z.object({
     noticeboardPostId: z.string().optional(), // Optional link to a promoted noticeboard post
     noticeboardPostIdsByCircleId: z.record(z.string(), z.string()).optional(), // Linked noticeboard posts by host circle
     images: z.array(mediaSchema).optional(), // Optional images/media attached to the event
+    deletionClaim: z
+        .object({
+            token: z.string().min(1),
+            claimedAt: z.date(),
+        })
+        .optional(),
+    // Phase 1 foundation only. Participation writers must use the shared lock before this is deployment-safe.
+    participationMutationLock: z
+        .object({
+            token: z.string().min(1),
+            acquiredAt: z.date(),
+            actorDid: didSchema,
+            operation: z.string().min(1),
+        })
+        .optional(),
     // Format
     isVirtual: z.boolean().optional(),
     virtualUrl: z.string().url().optional(),
