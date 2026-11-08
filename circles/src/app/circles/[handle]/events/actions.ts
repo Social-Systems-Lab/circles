@@ -112,6 +112,12 @@ import {
     type EventDestructiveLifecycleResult,
 } from "@/lib/data/event-destructive-lifecycle-orchestration";
 import {
+    evaluateEventDeletionEligibilityForAction,
+    eventDeletionBlockedMessage,
+    shouldRunOrdinaryEventCancellation,
+} from "@/lib/data/event-deletion-policy";
+import { executePreparedEventDeletionCleanup, prepareEventDeletionCleanup } from "@/lib/data/event-deletion-cleanup";
+import {
     EVENT_NOTICEBOARD_UNAVAILABLE_MESSAGE,
     hasStoredEventNoticeboardReferences,
     shouldOrchestrateEventNoticeboardUpdate,
@@ -585,6 +591,83 @@ const eventDestructiveLifecycleFailureMessage = (result: EventDestructiveLifecyc
         }
     }
     return "Event operation did not complete.";
+};
+
+type EventDeletionAttempt =
+    | { status: "success" | "deleted-cleanup-incomplete"; message: string }
+    | { status: "blocked" | "preflight-failed" | "failed"; message: string };
+
+const deleteAuthorizedEvent = async (
+    event: EventDisplay,
+    routeEventId: string,
+    hostCircles: Circle[],
+): Promise<EventDeletionAttempt> => {
+    const canonicalEventId = event._id?.toString();
+    if (!canonicalEventId || !ObjectId.isValid(canonicalEventId)) {
+        return { status: "failed", message: "Event not found" };
+    }
+
+    const eligibility = await evaluateEventDeletionEligibilityForAction(canonicalEventId, event.invitations);
+    if (eligibility.status === "preflight-failed") {
+        console.error("Event deletion eligibility lookup failed:", eligibility.error);
+        return {
+            status: "preflight-failed",
+            message: "Event deletion could not be verified safely.",
+        };
+    }
+    if (!eligibility.eligibility.allowed) {
+        return { status: "blocked", message: eventDeletionBlockedMessage };
+    }
+
+    let prepared;
+    try {
+        prepared = await prepareEventDeletionCleanup(event);
+    } catch (error) {
+        console.error("Event deletion ownership validation failed:", error);
+        return {
+            status: "preflight-failed",
+            message: "Event deletion could not continue because linked comments or media could not be verified safely.",
+        };
+    }
+
+    const lifecycle = await orchestrateEventDestructiveLifecycle({
+        cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
+        mutateSource: () => deleteEventDb(canonicalEventId),
+        afterSourceMutation: () => executePreparedEventDeletionCleanup(prepared),
+        revalidate: () => {
+            revalidateEventHostPaths(hostCircles, canonicalEventId);
+            if (routeEventId !== canonicalEventId) revalidateEventHostPaths(hostCircles, routeEventId);
+        },
+    });
+    if (lifecycle.status === "noticeboard-unavailable") {
+        return { status: "preflight-failed", message: eventDestructiveLifecycleFailureMessage(lifecycle) };
+    }
+    if (lifecycle.status === "partial-success") {
+        console.error("Event deleted but post-source cleanup failed:", lifecycle.error);
+        return {
+            status: "deleted-cleanup-incomplete",
+            message: "Event deleted, but linked comments or media could not be fully cleaned up.",
+        };
+    }
+    if (
+        lifecycle.status === "post-cleanup-operation-failed" &&
+        lifecycle.sourceMutationCompleted &&
+        lifecycle.phase === "revalidate"
+    ) {
+        return {
+            status: "deleted-cleanup-incomplete",
+            message: "Event deleted, but the event pages could not be fully refreshed.",
+        };
+    }
+    if (lifecycle.status !== "success") {
+        if (lifecycle.status === "noticeboard-cleanup-failed") {
+            console.error("Event delete Noticeboard cleanup failed:", lifecycle.cleanup.error);
+        } else if (lifecycle.status === "post-cleanup-operation-failed") {
+            console.error("Event delete operation failed after Noticeboard cleanup:", lifecycle.error);
+        }
+        return { status: "failed", message: eventDestructiveLifecycleFailureMessage(lifecycle) };
+    }
+    return { status: "success", message: "Event deleted successfully" };
 };
 
 // ----- Actions -----
@@ -1063,6 +1146,14 @@ export async function updateEventAction(
         } catch {
             return { success: false, message: "Failed to process existing image data." };
         }
+        const existingImageUrls = new Set(existingImages.map((image) => image.fileInfo.url));
+        if (
+            parsedExistingMedia.some(
+                (media) => typeof media?.fileInfo?.url !== "string" || !existingImageUrls.has(media.fileInfo.url),
+            )
+        ) {
+            return { success: false, message: "One or more existing event images could not be verified." };
+        }
 
         const remainingExistingUrls = new Set(parsedExistingMedia.map((m) => m?.fileInfo?.url));
         const toDelete = existingImages.filter((img) => !remainingExistingUrls.has(img.fileInfo.url));
@@ -1279,7 +1370,7 @@ export async function updateEventAction(
 export async function deleteEventAction(
     circleHandle: string,
     eventId: string,
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string; cleanupComplete?: boolean }> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
@@ -1298,34 +1389,11 @@ export async function deleteEventAction(
             return { success: false, message: "Not authorized to delete this event" };
         }
 
-        const lifecycle = await orchestrateEventDestructiveLifecycle({
-            cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
-            prepare: async () => {
-                if (event.images?.length) {
-                    const results = await Promise.allSettled(
-                        event.images.map((img) =>
-                            deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: event.circleId }),
-                        ),
-                    );
-                    const rejected = results.find(
-                        (result): result is PromiseRejectedResult => result.status === "rejected",
-                    );
-                    if (rejected) throw rejected.reason;
-                }
-            },
-            mutateSource: () => deleteEventDb(eventId),
-            revalidate: async () =>
-                revalidateEventHostPaths(await getHostCirclesByIds(normalizeEventHostCircleIds(event)), eventId),
-        });
-        if (lifecycle.status !== "success") {
-            if (lifecycle.status === "noticeboard-cleanup-failed") {
-                console.error("Event delete Noticeboard cleanup failed:", lifecycle.cleanup.error);
-            } else if (lifecycle.status === "post-cleanup-operation-failed") {
-                console.error("Event delete operation failed after Noticeboard cleanup:", lifecycle.error);
-            }
-            return { success: false, message: eventDestructiveLifecycleFailureMessage(lifecycle) };
-        }
-        return { success: true, message: "Event deleted successfully" };
+        const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(event));
+        const result = await deleteAuthorizedEvent(event, eventId, hostCircles);
+        return result.status === "success" || result.status === "deleted-cleanup-incomplete"
+            ? { success: true, message: result.message, cleanupComplete: result.status === "success" }
+            : { success: false, message: result.message };
     } catch (error) {
         console.error("Error deleting event:", error);
         return { success: false, message: "Failed to delete event" };
@@ -1445,27 +1513,18 @@ export async function changeEventStageAction(
 
         let success = false;
         if (currentStage === "open" && newStage === "cancelled") {
-            const activeRsvpCount = await EventRsvps.countDocuments({
-                eventId,
-                status: { $in: ["going", "interested", "waitlist"] },
-            });
-
-            if (activeRsvpCount === 0) {
-                const lifecycle = await orchestrateEventDestructiveLifecycle({
-                    cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
-                    mutateSource: () => deleteEventDb(eventId),
-                    revalidate: () => revalidateEventHostPaths(hostCircles, eventId),
-                });
-                if (lifecycle.status !== "success") {
-                    if (lifecycle.status === "noticeboard-cleanup-failed") {
-                        console.error("Event withdrawal Noticeboard cleanup failed:", lifecycle.cleanup.error);
-                    } else if (lifecycle.status === "post-cleanup-operation-failed") {
-                        console.error("Event withdrawal failed after Noticeboard cleanup:", lifecycle.error);
-                    }
-                    return { success: false, message: eventDestructiveLifecycleFailureMessage(lifecycle) };
-                }
-                return { success: true, message: "Event withdrawn" };
+            const deletion = await deleteAuthorizedEvent(event, eventId, hostCircles);
+            if (deletion.status === "success") return { success: true, message: "Event withdrawn" };
+            if (deletion.status === "deleted-cleanup-incomplete") {
+                return { success: true, message: deletion.message };
             }
+            if (shouldRunOrdinaryEventCancellation(deletion.status)) {
+                console.warn(
+                    "Skipping destructive event withdrawal cleanup; continuing with cancellation:",
+                    deletion.message,
+                );
+            }
+            if (deletion.status === "failed") return { success: false, message: deletion.message };
         }
 
         let lifecycleRevalidated = false;

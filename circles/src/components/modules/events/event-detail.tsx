@@ -15,6 +15,7 @@ import {
     cancelEventOccurrenceRsvpAction,
     hideCancelledEventAction,
     unhideCancelledEventAction,
+    deleteEventAction,
 } from "@/app/circles/[handle]/events/actions";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -113,6 +114,7 @@ export default function EventDetail({
     const [isOccurrenceInviteModalOpen, setOccurrenceInviteModalOpen] = useState(false);
     const [isRsvpDialogOpen, setRsvpDialogOpen] = useState(false);
     const [isCancelOccurrenceOpen, setCancelOccurrenceOpen] = useState(false);
+    const [isDeleteEventOpen, setDeleteEventOpen] = useState(false);
     const compact = !!isPreview;
     const [hideUpdating, setHideUpdating] = useState(false);
     const eventId = ((event as any)._id?.toString?.() || (event as any)._id || "") as string;
@@ -370,6 +372,30 @@ export default function EventDetail({
             } else {
                 toast({
                     title: "Unable to cancel occurrence",
+                    description: res.message || "Please try again.",
+                    variant: "destructive",
+                });
+            }
+        });
+    };
+
+    const onDeleteEvent = () => {
+        if (!eventId) return;
+        startTransition(async () => {
+            const res = await deleteEventAction(circleHandle, eventId);
+            if (res.success) {
+                const cleanupIncomplete = res.cleanupComplete === false;
+                setDeleteEventOpen(false);
+                toast({
+                    title: cleanupIncomplete ? "Event deleted with cleanup warning" : res.message || "Event deleted",
+                    description: cleanupIncomplete ? res.message : undefined,
+                    variant: cleanupIncomplete ? "destructive" : undefined,
+                });
+                router.push(`/circles/${circleHandle}/events`);
+                router.refresh();
+            } else {
+                toast({
+                    title: "Unable to delete event",
                     description: res.message || "Please try again.",
                     variant: "destructive",
                 });
@@ -726,6 +752,11 @@ export default function EventDetail({
                             {event.recurrence ? "Cancel series" : "Cancel event"}
                         </Button>
                     )}
+                    {canEdit && (
+                        <Button disabled={isPending} variant="destructive" onClick={() => setDeleteEventOpen(true)}>
+                            {event.recurrence ? "Delete series" : "Delete event"}
+                        </Button>
+                    )}
                     {(isSeriesCancelled || isEventHidden) && (
                         <Button variant="outline" disabled={hideUpdating} onClick={onToggleHidden}>
                             {hideUpdating ? "Updating…" : isEventHidden ? "Show again" : "Hide"}
@@ -899,6 +930,31 @@ export default function EventDetail({
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             {isPending ? "Cancelling…" : "Cancel occurrence"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={isDeleteEventOpen} onOpenChange={setDeleteEventOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {event.recurrence ? "Delete this event series?" : "Delete this event?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This permanently deletes the event
+                            {event.recurrence ? " series and all of its occurrences" : ""}, including linked
+                            discussions, noticeboard posts, and comments. Public images are retained for separate
+                            cleanup. Events with RSVPs, invitations, or recurring participation cannot be deleted.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isPending}>Keep event</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={isPending}
+                            onClick={onDeleteEvent}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isPending ? "Deleting…" : event.recurrence ? "Delete series" : "Delete event"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

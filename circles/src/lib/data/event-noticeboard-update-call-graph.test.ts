@@ -59,7 +59,11 @@ for (const [name, marker] of [
     assert.ok(marker >= 0, `${name} marker exists`);
 }
 assert.ok(
-    resolverTry < resolver && resolver < resolverGate && resolverGate < targetSelection && targetSelection < resolverCatch && resolverCatch < deletion,
+    resolverTry < resolver &&
+        resolver < resolverGate &&
+        resolverGate < targetSelection &&
+        targetSelection < resolverCatch &&
+        resolverCatch < deletion,
     "resolver and complete target setup are caught before deletion",
 );
 assert.equal(cleanupSeam.includes("noticeboardPostId)" + ";\n            await deleteValidatedPost"), false);
@@ -71,18 +75,15 @@ const mediaThrow = updateSeam.indexOf("throw rejected.reason", mediaRejected);
 for (const marker of [mediaHelper, mediaSettled, mediaRejected, mediaThrow]) assert.ok(marker >= 0);
 assert.ok(mediaHelper < mediaSettled && mediaSettled < mediaRejected && mediaRejected < mediaThrow);
 assert.ok(
-    update.includes("deleteEventMediaWithFailurePropagation(") && update.includes("deleteOldMedia: deleteOldEventMedia"),
+    update.includes("deleteEventMediaWithFailurePropagation(") &&
+        update.includes("deleteOldMedia: deleteOldEventMedia"),
     "production update path passes the fail-propagating media helper into orchestration",
 );
 
 const updateCleanup = updateSeam.indexOf("orchestrateEventNoticeboardCleanup({");
 const updateMedia = updateSeam.indexOf("await uploadMedia()", updateCleanup);
-for (const marker of [updateCleanup, updateMedia])
-    assert.ok(marker >= 0, "update ordering marker exists");
-assert.ok(
-    updateCleanup < updateMedia,
-    "preflight and cleanup precede update effects",
-);
+for (const marker of [updateCleanup, updateMedia]) assert.ok(marker >= 0, "update ordering marker exists");
+assert.ok(updateCleanup < updateMedia, "preflight and cleanup precede update effects");
 
 const lifecycleCleanup = lifecycleSeam.indexOf("await cleanupNoticeboards()");
 const lifecycleCleanupGate = lifecycleSeam.indexOf('cleanup.status === "partial-cleanup-failed"');
@@ -90,7 +91,14 @@ const lifecyclePrepare = lifecycleSeam.indexOf("await prepare()");
 const lifecycleSource = lifecycleSeam.indexOf("await mutateSource(prepared)");
 const lifecycleSourcePossible = lifecycleSeam.indexOf("sourceMutationPossible: true", lifecycleSource);
 const lifecycleBacklinks = lifecycleSeam.indexOf("await clearBacklinks()");
-for (const marker of [lifecycleCleanup, lifecycleCleanupGate, lifecyclePrepare, lifecycleSource, lifecycleSourcePossible, lifecycleBacklinks]) {
+for (const marker of [
+    lifecycleCleanup,
+    lifecycleCleanupGate,
+    lifecyclePrepare,
+    lifecycleSource,
+    lifecycleSourcePossible,
+    lifecycleBacklinks,
+]) {
     assert.ok(marker >= 0, "destructive lifecycle marker exists");
 }
 assert.ok(
@@ -103,44 +111,25 @@ assert.ok(
 assert.ok(lifecycleSource < lifecycleSourcePossible, "a throwing invoked source is represented as possibly mutated");
 assert.ok(actions.includes("if (result.sourceMutationPossible)"), "action wording uses source mutation possibility");
 
-const directDelete = section(
-    "export async function deleteEventAction",
-    "export async function cancelEventOccurrenceAction",
-);
+const directDelete = section("const deleteAuthorizedEvent", "export async function deleteEventAction");
 const directCleanup = directDelete.indexOf("cleanupEventNoticeboardPosts(event)");
-const imageDelete = directDelete.indexOf("deleteCircleOwnedMedia(");
-const sourceDelete = directDelete.indexOf("deleteEventDb(eventId)");
+const linkedResourceCleanup = directDelete.indexOf("executePreparedEventDeletionCleanup(prepared)");
+const sourceDelete = directDelete.indexOf("deleteEventDb(canonicalEventId)");
 const directLifecycle = directDelete.indexOf("orchestrateEventDestructiveLifecycle({");
-for (const marker of [directLifecycle, directCleanup, imageDelete, sourceDelete]) assert.ok(marker >= 0);
-assert.ok(directLifecycle < directCleanup && directCleanup < imageDelete && imageDelete < sourceDelete);
+for (const marker of [directLifecycle, directCleanup, linkedResourceCleanup, sourceDelete]) assert.ok(marker >= 0);
+assert.ok(directLifecycle < directCleanup && directCleanup < sourceDelete && sourceDelete < linkedResourceCleanup);
 
-const stage = section(
-    "export async function changeEventStageAction",
-    "export async function rsvpEventOccurrenceAction",
-);
-const zeroRsvp = stage.indexOf("activeRsvpCount === 0");
-const withdrawalCleanup = stage.indexOf("cleanupEventNoticeboardPosts(event)", zeroRsvp);
-const withdrawalDelete = stage.indexOf("deleteEventDb(eventId)", withdrawalCleanup);
+const stage = section("export async function changeEventStageAction", "/**\n * RSVP - going / interested / waitlist");
+const withdrawalGate = stage.indexOf('currentStage === "open" && newStage === "cancelled"');
+const sharedWithdrawal = stage.indexOf("deleteAuthorizedEvent(", withdrawalGate);
 const draftGate = stage.indexOf('if (newStage === "draft")');
 const draftCleanup = stage.indexOf("cleanupEventNoticeboardPosts(event)", draftGate);
 const stageMutation = stage.indexOf("changeEventStageDb(eventId, newStage)", draftCleanup);
-const withdrawalLifecycle = stage.lastIndexOf("orchestrateEventDestructiveLifecycle({", withdrawalCleanup);
 const draftLifecycle = stage.lastIndexOf("orchestrateEventDestructiveLifecycle({", draftCleanup);
-for (const marker of [
-    zeroRsvp,
-    withdrawalLifecycle,
-    withdrawalCleanup,
-    withdrawalDelete,
-    draftGate,
-    draftLifecycle,
-    draftCleanup,
-    stageMutation,
-]) {
+for (const marker of [withdrawalGate, sharedWithdrawal, draftGate, draftLifecycle, draftCleanup, stageMutation]) {
     assert.ok(marker >= 0, "stage lifecycle marker exists");
 }
-assert.ok(
-    zeroRsvp < withdrawalLifecycle && withdrawalLifecycle < withdrawalCleanup && withdrawalCleanup < withdrawalDelete,
-);
+assert.ok(withdrawalGate < sharedWithdrawal, "open-to-cancelled uses the shared safe deletion path");
 assert.ok(draftGate < draftLifecycle && draftLifecycle < draftCleanup && draftCleanup < stageMutation);
 
 assert.equal(actions.includes("removeEventNoticeboardPosts"), false, "raw-ID cleanup helper is removed");

@@ -27,9 +27,11 @@ const harness = ({
     sourceThrows = false,
     sourceMutatesBeforeThrow = false,
     sourceSucceeds = true,
+    afterSourceThrows = false,
     backlinksThrow = false,
     revalidateThrows = false,
     withPrepare = false,
+    withAfterSource = false,
     withBacklinks = false,
 }: {
     corrupt?: boolean;
@@ -39,9 +41,11 @@ const harness = ({
     sourceThrows?: boolean;
     sourceMutatesBeforeThrow?: boolean;
     sourceSucceeds?: boolean;
+    afterSourceThrows?: boolean;
     backlinksThrow?: boolean;
     revalidateThrows?: boolean;
     withPrepare?: boolean;
+    withAfterSource?: boolean;
     withBacklinks?: boolean;
 } = {}) => {
     const effects: string[] = [];
@@ -82,6 +86,12 @@ const harness = ({
             if (sourceThrows) throw new Error("source failed");
             return sourceSucceeds;
         },
+        afterSourceMutation: withAfterSource
+            ? async () => {
+                  effects.push("after-source");
+                  if (afterSourceThrows) throw new Error("post-source cleanup failed");
+              }
+            : undefined,
         clearBacklinks: withBacklinks
             ? async () => {
                   effects.push("backlinks");
@@ -100,6 +110,20 @@ async function main() {
     let run = harness({ withPrepare: true, withBacklinks: true });
     assert.equal((await run.result).status, "success", "draft lifecycle succeeds");
     assert.deepEqual(run.effects.slice(-4), ["prepare", "source", "backlinks", "revalidate"]);
+
+    run = harness({ withPrepare: true, withAfterSource: true, withBacklinks: true });
+    assert.equal((await run.result).status, "success", "post-source cleanup lifecycle succeeds");
+    assert.deepEqual(run.effects.slice(-5), ["prepare", "source", "after-source", "backlinks", "revalidate"]);
+
+    run = harness({ withAfterSource: true, afterSourceThrows: true });
+    const partialSuccess = await run.result;
+    assert.equal(partialSuccess.status, "partial-success", "post-source cleanup failure is partial success");
+    if (partialSuccess.status === "partial-success") {
+        assert.equal(partialSuccess.phase, "post-source-cleanup");
+        assert.equal(partialSuccess.sourceMutationCompleted, true);
+    }
+    assert.deepEqual(run.effects.slice(-2), ["source", "after-source"]);
+    assert.equal(run.effects.includes("revalidate"), false);
 
     run = harness({ corrupt: true, withPrepare: true, withBacklinks: true });
     assert.equal((await run.result).status, "noticeboard-unavailable", "corrupt draft fails before effects");

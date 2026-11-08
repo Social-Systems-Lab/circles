@@ -2,7 +2,6 @@ import {
     Circles,
     Events,
     EventRsvps,
-    Posts,
     EventInvitations,
     EventOccurrences,
     EventOccurrenceRsvps,
@@ -46,6 +45,7 @@ import {
     GLOBAL_EVENT_READ_BATCH_SIZE,
     type EventReaderHostPolicyDependencies,
 } from "./event-host-read-policy";
+import { evaluateEventDeletionEligibility } from "./event-deletion-policy";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -1107,15 +1107,18 @@ export const updateEvent = async (eventId: string, updates: Partial<Event>, invi
 /**
  * Delete an event and (optionally) its RSVPs.
  */
-export const deleteEvent = async (eventId: string): Promise<boolean> => {
+export const deleteEvent = async (requestedEventId: string): Promise<boolean> => {
     try {
-        if (!ObjectId.isValid(eventId)) {
-            console.error("Invalid eventId provided for delete:", eventId);
+        if (!ObjectId.isValid(requestedEventId)) {
+            console.error("Invalid eventId provided for delete:", requestedEventId);
             return false;
         }
 
-        // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
-        // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });
+        const eventId = new ObjectId(requestedEventId).toHexString();
+        const event = await Events.findOne({ _id: new ObjectId(eventId) }, { projection: { invitations: 1 } });
+        if (!event) return false;
+        const eligibility = await evaluateEventDeletionEligibility(eventId, event.invitations);
+        if (!eligibility.allowed) return false;
 
         const result = await runDerivedResourceVectorSafeMutation({
             kind: "events",
@@ -1132,7 +1135,7 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
         });
         return result.deletedCount > 0;
     } catch (error) {
-        console.error(`Error deleting event (${eventId}):`, error);
+        console.error(`Error deleting event (${requestedEventId}):`, error);
         return false;
     }
 };
