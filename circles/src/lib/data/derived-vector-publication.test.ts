@@ -553,6 +553,33 @@ async function testProductionMutationAndCircleDeletionSeams() {
     );
     assert.deepEqual(failedEventCalls, ["delete", "verify"]);
 
+    const disabledVectorCalls: string[] = [];
+    const disabledVectorResult = await runDerivedResourceVectorSafeMutation(
+        {
+            kind: "events",
+            resourceId,
+            mutate: async () => {
+                disabledVectorCalls.push("mongo-delete");
+                return { deletedCount: 1 };
+            },
+            didMutate: (value) => value.deletedCount > 0,
+        },
+        {
+            isEnabled: () => false,
+            deleteResources: async () => {
+                disabledVectorCalls.push("unexpected-vector-delete");
+            },
+            assertResourcesAbsent: async () => {
+                disabledVectorCalls.push("unexpected-vector-verify");
+            },
+            reconcileResource: async () => {
+                disabledVectorCalls.push("unexpected-vector-reconcile");
+            },
+        },
+    );
+    assert.equal(disabledVectorResult.deletedCount, 1);
+    assert.deepEqual(disabledVectorCalls, ["mongo-delete"], "disabled VDB skips only unavailable vector work");
+
     const circleCalls: string[] = [];
     await deleteCircleAfterPublicVectorPurge(
         id().toString(),

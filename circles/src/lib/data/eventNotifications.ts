@@ -5,6 +5,8 @@ import { getCircleById } from "./circle";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth";
 import { sanitizeObjectForJSON } from "../utils/sanitize";
+import { EventInvitations, EventOccurrenceInvitations, EventOccurrenceRsvps, EventRsvps } from "./db";
+import { resolveEventCancellationRecipientDids } from "./event-cancellation-recipients";
 
 /**
  * Resolve the Circle for an event
@@ -87,7 +89,7 @@ export async function notifyEventApproved(
 }
 
 /**
- * Notify the event author when the event's status changes (generic)
+ * Notify the event author and, on cancellation, all affected participants and invitees.
  */
 export async function notifyEventStatusChanged(
     event: Pick<EventModel, "_id" | "title" | "circleId" | "createdBy" | "stage">,
@@ -98,19 +100,47 @@ export async function notifyEventStatusChanged(
         const circle = await getEventCircle(event);
         if (!circle) return;
 
-        const author = await getUserPrivate(event.createdBy);
-        if (!author) return;
-
-        // Skip notifying the changer if they are the author (optional, mirrors other modules)
-        if (author.did === changer.did) return;
+        const eventId = (event as any)._id?.toString?.() || String((event as any)._id);
+        let recipientDids: string[];
+        if (event.stage === "cancelled") {
+            const [eventRsvps, eventInvitations, occurrenceRsvps, occurrenceInvitations] = await Promise.all([
+                EventRsvps.find(
+                    { eventId, status: { $in: ["going", "interested", "waitlist"] } },
+                    { projection: { userDid: 1, status: 1 } },
+                ).toArray(),
+                EventInvitations.find(
+                    { eventId, status: { $in: ["pending", "accepted"] } },
+                    { projection: { userDid: 1 } },
+                ).toArray(),
+                EventOccurrenceRsvps.find(
+                    { seriesId: eventId, status: { $in: ["going", "interested"] } },
+                    { projection: { userDid: 1, status: 1 } },
+                ).toArray(),
+                EventOccurrenceInvitations.find({ seriesId: eventId }, { projection: { userDid: 1 } }).toArray(),
+            ]);
+            recipientDids = resolveEventCancellationRecipientDids({
+                authorDid: event.createdBy,
+                actorDid: changer.did,
+                eventRsvps,
+                eventInvitations,
+                occurrenceRsvps,
+                occurrenceInvitations,
+            });
+        } else {
+            recipientDids = event.createdBy !== changer.did ? [event.createdBy] : [];
+        }
+        const recipients = (await Promise.all(recipientDids.map((did) => getUserPrivate(did)))).filter(
+            (recipient): recipient is UserPrivate => recipient !== null,
+        );
+        if (recipients.length === 0) return;
 
         await sendNotifications(
             "event_status_changed",
-            [author],
+            recipients,
             sanitizeObjectForJSON({
                 circle,
                 user: changer,
-                eventId: (event as any)._id?.toString?.() || String((event as any)._id),
+                eventId,
                 eventTitle: event.title,
                 eventOldStage: oldStage,
                 eventNewStage: event.stage,

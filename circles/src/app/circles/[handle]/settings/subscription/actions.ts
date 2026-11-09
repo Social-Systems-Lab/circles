@@ -6,7 +6,7 @@ import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { Circles } from "@/lib/data/db";
 import { generateSecureToken, hashToken, sendEmail } from "@/lib/data/email";
-import { assertDonorboxCredentialsConfigured, assertPaymentsEnabled } from "@/lib/payments";
+import { assertPaymentsEnabled } from "@/lib/payments";
 import { resendEmailVerificationForAuthenticatedUser } from "@/lib/auth/email-verification-recovery";
 import {
     createTelegramConnectToken,
@@ -15,8 +15,6 @@ import {
     updateTelegramChannelPrivacyMode,
 } from "@/lib/data/external-notification-channels";
 
-const DONORBOX_API_KEY = process.env.DONORBOX_API_KEY;
-const DONORBOX_API_URL = "https://donorbox.org/api/v1";
 const emailPreferenceLabels = {
     emailMissedMessages: "Missed-message digest emails",
     emailTaskAssigned: "Task assignment digest emails",
@@ -46,38 +44,6 @@ export async function createSubscription(circleId: string, planId: string) {
     )}&custom_fields[circleId]=${circleId}`;
 
     redirect(checkoutUrl);
-}
-
-export async function getSubscription(subscriptionId: string) {
-    assertDonorboxCredentialsConfigured(process.env.DONORBOX_EMAIL, DONORBOX_API_KEY);
-    const response = await fetch(`${DONORBOX_API_URL}/subscriptions/${subscriptionId}`, {
-        headers: {
-            Authorization: `Basic ${Buffer.from(`${process.env.DONORBOX_EMAIL}:${DONORBOX_API_KEY}`).toString("base64")}`,
-        },
-    });
-
-    if (!response.ok) {
-        throw new Error("Failed to fetch subscription");
-    }
-
-    return response.json();
-}
-
-export async function getPlans() {
-    assertDonorboxCredentialsConfigured(process.env.DONORBOX_EMAIL, DONORBOX_API_KEY);
-    const response = await fetch(`${DONORBOX_API_URL}/plans`, {
-        headers: {
-            Authorization: `Basic ${Buffer.from(`${process.env.DONORBOX_EMAIL}:${DONORBOX_API_KEY}`).toString("base64")}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Failed to fetch plans:", errorText);
-        throw new Error(`Failed to fetch plans: ${errorText}`);
-    }
-
-    return response.json();
 }
 
 export async function updateEmailPreferenceSetting(preference: EmailPreferenceKey, enabled: boolean) {

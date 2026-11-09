@@ -9,6 +9,7 @@ import { getAuthenticatedUserDid, getServerPublicKey } from "@/lib/auth/auth";
 import { getUserPrivate } from "@/lib/data/user";
 import { sendNotifications } from "@/lib/data/notifications";
 import { sendUserVerificationRejectedNotification, sendUserVerifiedNotification } from "@/lib/data/notifications";
+import { shapeReminderNotificationContents } from "@/lib/data/notification-content";
 import { sendEmail } from "@/lib/data/email";
 import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
 import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } from "@/lib/data/server-settings";
@@ -1204,7 +1205,7 @@ export async function sendReminderEmailForHandle(handle: string) {
             templateAlias: "notification-reminder",
             templateModel: {
                 name: user.name,
-                notifications: unreadNotifications.map((n: any) => n.content),
+                notifications: shapeReminderNotificationContents(unreadNotifications),
                 actionUrl: process.env.CIRCLES_URL || "http://localhost:3000",
             },
         });
@@ -1228,6 +1229,7 @@ export async function sendReminderEmailForHandle(handle: string) {
 
 export async function refreshSubscriptionStatus(userId: string) {
     try {
+        await requireSuperAdmin();
         const user = await Circles.findOne({ _id: new ObjectId(userId) });
         if (!user) {
             return { success: false, message: "User not found" };

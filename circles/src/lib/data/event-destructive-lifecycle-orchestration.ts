@@ -1,6 +1,11 @@
 import type { EventNoticeboardCleanupResult } from "./event-noticeboard-cleanup-orchestration";
 
-export type EventDestructiveLifecycleFailurePhase = "prepare" | "source" | "backlinks" | "revalidate";
+export type EventDestructiveLifecycleFailurePhase =
+    | "prepare"
+    | "source"
+    | "post-source-cleanup"
+    | "backlinks"
+    | "revalidate";
 
 export type EventDestructiveLifecycleResult =
     | { status: "success"; cleanupDeletedCount: number }
@@ -18,18 +23,27 @@ export type EventDestructiveLifecycleResult =
           sourceMutationCompleted: boolean;
           sourceMutationPossible: boolean;
           destructiveEffectsPossible: boolean;
+      }
+    | {
+          status: "partial-success";
+          phase: "post-source-cleanup";
+          error: unknown;
+          cleanupDeletedCount: number;
+          sourceMutationCompleted: true;
       };
 
 export const orchestrateEventDestructiveLifecycle = async <TPrepared = undefined>({
     cleanupNoticeboards,
     prepare,
     mutateSource,
+    afterSourceMutation,
     clearBacklinks,
     revalidate,
 }: {
     cleanupNoticeboards: () => Promise<EventNoticeboardCleanupResult>;
     prepare?: () => Promise<TPrepared>;
     mutateSource: (prepared: TPrepared | undefined) => Promise<boolean>;
+    afterSourceMutation?: () => Promise<void>;
     clearBacklinks?: () => Promise<void>;
     revalidate: () => void | Promise<void>;
 }): Promise<EventDestructiveLifecycleResult> => {
@@ -83,6 +97,20 @@ export const orchestrateEventDestructiveLifecycle = async <TPrepared = undefined
             sourceMutationPossible: true,
             destructiveEffectsPossible,
         };
+    }
+
+    if (afterSourceMutation) {
+        try {
+            await afterSourceMutation();
+        } catch (error) {
+            return {
+                status: "partial-success",
+                phase: "post-source-cleanup",
+                error,
+                cleanupDeletedCount,
+                sourceMutationCompleted: true,
+            };
+        }
     }
 
     if (clearBacklinks) {
