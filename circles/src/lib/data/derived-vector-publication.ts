@@ -145,12 +145,23 @@ export async function runDerivedResourceVectorSafeMutation<TResult>(
         deleteResources: (kind: DerivedVectorKind, ids: string[]) => Promise<void>;
         assertResourcesAbsent: (kind: DerivedVectorKind, ids: string[]) => Promise<void>;
         reconcileResource: (kind: DerivedVectorKind, resourceId: string) => Promise<unknown>;
+        isEnabled?: () => boolean;
     },
 ): Promise<TResult> {
     const normalizedIds = normalizeDerivedVectorMongoIds([input.resourceId]);
     if (normalizedIds.length !== 1) throw new Error("Invalid derived resource ID.");
     const resourceId = normalizedIds[0];
     const defaults = dependencies ? undefined : await import("@/lib/data/vdb");
+    const vectorEnabled = dependencies?.isEnabled
+        ? dependencies.isEnabled()
+        : defaults
+          ? defaults.isVdbEnabled()
+          : true;
+    if (!vectorEnabled) {
+        defaults?.logVdbDisabled(`${input.kind} derived-resource mutation`);
+        await input.beforeMutation?.();
+        return input.mutate();
+    }
     const deps = dependencies ?? {
         deleteResources: async (kind: DerivedVectorKind, ids: string[]) => {
             await defaults!.deleteVbdDerivedResources(kind, ids);

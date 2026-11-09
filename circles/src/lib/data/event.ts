@@ -46,6 +46,7 @@ import {
     GLOBAL_EVENT_READ_BATCH_SIZE,
     type EventReaderHostPolicyDependencies,
 } from "./event-host-read-policy";
+import { evaluateEventDeletionEligibility } from "./event-deletion-policy";
 
 // Safe projection for event queries
 export const SAFE_EVENT_PROJECTION = {
@@ -1114,20 +1115,20 @@ export const deleteEvent = async (eventId: string): Promise<boolean> => {
             return false;
         }
 
-        // TODO: Delete associated shadow post? Would need to find Posts by parentItemId/Type.
-        // await Posts.deleteOne({ _id: new ObjectId(createdPostId) });
+        const canonicalEventId = new ObjectId(eventId).toHexString();
+        const event = await Events.findOne(
+            { _id: new ObjectId(canonicalEventId) },
+            { projection: { invitations: 1, stage: 1 } },
+        );
+        if (!event) return false;
+
+        const eligibility = await evaluateEventDeletionEligibility(canonicalEventId, event.invitations, event.stage);
+        if (!eligibility.allowed) return false;
 
         const result = await runDerivedResourceVectorSafeMutation({
             kind: "events",
-            resourceId: eventId,
-            beforeMutation: async () => {
-                await EventRsvps.deleteMany({ eventId });
-                await EventInvitations.deleteMany({ eventId });
-                await EventOccurrences.deleteMany({ seriesId: eventId });
-                await EventOccurrenceRsvps.deleteMany({ seriesId: eventId });
-                await EventOccurrenceInvitations.deleteMany({ seriesId: eventId });
-            },
-            mutate: () => Events.deleteOne({ _id: new ObjectId(eventId) }),
+            resourceId: canonicalEventId,
+            mutate: () => Events.deleteOne({ _id: new ObjectId(canonicalEventId) }),
             didMutate: (deleteResult) => deleteResult.deletedCount > 0,
         });
         return result.deletedCount > 0;

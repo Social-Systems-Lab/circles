@@ -15,6 +15,7 @@ import {
     cancelEventOccurrenceRsvpAction,
     hideCancelledEventAction,
     unhideCancelledEventAction,
+    deleteEventAction,
 } from "@/app/circles/[handle]/events/actions";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -113,6 +114,8 @@ export default function EventDetail({
     const [isOccurrenceInviteModalOpen, setOccurrenceInviteModalOpen] = useState(false);
     const [isRsvpDialogOpen, setRsvpDialogOpen] = useState(false);
     const [isCancelOccurrenceOpen, setCancelOccurrenceOpen] = useState(false);
+    const [isCancelEventOpen, setCancelEventOpen] = useState(false);
+    const [isDeleteEventOpen, setDeleteEventOpen] = useState(false);
     const compact = !!isPreview;
     const [hideUpdating, setHideUpdating] = useState(false);
     const eventId = ((event as any)._id?.toString?.() || (event as any)._id || "") as string;
@@ -120,6 +123,7 @@ export default function EventDetail({
     const isEventHidden = eventId ? hiddenCancelledIds.includes(eventId) : false;
     const canManageJoinLink = Boolean(canEdit || canModerate || isAuthor || user?.did === event.createdBy);
     const canInvite = Boolean(canReview || canModerate || isAuthor || user?.did === event.createdBy);
+    const canDeleteEvent = Boolean(canEdit && (event.stage === "draft" || event.stage === "open"));
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
     const end = event.endAt ? new Date(event.endAt as any) : null;
@@ -351,10 +355,34 @@ export default function EventDetail({
         startTransition(async () => {
             const res = await changeEventStageAction(circleHandle, (event as any)._id?.toString?.() || "", "cancelled");
             if (res.success) {
+                setCancelEventOpen(false);
                 toast({ title: res.message || "Event cancelled" });
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to cancel", variant: "destructive" });
+            }
+        });
+    };
+
+    const onDeleteEvent = () => {
+        if (!eventId) return;
+        startTransition(async () => {
+            const res = await deleteEventAction(circleHandle, eventId);
+            if (res.success) {
+                setDeleteEventOpen(false);
+                toast({
+                    title: res.cleanupComplete === false ? "Event deleted with cleanup warning" : "Event deleted",
+                    description: res.cleanupComplete === false ? res.message : undefined,
+                    variant: res.cleanupComplete === false ? "destructive" : undefined,
+                });
+                router.push(`/circles/${circleHandle}/events`);
+                router.refresh();
+            } else {
+                toast({
+                    title: "Unable to delete event",
+                    description: res.message || "Please try again.",
+                    variant: "destructive",
+                });
             }
         });
     };
@@ -666,7 +694,7 @@ export default function EventDetail({
                     <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
                         <Button variant="outline">Add to Google Calendar</Button>
                     </a>
-                    {canEdit && (
+                    {canEdit && (event.stage === "draft" || event.stage === "open") && (
                         <Button
                             variant="outline"
                             onClick={() =>
@@ -722,8 +750,18 @@ export default function EventDetail({
                             </Button>
                         )}
                     {event.stage === "open" && (canReview || canModerate) && (
-                        <Button disabled={isPending} variant="destructive" onClick={onCancelEvent}>
+                        <Button
+                            disabled={isPending}
+                            variant="outline"
+                            onClick={() => setCancelEventOpen(true)}
+                            className="border-amber-400 bg-amber-100 text-amber-950 hover:bg-amber-200 hover:text-amber-950 focus-visible:ring-amber-500 disabled:border-amber-300 disabled:bg-amber-50 disabled:text-amber-900"
+                        >
                             {event.recurrence ? "Cancel series" : "Cancel event"}
+                        </Button>
+                    )}
+                    {canDeleteEvent && (
+                        <Button disabled={isPending} variant="destructive" onClick={() => setDeleteEventOpen(true)}>
+                            {event.recurrence ? "Delete series" : "Delete event"}
                         </Button>
                     )}
                     {(isSeriesCancelled || isEventHidden) && (
@@ -899,6 +937,54 @@ export default function EventDetail({
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             {isPending ? "Cancelling…" : "Cancel occurrence"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={isCancelEventOpen} onOpenChange={setCancelEventOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {event.recurrence ? "Cancel this event series?" : "Cancel this event?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The event will remain available as cancelled, including its RSVPs and invitations. Affected
+                            participants and invitees will be notified.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isPending}>Keep event</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={isPending}
+                            onClick={onCancelEvent}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isPending ? "Cancelling…" : event.recurrence ? "Cancel series" : "Cancel event"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={isDeleteEventOpen} onOpenChange={setDeleteEventOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {event.recurrence ? "Delete this event series?" : "Delete this event?"}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This permanently deletes the event
+                            {event.recurrence ? " series and all of its occurrences" : ""}, including linked discussions
+                            and noticeboard posts. Images are retained for separate cleanup. Events with RSVPs,
+                            invitations, or occurrence participation cannot be deleted; cancel them instead.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isPending}>Keep event</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={isPending}
+                            onClick={onDeleteEvent}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isPending ? "Deleting…" : event.recurrence ? "Delete series" : "Delete event"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
