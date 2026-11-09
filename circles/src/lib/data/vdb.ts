@@ -51,7 +51,7 @@ let qdrantClient: QdrantClient | undefined = undefined;
 let openAiClient: OpenAI | undefined = undefined;
 let hasLoggedVdbDisabled = false;
 
-const isVdbEnabled = () => {
+export const isVdbEnabled = () => {
     const flag = process.env.VDB_ENABLED;
     if (flag === undefined || flag === null) {
         return true;
@@ -72,7 +72,7 @@ class VdbDisabledError extends Error {
     }
 }
 
-const logVdbDisabled = (context: string) => {
+export const logVdbDisabled = (context: string) => {
     if (!hasLoggedVdbDisabled) {
         console.info(
             `[VDB] Disabled locally – skipping ${context}. Set VDB_ENABLED=true to enable Qdrant/OpenAI features.`,
