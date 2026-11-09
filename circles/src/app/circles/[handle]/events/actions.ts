@@ -111,6 +111,8 @@ import {
     orchestrateEventDestructiveLifecycle,
     type EventDestructiveLifecycleResult,
 } from "@/lib/data/event-destructive-lifecycle-orchestration";
+import { evaluateEventDeletionEligibility, eventDeletionBlockedMessage } from "@/lib/data/event-deletion-policy";
+import { executePreparedEventDeletionCleanup, prepareEventDeletionCleanup } from "@/lib/data/event-deletion-cleanup";
 import {
     EVENT_NOTICEBOARD_UNAVAILABLE_MESSAGE,
     hasStoredEventNoticeboardReferences,
@@ -1279,7 +1281,7 @@ export async function updateEventAction(
 export async function deleteEventAction(
     circleHandle: string,
     eventId: string,
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string; cleanupComplete?: boolean }> {
     try {
         const userDid = await getAuthenticatedUserDid();
         if (!userDid) return { success: false, message: "User not authenticated" };
@@ -1289,6 +1291,10 @@ export async function deleteEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        const canonicalEventId = event.seriesId || event._id?.toString();
+        if (!canonicalEventId || !ObjectId.isValid(canonicalEventId)) {
+            return { success: false, message: "Event not found" };
+        }
         await assertEventHostCirclesWritable(event);
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
@@ -1298,25 +1304,51 @@ export async function deleteEventAction(
             return { success: false, message: "Not authorized to delete this event" };
         }
 
+        const eligibility = await evaluateEventDeletionEligibility(canonicalEventId, event.invitations, event.stage);
+        if (!eligibility.allowed) {
+            return { success: false, message: eventDeletionBlockedMessage };
+        }
+
+        let prepared;
+        try {
+            prepared = await prepareEventDeletionCleanup({ ...event, _id: canonicalEventId });
+        } catch (error) {
+            console.error("Event deletion cleanup validation failed:", error);
+            return {
+                success: false,
+                message: "The event could not be deleted because linked discussion content could not be verified.",
+            };
+        }
+
+        const hostCircles = await getHostCirclesByIds(normalizeEventHostCircleIds(event));
         const lifecycle = await orchestrateEventDestructiveLifecycle({
-            cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
-            prepare: async () => {
-                if (event.images?.length) {
-                    const results = await Promise.allSettled(
-                        event.images.map((img) =>
-                            deleteCircleOwnedMedia({ url: img.fileInfo.url, expectedCircleId: event.circleId }),
-                        ),
-                    );
-                    const rejected = results.find(
-                        (result): result is PromiseRejectedResult => result.status === "rejected",
-                    );
-                    if (rejected) throw rejected.reason;
-                }
+            cleanupNoticeboards: () => cleanupEventNoticeboardPosts({ ...event, _id: canonicalEventId }),
+            mutateSource: () => deleteEventDb(canonicalEventId),
+            afterSourceMutation: () => executePreparedEventDeletionCleanup(prepared),
+            revalidate: () => {
+                revalidateEventHostPaths(hostCircles, canonicalEventId);
+                if (eventId !== canonicalEventId) revalidateEventHostPaths(hostCircles, eventId);
             },
-            mutateSource: () => deleteEventDb(eventId),
-            revalidate: async () =>
-                revalidateEventHostPaths(await getHostCirclesByIds(normalizeEventHostCircleIds(event)), eventId),
         });
+        if (lifecycle.status === "partial-success") {
+            console.error("Event deleted but linked discussion cleanup failed:", lifecycle.error);
+            return {
+                success: true,
+                cleanupComplete: false,
+                message: "Event deleted, but linked discussion content could not be fully cleaned up.",
+            };
+        }
+        if (
+            lifecycle.status === "post-cleanup-operation-failed" &&
+            lifecycle.sourceMutationCompleted &&
+            lifecycle.phase === "revalidate"
+        ) {
+            return {
+                success: true,
+                cleanupComplete: false,
+                message: "Event deleted, but event pages could not be fully refreshed.",
+            };
+        }
         if (lifecycle.status !== "success") {
             if (lifecycle.status === "noticeboard-cleanup-failed") {
                 console.error("Event delete Noticeboard cleanup failed:", lifecycle.cleanup.error);
@@ -1325,7 +1357,7 @@ export async function deleteEventAction(
             }
             return { success: false, message: eventDestructiveLifecycleFailureMessage(lifecycle) };
         }
-        return { success: true, message: "Event deleted successfully" };
+        return { success: true, cleanupComplete: true, message: "Event deleted successfully" };
     } catch (error) {
         console.error("Error deleting event:", error);
         return { success: false, message: "Failed to delete event" };
@@ -1403,6 +1435,10 @@ export async function changeEventStageAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        const canonicalEventId = event.seriesId || event._id?.toString();
+        if (!canonicalEventId || !ObjectId.isValid(canonicalEventId)) {
+            return { success: false, message: "Event not found" };
+        }
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
         }
@@ -1444,44 +1480,23 @@ export async function changeEventStageAction(
         }
 
         let success = false;
-        if (currentStage === "open" && newStage === "cancelled") {
-            const activeRsvpCount = await EventRsvps.countDocuments({
-                eventId,
-                status: { $in: ["going", "interested", "waitlist"] },
-            });
-
-            if (activeRsvpCount === 0) {
-                const lifecycle = await orchestrateEventDestructiveLifecycle({
-                    cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
-                    mutateSource: () => deleteEventDb(eventId),
-                    revalidate: () => revalidateEventHostPaths(hostCircles, eventId),
-                });
-                if (lifecycle.status !== "success") {
-                    if (lifecycle.status === "noticeboard-cleanup-failed") {
-                        console.error("Event withdrawal Noticeboard cleanup failed:", lifecycle.cleanup.error);
-                    } else if (lifecycle.status === "post-cleanup-operation-failed") {
-                        console.error("Event withdrawal failed after Noticeboard cleanup:", lifecycle.error);
-                    }
-                    return { success: false, message: eventDestructiveLifecycleFailureMessage(lifecycle) };
-                }
-                return { success: true, message: "Event withdrawn" };
-            }
-        }
-
         let lifecycleRevalidated = false;
         if (newStage === "draft") {
             const lifecycle = await orchestrateEventDestructiveLifecycle({
-                cleanupNoticeboards: () => cleanupEventNoticeboardPosts(event),
-                mutateSource: () => changeEventStageDb(eventId, newStage),
+                cleanupNoticeboards: () => cleanupEventNoticeboardPosts({ ...event, _id: canonicalEventId }),
+                mutateSource: () => changeEventStageDb(canonicalEventId, newStage),
                 clearBacklinks: hasStoredEventNoticeboardReferences(event)
                     ? async () => {
                           await Events.updateOne(
-                              { _id: new ObjectId(eventId) },
+                              { _id: new ObjectId(canonicalEventId) },
                               { $unset: { noticeboardPostId: "", noticeboardPostIdsByCircleId: "" } },
                           );
                       }
                     : undefined,
-                revalidate: () => revalidateEventHostPaths(hostCircles, eventId),
+                revalidate: () => {
+                    revalidateEventHostPaths(hostCircles, canonicalEventId);
+                    if (eventId !== canonicalEventId) revalidateEventHostPaths(hostCircles, eventId);
+                },
             });
             if (lifecycle.status !== "success") {
                 if (lifecycle.status === "noticeboard-cleanup-failed") {
@@ -1496,7 +1511,7 @@ export async function changeEventStageAction(
         }
 
         if (newStage !== "draft") {
-            success = await changeEventStageDb(eventId, newStage);
+            success = await changeEventStageDb(canonicalEventId, newStage);
             if (!success) return { success: false, message: "Failed to change event stage" };
         }
 
@@ -1506,18 +1521,23 @@ export async function changeEventStageAction(
             if (actor) {
                 if (currentStage === "draft" && newStage === "review") {
                     await notifyEventSubmittedForReview(
-                        { _id: event._id!, title: event.title, circleId: event.circleId },
+                        { _id: canonicalEventId, title: event.title, circleId: event.circleId },
                         actor,
                     );
                 } else if ((currentStage === "draft" || currentStage === "review") && newStage === "open") {
                     await notifyEventApproved(
-                        { _id: event._id!, title: event.title, circleId: event.circleId, createdBy: event.createdBy },
+                        {
+                            _id: canonicalEventId,
+                            title: event.title,
+                            circleId: event.circleId,
+                            createdBy: event.createdBy,
+                        },
                         actor,
                     );
                 } else {
                     await notifyEventStatusChanged(
                         {
-                            _id: event._id!,
+                            _id: canonicalEventId,
                             title: event.title,
                             circleId: event.circleId,
                             createdBy: event.createdBy,
@@ -1532,7 +1552,10 @@ export async function changeEventStageAction(
             console.error("Error sending event stage change notifications:", notifyErr);
         }
 
-        if (!lifecycleRevalidated) revalidateEventHostPaths(hostCircles, eventId);
+        if (!lifecycleRevalidated) {
+            revalidateEventHostPaths(hostCircles, canonicalEventId);
+            if (eventId !== canonicalEventId) revalidateEventHostPaths(hostCircles, eventId);
+        }
 
         return {
             success: true,

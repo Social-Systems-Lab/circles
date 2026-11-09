@@ -180,7 +180,9 @@ const buildNotificationBody = (type: string, payload: any): string => {
         case "event_approved":
             return `${eventName} was approved`;
         case "event_status_changed":
-            return `${actorName} updated ${eventName}`;
+            return payload?.eventNewStage === "cancelled"
+                ? `${eventName} was cancelled`
+                : `${actorName} updated ${eventName}`;
         case "event_invitation":
             return `${actorName} invited you to ${eventName}`;
         case "secret_circle_invitation":
