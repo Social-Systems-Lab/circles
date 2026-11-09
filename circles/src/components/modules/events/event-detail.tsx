@@ -123,6 +123,7 @@ export default function EventDetail({
     const isEventHidden = eventId ? hiddenCancelledIds.includes(eventId) : false;
     const canManageJoinLink = Boolean(canEdit || canModerate || isAuthor || user?.did === event.createdBy);
     const canInvite = Boolean(canReview || canModerate || isAuthor || user?.did === event.createdBy);
+    const canDeleteEvent = Boolean(canEdit && (event.stage === "draft" || event.stage === "open"));
 
     const start = event.startAt ? new Date(event.startAt as any) : null;
     const end = event.endAt ? new Date(event.endAt as any) : null;
@@ -749,11 +750,16 @@ export default function EventDetail({
                             </Button>
                         )}
                     {event.stage === "open" && (canReview || canModerate) && (
-                        <Button disabled={isPending} variant="destructive" onClick={() => setCancelEventOpen(true)}>
+                        <Button
+                            disabled={isPending}
+                            variant="outline"
+                            onClick={() => setCancelEventOpen(true)}
+                            className="border-amber-400 bg-amber-100 text-amber-950 hover:bg-amber-200 hover:text-amber-950 focus-visible:ring-amber-500 disabled:border-amber-300 disabled:bg-amber-50 disabled:text-amber-900"
+                        >
                             {event.recurrence ? "Cancel series" : "Cancel event"}
                         </Button>
                     )}
-                    {canEdit && (
+                    {canDeleteEvent && (
                         <Button disabled={isPending} variant="destructive" onClick={() => setDeleteEventOpen(true)}>
                             {event.recurrence ? "Delete series" : "Delete event"}
                         </Button>
