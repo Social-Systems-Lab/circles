@@ -8,6 +8,21 @@ import {
 } from "@/lib/auth/pending-registration-public-origin";
 
 const VERIFIED_COOKIE = "__Host-kamooni-verified-registration";
+const VERIFIED_COOKIE_MAX_AGE_SECONDS = 30 * 60;
+
+function verifiedCookieOptions(maxAge: number) {
+    return {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax" as const,
+        path: "/",
+        maxAge,
+    };
+}
+
+function clearVerifiedCookie(response: NextResponse) {
+    response.cookies.set(VERIFIED_COOKIE, "", verifiedCookieOptions(0));
+}
 
 export async function GET(request: NextRequest) {
     let publicOrigin: string;
@@ -16,7 +31,7 @@ export async function GET(request: NextRequest) {
     } catch {
         const response = new NextResponse(null, { status: 500 });
         setPrivateHeaders(response);
-        response.cookies.set(VERIFIED_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+        clearVerifiedCookie(response);
         return response;
     }
     const token = request.nextUrl.searchParams.get("token");
@@ -26,7 +41,7 @@ export async function GET(request: NextRequest) {
             303,
         );
         setPrivateHeaders(response);
-        response.cookies.set(VERIFIED_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+        clearVerifiedCookie(response);
         return response;
     };
     if (
@@ -47,13 +62,11 @@ export async function GET(request: NextRequest) {
             303,
         );
         setPrivateHeaders(response);
-        response.cookies.set(VERIFIED_COOKIE, `${result.pendingRegistrationId}.${result.verifiedContinuationSecret}`, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
-            path: "/",
-            maxAge: 30 * 60,
-        });
+        response.cookies.set(
+            VERIFIED_COOKIE,
+            `${result.pendingRegistrationId}.${result.verifiedContinuationSecret}`,
+            verifiedCookieOptions(VERIFIED_COOKIE_MAX_AGE_SECONDS),
+        );
         return response;
     } catch {
         return safeFailure();
