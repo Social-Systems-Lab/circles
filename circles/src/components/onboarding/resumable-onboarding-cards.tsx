@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, ImagePlus, Loader2, MapPin, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -501,11 +500,8 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
     );
 }
 
-export function HumanVerificationOnboardingCard({ profile, humanVerification }: CardProps) {
+export function HumanVerificationOnboardingCard({ humanVerification }: CardProps) {
     const verified = humanVerification.realPersonCount > 0;
-    const verificationHref = profile.handle
-        ? `/circles/${encodeURIComponent(profile.handle)}/home#proof-of-humanity`
-        : "/explore";
 
     return (
         <section className="space-y-4" aria-labelledby="onboarding-humanity-heading">
@@ -533,17 +529,10 @@ export function HumanVerificationOnboardingCard({ profile, humanVerification }: 
                 </div>
             </div>
             <p className="text-sm leading-6 text-muted-foreground">
-                “Real person” confirms that you are a real person. “Met in real life” separately records that someone
-                has met you physically. Existing verifications remain distinct.
+                You&apos;re ready to participate in Kamooni. Human verification is an additional trust signal. A member
+                who knows you can verify you later using the Verify Human action on your profile.
             </p>
-            <Button asChild variant="outline" className="min-h-11 w-full sm:w-auto">
-                <Link href={verificationHref}>
-                    {verified ? "Review your verification" : "Open your verification section"}
-                </Link>
-            </Button>
-            <p className="text-sm text-muted-foreground">
-                Ask a member who knows you to open your profile and use its existing Verify Human action.
-            </p>
+            <p className="text-sm text-muted-foreground">Human verification is optional during Phase 1.</p>
         </section>
     );
 }
