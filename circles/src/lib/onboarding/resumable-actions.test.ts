@@ -54,7 +54,11 @@ assert.match(completionAction, /persistOnboardingCompletionAcknowledgement\(own\
 assert.match(completionAction, /redirectTo:\s*getCircleDefaultPath\(own\.profile\)/);
 assert.match(actions, /import \{ getCircleDefaultPath \} from "@\/lib\/utils\/circle-routes"/);
 assert.match(shell, /if \(result\.redirectTo\) router\.push\(result\.redirectTo\)/);
-assert.match(shell, /pending \? "Saving…" : "Finish for now"/);
+assert.match(
+    shell,
+    /pending[\s\S]*?requiredStepsComplete[\s\S]*?"Finish onboarding"[\s\S]*?"Finish for now"/,
+    "the final action is labelled as onboarding completion only when required steps are complete",
+);
 assert.doesNotMatch(shell, /allRemainingSkipped|firstUnskippedIncomplete/);
 assert.match(persistence, /enabledModules:\s*1/, "canonical profile routing data is loaded for exit destination");
 assert.match(shell, /<progress[\s\S]*?aria-label="Onboarding progress"/);

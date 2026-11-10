@@ -68,6 +68,7 @@ export default function OnboardingShell({
     const participation = useMemo(() => statuses.filter((card) => card.kind === "participation"), [statuses]);
     const optional = useMemo(() => statuses.filter((card) => card.kind === "optional"), [statuses]);
     const participationComplete = participation.filter((card) => card.complete).length;
+    const requiredStepsComplete = participationComplete === participation.length;
     const optionalComplete = optional.filter((card) => card.complete).length;
     const go = (
         operation: () => Promise<{ success: boolean; card?: string; redirectTo?: string; message?: string }>,
@@ -334,7 +335,11 @@ export default function OnboardingShell({
                                     disabled={pending || cardSaving}
                                     onClick={() => go(acknowledgeOnboardingCompletion)}
                                 >
-                                    {pending ? "Saving…" : "Finish for now"}
+                                    {pending
+                                        ? "Saving…"
+                                        : requiredStepsComplete
+                                          ? "Finish onboarding"
+                                          : "Finish for now"}
                                 </Button>
                             )}
                         </div>

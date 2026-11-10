@@ -58,7 +58,19 @@ assert.match(cards, /set\("picture", file\)/, "photo uses the existing profile i
 assert.match(cards, /personalProfile/, "onboarding uses the privacy-safe personal location picker mode");
 assert.match(cards, /Choose where people can find you/, "onboarding shows the personal location privacy guidance");
 assert.match(cards, /realPersonCount[\s\S]*metInRealLifeCount/, "human verification levels remain distinct");
-assert.match(cards, /#proof-of-humanity/, "the human verification card links to the existing verification interface");
+assert.doesNotMatch(cards, /Open your verification section/, "the misleading verification-section action is removed");
+assert.doesNotMatch(
+    cards,
+    /#proof-of-humanity/,
+    "the onboarding card does not redirect to the profile verification panel",
+);
+assert.match(
+    cards,
+    /You&apos;re ready to participate in Kamooni\. Human verification is an additional trust signal\. A member\s+who knows you can verify you later using the Verify Human action on your profile\./,
+    "the human verification card explains the optional trust signal clearly",
+);
+assert.match(cards, /Human verification is optional during Phase 1\./);
+assert.doesNotMatch(cards, /required to post publicly/i, "Phase 1 public posting is not gated on human verification");
 assert.match(
     photoAction,
     /export const updateCircleField/,
