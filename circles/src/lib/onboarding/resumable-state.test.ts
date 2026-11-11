@@ -65,7 +65,6 @@ assert.deepEqual(
     [
         ["location", false],
         ["profile-photo", false],
-        ["proof-of-humanity", false],
     ],
 );
 assert.equal(canParticipate(participationMissing), true, "photo and location remain optional for participation");
@@ -83,13 +82,13 @@ assert.equal(
     "forward navigation advances through incomplete cards",
 );
 assert.equal(
-    getPreviousOnboardingCard("proof-of-humanity"),
-    "profile-photo",
+    getPreviousOnboardingCard("profile-photo"),
+    "location",
     "back from the final card reaches the previous card even when it is complete",
 );
 assert.equal(getPreviousOnboardingCard("email-verification"), null, "first card has no previous card");
 assert.equal(getNextOnboardingCardInSequence("introduction"), "community-guidelines");
-assert.equal(getNextOnboardingCardInSequence("proof-of-humanity"), null);
+assert.equal(getNextOnboardingCardInSequence("profile-photo"), null);
 
 const resumedState = { ...initial, currentCard: "location" as const, skippedCards: ["introduction" as const] };
 const stateReadByAnotherDevice = structuredClone(resumedState);
@@ -124,8 +123,27 @@ assert.equal(
     "skipping required cards does not mark canonical requirements complete",
 );
 assert.equal(isOnboardingCardId("location"), true);
+assert.equal(
+    isOnboardingCardId("proof-of-humanity"),
+    false,
+    "human verification is no longer part of the visible Phase 1 onboarding",
+);
 assert.equal(isOnboardingCardId("not-a-card"), false);
-assert.equal(ONBOARDING_CARDS.length, 6);
+assert.equal(ONBOARDING_CARDS.length, 5);
+assert.deepEqual(
+    ONBOARDING_CARDS.map((card) => card.id),
+    ["email-verification", "introduction", "community-guidelines", "location", "profile-photo"],
+);
+
+const legacyHumanVerificationState = {
+    ...initial,
+    currentCard: "proof-of-humanity" as const,
+};
+assert.equal(
+    getOnboardingNavigationTarget(undefined, incompleteProfile, legacyHumanVerificationState),
+    "introduction",
+    "legacy persisted human-verification navigation resumes on a visible incomplete card",
+);
 
 assert.deepEqual(
     fullProfile.completedOnboardingSteps,

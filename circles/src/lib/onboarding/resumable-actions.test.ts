@@ -27,6 +27,11 @@ assert.doesNotMatch(navigationAction, /status\.complete/, "navigation permits op
 assert.match(persistence, /did,\s*circleType:\s*"user"/, "database mutations are scoped to personal profiles");
 assert.match(route, /getAuthenticatedUserDid\(\)/, "the onboarding route requires an authenticated member");
 assert.match(route, /if \(!userDid\) redirect\("\/login/, "unauthenticated requests are redirected to login");
+assert.match(
+    route,
+    /if \(params\.card && !isOnboardingCardId\(params\.card\)\) redirect\("\/onboarding"\)/,
+    "retired onboarding card URLs return to the visible onboarding flow",
+);
 assert.match(persistence, /"onboardingState\.currentCard"/);
 assert.match(persistence, /"onboardingState\.skippedCards"/);
 assert.doesNotMatch(
@@ -62,7 +67,7 @@ assert.match(
 assert.doesNotMatch(shell, /allRemainingSkipped|firstUnskippedIncomplete/);
 assert.match(persistence, /enabledModules:\s*1/, "canonical profile routing data is loaded for exit destination");
 assert.match(shell, /<progress[\s\S]*?aria-label="Onboarding progress"/);
-assert.match(shell, /<details>[\s\S]*?<summary[\s\S]*?View progress/);
+assert.match(shell, /<details[^>]*>[\s\S]*?<summary>View progress<\/summary>/);
 assert.match(shell, /pt-\[calc\(5rem\+env\(safe-area-inset-top,0px\)\)\]/);
 assert.match(shell, /pb-\[calc\(5rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
 assert.match(
