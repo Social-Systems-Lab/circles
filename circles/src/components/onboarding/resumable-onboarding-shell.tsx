@@ -136,6 +136,12 @@ export default function OnboardingShell({
         go(() => navigateOnboardingCard(card));
     };
 
+    const exitOnboarding = () => {
+        if (pending || cardSaving) return;
+        if (hasUnsavedChanges && !window.confirm("You have unsaved changes. Exit onboarding and discard them?")) return;
+        router.push("/explore");
+    };
+
     const next = getNextOnboardingCardInSequence(currentCard);
 
     if (completionAcknowledged) {
@@ -211,9 +217,22 @@ export default function OnboardingShell({
                                 <p className={styles.stepLabel}>
                                     Step {cardIndex + 1} of {ONBOARDING_CARDS.length}
                                 </p>
-                                <p className={styles.progressSummary}>
-                                    {participationComplete}/3 required · {optionalComplete}/{optional.length} optional
-                                </p>
+                                <div className={styles.progressMeta}>
+                                    <p className={styles.progressSummary}>
+                                        {participationComplete}/3 required · {optionalComplete}/{optional.length}{" "}
+                                        optional
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className={styles.exitAction}
+                                        disabled={pending || cardSaving}
+                                        onClick={exitOnboarding}
+                                        aria-label="Exit onboarding and go to Explore"
+                                    >
+                                        Exit onboarding
+                                    </Button>
+                                </div>
                             </div>
                             <progress
                                 aria-label="Onboarding progress"

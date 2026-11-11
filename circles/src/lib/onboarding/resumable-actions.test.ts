@@ -7,6 +7,8 @@ const persistence = readFileSync("src/lib/data/resumable-onboarding.ts", "utf8")
 const sharedCircleData = readFileSync("src/lib/data/circle.ts", "utf8");
 const userDto = readFileSync("src/lib/data/client-user-dto.ts", "utf8");
 const shell = readFileSync("src/components/onboarding/resumable-onboarding-shell.tsx", "utf8");
+const globalNav = readFileSync("src/components/layout/global-nav.tsx", "utf8");
+const profileMenu = readFileSync("src/components/layout/profile-menu.tsx", "utf8");
 
 assert.match(
     actions,
@@ -70,6 +72,31 @@ assert.match(shell, /<progress[\s\S]*?aria-label="Onboarding progress"/);
 assert.match(shell, /<details[^>]*>[\s\S]*?<summary>View progress<\/summary>/);
 assert.match(shell, /pt-\[calc\(5rem\+env\(safe-area-inset-top,0px\)\)\]/);
 assert.match(shell, /pb-\[calc\(5rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+assert.match(
+    globalNav,
+    /hideNavForRoutes = \[[^\]]*"\/onboarding"/,
+    "global navigation is hidden on the focused onboarding route",
+);
+assert.match(profileMenu, /pathname === "\/onboarding"/, "the profile menu is hidden on the focused onboarding route");
+assert.match(shell, />\s*Exit onboarding\s*</, "onboarding exposes an explicit exit action");
+assert.match(shell, /aria-label="Exit onboarding and go to Explore"/);
+assert.match(
+    shell,
+    /hasUnsavedChanges[\s\S]*?window\.confirm\("You have unsaved changes\. Exit onboarding and discard them\?"\)/,
+    "exiting with local edits requires confirmation",
+);
+assert.match(
+    shell,
+    /className=\{styles\.exitAction\}[\s\S]*?disabled=\{pending \|\| cardSaving\}[\s\S]*?onClick=\{exitOnboarding\}/,
+    "the exit action is disabled while a save or navigation transition is pending",
+);
+const exitHandler = shell.slice(shell.indexOf("const exitOnboarding ="), shell.indexOf("const next ="));
+assert.match(exitHandler, /router\.push\("\/explore"\)/, "exit navigates directly to Explore");
+assert.doesNotMatch(
+    exitHandler,
+    /acknowledgeOnboardingCompletion|skipOnboardingCard|navigateOnboardingCard/,
+    "exit does not complete, skip or navigate an onboarding card through server actions",
+);
 assert.match(
     shell,
     /<StepLink\s+key=\{step\.id\}\s+step=\{step\}\s+current=\{step\.id === currentCard\}\s+onSelect=\{navigate\}/,

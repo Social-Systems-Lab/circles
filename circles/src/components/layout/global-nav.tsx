@@ -21,7 +21,7 @@ export default function GlobalNav() {
         }
     }, []);
 
-    const hideNavForRoutes = ["/", "/welcome", "/holding", "/donations", "/supporter", "/donate"];
+    const hideNavForRoutes = ["/", "/welcome", "/holding", "/donations", "/supporter", "/donate", "/onboarding"];
 
     if (pathname && hideNavForRoutes.includes(pathname)) {
         return null;
@@ -34,9 +34,7 @@ export default function GlobalNav() {
             <div
                 className={`order-last w-full flex-shrink-0 md:order-first md:h-full md:w-[72px]`}
                 style={
-                    isMobile
-                        ? { height: `calc(${mobileNavHeight}px + env(safe-area-inset-bottom, 0px))` }
-                        : undefined
+                    isMobile ? { height: `calc(${mobileNavHeight}px + env(safe-area-inset-bottom, 0px))` } : undefined
                 }
             ></div>
             <div

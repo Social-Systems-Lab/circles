@@ -163,6 +163,38 @@
     font-weight: 600;
 }
 
+.progressMeta {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: auto;
+}
+
+.surface .exitAction {
+    min-height: 2rem;
+    border-radius: 999px;
+    color: var(--onboarding-ink-muted);
+    padding: 0.3rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.surface .exitAction:hover {
+    background: rgba(234, 212, 164, 0.5);
+    color: var(--onboarding-ink);
+}
+
+.surface .exitAction:disabled {
+    background: transparent;
+    color: #a9906c;
+    opacity: 0.65;
+}
+
+.surface .exitAction:focus-visible {
+    outline: 2px solid var(--onboarding-red);
+    outline-offset: 2px;
+}
+
 .progress {
     width: 100%;
     height: 0.55rem;
