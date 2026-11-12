@@ -16,7 +16,6 @@ export const ONBOARDING_CARDS: ReadonlyArray<{
     { id: "community-guidelines", title: "Community Guidelines", kind: "participation" },
     { id: "location", title: "Choose your location", kind: "optional" },
     { id: "profile-photo", title: "Add a profile picture", kind: "optional" },
-    { id: "proof-of-humanity", title: "Get human-verified", kind: "optional" },
 ];
 
 export type OnboardingCardStatus = (typeof ONBOARDING_CARDS)[number] & { complete: boolean };

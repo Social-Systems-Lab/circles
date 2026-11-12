@@ -140,7 +140,7 @@ const ProfileMenuBar = () => {
     };
 
     // hide when in the welcome screen
-    if (pathname?.startsWith("/signup") || pathname === "/login") {
+    if (pathname?.startsWith("/signup") || pathname === "/login" || pathname === "/onboarding") {
         return null;
     }
 

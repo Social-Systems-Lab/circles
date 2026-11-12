@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { updateCircleField } from "@/components/modules/home/actions";
 import {
     acceptOnboardingCommunityGuidelinesAction,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/community-guidelines";
 import { hasRealProfileImage, hasSelectedProfileLocation } from "@/lib/profile-completion";
 import type { Location } from "@/models/models";
+import styles from "./resumable-onboarding.module.css";
 
 const LocationPicker = dynamic(() => import("@/components/forms/location-picker"), {
     ssr: false,
@@ -89,15 +91,10 @@ export function IntroductionOnboardingCard({ profile, onUnsavedChange, onSavingC
     };
 
     return (
-        <section className="space-y-4" aria-labelledby="onboarding-introduction-heading">
-            <div>
-                <h2 id="onboarding-introduction-heading" className="text-lg font-semibold">
-                    What brings you to Kamooni?
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    A sentence or a few words is enough. You can edit this any time.
-                </p>
-            </div>
+        <section className={cn("space-y-4", styles.cardSection)} aria-label="Your introduction">
+            <p className={styles.cardIntro}>
+                Tell us what brings you here. A sentence or a few words is enough, and you can edit this any time.
+            </p>
             <div className="space-y-2">
                 <Label htmlFor="onboarding-introduction">Your introduction</Label>
                 <Textarea
@@ -111,11 +108,12 @@ export function IntroductionOnboardingCard({ profile, onUnsavedChange, onSavingC
                     }}
                     placeholder="I’m here to…"
                     rows={4}
+                    className={styles.field}
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? "onboarding-introduction-error" : "onboarding-introduction-help"}
                 />
                 {error ? (
-                    <p id="onboarding-introduction-error" role="alert" className="text-sm text-destructive">
+                    <p id="onboarding-introduction-error" role="alert" className={cn("text-sm", styles.alert)}>
                         {error}
                     </p>
                 ) : (
@@ -125,7 +123,7 @@ export function IntroductionOnboardingCard({ profile, onUnsavedChange, onSavingC
                 )}
             </div>
             {message && (
-                <p role="status" className="text-sm text-green-700">
+                <p role="status" className={cn("text-sm", styles.success)}>
                     {message}
                 </p>
             )}
@@ -133,7 +131,7 @@ export function IntroductionOnboardingCard({ profile, onUnsavedChange, onSavingC
                 type="button"
                 onClick={save}
                 disabled={saving || !value.trim()}
-                className="min-h-11 w-full sm:w-auto"
+                className={cn("w-full sm:w-auto", styles.primaryAction)}
             >
                 {saving ? (
                     <>
@@ -187,20 +185,15 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
     };
 
     return (
-        <section className="space-y-4" aria-labelledby="onboarding-guidelines-heading">
-            <div>
-                <h2 id="onboarding-guidelines-heading" className="text-lg font-semibold">
-                    Community Guidelines
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    These shared principles help make Kamooni a respectful place to take part.
-                </p>
-            </div>
+        <section className={cn("space-y-4", styles.cardSection)} aria-label="Community Guidelines">
+            <p className={styles.cardIntro}>
+                These shared principles help make Kamooni a respectful place to take part.
+            </p>
             <div
                 tabIndex={0}
                 role="region"
                 aria-label="Community Guidelines text"
-                className="max-h-72 space-y-5 overflow-y-auto rounded-lg border bg-background p-4 pr-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn("max-h-72 space-y-5 overflow-y-auto p-4 pr-3", styles.scrollPanel)}
             >
                 {COMMUNITY_GUIDELINE_RULES.map((rule) => (
                     <article key={rule.id} className="space-y-1">
@@ -210,7 +203,7 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
                 ))}
             </div>
             {alreadyAccepted ? (
-                <div className="flex items-start gap-2 rounded-md bg-muted/60 p-3 text-sm" role="status">
+                <div className={cn("flex items-start gap-2 p-3 text-sm", styles.statusPanel)} role="status">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-700" />
                     <div>
                         <p className="font-medium">You’ve already accepted the Community Guidelines.</p>
@@ -227,7 +220,7 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
                             Those records and timestamps will be preserved.
                         </p>
                     )}
-                    <div className="flex items-start gap-3 rounded-md border p-3">
+                    <div className={cn("flex items-start gap-3 p-3", styles.checkRow)}>
                         <Checkbox
                             id="onboarding-guidelines-agreement"
                             checked={agreed}
@@ -237,6 +230,7 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
                                 setError("");
                                 setMessage("");
                             }}
+                            className={styles.checkbox}
                             aria-describedby={error ? "onboarding-guidelines-error" : undefined}
                         />
                         <Label htmlFor="onboarding-guidelines-agreement" className="cursor-pointer leading-5">
@@ -244,7 +238,7 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
                         </Label>
                     </div>
                     {error && (
-                        <p id="onboarding-guidelines-error" role="alert" className="text-sm text-destructive">
+                        <p id="onboarding-guidelines-error" role="alert" className={cn("text-sm", styles.alert)}>
                             {error}
                         </p>
                     )}
@@ -252,7 +246,7 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
                         type="button"
                         onClick={accept}
                         disabled={!agreed || saving}
-                        className="min-h-11 w-full sm:w-auto"
+                        className={cn("w-full sm:w-auto", styles.primaryAction)}
                     >
                         {saving ? (
                             <>
@@ -266,7 +260,7 @@ export function CommunityGuidelinesOnboardingCard({ profile, onUnsavedChange, on
                 </div>
             )}
             {message && (
-                <p role="status" className="text-sm text-green-700">
+                <p role="status" className={cn("text-sm", styles.success)}>
                     {message}
                 </p>
             )}
@@ -313,18 +307,12 @@ export function LocationOnboardingCard({ profile, onUnsavedChange, onSavingChang
     };
 
     return (
-        <section className="space-y-4" aria-labelledby="onboarding-location-heading">
-            <div>
-                <h2 id="onboarding-location-heading" className="text-lg font-semibold">
-                    Choose your location
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Optional. Search for a place or select it directly on the map. You don’t need to share an exact
-                    address.
-                </p>
-            </div>
-            <div className="rounded-lg border p-3 sm:p-4">
-                <div className="mb-4 space-y-1 rounded-md bg-muted/50 p-3 text-sm">
+        <section className={cn("space-y-4", styles.cardSection)} aria-label="Choose your location">
+            <p className={styles.cardIntro}>
+                Search for a place or select it directly on the map. You don’t need to share an exact address.
+            </p>
+            <div className={cn("p-3 sm:p-4", styles.innerPanel)}>
+                <div className={cn("mb-4 space-y-1 p-3 text-sm", styles.privacyNote)}>
                     <h3 className="font-medium">Choose where people can find you</h3>
                     <p className="text-muted-foreground">
                         Select a nearby public place, such as a café, park or library, rather than your home address.
@@ -345,12 +333,12 @@ export function LocationOnboardingCard({ profile, onUnsavedChange, onSavingChang
                 />
             </div>
             {error && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={cn("text-sm", styles.alert)}>
                     {error}
                 </p>
             )}
             {message && (
-                <p role="status" className="text-sm text-green-700">
+                <p role="status" className={cn("text-sm", styles.success)}>
                     {message}
                 </p>
             )}
@@ -358,7 +346,7 @@ export function LocationOnboardingCard({ profile, onUnsavedChange, onSavingChang
                 type="button"
                 onClick={save}
                 disabled={saving || !validSelectedLocation}
-                className="min-h-11 w-full sm:w-auto"
+                className={cn("w-full sm:w-auto", styles.primaryAction)}
             >
                 {saving ? (
                     <>
@@ -437,21 +425,16 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
     };
 
     return (
-        <section className="space-y-4" aria-labelledby="onboarding-photo-heading">
-            <div>
-                <h2 id="onboarding-photo-heading" className="text-lg font-semibold">
-                    Add a profile picture
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Optional for participation. A genuine picture and a selected location are both needed before a
-                    personal profile can appear on the map.
-                </p>
-            </div>
-            <div className="flex flex-col items-center gap-4 rounded-lg border p-4 sm:flex-row sm:items-start">
+        <section className={cn("space-y-4", styles.cardSection)} aria-label="Add a profile picture">
+            <p className={styles.cardIntro}>
+                A genuine picture and a selected location are both needed before a personal profile can appear on the
+                map.
+            </p>
+            <div className={cn("flex flex-col items-center gap-4 p-4 sm:flex-row sm:items-start", styles.photoLayout)}>
                 <img
                     src={previewUrl}
                     alt={realPhoto ? "Your current profile picture" : "Default profile picture preview"}
-                    className="h-28 w-28 rounded-full border object-cover"
+                    className={cn("h-28 w-28 rounded-full object-cover", styles.photoPreview)}
                 />
                 <div className="w-full space-y-3">
                     <Label htmlFor="onboarding-profile-photo" className="block text-sm font-medium">
@@ -463,14 +446,22 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
                         type="file"
                         accept="image/*"
                         onChange={(event) => selectFile(event.target.files?.[0])}
-                        className="block min-h-11 w-full cursor-pointer rounded-md border p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-muted file:px-3 file:py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className={cn(
+                            "block min-h-11 w-full cursor-pointer p-2 text-sm file:mr-3 file:px-3 file:py-2 focus-visible:outline-none",
+                            styles.field,
+                        )}
                         aria-describedby="onboarding-profile-photo-help"
                     />
                     <p id="onboarding-profile-photo-help" className="text-sm text-muted-foreground">
                         Kamooni’s existing image validation and secure profile storage will be used.
                     </p>
                     {file && (
-                        <Button type="button" onClick={upload} disabled={saving} className="min-h-11 w-full sm:w-auto">
+                        <Button
+                            type="button"
+                            onClick={upload}
+                            disabled={saving}
+                            className={cn("w-full sm:w-auto", styles.primaryAction)}
+                        >
                             {saving ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -487,12 +478,12 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
                 </div>
             </div>
             {error && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={cn("text-sm", styles.alert)}>
                     {error}
                 </p>
             )}
             {message && (
-                <p role="status" className="text-sm text-green-700">
+                <p role="status" className={cn("text-sm", styles.success)}>
                     {message}
                 </p>
             )}
