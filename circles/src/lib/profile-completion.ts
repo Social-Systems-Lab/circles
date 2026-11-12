@@ -54,9 +54,13 @@ export const hasRealProfileImage = (circle?: Partial<Circle> | null): boolean =>
     return hasRealProfileImageUrl(circle?.picture?.url);
 };
 
-export const hasProfileAboutText = (circle?: Partial<Circle> | null): boolean => {
-    return Boolean(circle?.description?.trim() || circle?.content?.trim());
+export const getProfileAboutText = (circle?: Partial<Circle> | null): string | null => {
+    if (circle?.content?.trim()) return circle.content;
+    if (circle?.description?.trim()) return circle.description;
+    return null;
 };
+
+export const hasProfileAboutText = (circle?: Partial<Circle> | null): boolean => getProfileAboutText(circle) !== null;
 
 export const hasCompletedCommunityGuidelines = (circle?: Partial<Circle> | null): boolean => {
     return isCommunityGuidelinesCompleted(circle?.communityGuidelinesAcceptance);
