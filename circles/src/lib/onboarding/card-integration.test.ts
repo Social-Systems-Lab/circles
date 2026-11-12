@@ -5,6 +5,7 @@ const actions = readFileSync("src/app/onboarding/card-actions.ts", "utf8");
 const cards = readFileSync("src/components/onboarding/resumable-onboarding-cards.tsx", "utf8");
 const page = readFileSync("src/app/onboarding/page.tsx", "utf8");
 const shell = readFileSync("src/components/onboarding/resumable-onboarding-shell.tsx", "utf8");
+const onboardingStyles = readFileSync("src/components/onboarding/resumable-onboarding.module.css", "utf8");
 const photoAction = readFileSync("src/components/modules/home/actions.ts", "utf8");
 const mediaStorage = readFileSync("src/lib/data/circle-media-storage.ts", "utf8");
 
@@ -94,6 +95,34 @@ assert.match(
 );
 assert.match(shell, /onSavingChange=\{setCardSaving\}/, "shell prevents navigation while a card save is pending");
 assert.match(shell, /hasUnsavedChanges && !window\.confirm/, "navigation warns before discarding unsaved card data");
+assert.match(
+    shell,
+    /kamooni-emblem-yellow\.png[\s\S]*kamooni-wordmark-yellow\.png/,
+    "onboarding uses the official Kamooni logo assets",
+);
+assert.doesNotMatch(shell, /hero-illustration/, "the decorative thumbnail is removed");
+assert.doesNotMatch(
+    shell,
+    /styles\.(?:progressCard|contentCard|completionCard)|<CardHeader/,
+    "branding, progress and card content share one onboarding frame",
+);
+assert.match(onboardingStyles, /--onboarding-primary: #2b643a/);
+assert.match(onboardingStyles, /background: #ffffff/);
+assert.doesNotMatch(
+    onboardingStyles,
+    /#f4ead0|#f6ca67|hero-illustration|flower-bg/,
+    "the cream and gold page treatment and decorative artwork are removed",
+);
+assert.match(
+    onboardingStyles,
+    /\.progress::-webkit-progress-value\s*\{[^}]*background: var\(--onboarding-primary\)/,
+    "completed progress uses the approved green",
+);
+assert.match(
+    onboardingStyles,
+    /\.surface \.primaryAction\s*\{[^}]*background: var\(--onboarding-primary\)[^}]*color: #ffffff/,
+    "primary buttons use the approved green with white text",
+);
 assert.match(
     shell,
     /IntroductionOnboardingCard[\s\S]*CommunityGuidelinesOnboardingCard[\s\S]*LocationOnboardingCard[\s\S]*ProfilePhotoOnboardingCard[\s\S]*HumanVerificationOnboardingCard/,

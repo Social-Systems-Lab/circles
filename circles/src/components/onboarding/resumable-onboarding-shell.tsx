@@ -6,7 +6,7 @@ import { Montserrat, Noto_Serif } from "next/font/google";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import type { OnboardingCardId } from "@/models/models";
 import type { OnboardingCardStatus } from "@/lib/onboarding/resumable-state";
 import { getNextOnboardingCardInSequence, ONBOARDING_CARDS } from "@/lib/onboarding/resumable-state";
@@ -65,22 +65,22 @@ const STEP_COPY: Record<OnboardingCardId, string> = {
 function OnboardingBrand() {
     return (
         <div className={styles.brand}>
-            <div className={styles.brandMark}>
-                <Image src="/images/kamooni_logo.png" alt="" fill sizes="54px" className="object-contain p-2" />
-            </div>
-            <div>
-                <p className={styles.brandName}>Kamooni</p>
-                <p className={styles.brandTagline}>Find the others</p>
-            </div>
-            <div className={styles.brandArt} aria-hidden="true">
-                <Image
-                    src="/images/landing/hero-illustration.png"
-                    alt=""
-                    fill
-                    sizes="(min-width: 640px) 108px, 84px"
-                    className="object-cover"
-                />
-            </div>
+            <Image
+                src="/images/landing/kamooni-emblem-yellow.png"
+                alt=""
+                width={1912}
+                height={1872}
+                sizes="40px"
+                className={styles.brandEmblem}
+            />
+            <Image
+                src="/images/landing/kamooni-wordmark-yellow.png"
+                alt="Kamooni"
+                width={2048}
+                height={425}
+                sizes="(min-width: 640px) 154px, 126px"
+                className={styles.brandWordmark}
+            />
         </div>
     );
 }
@@ -147,18 +147,21 @@ export default function OnboardingShell({
     if (completionAcknowledged) {
         return (
             <main className={cn(montserrat.variable, notoSerif.variable, styles.surface)}>
-                <div className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-[calc(5rem+env(safe-area-inset-top,0px))] sm:px-6 sm:pb-6 sm:pt-[calc(5rem+env(safe-area-inset-top,0px))]">
-                    <div className={styles.frame}>
-                        <OnboardingBrand />
-                        <Card className={styles.completionCard}>
-                            <CardContent className={styles.completionContent}>
+                <div className={styles.page}>
+                    <Card className={styles.frame}>
+                        <CardContent className={styles.frameContent}>
+                            <header className={styles.header}>
+                                <OnboardingBrand />
+                            </header>
+                            <section className={styles.completionContent}>
                                 <div className={styles.completionMark}>
                                     <Image
-                                        src="/images/kamooni_logo.png"
+                                        src="/images/landing/kamooni-emblem-yellow.png"
                                         alt=""
-                                        fill
-                                        sizes="80px"
-                                        className="object-contain p-4"
+                                        width={1912}
+                                        height={1872}
+                                        sizes="64px"
+                                        className={styles.completionEmblem}
                                     />
                                 </div>
                                 <h1 className={styles.completionTitle}>Welcome to Kamooni.</h1>
@@ -197,9 +200,9 @@ export default function OnboardingShell({
                                         <Link href="/explore">Continue to Kamooni</Link>
                                     </Button>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            </section>
+                        </CardContent>
+                    </Card>
                 </div>
             </main>
         );
@@ -207,32 +210,36 @@ export default function OnboardingShell({
 
     return (
         <main className={cn(montserrat.variable, notoSerif.variable, styles.surface)}>
-            <div className="mx-auto flex min-h-[70vh] w-full flex-col gap-4 px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-[calc(5rem+env(safe-area-inset-top,0px))] sm:gap-5 sm:px-6 sm:pb-6 sm:pt-[calc(5rem+env(safe-area-inset-top,0px))]">
-                <div className={styles.frame}>
-                    <OnboardingBrand />
+            <div
+                className={cn(
+                    styles.page,
+                    "px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-[calc(5rem+env(safe-area-inset-top,0px))] sm:px-6 sm:pb-6 sm:pt-[calc(5rem+env(safe-area-inset-top,0px))]",
+                )}
+            >
+                <Card className={styles.frame}>
+                    <CardContent className={styles.frameContent}>
+                        <header className={styles.header}>
+                            <OnboardingBrand />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className={styles.exitAction}
+                                disabled={pending || cardSaving}
+                                onClick={exitOnboarding}
+                                aria-label="Exit onboarding and go to Explore"
+                            >
+                                Exit onboarding
+                            </Button>
+                        </header>
 
-                    <Card className={styles.progressCard}>
-                        <CardContent className={styles.progressContent}>
+                        <section className={styles.progressSection} aria-label="Onboarding progress">
                             <div className={styles.progressHeader}>
                                 <p className={styles.stepLabel}>
                                     Step {cardIndex + 1} of {ONBOARDING_CARDS.length}
                                 </p>
-                                <div className={styles.progressMeta}>
-                                    <p className={styles.progressSummary}>
-                                        {participationComplete}/3 required · {optionalComplete}/{optional.length}{" "}
-                                        optional
-                                    </p>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className={styles.exitAction}
-                                        disabled={pending || cardSaving}
-                                        onClick={exitOnboarding}
-                                        aria-label="Exit onboarding and go to Explore"
-                                    >
-                                        Exit onboarding
-                                    </Button>
-                                </div>
+                                <p className={styles.progressSummary}>
+                                    {participationComplete}/3 required · {optionalComplete}/{optional.length} optional
+                                </p>
                             </div>
                             <progress
                                 aria-label="Onboarding progress"
@@ -277,11 +284,9 @@ export default function OnboardingShell({
                                     </section>
                                 </div>
                             </details>
-                        </CardContent>
-                    </Card>
+                        </section>
 
-                    <Card className={styles.contentCard}>
-                        <CardHeader className={styles.contentHeader}>
+                        <section className={styles.currentSection}>
                             <div className={styles.contentTitleRow}>
                                 <div>
                                     <p className={styles.eyebrow}>
@@ -295,146 +300,146 @@ export default function OnboardingShell({
                                     {current?.kind === "participation" ? "Required" : "Optional"}
                                 </span>
                             </div>
-                        </CardHeader>
-                        <CardContent className={cn("space-y-6", styles.content)}>
-                            <p className={styles.lead}>{STEP_COPY[currentCard]}</p>
-                            {currentCard === "introduction" && (
-                                <IntroductionOnboardingCard
-                                    key={currentCard}
-                                    profile={profile}
-                                    humanVerification={humanVerification}
-                                    onUnsavedChange={setHasUnsavedChanges}
-                                    onSavingChange={setCardSaving}
-                                    onSaved={() => {
-                                        setHasUnsavedChanges(false);
-                                        router.refresh();
-                                    }}
-                                />
-                            )}
-                            {currentCard === "community-guidelines" && (
-                                <CommunityGuidelinesOnboardingCard
-                                    key={currentCard}
-                                    profile={profile}
-                                    humanVerification={humanVerification}
-                                    onUnsavedChange={setHasUnsavedChanges}
-                                    onSavingChange={setCardSaving}
-                                    onSaved={() => {
-                                        setHasUnsavedChanges(false);
-                                        router.refresh();
-                                    }}
-                                />
-                            )}
-                            {currentCard === "location" && (
-                                <LocationOnboardingCard
-                                    key={currentCard}
-                                    profile={profile}
-                                    humanVerification={humanVerification}
-                                    onUnsavedChange={setHasUnsavedChanges}
-                                    onSavingChange={setCardSaving}
-                                    onSaved={() => {
-                                        setHasUnsavedChanges(false);
-                                        router.refresh();
-                                    }}
-                                />
-                            )}
-                            {currentCard === "profile-photo" && (
-                                <ProfilePhotoOnboardingCard
-                                    key={currentCard}
-                                    profile={profile}
-                                    humanVerification={humanVerification}
-                                    onUnsavedChange={setHasUnsavedChanges}
-                                    onSavingChange={setCardSaving}
-                                    onSaved={() => {
-                                        setHasUnsavedChanges(false);
-                                        router.refresh();
-                                    }}
-                                />
-                            )}
-                            {currentCard === "proof-of-humanity" && (
-                                <HumanVerificationOnboardingCard
-                                    key={currentCard}
-                                    profile={profile}
-                                    humanVerification={humanVerification}
-                                    onUnsavedChange={setHasUnsavedChanges}
-                                    onSavingChange={setCardSaving}
-                                    onSaved={() => {
-                                        setHasUnsavedChanges(false);
-                                        router.refresh();
-                                    }}
-                                />
-                            )}
-                            {currentCard === "email-verification" && (
-                                <p className={cn("p-4 text-sm", styles.statusPanel)}>
-                                    Email verification is handled through the link sent to your inbox. Your other
-                                    onboarding steps are still available while you browse.
-                                </p>
-                            )}
-                            {(navigationSaveFailed || error) && (
-                                <p role="alert" className={cn("text-sm", styles.alert)}>
-                                    {navigationSaveFailed
-                                        ? "This step is open, but we couldn’t save your place. Please try again."
-                                        : error}
-                                </p>
-                            )}
-                            <div className={styles.actions}>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className={styles.secondaryAction}
-                                    disabled={pending || cardSaving || !previousCard}
-                                    onClick={() => previousCard && navigate(previousCard)}
-                                >
-                                    Back
-                                </Button>
-                                <div className={styles.actionGroup}>
-                                    {current && !current.complete && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            className={styles.ghostAction}
-                                            disabled={pending || cardSaving}
-                                            onClick={() => {
-                                                if (
-                                                    hasUnsavedChanges &&
-                                                    !window.confirm(
-                                                        "You have unsaved changes. Skip this step and discard them?",
+                            <div className={cn("space-y-6", styles.content)}>
+                                <p className={styles.lead}>{STEP_COPY[currentCard]}</p>
+                                {currentCard === "introduction" && (
+                                    <IntroductionOnboardingCard
+                                        key={currentCard}
+                                        profile={profile}
+                                        humanVerification={humanVerification}
+                                        onUnsavedChange={setHasUnsavedChanges}
+                                        onSavingChange={setCardSaving}
+                                        onSaved={() => {
+                                            setHasUnsavedChanges(false);
+                                            router.refresh();
+                                        }}
+                                    />
+                                )}
+                                {currentCard === "community-guidelines" && (
+                                    <CommunityGuidelinesOnboardingCard
+                                        key={currentCard}
+                                        profile={profile}
+                                        humanVerification={humanVerification}
+                                        onUnsavedChange={setHasUnsavedChanges}
+                                        onSavingChange={setCardSaving}
+                                        onSaved={() => {
+                                            setHasUnsavedChanges(false);
+                                            router.refresh();
+                                        }}
+                                    />
+                                )}
+                                {currentCard === "location" && (
+                                    <LocationOnboardingCard
+                                        key={currentCard}
+                                        profile={profile}
+                                        humanVerification={humanVerification}
+                                        onUnsavedChange={setHasUnsavedChanges}
+                                        onSavingChange={setCardSaving}
+                                        onSaved={() => {
+                                            setHasUnsavedChanges(false);
+                                            router.refresh();
+                                        }}
+                                    />
+                                )}
+                                {currentCard === "profile-photo" && (
+                                    <ProfilePhotoOnboardingCard
+                                        key={currentCard}
+                                        profile={profile}
+                                        humanVerification={humanVerification}
+                                        onUnsavedChange={setHasUnsavedChanges}
+                                        onSavingChange={setCardSaving}
+                                        onSaved={() => {
+                                            setHasUnsavedChanges(false);
+                                            router.refresh();
+                                        }}
+                                    />
+                                )}
+                                {currentCard === "proof-of-humanity" && (
+                                    <HumanVerificationOnboardingCard
+                                        key={currentCard}
+                                        profile={profile}
+                                        humanVerification={humanVerification}
+                                        onUnsavedChange={setHasUnsavedChanges}
+                                        onSavingChange={setCardSaving}
+                                        onSaved={() => {
+                                            setHasUnsavedChanges(false);
+                                            router.refresh();
+                                        }}
+                                    />
+                                )}
+                                {currentCard === "email-verification" && (
+                                    <p className={cn("p-4 text-sm", styles.statusPanel)}>
+                                        Email verification is handled through the link sent to your inbox. Your other
+                                        onboarding steps are still available while you browse.
+                                    </p>
+                                )}
+                                {(navigationSaveFailed || error) && (
+                                    <p role="alert" className={cn("text-sm", styles.alert)}>
+                                        {navigationSaveFailed
+                                            ? "This step is open, but we couldn’t save your place. Please try again."
+                                            : error}
+                                    </p>
+                                )}
+                                <div className={styles.actions}>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className={styles.secondaryAction}
+                                        disabled={pending || cardSaving || !previousCard}
+                                        onClick={() => previousCard && navigate(previousCard)}
+                                    >
+                                        Back
+                                    </Button>
+                                    <div className={styles.actionGroup}>
+                                        {current && !current.complete && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className={styles.ghostAction}
+                                                disabled={pending || cardSaving}
+                                                onClick={() => {
+                                                    if (
+                                                        hasUnsavedChanges &&
+                                                        !window.confirm(
+                                                            "You have unsaved changes. Skip this step and discard them?",
+                                                        )
                                                     )
-                                                )
-                                                    return;
-                                                go(() => skipOnboardingCard(currentCard));
-                                            }}
-                                        >
-                                            Skip for now
-                                        </Button>
-                                    )}
-                                    {next ? (
-                                        <Button
-                                            type="button"
-                                            className={styles.primaryAction}
-                                            disabled={pending || cardSaving}
-                                            onClick={() => navigate(next)}
-                                        >
-                                            {pending ? "Saving…" : "Continue"}
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            type="button"
-                                            className={styles.primaryAction}
-                                            disabled={pending || cardSaving}
-                                            onClick={() => go(acknowledgeOnboardingCompletion)}
-                                        >
-                                            {pending
-                                                ? "Saving…"
-                                                : requiredStepsComplete
-                                                  ? "Finish onboarding"
-                                                  : "Finish for now"}
-                                        </Button>
-                                    )}
+                                                        return;
+                                                    go(() => skipOnboardingCard(currentCard));
+                                                }}
+                                            >
+                                                Skip for now
+                                            </Button>
+                                        )}
+                                        {next ? (
+                                            <Button
+                                                type="button"
+                                                className={styles.primaryAction}
+                                                disabled={pending || cardSaving}
+                                                onClick={() => navigate(next)}
+                                            >
+                                                {pending ? "Saving…" : "Continue"}
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                className={styles.primaryAction}
+                                                disabled={pending || cardSaving}
+                                                onClick={() => go(acknowledgeOnboardingCompletion)}
+                                            >
+                                                {pending
+                                                    ? "Saving…"
+                                                    : requiredStepsComplete
+                                                      ? "Finish onboarding"
+                                                      : "Finish for now"}
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                        </section>
+                    </CardContent>
+                </Card>
             </div>
         </main>
     );
