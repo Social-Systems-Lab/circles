@@ -296,6 +296,8 @@ test("owner-scoped welcome suppression preserves verified and contributor perk b
         { update: { manualMember: true }, expected: true },
         { update: { accountStatus: "active", isFoundingMember: true }, expected: true },
         { update: { completedOnboardingSteps: ["welcome"] }, expected: true },
+        { update: { metadata: { onboardingFlow: "pending-registration-v1" } }, expected: true },
+        { update: { metadata: { onboardingFlow: "pilot-quick-signup" } }, expected: false },
         { update: {}, expected: false },
     ];
 

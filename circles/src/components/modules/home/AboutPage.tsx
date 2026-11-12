@@ -38,6 +38,7 @@ import { UserPicture } from "../members/user-picture";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
+import { getProfileAboutText } from "@/lib/profile-completion";
 
 export default function AboutPage({
     circle,
@@ -248,7 +249,9 @@ export default function AboutPage({
         shouldShowFundingPanel ||
         shouldShowUpcomingShiftsPanel;
 
-    const hasMainContent = isUserProfile ? !!circle.content : !!circle.content || !!circle.description;
+    const richAboutContent = circle.content?.trim() ? circle.content : null;
+    const aboutText = getProfileAboutText(circle) ?? "";
+    const hasMainContent = Boolean(aboutText);
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
 
     const openLeaderPreview = (leader: ClientAdminDisplayDto) => {
@@ -330,14 +333,10 @@ export default function AboutPage({
                                             </Button>
                                         )}
                                     </div>
-                                    {circle.content ? (
-                                        <RichText content={circle.content} />
-                                    ) : isUserProfile ? (
-                                        <p className="mb-6 text-base text-muted-foreground">
-                                            This profile hasn&apos;t added an About section yet.
-                                        </p>
+                                    {richAboutContent ? (
+                                        <RichText content={richAboutContent} />
                                     ) : (
-                                        <p className="mb-6 text-base">{circle.description}</p>
+                                        <p className="mb-6 text-base">{aboutText}</p>
                                     )}
                                 </>
                             ) : (

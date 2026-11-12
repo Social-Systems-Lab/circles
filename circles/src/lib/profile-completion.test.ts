@@ -6,6 +6,7 @@ import {
     getParticipationBlockReason,
     getParticipationReadiness,
     getParticipationRequiredMessage,
+    getProfileAboutText,
     hasProfileAboutText,
     hasRealProfileImage,
     hasRealProfileImageUrl,
@@ -61,6 +62,26 @@ assert.equal(hasRealProfileImageUrl("/storage/users/profile.png"), true, "custom
 assert.equal(hasProfileAboutText({ description: "About me" }), true, "description satisfies About");
 assert.equal(hasProfileAboutText({ content: "Long about me" }), true, "content satisfies About");
 assert.equal(hasProfileAboutText({ description: "  ", content: "\n" }), false, "blank About fields fail");
+assert.equal(
+    getProfileAboutText({ description: "About me" }),
+    "About me",
+    "personal profile About falls back to description",
+);
+assert.equal(
+    getProfileAboutText({ description: "Plain description", content: "<p>Rich content</p>" }),
+    "<p>Rich content</p>",
+    "rich content takes precedence over description",
+);
+assert.equal(
+    getProfileAboutText({ description: "Description fallback", content: "   " }),
+    "Description fallback",
+    "blank rich content falls back to description",
+);
+assert.equal(
+    getProfileAboutText({ description: " ", content: "\n" }),
+    null,
+    "whitespace-only About fields produce the empty state",
+);
 assert.equal(hasSelectedProfileLocation(baseUser()), true, "finite selected coordinates satisfy location improvement");
 assert.equal(hasSelectedProfileLocation(baseUser({ location: undefined })), false, "missing location fails");
 assert.equal(

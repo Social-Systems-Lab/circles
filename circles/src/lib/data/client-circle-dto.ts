@@ -325,6 +325,9 @@ export const hasCompletedWelcomeOnboarding = (circle: Circle): boolean => {
     return steps.includes("welcome") || steps.includes("member") || steps.includes("final");
 };
 
+const usesPendingRegistrationOnboarding = (circle: Circle): boolean =>
+    circle.metadata?.onboardingFlow === "pending-registration-v1";
+
 export const buildVisibleCircleModuleHandles = (circle: Circle, viewerGroups: string[]): string[] => {
     const enabledModules = circle.enabledModules ?? [];
     return modules.flatMap((module) => {
@@ -355,7 +358,10 @@ export const buildLayoutClientProps = (
             parentCircle: buildClientParentCircleDto(parentCircle),
             shouldSuppressWelcomeOnboarding:
                 isProfileSubject &&
-                (isVerifiedUser(circle) || hasContributorPerks(circle) || hasCompletedWelcomeOnboarding(circle)),
+                (isVerifiedUser(circle) ||
+                    hasContributorPerks(circle) ||
+                    hasCompletedWelcomeOnboarding(circle) ||
+                    usesPendingRegistrationOnboarding(circle)),
             proofOfHumanitySummary: buildClientHumanityVerificationSummaryDto(proofOfHumanitySummary),
         },
         circleTabs: {
