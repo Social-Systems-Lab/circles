@@ -23,6 +23,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Production onboarding safety contracts
+        run: |
+          ./scripts/test-production-onboarding-control.sh
+          ./scripts/test-production-git-sync.sh
+          ./scripts/pending-registration-ops-container.test.sh
+          ./scripts/test-production-onboarding-rehearsal.sh
+
       - name: Build and execute registration operator image read-only
         run: ./scripts/test-pending-registration-ops-image.sh
 

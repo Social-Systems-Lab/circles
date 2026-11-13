@@ -33,6 +33,10 @@ services:
             - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
             - CIRCLES_URL=${CIRCLES_URL}
             - NEXT_PUBLIC_CHAT_PROVIDER=mongo
+            - PENDING_REGISTRATION_ENABLED=false
+            - PENDING_REGISTRATION_JOURNEY_READY=false
+            - PENDING_REGISTRATION_TOKEN_HMAC_KEY=
+            - REGISTRATION_DEPLOYMENT_ID=${REGISTRATION_DEPLOYMENT_ID:-}
 
         volumes:
             - circles:/circles

@@ -1,0 +1,38 @@
+name: Production Onboarding Rehearsal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearsal:
+    name: Disposable production onboarding rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare required local images
+        run: |
+          docker pull node:20-alpine
+          docker pull mongo:7.0
+          docker pull nginx:1.27.4-alpine
+          docker pull imbios/bun-node:1.3.1-20.19.5-slim
+
+      - name: Create disposable-runner marker
+        run: |
+          sudo install -m 600 /dev/null /run/kamooni-production-onboarding-rehearsal-disposable
+          printf '%s\n' 'KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL_V1' | \
+            sudo tee /run/kamooni-production-onboarding-rehearsal-disposable >/dev/null
+
+      - name: Run isolated rehearsal
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,CI \
+            env \
+              KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL=KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL_V1 \
+              KAMOONI_REHEARSAL_DAEMON_ID="$(docker info --format '{{.ID}}')" \
+              ./circles/scripts/rehearse-production-onboarding-control.sh

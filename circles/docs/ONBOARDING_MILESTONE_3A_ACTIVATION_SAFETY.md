@@ -2,6 +2,10 @@
 
 Milestone 3A does not expose pending registration. It adds operator inspection, durable reconciliation retention and a coordinated server-side routing gate.
 
+Production-specific safety tooling and the current activation procedure are documented in
+[`PRODUCTION_ONBOARDING_ACTIVATION.md`](PRODUCTION_ONBOARDING_ACTIVATION.md). The tooling remains
+disabled until a separately authorized production window.
+
 ## Registration routing
 
 The `registrationRouting` collection contains one `_id: "registration-routing"` record with three possible modes:
@@ -138,8 +142,10 @@ Do not log raw verification tokens, continuation secrets, ALTCHA payloads, passw
 
 ## Remaining activation blockers
 
-- Milestone 3 public actions and UI do not exist.
-- The email template and public verification URL remain unconfirmed.
+- The production pending-registration signup and onboarding journey has not completed an approved
+  Postmark end-to-end canary.
+- Production activation and rollback operators, monitoring ownership, and backup-restoration
+  evidence must be approved before the disabled tooling is used.
 - Real process-kill testing requires disposable staging MongoDB and credential volumes.
 - The legacy membership helper is not transactional across membership, chat and member-count side effects. Staging must prove interruption recovery or a separate repair mechanism must be implemented before production activation.
 - Orphan credentials without a Mongo account still require a reviewed import or explicit identity-abandonment decision; they intentionally fail closed.

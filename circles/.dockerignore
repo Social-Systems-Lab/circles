@@ -14,6 +14,9 @@ bun.lockb
 .env.local
 .env.development
 .env.production
+.env.production.activation
+.registration-routing-operator.sha256
+__pycache__
 
 # OS junk
 .DS_Store

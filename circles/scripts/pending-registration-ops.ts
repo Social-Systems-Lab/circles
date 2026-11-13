@@ -1,4 +1,5 @@
 import { inspectPendingRegistrationReconciliation } from "@/lib/auth/pending-registration-reconciliation";
+import { getPendingRegistrationCollections } from "@/lib/auth/pending-registration";
 import {
     ensureRegistrationRoutingRecord,
     getRegistrationRouting,
@@ -113,6 +114,44 @@ async function getRecoveryActivationStatus(db: Db) {
     };
 }
 
+async function preparePendingRegistrationIndexes(db: Db) {
+    const duplicateCorrelation = await db
+        .collection("circles")
+        .aggregate([
+            { $match: { "metadata.pendingRegistrationId": { $type: "string" } } },
+            { $group: { _id: "$metadata.pendingRegistrationId", count: { $sum: 1 } } },
+            { $match: { count: { $gt: 1 } } },
+            { $limit: 1 },
+        ])
+        .next();
+    if (duplicateCorrelation) {
+        throw new Error("Duplicate pending-registration account correlations require manual review");
+    }
+
+    const collections = await getPendingRegistrationCollections(db);
+    await db
+        .collection("pendingRegistrationProvisioningLocks")
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await db
+        .collection("pendingRegistrationFinalizationLocks")
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await db
+        .collection("circles")
+        .createIndex(
+            { "metadata.pendingRegistrationId": 1 },
+            { unique: true, partialFilterExpression: { "metadata.pendingRegistrationId": { $type: "string" } } },
+        );
+
+    return {
+        indexesReady: true,
+        pendingRegistrations: await collections.registrations.countDocuments(),
+        didReservations: await collections.didReservations.countDocuments(),
+        accountsWithPendingRegistration: await db
+            .collection("circles")
+            .countDocuments({ "metadata.pendingRegistrationId": { $type: "string" } }),
+    };
+}
+
 async function run(db: Db) {
     if (command === "inspect") {
         const usersDirectory = args.get("users-dir");
@@ -134,6 +173,14 @@ async function run(db: Db) {
     }
     if (command === "recovery-activation-status") {
         console.log(JSON.stringify(await getRecoveryActivationStatus(db), null, 2));
+        return;
+    }
+    if (command === "prepare-indexes") {
+        if (args.get("confirm") !== "PREPARE_PENDING_REGISTRATION_INDEXES") {
+            throw new Error("Explicit index-preparation confirmation is required");
+        }
+        authenticateRoutingOperator();
+        console.log(JSON.stringify(await preparePendingRegistrationIndexes(db), null, 2));
         return;
     }
     if (command === "route-set") {
@@ -169,7 +216,9 @@ async function run(db: Db) {
         console.log(JSON.stringify(await getRegistrationRouting(db.collection("registrationRouting")), null, 2));
         return;
     }
-    throw new Error("Usage: inspect, route-status, operations-status, recovery-activation-status, or route-set");
+    throw new Error(
+        "Usage: inspect, route-status, operations-status, recovery-activation-status, prepare-indexes, or route-set",
+    );
 }
 
 async function main() {
@@ -185,6 +234,7 @@ async function main() {
 }
 
 main().catch((error) => {
-    console.error(error instanceof Error ? error.message : "Operator command failed");
+    const message = error instanceof Error ? error.message : "Operator command failed";
+    console.error(/mongodb(?:\+srv)?:\/\//i.test(message) ? "Operator command failed during MongoDB access" : message);
     process.exit(1);
 });
