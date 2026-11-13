@@ -38,12 +38,17 @@ export async function isRegistrationModeAllowed(
     collection?: RegistrationRoutingCollection,
 ): Promise<boolean> {
     const routing = await getRegistrationRouting(collection);
+    return isRegistrationRoutingAllowed(routing, expected);
+}
+
+export function isRegistrationRoutingAllowed(
+    routing: Pick<RegistrationRoutingRecord, "mode" | "deploymentId">,
+    expected: Exclude<RegistrationMode, "paused">,
+    currentDeploymentId = process.env.REGISTRATION_DEPLOYMENT_ID,
+): boolean {
     if (routing.mode !== expected) return false;
     if (!routing.deploymentId) return expected === "legacy";
-    return (
-        Boolean(process.env.REGISTRATION_DEPLOYMENT_ID) &&
-        process.env.REGISTRATION_DEPLOYMENT_ID === routing.deploymentId
-    );
+    return Boolean(currentDeploymentId) && currentDeploymentId === routing.deploymentId;
 }
 
 export async function assertRegistrationMode(

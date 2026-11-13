@@ -10,6 +10,10 @@ The `registrationRouting` collection contains one `_id: "registration-routing"` 
 - `paused`: both creation paths reject new work.
 - `pending`: only pending-registration start and permanent provisioning are allowed.
 
+Both `/signup` and the legacy `/signup/pilot` entry render a friendly unavailable state while routing is
+`paused`. In `pending` mode, `/signup/pilot` redirects to `/signup`; in explicit `legacy` mode it continues to
+render the legacy form.
+
 No record is the fail-safe equivalent of `legacy`. Pending mode additionally requires `REGISTRATION_DEPLOYMENT_ID` on the application instance to exactly match `registrationRouting.deploymentId`. A missing or mismatched deployment id fails closed. `PENDING_REGISTRATION_ENABLED=true` remains independently required; routing alone cannot expose the backend.
 
 The active legacy action checks the routing record before ALTCHA and account creation. Pending start checks routing before ALTCHA or pending-record creation. Pending permanent provisioning checks routing again before acquiring its locks. This prevents verified pending records from provisioning after rollback.
