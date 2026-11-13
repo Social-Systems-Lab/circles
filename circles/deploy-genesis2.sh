@@ -136,8 +136,9 @@ echo "Building the read-only registration operator for the production SHA..."
   --profile production-onboarding-ops build registration_ops)
 
 echo "Verifying registration routing is legacy before normal production deployment..."
+docker image inspect "circles-registration-ops:$GIT_SHA" >/dev/null
 ROUTING_STATUS="$(cd "$APP_DIR" && docker compose -f docker-compose.yml -f docker-compose.production-ops.yml \
-  --profile production-onboarding-ops run --rm --no-deps --no-build -T registration_ops route-status)"
+  --profile production-onboarding-ops run --rm --no-deps --pull never -T registration_ops route-status)"
 if ! printf '%s\n' "$ROUTING_STATUS" | (cd "$APP_DIR" && \
   python3 scripts/validate-production-onboarding-activation.py route-status legacy >/dev/null); then
   echo "Error: normal production deployment is blocked while registration routing is not legacy." >&2

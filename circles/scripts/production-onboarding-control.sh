@@ -152,12 +152,14 @@ require_operator_verifier() {
 }
 
 run_ops() {
-    "${ops_compose[@]}" run --rm --no-deps --no-build -T registration_ops "$@"
+    require_operator_image
+    "${ops_compose[@]}" run --rm --no-deps --pull never -T registration_ops "$@"
 }
 
 run_ops_with_activation() {
     require_activation_file
-    "${ops_activation_compose[@]}" run --rm --no-deps --no-build -T registration_ops "$@"
+    require_operator_image
+    "${ops_activation_compose[@]}" run --rm --no-deps --pull never -T registration_ops "$@"
 }
 
 run_authenticated_ops() {
@@ -171,14 +173,16 @@ run_authenticated_ops() {
     [[ -n "$operator_token" ]] || fail "routing operator token is empty"
     if [[ "$compose_kind" == "activation" ]]; then
         require_activation_file
+        require_operator_image
         printf '%s' "$operator_token" | \
             python3 "$ACTIVATION_VALIDATOR" token-separation "$ACTIVATION_ENV_FILE" >/dev/null
         printf '%s\n' "$operator_token" | \
-            "${ops_activation_compose[@]}" run --rm --no-deps --no-build -T \
+            "${ops_activation_compose[@]}" run --rm --no-deps --pull never -T \
                 -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" registration_ops "$@"
     else
+        require_operator_image
         printf '%s\n' "$operator_token" | \
-            "${ops_compose[@]}" run --rm --no-deps --no-build -T \
+            "${ops_compose[@]}" run --rm --no-deps --pull never -T \
                 -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" registration_ops "$@"
     fi
     unset operator_token operator_hash

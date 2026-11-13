@@ -77,6 +77,14 @@ if grep -Eq 'echo .*operator_token|echo .*HMAC' "$control"; then
     echo "production control may disclose an operator token or HMAC" >&2
     exit 1
 fi
+if grep -Fq -- 'run --rm --no-deps --no-build' "$control" "$deploy"; then
+    echo "docker compose run uses unsupported --no-build instead of --pull never" >&2
+    exit 1
+fi
+grep -Fq 'run --rm --no-deps --pull never -T registration_ops' "$control"
+grep -Fq 'run --rm --no-deps --pull never -T registration_ops route-status' "$deploy"
+grep -Fq 'docker image inspect "circles-registration-ops:$GIT_SHA"' "$deploy"
+docker compose run --help 2>/dev/null | grep -Fq -- '--pull string'
 
 grep -Fq 'PRODUCTION_LOCK_FILE="/run/lock/circles-production-docker.lock"' "$deploy"
 grep -Fq 'PRODUCTION_LOCK_TIMEOUT_SECONDS=120' "$deploy"
