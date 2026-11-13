@@ -11,7 +11,11 @@ import { sendNotifications } from "@/lib/data/notifications";
 import { sendUserVerificationRejectedNotification, sendUserVerifiedNotification } from "@/lib/data/notifications";
 import { shapeReminderNotificationContents } from "@/lib/data/notification-content";
 import { sendEmail } from "@/lib/data/email";
-import { GlobalServerSettingsFormData, globalServerSettingsValidationSchema } from "./global-server-settings-schema";
+import {
+    GlobalServerSettingsFormData,
+    globalServerSettingsValidationSchema,
+    preserveOptionalIntegrationKeys,
+} from "./global-server-settings-schema";
 import { getServerSettings, registerServer, updateServerSettings, urlIsLocal } from "@/lib/data/server-settings";
 import { ServerSettings, VerificationRequest } from "@/models/models";
 import { upsertVdbCollections } from "@/lib/data/vdb"; // Import the re-indexing function
@@ -299,9 +303,10 @@ export async function saveGlobalServerSettings(data: GlobalServerSettingsFormDat
     try {
         // Fetch current settings to compare registry URL
         const currentSettings = await getServerSettings();
+        const settingsToPersist = preserveOptionalIntegrationKeys(validatedData, currentSettings);
 
         // Update the settings in the database
-        await updateServerSettings(validatedData as ServerSettings); // Cast needed as DB model might have more fields
+        await updateServerSettings(settingsToPersist as ServerSettings); // Cast needed as DB model might have more fields
 
         // Handle registry registration if URL changed and is valid
         if (
@@ -325,7 +330,7 @@ export async function saveGlobalServerSettings(data: GlobalServerSettingsFormDat
                     );
                     // Save updated registry info back to settings
                     await updateServerSettings({
-                        ...validatedData,
+                        ...settingsToPersist,
                         activeRegistryInfo: registryInfo,
                     } as ServerSettings);
                     console.log("Server re-registered with registry successfully.");
