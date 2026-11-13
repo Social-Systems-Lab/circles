@@ -1,0 +1,23 @@
+services:
+    registration_ops:
+        image: circles-registration-ops:${GIT_SHA:?GIT_SHA is required}
+        build:
+            context: .
+            dockerfile: Dockerfile.registration-ops
+        environment:
+            CIRCLES_MONGODB_DATABASE: circles
+            MONGODB_URI: ${MONGODB_URI:?MONGODB_URI is required}
+            REGISTRATION_DEPLOYMENT_ID: ${REGISTRATION_DEPLOYMENT_ID:-}
+        volumes:
+            - circles_users:/circles/users:ro
+        networks:
+            - webnet
+        read_only: true
+        tmpfs:
+            - /tmp
+        cap_drop:
+            - ALL
+        security_opt:
+            - no-new-privileges:true
+        profiles: ["production-onboarding-ops"]
+        restart: "no"

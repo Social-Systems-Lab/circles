@@ -30,6 +30,16 @@ for _ in $(seq 1 30); do
 done
 [[ "$ready" == true ]] || { echo "Disposable MongoDB did not become ready." >&2; exit 1; }
 
+if malformed_output="$(docker run --rm -e MONGODB_URI='mongodb://sensitive-user:sensitive-password@' \
+    "$image" route-status 2>&1)"; then
+    echo "Malformed MongoDB URI unexpectedly succeeded." >&2
+    exit 1
+fi
+if grep -Fq 'sensitive-password' <<<"$malformed_output"; then
+    echo "Operator error output disclosed the MongoDB URI credential." >&2
+    exit 1
+fi
+
 collections_before="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'JSON.stringify(db.getCollectionNames().sort())')"
 
 route_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" route-status)"
@@ -62,6 +72,23 @@ collections_after="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circ
 
 docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
 const now = new Date();
+db.pendingRegistrationProvisioningLocks.insertOne({ _id: "stale-lock", expiresAt: new Date(now.getTime() - 60000) });
+db.pendingRegistrationFinalizationLocks.insertOne({ _id: "active-lock", expiresAt: new Date(now.getTime() + 60000) });
+' >/dev/null
+lock_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" operations-status)"
+python3 - "$lock_status" <<'PY'
+import json, sys
+status = json.loads(sys.argv[1])
+assert status["activeProvisioningLocks"] == 0
+assert status["activeFinalizationLocks"] == 1
+PY
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrationProvisioningLocks.deleteOne({ _id: "stale-lock" });
+db.pendingRegistrationFinalizationLocks.deleteOne({ _id: "active-lock" });
+' >/dev/null
+
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+const now = new Date();
 db.pendingRegistrations.insertMany([
   {
     name: "Recoverable", email: "recoverable@example.invalid", normalizedEmail: "recoverable@example.invalid",
@@ -81,6 +108,7 @@ db.pendingRegistrations.insertMany([
 ' >/dev/null
 recovery_fixture_before="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'EJSON.stringify(db.pendingRegistrations.find().sort({_id:1}).toArray())')"
 recovery_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" recovery-activation-status)"
+email_only_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" operations-status)"
 python3 - "$recovery_status" <<'PY'
 import json, sys
 status = json.loads(sys.argv[1])
@@ -90,18 +118,69 @@ assert status == {
     "unsafePendingRegistrations": 1,
 }
 PY
+printf '%s\n' "$email_only_status" | python3 "$repo_dir/scripts/validate-production-onboarding-activation.py" operations-idle >/dev/null
 recovery_fixture_after="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'EJSON.stringify(db.pendingRegistrations.find().sort({_id:1}).toArray())')"
 [[ "$recovery_fixture_before" == "$recovery_fixture_after" ]] || {
     echo "Recovery activation inspection modified pending registrations." >&2
     exit 1
 }
-collections_before_failed_auth="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'JSON.stringify(db.getCollectionNames().sort())')"
-
 # Exercise stdin-only authentication and compare-and-set behavior against only
 # this disposable database. The raw synthetic token never appears in Docker
 # environment or command metadata.
 operator_token="disposable-registration-operator-token-$suffix"
 operator_hash="$(printf '%s' "$operator_token" | sha256sum | awk '{print $1}')"
+
+collections_before_prepare="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'JSON.stringify(db.getCollectionNames().sort())')"
+if printf '%s\n' "wrong-$operator_token" | docker run --rm --interactive --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+    "$image" prepare-indexes --confirm PREPARE_PENDING_REGISTRATION_INDEXES; then
+    echo "Wrong operator token unexpectedly authorized index preparation." >&2
+    exit 1
+fi
+collections_after_failed_prepare="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'JSON.stringify(db.getCollectionNames().sort())')"
+[[ "$collections_before_prepare" == "$collections_after_failed_prepare" ]] || {
+    echo "Failed index-preparation authentication changed MongoDB collections." >&2
+    exit 1
+}
+
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.circles.insertMany([
+  { name: "Duplicate 1", metadata: { pendingRegistrationId: "duplicate-correlation" } },
+  { name: "Duplicate 2", metadata: { pendingRegistrationId: "duplicate-correlation" } }
+]);
+' >/dev/null
+if printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+    "$image" prepare-indexes --confirm PREPARE_PENDING_REGISTRATION_INDEXES; then
+    echo "Duplicate account correlations unexpectedly allowed index preparation." >&2
+    exit 1
+fi
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+if (db.circles.countDocuments({ "metadata.pendingRegistrationId": "duplicate-correlation" }) !== 2) quit(1);
+db.circles.deleteMany({ "metadata.pendingRegistrationId": "duplicate-correlation" });
+' >/dev/null
+
+for _ in 1 2; do
+    printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
+        -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+        -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+        "$image" prepare-indexes --confirm PREPARE_PENDING_REGISTRATION_INDEXES >/dev/null
+done
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+const pending = db.pendingRegistrations.getIndexes().map((entry) => entry.name);
+const reservations = db.pendingRegistrationDidReservations.getIndexes().map((entry) => entry.name);
+const provisioning = db.pendingRegistrationProvisioningLocks.getIndexes().map((entry) => entry.name);
+const finalization = db.pendingRegistrationFinalizationLocks.getIndexes().map((entry) => entry.name);
+const accounts = db.circles.getIndexes().map((entry) => entry.name);
+if (!pending.includes("normalizedEmail_1") || !pending.includes("requestedHandle_1")) quit(1);
+if (!reservations.includes("did_1")) quit(1);
+if (!provisioning.includes("expiresAt_1") || !finalization.includes("expiresAt_1")) quit(1);
+if (!accounts.some((name) => name.includes("metadata.pendingRegistrationId"))) quit(1);
+' >/dev/null
+
+collections_before_failed_auth="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'JSON.stringify(db.getCollectionNames().sort())')"
 if printf '%s\n' "wrong-$operator_token" | docker run --rm --interactive --network "$network" \
     -e MONGODB_URI=mongodb://"$mongo":27017/circles \
     -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
@@ -129,9 +208,52 @@ if printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$n
     exit 1
 fi
 
+if printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    -e REGISTRATION_DEPLOYMENT_ID=release-123 \
+    -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+    "$image" route-set --expected paused --to pending --deployment-id release-999 \
+    --actor image-test --confirm SET_REGISTRATION_ROUTE; then
+    echo "Pending transition unexpectedly succeeded with a deployment mismatch." >&2
+    exit 1
+fi
+
+printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    -e REGISTRATION_DEPLOYMENT_ID=release-123 \
+    -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+    "$image" route-set --expected paused --to pending --deployment-id release-123 \
+    --actor image-test --confirm SET_REGISTRATION_ROUTE >/dev/null
+
+printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+    "$image" route-set --expected pending --to paused --deployment-id none \
+    --actor image-test --confirm SET_REGISTRATION_ROUTE >/dev/null
+
 printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
     -e MONGODB_URI=mongodb://"$mongo":27017/circles \
     -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
     "$image" route-set --expected paused --to legacy --deployment-id none --actor image-test --confirm SET_REGISTRATION_ROUTE >/dev/null
 
-echo "packaged registration operator image build, read-only execution, authentication, and CAS tests passed"
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.insertOne({
+  name: "Reserved", email: "reserved@example.invalid", normalizedEmail: "reserved@example.invalid",
+  requestedHandle: "reserved", status: "provisioning_claimed",
+  reservedDid: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  expiresAt: new Date(Date.now() + 3600000)
+});
+' >/dev/null
+before_preservation_count="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'db.pendingRegistrations.countDocuments()')"
+printf '%s\n' "$operator_token" | docker run --rm --interactive --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    -e REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256="$operator_hash" \
+    "$image" prepare-indexes --confirm PREPARE_PENDING_REGISTRATION_INDEXES >/dev/null
+after_preservation_count="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'db.pendingRegistrations.countDocuments()')"
+reservation_count="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'db.pendingRegistrationDidReservations.countDocuments()')"
+[[ "$before_preservation_count" == "$after_preservation_count" && "$reservation_count" == "1" ]] || {
+    echo "Index preparation did not preserve pending records or DID reservations." >&2
+    exit 1
+}
+
+echo "packaged registration operator image build, read-only execution, authentication, CAS, and index-preparation tests passed"

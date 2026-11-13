@@ -1,0 +1,297 @@
+# Production Pending-Registration Activation
+
+This runbook prepares and controls the production pending-registration rollout. The tooling is
+disabled by default and does not authorize an activation by itself. Do not run any mutating command
+without separate production approval, a named activation operator, a named rollback operator, and a
+verified backup.
+
+## Fixed production layout
+
+- Server: `root@kamooniorg`
+- Git checkout: `/root/circles/circles`
+- Compose directory: `/root/circles/circles/circles`
+- Compose project: `circles`
+- Application URL: `https://kamooni.org`
+- Shared maintenance lock: `/run/lock/circles-production-docker.lock`
+- External operator secrets: `/root/circles/onboarding-secrets`
+
+The activation environment and routing verifier must remain outside the Git checkout and Docker
+build context.
+
+Confirm that `flock`, `python3`, Docker Compose, `curl`, and OpenSSL are installed before beginning.
+The operator wrapper intentionally refuses to run outside this exact production layout.
+
+## Secret preparation
+
+Create the external secret directory once:
+
+```bash
+install -d -m 700 -o root -g root /root/circles/onboarding-secrets
+```
+
+Create the activation environment without printing its values:
+
+```bash
+cd /root/circles/onboarding-secrets
+umask 077
+read -r -p 'Approved production deployment ID: ' REGISTRATION_DEPLOYMENT_ID
+printf 'PENDING_REGISTRATION_TOKEN_HMAC_KEY=' > activation.env
+openssl rand -hex 32 >> activation.env
+printf '\nREGISTRATION_DEPLOYMENT_ID=%s\n' "$REGISTRATION_DEPLOYMENT_ID" >> activation.env
+unset REGISTRATION_DEPLOYMENT_ID
+chmod 600 activation.env
+```
+
+The deployment ID must use:
+
+```text
+production-onboarding-YYYYMMDD-<approved-sha-prefix>-<sequence>
+```
+
+The HMAC key must be independent of ALTCHA, JWT, cron, Mongo, MinIO, and routing-operator
+credentials. Never print the file, copy it into the application `.env`, commit it, or pass it as a
+command argument.
+
+The raw routing operator token remains only in the approved password manager. Install only its
+SHA-256 verifier:
+
+```bash
+cd /root/circles/onboarding-secrets
+umask 077
+read -r -s -p 'Routing operator token from the approved password manager: ' ROUTING_OPERATOR_TOKEN
+printf '\n'
+printf '%s' "$ROUTING_OPERATOR_TOKEN" | sha256sum | awk '{print $1}' > routing-operator.sha256
+unset ROUTING_OPERATOR_TOKEN
+chmod 600 routing-operator.sha256
+```
+
+Both external files must be regular root-owned files with mode `600`. The control script validates
+these properties and never prints either file's contents.
+
+To rotate the routing operator token, create the replacement in the password manager and write its
+new verifier through a temporary mode-600 file, then atomically rename it:
+
+```bash
+cd /root/circles/onboarding-secrets
+umask 077
+read -r -s -p 'Replacement routing operator token: ' ROUTING_OPERATOR_TOKEN
+printf '\n'
+printf '%s' "$ROUTING_OPERATOR_TOKEN" | sha256sum | awk '{print $1}' > .routing-operator.sha256.new
+unset ROUTING_OPERATOR_TOKEN
+chmod 600 .routing-operator.sha256.new
+mv .routing-operator.sha256.new routing-operator.sha256
+```
+
+The application and MongoDB do not need restarting for operator-token rotation. Never rotate the
+pending-registration HMAC while live pending records exist without a separate reconciliation review.
+The activation transition also compares the routing token and pending-registration HMAC in memory and
+rejects identical values. Neither value is printed or placed in Docker arguments or environment
+metadata.
+
+## Before activation
+
+1. Obtain approval for the exact `origin/main` commit and production activation window.
+2. Confirm the production checkout is clean and exactly matches `origin/main`.
+3. Confirm `/api/version` and `/app/VERSION` report that exact full Git SHA.
+4. Confirm exactly one `circles` container is running and record its immutable image ID.
+5. Take and independently verify backups of MongoDB, the `circles_users` volume, and MinIO where the
+   approved recovery policy requires it.
+6. Confirm Postmark, ALTCHA, `CIRCLES_URL=https://kamooni.org`, and existing login/password recovery
+   are operational.
+7. Deploy the reviewed safety-tooling release through the normal production deployment procedure.
+   Routing must still be `legacy`, both pending flags must be false, and no HMAC may be present.
+
+Create and validate the database and credential-volume backups without printing the Mongo URI:
+
+```bash
+backup_dir="/root/circles/backups/onboarding-$(date -u +%Y%m%dT%H%M%SZ)"
+install -d -m 700 "$backup_dir"
+cd /root/circles/circles/circles
+docker compose exec -T db sh -lc 'mongodump --uri="$MONGODB_URI" --archive --gzip' \
+  > "$backup_dir/mongo.archive.gz"
+gzip -t "$backup_dir/mongo.archive.gz"
+users_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/circles/users"}}{{.Name}}{{end}}{{end}}' \
+  "$(docker compose ps -q circles)")"
+test -n "$users_volume"
+docker run --rm --read-only \
+  --mount "type=volume,src=$users_volume,dst=/source,readonly" \
+  --mount "type=bind,src=$backup_dir,dst=/backup" \
+  alpine:3.19 tar -C /source -czf /backup/circles-users.tar.gz .
+tar -tzf "$backup_dir/circles-users.tar.gz" >/dev/null
+sha256sum "$backup_dir/mongo.archive.gz" "$backup_dir/circles-users.tar.gz" \
+  > "$backup_dir/SHA256SUMS"
+chmod 600 "$backup_dir"/*
+```
+
+Independently restore the Mongo archive into a disposable, isolated MongoDB instance and verify the
+expected account, event, pending-registration, and DID-reservation collection counts before relying
+on it for rollback. Never restore over production as part of activation.
+
+The production deployment script now builds the read-only operator image and refuses a normal
+deployment unless routing is `legacy`.
+
+If the reviewed tooling commit was deployed by the previous deployment script, build its read-only
+operator image once with the new wrapper:
+
+```bash
+./circles/scripts/production-onboarding-control.sh build-operator
+```
+
+Run the read-only preflight:
+
+```bash
+cd /root/circles/circles
+./circles/scripts/production-onboarding-control.sh preflight
+```
+
+Preflight validates the exact SHA, one production application, default-off environment, Postmark
+configuration, external file permissions, operator image, Compose overlays, routing `legacy`, and
+zero unfinished or reconciliation-required operations. It does not create indexes, change routing,
+restart services, or write registration data.
+
+Inspect current state without mutation:
+
+```bash
+./circles/scripts/production-onboarding-control.sh status
+./circles/scripts/production-onboarding-control.sh inspect
+```
+
+## Index preparation
+
+Index preparation is idempotent and requires the routing operator token plus an explicit
+confirmation. It runs while routing is still `legacy`. It creates only the pending-registration,
+lock, and account-correlation indexes, backfills DID reservations from existing pending records, and
+preserves all pending records, accounts, and DIDs:
+
+```bash
+./circles/scripts/production-onboarding-control.sh prepare-indexes
+```
+
+The command prompts for the routing operator token and requires the exact confirmation phrase
+`PREPARE_PENDING_REGISTRATION_INDEXES`.
+
+The command fails before creating the account-correlation index if duplicate pending-registration
+correlations exist.
+
+## Pause and activate the application
+
+Transition `legacy` to `paused`:
+
+```bash
+./circles/scripts/production-onboarding-control.sh route-set legacy paused none PRODUCTION_RELEASE_OPERATOR
+```
+
+Confirm both `/signup` and `/signup/pilot` display the unavailable state. Wait at least five minutes,
+then verify zero pending operations again:
+
+```bash
+./circles/scripts/production-onboarding-control.sh status
+```
+
+While routing remains `paused`, recreate the application with the validated activation overlay:
+
+```bash
+./circles/scripts/production-onboarding-control.sh activate-services
+```
+
+This stops NGINX before recreating `circles`, verifies one production application with the exact SHA,
+production image role, Postmark, `https://kamooni.org`, both pending flags, the HMAC presence without
+displaying it, the approved deployment ID, and the reserved network. It then refreshes NGINX and
+verifies the external version endpoint. Registration remains unavailable because routing is paused.
+
+Transition `paused` to `pending`:
+
+```bash
+./circles/scripts/production-onboarding-control.sh route-set paused pending activation PRODUCTION_RELEASE_OPERATOR
+```
+
+Before changing routing, the wrapper revalidates the live activation environment and exact SHA. The
+routing change is compare-and-set.
+
+## Controlled canary
+
+After the paused-to-pending transition:
+
+1. Confirm `/signup` renders pending registration and `/signup/pilot` redirects to `/signup`.
+2. Confirm existing login, password reset, DID-backed accounts, and profile access remain unchanged.
+3. Complete one synthetic signup to an operator-controlled Postmark inbox.
+4. Verify the token-free continuation URL, account provisioning, DID uniqueness, onboarding arrival,
+   logout, and login again.
+5. Do not delete or rewrite a DID. Preserve any interrupted record for reconciliation.
+6. Watch `status`, `inspect`, audit events, Postmark failures, duplicate-key errors, and
+   reconciliation-required records throughout the canary.
+
+## Monitoring
+
+Run:
+
+```bash
+./circles/scripts/production-onboarding-control.sh status
+./circles/scripts/production-onboarding-control.sh inspect
+```
+
+Alert on:
+
+- `reconciliationRequiredAt` without `provisionedAt`
+- `provisioning_interrupted` audit events
+- stale provisioning or finalization locks
+- Postmark delivery failures
+- duplicate email, handle, DID, account-correlation, or lock errors
+- deployment-ID mismatch
+- ALTCHA failures, replays, or rate-limit saturation
+- unexpected account, DID, membership, or chat side effects
+
+Never print verification tokens, continuation secrets, passwords, encrypted keys, connection URIs,
+HMAC keys, or the routing operator token.
+
+## Rollback
+
+Rollback changes routing and runtime configuration only. It does not restore or delete data.
+
+1. Compare-and-set `pending` to `paused`:
+
+```bash
+./circles/scripts/production-onboarding-control.sh route-set pending paused none PRODUCTION_ROLLBACK_OPERATOR
+```
+
+2. Confirm registration is unavailable.
+3. Wait at least five minutes and inspect unfinished registrations, locks, and reconciliation state.
+   `deactivate-services` rechecks immediately before the application mutation and refuses to continue
+   while provisioning/finalization locks or reconciliation work remain. Email-only unfinished records
+   may remain; they do not block deactivation.
+4. Recreate the application with normal production Compose:
+
+```bash
+./circles/scripts/production-onboarding-control.sh deactivate-services
+```
+
+5. Confirm both pending flags are false, the HMAC is absent, the exact SHA is unchanged, existing
+   login works, and registration remains unavailable.
+6. After the pending path is drained, compare-and-set `paused` to `legacy`:
+
+```bash
+./circles/scripts/production-onboarding-control.sh route-set paused legacy none PRODUCTION_ROLLBACK_OPERATOR
+```
+
+7. Confirm `/signup` and `/signup/pilot` render legacy signup.
+8. Preserve all pending registrations, accounts, DIDs, credential files, audit events, and backups.
+
+If routing or application state is uncertain, stop NGINX and the application; leave Mongo, MinIO,
+support services, and volumes intact. Do not clear claims, release DID reservations, guess routing
+state, or edit MongoDB records directly.
+
+Rollback and read-only diagnostics remain available if `origin/main` has advanced, provided the
+checkout is clean, the running application and exact-SHA operator image are verified, and the
+operation is one of `status`, `inspect`, `pending -> paused`, `paused -> legacy`, or
+`deactivate-services`. Build and activation operations still require the checkout to exactly match
+`origin/main`.
+
+Both deployment and operator commands wait at most 120 seconds for the shared maintenance lock. A
+timeout fails with an operator-facing error instead of waiting indefinitely.
+
+## Known activation blockers
+
+- A production Postmark end-to-end canary has not yet been executed.
+- The production activation and rollback operators have not yet been named and approved.
+- Production backup restoration has not yet been independently demonstrated for this operation.
+- Monitoring ownership and alert thresholds must be agreed before public rollout.

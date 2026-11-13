@@ -27,12 +27,23 @@ for required in \
   'if ! require_clean_worktree; then' \
   'LOCAL_SHA="$(git rev-parse HEAD)"' \
   'ISOLATION_GUARD="$APP_DIR/scripts/check-production-staging-isolation.sh"' \
+  'registration_ops route-status' \
+  'route-status legacy' \
   'docker compose build circles cron'; do
   line="$(rg -n -F -- "$required" "$DEPLOY_SCRIPT" | awk -F: -v after="$previous_line" '$1 > after { print $1; exit }')"
   [[ -n "$line" ]] || fail "deploy implementation drifted or is out of order near: $required"
   (( line > previous_line )) || fail "deployment operation order changed near: $required"
   previous_line="$line"
 done
+grep -Fq 'PRODUCTION_LOCK_FILE="/run/lock/circles-production-docker.lock"' "$DEPLOY_SCRIPT" || fail "missing production maintenance lock path"
+grep -Fq 'flock -w "$PRODUCTION_LOCK_TIMEOUT_SECONDS" 9' "$DEPLOY_SCRIPT" || fail "missing bounded production maintenance lock acquisition"
+lock_line="$(grep -nF 'flock -w "$PRODUCTION_LOCK_TIMEOUT_SECONDS" 9' "$DEPLOY_SCRIPT" | head -1 | cut -d: -f1)"
+fetch_line="$(grep -nF 'git fetch --no-tags origin' "$DEPLOY_SCRIPT" | head -1 | cut -d: -f1)"
+early_route_guard_line="$(grep -nF 'CURRENT_ROUTING_STATE=' "$DEPLOY_SCRIPT" | head -1 | cut -d: -f1)"
+[[ -n "$lock_line" && -n "$fetch_line" && "$lock_line" -lt "$fetch_line" ]] || \
+  fail "production maintenance lock must be acquired before Git synchronization"
+[[ -n "$early_route_guard_line" && "$early_route_guard_line" -lt "$fetch_line" ]] || \
+  fail "registration routing must be checked before production Git synchronization"
 grep -q 'ORIGIN_MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"' "$DEPLOY_SCRIPT" || fail "missing origin/main SHA validation"
 grep -q 'git branch --show-current' "$DEPLOY_SCRIPT" || fail "missing final branch validation"
 if rg -n 'git reset --hard' "$DEPLOY_SCRIPT"; then fail "production deployment uses destructive reset"; fi

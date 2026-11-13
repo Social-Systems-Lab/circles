@@ -12,6 +12,15 @@ EXPECTED_DIR="/root/circles/circles"
 APP_DIR="${EXPECTED_DIR}/circles"
 CURRENT_DIR="$(pwd -P)"
 BRANCH="$1"
+PRODUCTION_LOCK_FILE="/run/lock/circles-production-docker.lock"
+PRODUCTION_LOCK_TIMEOUT_SECONDS=120
+
+exec 9>"$PRODUCTION_LOCK_FILE"
+if ! flock -w "$PRODUCTION_LOCK_TIMEOUT_SECONDS" 9; then
+  echo "Error: could not acquire the production maintenance lock within ${PRODUCTION_LOCK_TIMEOUT_SECONDS}s." >&2
+  echo "Another deployment or onboarding operation may still be running." >&2
+  exit 1
+fi
 
 if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]; then
   echo "Error: run this script from $EXPECTED_DIR (current: $CURRENT_DIR)" >&2
@@ -51,6 +60,27 @@ case "$ORIGIN_URL" in
     exit 1
     ;;
 esac
+
+CURRENT_ROUTING_STATE="$(cd "$APP_DIR" && docker compose exec -T db sh -lc \
+  'mongosh "$MONGODB_URI" --quiet --eval '\''const record = db.getSiblingDB("circles").registrationRouting.findOne({_id:"registration-routing"}); const mode = record && record.mode ? record.mode : "legacy"; const deployment = record && record.deploymentId ? "set" : "null"; print(mode + "|" + deployment)'\''' 2>/dev/null)" || {
+  echo "Error: could not read registration routing before production synchronization." >&2
+  echo "The checkout and running application were not changed." >&2
+  exit 1
+}
+case "$CURRENT_ROUTING_STATE" in
+  "legacy|null"|"paused|null"|"pending|set")
+    ;;
+  *)
+    echo "Error: registration routing returned an unrecognized state before production synchronization." >&2
+    echo "The checkout and running application were not changed." >&2
+    exit 1
+    ;;
+esac
+if [[ "$CURRENT_ROUTING_STATE" != "legacy|null" ]]; then
+  echo "Error: normal production deployment requires routing mode legacy with no deployment ID." >&2
+  echo "Use scripts/production-onboarding-control.sh to pause, inspect, or roll back onboarding first." >&2
+  exit 1
+fi
 
 echo "Deploying branch: $BRANCH"
 git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
@@ -100,6 +130,20 @@ echo "Build time (UTC): $BUILD_TIME"
 
 echo "Running branding guard for Kamooni..."
 (cd "$APP_DIR" && ./scripts/check-branding-guard.sh kamooni)
+
+echo "Building the read-only registration operator for the production SHA..."
+(cd "$APP_DIR" && docker compose -f docker-compose.yml -f docker-compose.production-ops.yml \
+  --profile production-onboarding-ops build registration_ops)
+
+echo "Verifying registration routing is legacy before normal production deployment..."
+ROUTING_STATUS="$(cd "$APP_DIR" && docker compose -f docker-compose.yml -f docker-compose.production-ops.yml \
+  --profile production-onboarding-ops run --rm --no-deps --no-build -T registration_ops route-status)"
+if ! printf '%s\n' "$ROUTING_STATUS" | (cd "$APP_DIR" && \
+  python3 scripts/validate-production-onboarding-activation.py route-status legacy >/dev/null); then
+  echo "Error: normal production deployment is blocked while registration routing is not legacy." >&2
+  echo "Use scripts/production-onboarding-control.sh to pause, inspect, or roll back onboarding first." >&2
+  exit 1
+fi
 
 (cd "$APP_DIR" && docker compose build circles cron)
 

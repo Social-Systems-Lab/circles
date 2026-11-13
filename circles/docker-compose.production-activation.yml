@@ -1,0 +1,11 @@
+# Deliberately excluded from normal production deployment. Use only through
+# scripts/production-onboarding-control.sh after routing has reached paused.
+x-kamooni-production-onboarding-activation-confirm: ${KAMOONI_PRODUCTION_ONBOARDING_ACTIVATION_CONFIRM:?Use the reviewed production onboarding control script}
+
+services:
+    circles:
+        environment:
+            PENDING_REGISTRATION_ENABLED: "true"
+            PENDING_REGISTRATION_JOURNEY_READY: "true"
+            PENDING_REGISTRATION_TOKEN_HMAC_KEY: ${PENDING_REGISTRATION_TOKEN_HMAC_KEY:?PENDING_REGISTRATION_TOKEN_HMAC_KEY is required}
+            REGISTRATION_DEPLOYMENT_ID: ${REGISTRATION_DEPLOYMENT_ID:?REGISTRATION_DEPLOYMENT_ID is required}

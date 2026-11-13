@@ -74,13 +74,16 @@ The deployment script accepts only the explicit argument `main`. Emergency fixes
 The script:
 
 - confirms it is running from `/root/circles/circles`
+- acquires `/run/lock/circles-production-docker.lock` with a 120-second bound, shared with onboarding operations
 - confirms the configured `origin` is the `Social-Systems-Lab/circles` GitHub repository
+- reads MongoDB registration routing before Git synchronization and refuses to continue unless it is `legacy`
 - fetches only `origin/main`
 - checks out `main` and resets the server checkout to the exact `origin/main` commit
 - verifies the local branch and full commit identity against `origin/main`
 - runs the production staging-isolation guard before building or accessing application services or data
 - exports the deployed `GIT_SHA` and `BUILD_TIME`
 - runs the Kamooni branding guard
+- builds the exact-SHA read-only registration operator and refuses normal deployment unless registration routing is `legacy`
 - builds the `circles` Docker Compose service
 - reads the migration completion status before stopping the current application and accepts only `0` or `1`
 - for status `1`, verifies the completed migration while the current application remains running, then replaces it
@@ -155,6 +158,10 @@ docker compose exec -T circles cat /app/VERSION
 ```
 
 The `gitSha` in `/app/VERSION` should also match the deployed commit.
+
+Pending-registration activation, deactivation, index preparation, and routing changes use the
+separate [production onboarding runbook](PRODUCTION_ONBOARDING_ACTIVATION.md). Do not bypass the
+normal deployment routing guard with ad-hoc Compose commands.
 
 ## Historical deployment references
 

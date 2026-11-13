@@ -29,6 +29,9 @@ yarn-error.log*
 .env
 .env*.local
 .env.staging
+.env.production.activation
+.registration-routing-operator.sha256
+__pycache__/
 
 # vercel
 .vercel
