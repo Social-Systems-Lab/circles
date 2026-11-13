@@ -8,10 +8,26 @@ image_test="$repo_dir/scripts/verify-production-application-image.test.py"
 workflow="$repo_dir/../.github/workflows/production-onboarding-rehearsal.yml"
 build_workflow="$repo_dir/../.github/workflows/build-check.yml"
 control="$repo_dir/scripts/production-onboarding-control.sh"
+verifier_validator="$repo_dir/scripts/validate-routing-operator-verifier.py"
 
 bash -n "$harness"
 python3 "$pty_helper" --self-test >/dev/null
 python3 "$image_test" >/dev/null
+
+verifier_tmp="$(mktemp -d)"
+trap 'rm -rf -- "$verifier_tmp"' EXIT
+verifier_file="$verifier_tmp/routing-operator.sha256"
+printf '%s' 'rehearsal-operator-token' | sha256sum | awk '{print $1}' >"$verifier_file"
+chmod 600 "$verifier_file"
+verifier_value="$(python3 "$verifier_validator" "$verifier_file")"
+[[ "$verifier_value" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "generated rehearsal verifier is not exactly one lowercase SHA-256 line" >&2
+    exit 1
+}
+if grep -Fq "printf '\\n' >>\"\$SECRET_DIR/routing-operator.sha256\"" "$harness"; then
+    echo "rehearsal harness appends an extra newline to the verifier" >&2
+    exit 1
+fi
 
 for required in \
     'KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL_V1' \

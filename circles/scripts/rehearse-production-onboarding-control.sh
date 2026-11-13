@@ -301,7 +301,6 @@ prepare_fake_credentials() {
     printf 'PENDING_REGISTRATION_TOKEN_HMAC_KEY=%s\nREGISTRATION_DEPLOYMENT_ID=production-onboarding-20261113-rehearsal-01\n' \
         "$hmac" >"$SECRET_DIR/activation.env"
     printf '%s' "$operator_token" | sha256sum | awk '{print $1}' >"$SECRET_DIR/routing-operator.sha256"
-    printf '\n' >>"$SECRET_DIR/routing-operator.sha256"
     chmod 600 "$SECRET_DIR/activation.env" "$SECRET_DIR/routing-operator.sha256"
     printf '%s\n' "$hmac" >"$CONTROL_DIR/.hmac"
     printf '%s\n' "$operator_token" >"$CONTROL_DIR/.operator-token"
@@ -474,14 +473,12 @@ assert_route paused
 
 hmac="$(cat "$CONTROL_DIR/.hmac")"
 printf '%s' "$hmac" | sha256sum | awk '{print $1}' >"$SECRET_DIR/routing-operator.sha256"
-printf '\n' >>"$SECRET_DIR/routing-operator.sha256"
 write_response_file "$CONTROL_DIR/collision.responses" "Routing operator token:	$hmac"
 if run_pty_wrapper "$CONTROL_DIR/collision.responses" route-set paused pending activation REHEARSAL >/dev/null 2>&1; then
     fail "wrapper accepted identical operator token and activation HMAC"
 fi
 assert_route paused
 printf '%s' "$operator_token" | sha256sum | awk '{print $1}' >"$SECRET_DIR/routing-operator.sha256"
-printf '\n' >>"$SECRET_DIR/routing-operator.sha256"
 run_pty_wrapper "$CONTROL_DIR/route.responses" route-set paused pending activation REHEARSAL >/dev/null
 assert_route pending
 
