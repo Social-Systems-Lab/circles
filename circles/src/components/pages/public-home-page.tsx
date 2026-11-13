@@ -284,7 +284,7 @@ export default async function PublicHomePage() {
                         be the system change we want to see. Together.
                     </p>
                     <div className="stats-cta">
-                        <Link className="btn btn-primary" href="/signup/pilot">
+                        <Link className="btn btn-primary" href="/signup">
                             Sign up
                             <ArrowIcon />
                         </Link>
@@ -316,7 +316,7 @@ export default async function PublicHomePage() {
                                 <HeartIcon />
                                 Fund us
                             </Link>
-                            <Link className="btn btn-primary" href="/signup/pilot">
+                            <Link className="btn btn-primary" href="/signup">
                                 Join
                                 <ArrowIcon />
                             </Link>

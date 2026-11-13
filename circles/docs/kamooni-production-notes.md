@@ -51,7 +51,7 @@ Verify after deploy:
 
     curl -fsSL https://kamooni.org/api/version && echo
     curl -fsSL https://kamooni.org/api/altcha/challenge | head -c 300 && echo
-    curl -I https://kamooni.org/signup/pilot
+    curl -I https://kamooni.org/signup
 
 The SHA from /api/version should match:
 
