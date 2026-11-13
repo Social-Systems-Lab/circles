@@ -9,11 +9,12 @@ ops="$repo_dir/docker-compose.production-ops.yml"
 production="$repo_dir/docker-compose.yml"
 validator="$repo_dir/scripts/validate-production-onboarding-activation.py"
 runtime_validator="$repo_dir/scripts/verify-production-onboarding-runtime.py"
+application_image_validator="$repo_dir/scripts/verify-production-application-image.py"
 verifier_validator="$repo_dir/scripts/validate-routing-operator-verifier.py"
 
 bash -n "$control"
 bash -n "$deploy"
-for executable in "$control" "$validator" "$runtime_validator" "$verifier_validator"; do
+for executable in "$control" "$validator" "$runtime_validator" "$application_image_validator" "$verifier_validator"; do
     [[ -x "$executable" ]] || { echo "required production onboarding tool is not executable: $executable" >&2; exit 1; }
 done
 
@@ -35,6 +36,12 @@ for required in \
     'route-set --expected' \
     'verify_application activation' \
     'deactivate-services' \
+    'recover-default-services' \
+    'RECOVER_DEFAULT_SERVICES' \
+    'verify_recovery_application_image' \
+    'require_failed_application_state' \
+    '--pull=never --network none --read-only' \
+    'verify-production-application-image.py' \
     'fail_public_services'; do
     grep -Fq -- "$required" "$control" || { echo "missing production control contract: $required" >&2; exit 1; }
 done
@@ -139,6 +146,7 @@ fi
 
 python3 "$repo_dir/scripts/validate-production-onboarding-activation.test.py"
 python3 "$repo_dir/scripts/verify-production-onboarding-runtime.test.py"
+python3 "$repo_dir/scripts/verify-production-application-image.test.py"
 
 verifier_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$verifier_tmp"' EXIT

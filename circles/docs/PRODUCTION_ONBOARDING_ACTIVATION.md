@@ -280,14 +280,64 @@ If routing or application state is uncertain, stop NGINX and the application; le
 support services, and volumes intact. Do not clear claims, release DID reservations, guess routing
 state, or edit MongoDB records directly.
 
+### Recovering after a failed activation
+
+If `activate-services` fails after stopping NGINX and leaves the application stopped or absent,
+retry activation after correcting the failure. If normal deactivation cannot be used because no
+application container is running, use the explicit recovery command while routing remains `paused`:
+
+```bash
+./circles/scripts/production-onboarding-control.sh recover-default-services
+```
+
+The command requires:
+
+- Exact routing mode `paused`.
+- Zero active provisioning and finalization locks.
+- Zero records requiring reconciliation.
+- A clean production checkout.
+- The exact-SHA operator image.
+- A stopped/absent application container whose image, if present, matches the verified
+  `circles-circles:latest` image.
+- `/app/VERSION` in that immutable application image to match the deployed checkout SHA.
+- The immutable image's role marker to be `production`.
+- Safe default Compose with both pending flags false and no HMAC.
+- The explicit confirmation phrase `RECOVER_DEFAULT_SERVICES`.
+
+Recovery starts and verifies the ordinary application before recreating NGINX. Registration routing
+is rechecked as `paused` before and after each public-service transition. The command does not fetch
+Git, rebuild an image, change routing, or modify pending registrations, accounts, DIDs, credentials,
+MongoDB, or MinIO.
+
 Rollback and read-only diagnostics remain available if `origin/main` has advanced, provided the
 checkout is clean, the running application and exact-SHA operator image are verified, and the
 operation is one of `status`, `inspect`, `pending -> paused`, `paused -> legacy`, or
-`deactivate-services`. Build and activation operations still require the checkout to exactly match
-`origin/main`.
+`deactivate-services`, or `recover-default-services`. Build and activation operations still require
+the checkout to exactly match `origin/main`.
 
 Both deployment and operator commands wait at most 120 seconds for the shared maintenance lock. A
 timeout fails with an operator-facing error instead of waiting indefinitely.
+
+## Disposable orchestration rehearsal
+
+The manually triggered `Production Onboarding Rehearsal` GitHub workflow exercises the unmodified
+production wrapper against synthetic infrastructure on a GitHub-hosted runner. It uses the exact
+production paths intentionally, but only after proving:
+
+- The OS is disposable Linux.
+- The runner is GitHub-hosted or an explicitly marked dedicated VM.
+- The selected Docker daemon ID matches the runner-provided identity.
+- No containers, production project, production-named volumes, `circles_webnet`, production images,
+  `/root/circles`, maintenance lock, or `kamooni.org` host override already exist.
+
+The rehearsal creates a fake application, disposable MongoDB, synthetic TLS NGINX, fake credentials,
+and synthetic DID/account records. It maps `kamooni.org` only to the local synthetic TLS endpoint and
+never includes a real Postmark client or production application code.
+
+Do not run this workflow until a disposable environment is available. It fault-injects application
+failure after NGINX stops, verifies the application remains safely stopped, verifies synthetic data
+and identities are preserved, and then exercises `recover-default-services` before returning routing
+to legacy.
 
 ## Known activation blockers
 
@@ -295,3 +345,4 @@ timeout fails with an operator-facing error instead of waiting indefinitely.
 - The production activation and rollback operators have not yet been named and approved.
 - Production backup restoration has not yet been independently demonstrated for this operation.
 - Monitoring ownership and alert thresholds must be agreed before public rollout.
+- The disposable orchestration rehearsal has not yet been executed.

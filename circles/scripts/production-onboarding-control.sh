@@ -22,6 +22,7 @@ ACTIVATION_COMPOSE_FILE="$APP_DIR/docker-compose.production-activation.yml"
 ACTIVATION_VALIDATOR="$APP_DIR/scripts/validate-production-onboarding-activation.py"
 OPERATOR_VERIFIER_VALIDATOR="$APP_DIR/scripts/validate-routing-operator-verifier.py"
 RUNTIME_VALIDATOR="$APP_DIR/scripts/verify-production-onboarding-runtime.py"
+APPLICATION_IMAGE_VALIDATOR="$APP_DIR/scripts/verify-production-application-image.py"
 TEMP_FILES=()
 
 cleanup_temporary_files() {
@@ -44,6 +45,7 @@ Usage:
   production-onboarding-control.sh route-set EXPECTED_MODE NEW_MODE DEPLOYMENT_SELECTOR ACTOR
   production-onboarding-control.sh activate-services
   production-onboarding-control.sh deactivate-services
+  production-onboarding-control.sh recover-default-services
 EOF
     exit 2
 }
@@ -80,7 +82,11 @@ fi
 [[ -f "$BASE_ENV_FILE" ]] || fail "production environment file is missing"
 [[ -f "$BASE_COMPOSE_FILE" && -f "$OPS_COMPOSE_FILE" && -f "$ACTIVATION_COMPOSE_FILE" ]] || \
     fail "production Compose configuration is incomplete"
-for validator in "$ACTIVATION_VALIDATOR" "$OPERATOR_VERIFIER_VALIDATOR" "$RUNTIME_VALIDATOR"; do
+for validator in \
+    "$ACTIVATION_VALIDATOR" \
+    "$OPERATOR_VERIFIER_VALIDATOR" \
+    "$RUNTIME_VALIDATOR" \
+    "$APPLICATION_IMAGE_VALIDATOR"; do
     [[ -f "$validator" ]] || fail "production onboarding validator is missing: $validator"
 done
 
@@ -191,6 +197,10 @@ require_operations_zero() {
     run_ops operations-status | python3 "$ACTIVATION_VALIDATOR" operations-zero >/dev/null
 }
 
+require_operations_idle() {
+    run_ops operations-status | python3 "$ACTIVATION_VALIDATOR" operations-idle >/dev/null
+}
+
 render_compose() {
     local output="$1"
     shift
@@ -275,6 +285,36 @@ verify_running_application_identity_if_present() {
     if [[ "${#ids[@]}" -eq 1 ]]; then
         verify_application_build_identity "${ids[0]}"
     fi
+}
+
+verify_recovery_application_image() {
+    local image_id stopped_ids stopped_id metadata
+    image_id="$(docker image inspect --format '{{.Id}}' circles-circles:latest)" || \
+        fail "verified production application image is missing"
+    stopped_ids="$("${base_compose[@]}" ps --all -q circles)"
+    [[ "$(grep -c . <<<"$stopped_ids" || true)" -le 1 ]] || \
+        fail "multiple stopped production application containers require manual review"
+    if [[ -n "$stopped_ids" ]]; then
+        stopped_id="$(docker inspect --format '{{.Image}}' "$stopped_ids")"
+        [[ "$stopped_id" == "$image_id" ]] || \
+            fail "stopped application image does not match the verified application image"
+    fi
+    metadata="$(docker run --rm --pull=never --network none --read-only --entrypoint sh "$image_id" -c \
+        'cat /app/VERSION; printf "\\n---KAMOONI-ROLE---\\n"; cat /app/.kamooni-deployment-role')" || \
+        fail "could not read the verified application image metadata"
+    printf '%s' "$metadata" | \
+        python3 "$APPLICATION_IMAGE_VALIDATOR" "$GIT_SHA" "$image_id" "$image_id" >/dev/null
+    printf '%s\n' "$image_id"
+}
+
+require_failed_application_state() {
+    local running_ids all_ids
+    running_ids="$("${base_compose[@]}" ps -q circles)"
+    [[ -z "$running_ids" ]] || \
+        fail "recover-default-services requires the application to be stopped or absent"
+    all_ids="$("${base_compose[@]}" ps --all -q circles)"
+    [[ "$(grep -c . <<<"$all_ids" || true)" -le 1 ]] || \
+        fail "recover-default-services found multiple application containers"
 }
 
 verify_external_application() {
@@ -426,7 +466,7 @@ case "$command_name" in
             fail "expected exactly one production application container before deactivation"
         verify_application_build_identity "$current_container_id"
         expected_image_id="$(docker image inspect --format '{{.Id}}' circles-circles:latest)"
-        run_ops operations-status | python3 "$ACTIVATION_VALIDATOR" operations-idle >/dev/null
+        require_operations_idle
         "${base_compose[@]}" stop nginx || fail_public_services "could not stop production NGINX before deactivation"
         "${base_compose[@]}" up -d --no-deps --no-build --force-recreate circles || \
             fail_public_services "default production application recreation failed"
@@ -435,6 +475,33 @@ case "$command_name" in
         "${base_compose[@]}" up -d --no-deps --force-recreate nginx || \
             fail_public_services "production NGINX refresh failed after deactivation"
         verify_external_application || fail_public_services "external production deactivation verification failed"
+        ;;
+    recover-default-services)
+        [[ "$#" -eq 0 ]] || usage
+        require_operator_image
+        require_route_mode paused
+        require_default_and_ops_contracts
+        require_operations_idle
+        require_failed_application_state
+        recovery_image_id="$(verify_recovery_application_image)" || \
+            fail "verified application image cannot be used for recovery"
+        require_terminal_confirmation RECOVER_DEFAULT_SERVICES
+        require_route_mode paused
+        require_operations_idle
+        "${base_compose[@]}" stop nginx || \
+            fail_public_services "could not stop production NGINX before application recovery"
+        "${base_compose[@]}" up -d --no-deps --no-build --force-recreate circles || \
+            fail_public_services "default application recovery failed"
+        verify_application default none "$recovery_image_id" || \
+            fail_public_services "default application recovery verification failed"
+        require_route_mode paused || \
+            fail_public_services "registration routing changed during application recovery"
+        "${base_compose[@]}" up -d --no-deps --force-recreate nginx || \
+            fail_public_services "production NGINX refresh failed after application recovery"
+        verify_external_application || \
+            fail_public_services "external application recovery verification failed"
+        require_route_mode paused || \
+            fail_public_services "registration routing changed during NGINX recovery"
         ;;
     *)
         usage

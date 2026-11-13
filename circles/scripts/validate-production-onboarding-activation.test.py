@@ -243,7 +243,7 @@ class ActivationValidatorTests(unittest.TestCase):
                 == 0
             )
 
-        for command in ("status", "inspect", "deactivate-services"):
+        for command in ("status", "inspect", "deactivate-services", "recover-default-services"):
             with self.subTest(command=command):
                 self.assertTrue(eligible(command))
         self.assertTrue(eligible("route-set", "pending", "paused"))
