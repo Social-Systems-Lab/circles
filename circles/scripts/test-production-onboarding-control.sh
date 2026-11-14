@@ -14,6 +14,7 @@ verifier_validator="$repo_dir/scripts/validate-routing-operator-verifier.py"
 
 bash -n "$control"
 bash -n "$deploy"
+bash -n "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 for executable in "$control" "$validator" "$runtime_validator" "$application_image_validator" "$verifier_validator"; do
     [[ -x "$executable" ]] || { echo "required production onboarding tool is not executable: $executable" >&2; exit 1; }
 done
@@ -38,6 +39,17 @@ for required in \
     'deactivate-services' \
     'recover-default-services' \
     'RECOVER_DEFAULT_SERVICES' \
+    'postmark-canary)' \
+    'POSTMARK_CANARY_SCRIPT=' \
+    'POSTMARK_CANARY_ENV_FILE="$env_file"' \
+    'write_postmark_canary_environment "$container_id"' \
+    'env_file="$POSTMARK_CANARY_ENV_FILE"' \
+    'SEND_POSTMARK_VERIFICATION_CANARY' \
+    'await runCanaryCli();' \
+    '--network bridge' \
+    '--env-file "$env_file"' \
+    '--cap-drop ALL' \
+    '--security-opt no-new-privileges --user node' \
     'verify_recovery_application_image' \
     'require_failed_application_state' \
     '--pull=never --network none --read-only' \
@@ -49,6 +61,8 @@ done
 for forbidden in \
     '--operator-token' \
     'REGISTRATION_ROUTING_OPERATOR_TOKEN;' \
+    'KAMOONI_POSTMARK_CANARY_CLI' \
+    'env_file="$(write_postmark_canary_environment' \
     'docker compose down' \
     'docker volume rm' \
     'rm -rf'; do
@@ -151,10 +165,20 @@ if grep -Fq 'docker-compose.production-activation.yml' "$production"; then
     echo "ordinary production Compose references the activation overlay" >&2
     exit 1
 fi
+if grep -Fq 'MONGODB_URI' "$control"; then
+    echo "production control must not pass database credentials to the Postmark canary" >&2
+    exit 1
+fi
+if grep -Eq -- '--mount|--volume|/var/run/docker.sock' "$control"; then
+    echo "production control must not attach volumes or the Docker socket to the Postmark canary" >&2
+    exit 1
+fi
 
 python3 "$repo_dir/scripts/validate-production-onboarding-activation.test.py"
 python3 "$repo_dir/scripts/verify-production-onboarding-runtime.test.py"
 python3 "$repo_dir/scripts/verify-production-application-image.test.py"
+bash "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
+bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
 
 verifier_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$verifier_tmp"' EXIT

@@ -249,11 +249,28 @@ class ActivationValidatorTests(unittest.TestCase):
         self.assertTrue(eligible("route-set", "pending", "paused"))
         self.assertTrue(eligible("route-set", "paused", "legacy"))
 
-        for command in ("build-operator", "preflight", "prepare-indexes", "activate-services"):
+        for command in (
+            "build-operator",
+            "preflight",
+            "prepare-indexes",
+            "activate-services",
+            "postmark-canary",
+        ):
             with self.subTest(command=command):
                 self.assertFalse(eligible(command))
         self.assertFalse(eligible("route-set", "legacy", "paused"))
         self.assertFalse(eligible("route-set", "paused", "pending"))
+        self.assertEqual(
+            self.run_command(
+                "origin-eligible",
+                "postmark-canary",
+                "",
+                "",
+                deployed,
+                deployed,
+            ).returncode,
+            0,
+        )
 
         def eligible_without_origin(command: str, expected: str = "", target: str = "") -> bool:
             return (
@@ -270,6 +287,7 @@ class ActivationValidatorTests(unittest.TestCase):
 
         self.assertTrue(eligible_without_origin("deactivate-services"))
         self.assertFalse(eligible_without_origin("preflight"))
+        self.assertFalse(eligible_without_origin("postmark-canary"))
 
     def test_operations_idle_ignores_email_only_records_but_rejects_active_or_uncertain_state(self) -> None:
         safe = {

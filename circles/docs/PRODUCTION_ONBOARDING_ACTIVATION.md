@@ -174,6 +174,53 @@ Inspect current state without mutation:
 ./circles/scripts/production-onboarding-control.sh inspect
 ```
 
+## Pre-activation Postmark canary
+
+After the reviewed candidate is deployed in legacy mode with both pending flags false and zero
+pending operations, test the production Postmark credentials, `email-verification` template and
+production-equivalent template model without activating registration:
+
+```bash
+cd /root/circles/circles
+./circles/scripts/production-onboarding-control.sh postmark-canary
+```
+
+The command requires the checkout and deployed image to match `origin/main`, routing to remain
+`legacy`, the default-off runtime configuration, an idle pending-registration state and exact
+confirmation phrase `SEND_POSTMARK_VERIFICATION_CANARY`. It prompts for an approved recipient without
+echoing the address. It does not read or require the pending-registration HMAC or deployment ID.
+
+Use a dedicated operator-controlled mailbox or plus-address on an owned domain. Do not use a public
+temporary-email service. The command sends exactly one email and does not retry.
+
+The one-off request runs from the exact deployed application image with only the production Postmark
+transport settings, a bridge network connection, a read-only filesystem, dropped capabilities and no
+database credentials, production volumes or Docker socket. It generates an inert verification token
+in memory, calls the actual Postmark `email-verification` template once and does not invoke signup,
+MongoDB writes, pending-registration records or DID reservation.
+
+The command reports only whether Postmark accepted the request and whether it returned a MessageID.
+It never prints the recipient, API token, generated token, action URL or provider message.
+
+Confirm the canary through all of these independent checks:
+
+1. The message arrives at the controlled mailbox with the expected sender and verification-template
+   content.
+2. The rendered action link uses `https://kamooni.org/signup/verify?token=…`.
+3. SPF, DKIM and DMARC pass in the received message headers.
+4. Postmark Activity shows the message as delivered rather than bounced or rejected.
+5. Opening the link while routing remains `legacy` returns the safe unavailable/invalid state and
+   creates no registration, account or DID.
+6. The rendered email is usable on desktop and mobile without exposing the raw token in logs or
+   evidence screenshots.
+
+Provider acceptance is not proof of inbox delivery. A failed canary must be investigated before any
+new send; do not add automatic retries.
+
+This pre-activation canary proves production provider, sender, template and rendering behavior only.
+It does not replace the full Postmark signup canary after a separately approved transition to
+pending routing.
+
 ## Index preparation
 
 Index preparation is idempotent and requires the routing operator token plus an explicit
@@ -363,7 +410,8 @@ canary, production backup restore test, monitoring approval or activation-operat
 
 ## Known activation blockers
 
-- A production Postmark end-to-end canary has not yet been executed.
+- The production Postmark pre-activation delivery/template canary has not yet been executed.
+- The full pending-registration Postmark end-to-end canary remains required after approved activation.
 - The production activation and rollback operators have not yet been named and approved.
 - Production backup restoration has not yet been independently demonstrated for this operation.
 - Monitoring ownership and alert thresholds must be agreed before public rollout.
