@@ -21,6 +21,17 @@ Do not use ad-hoc `docker compose build` or `docker compose up` commands for nor
 
 Production deployment requires an approved release from `origin/main` after successful local checks and staging integration/browser validation. Production Compose hard-selects Postmark and builds an image with an immutable production role marker; runtime email validation rejects Mailpit for that image. Mailpit services and staging transport configuration must not be present in production Compose. The required `Production Isolation / production-isolation` check and the deployment script enforce these contracts.
 
+## Registration-mode boundary
+
+An ordinary production deployment remains in legacy registration mode. The default production Compose
+keeps `PENDING_REGISTRATION_ENABLED=false`, `PENDING_REGISTRATION_JOURNEY_READY=false`, the
+pending-registration HMAC empty, and no pending deployment ID. Deploying this document's normal workflow
+does not activate the new signup journey.
+
+Index preparation, paused routing, activation, canary verification and rollback are separate,
+explicitly approved operations. Use [Production pending-registration activation](PRODUCTION_ONBOARDING_ACTIVATION.md)
+for those steps.
+
 ## Production layout
 
 - Server and SSH target: `root@kamooniorg`
@@ -58,6 +69,208 @@ Confirm:
 
 The script also refuses to deploy if the working tree is dirty.
 
+Confirm the public and image build identities before changing production:
+
+```bash
+cd /root/circles/circles/circles
+expected_sha="$(git rev-parse HEAD)"
+public_sha="$(
+  curl -fsSL https://kamooni.org/api/version |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["gitSha"])'
+)"
+image_sha="$(
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles sed -n 's/^gitSha=//p' /app/VERSION
+)"
+printf 'checkout=%s\npublic=%s\nimage=%s\n' \
+  "$expected_sha" "$public_sha" "$image_sha"
+test "$public_sha" = "$expected_sha"
+test "$image_sha" = "$expected_sha"
+```
+
+The `/api/version` response and `/app/VERSION` must both report `expected_sha`.
+
+Validate Compose without printing its resolved secret environment:
+
+```bash
+docker compose --project-name circles -f docker-compose.yml config --quiet
+docker compose --project-name circles -f docker-compose.yml config --services
+grep -Fq -- '- PENDING_REGISTRATION_ENABLED=false' docker-compose.yml
+grep -Fq -- '- PENDING_REGISTRATION_JOURNEY_READY=false' docker-compose.yml
+grep -Fq -- '- PENDING_REGISTRATION_TOKEN_HMAC_KEY=' docker-compose.yml
+```
+
+The service list must not contain Mailpit. The source checks prove the prospective release's
+default Compose keeps pending registration disabled. Check the currently running release's
+non-secret configuration:
+
+```bash
+docker compose --project-name circles -f docker-compose.yml exec -T circles sh -lc '
+  test "$CIRCLES_URL" = "https://kamooni.org" &&
+  test "$EMAIL_TRANSPORT" = "postmark" &&
+  test -n "$ALTCHA_HMAC_KEY" &&
+  test -n "$POSTMARK_API_TOKEN" &&
+  test -n "$POSTMARK_SENDER_EMAIL" &&
+  case "${PENDING_REGISTRATION_ENABLED:-false}" in false) ;; *) exit 1 ;; esac &&
+  case "${PENDING_REGISTRATION_JOURNEY_READY:-false}" in false) ;; *) exit 1 ;; esac &&
+  test -z "${PENDING_REGISTRATION_TOKEN_HMAC_KEY:-}" &&
+  test -z "${REGISTRATION_DEPLOYMENT_ID:-}" &&
+  printf "CIRCLES_URL=%s\nALTCHA=configured\nPOSTMARK=configured\n" "$CIRCLES_URL" &&
+  printf "PENDING_REGISTRATION_ENABLED=%s\n" "${PENDING_REGISTRATION_ENABLED:-false}"
+'
+```
+
+Treating an absent runtime flag as `false` keeps this check compatible with a previous running
+release that predates the flag; the prospective Compose check above still requires the new defaults.
+This verifies credential presence without displaying the ALTCHA or Postmark secrets.
+
+Check MongoDB and routing through the application's resolved `MONGODB_URI`. The URI is passed over
+standard input and is never printed:
+
+```bash
+(
+  set -o pipefail
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles printenv MONGODB_URI |
+    docker compose --project-name circles -f docker-compose.yml \
+      exec -T db sh -lc '
+      IFS= read -r MONGODB_URI || exit 1
+      [ -n "$MONGODB_URI" ] || exit 1
+      mongosh "$MONGODB_URI" --quiet --eval "
+        const app = db.getSiblingDB(\"circles\");
+        const routing = app.registrationRouting.findOne({_id: \"registration-routing\"});
+        print(\"mongo=\" + db.adminCommand({ping: 1}).ok);
+        print(\"routing=\" + (routing?.mode || \"legacy\"));
+      "
+    '
+)
+```
+
+Before an ordinary deployment, routing must report `legacy`. `MONGO_INITDB_ROOT_USERNAME` and
+`MONGO_INITDB_ROOT_PASSWORD` only initialize a new Mongo volume and may be stale for an existing
+volume. The application service's `MONGODB_URI` is authoritative for connectivity, migration,
+backup and verification.
+
+## MongoDB backup and restore validation
+
+Take a backup before any deployment that can change database data, and before starting pending-registration
+activation. Use the database container's existing `mongodump` tool and the application's current
+credentials:
+
+```bash
+cd /root/circles/circles/circles
+backup_parent="/root/circles/backups"
+install -d -m 700 "$backup_parent"
+backup_dir="$(mktemp -d "$backup_parent/mongo-$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")"
+chmod 700 "$backup_dir"
+
+(
+  set -o pipefail
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles printenv MONGODB_URI |
+    docker compose --project-name circles -f docker-compose.yml \
+      exec -T db sh -lc '
+      IFS= read -r MONGODB_URI || exit 1
+      [ -n "$MONGODB_URI" ] || exit 1
+      export MONGODB_URI
+      mongosh "$MONGODB_URI" --quiet --eval "
+        const app = db.getSiblingDB(\"circles\");
+        print(EJSON.stringify({
+          accounts: app.circles.countDocuments({}),
+          events: app.events.countDocuments({}),
+          pendingRegistrations: app.pendingRegistrations.countDocuments({}),
+          didReservations: app.pendingRegistrationDidReservations.countDocuments({})
+        }));
+      "
+    '
+) > "$backup_dir/source-counts.json"
+cat "$backup_dir/source-counts.json"
+
+(
+  set -o pipefail
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles printenv MONGODB_URI |
+    docker compose --project-name circles -f docker-compose.yml \
+      exec -T db sh -lc '
+      IFS= read -r MONGODB_URI || exit 1
+      [ -n "$MONGODB_URI" ] || exit 1
+      export MONGODB_URI
+      mongodump --uri="$MONGODB_URI" --nsInclude="circles.*" --archive --gzip
+    '
+) > "$backup_dir/mongo.archive.gz"
+```
+
+Verify the complete compressed stream, decompress it once, and record and check its checksum:
+
+```bash
+gzip -t "$backup_dir/mongo.archive.gz"
+gzip -dc "$backup_dir/mongo.archive.gz" >/dev/null
+(
+  cd "$backup_dir"
+  sha256sum mongo.archive.gz source-counts.json > SHA256SUMS
+  sha256sum -c SHA256SUMS
+)
+chmod 600 "$backup_dir/mongo.archive.gz" "$backup_dir/SHA256SUMS" \
+  "$backup_dir/source-counts.json"
+printf 'backup=%s\n' "$backup_dir"
+```
+
+These checks verify the gzip stream and archive bytes; they do not prove that MongoDB can restore
+the archive. Test that separately in a disposable Mongo container that reuses the already-present
+`mongo:7.0` image, has no network, receives no production credentials and mounts the backup read-only:
+
+```bash
+(
+  set -euo pipefail
+  restore_container="kamooni-mongo-restore-check-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  if docker container inspect "$restore_container" >/dev/null 2>&1; then
+    echo "Error: restore container name already exists: $restore_container" >&2
+    exit 1
+  fi
+  trap 'docker rm -f "$restore_container" >/dev/null 2>&1 || true' EXIT
+  docker run --detach --rm --pull never --name "$restore_container" --network none \
+    --mount "type=bind,src=$backup_dir,dst=/backup,readonly" \
+    mongo:7.0 --bind_ip_all >/dev/null
+
+  ready=false
+  for _ in $(seq 1 30); do
+    if docker exec "$restore_container" mongosh --quiet \
+      --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)' >/dev/null 2>&1; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  test "$ready" = true
+
+  docker exec "$restore_container" \
+    mongorestore --archive=/backup/mongo.archive.gz --gzip
+  docker exec "$restore_container" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+    const app = db.getSiblingDB("circles");
+    printjson({
+      accounts: app.circles.countDocuments({}),
+      events: app.events.countDocuments({}),
+      pendingRegistrations: app.pendingRegistrations.countDocuments({}),
+      didReservations: app.pendingRegistrationDidReservations.countDocuments({})
+    });
+  '
+
+  if ! docker rm -f "$restore_container" >/dev/null; then
+    echo "Error: could not remove $restore_container; retry cleanup manually." >&2
+    exit 1
+  fi
+  trap - EXIT
+)
+```
+
+Compare these counts and collection presence with `source-counts.json`, captured immediately before
+the backup. The isolated restore is the recoverability test; a clean checksum alone is insufficient.
+
+Do not use `mongorestore --dryRun` as proof of full recoverability. It can stop consuming an archive
+before the producer has finished; in a pipeline that can cause the upstream producer to receive
+`SIGPIPE`. That signal is not evidence that the archive is corrupt, and a dry run does not replace
+an isolated restore with expected collection and count checks.
+
 ## Deploy
 
 Normal releases deploy only from the approved `origin/main` branch:
@@ -78,7 +291,7 @@ The script:
 - confirms the configured `origin` is the `Social-Systems-Lab/circles` GitHub repository
 - reads MongoDB registration routing before Git synchronization and refuses to continue unless it is `legacy`
 - fetches only `origin/main`
-- checks out `main` and resets the server checkout to the exact `origin/main` commit
+- checks out `main` and fast-forwards it to `origin/main` with `git merge --ff-only`; it does not reset or clean the checkout
 - verifies the local branch and full commit identity against `origin/main`
 - runs the production staging-isolation guard before building or accessing application services or data
 - exports the deployed `GIT_SHA` and `BUILD_TIME`
@@ -98,12 +311,11 @@ Successful verification writes the `schemaMigrations/chat-read-state-v2` complet
 one-time offline migration window, run the safe idempotent verifier while the current V2 app remains live, and then follow
 the normal replacement flow. Duplicate or malformed state, and a missing required unique index, still prevent replacement.
 
-Migration authentication uses the resolved `MONGODB_URI` from the Compose `circles` service, including while that service
-is stopped. Mongo's `MONGO_INITDB_ROOT_*` environment values are initialization settings and may no longer match the
-credentials of an existing database volume. The URI is transferred to the database container over standard input rather
-than process arguments. Migration and verification JavaScript is executed by `mongosh --file` so the deployment cannot
-remain attached to an interactive shell after a script finishes. URI resolution, authentication, and the migration-status
-query must succeed before the currently running application is stopped.
+Migration authentication uses the authoritative `MONGODB_URI` from the Compose `circles` service, including while that
+service is stopped. The URI is transferred to the database container over standard input rather than process arguments.
+Migration and verification JavaScript is executed by `mongosh --file` so the deployment cannot remain attached to an
+interactive shell after a script finishes. URI resolution, authentication, and the migration-status query must succeed
+before the currently running application is stopped.
 
 ## V2 maintenance-window and failure rules
 

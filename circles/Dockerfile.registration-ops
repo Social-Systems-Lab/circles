@@ -12,6 +12,11 @@ COPY src/lib/auth/pending-registration.ts ./src/lib/auth/pending-registration.ts
 COPY src/lib/auth/pending-registration-reconciliation.ts ./src/lib/auth/pending-registration-reconciliation.ts
 COPY src/lib/auth/registration-routing.ts ./src/lib/auth/registration-routing.ts
 
+# Production checkouts may apply restrictive umasks that Docker COPY preserves.
+# These files contain no credentials and must be readable by the non-root runtime user.
+RUN chmod -R a+rX /app/scripts /app/src /app/tsconfig.json \
+  && chmod a+r /app/package.json /app/bun.lock
+
 ENV NODE_ENV=production
 
 USER node
