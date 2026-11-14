@@ -30,13 +30,23 @@ def container(*, activation: bool = True) -> dict:
                 "POSTMARK_SENDER_EMAIL=hello@example.invalid",
             ]
         },
-        "NetworkSettings": {"Networks": {"circles_webnet": {}}},
+        "NetworkSettings": {"Networks": {"circles_webnet": {"IPAddress": "172.20.0.4"}}},
     }
 
 
 def run_validator(mode: str, deployment_id: str, value: object) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["python3", str(VALIDATOR), mode, deployment_id],
+        input=json.dumps(value),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def run_endpoint(value: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["python3", str(VALIDATOR), "endpoint"],
         input=json.dumps(value),
         check=False,
         capture_output=True,
@@ -73,6 +83,31 @@ class RuntimeValidatorTests(unittest.TestCase):
             run_validator("activation", DEPLOYMENT_ID, [container(), container()]).returncode,
             0,
         )
+
+    def test_endpoint_returns_one_private_container_address(self) -> None:
+        result = run_endpoint([container()])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "172.20.0.4")
+        self.assertNotIn(HMAC, result.stdout + result.stderr)
+        self.assertNotIn(POSTMARK_TOKEN, result.stdout + result.stderr)
+
+    def test_endpoint_rejects_loopback_public_missing_and_ambiguous_networks(self) -> None:
+        for address in ("127.0.0.1", "8.8.8.8", "", "invalid"):
+            with self.subTest(address=address):
+                value = container()
+                value["NetworkSettings"]["Networks"]["circles_webnet"]["IPAddress"] = address
+                self.assertNotEqual(run_endpoint([value]).returncode, 0)
+
+        extra_network = container()
+        extra_network["NetworkSettings"]["Networks"]["unexpected"] = {"IPAddress": "172.21.0.4"}
+        self.assertNotEqual(run_endpoint([extra_network]).returncode, 0)
+        self.assertNotEqual(run_endpoint([container(), container()]).returncode, 0)
+        missing_network = container()
+        missing_network["NetworkSettings"]["Networks"] = {}
+        self.assertNotEqual(run_endpoint([missing_network]).returncode, 0)
+        stopped = container()
+        stopped["State"]["Running"] = False
+        self.assertNotEqual(run_endpoint([stopped]).returncode, 0)
 
 
 if __name__ == "__main__":

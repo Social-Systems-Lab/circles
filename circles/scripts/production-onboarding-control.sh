@@ -280,16 +280,24 @@ verify_application() {
 }
 
 verify_application_build_identity() {
-    local container_id="$1"
+    local container_id="$1" container_ip
     [[ "$(docker exec "$container_id" cat /app/.kamooni-deployment-role)" == "production" ]] || \
         fail "running application image role is not production"
+    container_ip="$(docker inspect "$container_id" | python3 "$RUNTIME_VALIDATOR" endpoint)" || \
+        fail "running application container address could not be verified"
     docker exec "$container_id" node -e '
 const expected = process.argv[1];
-fetch(`http://127.0.0.1:${process.env.PORT}/api/version`)
+const host = process.argv[2];
+const port = Number(process.env.PORT);
+if (!host || !Number.isInteger(port) || port < 1 || port > 65535) process.exit(1);
+fetch(`http://${host}:${port}/api/version`, {
+  redirect: "error",
+  signal: AbortSignal.timeout(10000),
+})
   .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
   .then((body) => process.exit(body.gitSha === expected ? 0 : 1))
   .catch(() => process.exit(1));
-' "$GIT_SHA" || fail "running application SHA does not match the approved production SHA"
+' "$GIT_SHA" "$container_ip" || fail "running application SHA does not match the approved production SHA"
 }
 
 verify_running_application_identity_if_present() {
