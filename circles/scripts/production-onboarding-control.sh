@@ -311,6 +311,20 @@ verify_running_application_identity_if_present() {
     fi
 }
 
+runtime_status_summary() {
+    local -a ids=()
+    local container_id
+    while IFS= read -r container_id; do
+        [[ -z "$container_id" ]] || ids+=("$container_id")
+    done < <("${base_compose[@]}" ps -q circles)
+    [[ "${#ids[@]}" -le 1 ]] || fail "multiple production application containers are running"
+    if [[ "${#ids[@]}" -eq 0 ]]; then
+        printf '{"available":false,"reason":"application-not-running"}'
+        return
+    fi
+    docker inspect "${ids[0]}" | python3 "$RUNTIME_VALIDATOR" summary
+}
+
 verify_recovery_application_image() {
     local image_id stopped_ids stopped_id metadata
     image_id="$(docker image inspect --format '{{.Id}}' circles-circles:latest)" || \
@@ -480,11 +494,12 @@ case "$command_name" in
         [[ "$#" -eq 0 ]] || usage
         require_operator_image
         verify_running_application_identity_if_present
+        runtime_summary="$(runtime_status_summary)"
         route_status
         if [[ -f "$ACTIVATION_ENV_FILE" ]]; then
-            run_ops_with_activation operations-status
+            run_ops_with_activation operations-status --users-dir /circles/users --runtime-summary "$runtime_summary"
         else
-            run_ops operations-status
+            run_ops operations-status --users-dir /circles/users --runtime-summary "$runtime_summary"
         fi
         run_ops recovery-activation-status
         ;;

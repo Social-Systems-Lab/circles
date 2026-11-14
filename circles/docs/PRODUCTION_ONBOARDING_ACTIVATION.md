@@ -221,6 +221,22 @@ This pre-activation canary proves production provider, sender, template and rend
 It does not replace the full Postmark signup canary after a separately approved transition to
 pending routing.
 
+## Supervised pilot approval and responsibilities
+
+The production Postmark verification-email canary has passed. MongoDB restoration completed with
+16,253 restored documents, and the identity/credential-volume restoration covered 1,976 files.
+
+For this controlled pilot, the same approved operator is explicitly assigned as:
+
+- activation operator
+- rollback operator
+- initial monitoring owner
+
+This single-person assignment authorizes only a short, actively supervised pilot. It does not
+authorize unattended, overnight or general public rollout. Public rollout still requires a named
+fallback/rollback operator and monitoring arrangement that works when the primary operator is
+unavailable.
+
 ## Index preparation
 
 Index preparation is idempotent and requires the routing operator token plus an explicit
@@ -288,23 +304,114 @@ After the paused-to-pending transition:
 
 ## Monitoring
 
-Run:
+Monitoring is manual and must remain active for the entire supervised pilot. Run:
 
 ```bash
 ./circles/scripts/production-onboarding-control.sh status
-./circles/scripts/production-onboarding-control.sh inspect
 ```
 
-Alert on:
+`status` is read-only and reports:
 
-- `reconciliationRequiredAt` without `provisionedAt`
-- `provisioning_interrupted` audit events
-- stale provisioning or finalization locks
-- Postmark delivery failures
-- duplicate email, handle, DID, account-correlation, or lock errors
-- deployment-ID mismatch
-- ALTCHA failures, replays, or rate-limit saturation
-- unexpected account, DID, membership, or chat side effects
+- pending counts plus oldest created and last-updated ages by lifecycle status
+- active provisioning/finalization lock counts and remaining lease time
+- reconciliation, aggregated manual-review and recoverable-finalization counts
+- successful-email, email-failure and provisioning-interruption audit counts for 15 and 60 minutes
+- live runtime flags, deployment ID and credential-presence booleans
+- routing/runtime consistency
+
+Some metrics are deliberately unavailable rather than unbounded:
+
+- Lock documents do not store acquisition time, so lock age is unavailable; use repeated samples.
+- Status aggregation is skipped above 1,000 unfinished registrations or 5,000 retained records.
+- Manual-review aggregation is skipped above 100 unfinished registrations, 500 retained pending
+  records or 500 DID reservations.
+- Audit aggregation is skipped above 20,000 retained audit documents.
+
+When a metric is unavailable, use `inspect` and application logs without removing data.
+
+Run `status` every five minutes during the controlled canary and the first two hours, every 15
+minutes through the first 24 hours, and hourly while the pilot remains active. This cadence is not
+approved for unattended operation.
+
+Inspect an individual problem record without printing or sharing unrelated identities:
+
+```bash
+./circles/scripts/production-onboarding-control.sh inspect PENDING_REGISTRATION_ID
+```
+
+For aggregate classifications without identity identifiers:
+
+```bash
+./circles/scripts/production-onboarding-control.sh inspect |
+python3 -c 'import collections,json,sys; d=json.load(sys.stdin); r=d.get("results",[]); print(json.dumps({"count":d.get("count",0),"byClassification":dict(collections.Counter(x.get("classification","unknown") for x in r))},sort_keys=True))'
+```
+
+Review sanitized Postmark delivery failures on the production application:
+
+```bash
+cd /root/circles/circles/circles
+docker compose --project-name circles -f docker-compose.yml logs --since 15m --no-color circles 2>&1 |
+grep -F 'Email delivery failed'
+```
+
+Also inspect Postmark Activity for delivered, bounced or rejected messages.
+
+### Monitoring thresholds
+
+Stop new registrations and investigate immediately when any of these occurs:
+
+- routing/runtime consistency is false
+- the deployed role or application SHA differs, or an image-identity check fails
+- `manualReviewMetrics.manualReview` is greater than zero
+- duplicate correlated accounts, duplicate DIDs or identity-field mismatches are reported
+- Postmark reports an authentication/configuration failure
+- three consecutive email-delivery failures or more than 10% failures in 15 minutes
+- an active provisioning or finalization lock remains across two five-minute checks
+- `oldestUpdatedAgeSecondsByStatus.provisioning` or `.provisioning_claimed` exceeds ten minutes
+
+Treat these as warnings:
+
+- `reconciliationRequired` is present while at least one provisioning or finalization lock exists
+  and no `provisioning`/`provisioning_claimed` updated age exceeds ten minutes
+- `pending_email` is older than 25 minutes; verification links expire at 30 minutes
+- `email_verified` is older than 25 minutes; the verified continuation expires at 30 minutes
+- one isolated Postmark failure or delayed delivery
+- more than ten unfinished registrations, or rapid growth without successful-email activity or
+  corresponding count turnover
+
+For the pilot, stop new signups if unfinished registrations exceed 25 or continue growing while no
+successful-email activity or pending-count turnover is occurring. Re-baseline these count thresholds
+after the supervised canary.
+
+The following are expected and are not integrity failures by themselves:
+
+- unfinished `pending_email` records waiting for users
+- `recoverablePendingRegistrations` in recovery status
+- `unsafePendingRegistrations`, which includes ordinary unfinished email-only records
+- expired records remaining until MongoDB's TTL monitor runs, normally within about one minute
+
+Never delete pending records or credentials, clear locks, release DID reservations or infer lock age
+from expiry time.
+
+### Containment
+
+For an immediate stop while keeping data and support services intact, transition routing back to
+`paused`:
+
+```bash
+./circles/scripts/production-onboarding-control.sh route-set pending paused none ROLLBACK_OPERATOR
+```
+
+Then:
+
+1. Run `status`.
+2. Run the aggregated classification review.
+3. Inspect only affected pending-registration IDs with `inspect`.
+4. Preserve MongoDB, MinIO, credential files, audit events and all identity records.
+5. Do not run `deactivate-services` while active locks or reconciliation-required records remain.
+
+The operator may resume the supervised pilot only after the cause is understood and another
+read-only status check is consistent. No automatic retry, rollback or recovery is authorized.
 
 Never print verification tokens, continuation secrets, passwords, encrypted keys, connection URIs,
 HMAC keys, or the routing operator token.
@@ -410,8 +517,7 @@ canary, production backup restore test, monitoring approval or activation-operat
 
 ## Known activation blockers
 
-- The production Postmark pre-activation delivery/template canary has not yet been executed.
 - The full pending-registration Postmark end-to-end canary remains required after approved activation.
-- The production activation and rollback operators have not yet been named and approved.
-- Production backup restoration has not yet been independently demonstrated for this operation.
-- Monitoring ownership and alert thresholds must be agreed before public rollout.
+- The supervised pilot has one operator explicitly assigned for activation, rollback and initial
+  monitoring. Unattended, overnight and general public rollout remain unauthorized.
+- A fallback/rollback operator and out-of-hours monitoring arrangement are required before public rollout.

@@ -85,6 +85,55 @@ assert operations["pendingRegistrations"] == 0
 assert operations["reconciliationRequired"] == 0
 assert operations["activeProvisioningLocks"] == 0
 assert operations["activeFinalizationLocks"] == 0
+assert operations["pendingStatusMetrics"] == {
+    "available": True,
+    "counts": {
+        "pending_email": 0,
+        "email_verified": 0,
+        "provisioning": 0,
+        "provisioning_claimed": 0,
+        "unknown": 0,
+    },
+    "oldestAgeSeconds": None,
+    "oldestStatus": None,
+    "oldestAgeSecondsByStatus": {
+        "pending_email": None,
+        "email_verified": None,
+        "provisioning": None,
+        "provisioning_claimed": None,
+        "unknown": None,
+    },
+    "oldestUpdatedAgeSeconds": None,
+    "oldestUpdatedStatus": None,
+    "oldestUpdatedAgeSecondsByStatus": {
+        "pending_email": None,
+        "email_verified": None,
+        "provisioning": None,
+        "provisioning_claimed": None,
+        "unknown": None,
+    },
+    "scanLimit": 1000,
+    "documentLimit": 5000,
+}
+assert operations["lockMetrics"]["provisioning"]["ageAvailable"] is False
+assert operations["lockMetrics"]["finalization"]["ageAvailable"] is False
+assert operations["manualReviewMetrics"]["available"] is False
+assert operations["manualReviewMetrics"]["reason"] == "users-directory-not-provided"
+assert operations["auditEvents"]["available"] is True
+assert operations["auditEvents"]["emailSent"] == {"last15Minutes": 0, "last60Minutes": 0}
+assert operations["auditEvents"]["emailFailed"] == {"last15Minutes": 0, "last60Minutes": 0}
+assert operations["auditEvents"]["provisioningInterrupted"] == {"last15Minutes": 0, "last60Minutes": 0}
+assert operations["auditEvents"]["documentLimit"] == 20000
+assert operations["runtime"]["available"] is False
+assert operations["runtimeRoutingConsistency"]["status"] == "unavailable"
+assert operations["monitoringLimits"] == {
+    "pendingStatusRecords": 1000,
+    "pendingStatusDocuments": 5000,
+    "manualReviewRecords": 100,
+    "manualReviewDocuments": 500,
+    "identityReservationDocuments": 500,
+    "auditDocuments": 20000,
+}
 assert inspection == {"count": 0, "results": []}
 assert recovery == {
     "pendingRegistrations": 0,
@@ -110,6 +159,10 @@ import json, sys
 status = json.loads(sys.argv[1])
 assert status["activeProvisioningLocks"] == 0
 assert status["activeFinalizationLocks"] == 1
+assert status["lockMetrics"]["finalization"]["active"] == 1
+assert status["lockMetrics"]["finalization"]["oldestRemainingSeconds"] is not None
+assert status["lockMetrics"]["finalization"]["oldestAgeSeconds"] is None
+assert status["lockMetrics"]["finalization"]["ageAvailable"] is False
 PY
 docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
 db.pendingRegistrationProvisioningLocks.deleteOne({ _id: "stale-lock" });
@@ -124,16 +177,86 @@ db.pendingRegistrations.insertMany([
     requestedHandle: "recoverable", status: "email_verified", verifiedAt: new Date(now - 3600000),
     verifiedContinuationExpiresAt: new Date(now - 60000), expiresAt: new Date(now.getTime() + 3600000),
     reservedDid: null, reconciliationRequiredAt: null, accountId: null, accountDid: null, provisionedAt: null,
-    provisioningClaimHash: null
+    provisioningClaimHash: null, createdAt: new Date(now.getTime() - 45 * 60 * 1000),
+    updatedAt: new Date(now.getTime() - 45 * 60 * 1000)
   },
   {
     name: "Unsafe", email: "unsafe@example.invalid", normalizedEmail: "unsafe@example.invalid",
     requestedHandle: "unsafe", status: "provisioning", verifiedAt: new Date(now - 3600000),
     verifiedContinuationExpiresAt: new Date(now - 60000), expiresAt: new Date(now.getTime() + 3600000),
     reservedDid: null, reconciliationRequiredAt: null, accountId: null, accountDid: null, provisionedAt: null,
-    provisioningClaimHash: null
+    provisioningClaimHash: null, createdAt: new Date(now.getTime() - 10 * 60 * 1000),
+    updatedAt: new Date(now.getTime() - 10 * 60 * 1000)
   }
 ]);
+db.pendingRegistrationAuditEvents.insertMany([
+  { pendingRegistrationId: "audit-sent", eventType: "pending_registration.verification_sent", occurredAt: new Date(now.getTime() - 5 * 60 * 1000), expiresAt: new Date(now.getTime() + 86400000) },
+  { pendingRegistrationId: "audit-failed", eventType: "pending_registration.email_delivery_failed", occurredAt: new Date(now.getTime() - 20 * 60 * 1000), expiresAt: new Date(now.getTime() + 86400000) },
+  { pendingRegistrationId: "audit-interrupted", eventType: "pending_registration.provisioning_interrupted", occurredAt: new Date(now.getTime() - 40 * 60 * 1000), expiresAt: new Date(now.getTime() + 86400000) }
+]);
+' >/dev/null
+monitoring_runtime='{"available":true,"running":true,"pendingRegistrationEnabled":false,"pendingRegistrationJourneyReady":false,"pendingRegistrationHmacPresent":false,"registrationDeploymentId":null,"altchaConfigured":true,"postmarkConfigured":true,"emailTransport":"postmark"}'
+monitoring_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles --mount type=bind,src="$users_dir",dst=/circles/users,readonly "$image" operations-status --users-dir /circles/users --runtime-summary "$monitoring_runtime")"
+python3 - "$monitoring_status" <<'PY'
+import json, sys
+status = json.loads(sys.argv[1])
+assert status["pendingStatusMetrics"]["available"] is True
+assert status["pendingStatusMetrics"]["counts"]["email_verified"] == 1
+assert status["pendingStatusMetrics"]["counts"]["provisioning"] == 1
+assert 2690 <= status["pendingStatusMetrics"]["oldestAgeSecondsByStatus"]["email_verified"] <= 2710
+assert status["pendingStatusMetrics"]["oldestStatus"] == "email_verified"
+assert 2690 <= status["pendingStatusMetrics"]["oldestUpdatedAgeSecondsByStatus"]["email_verified"] <= 2710
+assert status["pendingStatusMetrics"]["oldestUpdatedStatus"] == "email_verified"
+assert status["manualReviewMetrics"] == {
+    "available": True,
+    "recordsExamined": 0,
+    "byClassification": {},
+    "manualReview": 0,
+    "recoverableFinalize": 0,
+    "recordLimit": 100,
+    "pendingDocumentLimit": 500,
+    "reservationDocumentLimit": 500,
+}
+assert status["auditEvents"]["emailSent"] == {"last15Minutes": 1, "last60Minutes": 1}
+assert status["auditEvents"]["emailFailed"] == {"last15Minutes": 0, "last60Minutes": 1}
+assert status["auditEvents"]["provisioningInterrupted"] == {"last15Minutes": 0, "last60Minutes": 1}
+assert status["runtimeRoutingConsistency"]["consistent"] is True
+assert status["runtimeRoutingConsistency"]["issues"] == []
+assert "recoverable@example.invalid" not in sys.argv[1]
+assert "unsafe@example.invalid" not in sys.argv[1]
+PY
+drifted_runtime='{"available":true,"running":true,"pendingRegistrationEnabled":true,"pendingRegistrationJourneyReady":false,"pendingRegistrationHmacPresent":false,"registrationDeploymentId":null,"altchaConfigured":true,"postmarkConfigured":true,"emailTransport":"postmark"}'
+drifted_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" operations-status --runtime-summary "$drifted_runtime")"
+python3 - "$drifted_status" <<'PY'
+import json, sys
+status = json.loads(sys.argv[1])
+assert status["runtimeRoutingConsistency"]["available"] is True
+assert status["runtimeRoutingConsistency"]["consistent"] is False
+assert status["runtimeRoutingConsistency"]["status"] == "inconsistent"
+assert "legacy_runtime_not_default_off" in status["runtimeRoutingConsistency"]["issues"]
+PY
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.insertOne({
+  name: "Manual Review", email: "manual-review@example.invalid", normalizedEmail: "manual-review@example.invalid",
+  requestedHandle: "manual-review", status: "provisioning_claimed",
+  reservedDid: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  reconciliationRequiredAt: null, accountId: null, accountDid: null, provisionedAt: null,
+  provisioningClaimHash: "synthetic-claim-hash",
+  createdAt: new Date(), updatedAt: new Date()
+});
+' >/dev/null
+manual_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles --mount type=bind,src="$users_dir",dst=/circles/users,readonly "$image" operations-status --users-dir /circles/users)"
+python3 - "$manual_status" <<'PY'
+import json, sys
+status = json.loads(sys.argv[1])
+assert status["manualReviewMetrics"]["available"] is True
+assert status["manualReviewMetrics"]["manualReview"] == 1
+assert status["manualReviewMetrics"]["byClassification"] == {"manual_review_missing_credentials": 1}
+assert "manual-review@example.invalid" not in sys.argv[1]
+assert "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" not in sys.argv[1]
+PY
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.deleteOne({ normalizedEmail: "manual-review@example.invalid" });
 ' >/dev/null
 recovery_fixture_before="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'EJSON.stringify(db.pendingRegistrations.find().sort({_id:1}).toArray())')"
 recovery_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" recovery-activation-status)"

@@ -54,6 +54,16 @@ def run_endpoint(value: object) -> subprocess.CompletedProcess[str]:
     )
 
 
+def run_summary(value: object) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["python3", str(VALIDATOR), "summary"],
+        input=json.dumps(value),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 class RuntimeValidatorTests(unittest.TestCase):
     def test_validates_activation_without_disclosing_secrets(self) -> None:
         result = run_validator("activation", DEPLOYMENT_ID, [container()])
@@ -108,6 +118,27 @@ class RuntimeValidatorTests(unittest.TestCase):
         stopped = container()
         stopped["State"]["Running"] = False
         self.assertNotEqual(run_endpoint([stopped]).returncode, 0)
+
+    def test_summary_reports_flags_and_secret_presence_without_values(self) -> None:
+        result = run_summary([container()])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(
+            summary,
+            {
+                "available": True,
+                "running": True,
+                "pendingRegistrationEnabled": True,
+                "pendingRegistrationJourneyReady": True,
+                "pendingRegistrationHmacPresent": True,
+                "registrationDeploymentId": DEPLOYMENT_ID,
+                "altchaConfigured": True,
+                "postmarkConfigured": True,
+                "emailTransport": "postmark",
+            },
+        )
+        self.assertNotIn(HMAC, result.stdout + result.stderr)
+        self.assertNotIn(POSTMARK_TOKEN, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

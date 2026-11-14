@@ -39,6 +39,8 @@ for required in \
     'verify_application activation' \
     'python3 "$RUNTIME_VALIDATOR" endpoint' \
     '"$GIT_SHA" "$container_ip"' \
+    'runtime_status_summary()' \
+    'operations-status --users-dir /circles/users --runtime-summary "$runtime_summary"' \
     'deactivate-services' \
     'recover-default-services' \
     'RECOVER_DEFAULT_SERVICES' \

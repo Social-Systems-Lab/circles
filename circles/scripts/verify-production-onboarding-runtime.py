@@ -84,12 +84,30 @@ def application_container_ipv4(container: dict) -> str:
     return str(parsed)
 
 
+def application_runtime_summary(container: dict) -> dict:
+    env = environment(container)
+    return {
+        "available": True,
+        "running": container.get("State", {}).get("Running") is True,
+        "pendingRegistrationEnabled": env.get("PENDING_REGISTRATION_ENABLED", "").lower() == "true",
+        "pendingRegistrationJourneyReady": env.get("PENDING_REGISTRATION_JOURNEY_READY", "").lower() == "true",
+        "pendingRegistrationHmacPresent": bool(env.get("PENDING_REGISTRATION_TOKEN_HMAC_KEY")),
+        "registrationDeploymentId": env.get("REGISTRATION_DEPLOYMENT_ID") or None,
+        "altchaConfigured": bool(env.get("ALTCHA_HMAC_KEY")),
+        "postmarkConfigured": bool(env.get("POSTMARK_API_TOKEN") and env.get("POSTMARK_SENDER_EMAIL")),
+        "emailTransport": env.get("EMAIL_TRANSPORT") or None,
+    }
+
+
 def main() -> None:
+    if len(sys.argv) == 2 and sys.argv[1] == "summary":
+        print(json.dumps(application_runtime_summary(read_single_container()), separators=(",", ":")))
+        return
     if len(sys.argv) == 2 and sys.argv[1] == "endpoint":
         print(application_container_ipv4(read_single_container()))
         return
     if len(sys.argv) != 3 or sys.argv[1] not in {"default", "activation"}:
-        raise SystemExit(f"usage: {sys.argv[0]} endpoint | default|activation DEPLOYMENT_ID_OR_NONE")
+        raise SystemExit(f"usage: {sys.argv[0]} summary | endpoint | default|activation DEPLOYMENT_ID_OR_NONE")
     errors = validate_application(read_single_container(), sys.argv[1], sys.argv[2])
     if errors:
         for error in errors:
