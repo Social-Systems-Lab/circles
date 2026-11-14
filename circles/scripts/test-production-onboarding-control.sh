@@ -14,6 +14,7 @@ verifier_validator="$repo_dir/scripts/validate-routing-operator-verifier.py"
 
 bash -n "$control"
 bash -n "$deploy"
+bash -n "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 for executable in "$control" "$validator" "$runtime_validator" "$application_image_validator" "$verifier_validator"; do
     [[ -x "$executable" ]] || { echo "required production onboarding tool is not executable: $executable" >&2; exit 1; }
 done
@@ -40,6 +41,9 @@ for required in \
     'RECOVER_DEFAULT_SERVICES' \
     'postmark-canary)' \
     'POSTMARK_CANARY_SCRIPT=' \
+    'POSTMARK_CANARY_ENV_FILE="$env_file"' \
+    'write_postmark_canary_environment "$container_id"' \
+    'env_file="$POSTMARK_CANARY_ENV_FILE"' \
     'SEND_POSTMARK_VERIFICATION_CANARY' \
     'await runCanaryCli();' \
     '--network bridge' \
@@ -58,6 +62,7 @@ for forbidden in \
     '--operator-token' \
     'REGISTRATION_ROUTING_OPERATOR_TOKEN;' \
     'KAMOONI_POSTMARK_CANARY_CLI' \
+    'env_file="$(write_postmark_canary_environment' \
     'docker compose down' \
     'docker volume rm' \
     'rm -rf'; do
@@ -172,6 +177,7 @@ fi
 python3 "$repo_dir/scripts/validate-production-onboarding-activation.test.py"
 python3 "$repo_dir/scripts/verify-production-onboarding-runtime.test.py"
 python3 "$repo_dir/scripts/verify-production-application-image.test.py"
+bash "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
 
 verifier_tmp="$(mktemp -d)"

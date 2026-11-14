@@ -24,17 +24,22 @@ OPERATOR_VERIFIER_VALIDATOR="$APP_DIR/scripts/validate-routing-operator-verifier
 RUNTIME_VALIDATOR="$APP_DIR/scripts/verify-production-onboarding-runtime.py"
 APPLICATION_IMAGE_VALIDATOR="$APP_DIR/scripts/verify-production-application-image.py"
 POSTMARK_CANARY_SCRIPT="$APP_DIR/scripts/postmark-verification-canary.mjs"
+POSTMARK_CANARY_ENV_FILE=""
 TEMP_FILES=()
 TEMP_CONTAINERS=()
 
 cleanup_temporary_files() {
     local file container
-    for file in "${TEMP_FILES[@]}"; do
-        [[ ! -e "$file" ]] || rm -f -- "$file"
-    done
-    for container in "${TEMP_CONTAINERS[@]}"; do
-        docker rm -f "$container" >/dev/null 2>&1 || true
-    done
+    if [[ "${#TEMP_FILES[@]}" -gt 0 ]]; then
+        for file in "${TEMP_FILES[@]}"; do
+            [[ ! -e "$file" ]] || rm -f -- "$file"
+        done
+    fi
+    if [[ "${#TEMP_CONTAINERS[@]}" -gt 0 ]]; then
+        for container in "${TEMP_CONTAINERS[@]}"; do
+            docker rm -f "$container" >/dev/null 2>&1 || true
+        done
+    fi
 }
 
 trap cleanup_temporary_files EXIT
@@ -405,7 +410,7 @@ write_postmark_canary_environment() {
         printf 'POSTMARK_SENDER_EMAIL=%s\n' "$sender"
     ) >"$env_file"
     chmod 600 "$env_file"
-    printf '%s' "$env_file"
+    POSTMARK_CANARY_ENV_FILE="$env_file"
 }
 
 run_postmark_canary() {
@@ -413,7 +418,9 @@ run_postmark_canary() {
     container_id="$(application_container_id)" || fail "expected exactly one production application container"
     image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
     [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "production application image identity is invalid"
-    env_file="$(write_postmark_canary_environment "$container_id")"
+    write_postmark_canary_environment "$container_id"
+    env_file="$POSTMARK_CANARY_ENV_FILE"
+    [[ -n "$env_file" && -f "$env_file" ]] || fail "Postmark canary environment file was not prepared"
     canary_source="$(<"$POSTMARK_CANARY_SCRIPT")"
     [[ -n "$canary_source" ]] || fail "Postmark canary script is empty"
     canary_source+=$'\nawait runCanaryCli();'
