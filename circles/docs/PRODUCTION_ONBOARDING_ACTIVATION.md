@@ -94,22 +94,21 @@ metadata.
 2. Confirm the production checkout is clean and exactly matches `origin/main`.
 3. Confirm `/api/version` and `/app/VERSION` report that exact full Git SHA.
 4. Confirm exactly one `circles` container is running and record its immutable image ID.
-5. Take and independently verify backups of MongoDB, the `circles_users` volume, and MinIO where the
-   approved recovery policy requires it.
+5. Complete and independently restore-test the MongoDB backup using the canonical
+   [production backup procedure](PRODUCTION_DEPLOYMENT.md#mongodb-backup-and-restore-validation).
+   Record the backup path and verified collection counts. Back up the `circles_users` volume and
+   MinIO where the approved recovery policy requires it.
 6. Confirm Postmark, ALTCHA, `CIRCLES_URL=https://kamooni.org`, and existing login/password recovery
    are operational.
 7. Deploy the reviewed safety-tooling release through the normal production deployment procedure.
    Routing must still be `legacy`, both pending flags must be false, and no HMAC may be present.
 
-Create and validate the database and credential-volume backups without printing the Mongo URI:
+Back up the credential volume separately without exposing its contents:
 
 ```bash
+cd /root/circles/circles/circles
 backup_dir="/root/circles/backups/onboarding-$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -m 700 "$backup_dir"
-cd /root/circles/circles/circles
-docker compose exec -T db sh -lc 'mongodump --uri="$MONGODB_URI" --archive --gzip' \
-  > "$backup_dir/mongo.archive.gz"
-gzip -t "$backup_dir/mongo.archive.gz"
 users_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/circles/users"}}{{.Name}}{{end}}{{end}}' \
   "$(docker compose ps -q circles)")"
 test -n "$users_volume"
@@ -118,14 +117,16 @@ docker run --rm --read-only \
   --mount "type=bind,src=$backup_dir,dst=/backup" \
   alpine:3.19 tar -C /source -czf /backup/circles-users.tar.gz .
 tar -tzf "$backup_dir/circles-users.tar.gz" >/dev/null
-sha256sum "$backup_dir/mongo.archive.gz" "$backup_dir/circles-users.tar.gz" \
-  > "$backup_dir/SHA256SUMS"
-chmod 600 "$backup_dir"/*
+(
+  cd "$backup_dir"
+  sha256sum circles-users.tar.gz > circles-users.SHA256SUMS
+  sha256sum -c circles-users.SHA256SUMS
+)
+chmod 600 "$backup_dir/circles-users.tar.gz" "$backup_dir/circles-users.SHA256SUMS"
 ```
 
-Independently restore the Mongo archive into a disposable, isolated MongoDB instance and verify the
-expected account, event, pending-registration, and DID-reservation collection counts before relying
-on it for rollback. Never restore over production as part of activation.
+Do not continue unless the Mongo archive passed checksum, gzip and isolated restoration validation.
+Never restore over production as part of activation.
 
 The production deployment script now builds the read-only operator image and refuses a normal
 deployment unless routing is `legacy`.
@@ -136,6 +137,20 @@ operator image once with the new wrapper:
 ```bash
 ./circles/scripts/production-onboarding-control.sh build-operator
 ```
+
+### Operator image file permissions
+
+The November 14 production activation attempt exposed a build-context permission dependency. The
+operator image runs as non-root `node` UID 1000. A production checkout with a restrictive umask
+provided root-owned mode-`600` TypeScript sources, Docker preserved those modes during `COPY`, and
+the container could not read `/app/scripts/pending-registration-ops.ts`, failing safely with
+`EACCES` before the application was rebuilt or restarted. The earlier rehearsal copied fixture
+sources before applying its restrictive secret umask, so those sources remained mode `0644`.
+
+`Dockerfile.registration-ops` now normalizes only non-secret copied operator sources and package
+metadata to runtime-readable permissions inside the image. The image remains non-root and host
+permissions are unchanged. `scripts/test-pending-registration-ops-image.sh` rebuilds from explicitly
+mode-`600` fixture sources and verifies every copied source as the image's actual runtime user.
 
 Run the read-only preflight:
 
@@ -334,10 +349,14 @@ The rehearsal creates a fake application, disposable MongoDB, synthetic TLS NGIN
 and synthetic DID/account records. It maps `kamooni.org` only to the local synthetic TLS endpoint and
 never includes a real Postmark client or production application code.
 
-Do not run this workflow until a disposable environment is available. It fault-injects application
-failure after NGINX stops, verifies the application remains safely stopped, verifies synthetic data
-and identities are preserved, and then exercises `recover-default-services` before returning routing
-to legacy.
+The complete rehearsal passed at commit
+[`4540cabe082a41959ae20567dd07a6a93ef1e447`](https://github.com/akrobatim/kamooni-onboarding-rehearsal/actions/runs/43482980000).
+It fault-injected application failure after NGINX stopped, verified the application remained safely
+stopped, verified synthetic data and identities were preserved, and exercised
+`recover-default-services` before returning routing to legacy.
+
+This result proves isolated orchestration behavior only. It does not replace the production Postmark
+canary, production backup restore test, monitoring approval or activation-operator approval.
 
 ## Known activation blockers
 
@@ -345,4 +364,3 @@ to legacy.
 - The production activation and rollback operators have not yet been named and approved.
 - Production backup restoration has not yet been independently demonstrated for this operation.
 - Monitoring ownership and alert thresholds must be agreed before public rollout.
-- The disposable orchestration rehearsal has not yet been executed.

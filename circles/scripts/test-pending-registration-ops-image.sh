@@ -7,16 +7,45 @@ image="kamooni-registration-ops:test-$suffix"
 network="kamooni-registration-ops-test-$suffix"
 mongo="kamooni-registration-ops-mongo-$suffix"
 users_dir="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-registration-ops-users.XXXXXX")"
+build_context="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-registration-ops-context.XXXXXX")"
 
 cleanup() {
     docker rm -f "$mongo" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
     docker image rm "$image" >/dev/null 2>&1 || true
-    rm -rf -- "$users_dir"
+    rm -rf -- "$users_dir" "$build_context"
 }
 trap cleanup EXIT
 
-docker build --file "$repo_dir/Dockerfile.registration-ops" --tag "$image" "$repo_dir"
+cp "$repo_dir/Dockerfile.registration-ops" "$repo_dir/tsconfig.json" "$build_context/"
+cp -R "$repo_dir/registration-ops" "$build_context/"
+mkdir -p "$build_context/scripts" "$build_context/src/lib/auth"
+cp "$repo_dir/scripts/pending-registration-ops.ts" "$build_context/scripts/"
+cp "$repo_dir/src/lib/auth/email-normalization.ts" \
+    "$repo_dir/src/lib/auth/pending-registration.ts" \
+    "$repo_dir/src/lib/auth/pending-registration-reconciliation.ts" \
+    "$repo_dir/src/lib/auth/registration-routing.ts" \
+    "$build_context/src/lib/auth/"
+
+# Reproduce production checkouts that apply a restrictive umask before Docker COPY.
+chmod 600 "$build_context/tsconfig.json" \
+    "$build_context/registration-ops/package.json" \
+    "$build_context/registration-ops/bun.lock" \
+    "$build_context/scripts/pending-registration-ops.ts" \
+    "$build_context/src/lib/auth/"*.ts
+
+docker build --file "$build_context/Dockerfile.registration-ops" --tag "$image" "$build_context"
+docker run --rm --entrypoint sh "$image" -c '
+  [ "$(id -u)" -eq 1000 ] &&
+  test -r /app/package.json &&
+  test -r /app/bun.lock &&
+  test -r /app/tsconfig.json &&
+  test -r /app/scripts/pending-registration-ops.ts &&
+  test -r /app/src/lib/auth/email-normalization.ts &&
+  test -r /app/src/lib/auth/pending-registration.ts &&
+  test -r /app/src/lib/auth/pending-registration-reconciliation.ts &&
+  test -r /app/src/lib/auth/registration-routing.ts
+' >/dev/null
 docker network create "$network" >/dev/null
 docker run --detach --name "$mongo" --network "$network" mongo:7.0 --bind_ip_all >/dev/null
 
