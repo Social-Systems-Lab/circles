@@ -107,12 +107,14 @@ Back up the credential volume separately without exposing its contents:
 
 ```bash
 cd /root/circles/circles/circles
-backup_dir="/root/circles/backups/onboarding-$(date -u +%Y%m%dT%H%M%SZ)"
-install -d -m 700 "$backup_dir"
+backup_parent="/root/circles/backups"
+install -d -m 700 "$backup_parent"
+backup_dir="$(mktemp -d "$backup_parent/onboarding-$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")"
+chmod 700 "$backup_dir"
 users_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/circles/users"}}{{.Name}}{{end}}{{end}}' \
-  "$(docker compose ps -q circles)")"
+  "$(docker compose --project-name circles -f docker-compose.yml ps -q circles)")"
 test -n "$users_volume"
-docker run --rm --read-only \
+docker run --rm --read-only --pull never \
   --mount "type=volume,src=$users_volume,dst=/source,readonly" \
   --mount "type=bind,src=$backup_dir,dst=/backup" \
   alpine:3.19 tar -C /source -czf /backup/circles-users.tar.gz .
@@ -123,6 +125,7 @@ tar -tzf "$backup_dir/circles-users.tar.gz" >/dev/null
   sha256sum -c circles-users.SHA256SUMS
 )
 chmod 600 "$backup_dir/circles-users.tar.gz" "$backup_dir/circles-users.SHA256SUMS"
+printf 'users_backup=%s\n' "$backup_dir"
 ```
 
 Do not continue unless the Mongo archive passed checksum, gzip and isolated restoration validation.

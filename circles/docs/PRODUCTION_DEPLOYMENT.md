@@ -74,9 +74,18 @@ Confirm the public and image build identities before changing production:
 ```bash
 cd /root/circles/circles/circles
 expected_sha="$(git rev-parse HEAD)"
-curl -fsSL https://kamooni.org/api/version
-docker compose exec -T circles sed -n 's/^gitSha=//p' /app/VERSION
-printf 'checkout=%s\n' "$expected_sha"
+public_sha="$(
+  curl -fsSL https://kamooni.org/api/version |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["gitSha"])'
+)"
+image_sha="$(
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles sed -n 's/^gitSha=//p' /app/VERSION
+)"
+printf 'checkout=%s\npublic=%s\nimage=%s\n' \
+  "$expected_sha" "$public_sha" "$image_sha"
+test "$public_sha" = "$expected_sha"
+test "$image_sha" = "$expected_sha"
 ```
 
 The `/api/version` response and `/app/VERSION` must both report `expected_sha`.
@@ -84,29 +93,36 @@ The `/api/version` response and `/app/VERSION` must both report `expected_sha`.
 Validate Compose without printing its resolved secret environment:
 
 ```bash
-docker compose config --quiet
-docker compose config --services
+docker compose --project-name circles -f docker-compose.yml config --quiet
+docker compose --project-name circles -f docker-compose.yml config --services
+grep -Fq -- '- PENDING_REGISTRATION_ENABLED=false' docker-compose.yml
+grep -Fq -- '- PENDING_REGISTRATION_JOURNEY_READY=false' docker-compose.yml
+grep -Fq -- '- PENDING_REGISTRATION_TOKEN_HMAC_KEY=' docker-compose.yml
 ```
 
-The service list must not contain Mailpit. Check the runtime-visible, non-secret configuration:
+The service list must not contain Mailpit. The source checks prove the prospective release's
+default Compose keeps pending registration disabled. Check the currently running release's
+non-secret configuration:
 
 ```bash
-docker compose exec -T circles sh -lc '
+docker compose --project-name circles -f docker-compose.yml exec -T circles sh -lc '
   test "$CIRCLES_URL" = "https://kamooni.org" &&
   test "$EMAIL_TRANSPORT" = "postmark" &&
   test -n "$ALTCHA_HMAC_KEY" &&
   test -n "$POSTMARK_API_TOKEN" &&
   test -n "$POSTMARK_SENDER_EMAIL" &&
-  test "$PENDING_REGISTRATION_ENABLED" = "false" &&
-  test "$PENDING_REGISTRATION_JOURNEY_READY" = "false" &&
+  case "${PENDING_REGISTRATION_ENABLED:-false}" in false) ;; *) exit 1 ;; esac &&
+  case "${PENDING_REGISTRATION_JOURNEY_READY:-false}" in false) ;; *) exit 1 ;; esac &&
   test -z "${PENDING_REGISTRATION_TOKEN_HMAC_KEY:-}" &&
   test -z "${REGISTRATION_DEPLOYMENT_ID:-}" &&
   printf "CIRCLES_URL=%s\nALTCHA=configured\nPOSTMARK=configured\n" "$CIRCLES_URL" &&
-  printf "PENDING_REGISTRATION_ENABLED=false\n"
+  printf "PENDING_REGISTRATION_ENABLED=%s\n" "${PENDING_REGISTRATION_ENABLED:-false}"
 '
 ```
 
-This verifies presence without displaying the ALTCHA or Postmark credentials.
+Treating an absent runtime flag as `false` keeps this check compatible with a previous running
+release that predates the flag; the prospective Compose check above still requires the new defaults.
+This verifies credential presence without displaying the ALTCHA or Postmark secrets.
 
 Check MongoDB and routing through the application's resolved `MONGODB_URI`. The URI is passed over
 standard input and is never printed:
@@ -114,8 +130,10 @@ standard input and is never printed:
 ```bash
 (
   set -o pipefail
-  docker compose exec -T circles printenv MONGODB_URI |
-    docker compose exec -T db sh -lc '
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles printenv MONGODB_URI |
+    docker compose --project-name circles -f docker-compose.yml \
+      exec -T db sh -lc '
       IFS= read -r MONGODB_URI || exit 1
       [ -n "$MONGODB_URI" ] || exit 1
       mongosh "$MONGODB_URI" --quiet --eval "
@@ -141,13 +159,17 @@ credentials:
 
 ```bash
 cd /root/circles/circles/circles
-backup_dir="/root/circles/backups/mongo-$(date -u +%Y%m%dT%H%M%SZ)"
-install -d -m 700 "$backup_dir"
+backup_parent="/root/circles/backups"
+install -d -m 700 "$backup_parent"
+backup_dir="$(mktemp -d "$backup_parent/mongo-$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")"
+chmod 700 "$backup_dir"
 
 (
   set -o pipefail
-  docker compose exec -T circles printenv MONGODB_URI |
-    docker compose exec -T db sh -lc '
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles printenv MONGODB_URI |
+    docker compose --project-name circles -f docker-compose.yml \
+      exec -T db sh -lc '
       IFS= read -r MONGODB_URI || exit 1
       [ -n "$MONGODB_URI" ] || exit 1
       export MONGODB_URI
@@ -166,12 +188,14 @@ cat "$backup_dir/source-counts.json"
 
 (
   set -o pipefail
-  docker compose exec -T circles printenv MONGODB_URI |
-    docker compose exec -T db sh -lc '
+  docker compose --project-name circles -f docker-compose.yml \
+    exec -T circles printenv MONGODB_URI |
+    docker compose --project-name circles -f docker-compose.yml \
+      exec -T db sh -lc '
       IFS= read -r MONGODB_URI || exit 1
       [ -n "$MONGODB_URI" ] || exit 1
       export MONGODB_URI
-      mongodump --uri="$MONGODB_URI" --archive --gzip
+      mongodump --uri="$MONGODB_URI" --nsInclude="circles.*" --archive --gzip
     '
 ) > "$backup_dir/mongo.archive.gz"
 ```
@@ -183,7 +207,7 @@ gzip -t "$backup_dir/mongo.archive.gz"
 gzip -dc "$backup_dir/mongo.archive.gz" >/dev/null
 (
   cd "$backup_dir"
-  sha256sum mongo.archive.gz > SHA256SUMS
+  sha256sum mongo.archive.gz source-counts.json > SHA256SUMS
   sha256sum -c SHA256SUMS
 )
 chmod 600 "$backup_dir/mongo.archive.gz" "$backup_dir/SHA256SUMS" \
@@ -192,41 +216,51 @@ printf 'backup=%s\n' "$backup_dir"
 ```
 
 These checks verify the gzip stream and archive bytes; they do not prove that MongoDB can restore
-the archive. Test that separately in a disposable Mongo container with no network and a read-only
-mount of the backup:
+the archive. Test that separately in a disposable Mongo container that reuses the already-present
+`mongo:7.0` image, has no network, receives no production credentials and mounts the backup read-only:
 
 ```bash
-restore_container="kamooni-mongo-restore-check-$$"
-docker run --detach --rm --name "$restore_container" --network none \
-  --mount "type=bind,src=$backup_dir,dst=/backup,readonly" \
-  mongo:7.0 --bind_ip_all >/dev/null
-trap 'docker rm -f "$restore_container" >/dev/null 2>&1 || true' EXIT
-
-ready=false
-for _ in $(seq 1 30); do
-  if docker exec "$restore_container" mongosh --quiet \
-    --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)' >/dev/null 2>&1; then
-    ready=true
-    break
+(
+  set -euo pipefail
+  restore_container="kamooni-mongo-restore-check-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  if docker container inspect "$restore_container" >/dev/null 2>&1; then
+    echo "Error: restore container name already exists: $restore_container" >&2
+    exit 1
   fi
-  sleep 1
-done
-test "$ready" = true
+  trap 'docker rm -f "$restore_container" >/dev/null 2>&1 || true' EXIT
+  docker run --detach --rm --pull never --name "$restore_container" --network none \
+    --mount "type=bind,src=$backup_dir,dst=/backup,readonly" \
+    mongo:7.0 --bind_ip_all >/dev/null
 
-docker exec -T "$restore_container" \
-  mongorestore --archive=/backup/mongo.archive.gz --gzip
-docker exec -T "$restore_container" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
-  const app = db.getSiblingDB("circles");
-  printjson({
-    accounts: app.circles.countDocuments({}),
-    events: app.events.countDocuments({}),
-    pendingRegistrations: app.pendingRegistrations.countDocuments({}),
-    didReservations: app.pendingRegistrationDidReservations.countDocuments({})
-  });
-'
+  ready=false
+  for _ in $(seq 1 30); do
+    if docker exec "$restore_container" mongosh --quiet \
+      --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)' >/dev/null 2>&1; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  test "$ready" = true
 
-docker rm -f "$restore_container" >/dev/null
-trap - EXIT
+  docker exec "$restore_container" \
+    mongorestore --archive=/backup/mongo.archive.gz --gzip
+  docker exec "$restore_container" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+    const app = db.getSiblingDB("circles");
+    printjson({
+      accounts: app.circles.countDocuments({}),
+      events: app.events.countDocuments({}),
+      pendingRegistrations: app.pendingRegistrations.countDocuments({}),
+      didReservations: app.pendingRegistrationDidReservations.countDocuments({})
+    });
+  '
+
+  if ! docker rm -f "$restore_container" >/dev/null; then
+    echo "Error: could not remove $restore_container; retry cleanup manually." >&2
+    exit 1
+  fi
+  trap - EXIT
+)
 ```
 
 Compare these counts and collection presence with `source-counts.json`, captured immediately before
