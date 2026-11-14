@@ -38,6 +38,14 @@ for required in \
     'deactivate-services' \
     'recover-default-services' \
     'RECOVER_DEFAULT_SERVICES' \
+    'postmark-canary)' \
+    'POSTMARK_CANARY_SCRIPT=' \
+    'SEND_POSTMARK_VERIFICATION_CANARY' \
+    'await runCanaryCli();' \
+    '--network bridge' \
+    '--env-file "$env_file"' \
+    '--cap-drop ALL' \
+    '--security-opt no-new-privileges --user node' \
     'verify_recovery_application_image' \
     'require_failed_application_state' \
     '--pull=never --network none --read-only' \
@@ -49,6 +57,7 @@ done
 for forbidden in \
     '--operator-token' \
     'REGISTRATION_ROUTING_OPERATOR_TOKEN;' \
+    'KAMOONI_POSTMARK_CANARY_CLI' \
     'docker compose down' \
     'docker volume rm' \
     'rm -rf'; do
@@ -151,10 +160,19 @@ if grep -Fq 'docker-compose.production-activation.yml' "$production"; then
     echo "ordinary production Compose references the activation overlay" >&2
     exit 1
 fi
+if grep -Fq 'MONGODB_URI' "$control"; then
+    echo "production control must not pass database credentials to the Postmark canary" >&2
+    exit 1
+fi
+if grep -Eq -- '--mount|--volume|/var/run/docker.sock' "$control"; then
+    echo "production control must not attach volumes or the Docker socket to the Postmark canary" >&2
+    exit 1
+fi
 
 python3 "$repo_dir/scripts/validate-production-onboarding-activation.test.py"
 python3 "$repo_dir/scripts/verify-production-onboarding-runtime.test.py"
 python3 "$repo_dir/scripts/verify-production-application-image.test.py"
+bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
 
 verifier_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$verifier_tmp"' EXIT

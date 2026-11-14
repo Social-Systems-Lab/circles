@@ -58,7 +58,13 @@ def validate_activation_values(values: dict[str, str], expected_deployment_id: s
 
 
 def requires_origin_sync(command: str, expected: str, target: str) -> bool:
-    if command in {"build-operator", "preflight", "prepare-indexes", "activate-services"}:
+    if command in {
+        "build-operator",
+        "preflight",
+        "prepare-indexes",
+        "activate-services",
+        "postmark-canary",
+    }:
         return True
     if command == "route-set":
         return target == "pending" or (expected == "legacy" and target == "paused")

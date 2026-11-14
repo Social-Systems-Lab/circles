@@ -23,12 +23,17 @@ ACTIVATION_VALIDATOR="$APP_DIR/scripts/validate-production-onboarding-activation
 OPERATOR_VERIFIER_VALIDATOR="$APP_DIR/scripts/validate-routing-operator-verifier.py"
 RUNTIME_VALIDATOR="$APP_DIR/scripts/verify-production-onboarding-runtime.py"
 APPLICATION_IMAGE_VALIDATOR="$APP_DIR/scripts/verify-production-application-image.py"
+POSTMARK_CANARY_SCRIPT="$APP_DIR/scripts/postmark-verification-canary.mjs"
 TEMP_FILES=()
+TEMP_CONTAINERS=()
 
 cleanup_temporary_files() {
-    local file
+    local file container
     for file in "${TEMP_FILES[@]}"; do
         [[ ! -e "$file" ]] || rm -f -- "$file"
+    done
+    for container in "${TEMP_CONTAINERS[@]}"; do
+        docker rm -f "$container" >/dev/null 2>&1 || true
     done
 }
 
@@ -46,6 +51,7 @@ Usage:
   production-onboarding-control.sh activate-services
   production-onboarding-control.sh deactivate-services
   production-onboarding-control.sh recover-default-services
+  production-onboarding-control.sh postmark-canary
 EOF
     exit 2
 }
@@ -89,6 +95,7 @@ for validator in \
     "$APPLICATION_IMAGE_VALIDATOR"; do
     [[ -f "$validator" ]] || fail "production onboarding validator is missing: $validator"
 done
+[[ -f "$POSTMARK_CANARY_SCRIPT" ]] || fail "Postmark canary script is missing"
 
 [[ "$(git -C "$REPO_DIR" branch --show-current)" == "main" ]] || fail "production checkout must be on main"
 [[ -z "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all)" ]] || fail "production checkout is dirty"
@@ -369,6 +376,73 @@ require_images() {
     require_operator_image
 }
 
+runtime_container_value() {
+    local container_id="$1" key="$2" value
+    value="$(docker exec "$container_id" printenv "$key")" || \
+        fail "could not resolve required production email setting: $key"
+    [[ -n "$value" && "$value" != *$'\n'* && "$value" != *$'\r'* ]] || \
+        fail "required production email setting is empty or invalid: $key"
+    printf '%s' "$value"
+}
+
+write_postmark_canary_environment() {
+    local container_id="$1" env_file transport origin token sender
+    transport="$(runtime_container_value "$container_id" EMAIL_TRANSPORT)"
+    origin="$(runtime_container_value "$container_id" CIRCLES_URL)"
+    token="$(runtime_container_value "$container_id" POSTMARK_API_TOKEN)"
+    sender="$(runtime_container_value "$container_id" POSTMARK_SENDER_EMAIL)"
+    [[ "$transport" == "postmark" ]] || fail "production email transport is not Postmark"
+    [[ "$origin" == "https://kamooni.org" ]] || fail "production public origin is not canonical"
+    [[ "$token" != *[[:space:]]* ]] || fail "production Postmark token is invalid"
+
+    env_file="$(mktemp /tmp/kamooni-postmark-canary.XXXXXX.env)"
+    TEMP_FILES+=("$env_file")
+    (
+        umask 077
+        printf 'EMAIL_TRANSPORT=%s\n' "$transport"
+        printf 'CIRCLES_URL=%s\n' "$origin"
+        printf 'POSTMARK_API_TOKEN=%s\n' "$token"
+        printf 'POSTMARK_SENDER_EMAIL=%s\n' "$sender"
+    ) >"$env_file"
+    chmod 600 "$env_file"
+    printf '%s' "$env_file"
+}
+
+run_postmark_canary() {
+    local container_id image_id env_file recipient canary_source canary_container
+    container_id="$(application_container_id)" || fail "expected exactly one production application container"
+    image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+    [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "production application image identity is invalid"
+    env_file="$(write_postmark_canary_environment "$container_id")"
+    canary_source="$(<"$POSTMARK_CANARY_SCRIPT")"
+    [[ -n "$canary_source" ]] || fail "Postmark canary script is empty"
+    canary_source+=$'\nawait runCanaryCli();'
+
+    [[ -r /dev/tty ]] || fail "an interactive terminal is required for the Postmark canary recipient"
+    read -r -s -p 'Approved controlled Postmark canary recipient: ' recipient </dev/tty
+    printf '\n' >/dev/tty
+    local recipient_confirmation
+    read -r -s -p 'Re-enter the controlled Postmark canary recipient: ' recipient_confirmation </dev/tty
+    printf '\n' >/dev/tty
+    [[ "$recipient" == "$recipient_confirmation" ]] || fail "Postmark canary recipient confirmation did not match"
+    unset recipient_confirmation
+    [[ "$recipient" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || \
+        fail "Postmark canary recipient is invalid"
+    require_terminal_confirmation SEND_POSTMARK_VERIFICATION_CANARY
+
+    canary_container="kamooni-postmark-canary-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    if docker container inspect "$canary_container" >/dev/null 2>&1; then
+        fail "Postmark canary container name already exists"
+    fi
+    TEMP_CONTAINERS+=("$canary_container")
+    printf '%s\n' "$recipient" | docker run --interactive --rm --pull never \
+        --name "$canary_container" --network bridge --read-only \
+        --cap-drop ALL --security-opt no-new-privileges --user node \
+        --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m \
+        --env-file "$env_file" --entrypoint node "$image_id" \
+        --input-type=module -e "$canary_source"
+}
+
 case "$command_name" in
     build-operator)
         [[ "$#" -eq 0 ]] || usage
@@ -506,6 +580,15 @@ case "$command_name" in
             fail_public_services "external application recovery verification failed"
         require_route_mode paused || \
             fail_public_services "registration routing changed during NGINX recovery"
+        ;;
+    postmark-canary)
+        [[ "$#" -eq 0 ]] || usage
+        require_default_and_ops_contracts
+        require_images
+        require_route_mode legacy
+        require_operations_zero
+        verify_application default
+        run_postmark_canary
         ;;
     *)
         usage
