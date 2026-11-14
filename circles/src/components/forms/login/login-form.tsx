@@ -82,14 +82,6 @@ export function LoginForm(): React.ReactElement {
             <form onSubmit={form.handleSubmit(onSubmit)} className="formatted mb-4 w-full space-y-6 md:min-w-[400px]">
                 <h2 className="text-center text-2xl font-semibold">Login</h2>
                 <p className="text-center text-sm text-muted-foreground">Enter your email and password to log in.</p>
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    <div className="font-medium">Password update required for some users</div>
-                    <div className="mt-1">
-                        If you created your account before 2026, you may need to reset your password before signing in.
-                        Please click <span className="font-medium">Forgot Password</span> and follow the email
-                        instructions to set a new password.
-                    </div>
-                </div>
 
                 <FormField
                     control={form.control}
@@ -123,10 +115,15 @@ export function LoginForm(): React.ReactElement {
                     )}
                 />
 
-                <div className="text-right text-sm">
-                    <Link href="/forgot-password" className="text-muted-foreground underline hover:text-primary">
-                        Reset password
-                    </Link>
+                <div className="flex justify-end">
+                    <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="border-orange-600 text-orange-700 hover:border-orange-700 hover:bg-orange-50 hover:text-orange-800 focus-visible:ring-orange-700"
+                    >
+                        <Link href="/forgot-password">Reset password</Link>
+                    </Button>
                 </div>
 
                 <Button type="submit" disabled={isSubmitting} className="w-full">
