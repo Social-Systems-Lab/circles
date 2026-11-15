@@ -74,6 +74,7 @@ def requires_origin_sync(command: str, expected: str, target: str) -> bool:
         "activate-services",
         "postmark-canary",
         "watchdog-alert-canary",
+        "verify-provisioned-account",
     }:
         return True
     if command == "route-set":

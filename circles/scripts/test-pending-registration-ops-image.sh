@@ -150,6 +150,87 @@ collections_after="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circ
     exit 1
 }
 
+completed_handle="completed-integrity"
+completed_account_id="aaaaaaaaaaaaaaaaaaaaaaaa"
+completed_pending_id="bbbbbbbbbbbbbbbbbbbbbbbb"
+credential_private_key="$users_dir/synthetic-private-key.pem"
+openssl genrsa -out "$credential_private_key" 2048 >/dev/null 2>&1
+openssl rsa -in "$credential_private_key" -RSAPublicKey_out -out "$users_dir/public-key.pem" >/dev/null 2>&1
+completed_did="$(openssl dgst -sha256 "$users_dir/public-key.pem" | awk '{print $NF}')"
+completed_credential_dir="$users_dir/$completed_did"
+mkdir "$completed_credential_dir"
+cp "$users_dir/public-key.pem" "$completed_credential_dir/publicKey.pem"
+completed_public_key_base64="$(base64 <"$completed_credential_dir/publicKey.pem" | tr -d '\n')"
+openssl rand 16 >"$completed_credential_dir/salt.bin"
+openssl rand 16 >"$completed_credential_dir/iv.bin"
+openssl rand 64 >"$completed_credential_dir/privateKey.pem.enc"
+rm -f "$credential_private_key" "$users_dir/public-key.pem"
+
+docker exec -i \
+    -e COMPLETED_ACCOUNT_ID="$completed_account_id" \
+    -e COMPLETED_PENDING_ID="$completed_pending_id" \
+    -e COMPLETED_HANDLE="$completed_handle" \
+    -e COMPLETED_DID="$completed_did" \
+    -e COMPLETED_PUBLIC_KEY_BASE64="$completed_public_key_base64" \
+    "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet \
+    --eval 'const publicKey = Buffer.from(process.env.COMPLETED_PUBLIC_KEY_BASE64, "base64").toString("utf8"); db.circles.insertOne({ _id: ObjectId(process.env.COMPLETED_ACCOUNT_ID), circleType: "user", did: process.env.COMPLETED_DID, handle: process.env.COMPLETED_HANDLE, publicKey, metadata: { pendingRegistrationId: process.env.COMPLETED_PENDING_ID, onboardingFlow: "pending-registration-v1", pendingRegistrationFinalizationVersion: 1 } }); db.pendingRegistrations.insertOne({ _id: ObjectId(process.env.COMPLETED_PENDING_ID), requestedHandle: process.env.COMPLETED_HANDLE, status: "provisioned", reservedDid: process.env.COMPLETED_DID, accountId: process.env.COMPLETED_ACCOUNT_ID, accountDid: process.env.COMPLETED_DID, provisionedAt: new Date(), reconciliationRequiredAt: null, provisioningClaimHash: null, provisioningLeaseHash: null, provisioningLeaseExpiresAt: null, expiresAt: new Date(Date.now() + 86400000) }); db.pendingRegistrationDidReservations.insertOne({ _id: process.env.COMPLETED_PENDING_ID, did: process.env.COMPLETED_DID, createdAt: new Date() });' >/dev/null
+
+identity_before="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'EJSON.stringify({ account: db.circles.findOne({ handle: "completed-integrity" }), reservation: db.pendingRegistrationDidReservations.findOne({ _id: "bbbbbbbbbbbbbbbbbbbbbbbb" }) })')"
+if invalid_handle_output="$(printf '%s\n' 'Private Handle' | docker run --interactive --rm --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    --mount type=bind,src="$users_dir",dst=/circles/users,readonly \
+    "$image" verify-provisioned-account --users-dir /circles/users 2>&1)"; then
+    echo "Invalid completed-account handle unexpectedly succeeded." >&2
+    exit 1
+fi
+if grep -Fq 'Private Handle' <<<"$invalid_handle_output"; then
+    echo "Completed-account verifier disclosed invalid handle input." >&2
+    exit 1
+fi
+completed_output="$(printf '%s\n' "$completed_handle" | docker run --interactive --rm --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    --mount type=bind,src="$users_dir",dst=/circles/users,readonly \
+    "$image" verify-provisioned-account --users-dir /circles/users)"
+python3 - "$completed_output" "$completed_handle" "$completed_did" "$completed_account_id" "$completed_pending_id" <<'PY'
+import json, sys
+result = json.loads(sys.argv[1])
+assert result["result"] == "PASS", result
+assert result["pendingRecordRetained"] is True, result
+assert result["failureCodes"] == [], result
+assert all(value is True for key, value in result["checks"].items() if value is not None), result
+serialized = sys.argv[1]
+for sensitive in sys.argv[2:]:
+    assert sensitive not in serialized
+assert "/circles/users" not in serialized
+PY
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet \
+    --eval 'db.pendingRegistrations.deleteOne({ _id: ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb") })' >/dev/null
+expired_output="$(printf '%s\n' "$completed_handle" | docker run --interactive --rm --network "$network" \
+    -e MONGODB_URI=mongodb://"$mongo":27017/circles \
+    --mount type=bind,src="$users_dir",dst=/circles/users,readonly \
+    "$image" verify-provisioned-account --users-dir /circles/users)"
+python3 - "$expired_output" "$completed_handle" "$completed_did" "$completed_account_id" "$completed_pending_id" <<'PY'
+import json, sys
+result = json.loads(sys.argv[1])
+assert result["result"] == "PASS", result
+assert result["pendingRecordRetained"] is False, result
+assert result["checks"]["pendingRecordStatusProvisioned"] is None, result
+assert result["failureCodes"] == [], result
+serialized = sys.argv[1]
+for sensitive in sys.argv[2:]:
+    assert sensitive not in serialized
+PY
+identity_after="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval 'EJSON.stringify({ account: db.circles.findOne({ handle: "completed-integrity" }), reservation: db.pendingRegistrationDidReservations.findOne({ _id: "bbbbbbbbbbbbbbbbbbbbbbbb" }) })')"
+python3 - "$identity_before" "$identity_after" <<'PY'
+import json, sys
+assert json.loads(sys.argv[1]) == json.loads(sys.argv[2])
+PY
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.circles.deleteOne({ _id: ObjectId("aaaaaaaaaaaaaaaaaaaaaaaa") });
+db.pendingRegistrationDidReservations.deleteOne({ _id: "bbbbbbbbbbbbbbbbbbbbbbbb" });
+' >/dev/null
+rm -rf -- "$completed_credential_dir"
+
 docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
 const now = new Date();
 db.pendingRegistrationProvisioningLocks.insertOne({ _id: "stale-lock", expiresAt: new Date(now.getTime() - 60000) });

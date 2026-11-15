@@ -4,6 +4,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
 dockerfile="$repo_dir/Dockerfile.registration-ops"
 script="$repo_dir/scripts/pending-registration-ops.ts"
+reconciliation="$repo_dir/src/lib/auth/pending-registration-reconciliation.ts"
 
 grep -Fq 'USER node' "$dockerfile"
 grep -Fq 'ENTRYPOINT ["bun", "scripts/pending-registration-ops.ts"]' "$dockerfile"
@@ -17,6 +18,8 @@ if grep -Fq 'getDb' "$script"; then
     exit 1
 fi
 grep -Fq 'operations-status' "$script"
+grep -Fq 'verify-provisioned-account' "$script"
+grep -Fq 'verifyCompletedAccountIntegrity' "$script"
 grep -Fq 'recovery-activation-status' "$script"
 grep -Fq 'prepare-indexes' "$script"
 grep -Fq 'PREPARE_PENDING_REGISTRATION_INDEXES' "$script"
@@ -24,6 +27,12 @@ grep -Fq 'Pending routing deployment id does not match REGISTRATION_DEPLOYMENT_I
 grep -Fq 'Unsupported routing transition' "$script"
 grep -Fq 'REGISTRATION_ROUTING_OPERATOR_TOKEN_SHA256' "$script"
 grep -Fq 'fs.readFileSync(0, "utf8")' "$script"
+grep -Fq 'verifyCompletedAccountIntegrity' "$reconciliation"
+grep -Fq 'countDocuments' "$reconciliation"
+if grep -Eq 'writeFile|mkdir|unlink|rename|rmSync|insertOne|updateOne|deleteOne|findOneAndUpdate|createIndex' "$reconciliation"; then
+    echo "Completed-account reconciliation must remain strictly read-only." >&2
+    exit 1
+fi
 if grep -Fq -- '--operator-token' "$script"; then
     echo "Operator token must never be accepted through argv." >&2
     exit 1
