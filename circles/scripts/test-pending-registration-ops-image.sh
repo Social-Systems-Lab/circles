@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 022
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 suffix="$$"
@@ -7,6 +8,9 @@ image="kamooni-registration-ops:test-$suffix"
 network="kamooni-registration-ops-test-$suffix"
 mongo="kamooni-registration-ops-mongo-$suffix"
 users_dir="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-registration-ops-users.XXXXXX")"
+# GitHub-hosted runners create mktemp directories as UID 1001 mode 700, while
+# the operator image runs as node UID 1000. The synthetic volume must be readable.
+chmod 755 "$users_dir"
 build_context="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-registration-ops-context.XXXXXX")"
 
 cleanup() {
@@ -159,12 +163,27 @@ openssl rsa -in "$credential_private_key" -RSAPublicKey_out -out "$users_dir/pub
 completed_did="$(openssl dgst -sha256 "$users_dir/public-key.pem" | awk '{print $NF}')"
 completed_credential_dir="$users_dir/$completed_did"
 mkdir "$completed_credential_dir"
+chmod 755 "$completed_credential_dir"
 cp "$users_dir/public-key.pem" "$completed_credential_dir/publicKey.pem"
 completed_public_key_base64="$(base64 <"$completed_credential_dir/publicKey.pem" | tr -d '\n')"
 openssl rand 16 >"$completed_credential_dir/salt.bin"
 openssl rand 16 >"$completed_credential_dir/iv.bin"
 openssl rand 64 >"$completed_credential_dir/privateKey.pem.enc"
+chmod 644 "$completed_credential_dir/publicKey.pem"
+chmod 600 "$completed_credential_dir/salt.bin" \
+    "$completed_credential_dir/iv.bin" \
+    "$completed_credential_dir/privateKey.pem.enc"
 rm -f "$credential_private_key" "$users_dir/public-key.pem"
+
+docker run --rm --network none --read-only --user 1000:1000 \
+    -e COMPLETED_DID="$completed_did" \
+    --mount type=bind,src="$users_dir",dst=/circles/users,readonly \
+    --entrypoint sh "$image" -c \
+    'test -d "/circles/users/$COMPLETED_DID" && test -r "/circles/users/$COMPLETED_DID/publicKey.pem"' \
+    >/dev/null || {
+    echo "Synthetic credentials are not readable by the operator image runtime user." >&2
+    exit 1
+}
 
 docker exec -i \
     -e COMPLETED_ACCOUNT_ID="$completed_account_id" \
