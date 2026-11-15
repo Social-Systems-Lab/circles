@@ -78,9 +78,10 @@ export function ProfileCompletionChecklist({ profile }: ProfileCompletionCheckli
         return (
             <section className="mt-4 w-full rounded-lg border border-emerald-100 bg-white p-4 shadow-sm">
                 <div className="space-y-2">
-                    <h2 className="text-lg font-semibold text-gray-900">You&apos;re ready! Welcome to Kamooni 🎉</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">You&apos;re ready to participate! 🎉</h2>
                     <p className="text-sm text-gray-600">
-                        Your profile is complete. You can now take part across Kamooni.
+                        Welcome to Kamooni. A profile photo and location are optional for participation; a genuine photo
+                        and selected location help others discover you on the map.
                     </p>
                 </div>
 
