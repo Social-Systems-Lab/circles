@@ -14,6 +14,7 @@ VALIDATOR = Path(__file__).with_name("validate-production-onboarding-activation.
 DEPLOYMENT_ID = "production-onboarding-20261113-2437ad23-01"
 HMAC = "0123456789abcdef0123456789abcdeffedcba9876543210fedcba9876543210"
 POSTMARK_TOKEN = "sensitive-postmark-token"
+ALERT_EMAIL = "onboarding-alerts@kamooni.invalid"
 
 
 def compose_environment(*, mode: str = "default", deployment_id: str = "") -> dict:
@@ -33,6 +34,7 @@ def compose_environment(*, mode: str = "default", deployment_id: str = "") -> di
                     "PENDING_REGISTRATION_JOURNEY_READY": "true" if activation else "false",
                     "PENDING_REGISTRATION_TOKEN_HMAC_KEY": HMAC if activation else "",
                     "REGISTRATION_DEPLOYMENT_ID": deployment_id,
+                    "ONBOARDING_ALERT_EMAIL": ALERT_EMAIL if activation else "",
                 },
             }
         },
@@ -85,7 +87,9 @@ class ActivationValidatorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "activation.env"
             path.write_text(
-                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\nREGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n",
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                f"ONBOARDING_ALERT_EMAIL={ALERT_EMAIL}\n",
                 encoding="utf-8",
             )
             path.chmod(0o600)
@@ -106,7 +110,8 @@ class ActivationValidatorTests(unittest.TestCase):
             path = Path(directory) / "activation.env"
             path.write_text(
                 "PENDING_REGISTRATION_TOKEN_HMAC_KEY=GENERATE_PRODUCTION_ONLY_64_HEX_SECRET\n"
-                "REGISTRATION_DEPLOYMENT_ID=production-onboarding-YYYYMMDD-APP_SHA_SEQUENCE\n",
+                "REGISTRATION_DEPLOYMENT_ID=production-onboarding-YYYYMMDD-APP_SHA_SEQUENCE\n"
+                "ONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid\n",
                 encoding="utf-8",
             )
             path.chmod(0o600)
@@ -116,7 +121,8 @@ class ActivationValidatorTests(unittest.TestCase):
 
             path.write_text(
                 f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n"
-                "REGISTRATION_DEPLOYMENT_ID=production-onboarding-20261113-12345678-01\n",
+                "REGISTRATION_DEPLOYMENT_ID=production-onboarding-20261113-12345678-01\n"
+                f"ONBOARDING_ALERT_EMAIL={ALERT_EMAIL}\n",
                 encoding="utf-8",
             )
             composed = compose_environment(
@@ -140,7 +146,9 @@ class ActivationValidatorTests(unittest.TestCase):
             application = root / ".env"
             verifier = root / "verifier"
             activation.write_text(
-                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\nREGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n",
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                f"ONBOARDING_ALERT_EMAIL={ALERT_EMAIL}\n",
                 encoding="utf-8",
             )
             activation.chmod(0o600)
@@ -203,7 +211,9 @@ class ActivationValidatorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             activation = Path(directory) / "activation.env"
             activation.write_text(
-                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\nREGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n",
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                f"ONBOARDING_ALERT_EMAIL={ALERT_EMAIL}\n",
                 encoding="utf-8",
             )
             distinct = subprocess.run(

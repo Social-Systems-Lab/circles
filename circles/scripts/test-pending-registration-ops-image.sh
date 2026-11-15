@@ -23,6 +23,7 @@ mkdir -p "$build_context/scripts" "$build_context/src/lib/auth"
 cp "$repo_dir/scripts/pending-registration-ops.ts" "$build_context/scripts/"
 cp "$repo_dir/src/lib/auth/email-normalization.ts" \
     "$repo_dir/src/lib/auth/pending-registration.ts" \
+    "$repo_dir/src/lib/auth/pending-registration-monitoring.ts" \
     "$repo_dir/src/lib/auth/pending-registration-reconciliation.ts" \
     "$repo_dir/src/lib/auth/registration-routing.ts" \
     "$build_context/src/lib/auth/"
@@ -43,6 +44,7 @@ docker run --rm --entrypoint sh "$image" -c '
   test -r /app/scripts/pending-registration-ops.ts &&
   test -r /app/src/lib/auth/email-normalization.ts &&
   test -r /app/src/lib/auth/pending-registration.ts &&
+  test -r /app/src/lib/auth/pending-registration-monitoring.ts &&
   test -r /app/src/lib/auth/pending-registration-reconciliation.ts &&
   test -r /app/src/lib/auth/registration-routing.ts
 ' >/dev/null
@@ -212,6 +214,7 @@ assert status["manualReviewMetrics"] == {
     "recordsExamined": 0,
     "byClassification": {},
     "manualReview": 0,
+    "transientActiveProvisioning": 0,
     "recoverableFinalize": 0,
     "recordLimit": 100,
     "pendingDocumentLimit": 500,
@@ -222,6 +225,8 @@ assert status["auditEvents"]["emailFailed"] == {"last15Minutes": 0, "last60Minut
 assert status["auditEvents"]["provisioningInterrupted"] == {"last15Minutes": 0, "last60Minutes": 1}
 assert status["runtimeRoutingConsistency"]["consistent"] is True
 assert status["runtimeRoutingConsistency"]["issues"] == []
+assert status["watchdogHeartbeat"]["status"] == "not_applicable"
+assert status["watchdogHeartbeat"]["reason"] == "routing_legacy"
 assert "recoverable@example.invalid" not in sys.argv[1]
 assert "unsafe@example.invalid" not in sys.argv[1]
 PY

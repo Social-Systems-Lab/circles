@@ -412,6 +412,12 @@ runtime_container_value() {
     printf '%s' "$value"
 }
 
+require_application_runtime_environment() {
+    local key="$1" container_id
+    container_id="$(application_container_id)" || fail "expected exactly one production application container"
+    runtime_container_value "$container_id" "$key" >/dev/null
+}
+
 write_postmark_canary_environment() {
     local container_id="$1" env_file transport origin token sender
     transport="$(runtime_container_value "$container_id" EMAIL_TRANSPORT)"
@@ -488,6 +494,7 @@ case "$command_name" in
         require_route_mode legacy
         require_operations_zero
         verify_application default
+        require_application_runtime_environment CRON_SECRET
         echo "Production onboarding preflight passed; no state was changed."
         ;;
     status)

@@ -9,6 +9,7 @@ COPY tsconfig.json ./
 COPY scripts/pending-registration-ops.ts ./scripts/pending-registration-ops.ts
 COPY src/lib/auth/email-normalization.ts ./src/lib/auth/email-normalization.ts
 COPY src/lib/auth/pending-registration.ts ./src/lib/auth/pending-registration.ts
+COPY src/lib/auth/pending-registration-monitoring.ts ./src/lib/auth/pending-registration-monitoring.ts
 COPY src/lib/auth/pending-registration-reconciliation.ts ./src/lib/auth/pending-registration-reconciliation.ts
 COPY src/lib/auth/registration-routing.ts ./src/lib/auth/registration-routing.ts
 

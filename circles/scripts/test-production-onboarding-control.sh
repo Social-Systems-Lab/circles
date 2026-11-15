@@ -112,6 +112,10 @@ grep -Fq 'flock -w "$PRODUCTION_LOCK_TIMEOUT_SECONDS" 9' "$deploy"
 grep -Fq 'registration_ops route-status' "$deploy"
 grep -Fq 'route-status legacy' "$deploy"
 grep -Fq 'normal production deployment is blocked while registration routing is not legacy' "$deploy"
+grep -Fq 'require_application_runtime_environment CRON_SECRET' "$control" || {
+    echo "preflight does not require CRON_SECRET" >&2
+    exit 1
+}
 
 route_guard_line="$(grep -nF 'registration_ops route-status' "$deploy" | head -1 | cut -d: -f1)"
 app_build_line="$(grep -nF 'docker compose build circles cron' "$deploy" | head -1 | cut -d: -f1)"
@@ -140,6 +144,7 @@ grep -Fq 'PENDING_REGISTRATION_ENABLED: "true"' "$activation"
 grep -Fq 'PENDING_REGISTRATION_JOURNEY_READY: "true"' "$activation"
 grep -Fq 'PENDING_REGISTRATION_TOKEN_HMAC_KEY: ${PENDING_REGISTRATION_TOKEN_HMAC_KEY:?' "$activation"
 grep -Fq 'REGISTRATION_DEPLOYMENT_ID: ${REGISTRATION_DEPLOYMENT_ID:?' "$activation"
+grep -Fq 'ONBOARDING_ALERT_EMAIL: ${ONBOARDING_ALERT_EMAIL:?' "$activation"
 
 for required in \
     'read_only: true' \
@@ -236,6 +241,7 @@ EOF
 cat >"$compose_tmp/activation.env" <<EOF
 PENDING_REGISTRATION_TOKEN_HMAC_KEY=0123456789abcdef0123456789abcdeffedcba9876543210fedcba9876543210
 REGISTRATION_DEPLOYMENT_ID=$fake_deployment
+ONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid
 EOF
 export GIT_SHA="$fake_sha"
 export KAMOONI_PRODUCTION_ONBOARDING_ACTIVATION_CONFIRM="AUTHORIZED_PRODUCTION_ONBOARDING_CONTROL"

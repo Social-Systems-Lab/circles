@@ -298,7 +298,7 @@ prepare_fake_credentials() {
     local hmac operator_token
     hmac="$(openssl rand -hex 32)"
     operator_token="$(openssl rand -hex 32)"
-    printf 'PENDING_REGISTRATION_TOKEN_HMAC_KEY=%s\nREGISTRATION_DEPLOYMENT_ID=production-onboarding-20261113-rehearsal-01\n' \
+    printf 'PENDING_REGISTRATION_TOKEN_HMAC_KEY=%s\nREGISTRATION_DEPLOYMENT_ID=production-onboarding-20261113-rehearsal-01\nONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid\n' \
         "$hmac" >"$SECRET_DIR/activation.env"
     printf '%s' "$operator_token" | sha256sum | awk '{print $1}' >"$SECRET_DIR/routing-operator.sha256"
     chmod 600 "$SECRET_DIR/activation.env" "$SECRET_DIR/routing-operator.sha256"

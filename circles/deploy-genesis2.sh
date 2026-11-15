@@ -284,11 +284,16 @@ for attempt in $(seq 1 20); do
       exit 1
     fi
     if ! (cd "$APP_DIR" && docker compose exec -T cron sh -lc \
-      'grep -Fq "/api/cron/email-reminders" /etc/crontabs/root && grep -Fq "/api/cron/first-topic-notifications" /etc/crontabs/root'); then
-      echo "Error: cron schedule verification failed; expected reminder and first-topic jobs." >&2
+      'grep -Fq "/api/cron/email-reminders" /etc/crontabs/root && grep -Fq "/api/cron/first-topic-notifications" /etc/crontabs/root && grep -Fq "/api/cron/onboarding-watchdog" /etc/crontabs/root'); then
+      echo "Error: cron schedule verification failed; expected reminder, first-topic and onboarding-watchdog jobs." >&2
       exit 1
     fi
-    echo "Verified cron schedules: hourly email reminders and minutely first-topic notification recovery."
+    if ! (cd "$APP_DIR" && docker compose exec -T cron sh -lc \
+      'curl -fsS --max-time 20 -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/onboarding-watchdog >/dev/null'); then
+      echo "Error: authenticated onboarding watchdog invocation failed after cron recreation." >&2
+      exit 1
+    fi
+    echo "Verified cron schedules and an authenticated legacy-mode onboarding watchdog invocation."
     exit 0
   fi
   sleep 1

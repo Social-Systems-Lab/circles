@@ -65,6 +65,7 @@ export async function setRegistrationMode(
         expectedMode: RegistrationMode;
         mode: RegistrationMode;
         deploymentId: string | null;
+        expectedDeploymentId?: string | null;
         updatedBy: string;
         now?: Date;
     },
@@ -73,7 +74,11 @@ export async function setRegistrationMode(
     if (input.mode === "pending" && !input.deploymentId) return false;
     const records = collection ?? (await registrationRoutingCollection());
     const result = await records.findOneAndUpdate(
-        { _id: ROUTING_ID, mode: input.expectedMode },
+        {
+            _id: ROUTING_ID,
+            mode: input.expectedMode,
+            ...("expectedDeploymentId" in input ? { deploymentId: input.expectedDeploymentId } : {}),
+        },
         {
             $set: {
                 mode: input.mode,
