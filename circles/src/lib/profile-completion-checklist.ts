@@ -1,9 +1,5 @@
 import type { Circle } from "@/models/models";
-import {
-    getParticipationReadiness,
-    getProfileCompletionRequirements,
-    isProfileComplete,
-} from "@/lib/profile-completion";
+import { getParticipationReadiness, getProfileCompletionRequirements } from "@/lib/profile-completion";
 
 export type ProfileCompletionStepId = "profile-image" | "about" | "rules";
 
@@ -29,16 +25,16 @@ export const getProfileCompletionChecklistState = (
     const participation = getParticipationReadiness(profile);
 
     return {
-        // Preserve the historical completion/welcome boundary so this milestone does not expand supporter prompts.
-        complete: isProfileComplete(profile),
+        complete: participation.ready,
         participationReady: participation.ready,
         items: [
             {
                 id: "profile-image",
-                label: "Add a profile image",
-                description: "Click your current profile image to upload your own.",
+                label: "Add a profile photo (optional)",
+                description:
+                    "Optional for participation. A genuine profile photo and a selected location help your profile appear in map discovery.",
                 complete: requirements.hasRealProfileImage,
-                actionLabel: "Add image",
+                actionLabel: "Add photo",
                 requiredForParticipation: false,
             },
             {

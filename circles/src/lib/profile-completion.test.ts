@@ -144,16 +144,47 @@ assert.deepEqual(
     { "profile-image": true, about: true, rules: false },
     "checklist handles mixed completion",
 );
-assert.equal(checklistState(baseUser()).complete, true, "checklist complete state follows profileComplete");
+assert.equal(checklistState(baseUser()).complete, true, "checklist completion follows participation readiness");
 assert.equal(
     checklistState(baseUser({ picture: undefined })).participationReady,
     true,
     "checklist recognizes participation-ready users without a profile image",
 );
+assert.equal(
+    checklistState(baseUser({ picture: undefined })).complete,
+    true,
+    "checklist completion does not require a profile image when participation requirements are met",
+);
 assert.deepEqual(
     Object.fromEntries(checklistState(baseUser()).items.map((item) => [item.id, item.requiredForParticipation])),
     { "profile-image": false, about: true, rules: true },
     "checklist labels the profile image as an optional improvement",
+);
+const profileImageChecklistItem = checklistState(baseUser()).items.find((item) => item.id === "profile-image");
+assert.match(profileImageChecklistItem?.label ?? "", /profile photo \(optional\)/);
+assert.match(
+    profileImageChecklistItem?.description ?? "",
+    /Optional for participation.*genuine profile photo and a selected location.*map discovery/,
+    "checklist explains that photo and location affect map discovery rather than participation",
+);
+for (const missingParticipationRequirement of [
+    { isEmailVerified: false },
+    { description: "", content: "" },
+    { communityGuidelinesAcceptance: createEmptyCommunityGuidelineAgreementState() },
+]) {
+    const state = checklistState(baseUser(missingParticipationRequirement));
+    assert.equal(state.participationReady, false);
+    assert.equal(state.complete, false, "checklist completion requires every participation requirement");
+}
+const participationReadyWithoutImage = baseUser({
+    picture: { url: "/images/default-user-picture.png" },
+});
+assert.equal(checklistState(participationReadyWithoutImage).complete, true);
+assert.equal(canParticipate(participationReadyWithoutImage), true);
+assert.equal(
+    isPersonalProfileMapEligible(participationReadyWithoutImage),
+    false,
+    "participation-ready users without a genuine photo remain excluded from map discovery",
 );
 
 assert.equal(

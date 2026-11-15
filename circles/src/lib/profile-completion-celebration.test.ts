@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync("src/components/profile-completion/profile-completion-checklist.tsx", "utf8");
 
-assert.match(source, /You&apos;re ready! Welcome to Kamooni/);
-assert.match(source, /Your profile is complete\. You can now take part across Kamooni\./);
+assert.match(source, /You&apos;re ready to participate!/);
+assert.match(source, /A profile photo and location are optional for participation/);
+assert.doesNotMatch(source, /Your profile is complete/);
 assert.match(source, /completeProfileCompletionWelcomeStep\(\)/);
 assert.match(source, /Start Kamoonying/);
 assert.doesNotMatch(
