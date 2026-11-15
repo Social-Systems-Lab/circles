@@ -18,6 +18,7 @@ function harness(initial: RegistrationRoutingRecord | null = null) {
         },
         async findOneAndUpdate(filter: any, update: any) {
             if (!record || record._id !== filter._id || record.mode !== filter.mode) return null;
+            if ("deploymentId" in filter && record.deploymentId !== filter.deploymentId) return null;
             record = { ...record, ...update.$set };
             return { ...record };
         },
@@ -86,6 +87,41 @@ async function main() {
     assert.equal(await isRegistrationModeAllowed("pending", records as any), false, "mixed deployment fails closed");
     process.env.REGISTRATION_DEPLOYMENT_ID = "release-123";
     assert.equal(await isRegistrationModeAllowed("pending", records as any), true);
+    const deploymentScoped = harness({
+        _id: "registration-routing",
+        mode: "pending",
+        deploymentId: "release-123",
+        updatedAt: new Date(0),
+        updatedBy: "test",
+    });
+    assert.equal(
+        await setRegistrationMode(
+            {
+                expectedMode: "pending",
+                mode: "paused",
+                deploymentId: null,
+                expectedDeploymentId: "another-release",
+                updatedBy: "watchdog-test",
+            },
+            deploymentScoped as any,
+        ),
+        false,
+        "deployment-scoped CAS rejects a different pending deployment",
+    );
+    assert.equal(
+        await setRegistrationMode(
+            {
+                expectedMode: "pending",
+                mode: "paused",
+                deploymentId: null,
+                expectedDeploymentId: "release-123",
+                updatedBy: "watchdog-test",
+            },
+            deploymentScoped as any,
+        ),
+        true,
+        "watchdog can pause the exact evaluated deployment",
+    );
     if (originalDeployment === undefined) delete process.env.REGISTRATION_DEPLOYMENT_ID;
     else process.env.REGISTRATION_DEPLOYMENT_ID = originalDeployment;
     console.log("registration-routing tests passed");

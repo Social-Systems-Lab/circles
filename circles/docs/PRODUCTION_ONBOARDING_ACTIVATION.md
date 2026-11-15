@@ -38,7 +38,10 @@ read -r -p 'Approved production deployment ID: ' REGISTRATION_DEPLOYMENT_ID
 printf 'PENDING_REGISTRATION_TOKEN_HMAC_KEY=' > activation.env
 openssl rand -hex 32 >> activation.env
 printf '\nREGISTRATION_DEPLOYMENT_ID=%s\n' "$REGISTRATION_DEPLOYMENT_ID" >> activation.env
+read -r -p 'Onboarding operator alert email: ' ONBOARDING_ALERT_EMAIL
+printf 'ONBOARDING_ALERT_EMAIL=%s\n' "$ONBOARDING_ALERT_EMAIL" >> activation.env
 unset REGISTRATION_DEPLOYMENT_ID
+unset ONBOARDING_ALERT_EMAIL
 chmod 600 activation.env
 ```
 
@@ -50,7 +53,9 @@ production-onboarding-YYYYMMDD-<approved-sha-prefix>-<sequence>
 
 The HMAC key must be independent of ALTCHA, JWT, cron, Mongo, MinIO, and routing-operator
 credentials. Never print the file, copy it into the application `.env`, commit it, or pass it as a
-command argument.
+command argument. `ONBOARDING_ALERT_EMAIL` must be a dedicated operator-controlled mailbox. It is
+not a secret, but alerts contain only sanitized reason codes and never contain identities,
+credentials, tokens, or user contact data.
 
 The raw routing operator token remains only in the approved password manager. Install only its
 SHA-256 verifier:
@@ -163,9 +168,10 @@ cd /root/circles/circles
 ```
 
 Preflight validates the exact SHA, one production application, default-off environment, Postmark
-configuration, external file permissions, operator image, Compose overlays, routing `legacy`, and
-zero unfinished or reconciliation-required operations. It does not create indexes, change routing,
-restart services, or write registration data.
+configuration, non-empty `CRON_SECRET`, external file permissions, operator image, Compose overlays,
+routing `legacy`, and zero unfinished or reconciliation-required operations. It does not create
+indexes, change routing, restart services, or write registration data. Secret values are never
+printed.
 
 Inspect current state without mutation:
 
@@ -295,16 +301,80 @@ After the paused-to-pending transition:
 
 1. Confirm `/signup` renders pending registration and `/signup/pilot` redirects to `/signup`.
 2. Confirm existing login, password reset, DID-backed accounts, and profile access remain unchanged.
-3. Complete one synthetic signup to an operator-controlled Postmark inbox.
-4. Verify the token-free continuation URL, account provisioning, DID uniqueness, onboarding arrival,
+3. Wait for one five-minute watchdog invocation and confirm `status` reports
+   `watchdogHeartbeat.status=current` for the active deployment.
+4. Complete one synthetic signup to an operator-controlled Postmark inbox.
+5. Verify the token-free continuation URL, account provisioning, DID uniqueness, onboarding arrival,
    logout, and login again.
-5. Do not delete or rewrite a DID. Preserve any interrupted record for reconciliation.
-6. Watch `status`, `inspect`, audit events, Postmark failures, duplicate-key errors, and
+6. Do not delete or rewrite a DID. Preserve any interrupted record for reconciliation.
+7. Watch `status`, `inspect`, audit events, Postmark failures, duplicate-key errors, and
    reconciliation-required records throughout the canary.
 
 ## Monitoring
 
-Monitoring is manual and must remain active for the entire supervised pilot. Run:
+The production cron service evaluates onboarding health every five minutes. In `pending` mode the
+watchdog can automatically change routing only from `pending` to `paused` after a confirmed critical
+condition. It cannot activate, resume, enter legacy mode, restart services, clear locks, retry
+provisioning, or modify identity data.
+
+The watchdog reports one of:
+
+- `healthy`: no alert and no routing change.
+- `warning`: sanitized operator alert only.
+- `critical`: alert and, when the runtime deployment ID still matches the pending routing record,
+  the protected `pending -> paused` CAS transition. The CAS filter includes the expected pending mode
+  and deployment ID so a concurrently replaced deployment cannot be paused accidentally.
+- `monitoring_unavailable`: never treated as healthy. One bounded/unavailable sample alerts the
+  operator; a second consecutive sample pauses registration. A monitoring query exception returns
+  HTTP 503, records a durable failed heartbeat, sends a sanitized fallback alert through the same
+  bounded queue, and pauses on the second consecutive exception when deployment scope can be proven.
+
+Alerts are deduplicated through durable `onboardingWatchdogState` data. Alert delivery is attempted
+after containment and cannot prevent the automatic pause. If Postmark is also failing, the
+registration path pauses and the cron command reports a nonzero result. Up to six alert attempts
+are retried every five minutes for at most 30 minutes while routing is paused. Retrying an alert
+never resumes registration. An old deployment's counters, lock history and alert state are discarded
+when the pending deployment ID changes or when unversioned state is encountered.
+
+The watchdog evaluates:
+
+- deployment ID and runtime/routing consistency
+- manual-review identity classifications
+- provisioning/pickup lock persistence across separate five-minute samples
+- provisioning age over ten minutes
+- email-failure bursts and provisioning-interruption bursts
+- more than 25 unfinished registrations
+- bounded monitoring scans that cannot safely produce an answer
+
+The manual-review scanner correlates active provisioning/finalization locks to the exact pending or
+account record. Incomplete credentials seen during a legitimate operation under ten minutes old are
+reported separately as `transientActiveProvisioning` rather than confirmed manual review. Unrelated
+locks do not suppress another record's manual-review incident.
+
+Legacy mode does not access or create watchdog state. Paused mode never changes routing; it may
+retry an already-pending deployment-scoped alert or clear an exhausted alert record. Staging and
+development images, identified by the immutable deployment-role marker, also no-op.
+
+`status` includes a sanitized watchdog heartbeat:
+
+- `current`: the current deployment completed a monitoring sample within ten minutes.
+- `stale`: the last successful sample is older than ten minutes.
+- `missing`: no versioned heartbeat exists for the current deployment.
+- `monitoring_failed`: the latest attempt did not complete successfully.
+- `not_applicable`: routing is legacy or paused.
+
+The heartbeat timestamp is stored in MongoDB and survives application restarts. After deployment,
+the normal deployment script performs one authenticated legacy-mode watchdog request, and the
+activation preflight requires a non-empty `CRON_SECRET`.
+
+There is no separate external scheduler service. The operator must independently run `status` at
+least daily and investigate `stale`, `missing` or `monitoring_failed`. This manual status check can
+detect a stopped watchdog or cron container, but it is not an automatic external liveness monitor.
+The cron container also logs failed requests to `/var/log/cron.log`. If the application or MongoDB
+is unavailable, watchdog containment may also be unavailable, although pending registration cannot
+mutate identity data without the database.
+
+Manual monitoring remains available. Run:
 
 ```bash
 ./circles/scripts/production-onboarding-control.sh status
@@ -318,6 +388,7 @@ Monitoring is manual and must remain active for the entire supervised pilot. Run
 - successful-email, email-failure and provisioning-interruption audit counts for 15 and 60 minutes
 - live runtime flags, deployment ID and credential-presence booleans
 - routing/runtime consistency
+- sanitized watchdog heartbeat status, age and whether an alert retry is pending
 
 Some metrics are deliberately unavailable rather than unbounded:
 
@@ -330,8 +401,8 @@ Some metrics are deliberately unavailable rather than unbounded:
 When a metric is unavailable, use `inspect` and application logs without removing data.
 
 Run `status` every five minutes during the controlled canary and the first two hours, every 15
-minutes through the first 24 hours, and hourly while the pilot remains active. This cadence is not
-approved for unattended operation.
+minutes through the first 24 hours, and at least once daily after the watchdog is proven stable.
+Automated pause limits exposure but does not establish 24/7 operational readiness.
 
 Inspect an individual problem record without printing or sharing unrelated identities:
 
@@ -361,6 +432,7 @@ Also inspect Postmark Activity for delivered, bounced or rejected messages.
 Stop new registrations and investigate immediately when any of these occurs:
 
 - routing/runtime consistency is false
+- watchdog heartbeat is `missing`, `stale`, or `monitoring_failed` while routing is `pending`
 - the deployed role or application SHA differs, or an image-identity check fails
 - `manualReviewMetrics.manualReview` is greater than zero
 - duplicate correlated accounts, duplicate DIDs or identity-field mismatches are reported
@@ -411,7 +483,10 @@ Then:
 5. Do not run `deactivate-services` while active locks or reconciliation-required records remain.
 
 The operator may resume the supervised pilot only after the cause is understood and another
-read-only status check is consistent. No automatic retry, rollback or recovery is authorized.
+read-only status check is consistent. An automatic pause is never resumed automatically. The
+operator must inspect the alert, run `status` and the aggregate reconciliation review, resolve the
+cause, and use the normal authenticated `paused -> pending` transition only after another clean
+sample. No automatic retry, legacy rollback or service recovery is authorized.
 
 Never print verification tokens, continuation secrets, passwords, encrypted keys, connection URIs,
 HMAC keys, or the routing operator token.
@@ -517,7 +592,13 @@ canary, production backup restore test, monitoring approval or activation-operat
 
 ## Known activation blockers
 
-- The full pending-registration Postmark end-to-end canary remains required after approved activation.
-- The supervised pilot has one operator explicitly assigned for activation, rollback and initial
-  monitoring. Unattended, overnight and general public rollout remain unauthorized.
-- A fallback/rollback operator and out-of-hours monitoring arrangement are required before public rollout.
+- The watchdog and its disposable fault-injection test must be reviewed and deployed in legacy mode
+  before pending registration is enabled.
+- Alert delivery must be confirmed independently; an automatic pause protects containment but does
+  not prove that the operator will notice an outage.
+- No external scheduler-liveness service is added. Sustained cron death is detected through the
+  sanitized status heartbeat and the required operator review, not by an automatic pager.
+- A fallback/rollback operator or another explicit out-of-hours response arrangement is still
+  recommended before sustained 24/7 public use.
+- The safe signup error-message improvements and completed-account DID/credential correlation check
+  remain separate release-review items.

@@ -14,6 +14,7 @@ from urllib.parse import unquote, urlsplit
 HMAC = re.compile(r"[0-9a-fA-F]{64}")
 DEPLOYMENT_ID = re.compile(r"production-onboarding-[A-Za-z0-9][A-Za-z0-9._-]{7,111}")
 PLACEHOLDER = re.compile(r"(?:GENERATE|CHANGE|PLACEHOLDER|REPLACE|EXAMPLE|TODO|YYYY|APP_SHA|SEQUENCE)", re.I)
+EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 def fail(messages: list[str] | str) -> None:
@@ -42,16 +43,24 @@ def parse_env(path: Path) -> dict[str, str]:
 
 def validate_activation_values(values: dict[str, str], expected_deployment_id: str | None = None) -> list[str]:
     errors: list[str] = []
-    if set(values) != {"PENDING_REGISTRATION_TOKEN_HMAC_KEY", "REGISTRATION_DEPLOYMENT_ID"}:
-        errors.append("activation file must contain exactly the HMAC key and deployment ID")
+    required_keys = {
+        "PENDING_REGISTRATION_TOKEN_HMAC_KEY",
+        "REGISTRATION_DEPLOYMENT_ID",
+        "ONBOARDING_ALERT_EMAIL",
+    }
+    if set(values) != required_keys:
+        errors.append("activation file must contain exactly the HMAC key, deployment ID and onboarding alert email")
     secret = values.get("PENDING_REGISTRATION_TOKEN_HMAC_KEY", "")
     deployment_id = values.get("REGISTRATION_DEPLOYMENT_ID", "")
+    alert_email = values.get("ONBOARDING_ALERT_EMAIL", "")
     if not HMAC.fullmatch(secret) or PLACEHOLDER.search(secret):
         errors.append("pending-registration HMAC key must be a non-placeholder 64-character hexadecimal value")
     if secret and any(secret == secret[:size] * (64 // size) for size in range(1, 17) if 64 % size == 0):
         errors.append("pending-registration HMAC key must not be a repeated low-entropy pattern")
     if not DEPLOYMENT_ID.fullmatch(deployment_id) or PLACEHOLDER.search(deployment_id):
         errors.append("registration deployment ID has an invalid or placeholder production format")
+    if not EMAIL.fullmatch(alert_email) or PLACEHOLDER.search(alert_email):
+        errors.append("onboarding alert email is invalid or a placeholder")
     if expected_deployment_id is not None and deployment_id != expected_deployment_id:
         errors.append("activation deployment ID does not match the approved deployment ID")
     return errors
@@ -183,6 +192,7 @@ def validate_activation_compose(config: dict, expected_deployment_id: str) -> li
             {
                 "PENDING_REGISTRATION_TOKEN_HMAC_KEY": env.get("PENDING_REGISTRATION_TOKEN_HMAC_KEY", ""),
                 "REGISTRATION_DEPLOYMENT_ID": env.get("REGISTRATION_DEPLOYMENT_ID", ""),
+                "ONBOARDING_ALERT_EMAIL": env.get("ONBOARDING_ALERT_EMAIL", ""),
             },
             expected_deployment_id,
         )
