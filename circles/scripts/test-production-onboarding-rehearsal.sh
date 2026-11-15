@@ -42,6 +42,8 @@ for required in \
     'loopback port 443 is already in use' \
     'NO_PROXY="kamooni.org,localhost,127.0.0.1"' \
     'cmp "$SOURCE_APP_DIR/scripts/production-onboarding-control.sh" "$CONTROL_SCRIPT"' \
+    'postmark-verification-canary.mjs' \
+    'pending-registration-watchdog-alert.mjs' \
     'legacy paused none REHEARSAL' \
     'paused pending activation REHEARSAL' \
     'pending paused none REHEARSAL' \

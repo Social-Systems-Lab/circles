@@ -54,6 +54,8 @@ mock.module("@/lib/data/email", () => ({
     },
 }));
 mock.module("@/lib/auth/pending-registration-monitoring", () => ({
+    WATCHDOG_STATE_SCHEMA_VERSION: 1,
+    WATCHDOG_STUCK_PROVISIONING_SECONDS: 600,
     getOperationsStatus: async () => {
         throw new Error("not used by the mocked processor");
     },
@@ -172,8 +174,10 @@ test("monitoring failure returns 503 and sends only a sanitized fallback alert",
     assert.equal(response.status, 503);
     assert.equal(state.alerts.length, 1);
     assert.equal(state.alerts[0].to, "operator@example.invalid");
+    assert.equal(state.alerts[0].templateAlias, "notification-reminder");
     const serialized = JSON.stringify(state.alerts[0].templateModel);
     assert.match(serialized, /monitoring_query_failed/);
+    assert.match(serialized, /Automatic pause: not_requested/);
     assert.doesNotMatch(serialized, /synthetic-cron-secret|operator@example\.invalid/);
     assert.equal(state.monitoringFailureCalls, 1);
 });

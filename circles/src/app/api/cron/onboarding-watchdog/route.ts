@@ -10,6 +10,11 @@ import {
 import { getRegistrationRouting, type RegistrationRoutingRecord } from "@/lib/auth/registration-routing";
 import { EMPTY_WATCHDOG_STATE, type WatchdogState } from "@/lib/auth/pending-registration-watchdog-policy";
 import {
+    buildWatchdogAlertTemplateModel,
+    sanitizeWatchdogAlertReasons,
+    WATCHDOG_ALERT_TEMPLATE_ALIAS,
+} from "@/lib/auth/pending-registration-watchdog-alert.mjs";
+import {
     processPendingRegistrationMonitoringFailure,
     processPendingRegistrationWatchdog,
     type WatchdogPauseResult,
@@ -39,35 +44,21 @@ function alertRecipient(): string | null {
     return value;
 }
 
-function safeReasons(reasons: string[]): string[] {
-    return [...new Set(reasons.filter((reason) => /^[a-z0-9_]{1,64}$/.test(reason)))].sort();
-}
-
 async function sendOperatorAlert(
     recipient: string,
     level: string,
     reasons: string[],
     pauseResult: WatchdogPauseResult,
 ): Promise<void> {
-    const safeStatus = safeReasons(reasons);
-    const safePauseResult = safeReasons([pauseResult])[0] ?? "unknown";
     await sendEmail({
         to: recipient,
-        templateAlias: "notification-reminder",
-        templateModel: {
-            name: "Kamooni onboarding operator",
-            notifications: [
-                `Onboarding watchdog status: ${level}`,
-                `Signals: ${safeStatus.join(", ") || "none"}`,
-                `Automatic pause: ${safePauseResult}`,
-            ],
-            actionUrl: process.env.CIRCLES_URL || "https://kamooni.org",
-            productUrl: process.env.CIRCLES_URL || "https://kamooni.org",
-            introText: "Kamooni onboarding requires operator review.",
-            bodyText: "Review routing, pending-registration status and reconciliation state before resuming signup.",
-            summaryText: `Onboarding watchdog: ${level}; pause: ${safePauseResult}.`,
-            actionText: "Review Kamooni",
-        },
+        templateAlias: WATCHDOG_ALERT_TEMPLATE_ALIAS,
+        templateModel: buildWatchdogAlertTemplateModel({
+            level,
+            reasons: sanitizeWatchdogAlertReasons(reasons),
+            pauseResult,
+            origin: process.env.CIRCLES_URL || "https://kamooni.org",
+        }),
     });
 }
 
