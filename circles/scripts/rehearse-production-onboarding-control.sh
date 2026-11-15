@@ -140,6 +140,7 @@ install_fixture_files() {
         "$APP_DIR/registration-ops/"
     cp "$SOURCE_APP_DIR/scripts/production-onboarding-control.sh" "$CONTROL_SCRIPT"
     cp "$SOURCE_APP_DIR/scripts/pending-registration-ops.ts" "$APP_DIR/scripts/"
+    cp "$SOURCE_APP_DIR/scripts/postmark-verification-canary.mjs" "$APP_DIR/scripts/"
     cp "$SOURCE_APP_DIR/scripts/validate-production-onboarding-activation.py" "$APP_DIR/scripts/"
     cp "$SOURCE_APP_DIR/scripts/validate-routing-operator-verifier.py" "$APP_DIR/scripts/"
     cp "$SOURCE_APP_DIR/scripts/verify-production-onboarding-runtime.py" "$APP_DIR/scripts/"
@@ -147,6 +148,7 @@ install_fixture_files() {
     cp "$SOURCE_APP_DIR/src/lib/auth/email-normalization.ts" \
         "$SOURCE_APP_DIR/src/lib/auth/pending-registration.ts" \
         "$SOURCE_APP_DIR/src/lib/auth/pending-registration-reconciliation.ts" \
+        "$SOURCE_APP_DIR/src/lib/auth/pending-registration-watchdog-alert.mjs" \
         "$SOURCE_APP_DIR/src/lib/auth/registration-routing.ts" \
         "$APP_DIR/src/lib/auth/"
     cp "$SOURCE_APP_DIR/docker-compose.production-activation.yml" \

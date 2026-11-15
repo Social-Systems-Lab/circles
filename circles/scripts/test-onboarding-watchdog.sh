@@ -7,9 +7,10 @@ control="$repo_dir/src/lib/auth/pending-registration-watchdog-control.ts"
 cron="$repo_dir/crontab"
 deploy="$repo_dir/deploy-genesis2.sh"
 policy="$repo_dir/src/lib/auth/pending-registration-watchdog-policy.ts"
+alert_module="$repo_dir/src/lib/auth/pending-registration-watchdog-alert.mjs"
 rehearsal_workflow="$repo_dir/../.github/workflows/production-onboarding-rehearsal.yml"
 
-for file in "$route" "$control" "$cron" "$deploy" "$policy" "$rehearsal_workflow"; do
+for file in "$route" "$control" "$cron" "$deploy" "$policy" "$alert_module" "$rehearsal_workflow"; do
     [[ -f "$file" ]] || {
         echo "Missing onboarding watchdog file: $file" >&2
         exit 1
@@ -60,6 +61,18 @@ grep -Fq 'monitoring_unavailable' "$policy" || {
     echo "Watchdog policy does not expose monitoring-unavailable state." >&2
     exit 1
 }
+grep -Fq 'buildWatchdogAlertTemplateModel' "$route" || {
+    echo "Live watchdog alerts do not use the shared canary payload builder." >&2
+    exit 1
+}
+grep -Fq 'WATCHDOG_ALERT_TEMPLATE_ALIAS = "notification-reminder"' "$alert_module" || {
+    echo "Watchdog alert canary does not use the live notification template alias." >&2
+    exit 1
+}
+if grep -Eq 'getDb|registrationRouting|pendingRegistrations|MONGODB_URI' "$alert_module"; then
+    echo "Watchdog alert canary contains a database or routing mutation path." >&2
+    exit 1
+fi
 grep -Fq './circles/scripts/test-onboarding-watchdog-integration.sh' "$rehearsal_workflow" || {
     echo "Manual disposable rehearsal does not run the watchdog fault-injection test." >&2
     exit 1

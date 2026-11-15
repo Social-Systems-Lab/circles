@@ -15,6 +15,7 @@ verifier_validator="$repo_dir/scripts/validate-routing-operator-verifier.py"
 bash -n "$control"
 bash -n "$deploy"
 bash -n "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
+bash -n "$repo_dir/scripts/test-watchdog-alert-canary-control.sh"
 bash -n "$repo_dir/scripts/test-production-application-sha-verification.sh"
 for executable in "$control" "$validator" "$runtime_validator" "$application_image_validator" "$verifier_validator"; do
     [[ -x "$executable" ]] || { echo "required production onboarding tool is not executable: $executable" >&2; exit 1; }
@@ -55,6 +56,10 @@ for required in \
     '--env-file "$env_file"' \
     '--cap-drop ALL' \
     '--security-opt no-new-privileges --user node' \
+    'watchdog-alert-canary)' \
+    'WATCHDOG_ALERT_CANARY_SCRIPT=' \
+    'SEND_WATCHDOG_ALERT_CANARY' \
+    'await runWatchdogAlertCanaryCli();' \
     'verify_recovery_application_image' \
     'require_failed_application_state' \
     '--pull=never --network none --read-only' \
@@ -184,13 +189,38 @@ if grep -Eq -- '--mount|--volume|/var/run/docker.sock' "$control"; then
     echo "production control must not attach volumes or the Docker socket to the Postmark canary" >&2
     exit 1
 fi
+watchdog_canary_function="$(sed -n '/^run_watchdog_alert_canary()/,/^}/p' "$control")"
+if grep -Eq -- '--env-file|--env[[:space:]]+[^[:space:]]*(POSTMARK|ONBOARDING_ALERT)' <<<"$watchdog_canary_function"; then
+    echo "watchdog alert canary must not place credentials or recipients in Docker metadata" >&2
+    exit 1
+fi
+if ! grep -Fq 'printf '\''%s\n'\'' "$origin" "$transport" "$token" "$sender" "$recipient" | \' \
+    <<<"$watchdog_canary_function"; then
+    echo "watchdog alert canary must provide runtime values over stdin" >&2
+    exit 1
+fi
+watchdog_confirmation_line="$(grep -nF 'require_terminal_confirmation SEND_WATCHDOG_ALERT_CANARY' \
+    <<<"$watchdog_canary_function" | cut -d: -f1)"
+watchdog_route_recheck_line="$(grep -nF 'require_route_mode legacy' <<<"$watchdog_canary_function" | tail -1 | cut -d: -f1)"
+watchdog_idle_recheck_line="$(grep -nF 'require_operations_zero' <<<"$watchdog_canary_function" | tail -1 | cut -d: -f1)"
+watchdog_send_line="$(grep -nF 'docker run --interactive' <<<"$watchdog_canary_function" | cut -d: -f1)"
+[[ -n "$watchdog_confirmation_line" && -n "$watchdog_route_recheck_line" &&
+    -n "$watchdog_idle_recheck_line" && -n "$watchdog_send_line" &&
+    "$watchdog_confirmation_line" -lt "$watchdog_route_recheck_line" &&
+    "$watchdog_route_recheck_line" -lt "$watchdog_send_line" &&
+    "$watchdog_idle_recheck_line" -lt "$watchdog_send_line" ]] || {
+    echo "watchdog alert canary must recheck routing and idle state before sending" >&2
+    exit 1
+}
 
 python3 "$repo_dir/scripts/validate-production-onboarding-activation.test.py"
 python3 "$repo_dir/scripts/verify-production-onboarding-runtime.test.py"
 python3 "$repo_dir/scripts/verify-production-application-image.test.py"
 bash "$repo_dir/scripts/test-production-application-sha-verification.sh"
 bash "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
+bash "$repo_dir/scripts/test-watchdog-alert-canary-control.sh"
 bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
+bun test "$repo_dir/src/lib/auth/pending-registration-watchdog-alert.test.ts"
 
 verifier_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$verifier_tmp"' EXIT

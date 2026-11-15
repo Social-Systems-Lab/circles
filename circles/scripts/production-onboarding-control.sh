@@ -24,6 +24,7 @@ OPERATOR_VERIFIER_VALIDATOR="$APP_DIR/scripts/validate-routing-operator-verifier
 RUNTIME_VALIDATOR="$APP_DIR/scripts/verify-production-onboarding-runtime.py"
 APPLICATION_IMAGE_VALIDATOR="$APP_DIR/scripts/verify-production-application-image.py"
 POSTMARK_CANARY_SCRIPT="$APP_DIR/scripts/postmark-verification-canary.mjs"
+WATCHDOG_ALERT_CANARY_SCRIPT="$APP_DIR/src/lib/auth/pending-registration-watchdog-alert.mjs"
 POSTMARK_CANARY_ENV_FILE=""
 TEMP_FILES=()
 TEMP_CONTAINERS=()
@@ -57,6 +58,7 @@ Usage:
   production-onboarding-control.sh deactivate-services
   production-onboarding-control.sh recover-default-services
   production-onboarding-control.sh postmark-canary
+  production-onboarding-control.sh watchdog-alert-canary
 EOF
     exit 2
 }
@@ -101,6 +103,7 @@ for validator in \
     [[ -f "$validator" ]] || fail "production onboarding validator is missing: $validator"
 done
 [[ -f "$POSTMARK_CANARY_SCRIPT" ]] || fail "Postmark canary script is missing"
+[[ -f "$WATCHDOG_ALERT_CANARY_SCRIPT" ]] || fail "watchdog alert canary script is missing"
 
 [[ "$(git -C "$REPO_DIR" branch --show-current)" == "main" ]] || fail "production checkout must be on main"
 [[ -z "$(git -C "$REPO_DIR" status --porcelain --untracked-files=all)" ]] || fail "production checkout is dirty"
@@ -478,6 +481,44 @@ run_postmark_canary() {
         --input-type=module -e "$canary_source"
 }
 
+run_watchdog_alert_canary() {
+    local container_id image_id canary_source canary_container recipient origin transport token sender
+    container_id="$(application_container_id)" || fail "expected exactly one production application container"
+    image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+    [[ "$image_id" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "production application image identity is invalid"
+    origin="$(runtime_container_value "$container_id" CIRCLES_URL)"
+    transport="$(runtime_container_value "$container_id" EMAIL_TRANSPORT)"
+    token="$(runtime_container_value "$container_id" POSTMARK_API_TOKEN)"
+    sender="$(runtime_container_value "$container_id" POSTMARK_SENDER_EMAIL)"
+    recipient="$(activation_value ONBOARDING_ALERT_EMAIL)"
+    [[ "$origin" == "https://kamooni.org" ]] || fail "production public origin is not canonical"
+    [[ "$transport" == "postmark" ]] || fail "production email transport is not Postmark"
+    [[ "$token" != *[[:space:]]* ]] || fail "production Postmark token is invalid"
+    [[ -n "$recipient" ]] || fail "onboarding alert recipient is missing"
+
+    canary_source="$(<"$WATCHDOG_ALERT_CANARY_SCRIPT")"
+    [[ -n "$canary_source" ]] || fail "watchdog alert canary script is empty"
+    canary_source+=$'\nawait runWatchdogAlertCanaryCli();'
+
+    require_terminal_confirmation SEND_WATCHDOG_ALERT_CANARY
+    require_route_mode legacy
+    require_operations_zero
+    verify_application default
+    canary_container="kamooni-watchdog-alert-canary-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    if docker container inspect "$canary_container" >/dev/null 2>&1; then
+        fail "watchdog alert canary container name already exists"
+    fi
+    TEMP_CONTAINERS+=("$canary_container")
+    # Cross the secret boundary over stdin only; Docker metadata must contain no token or recipient.
+    printf '%s\n' "$origin" "$transport" "$token" "$sender" "$recipient" | \
+        docker run --interactive --rm --pull never \
+            --name "$canary_container" --network bridge --read-only \
+            --cap-drop ALL --security-opt no-new-privileges --user node \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m \
+            --entrypoint node "$image_id" --input-type=module -e "$canary_source"
+    unset token
+}
+
 case "$command_name" in
     build-operator)
         [[ "$#" -eq 0 ]] || usage
@@ -626,6 +667,15 @@ case "$command_name" in
         require_operations_zero
         verify_application default
         run_postmark_canary
+        ;;
+    watchdog-alert-canary)
+        [[ "$#" -eq 0 ]] || usage
+        require_compose_contracts
+        require_images
+        require_route_mode legacy
+        require_operations_zero
+        verify_application default
+        run_watchdog_alert_canary
         ;;
     *)
         usage

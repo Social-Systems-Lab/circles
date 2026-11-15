@@ -227,6 +227,38 @@ This pre-activation canary proves production provider, sender, template and rend
 It does not replace the full Postmark signup canary after a separately approved transition to
 pending routing.
 
+## Watchdog alert canary
+
+In legacy mode, verify the actual watchdog alert template and sanitized payload without changing
+registration routing:
+
+```bash
+cd /root/circles/circles
+./circles/scripts/production-onboarding-control.sh watchdog-alert-canary
+```
+
+The command requires the clean checkout and immutable application image to match `origin/main`,
+routing to remain `legacy`, both pending-registration flags to be disabled, and zero pending,
+lock, or reconciliation-required operations. It reads `ONBOARDING_ALERT_EMAIL` from the protected
+activation file and requires the confirmation phrase `SEND_WATCHDOG_ALERT_CANARY`.
+
+It sends exactly one message through the production Postmark transport using the same
+`notification-reminder` template model builder as the live watchdog. The canary reports only
+provider acceptance, template alias and MessageID presence. It does not print the recipient, token,
+sender, provider response body or message ID. Runtime credentials and the recipient are supplied to
+the one-off container over stdin rather than environment variables or command arguments. The
+container has no database credentials, production volumes, Docker socket or routing operator
+credential.
+
+This canary makes no MongoDB, account, DID, credential-file, pending-registration or MinIO changes.
+Confirm inbox delivery, sender authentication and Postmark Activity independently.
+
+There is intentionally no production mode that injects a synthetic critical monitoring state or
+forces the live cron watchdog to pause routing. That would require a persistent diagnostic bypass
+or arbitrary metric override. Automatic `pending -> paused` behavior therefore remains covered by
+the disposable policy, CAS and fault-injection tests until a separately reviewed single-use
+canary design is approved.
+
 ## Supervised pilot approval and responsibilities
 
 The production Postmark verification-email canary has passed. MongoDB restoration completed with
@@ -596,6 +628,9 @@ canary, production backup restore test, monitoring approval or activation-operat
   before pending registration is enabled.
 - Alert delivery must be confirmed independently; an automatic pause protects containment but does
   not prove that the operator will notice an outage.
+- The alert-only watchdog canary can confirm production delivery in legacy mode, but there is no
+  production-safe full cron-to-CAS canary. Automatic pause must not be represented as live-tested
+  until that separate design is reviewed.
 - No external scheduler-liveness service is added. Sustained cron death is detected through the
   sanitized status heartbeat and the required operator review, not by an automatic pager.
 - A fallback/rollback operator or another explicit out-of-hours response arrangement is still

@@ -265,6 +265,7 @@ class ActivationValidatorTests(unittest.TestCase):
             "prepare-indexes",
             "activate-services",
             "postmark-canary",
+            "watchdog-alert-canary",
         ):
             with self.subTest(command=command):
                 self.assertFalse(eligible(command))
@@ -274,6 +275,17 @@ class ActivationValidatorTests(unittest.TestCase):
             self.run_command(
                 "origin-eligible",
                 "postmark-canary",
+                "",
+                "",
+                deployed,
+                deployed,
+            ).returncode,
+            0,
+        )
+        self.assertEqual(
+            self.run_command(
+                "origin-eligible",
+                "watchdog-alert-canary",
                 "",
                 "",
                 deployed,
@@ -298,6 +310,7 @@ class ActivationValidatorTests(unittest.TestCase):
         self.assertTrue(eligible_without_origin("deactivate-services"))
         self.assertFalse(eligible_without_origin("preflight"))
         self.assertFalse(eligible_without_origin("postmark-canary"))
+        self.assertFalse(eligible_without_origin("watchdog-alert-canary"))
 
     def test_operations_idle_ignores_email_only_records_but_rejects_active_or_uncertain_state(self) -> None:
         safe = {
