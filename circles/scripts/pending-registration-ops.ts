@@ -1,4 +1,7 @@
-import { inspectPendingRegistrationReconciliation } from "@/lib/auth/pending-registration-reconciliation";
+import {
+    inspectPendingRegistrationReconciliation,
+    verifyCompletedAccountIntegrity,
+} from "@/lib/auth/pending-registration-reconciliation";
 import { getPendingRegistrationCollections } from "@/lib/auth/pending-registration";
 import {
     ensureRegistrationRoutingRecord,
@@ -39,6 +42,15 @@ function authenticateRoutingOperator() {
     const expected = Buffer.from(expectedHex, "hex");
     const supplied = crypto.createHash("sha256").update(suppliedToken).digest();
     if (!crypto.timingSafeEqual(expected, supplied)) throw new Error("Routing operator authorization failed");
+}
+
+function readAccountHandleFromStdin(): string {
+    const input = fs.readFileSync(0, "utf8");
+    const value = input.endsWith("\r\n") ? input.slice(0, -2) : input.endsWith("\n") ? input.slice(0, -1) : input;
+    if (value.length < 3 || value.length > 20 || /[\r\n]/.test(value) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
+        throw new Error("Invalid account lookup input");
+    }
+    return value;
 }
 
 async function getRecoveryActivationStatus(db: Db) {
@@ -139,6 +151,16 @@ async function run(db: Db) {
         console.log(JSON.stringify({ count: results.length, results }, null, 2));
         return;
     }
+    if (command === "verify-provisioned-account") {
+        const usersDirectory = args.get("users-dir");
+        if (!usersDirectory) throw new Error("--users-dir is required");
+        const result = await verifyCompletedAccountIntegrity(db, {
+            handle: readAccountHandleFromStdin(),
+            usersDirectory,
+        });
+        console.log(JSON.stringify(result, null, 2));
+        return;
+    }
     if (command === "route-status") {
         console.log(JSON.stringify(await getRegistrationRouting(db.collection("registrationRouting")), null, 2));
         return;
@@ -202,7 +224,7 @@ async function run(db: Db) {
         return;
     }
     throw new Error(
-        "Usage: inspect, route-status, operations-status, recovery-activation-status, prepare-indexes, or route-set",
+        "Usage: inspect, verify-provisioned-account, route-status, operations-status, recovery-activation-status, prepare-indexes, or route-set",
     );
 }
 
@@ -219,6 +241,10 @@ async function main() {
 }
 
 main().catch((error) => {
+    if (command === "verify-provisioned-account") {
+        console.error("Provisioned account verification failed safely.");
+        process.exit(1);
+    }
     const message = error instanceof Error ? error.message : "Operator command failed";
     console.error(/mongodb(?:\+srv)?:\/\//i.test(message) ? "Operator command failed during MongoDB access" : message);
     process.exit(1);

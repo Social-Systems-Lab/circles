@@ -59,6 +59,7 @@ Usage:
   production-onboarding-control.sh recover-default-services
   production-onboarding-control.sh postmark-canary
   production-onboarding-control.sh watchdog-alert-canary
+  production-onboarding-control.sh verify-provisioned-account
 EOF
     exit 2
 }
@@ -519,6 +520,22 @@ run_watchdog_alert_canary() {
     unset token
 }
 
+run_completed_account_verification() {
+    local expected_image_id="$1" account_handle=""
+    [[ -r /dev/tty ]] || fail "an interactive terminal is required for the completed-account handle"
+    read -r -s -p 'Completed account handle: ' account_handle </dev/tty
+    printf '\n' >/dev/tty
+    if [[ ! "$account_handle" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || \
+        [[ "${#account_handle}" -lt 3 || "${#account_handle}" -gt 20 ]]; then
+        unset account_handle
+        fail "completed-account handle is invalid"
+    fi
+    verify_application default none "$expected_image_id"
+    printf '%s\n' "$account_handle" | \
+        run_ops verify-provisioned-account --users-dir /circles/users
+    unset account_handle
+}
+
 case "$command_name" in
     build-operator)
         [[ "$#" -eq 0 ]] || usage
@@ -676,6 +693,14 @@ case "$command_name" in
         require_operations_zero
         verify_application default
         run_watchdog_alert_canary
+        ;;
+    verify-provisioned-account)
+        [[ "$#" -eq 0 ]] || usage
+        require_default_and_ops_contracts
+        require_images
+        expected_image_id="$(docker image inspect --format '{{.Id}}' circles-circles:latest)"
+        verify_application default none "$expected_image_id"
+        run_completed_account_verification "$expected_image_id"
         ;;
     *)
         usage

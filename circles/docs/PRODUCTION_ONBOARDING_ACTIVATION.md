@@ -449,6 +449,31 @@ For aggregate classifications without identity identifiers:
 python3 -c 'import collections,json,sys; d=json.load(sys.stdin); r=d.get("results",[]); print(json.dumps({"count":d.get("count",0),"byClassification":dict(collections.Counter(x.get("classification","unknown") for x in r))},sort_keys=True))'
 ```
 
+Verify one completed pending-registration-v1 account without requiring pending registration to be active:
+
+```bash
+./circles/scripts/production-onboarding-control.sh verify-provisioned-account
+```
+
+The command prompts for the current account handle on `/dev/tty` without echoing it and passes the
+handle to the read-only operator container over standard input. The handle, account ID, DID,
+pending-registration ID, email address, public keys, hashes and credential paths are never printed
+or included in command arguments. Output contains only `PASS` or `FAIL`, boolean checks and fixed
+failure codes.
+
+The verifier requires the exact deployed SHA and production role, validates the default production
+Compose configuration and immutable operator image, and uses the existing read-only users-volume
+mount. It requires exactly one account for the current handle, DID and persistent pending-ID
+reference; one matching DID reservation; a credential directory containing the four expected
+regular, non-symlink files; and both MongoDB and `publicKey.pem` SHA-256 values to equal the account
+DID. It reads no salt, IV or encrypted-private-key content and performs no password reset,
+authentication or credential decryption.
+
+Completed pending records are retained for seven days. If the record has expired, the command
+reports `pendingRecordRetained: false` and verifies the durable account metadata and DID reservation
+instead. A retained record must still be `provisioned`, match the account ID and DID, have no active
+claim or reconciliation marker, and have no active provisioning or finalization lock.
+
 Review sanitized Postmark delivery failures on the production application:
 
 ```bash

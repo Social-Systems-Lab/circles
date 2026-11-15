@@ -16,6 +16,7 @@ bash -n "$control"
 bash -n "$deploy"
 bash -n "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 bash -n "$repo_dir/scripts/test-watchdog-alert-canary-control.sh"
+bash -n "$repo_dir/scripts/test-verify-provisioned-account-control.sh"
 bash -n "$repo_dir/scripts/test-production-application-sha-verification.sh"
 for executable in "$control" "$validator" "$runtime_validator" "$application_image_validator" "$verifier_validator"; do
     [[ -x "$executable" ]] || { echo "required production onboarding tool is not executable: $executable" >&2; exit 1; }
@@ -60,6 +61,9 @@ for required in \
     'WATCHDOG_ALERT_CANARY_SCRIPT=' \
     'SEND_WATCHDOG_ALERT_CANARY' \
     'await runWatchdogAlertCanaryCli();' \
+    'verify-provisioned-account)' \
+    'Completed account handle:' \
+    'run_ops verify-provisioned-account --users-dir /circles/users' \
     'verify_recovery_application_image' \
     'require_failed_application_state' \
     '--pull=never --network none --read-only' \
@@ -212,6 +216,15 @@ watchdog_send_line="$(grep -nF 'docker run --interactive' <<<"$watchdog_canary_f
     echo "watchdog alert canary must recheck routing and idle state before sending" >&2
     exit 1
 }
+completed_account_function="$(sed -n '/^run_completed_account_verification()/,/^}/p' "$control")"
+if grep -Eq -- '--handle|verify-provisioned-account[[:space:]]+"\$account_handle"' <<<"$completed_account_function"; then
+    echo "completed-account verifier must not place the handle in command arguments" >&2
+    exit 1
+fi
+grep -Fq 'printf '\''%s\n'\'' "$account_handle" |' <<<"$completed_account_function" || {
+    echo "completed-account verifier must pass the handle over stdin" >&2
+    exit 1
+}
 
 python3 "$repo_dir/scripts/validate-production-onboarding-activation.test.py"
 python3 "$repo_dir/scripts/verify-production-onboarding-runtime.test.py"
@@ -219,8 +232,10 @@ python3 "$repo_dir/scripts/verify-production-application-image.test.py"
 bash "$repo_dir/scripts/test-production-application-sha-verification.sh"
 bash "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 bash "$repo_dir/scripts/test-watchdog-alert-canary-control.sh"
+bash "$repo_dir/scripts/test-verify-provisioned-account-control.sh"
 bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
 bun test "$repo_dir/src/lib/auth/pending-registration-watchdog-alert.test.ts"
+bun test "$repo_dir/src/lib/auth/pending-registration-completed-account.test.ts"
 
 verifier_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$verifier_tmp"' EXIT
