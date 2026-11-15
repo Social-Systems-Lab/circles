@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { toAuthenticatedClientUser } from "@/lib/data/client-user-dto";
 import { headers } from "next/headers";
+import { resolvePostLoginRedirect } from "@/lib/auth/post-login-navigation";
 import {
     abandonLoginAttempt,
     beginLoginAttempt,
@@ -109,11 +110,12 @@ export const submitLoginFormAction = async (values: Record<string, any>): Promis
 
         let privateUser = await getUserPrivate(user.did!);
         await createUserSession(privateUser, user.did!);
+        const redirectTo = resolvePostLoginRedirect(privateUser, values.redirectTo);
 
         return {
             success: true,
             message: "User authenticated successfully",
-            data: { user: toAuthenticatedClientUser(privateUser) },
+            data: { user: toAuthenticatedClientUser(privateUser), redirectTo },
         };
     } catch (error) {
         if (lease) {

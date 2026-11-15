@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { submitLoginFormAction } from "./actions"; // Import the action object
+import { resolveLoginFormDestination } from "./login-navigation";
 import { useAtom } from "jotai";
 import { authInfoAtom, userAtom } from "@/lib/data/atoms";
 
@@ -42,7 +43,10 @@ export function LoginForm(): React.ReactElement {
         setIsSubmitting(true);
         try {
             // Call the onSubmit method from the imported action object
-            const result = await submitLoginFormAction(data);
+            const result = await submitLoginFormAction({
+                ...data,
+                redirectTo: searchParams?.get("redirectTo") ?? null,
+            });
             if (result.success) {
                 toast({
                     title: "Login Successful",
@@ -53,8 +57,9 @@ export function LoginForm(): React.ReactElement {
                 setUser(result.data.user);
                 setAuthInfo((prev) => ({ ...prev, authStatus: "authenticated" }));
 
-                // redirect to requested page
-                const redirectUrl = searchParams?.get("redirectTo") ?? `/circles/${result.data.user.handle}`;
+                // The server validates the explicit return URL and decides whether
+                // unfinished resumable onboarding should take precedence.
+                const redirectUrl = resolveLoginFormDestination(result);
 
                 // Use a full navigation after login so the next server-rendered page
                 // sees the freshly-set auth cookie/session.
