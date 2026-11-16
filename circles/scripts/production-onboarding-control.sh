@@ -213,8 +213,8 @@ require_route_mode() {
     route_status | python3 "$ACTIVATION_VALIDATOR" route-status "$expected" >/dev/null
 }
 
-require_operations_zero() {
-    run_ops operations-status | python3 "$ACTIVATION_VALIDATOR" operations-zero >/dev/null
+require_activation_ready() {
+    run_ops activation-readiness | python3 "$ACTIVATION_VALIDATOR" activation-ready >/dev/null
 }
 
 require_operations_idle() {
@@ -503,7 +503,7 @@ run_watchdog_alert_canary() {
 
     require_terminal_confirmation SEND_WATCHDOG_ALERT_CANARY
     require_route_mode legacy
-    require_operations_zero
+    require_activation_ready
     verify_application default
     canary_container="kamooni-watchdog-alert-canary-$(date -u +%Y%m%dT%H%M%SZ)-$$"
     if docker container inspect "$canary_container" >/dev/null 2>&1; then
@@ -550,7 +550,7 @@ case "$command_name" in
         require_images
         require_compose_contracts
         require_route_mode legacy
-        require_operations_zero
+        require_activation_ready
         verify_application default
         require_application_runtime_environment CRON_SECRET
         echo "Production onboarding preflight passed; no state was changed."
@@ -615,7 +615,7 @@ case "$command_name" in
     activate-services)
         [[ "$#" -eq 0 ]] || usage
         require_route_mode paused
-        require_operations_zero
+        require_activation_ready
         require_compose_contracts
         require_images
         deployment_id="$(activation_value REGISTRATION_DEPLOYMENT_ID)"
@@ -681,7 +681,7 @@ case "$command_name" in
         require_default_and_ops_contracts
         require_images
         require_route_mode legacy
-        require_operations_zero
+        require_activation_ready
         verify_application default
         run_postmark_canary
         ;;
@@ -690,7 +690,7 @@ case "$command_name" in
         require_compose_contracts
         require_images
         require_route_mode legacy
-        require_operations_zero
+        require_activation_ready
         verify_application default
         run_watchdog_alert_canary
         ;;

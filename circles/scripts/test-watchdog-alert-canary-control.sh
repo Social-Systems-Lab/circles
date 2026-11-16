@@ -42,7 +42,7 @@ require_route_mode() {
     [[ "$1" == legacy ]]
 }
 
-require_operations_zero() {
+require_activation_ready() {
     return 0
 }
 

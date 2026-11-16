@@ -313,6 +313,24 @@ def main() -> None:
             if mode_matches and deployment_clean
             else [f"registration routing is not the expected {expected_mode} state"]
         )
+    elif command == "activation-ready" and len(sys.argv) == 2:
+        try:
+            status = json.load(sys.stdin)
+        except json.JSONDecodeError:
+            fail("could not parse pending-registration activation readiness")
+        if not isinstance(status, dict) or status.get("ready") is not True:
+            fail("pending-registration activation readiness was not established")
+        errors = []
+        for key in ("pendingRegistrations", "untouchedPendingEmail", "expiredPendingEmail"):
+            if type(status.get(key)) is not int or status[key] < 0:
+                errors.append(f"{key} must be a non-negative integer")
+        if not errors and not (
+            status["expiredPendingEmail"] <= status["untouchedPendingEmail"] == status["pendingRegistrations"]
+        ):
+            errors.append("every unfinished registration must be untouched pending_email")
+        for key in ("reconciliationRequired", "provisioningLocks", "finalizationLocks"):
+            if type(status.get(key)) is not int or status[key] != 0:
+                errors.append(f"{key} must be zero before activation")
     elif command == "operations-zero" and len(sys.argv) == 2:
         try:
             status = json.load(sys.stdin)

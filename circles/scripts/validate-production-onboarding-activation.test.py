@@ -342,6 +342,39 @@ class ActivationValidatorTests(unittest.TestCase):
                 )
         self.assertNotEqual(self.run_command("operations-idle", stdin="[]").returncode, 0)
 
+    def test_activation_readiness_accepts_only_complete_safe_classification(self) -> None:
+        safe = {
+            "ready": True,
+            "pendingRegistrations": 2,
+            "untouchedPendingEmail": 2,
+            "expiredPendingEmail": 1,
+            "reconciliationRequired": 0,
+            "provisioningLocks": 0,
+            "finalizationLocks": 0,
+        }
+        self.assertEqual(self.run_command("activation-ready", stdin=json.dumps(safe)).returncode, 0)
+        for key in safe:
+            for invalid in (None, "0", False):
+                with self.subTest(key=key, invalid=invalid):
+                    self.assertNotEqual(
+                        self.run_command("activation-ready", stdin=json.dumps({**safe, key: invalid})).returncode,
+                        0,
+                    )
+            missing = {name: value for name, value in safe.items() if name != key}
+            self.assertNotEqual(self.run_command("activation-ready", stdin=json.dumps(missing)).returncode, 0)
+        for patch in (
+            {"ready": False},
+            {"untouchedPendingEmail": 1},
+            {"expiredPendingEmail": 3},
+            {"pendingRegistrations": -1},
+            {"reconciliationRequired": 1},
+            {"provisioningLocks": 1},
+            {"finalizationLocks": 1},
+        ):
+            self.assertNotEqual(self.run_command("activation-ready", stdin=json.dumps({**safe, **patch})).returncode, 0)
+        for invalid in ("[]", "null", "invalid"):
+            self.assertNotEqual(self.run_command("activation-ready", stdin=invalid).returncode, 0)
+
     def test_default_and_activation_compose_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

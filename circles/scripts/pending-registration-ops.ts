@@ -9,7 +9,10 @@ import {
     setRegistrationMode,
     type RegistrationMode,
 } from "@/lib/auth/registration-routing";
-import { getOperationsStatus } from "@/lib/auth/pending-registration-monitoring";
+import {
+    getOperationsStatus,
+    getPendingRegistrationActivationReadiness,
+} from "@/lib/auth/pending-registration-monitoring";
 import crypto from "crypto";
 import fs from "fs";
 import { MongoClient, type Db } from "mongodb";
@@ -178,6 +181,10 @@ async function run(db: Db) {
         );
         return;
     }
+    if (command === "activation-readiness") {
+        console.log(JSON.stringify(await getPendingRegistrationActivationReadiness(db), null, 2));
+        return;
+    }
     if (command === "recovery-activation-status") {
         console.log(JSON.stringify(await getRecoveryActivationStatus(db), null, 2));
         return;
@@ -224,7 +231,7 @@ async function run(db: Db) {
         return;
     }
     throw new Error(
-        "Usage: inspect, verify-provisioned-account, route-status, operations-status, recovery-activation-status, prepare-indexes, or route-set",
+        "Usage: inspect, verify-provisioned-account, route-status, operations-status, activation-readiness, recovery-activation-status, prepare-indexes, or route-set",
     );
 }
 

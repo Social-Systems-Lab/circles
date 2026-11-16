@@ -31,6 +31,8 @@ for required in \
     'origin-eligible' \
     'token-separation' \
     'operations-idle' \
+    'run_ops activation-readiness' \
+    'activation-ready' \
     'SECRET_DIR="/root/circles/onboarding-secrets"' \
     'build-operator)' \
     'require_activation_file' \
@@ -206,7 +208,7 @@ fi
 watchdog_confirmation_line="$(grep -nF 'require_terminal_confirmation SEND_WATCHDOG_ALERT_CANARY' \
     <<<"$watchdog_canary_function" | cut -d: -f1)"
 watchdog_route_recheck_line="$(grep -nF 'require_route_mode legacy' <<<"$watchdog_canary_function" | tail -1 | cut -d: -f1)"
-watchdog_idle_recheck_line="$(grep -nF 'require_operations_zero' <<<"$watchdog_canary_function" | tail -1 | cut -d: -f1)"
+watchdog_idle_recheck_line="$(grep -nF 'require_activation_ready' <<<"$watchdog_canary_function" | tail -1 | cut -d: -f1)"
 watchdog_send_line="$(grep -nF 'docker run --interactive' <<<"$watchdog_canary_function" | cut -d: -f1)"
 [[ -n "$watchdog_confirmation_line" && -n "$watchdog_route_recheck_line" &&
     -n "$watchdog_idle_recheck_line" && -n "$watchdog_send_line" &&
