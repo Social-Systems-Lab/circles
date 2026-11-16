@@ -434,8 +434,10 @@ initialize_fake_git_repository() {
     git -C "$EXPECTED_REPO_DIR" push -qu origin main
     git -C "$EXPECTED_REPO_DIR" update-ref refs/remotes/origin/main HEAD
     git --git-dir="$ORIGIN_BARE" symbolic-ref HEAD refs/heads/main
-    [[ "$(git -C "$EXPECTED_REPO_DIR" remote get-url origin)" == \
-        "https://github.com/Social-Systems-Lab/circles.git" ]] || fail "rehearsal origin identity changed"
+    [[ "$(git -C "$EXPECTED_REPO_DIR" config --get remote.origin.url)" == \
+        "https://github.com/Social-Systems-Lab/circles.git" ]] || fail "rehearsal raw origin identity changed"
+    [[ "$(git -C "$EXPECTED_REPO_DIR" remote get-url origin)" == "file://$ORIGIN_BARE" ]] || \
+        fail "rehearsal Git origin was not rewritten to the disposable bare repository"
     git -C "$EXPECTED_REPO_DIR" ls-remote origin refs/heads/main >/dev/null 2>&1 || \
         fail "local rewritten rehearsal origin is not readable with file-only Git transport"
 }

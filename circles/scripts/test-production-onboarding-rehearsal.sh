@@ -8,9 +8,11 @@ image_test="$repo_dir/scripts/verify-production-application-image.test.py"
 workflow="$repo_dir/../.github/workflows/production-onboarding-rehearsal.yml"
 build_workflow="$repo_dir/../.github/workflows/build-check.yml"
 control="$repo_dir/scripts/production-onboarding-control.sh"
+deploy="$repo_dir/deploy-genesis2.sh"
 verifier_validator="$repo_dir/scripts/validate-routing-operator-verifier.py"
 
 bash -n "$harness"
+bash -n "$deploy"
 python3 "$pty_helper" --self-test >/dev/null
 python3 "$image_test" >/dev/null
 
@@ -55,6 +57,8 @@ for required in \
     'assert_public_services_stopped' \
     'GIT_ALLOW_PROTOCOL=file' \
     'url.file://$ORIGIN_BARE.insteadOf' \
+    'config --get remote.origin.url' \
+    '"$(git -C "$EXPECTED_REPO_DIR" remote get-url origin)" == "file://$ORIGIN_BARE"' \
     'mongodb://rehearsal:rehearsal-not-a-credential@db:27017/circles?authSource=admin' \
     'USER node' \
     'status: "pending_email"' \
@@ -84,6 +88,56 @@ for required in \
         exit 1
     }
 done
+
+origin_tmp="$verifier_tmp/origin"
+git init --bare -q "$origin_tmp.git"
+git init -q -b main "$origin_tmp"
+git -C "$origin_tmp" config user.name Fixture
+git -C "$origin_tmp" config user.email fixture@example.test
+printf 'origin fixture\n' >"$origin_tmp/tracked.txt"
+git -C "$origin_tmp" add tracked.txt
+git -C "$origin_tmp" commit -qm fixture
+git -C "$origin_tmp" remote add origin https://github.com/Social-Systems-Lab/circles.git
+git -C "$origin_tmp" config \
+    "url.file://$origin_tmp.git.insteadOf" https://github.com/Social-Systems-Lab/circles.git
+[[ "$(git -C "$origin_tmp" config --get remote.origin.url)" == \
+    "https://github.com/Social-Systems-Lab/circles.git" ]] || {
+    echo "raw disposable origin identity was not retained" >&2
+    exit 1
+}
+[[ "$(git -C "$origin_tmp" remote get-url origin)" == "file://$origin_tmp.git" ]] || {
+    echo "Git URL rewriting regression fixture did not reproduce the failure condition" >&2
+    exit 1
+}
+
+origin_guard="$(
+    sed -n '/^is_disposable_rehearsal_origin() {/,/^}/p' "$deploy"
+)"
+(
+    set -euo pipefail
+    REHEARSAL_CONFIRM="KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL_V1"
+    REHEARSAL_LOCAL_ORIGIN="file:///root/circles/rehearsal-origin.git"
+    eval "$origin_guard"
+    KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL="$REHEARSAL_CONFIRM" GIT_ALLOW_PROTOCOL=file \
+        is_disposable_rehearsal_origin \
+        "$REHEARSAL_LOCAL_ORIGIN" \
+        https://github.com/Social-Systems-Lab/circles.git \
+        "$REHEARSAL_CONFIRM"
+    if KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL="$REHEARSAL_CONFIRM" GIT_ALLOW_PROTOCOL=https \
+        is_disposable_rehearsal_origin \
+        "$REHEARSAL_LOCAL_ORIGIN" \
+        https://github.com/Social-Systems-Lab/circles.git \
+        "$REHEARSAL_CONFIRM"; then
+        exit 1
+    fi
+    if KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL="$REHEARSAL_CONFIRM" GIT_ALLOW_PROTOCOL=file \
+        is_disposable_rehearsal_origin \
+        "$REHEARSAL_LOCAL_ORIGIN" \
+        https://github.com/Social-Systems-Lab/circles.git \
+        wrong-marker; then
+        exit 1
+    fi
+)
 
 recovery_app_line="$(grep -nF 'verify_application default none "$recovery_image_id"' "$control" | head -1 | cut -d: -f1)"
 recovery_nginx_line="$(grep -nF 'production NGINX refresh failed after application recovery' "$control" | head -1 | cut -d: -f1)"

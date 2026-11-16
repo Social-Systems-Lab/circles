@@ -34,6 +34,9 @@ MAINTENANCE_COMPOSE_FILE="$APP_DIR/docker-compose.production-maintenance.yml"
 OPS_COMPOSE_FILE="$APP_DIR/docker-compose.production-ops.yml"
 ACTIVATION_CONFIRM="AUTHORIZED_PRODUCTION_ONBOARDING_CONTROL"
 PAUSED_DEPLOY_CONFIRM="DEPLOY_PAUSED_ONBOARDING_SERVICES"
+REHEARSAL_CONFIRM="KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL_V1"
+REHEARSAL_MARKER="/run/kamooni-production-onboarding-rehearsal-disposable"
+REHEARSAL_LOCAL_ORIGIN="file:///root/circles/rehearsal-origin.git"
 TEMP_FILES=()
 NGINX_STOPPED=false
 PAUSED_APPLICATION_VERIFIED=false
@@ -197,6 +200,15 @@ fetch(`http://${host}:${port}/api/version`, {
 ' "$expected_sha" "$container_ip"
 }
 
+is_disposable_rehearsal_origin() {
+  local rewritten_url="$1" raw_url="$2" marker_value="$3"
+  [[ "${KAMOONI_PRODUCTION_ONBOARDING_REHEARSAL:-}" == "$REHEARSAL_CONFIRM" ]] &&
+    [[ "${GIT_ALLOW_PROTOCOL:-}" == "file" ]] &&
+    [[ "$rewritten_url" == "$REHEARSAL_LOCAL_ORIGIN" ]] &&
+    [[ "$raw_url" == "https://github.com/Social-Systems-Lab/circles.git" ]] &&
+    [[ "$marker_value" == "$REHEARSAL_CONFIRM" ]]
+}
+
 if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]; then
   echo "Error: run this script from $EXPECTED_DIR (current: $CURRENT_DIR)" >&2
   exit 1
@@ -240,12 +252,17 @@ if ! require_clean_worktree; then
 fi
 
 ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+ORIGIN_RAW_URL="$(git config --get remote.origin.url 2>/dev/null || true)"
 case "$ORIGIN_URL" in
   https://github.com/Social-Systems-Lab/circles.git|git@github.com:Social-Systems-Lab/circles.git|ssh://git@github.com/Social-Systems-Lab/circles.git)
     ;;
   *)
-    echo "Error: origin must be the Social-Systems-Lab/circles GitHub repository (found: $ORIGIN_URL)." >&2
-    exit 1
+    rehearsal_marker_value="$(cat "$REHEARSAL_MARKER" 2>/dev/null || true)"
+    if ! is_disposable_rehearsal_origin "$ORIGIN_URL" "$ORIGIN_RAW_URL" "$rehearsal_marker_value"; then
+      echo "Error: origin must be the Social-Systems-Lab/circles GitHub repository (found: $ORIGIN_URL)." >&2
+      exit 1
+    fi
+    echo "Disposable rehearsal origin verified with local file-only Git transport."
     ;;
 esac
 
