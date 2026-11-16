@@ -188,6 +188,7 @@ install_fixture_files() {
         "$APP_DIR/scripts/verify-production-application-image.original.py"
     cp "$SOURCE_APP_DIR/src/lib/auth/email-normalization.ts" \
         "$SOURCE_APP_DIR/src/lib/auth/pending-registration.ts" \
+        "$SOURCE_APP_DIR/src/lib/auth/pending-registration-monitoring.ts" \
         "$SOURCE_APP_DIR/src/lib/auth/pending-registration-reconciliation.ts" \
         "$SOURCE_APP_DIR/src/lib/auth/pending-registration-watchdog-alert.mjs" \
         "$SOURCE_APP_DIR/src/lib/auth/registration-routing.ts" \
@@ -206,6 +207,17 @@ install_fixture_files() {
         "$APP_DIR/scripts/check-branding-guard.sh" \
         "$APP_DIR/scripts/check-production-staging-isolation.sh" \
         "$APP_DIR/scripts/preflight-messaging-stage1a.sh"
+}
+
+verify_operator_build_context() {
+    local dockerfile="$APP_DIR/Dockerfile.registration-ops"
+    local source
+    [[ -f "$dockerfile" ]] || fail "registration operator Dockerfile is missing"
+    while IFS= read -r source; do
+        [[ -n "$source" ]] || continue
+        [[ -f "$APP_DIR/$source" && -r "$APP_DIR/$source" ]] || \
+            fail "registration operator build context is missing $source"
+    done < <(awk '$1 == "COPY" { for (field = 2; field < NF; field += 1) print $field }' "$dockerfile")
 }
 
 write_fixture_configuration() {
@@ -669,6 +681,7 @@ wait_for_internal_version_request() {
 require_disposable_environment
 trap cleanup EXIT
 install_fixture_files
+verify_operator_build_context
 write_fixture_configuration
 initialize_fake_git_repository
 prepare_fake_credentials

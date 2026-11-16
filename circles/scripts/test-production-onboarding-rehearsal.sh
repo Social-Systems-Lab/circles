@@ -45,6 +45,8 @@ for required in \
     'NO_PROXY="kamooni.org,localhost,127.0.0.1"' \
     'cmp "$SOURCE_APP_DIR/scripts/production-onboarding-control.sh" "$CONTROL_SCRIPT"' \
     'cmp "$SOURCE_APP_DIR/deploy-genesis2.sh" "$DEPLOY_SCRIPT"' \
+    'pending-registration-monitoring.ts' \
+    'verify_operator_build_context' \
     'docker-compose.production-maintenance.yml' \
     'deploy-paused-services' \
     'image-validation-failure' \
@@ -137,6 +139,37 @@ origin_guard="$(
         wrong-marker; then
         exit 1
     fi
+)
+
+operator_context="$verifier_tmp/operator-context"
+mkdir -p "$operator_context"
+cp "$repo_dir/Dockerfile.registration-ops" "$operator_context/"
+while IFS= read -r source; do
+    [[ "$source" != "src/lib/auth/pending-registration-monitoring.ts" ]] || continue
+    mkdir -p "$operator_context/$(dirname "$source")"
+    printf 'fixture\n' >"$operator_context/$source"
+done < <(awk '$1 == "COPY" { for (field = 2; field < NF; field += 1) print $field }' \
+    "$repo_dir/Dockerfile.registration-ops")
+
+operator_context_check="$(
+    sed -n '/^verify_operator_build_context() {/,/^}/p' "$harness"
+)"
+if (
+    APP_DIR="$operator_context"
+    fail() { exit 1; }
+    eval "$operator_context_check"
+    verify_operator_build_context
+); then
+    echo "operator build-context regression accepted a missing COPY source" >&2
+    exit 1
+fi
+mkdir -p "$operator_context/src/lib/auth"
+printf 'fixture\n' >"$operator_context/src/lib/auth/pending-registration-monitoring.ts"
+(
+    APP_DIR="$operator_context"
+    fail() { exit 1; }
+    eval "$operator_context_check"
+    verify_operator_build_context
 )
 
 recovery_app_line="$(grep -nF 'verify_application default none "$recovery_image_id"' "$control" | head -1 | cut -d: -f1)"
