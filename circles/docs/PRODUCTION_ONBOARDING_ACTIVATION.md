@@ -169,9 +169,23 @@ cd /root/circles/circles
 
 Preflight validates the exact SHA, one production application, default-off environment, Postmark
 configuration, non-empty `CRON_SECRET`, external file permissions, operator image, Compose overlays,
-routing `legacy`, and zero unfinished or reconciliation-required operations. It does not create
+routing `legacy`, and read-only activation readiness. It does not create
 indexes, change routing, restart services, or write registration data. Secret values are never
 printed.
+
+Activation readiness permits only untouched `pending_email` records: zero provisioning attempts,
+explicitly null identity/claim/lease/verification-completion fields, a valid expiry, no DID reservation
+or correlated account (including canonical email or requested-handle conflicts with legacy accounts),
+and no reconciliation marker. Missing fields, other unfinished states, retained
+provisioning/finalization locks (including expired or malformed locks), or more than 100 unfinished
+records fail closed. Completed accounts and their durable DID reservations are preserved.
+
+`pendingRegistrations` counts all retained unfinished records, including expired ones. MongoDB's
+`expiresAt` TTL index performs asynchronous cleanup; expiry does not prove deletion and the read-only
+check never deletes or repairs records. Claims and DID reservation remove expiry to preserve identity
+evidence. `reconciliationRequired` counts non-null markers regardless of whether `provisionedAt` is
+null, absent, or populated; ordinary email-only pending records have a null marker and are not
+reconciliation failures.
 
 Inspect current state without mutation:
 
@@ -182,8 +196,8 @@ Inspect current state without mutation:
 
 ## Pre-activation Postmark canary
 
-After the reviewed candidate is deployed in legacy mode with both pending flags false and zero
-pending operations, test the production Postmark credentials, `email-verification` template and
+After the reviewed candidate is deployed in legacy mode with both pending flags false and activation
+readiness established, test the production Postmark credentials, `email-verification` template and
 production-equivalent template model without activating registration:
 
 ```bash
@@ -192,7 +206,7 @@ cd /root/circles/circles
 ```
 
 The command requires the checkout and deployed image to match `origin/main`, routing to remain
-`legacy`, the default-off runtime configuration, an idle pending-registration state and exact
+`legacy`, the default-off runtime configuration, read-only activation readiness and exact
 confirmation phrase `SEND_POSTMARK_VERIFICATION_CANARY`. It prompts for an approved recipient without
 echoing the address. It does not read or require the pending-registration HMAC or deployment ID.
 
@@ -238,8 +252,8 @@ cd /root/circles/circles
 ```
 
 The command requires the clean checkout and immutable application image to match `origin/main`,
-routing to remain `legacy`, both pending-registration flags to be disabled, and zero pending,
-lock, or reconciliation-required operations. It reads `ONBOARDING_ALERT_EMAIL` from the protected
+routing to remain `legacy`, both pending-registration flags to be disabled, and activation readiness
+with no retained locks or reconciliation evidence. It reads `ONBOARDING_ALERT_EMAIL` from the protected
 activation file and requires the confirmation phrase `SEND_WATCHDOG_ALERT_CANARY`.
 
 It sends exactly one message through the production Postmark transport using the same
@@ -301,7 +315,7 @@ Transition `legacy` to `paused`:
 ```
 
 Confirm both `/signup` and `/signup/pilot` display the unavailable state. Wait at least five minutes,
-then verify zero pending operations again:
+then inspect pending operations again (untouched email-only records may remain):
 
 ```bash
 ./circles/scripts/production-onboarding-control.sh status
@@ -312,6 +326,8 @@ While routing remains `paused`, recreate the application with the validated acti
 ```bash
 ./circles/scripts/production-onboarding-control.sh activate-services
 ```
+
+The command rechecks activation readiness before recreating services.
 
 This stops NGINX before recreating `circles`, verifies one production application with the exact SHA,
 production image role, Postmark, `https://kamooni.org`, both pending flags, the HMAC presence without

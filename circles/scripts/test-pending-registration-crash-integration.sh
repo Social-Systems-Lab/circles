@@ -49,12 +49,13 @@ if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
     exit 1
 fi
 
+# Retain expired fixtures so readiness tests cannot pass by relying on asynchronous TTL deletion.
 docker run --detach --rm \
     --name "$CONTAINER" \
     --memory 512m \
     --cpus 1 \
     --publish 127.0.0.1:27019:27017 \
-    "$IMAGE" --bind_ip_all >/dev/null
+    "$IMAGE" --bind_ip_all --setParameter ttlMonitorEnabled=false >/dev/null
 CONTAINER_CREATED=true
 
 ready=false

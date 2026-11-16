@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import type { Db } from "mongodb";
+import { ObjectId, type Db } from "mongodb";
+import { normalizeEmailForComparison, permanentSignupAccountExists } from "@/lib/auth/email-normalization";
 import {
     inspectPendingRegistrationReconciliation,
     type PendingRegistrationReconciliation,
@@ -611,6 +612,103 @@ async function getManualReviewMetrics(
     };
 }
 
+/** Read-only initial activation check; expiry never substitutes for checking retained identity evidence. */
+export async function getPendingRegistrationActivationReadiness(db: Db, now = new Date()) {
+    const registrations = db.collection("pendingRegistrations");
+    const unfinished = { status: { $ne: "provisioned" } };
+    const emptyIdentityFields = [
+        "reservedDid",
+        "accountId",
+        "accountDid",
+        "provisionedAt",
+        "reconciliationRequiredAt",
+        "provisioningClaimHash",
+        "provisioningClaimedAt",
+        "provisioningLeaseHash",
+        "provisioningLeaseExpiresAt",
+        "verifiedAt",
+        "verifiedContinuationHash",
+        "verifiedContinuationExpiresAt",
+    ];
+    const [pendingRegistrations, reconciliationRequired, provisioningLocks, finalizationLocks, records] =
+        await Promise.all([
+            registrations.countDocuments(unfinished),
+            registrations.countDocuments({ reconciliationRequiredAt: { $ne: null } }),
+            // Even expired/malformed retained locks require review; do not depend on TTL cleanup.
+            db.collection("pendingRegistrationProvisioningLocks").countDocuments(),
+            db.collection("pendingRegistrationFinalizationLocks").countDocuments(),
+            registrations
+                .find(unfinished, {
+                    projection: Object.fromEntries([
+                        ["status", 1],
+                        ["expiresAt", 1],
+                        ["provisioningAttempts", 1],
+                        ["email", 1],
+                        ["normalizedEmail", 1],
+                        ["requestedHandle", 1],
+                        ...emptyIdentityFields.map((field) => [field, 1]),
+                    ]),
+                })
+                .limit(MONITORING_LIMITS.manualReviewRecords + 1)
+                .toArray(),
+        ]);
+    let untouchedPendingEmail = 0;
+    let expiredPendingEmail = 0;
+    const scanComplete =
+        pendingRegistrations <= MONITORING_LIMITS.manualReviewRecords && records.length === pendingRegistrations;
+    if (scanComplete) {
+        for (const record of records) {
+            if (
+                !(record._id instanceof ObjectId) ||
+                record.status !== "pending_email" ||
+                record.provisioningAttempts !== 0 ||
+                typeof record.email !== "string" ||
+                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(record.email) ||
+                typeof record.normalizedEmail !== "string" ||
+                record.normalizedEmail !== normalizeEmailForComparison(record.email) ||
+                typeof record.requestedHandle !== "string" ||
+                record.requestedHandle.length < 3 ||
+                record.requestedHandle.length > 20 ||
+                !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(record.requestedHandle) ||
+                !(record.expiresAt instanceof Date) ||
+                !Number.isFinite(record.expiresAt.getTime()) ||
+                !emptyIdentityFields.every((field) => record[field] === null)
+            ) {
+                continue;
+            }
+            const [reservation, account, permanentAccount] = await Promise.all([
+                db
+                    .collection<{ _id: string }>("pendingRegistrationDidReservations")
+                    .findOne({ _id: record._id.toHexString() }, { projection: { _id: 1 } }),
+                db
+                    .collection("circles")
+                    .findOne(
+                        { "metadata.pendingRegistrationId": record._id.toHexString() },
+                        { projection: { _id: 1 } },
+                    ),
+                permanentSignupAccountExists(db.collection("circles"), record.normalizedEmail, record.requestedHandle),
+            ]);
+            if (reservation || account || permanentAccount) continue;
+            untouchedPendingEmail += 1;
+            if (record.expiresAt <= now) expiredPendingEmail += 1;
+        }
+    }
+    return {
+        ready:
+            scanComplete &&
+            untouchedPendingEmail === pendingRegistrations &&
+            reconciliationRequired === 0 &&
+            provisioningLocks === 0 &&
+            finalizationLocks === 0,
+        pendingRegistrations,
+        untouchedPendingEmail,
+        expiredPendingEmail,
+        reconciliationRequired,
+        provisioningLocks,
+        finalizationLocks,
+    };
+}
+
 export async function getOperationsStatus(db: Db, options: { usersDirectory?: string; runtimeSummary?: string } = {}) {
     const now = new Date();
     const collectionNames = new Set(
@@ -625,8 +723,8 @@ export async function getOperationsStatus(db: Db, options: { usersDirectory?: st
     const configuredDeploymentId = process.env.REGISTRATION_DEPLOYMENT_ID || null;
     const pendingRegistrations = await count("pendingRegistrations", { status: { $ne: "provisioned" } });
     const reconciliationRequired = await count("pendingRegistrations", {
+        // Finalization clears this marker. Null/missing provisionedAt must not hide an interrupted claim.
         reconciliationRequiredAt: { $ne: null },
-        provisionedAt: { $exists: false },
     });
     const [provisioningLockMetrics, finalizationLockMetrics, pendingStatusMetrics, auditEvents, manualReview] =
         await Promise.all([

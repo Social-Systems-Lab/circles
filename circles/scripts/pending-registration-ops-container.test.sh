@@ -18,6 +18,7 @@ if grep -Fq 'getDb' "$script"; then
     exit 1
 fi
 grep -Fq 'operations-status' "$script"
+grep -Fq 'activation-readiness' "$script"
 grep -Fq 'verify-provisioned-account' "$script"
 grep -Fq 'verifyCompletedAccountIntegrity' "$script"
 grep -Fq 'recovery-activation-status' "$script"

@@ -12,10 +12,231 @@ import {
     hashPendingRegistrationSecret,
     requestPendingRegistrationRecovery,
     reservePendingRegistrationDid,
+    startPendingRegistration,
     verifyPendingRegistrationEmail,
     type PendingRegistration,
 } from "@/lib/auth/pending-registration";
 import { inspectPendingRegistrationReconciliation } from "@/lib/auth/pending-registration-reconciliation";
+import { normalizeEmailForComparison, permanentSignupAccountExists } from "@/lib/auth/email-normalization";
+import {
+    getOperationsStatus,
+    getPendingRegistrationActivationReadiness,
+} from "@/lib/auth/pending-registration-monitoring";
+
+async function checkActivationReadiness(db: ReturnType<MongoClient["db"]>, collections: any) {
+    const now = new Date();
+    assert.equal((await getPendingRegistrationActivationReadiness(db, now)).ready, true);
+    await startPendingRegistration(
+        {
+            name: "Readiness Test",
+            email: "readiness@example.invalid",
+            requestedHandle: "readiness-test",
+            clientIp: "192.0.2.1",
+        },
+        {
+            collections,
+            baseUrl: "https://kamooni.invalid",
+            permanentAccountExists: async () => false,
+            findAccountByPendingRegistrationId: async () => null,
+            sendVerificationEmail: async () => {},
+            provisionAccount: async () => {
+                throw new Error("Readiness must not provision accounts");
+            },
+            validateProvisionedAccount: async () => false,
+            finalizeAccount: async () => {
+                throw new Error("Readiness must not finalize accounts");
+            },
+            issueSession: async () => {
+                throw new Error("Readiness must not issue sessions");
+            },
+            now: () => now,
+        },
+    );
+    const registrations = db.collection("pendingRegistrations");
+    const original = (await registrations.findOne({ requestedHandle: "readiness-test" }))!;
+    const id = original._id;
+    const expected = {
+        ready: true,
+        pendingRegistrations: 1,
+        untouchedPendingEmail: 1,
+        expiredPendingEmail: 0,
+        reconciliationRequired: 0,
+        provisioningLocks: 0,
+        finalizationLocks: 0,
+    };
+    const snapshot = async () =>
+        JSON.stringify(
+            await Promise.all(
+                [
+                    "pendingRegistrations",
+                    "pendingRegistrationDidReservations",
+                    "circles",
+                    "pendingRegistrationProvisioningLocks",
+                    "pendingRegistrationFinalizationLocks",
+                ].map((name) => db.collection(name).find().sort({ _id: 1 }).toArray()),
+            ),
+        );
+    const inspect = async () => {
+        const before = await snapshot();
+        const result = await getPendingRegistrationActivationReadiness(db, now);
+        assert.equal(await snapshot(), before, "classification must not change records or identities");
+        return result;
+    };
+    assert.deepEqual(await inspect(), expected);
+    assert.equal(
+        (await getOperationsStatus(db)).reconciliationRequired,
+        0,
+        "legitimate null-initialized pending is not reconciliation",
+    );
+
+    const indexes = await registrations.listIndexes().toArray();
+    assert.ok(indexes.some((index) => index.key.expiresAt === 1 && index.expireAfterSeconds === 0));
+    // The disposable runner disables MongoDB's asynchronous TTL monitor. An expired document is still present.
+    const expired = { ...original, expiresAt: new Date(now.getTime() - 60_000) };
+    await registrations.replaceOne({ _id: id }, expired);
+    assert.deepEqual(await inspect(), { ...expected, expiredPendingEmail: 1 });
+    assert.equal((await getOperationsStatus(db)).pendingRegistrations, 1, "expiry is not deletion");
+    assert.equal(await registrations.countDocuments({ _id: id }), 1);
+
+    for (const patch of [
+        { status: "email_verified" },
+        { status: "provisioning" },
+        { status: "provisioning_claimed" },
+        { status: "unknown" },
+        { reservedDid: "a".repeat(64) },
+        { accountId: new ObjectId().toHexString() },
+        { accountDid: "a".repeat(64) },
+        { provisionedAt: now },
+        { provisioningAttempts: 1 },
+        { provisioningClaimHash: "claim" },
+        { provisioningClaimedAt: now },
+        { provisioningLeaseHash: "lease" },
+        { provisioningLeaseExpiresAt: new Date(now.getTime() - 1) },
+        { verifiedAt: now },
+        { verifiedContinuationHash: "verified" },
+        { verifiedContinuationExpiresAt: now },
+        { reconciliationRequiredAt: now },
+        { expiresAt: null },
+        { email: "invalid" },
+        { normalizedEmail: "different@example.invalid" },
+        { requestedHandle: "__email_only__" },
+    ]) {
+        await registrations.replaceOne({ _id: id }, { ...expired, ...patch });
+        assert.equal((await inspect()).ready, false, `retained partial state rejected: ${Object.keys(patch)}`);
+    }
+    for (const provisionedAt of [null, undefined, now]) {
+        await registrations.replaceOne({ _id: id }, { ...original, reconciliationRequiredAt: now, provisionedAt });
+        if (provisionedAt === undefined) await registrations.updateOne({ _id: id }, { $unset: { provisionedAt: "" } });
+        assert.equal((await getOperationsStatus(db)).reconciliationRequired, 1);
+        assert.equal((await inspect()).ready, false);
+    }
+    await registrations.replaceOne({ _id: id }, original);
+    for (const field of [
+        "provisioningClaimHash",
+        "provisionedAt",
+        "expiresAt",
+        "status",
+        "email",
+        "normalizedEmail",
+        "requestedHandle",
+    ]) {
+        await registrations.replaceOne({ _id: id }, original);
+        await registrations.updateOne({ _id: id }, { $unset: { [field]: "" } });
+        assert.equal((await inspect()).ready, false, "missing evidence is uncertain, not empty");
+    }
+    await registrations.replaceOne({ _id: id }, original);
+
+    const reservations = db.collection<{ _id: string; did: string }>("pendingRegistrationDidReservations");
+    await reservations.insertOne({ _id: id.toHexString(), did: "a".repeat(64) });
+    assert.equal((await inspect()).ready, false, "registry-only reservation blocks activation");
+    await reservations.deleteOne({ _id: id.toHexString() });
+    const account = await db.collection("circles").insertOne({ metadata: { pendingRegistrationId: id.toHexString() } });
+    assert.equal((await inspect()).ready, false, "correlated account blocks activation despite null record fields");
+    await db.collection("circles").deleteOne({ _id: account.insertedId });
+    for (const { email, legacy, conflict } of [
+        { email: original.email, legacy: { email: original.email, handle: "other-handle" }, conflict: true },
+        {
+            email: original.email,
+            legacy: { email: "READINESS@EXAMPLE.INVALID", handle: "other-handle" },
+            conflict: true,
+        },
+        {
+            email: "new.member+pilot@googlemail.com",
+            legacy: { email: "New.Member+legacy@GMAIL.COM", handle: "other-handle" },
+            conflict: true,
+        },
+        {
+            email: "newmember@gmail.com",
+            legacy: { email: "N.E.W.Member+legacy@GOOGLEMAIL.COM", handle: "other-handle" },
+            conflict: true,
+        },
+        {
+            email: original.email,
+            legacy: { email: "unrelated@example.invalid", handle: original.requestedHandle },
+            conflict: true,
+        },
+        {
+            email: original.email,
+            legacy: { email: "readiness+alias@example.invalid", handle: "other-handle" },
+            conflict: false,
+        },
+        {
+            email: "newmember@gmail.com",
+            legacy: { email: "another.member@gmail.com", handle: "other-handle" },
+            conflict: false,
+        },
+    ]) {
+        const normalizedEmail = normalizeEmailForComparison(email);
+        await registrations.replaceOne({ _id: id }, { ...original, email, normalizedEmail });
+        const legacyAccount = await db.collection("circles").insertOne({ ...legacy, did: "c".repeat(64) });
+        assert.equal(
+            await permanentSignupAccountExists(db.collection("circles"), normalizedEmail, original.requestedHandle),
+            conflict,
+        );
+        assert.equal(
+            (await inspect()).ready,
+            !conflict,
+            "legacy collision semantics must match provisioning without pending-ID metadata",
+        );
+        await db.collection("circles").deleteOne({ _id: legacyAccount.insertedId });
+    }
+    await registrations.replaceOne({ _id: id }, original);
+    for (const name of ["pendingRegistrationProvisioningLocks", "pendingRegistrationFinalizationLocks"]) {
+        for (const expiresAt of [new Date(now.getTime() + 60_000), new Date(now.getTime() - 60_000), null]) {
+            const lock = await db.collection(name).insertOne({ expiresAt });
+            assert.equal((await inspect()).ready, false, "active, expired and malformed retained locks require review");
+            await db.collection(name).deleteOne({ _id: lock.insertedId });
+        }
+    }
+    assert.deepEqual(await inspect(), expected);
+    const overflow = Array.from({ length: 100 }, (_, index) => ({
+        ...original,
+        _id: new ObjectId(),
+        normalizedEmail: `readiness-${index}@example.invalid`,
+        email: `readiness-${index}@example.invalid`,
+        requestedHandle: `readiness-${index}`,
+        verificationTokenHash: `readiness-token-${index}`,
+    }));
+    await registrations.insertMany(overflow);
+    assert.equal((await inspect()).ready, false, "scan overflow must fail closed");
+    await registrations.deleteMany({ _id: { $in: overflow.map((record) => record._id) } });
+    await registrations.updateOne({ _id: id }, { $set: { status: "provisioned", provisionedAt: now } });
+    await reservations.insertOne({ _id: id.toHexString(), did: "a".repeat(64) });
+    assert.equal((await inspect()).ready, true, "completed registrations and durable reservations are preserved");
+    assert.equal((await getOperationsStatus(db)).pendingRegistrations, 0);
+    await registrations.updateOne({ _id: id }, { $set: { reconciliationRequiredAt: now } });
+    assert.equal(
+        (await getOperationsStatus(db)).reconciliationRequired,
+        1,
+        "a stale completed marker remains evidence",
+    );
+    assert.equal((await inspect()).ready, false);
+    await reservations.deleteOne({ _id: id.toHexString() });
+    await registrations.deleteOne({ _id: id });
+    await collections.rateLimits.deleteMany({});
+    await collections.auditEvents.deleteMany({});
+    console.log("pending-registration read-only activation readiness and retained-expiry tests passed");
+}
 
 async function main() {
     const uri = process.env.PENDING_REGISTRATION_TEST_MONGODB_URI;
@@ -62,6 +283,7 @@ async function main() {
             auditEvents: db.collection("pendingRegistrationAuditEvents"),
         } as any;
         await ensurePendingRegistrationIndexes(collections);
+        await checkActivationReadiness(db, collections);
 
         const recoveryId = new ObjectId();
         const recoveryNow = new Date();
