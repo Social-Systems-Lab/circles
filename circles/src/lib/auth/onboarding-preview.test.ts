@@ -46,6 +46,8 @@ assert.match(
 );
 assert.match(checkEmail, /result\.resendAvailableAt \? Date\.parse\(result\.resendAvailableAt\)/);
 assert.match(checkEmail, /result\.email\?\.toLowerCase\(\) === newEmail\.trim\(\)\.toLowerCase\(\)/);
+assert.match(checkEmail, /pendingResendMessage\(result\.deliveryFailed\)/);
+assert.match(checkEmail, /pendingCorrectionMessage\(\{/);
 assert.doesNotMatch(checkEmail, /a fresh verification link has been sent/);
 assert.match(pendingActions, /email: state\.success \? \(state\.email \?\? null\) : null/);
 assert.match(pendingActions, /resendAvailableAt:[\s\S]*?state\.verificationLastSentAt/);

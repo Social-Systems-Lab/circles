@@ -17,6 +17,12 @@ const recoveryAction = actions.slice(
     actions.indexOf("async function pendingMutation"),
 );
 assert.doesNotMatch(recoveryAction, /verifiedContinuationSecret/);
+assert.doesNotMatch(recoveryAction, /deliveryFailed/);
+const startAction = actions.slice(
+    actions.indexOf("export async function startPendingRegistrationAction"),
+    actions.indexOf("export async function resendPendingRegistrationAction"),
+);
+assert.doesNotMatch(startAction, /deliveryFailed/);
 
 assert.match(recoveryForm, /type="email"/);
 assert.match(recoveryForm, /<altcha-widget/);

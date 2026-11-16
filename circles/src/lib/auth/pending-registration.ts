@@ -823,7 +823,7 @@ export async function requestPendingRegistrationRecovery(
 export async function resendPendingRegistrationVerification(
     input: { pendingRegistrationId: string; continuationSecret: string; clientIp: string },
     deps: PendingRegistrationDependencies,
-): Promise<{ success: true; message: string }> {
+): Promise<{ success: true; message: string; deliveryFailed?: true }> {
     const now = deps.now?.() ?? new Date();
     const filter = possessionFilter(input.pendingRegistrationId, input.continuationSecret, now);
     if (!filter) return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
@@ -873,6 +873,7 @@ export async function resendPendingRegistrationVerification(
         },
         { returnDocument: "after" },
     );
+    let deliveryFailed = false;
     if (record) {
         try {
             await deps.sendVerificationEmail({
@@ -882,6 +883,7 @@ export async function resendPendingRegistrationVerification(
             });
             await audit(deps.collections, input.pendingRegistrationId, "pending_registration.verification_resent", now);
         } catch {
+            deliveryFailed = true;
             await audit(
                 deps.collections,
                 input.pendingRegistrationId,
@@ -890,7 +892,11 @@ export async function resendPendingRegistrationVerification(
             );
         }
     }
-    return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+    return {
+        success: true,
+        message: PENDING_REGISTRATION_PUBLIC_MESSAGE,
+        ...(deliveryFailed ? { deliveryFailed: true as const } : {}),
+    };
 }
 
 export async function correctPendingRegistrationEmail(
@@ -901,7 +907,7 @@ export async function correctPendingRegistrationEmail(
         clientIp: string;
     },
     deps: PendingRegistrationDependencies,
-): Promise<{ success: true; message: string }> {
+): Promise<{ success: true; message: string; deliveryFailed?: true }> {
     const now = deps.now?.() ?? new Date();
     const filter = possessionFilter(input.pendingRegistrationId, input.continuationSecret, now);
     if (!filter) return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
@@ -950,6 +956,7 @@ export async function correctPendingRegistrationEmail(
     } catch (error) {
         if ((error as { code?: number }).code !== 11000) throw error;
     }
+    let deliveryFailed = false;
     if (record) {
         try {
             await deps.sendVerificationEmail({
@@ -959,6 +966,7 @@ export async function correctPendingRegistrationEmail(
             });
             await audit(deps.collections, input.pendingRegistrationId, "pending_registration.email_corrected", now);
         } catch {
+            deliveryFailed = true;
             await audit(
                 deps.collections,
                 input.pendingRegistrationId,
@@ -967,7 +975,11 @@ export async function correctPendingRegistrationEmail(
             );
         }
     }
-    return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
+    return {
+        success: true,
+        message: PENDING_REGISTRATION_PUBLIC_MESSAGE,
+        ...(deliveryFailed ? { deliveryFailed: true as const } : {}),
+    };
 }
 
 export async function provisionPendingRegistration(

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 // @ts-expect-error Bun provides test at runtime; Bun types are not installed.
 import { test } from "bun:test";
+import { Errors } from "postmark";
 import {
     EmailDeliveryError,
     resolveEmailTransportConfiguration,
@@ -89,6 +90,64 @@ test("Postmark delivery failures reject with a sanitized error and log no messag
     const logged = JSON.stringify(testHarness.logs);
     assert.equal(testHarness.logs[0]?.details.error, "ECONNRESET");
     assert.doesNotMatch(logged, /verification-token|staging\.kamooni|test-member|example\.invalid/);
+});
+
+test("Postmark SDK failures use stable sanitized categories despite minified names", async () => {
+    const cases: Array<[Error, string]> = [
+        [new Errors.InvalidAPIKeyError(`invalid key ${token}`, 10, 401), "postmark_invalid_api_key"],
+        [new Errors.InvalidEmailRequestError(`invalid ${emailOptions.to}`, 300, 422), "postmark_invalid_email_request"],
+        [new Errors.InactiveRecipientsError(`inactive ${emailOptions.to}`, 406, 422), "postmark_inactive_recipient"],
+        [new Errors.RateLimitExceededError(`rate limit ${token}`, 429, 429), "postmark_rate_limit"],
+        [new Errors.InternalServerError(`server ${verificationUrl}`, 500, 500), "postmark_internal"],
+        [new Errors.ServiceUnavailablerError("unavailable", 503, 503), "postmark_unavailable"],
+        [new Errors.ApiInputError("api input", 300, 422), "postmark_api_input"],
+        [new Errors.HttpError("http failure", 777, 400), "postmark_http_400_777"],
+        [new Errors.UnknownError("http failure", 300, 422), "postmark_http_422_300"],
+    ];
+    const transportError = Object.assign(new Errors.PostmarkError(`failed ${verificationUrl}`, 0, 0), {
+        name: "b",
+    });
+    cases.push([transportError, "postmark_transport"]);
+    cases.push([new Errors.PostmarkError("non-http failure", 500, 0), "postmark_error_500_0"]);
+
+    for (const [error, expected] of cases) {
+        const testHarness = harness(
+            "production",
+            {
+                EMAIL_TRANSPORT: "postmark",
+                POSTMARK_API_TOKEN: "test-postmark-token",
+                POSTMARK_SENDER_EMAIL: "sender@example.invalid",
+            },
+            {
+                sendPostmark: async () => {
+                    throw error;
+                },
+            },
+        );
+        await assert.rejects(sendEmailWithDependencies(emailOptions, testHarness.dependencies), EmailDeliveryError);
+        assert.equal(testHarness.logs[0]?.details.error, expected);
+        const logged = JSON.stringify(testHarness.logs);
+        assert.doesNotMatch(logged, /verification-token|signup\/verify|test-member|example\.invalid/);
+    }
+
+    const minifiedUnknown = Object.assign(new Error(`failed ${verificationUrl} for ${emailOptions.to}`), {
+        name: "b",
+    });
+    const testHarness = harness(
+        "production",
+        {
+            EMAIL_TRANSPORT: "postmark",
+            POSTMARK_API_TOKEN: "test-postmark-token",
+            POSTMARK_SENDER_EMAIL: "sender@example.invalid",
+        },
+        {
+            sendPostmark: async () => {
+                throw minifiedUnknown;
+            },
+        },
+    );
+    await assert.rejects(sendEmailWithDependencies(emailOptions, testHarness.dependencies), EmailDeliveryError);
+    assert.equal(testHarness.logs[0]?.details.error, "unknown");
 });
 
 test("Mailpit captures the pending verification link without changing its encoded token", async () => {
