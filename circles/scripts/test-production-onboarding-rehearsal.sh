@@ -53,8 +53,12 @@ for required in \
     'deploy-startup-failure.log' \
     'deploy-nginx-failure.log' \
     'assert_no_app_host_port' \
-    'hold-version-response' \
-    'release-version-response' \
+    'REHEARSAL_INTERNAL_VERSION' \
+    'REHEARSAL_HOLD_VERSION_SHA' \
+    'REHEARSAL_RELEASE_TOKEN' \
+    'release_internal_version_response' \
+    'report_retry_verification_failure' \
+    'stage=internal-version-observation' \
     'assert_activation_state_preserved' \
     'assert_public_services_stopped' \
     'GIT_ALLOW_PROTOCOL=file' \
@@ -170,6 +174,28 @@ printf 'fixture\n' >"$operator_context/src/lib/auth/pending-registration-monitor
     fail() { exit 1; }
     eval "$operator_context_check"
     verify_operator_build_context
+)
+
+wait_helper="$(
+    sed -n '/^wait_for_internal_version_request() {/,/^}/p' "$harness"
+)"
+(
+    set -euo pipefail
+    RUNTIME_DIR="$verifier_tmp/no-runtime-marker"
+    REHEARSAL_WAIT_ATTEMPTS=1
+    REHEARSAL_WAIT_DELAY_SECONDS=0
+    container_id() { printf 'mock-container\n'; }
+    docker() {
+        [[ "$1" == "logs" && "$2" == "mock-container" ]]
+        printf 'REHEARSAL_INTERNAL_VERSION %s\n' "$LOG_SHA"
+    }
+    eval "$wait_helper"
+    LOG_SHA=expected-sha
+    wait_for_internal_version_request "$$" expected-sha
+    LOG_SHA=different-sha
+    if wait_for_internal_version_request "$$" expected-sha; then
+        exit 1
+    fi
 )
 
 recovery_app_line="$(grep -nF 'verify_application default none "$recovery_image_id"' "$control" | head -1 | cut -d: -f1)"

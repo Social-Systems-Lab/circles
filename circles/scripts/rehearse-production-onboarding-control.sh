@@ -229,11 +229,26 @@ import http from "node:http";
 if (fs.existsSync("/rehearsal-control/failure")) process.exit(23);
 const port = Number(process.env.PORT || process.env.CIRCLES_PORT || 3000);
 const gitSha = process.env.GIT_SHA || "unknown";
+const holdSha = process.env.REHEARSAL_HOLD_VERSION_SHA || "";
+const releaseToken = process.env.REHEARSAL_RELEASE_TOKEN || "";
+const heldResponses = new Set();
 function sendVersion(response) {
   response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
   response.end(JSON.stringify({ version: "rehearsal", gitSha, buildTime: "rehearsal" }));
 }
 http.createServer((request, response) => {
+  const requestUrl = new URL(request.url, "http://rehearsal.invalid");
+  if (
+    requestUrl.pathname === "/rehearsal-release" &&
+    releaseToken &&
+    requestUrl.searchParams.get("token") === releaseToken
+  ) {
+    for (const heldResponse of heldResponses) sendVersion(heldResponse);
+    heldResponses.clear();
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ released: true }));
+    return;
+  }
   if (request.url !== "/api/version") {
     if (
       request.url === "/api/cron/onboarding-watchdog" &&
@@ -249,26 +264,12 @@ http.createServer((request, response) => {
   try {
     fs.writeFileSync("/rehearsal-runtime/internal-version-requested", gitSha);
   } catch {}
-  let holdSha = "";
-  try {
-    holdSha = fs.readFileSync("/rehearsal-runtime/hold-version-sha", "utf8").trim();
-  } catch {}
-  if (
-    fs.existsSync("/rehearsal-runtime/hold-version-response") &&
-    holdSha === gitSha
-  ) {
-    const deadline = Date.now() + 9000;
-    const waitForRelease = () => {
-      if (
-        fs.existsSync("/rehearsal-runtime/release-version-response") ||
-        Date.now() >= deadline
-      ) {
-        sendVersion(response);
-      } else {
-        setTimeout(waitForRelease, 50);
-      }
-    };
-    waitForRelease();
+  if (holdSha && holdSha === gitSha) {
+    console.log(`REHEARSAL_INTERNAL_VERSION ${gitSha}`);
+    heldResponses.add(response);
+    setTimeout(() => {
+      if (heldResponses.delete(response)) sendVersion(response);
+    }, 9000);
     return;
   }
   sendVersion(response);
@@ -378,6 +379,8 @@ services:
       - PENDING_REGISTRATION_TOKEN_HMAC_KEY=
       - REGISTRATION_DEPLOYMENT_ID=${REGISTRATION_DEPLOYMENT_ID:-}
       - GIT_SHA=${GIT_SHA:?GIT_SHA is required}
+      - REHEARSAL_HOLD_VERSION_SHA=${REHEARSAL_HOLD_VERSION_SHA:-}
+      - REHEARSAL_RELEASE_TOKEN=${REHEARSAL_RELEASE_TOKEN:-}
     volumes:
       - circles_users:/circles/users
       - /root/circles/rehearsal-control:/rehearsal-control:ro
@@ -667,15 +670,60 @@ start_paused_deploy_background() {
 
 wait_for_internal_version_request() {
     local pid="$1" expected_sha="$2"
-    for _ in $(seq 1 240); do
+    local id=""
+    local attempts="${REHEARSAL_WAIT_ATTEMPTS:-240}"
+    local delay="${REHEARSAL_WAIT_DELAY_SECONDS:-0.5}"
+    for _ in $(seq 1 "$attempts"); do
+        id="$(container_id 2>/dev/null || true)"
+        if [[ -n "$id" ]] && \
+            docker logs "$id" 2>&1 | grep -Fxq "REHEARSAL_INTERNAL_VERSION $expected_sha"; then
+            return 0
+        fi
         if [[ -f "$RUNTIME_DIR/internal-version-requested" ]] && \
             [[ "$(cat "$RUNTIME_DIR/internal-version-requested" 2>/dev/null)" == "$expected_sha" ]]; then
             return 0
         fi
         kill -0 "$pid" 2>/dev/null || return 1
-        sleep 0.5
+        sleep "$delay"
     done
     return 1
+}
+
+release_internal_version_response() {
+    local id
+    id="$(container_id)" || return 1
+    docker exec "$id" node -e '
+const port = Number(process.env.PORT);
+const token = process.env.REHEARSAL_RELEASE_TOKEN || "";
+if (!Number.isInteger(port) || !token) process.exit(1);
+fetch(`http://127.0.0.1:${port}/rehearsal-release?token=${encodeURIComponent(token)}`, {
+  signal: AbortSignal.timeout(5000),
+})
+  .then((response) => process.exit(response.ok ? 0 : 1))
+  .catch(() => process.exit(1));
+'
+}
+
+report_retry_verification_failure() {
+    local id="" marker="missing"
+    id="$(container_id 2>/dev/null || true)"
+    if [[ -f "$RUNTIME_DIR/internal-version-requested" ]]; then
+        marker="$(cat "$RUNTIME_DIR/internal-version-requested" 2>/dev/null || echo unreadable)"
+    fi
+    {
+        echo "REHEARSAL ERROR: retry deployment did not verify the internal application"
+        echo "stage=internal-version-observation"
+        echo "expected_sha=$image_failure_sha"
+        echo "marker_sha=$marker"
+        echo "routing=$(route_mode 2>/dev/null || echo unavailable)"
+        echo "nginx_running=$([[ -n "$("${BASE_COMPOSE[@]}" ps --status running -q nginx 2>/dev/null)" ]] && echo true || echo false)"
+        echo "application_container=$([[ -n "$id" ]] && echo present || echo absent)"
+        if [[ -n "$id" ]]; then
+            echo "application_ports=$([[ -n "$(docker port "$id" 2>/dev/null)" ]] && echo published || echo none)"
+        fi
+        echo "deploy_log_tail:"
+        tail -60 "$CONTROL_DIR/deploy-image-retry.log" 2>/dev/null || true
+    } >&2
 }
 
 require_disposable_environment
@@ -813,25 +861,22 @@ assert_synthetic_identity_preserved
 assert_activation_state_preserved
 "$CONTROL_SCRIPT" status >/dev/null
 
-rm -f "$CONTROL_DIR/image-validation-failure" "$RUNTIME_DIR/internal-version-requested" \
-    "$RUNTIME_DIR/release-version-response"
-printf '%s\n' "$image_failure_sha" >"$RUNTIME_DIR/hold-version-sha"
-touch "$RUNTIME_DIR/hold-version-response"
-chmod 644 "$RUNTIME_DIR/hold-version-sha" "$RUNTIME_DIR/hold-version-response"
+rm -f "$CONTROL_DIR/image-validation-failure" "$RUNTIME_DIR/internal-version-requested"
+export REHEARSAL_HOLD_VERSION_SHA="$image_failure_sha"
+export REHEARSAL_RELEASE_TOKEN="$(openssl rand -hex 24)"
 start_paused_deploy_background "$CONTROL_DIR/deploy-image-retry.log"
 wait_for_internal_version_request "$DEPLOY_PID" "$image_failure_sha" || \
-    fail "retry deployment did not verify the internal application"
+    { report_retry_verification_failure; exit 1; }
 [[ -z "$("${BASE_COMPOSE[@]}" ps --status running -q nginx)" ]] || \
     fail "NGINX reopened before paused application verification"
 assert_no_app_host_port
-touch "$RUNTIME_DIR/release-version-response"
+release_internal_version_response || fail "could not release the held internal version response"
 set +e
 wait "$DEPLOY_PID"
 deploy_status=$?
 set -e
 [[ "$deploy_status" -eq 0 ]] || fail "paused deployment retry failed after image-validation recovery"
-rm -f "$RUNTIME_DIR/hold-version-sha" "$RUNTIME_DIR/hold-version-response" \
-    "$RUNTIME_DIR/release-version-response"
+unset REHEARSAL_HOLD_VERSION_SHA REHEARSAL_RELEASE_TOKEN
 wait_for_external_version "$image_failure_sha" || fail "retry deployment did not expose the approved SHA"
 assert_route paused
 assert_no_app_host_port
