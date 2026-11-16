@@ -13,6 +13,7 @@ import {
     resendPendingRegistrationAction,
     resumePendingRegistrationAction,
 } from "@/components/forms/signup/pending-actions";
+import { pendingCorrectionMessage, pendingResendMessage } from "@/components/forms/signup/pending-email-feedback";
 
 type PreviewState = "default" | "error" | "loading";
 
@@ -74,7 +75,7 @@ export function CheckEmailCard({
         try {
             const result = await resendPendingRegistrationAction();
             setResendAt(result.resendAvailableAt ? Date.parse(result.resendAvailableAt) : Date.now() + 60_000);
-            setMessage("If this signup can continue, a fresh verification link will arrive shortly.");
+            setMessage(pendingResendMessage(result.deliveryFailed));
         } finally {
             setBusy(false);
         }
@@ -98,12 +99,16 @@ export function CheckEmailCard({
             const currentEmail = result.email || email;
             setEmail(currentEmail);
             if (result.resendAvailableAt) setResendAt(Date.parse(result.resendAvailableAt));
-            if (result.email?.toLowerCase() === newEmail.trim().toLowerCase()) {
+            const emailUpdated = result.email?.toLowerCase() === newEmail.trim().toLowerCase();
+            if (emailUpdated) {
                 setEditing(false);
-                setMessage("If this signup can continue, a new verification link will arrive shortly.");
-            } else {
-                setMessage("We couldn’t update that address yet. Check it and try again, or wait before retrying.");
             }
+            setMessage(
+                pendingCorrectionMessage({
+                    emailUpdated: Boolean(emailUpdated),
+                    deliveryFailed: result.deliveryFailed,
+                }),
+            );
         } finally {
             setBusy(false);
         }

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { ServerClient, TemplatedMessage } from "postmark";
+import { Errors, ServerClient, TemplatedMessage } from "postmark";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 
@@ -184,8 +184,33 @@ function errorCategory(error: unknown): string {
     if (!error || typeof error !== "object") return "unknown";
     const code = (error as { code?: unknown }).code;
     if (typeof code === "string" && /^[A-Z0-9_-]{1,32}$/.test(code)) return code;
+    const numericCode = (error as { code?: unknown }).code;
+    const numericStatus = (error as { statusCode?: unknown }).statusCode;
+    const safeNumber = (value: unknown): string | null =>
+        typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 999_999
+            ? String(value)
+            : null;
+
+    if (error instanceof Errors.InvalidAPIKeyError) return "postmark_invalid_api_key";
+    if (error instanceof Errors.InactiveRecipientsError) return "postmark_inactive_recipient";
+    if (error instanceof Errors.InvalidEmailRequestError) return "postmark_invalid_email_request";
+    if (error instanceof Errors.ApiInputError) return "postmark_api_input";
+    if (error instanceof Errors.RateLimitExceededError) return "postmark_rate_limit";
+    if (error instanceof Errors.InternalServerError) return "postmark_internal";
+    if (error instanceof Errors.ServiceUnavailablerError) return "postmark_unavailable";
+    if (error instanceof Errors.HttpError) {
+        return `postmark_http_${safeNumber(numericStatus) ?? "unknown"}_${safeNumber(numericCode) ?? "unknown"}`;
+    }
+    if (error instanceof Errors.PostmarkError) {
+        const status = safeNumber(numericStatus);
+        const providerCode = safeNumber(numericCode);
+        return status === "0" && providerCode === "0"
+            ? "postmark_transport"
+            : `postmark_error_${providerCode ?? "unknown"}_${status ?? "unknown"}`;
+    }
+    if (error instanceof EmailDeliveryError) return "email_delivery_error";
     const name = (error as { name?: unknown }).name;
-    if (typeof name === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(name)) return name;
+    if (new Set(["Error", "TypeError", "RangeError", "SyntaxError"]).has(String(name))) return String(name);
     return "unknown";
 }
 

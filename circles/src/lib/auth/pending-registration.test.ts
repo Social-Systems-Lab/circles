@@ -408,6 +408,59 @@ async function main() {
         );
     }
 
+    {
+        const deliveryFailure = createHarness();
+        const pending = await createPending(deliveryFailure, {
+            email: "initial-address@example.invalid",
+            requestedHandle: "delivery-failure",
+        });
+        const initialToken = tokenFrom(deliveryFailure.sent[0].verificationUrl);
+        deliveryFailure.setEmailDeliveryFailure(true);
+        deliveryFailure.advance(61_000);
+
+        const resend = await resendPendingRegistrationVerification(
+            {
+                pendingRegistrationId: pending.pendingRegistrationId,
+                continuationSecret: pending.continuationSecret,
+                clientIp: validInput.clientIp,
+            },
+            deliveryFailure.deps,
+        );
+        assert.equal(resend.deliveryFailed, true, "capability-protected resend reports delivery failure");
+        assert.equal(deliveryFailure.sent.length, 1, "failed resend adds no delivered email");
+
+        const correction = await correctPendingRegistrationEmail(
+            {
+                pendingRegistrationId: pending.pendingRegistrationId,
+                continuationSecret: pending.continuationSecret,
+                newEmail: "corrected-address@example.invalid",
+                clientIp: validInput.clientIp,
+            },
+            deliveryFailure.deps,
+        );
+        assert.equal(correction.deliveryFailed, true, "capability-protected correction reports delivery failure");
+        assert.equal(deliveryFailure.registrations[0].email, "corrected-address@example.invalid");
+        assert.equal(deliveryFailure.registrations[0].verificationVersion, 3);
+        assert.ok(deliveryFailure.registrations[0].verificationLastSentAt instanceof Date);
+        assert.equal(deliveryFailure.sent.length, 1, "failed correction adds no delivered email");
+        assert.equal(
+            (
+                await verifyPendingRegistrationEmail(
+                    tokenFrom(deliveryFailure.sent[0].verificationUrl),
+                    deliveryFailure.deps,
+                )
+            ).success,
+            false,
+            "failed resend and correction still invalidate older verification tokens",
+        );
+        assert.ok(
+            deliveryFailure.audits.filter((event) => event.eventType === "pending_registration.email_delivery_failed")
+                .length >= 2,
+            "both failed capability-protected attempts are audited",
+        );
+        assert.equal(deliveryFailure.provisionCalls, 0, "delivery failure cannot trigger provisioning");
+    }
+
     const harness = createHarness();
     const started = await createPending(harness);
     assert.equal(started.enabled, true);

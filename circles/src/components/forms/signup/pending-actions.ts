@@ -27,6 +27,7 @@ type PendingMutationResponse = {
     message: string;
     email?: string | null;
     resendAvailableAt?: string | null;
+    deliveryFailed?: true;
 };
 
 async function trustedRequest(): Promise<{ ok: boolean; clientIp: string }> {

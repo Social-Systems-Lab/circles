@@ -236,6 +236,10 @@ bash "$repo_dir/scripts/test-verify-provisioned-account-control.sh"
 bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
 bun test "$repo_dir/src/lib/auth/pending-registration-watchdog-alert.test.ts"
 bun test "$repo_dir/src/lib/auth/pending-registration-completed-account.test.ts"
+bun test "$repo_dir/src/lib/data/email.test.ts" "$repo_dir/src/components/forms/signup/pending-email-feedback.test.ts"
+bun "$repo_dir/src/lib/auth/pending-registration.test.ts"
+bun "$repo_dir/src/lib/auth/pending-registration-recovery.test.ts"
+bun "$repo_dir/src/lib/auth/onboarding-preview.test.ts"
 
 verifier_tmp="$(mktemp -d)"
 trap 'rm -rf -- "$verifier_tmp"' EXIT
