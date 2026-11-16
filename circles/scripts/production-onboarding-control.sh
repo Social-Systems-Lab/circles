@@ -355,9 +355,9 @@ verify_running_application_status_identity_if_present() {
     running_sha="$(sed -n 's/^gitSha=//p' <<<"$version_file")"
     [[ "$running_sha" =~ ^[0-9a-f]{40}$ ]] || \
         fail "running application Git SHA is invalid"
-    git cat-file -e "${running_sha}^{commit}" 2>/dev/null || \
+    git -C "$REPO_DIR" cat-file -e "${running_sha}^{commit}" 2>/dev/null || \
         fail "running application Git SHA is not present in the clean production checkout"
-    git merge-base --is-ancestor "$running_sha" HEAD || \
+    git -C "$REPO_DIR" merge-base --is-ancestor "$running_sha" HEAD || \
         fail "running application Git SHA is not an ancestor of the clean production checkout"
 
     verify_application_image_metadata "$image_id" "$running_sha"

@@ -70,6 +70,8 @@ for required in \
     'exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding' \
     'verify_running_application_status_identity_if_present' \
     'verify_application_image_metadata' \
+    'git -C "$REPO_DIR" cat-file -e' \
+    'git -C "$REPO_DIR" merge-base --is-ancestor' \
     'verify_recovery_application_image' \
     'require_failed_application_state' \
     '--pull=never --network none --read-only' \

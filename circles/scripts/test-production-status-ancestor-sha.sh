@@ -34,6 +34,7 @@ git -C "$test_root/repo" rm -q -rf tracked.txt
 git -C "$test_root/repo" commit -q --allow-empty -m unrelated
 unrelated_sha="$(git -C "$test_root/repo" rev-parse HEAD)"
 git -C "$test_root/repo" checkout -q main
+mkdir -p "$test_root/outside"
 
 printf '%s\n' "$definitions" >"$test_root/definitions.sh"
 
@@ -45,13 +46,15 @@ definitions="$2"
 application_image_validator="$3"
 runtime_validator="$4"
 calls="$5"
+outside="$6"
 
-cd "$repo"
+cd "$outside"
 fail() {
     echo "Error: $1" >&2
     exit 1
 }
 base_compose=(mock_compose)
+REPO_DIR="$repo"
 GIT_SHA="$CURRENT_SHA"
 APPLICATION_IMAGE_VALIDATOR="$application_image_validator"
 RUNTIME_VALIDATOR="$runtime_validator"
@@ -105,7 +108,7 @@ run_case() {
         IMAGE_SHA="${IMAGE_SHA-$valid_running_sha}" CONTAINER_ROLE="${CONTAINER_ROLE-production}" \
         IMAGE_ROLE="${IMAGE_ROLE-production}" NODE_STATUS="${NODE_STATUS-0}" \
         "$test_root/run-status-identity.sh" "$test_root/repo" "$test_root/definitions.sh" \
-        "$application_image_validator" "$runtime_validator" "$calls" >"$output" 2>&1 || status=$?
+        "$application_image_validator" "$runtime_validator" "$calls" "$test_root/outside" >"$output" 2>&1 || status=$?
     if [[ "$status" -ne "$expected" ]]; then
         cat "$output" >&2
         fail "$label returned $status instead of $expected"
