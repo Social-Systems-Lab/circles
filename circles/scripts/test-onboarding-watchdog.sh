@@ -9,8 +9,10 @@ deploy="$repo_dir/deploy-genesis2.sh"
 policy="$repo_dir/src/lib/auth/pending-registration-watchdog-policy.ts"
 alert_module="$repo_dir/src/lib/auth/pending-registration-watchdog-alert.mjs"
 rehearsal_workflow="$repo_dir/../.github/workflows/production-onboarding-rehearsal.yml"
+watchdog_integration="$repo_dir/scripts/test-onboarding-watchdog-integration.sh"
 
-for file in "$route" "$control" "$cron" "$deploy" "$policy" "$alert_module" "$rehearsal_workflow"; do
+for file in "$route" "$control" "$cron" "$deploy" "$policy" "$alert_module" \
+    "$rehearsal_workflow" "$watchdog_integration"; do
     [[ -f "$file" ]] || {
         echo "Missing onboarding watchdog file: $file" >&2
         exit 1
@@ -77,6 +79,14 @@ grep -Fq './circles/scripts/test-onboarding-watchdog-integration.sh' "$rehearsal
     echo "Manual disposable rehearsal does not run the watchdog fault-injection test." >&2
     exit 1
 }
+grep -Fq 'docker.io/pgsty/silo:RELEASE.2026-11-12T00-00-00Z' "$rehearsal_workflow" "$watchdog_integration" || {
+    echo "Watchdog rehearsal does not use the accessible pinned object-storage image." >&2
+    exit 1
+}
+if grep -Eq 'minio/minio(:|$)|quay.io/minio/minio' "$rehearsal_workflow" "$watchdog_integration"; then
+    echo "Watchdog rehearsal still references an unavailable MinIO image." >&2
+    exit 1
+fi
 
 bash -n "$repo_dir/scripts/test-onboarding-watchdog-integration.sh"
 echo "onboarding watchdog safety contracts passed"
