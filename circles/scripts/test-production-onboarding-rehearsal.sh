@@ -42,6 +42,22 @@ for required in \
     'loopback port 443 is already in use' \
     'NO_PROXY="kamooni.org,localhost,127.0.0.1"' \
     'cmp "$SOURCE_APP_DIR/scripts/production-onboarding-control.sh" "$CONTROL_SCRIPT"' \
+    'cmp "$SOURCE_APP_DIR/deploy-genesis2.sh" "$DEPLOY_SCRIPT"' \
+    'docker-compose.production-maintenance.yml' \
+    'deploy-paused-services' \
+    'image-validation-failure' \
+    'deploy-startup-failure.log' \
+    'deploy-nginx-failure.log' \
+    'assert_no_app_host_port' \
+    'hold-version-response' \
+    'release-version-response' \
+    'assert_activation_state_preserved' \
+    'assert_public_services_stopped' \
+    'GIT_ALLOW_PROTOCOL=file' \
+    'url.file://$ORIGIN_BARE.insteadOf' \
+    'mongodb://rehearsal:rehearsal-not-a-credential@db:27017/circles?authSource=admin' \
+    'USER node' \
+    'status: "pending_email"' \
     'postmark-verification-canary.mjs' \
     'pending-registration-watchdog-alert.mjs' \
     'legacy paused none REHEARSAL' \
@@ -88,6 +104,13 @@ for forbidden in \
     fi
 done
 
+guard_line="$(grep -nF 'require_disposable_environment' "$harness" | tail -1 | cut -d: -f1)"
+first_up_line="$(grep -nF '"${BASE_COMPOSE[@]}" up -d --no-deps db circles nginx' "$harness" | head -1 | cut -d: -f1)"
+[[ -n "$guard_line" && -n "$first_up_line" && "$guard_line" -lt "$first_up_line" ]] || {
+    echo "disposable-environment guard must pass before containers start" >&2
+    exit 1
+}
+
 grep -Fq '#!/usr/bin/env bash' "$control"
 grep -Fq 'set +x' "$control"
 
@@ -98,6 +121,7 @@ if grep -Eq 'pull_request:|push:' "$workflow"; then
     exit 1
 fi
 grep -Fq 'runs-on: ubuntu-latest' "$workflow"
+grep -Fq 'timeout-minutes: 60' "$workflow"
 grep -Fq 'KAMOONI_REHEARSAL_DAEMON_ID=' "$workflow"
 grep -Fq 'rehearse-production-onboarding-control.sh' "$workflow"
 

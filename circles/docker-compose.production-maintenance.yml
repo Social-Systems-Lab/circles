@@ -1,0 +1,6 @@
+# Used only while the paused-onboarding application is being replaced.
+# The circles service remains on webnet for NGINX and cron, but cannot be reached
+# through the host-published application port during startup or verification.
+services:
+    circles:
+        ports: !override []

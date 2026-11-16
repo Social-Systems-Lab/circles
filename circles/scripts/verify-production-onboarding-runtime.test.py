@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 VALIDATOR = Path(__file__).with_name("verify-production-onboarding-runtime.py")
@@ -30,13 +31,25 @@ def container(*, activation: bool = True) -> dict:
                 "POSTMARK_SENDER_EMAIL=hello@example.invalid",
             ]
         },
-        "NetworkSettings": {"Networks": {"circles_webnet": {"IPAddress": "172.20.0.4"}}},
+        "HostConfig": {"PortBindings": {}},
+        "NetworkSettings": {
+            "Networks": {"circles_webnet": {"IPAddress": "172.20.0.4"}},
+            "Ports": {"3000/tcp": None},
+        },
     }
 
 
-def run_validator(mode: str, deployment_id: str, value: object) -> subprocess.CompletedProcess[str]:
+def run_validator(
+    mode: str,
+    deployment_id: str,
+    value: object,
+    activation_file: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    args = ["python3", str(VALIDATOR), mode, deployment_id]
+    if activation_file is not None:
+        args.append(str(activation_file))
     return subprocess.run(
-        ["python3", str(VALIDATOR), mode, deployment_id],
+        args,
         input=json.dumps(value),
         check=False,
         capture_output=True,
@@ -81,6 +94,56 @@ class RuntimeValidatorTests(unittest.TestCase):
         result = run_validator("default", "none", [default])
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn(HMAC, result.stdout + result.stderr)
+
+    def test_activation_hmac_must_match_without_disclosure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            activation = Path(directory) / "activation.env"
+            activation.write_text(
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                "ONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid\n",
+                encoding="utf-8",
+            )
+            accepted = run_validator("activation", DEPLOYMENT_ID, [container()], activation)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertNotIn(HMAC, accepted.stdout + accepted.stderr)
+
+            replacement = "0" * 64
+            activation.write_text(
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={replacement}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                "ONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid\n",
+                encoding="utf-8",
+            )
+            rejected = run_validator("activation", DEPLOYMENT_ID, [container()], activation)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("differs from the approved activation file", rejected.stderr)
+            self.assertNotIn(HMAC, rejected.stdout + rejected.stderr)
+            self.assertNotIn(replacement, rejected.stdout + rejected.stderr)
+
+    def test_maintenance_application_must_not_publish_host_ports(self) -> None:
+        safe = subprocess.run(
+            ["python3", str(VALIDATOR), "no-published-ports"],
+            input=json.dumps([container()]),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(safe.returncode, 0, safe.stderr)
+
+        published = container()
+        published["HostConfig"]["PortBindings"] = {
+            "3000/tcp": [{"HostIp": "", "HostPort": "3000"}],
+        }
+        published["NetworkSettings"]["Ports"] = published["HostConfig"]["PortBindings"]
+        rejected = subprocess.run(
+            ["python3", str(VALIDATOR), "no-published-ports"],
+            input=json.dumps([published]),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(rejected.returncode, 0)
 
     def test_rejects_wrong_network_and_multiple_containers(self) -> None:
         wrong_network = container()

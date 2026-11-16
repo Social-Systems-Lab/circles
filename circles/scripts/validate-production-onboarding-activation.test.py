@@ -24,6 +24,8 @@ def compose_environment(*, mode: str = "default", deployment_id: str = "") -> di
         "services": {
             "circles": {
                 "build": {"args": {"KAMOONI_DEPLOYMENT_ROLE": "production"}},
+                "ports": [],
+                "networks": {"webnet": None},
                 "environment": {
                     "CIRCLES_URL": "https://kamooni.org",
                     "EMAIL_TRANSPORT": "postmark",
@@ -136,6 +138,27 @@ class ActivationValidatorTests(unittest.TestCase):
                     str(composed_path),
                     DEPLOYMENT_ID,
                 ).returncode,
+                0,
+            )
+
+    def test_maintenance_compose_must_remove_host_ports_but_keep_webnet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            safe = compose_environment(mode="activation", deployment_id=DEPLOYMENT_ID)
+            safe_path = self.write_json(root, "safe.json", safe)
+            result = self.run_command("no-published-ports-json", str(safe_path))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            unsafe = compose_environment(mode="activation", deployment_id=DEPLOYMENT_ID)
+            unsafe["services"]["circles"]["ports"] = [{"target": 3000, "published": "3000"}]
+            unsafe_path = self.write_json(root, "unsafe.json", unsafe)
+            self.assertNotEqual(self.run_command("no-published-ports-json", str(unsafe_path)).returncode, 0)
+
+            wrong_network = compose_environment(mode="activation", deployment_id=DEPLOYMENT_ID)
+            wrong_network["services"]["circles"]["networks"] = {"host": None}
+            wrong_network_path = self.write_json(root, "wrong-network.json", wrong_network)
+            self.assertNotEqual(
+                self.run_command("no-published-ports-json", str(wrong_network_path)).returncode,
                 0,
             )
 
