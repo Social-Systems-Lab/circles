@@ -59,7 +59,7 @@ Usage:
   production-onboarding-control.sh recover-default-services
   production-onboarding-control.sh postmark-canary
   production-onboarding-control.sh watchdog-alert-canary
-  production-onboarding-control.sh verify-provisioned-account
+  production-onboarding-control.sh verify-provisioned-account [default|activation]
 EOF
     exit 2
 }
@@ -520,8 +520,21 @@ run_watchdog_alert_canary() {
     unset token
 }
 
+verify_completed_account_runtime() {
+    local mode="$1" deployment_id="$2" expected_image_id="$3"
+    if [[ "$mode" == "activation" ]]; then
+        require_compose_contracts
+        [[ "$(activation_value REGISTRATION_DEPLOYMENT_ID)" == "$deployment_id" ]] || \
+            fail "approved activation deployment ID changed during account verification"
+        route_status | python3 "$ACTIVATION_VALIDATOR" route-status pending "$deployment_id" >/dev/null
+    else
+        require_route_mode default
+    fi
+    verify_application "$mode" "$deployment_id" "$expected_image_id"
+}
+
 run_completed_account_verification() {
-    local expected_image_id="$1" account_handle=""
+    local expected_image_id="$1" mode="$2" deployment_id="$3" account_handle=""
     [[ -r /dev/tty ]] || fail "an interactive terminal is required for the completed-account handle"
     read -r -s -p 'Completed account handle: ' account_handle </dev/tty
     printf '\n' >/dev/tty
@@ -530,7 +543,7 @@ run_completed_account_verification() {
         unset account_handle
         fail "completed-account handle is invalid"
     fi
-    verify_application default none "$expected_image_id"
+    verify_completed_account_runtime "$mode" "$deployment_id" "$expected_image_id"
     printf '%s\n' "$account_handle" | \
         run_ops verify-provisioned-account --users-dir /circles/users
     unset account_handle
@@ -695,12 +708,19 @@ case "$command_name" in
         run_watchdog_alert_canary
         ;;
     verify-provisioned-account)
-        [[ "$#" -eq 0 ]] || usage
+        [[ "$#" -le 1 ]] || usage
+        verification_mode="${1:-default}"
+        [[ "$verification_mode" == "default" || "$verification_mode" == "activation" ]] || usage
         require_default_and_ops_contracts
         require_images
+        deployment_id=none
+        if [[ "$verification_mode" == "activation" ]]; then
+            require_activation_file
+            deployment_id="$(activation_value REGISTRATION_DEPLOYMENT_ID)"
+        fi
         expected_image_id="$(docker image inspect --format '{{.Id}}' circles-circles:latest)"
-        verify_application default none "$expected_image_id"
-        run_completed_account_verification "$expected_image_id"
+        verify_completed_account_runtime "$verification_mode" "$deployment_id" "$expected_image_id"
+        run_completed_account_verification "$expected_image_id" "$verification_mode" "$deployment_id"
         ;;
     *)
         usage

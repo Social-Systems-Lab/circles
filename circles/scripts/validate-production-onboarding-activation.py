@@ -298,7 +298,7 @@ def main() -> None:
         errors = validate_activation_compose(read_json(sys.argv[2]), sys.argv[3])
     elif command == "ops-compose-json" and len(sys.argv) == 4:
         errors = validate_ops_compose(read_json(sys.argv[2]), sys.argv[3])
-    elif command == "route-status" and len(sys.argv) == 3:
+    elif command == "route-status" and len(sys.argv) in (3, 4):
         try:
             status = json.load(sys.stdin)
         except json.JSONDecodeError:
@@ -308,6 +308,17 @@ def main() -> None:
         expected_mode = sys.argv[2]
         mode_matches = status.get("mode") == expected_mode
         deployment_clean = expected_mode == "pending" or status.get("deploymentId") is None
+        if expected_mode == "default":
+            # Default services also run while registration is safely paused during rollback.
+            mode_matches = status.get("mode") in {"legacy", "paused"}
+            deployment_clean = "deploymentId" in status and status["deploymentId"] is None
+        if len(sys.argv) == 4:
+            expected_deployment_id = sys.argv[3]
+            deployment_clean = (
+                expected_mode == "pending"
+                and DEPLOYMENT_ID.fullmatch(expected_deployment_id) is not None
+                and status.get("deploymentId") == expected_deployment_id
+            )
         errors = (
             []
             if mode_matches and deployment_clean
