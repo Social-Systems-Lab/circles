@@ -202,6 +202,19 @@ def validate_activation_compose(config: dict, expected_deployment_id: str) -> li
     return errors
 
 
+def validate_no_published_application_ports(config: dict) -> list[str]:
+    services = config.get("services", {})
+    circles = services.get("circles")
+    if not isinstance(circles, dict):
+        return ["maintenance Compose does not contain a circles service"]
+    errors: list[str] = []
+    if circles.get("ports"):
+        errors.append("maintenance application must not publish host ports")
+    if set(circles.get("networks") or {}) != {"webnet"}:
+        errors.append("maintenance application must retain only the production web network")
+    return errors
+
+
 def validate_ops_compose(config: dict, expected_sha: str) -> list[str]:
     services = config.get("services", {})
     ops = services.get("registration_ops")
@@ -296,6 +309,8 @@ def main() -> None:
         errors = validate_default_compose(read_json(sys.argv[2]))
     elif command == "activation-compose-json" and len(sys.argv) == 4:
         errors = validate_activation_compose(read_json(sys.argv[2]), sys.argv[3])
+    elif command == "no-published-ports-json" and len(sys.argv) == 3:
+        errors = validate_no_published_application_ports(read_json(sys.argv[2]))
     elif command == "ops-compose-json" and len(sys.argv) == 4:
         errors = validate_ops_compose(read_json(sys.argv[2]), sys.argv[3])
     elif command == "route-status" and len(sys.argv) == 3:

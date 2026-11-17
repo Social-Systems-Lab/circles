@@ -17,6 +17,8 @@ bash -n "$deploy"
 bash -n "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 bash -n "$repo_dir/scripts/test-watchdog-alert-canary-control.sh"
 bash -n "$repo_dir/scripts/test-verify-provisioned-account-control.sh"
+bash -n "$repo_dir/scripts/test-production-paused-onboarding-deploy.sh"
+bash -n "$repo_dir/scripts/test-production-status-ancestor-sha.sh"
 bash -n "$repo_dir/scripts/test-production-application-sha-verification.sh"
 for executable in "$control" "$validator" "$runtime_validator" "$application_image_validator" "$verifier_validator"; do
     [[ -x "$executable" ]] || { echo "required production onboarding tool is not executable: $executable" >&2; exit 1; }
@@ -42,7 +44,7 @@ for required in \
     'route-set --expected' \
     'verify_application activation' \
     'python3 "$RUNTIME_VALIDATOR" endpoint' \
-    '"$GIT_SHA" "$container_ip"' \
+    '"$expected_sha" "$container_ip"' \
     'runtime_status_summary()' \
     'operations-status --users-dir /circles/users --runtime-summary "$runtime_summary"' \
     'deactivate-services' \
@@ -66,6 +68,12 @@ for required in \
     'verify-provisioned-account)' \
     'Completed account handle:' \
     'run_ops verify-provisioned-account --users-dir /circles/users' \
+    'command_name" == "deploy-paused-services"' \
+    'exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding' \
+    'verify_running_application_status_identity_if_present' \
+    'verify_application_image_metadata' \
+    'git -C "$REPO_DIR" cat-file -e' \
+    'git -C "$REPO_DIR" merge-base --is-ancestor' \
     'verify_recovery_application_image' \
     'require_failed_application_state' \
     '--pull=never --network none --read-only' \
@@ -121,7 +129,8 @@ grep -Fq 'PRODUCTION_LOCK_FILE="/run/lock/circles-production-docker.lock"' "$dep
 grep -Fq 'PRODUCTION_LOCK_TIMEOUT_SECONDS=120' "$deploy"
 grep -Fq 'flock -w "$PRODUCTION_LOCK_TIMEOUT_SECONDS" 9' "$deploy"
 grep -Fq 'registration_ops route-status' "$deploy"
-grep -Fq 'route-status legacy' "$deploy"
+grep -Fq 'EXPECTED_ROUTING_MODE="legacy"' "$deploy"
+grep -Fq 'route-status "$EXPECTED_ROUTING_MODE"' "$deploy"
 grep -Fq 'normal production deployment is blocked while registration routing is not legacy' "$deploy"
 grep -Fq 'require_application_runtime_environment CRON_SECRET' "$control" || {
     echo "preflight does not require CRON_SECRET" >&2
@@ -129,7 +138,7 @@ grep -Fq 'require_application_runtime_environment CRON_SECRET' "$control" || {
 }
 
 route_guard_line="$(grep -nF 'registration_ops route-status' "$deploy" | head -1 | cut -d: -f1)"
-app_build_line="$(grep -nF 'docker compose build circles cron' "$deploy" | head -1 | cut -d: -f1)"
+app_build_line="$(grep -nF '"${BASE_COMPOSE[@]}" build circles cron' "$deploy" | head -1 | cut -d: -f1)"
 [[ -n "$route_guard_line" && -n "$app_build_line" && "$route_guard_line" -lt "$app_build_line" ]] || {
     echo "registration routing guard must run before the application build and mutation window" >&2
     exit 1
@@ -234,6 +243,8 @@ python3 "$repo_dir/scripts/verify-production-application-image.test.py"
 bash "$repo_dir/scripts/test-production-application-sha-verification.sh"
 bash "$repo_dir/scripts/test-postmark-canary-cleanup.sh"
 bash "$repo_dir/scripts/test-watchdog-alert-canary-control.sh"
+bash "$repo_dir/scripts/test-production-paused-onboarding-deploy.sh"
+bash "$repo_dir/scripts/test-production-status-ancestor-sha.sh"
 bash "$repo_dir/scripts/test-verify-provisioned-account-control.sh"
 bun test "$repo_dir/scripts/postmark-verification-canary.test.ts"
 bun test "$repo_dir/src/lib/auth/pending-registration-watchdog-alert.test.ts"
@@ -264,7 +275,8 @@ ln -s "$verifier_file" "$verifier_tmp/link"
 compose_tmp="$verifier_tmp/compose"
 mkdir -p "$compose_tmp"
 cp "$repo_dir/docker-compose.yml" "$repo_dir/docker-compose.production-ops.yml" \
-    "$repo_dir/docker-compose.production-activation.yml" "$compose_tmp/"
+    "$repo_dir/docker-compose.production-activation.yml" \
+    "$repo_dir/docker-compose.production-maintenance.yml" "$compose_tmp/"
 fake_sha="2437ad23f850e31f71b3ab544326e0f471eef59d"
 fake_deployment="production-onboarding-20261113-2437ad23-01"
 cat >"$compose_tmp/.env" <<EOF
@@ -307,8 +319,15 @@ docker compose --project-name circles --project-directory "$compose_tmp" \
     --env-file "$compose_tmp/.env" -f "$compose_tmp/docker-compose.yml" \
     -f "$compose_tmp/docker-compose.production-ops.yml" --profile production-onboarding-ops \
     config --format json >"$compose_tmp/ops.json"
+docker compose --project-name circles --project-directory "$compose_tmp" \
+    --env-file "$compose_tmp/.env" --env-file "$compose_tmp/activation.env" \
+    -f "$compose_tmp/docker-compose.yml" -f "$compose_tmp/docker-compose.production-activation.yml" \
+    -f "$compose_tmp/docker-compose.production-maintenance.yml" \
+    config --format json >"$compose_tmp/activation-maintenance.json"
 python3 "$validator" default-compose-json "$compose_tmp/default.json" >/dev/null
 python3 "$validator" activation-compose-json "$compose_tmp/activation.json" "$fake_deployment" >/dev/null
+python3 "$validator" activation-compose-json "$compose_tmp/activation-maintenance.json" "$fake_deployment" >/dev/null
+python3 "$validator" no-published-ports-json "$compose_tmp/activation-maintenance.json" >/dev/null
 python3 "$validator" ops-compose-json "$compose_tmp/ops.json" "$fake_sha" >/dev/null
 
 [[ -f "$validator" && -f "$runtime_validator" ]]

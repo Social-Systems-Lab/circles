@@ -5,6 +5,7 @@ REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 TEST_ID="${UID:-1000}-$$"
 MONGO_CONTAINER="kamooni-watchdog-mongo-${TEST_ID}"
 MINIO_CONTAINER="kamooni-watchdog-minio-${TEST_ID}"
+MINIO_IMAGE="docker.io/pgsty/silo:RELEASE.2026-11-12T00-00-00Z"
 DATABASE="circles_stage1a_test_watchdog_${TEST_ID//-/_}"
 TMP_BASE="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)"
 USERS_DIR="$(mktemp -d "$TMP_BASE/kamooni-watchdog-users.XXXXXX")"
@@ -54,7 +55,7 @@ docker run --detach \
     --publish 127.0.0.1:29001:9000 \
     --env MINIO_ROOT_USER="$MINIO_USER" \
     --env MINIO_ROOT_PASSWORD="$MINIO_PASSWORD" \
-    minio/minio:latest server /data >/dev/null
+    "$MINIO_IMAGE" server /data >/dev/null
 MINIO_CREATED=true
 
 mongo_ready=false
