@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Montserrat, Noto_Serif } from "next/font/google";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { OnboardingCardId } from "@/models/models";
@@ -99,7 +99,17 @@ export default function OnboardingShell({
     const [pending, startTransition] = useTransition();
     const [error, setError] = useState("");
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-    const [cardSaving, setCardSaving] = useState(false);
+    const [cardSaving, updateCardSaving] = useState(false);
+    const cardSavingRef = useRef(false);
+    const navigationPendingRef = useRef(false);
+    const setCardSaving = useCallback((saving: boolean) => {
+        cardSavingRef.current = saving;
+        updateCardSaving(saving);
+    }, []);
+    const isNavigationPending = useCallback(() => navigationPendingRef.current, []);
+    useEffect(() => {
+        if (!pending) navigationPendingRef.current = false;
+    }, [pending]);
     const cardIndex = ONBOARDING_CARDS.findIndex((card) => card.id === currentCard);
     const current = statuses.find((card) => card.id === currentCard);
     const participation = useMemo(() => statuses.filter((card) => card.kind === "participation"), [statuses]);
@@ -110,6 +120,9 @@ export default function OnboardingShell({
     const go = (
         operation: () => Promise<{ success: boolean; card?: string; redirectTo?: string; message?: string }>,
     ) => {
+        if (pending || navigationPendingRef.current || cardSavingRef.current) return;
+        // Lock synchronously: a file-picker event can arrive before React renders pending=true.
+        navigationPendingRef.current = true;
         setError("");
         startTransition(async () => {
             try {
@@ -128,7 +141,8 @@ export default function OnboardingShell({
     };
 
     const navigate = (card: OnboardingCardId) => {
-        if (cardSaving) {
+        if (pending || navigationPendingRef.current) return;
+        if (cardSavingRef.current) {
             setError("Please wait for this save to finish before changing steps.");
             return;
         }
@@ -136,10 +150,21 @@ export default function OnboardingShell({
         go(() => navigateOnboardingCard(card));
     };
 
+    const finishOnboarding = () => {
+        if (pending || navigationPendingRef.current || cardSavingRef.current) return;
+        if (
+            hasUnsavedChanges &&
+            !window.confirm("Your selected picture has not been saved. Finish without saving this picture?")
+        )
+            return;
+        go(acknowledgeOnboardingCompletion);
+    };
+
     const exitOnboarding = () => {
-        if (pending || cardSaving) return;
+        if (pending || navigationPendingRef.current || cardSavingRef.current) return;
         if (hasUnsavedChanges && !window.confirm("You have unsaved changes. Exit onboarding and discard them?")) return;
-        router.push("/explore");
+        navigationPendingRef.current = true;
+        startTransition(() => router.push("/explore"));
     };
 
     const next = getNextOnboardingCardInSequence(currentCard);
@@ -346,6 +371,8 @@ export default function OnboardingShell({
                                         key={currentCard}
                                         profile={profile}
                                         humanVerification={humanVerification}
+                                        navigationPending={pending}
+                                        isNavigationPending={isNavigationPending}
                                         onUnsavedChange={setHasUnsavedChanges}
                                         onSavingChange={setCardSaving}
                                         onSaved={() => {
@@ -425,7 +452,7 @@ export default function OnboardingShell({
                                                 type="button"
                                                 className={styles.primaryAction}
                                                 disabled={pending || cardSaving}
-                                                onClick={() => go(acknowledgeOnboardingCompletion)}
+                                                onClick={finishOnboarding}
                                             >
                                                 {pending
                                                     ? "Saving…"

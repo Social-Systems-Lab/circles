@@ -364,7 +364,14 @@ export function LocationOnboardingCard({ profile, onUnsavedChange, onSavingChang
     );
 }
 
-export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingChange, onSaved }: CardProps) {
+export function ProfilePhotoOnboardingCard({
+    profile,
+    onUnsavedChange,
+    onSavingChange,
+    onSaved,
+    navigationPending,
+    isNavigationPending,
+}: CardProps & { navigationPending: boolean; isNavigationPending: () => boolean }) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState(profile.pictureUrl || "/images/default-user-picture.png");
@@ -372,41 +379,51 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
     const objectUrlRef = useRef<string | null>(null);
+    const uploadingRef = useRef(false);
+    const mountedRef = useRef(true);
     const realPhoto = hasRealProfileImage({ picture: profile.pictureUrl ? { url: profile.pictureUrl } : undefined });
 
     useEffect(() => onUnsavedChange(Boolean(file)), [file, onUnsavedChange]);
-    useEffect(
-        () => () => {
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
             if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-        },
-        [],
-    );
+            objectUrlRef.current = null;
+            if (uploadingRef.current) onSavingChange(false);
+        };
+    }, [onSavingChange]);
 
     const selectFile = (nextFile?: File) => {
-        if (!nextFile) return;
+        if (!nextFile || uploadingRef.current || navigationPending || isNavigationPending()) return;
         if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = URL.createObjectURL(nextFile);
         setFile(nextFile);
+        onUnsavedChange(true);
         setPreviewUrl(objectUrlRef.current);
         setError("");
         setMessage("");
+        void upload(nextFile);
     };
 
-    const upload = async () => {
-        if (!file || !profile.circleId) {
-            setError("Choose a profile picture before uploading.");
+    const upload = async (selectedFile: File) => {
+        if (uploadingRef.current || navigationPending || isNavigationPending()) return;
+        if (!profile.circleId) {
+            setError("We couldn’t find your profile. Please reload before trying again.");
             return;
         }
+        uploadingRef.current = true;
         setSaving(true);
         onSavingChange(true);
         setError("");
         setMessage("");
         try {
             const formData = new FormData();
-            formData.set("picture", file);
+            formData.set("picture", selectedFile);
             const result = await updateCircleField(profile.circleId, formData);
+            if (!mountedRef.current) return;
             const savedUrl = result.circle?.picture?.url;
-            if (!result.success || !savedUrl) {
+            if (!result.success || !savedUrl || !hasRealProfileImage({ picture: { url: savedUrl } })) {
                 setError(result.message || "We couldn’t upload your picture. Please try again.");
                 return;
             }
@@ -414,13 +431,18 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
             objectUrlRef.current = null;
             setPreviewUrl(savedUrl);
             setFile(null);
+            if (inputRef.current) inputRef.current.value = "";
+            onUnsavedChange(false);
             setMessage("Your profile picture is saved.");
             onSaved();
         } catch {
-            setError("We couldn’t upload your picture. Please try again.");
+            if (mountedRef.current) setError("We couldn’t upload your picture. Please try again.");
         } finally {
-            setSaving(false);
-            onSavingChange(false);
+            uploadingRef.current = false;
+            if (mountedRef.current) {
+                setSaving(false);
+                onSavingChange(false);
+            }
         }
     };
 
@@ -430,10 +452,19 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
                 A genuine picture and a selected location are both needed before a personal profile can appear on the
                 map.
             </p>
-            <div className={cn("flex flex-col items-center gap-4 p-4 sm:flex-row sm:items-start", styles.photoLayout)}>
+            <div
+                className={cn("flex flex-col items-center gap-4 p-4 sm:flex-row sm:items-start", styles.photoLayout)}
+                aria-busy={saving}
+            >
                 <img
                     src={previewUrl}
-                    alt={realPhoto ? "Your current profile picture" : "Default profile picture preview"}
+                    alt={
+                        file
+                            ? "Selected profile picture preview"
+                            : realPhoto
+                              ? "Your current profile picture"
+                              : "Profile picture preview"
+                    }
                     className={cn("h-28 w-28 rounded-full object-cover", styles.photoPreview)}
                 />
                 <div className="w-full space-y-3">
@@ -445,48 +476,42 @@ export function ProfilePhotoOnboardingCard({ profile, onUnsavedChange, onSavingC
                         id="onboarding-profile-photo"
                         type="file"
                         accept="image/*"
+                        disabled={saving || navigationPending}
                         onChange={(event) => selectFile(event.target.files?.[0])}
                         className={cn(
                             "block min-h-11 w-full cursor-pointer p-2 text-sm file:mr-3 file:px-3 file:py-2 focus-visible:outline-none",
                             styles.field,
                         )}
-                        aria-describedby="onboarding-profile-photo-help"
+                        aria-invalid={Boolean(error)}
+                        aria-describedby="onboarding-profile-photo-help onboarding-profile-photo-status"
                     />
                     <p id="onboarding-profile-photo-help" className="text-sm text-muted-foreground">
-                        Kamooni’s existing image validation and secure profile storage will be used.
+                        Your picture uploads automatically when you choose a file. Adding a picture is optional.
                     </p>
-                    {file && (
+                    {file && error && (
                         <Button
                             type="button"
-                            onClick={upload}
-                            disabled={saving}
+                            onClick={() => void upload(file)}
+                            disabled={saving || navigationPending}
+                            aria-describedby="onboarding-profile-photo-status"
                             className={cn("w-full sm:w-auto", styles.primaryAction)}
                         >
-                            {saving ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Uploading…
-                                </>
-                            ) : (
-                                <>
-                                    <ImagePlus className="mr-2 h-4 w-4" />
-                                    Upload picture
-                                </>
-                            )}
+                            <ImagePlus aria-hidden="true" className="mr-2 h-4 w-4" />
+                            Retry upload
                         </Button>
                     )}
                 </div>
             </div>
-            {error && (
-                <p role="alert" className={cn("text-sm", styles.alert)}>
-                    {error}
-                </p>
-            )}
-            {message && (
-                <p role="status" className={cn("text-sm", styles.success)}>
-                    {message}
-                </p>
-            )}
+            <p
+                id="onboarding-profile-photo-status"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className={cn("flex items-center text-sm", error && styles.alert, message && styles.success)}
+            >
+                {saving && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Uploading your picture…" : error || message}
+            </p>
         </section>
     );
 }
