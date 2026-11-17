@@ -64,6 +64,8 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
     const registrations: PendingRegistration[] = [];
     const rates: any[] = [];
     const audits: any[] = [];
+    const auditAttempts: string[] = [];
+    const auditFailures = new Set<string>();
     const didReservationRecords: Array<{ _id: string; did: string; createdAt: Date }> = [];
     const sent: Array<{ to: string; verificationUrl: string }> = [];
     const accounts = new Map<string, ProvisionedPendingAccount>();
@@ -140,6 +142,10 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
             return "index";
         },
         async insertOne(record: any) {
+            auditAttempts.push(record.eventType);
+            if (auditFailures.has(record.eventType)) {
+                throw new Error("audit unavailable: pending@example.invalid token=must-not-log");
+            }
             audits.push(structuredClone(record));
             return { acknowledged: true, insertedId: new ObjectId() };
         },
@@ -240,6 +246,8 @@ function createHarness(now = new Date("2026-11-01T12:00:00.000Z")) {
         registrations,
         sent,
         audits,
+        auditAttempts,
+        auditFailures,
         accounts,
         reservedDids,
         credentialDirectories,
@@ -459,6 +467,112 @@ async function main() {
             "both failed capability-protected attempts are audited",
         );
         assert.equal(deliveryFailure.provisionCalls, 0, "delivery failure cannot trigger provisioning");
+    }
+
+    for (const [operation, successEvent] of Object.entries({
+        initial: "pending_registration.verification_sent",
+        resend: "pending_registration.verification_resent",
+        correction: "pending_registration.email_corrected",
+        recovery: "pending_registration.recovery_verification_sent",
+    })) {
+        for (const failure of ["success-audit", "transport", "transport-and-audit"]) {
+            const emailHarness = createHarness();
+            const pending = operation === "initial" ? null : await createPending(emailHarness);
+            if (operation === "recovery") {
+                await verifyPendingRegistrationEmail(
+                    tokenFrom(emailHarness.sent[0].verificationUrl),
+                    emailHarness.deps,
+                );
+                emailHarness.advance(31 * 60 * 1000);
+            } else if (operation === "resend") {
+                emailHarness.advance(61_000);
+            }
+            const transportFails = failure !== "success-audit";
+            const expectedEvent = transportFails ? "pending_registration.email_delivery_failed" : successEvent;
+            const auditFails = failure !== "transport";
+            if (auditFails) emailHarness.auditFailures.add(expectedEvent);
+            emailHarness.setEmailDeliveryFailure(transportFails);
+            emailHarness.auditAttempts.length = 0;
+            emailHarness.audits.length = 0;
+            const sentBefore = emailHarness.sent.length;
+            const warnings: unknown[][] = [];
+            const originalWarn = console.warn;
+            console.warn = (...args: unknown[]) => {
+                warnings.push(args);
+            };
+            let result: { success: boolean; message: string; deliveryFailed?: true };
+            try {
+                const capability = {
+                    pendingRegistrationId: pending?.pendingRegistrationId ?? "",
+                    continuationSecret: pending?.continuationSecret ?? "",
+                    clientIp: validInput.clientIp,
+                };
+                switch (operation) {
+                    case "initial":
+                        result = await createPending(emailHarness);
+                        break;
+                    case "resend":
+                        result = await resendPendingRegistrationVerification(capability, emailHarness.deps);
+                        break;
+                    case "correction":
+                        result = await correctPendingRegistrationEmail(
+                            { ...capability, newEmail: "corrected@example.invalid" },
+                            emailHarness.deps,
+                        );
+                        break;
+                    default:
+                        result = await requestPendingRegistrationRecovery(
+                            { email: validInput.email, clientIp: validInput.clientIp },
+                            emailHarness.deps,
+                        );
+                }
+            } finally {
+                console.warn = originalWarn;
+            }
+            const label = `${operation}: ${failure}`;
+            assert.equal(result.success, true, label);
+            assert.equal(result.message, PENDING_REGISTRATION_PUBLIC_MESSAGE, label);
+            assert.equal(
+                result.deliveryFailed,
+                transportFails && (operation === "resend" || operation === "correction") ? true : undefined,
+                `${label}: only transport failure affects capability-protected feedback`,
+            );
+            assert.equal(emailHarness.sent.length - sentBefore, transportFails ? 0 : 1, label);
+            assert.deepEqual(
+                emailHarness.auditAttempts,
+                operation === "initial" ? ["pending_registration.created", expectedEvent] : [expectedEvent],
+                `${label}: audit failure cannot trigger an email delivery failure audit`,
+            );
+            assert.equal(
+                emailHarness.audits.some((event) => event.eventType === expectedEvent),
+                !auditFails,
+                label,
+            );
+            assert.deepEqual(
+                warnings,
+                auditFails
+                    ? [
+                          [
+                              "Pending registration email audit failed",
+                              {
+                                  pendingRegistrationId: emailHarness.registrations[0]._id.toHexString(),
+                                  eventType: expectedEvent,
+                              },
+                          ],
+                      ]
+                    : [],
+                `${label}: audit failures log only the registration ID and event type`,
+            );
+            const record = emailHarness.registrations[0];
+            assert.equal(record.status, "pending_email", label);
+            assert.equal(record.verificationVersion, operation === "initial" ? 1 : 2, label);
+            assert.ok(record.verificationLastSentAt instanceof Date, label);
+            assert.equal(emailHarness.provisionCalls, 0, label);
+            if (!transportFails) {
+                const token = tokenFrom(emailHarness.sent.at(-1)!.verificationUrl);
+                assert.equal((await verifyPendingRegistrationEmail(token, emailHarness.deps)).success, true, label);
+            }
+        }
     }
 
     const harness = createHarness();
