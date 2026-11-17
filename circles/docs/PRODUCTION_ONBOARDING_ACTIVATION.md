@@ -465,11 +465,23 @@ For aggregate classifications without identity identifiers:
 python3 -c 'import collections,json,sys; d=json.load(sys.stdin); r=d.get("results",[]); print(json.dumps({"count":d.get("count",0),"byClassification":dict(collections.Counter(x.get("classification","unknown") for x in r))},sort_keys=True))'
 ```
 
-Verify one completed pending-registration-v1 account without requiring pending registration to be active:
+Verify one completed pending-registration-v1 account while default services are running and routing is
+`legacy` or `paused` with no deployment ID (including the paused rollback state):
 
 ```bash
 ./circles/scripts/production-onboarding-control.sh verify-provisioned-account
 ```
+
+While routing remains `pending` and activation services are running, select activation verification explicitly:
+
+```bash
+./circles/scripts/production-onboarding-control.sh verify-provisioned-account activation
+```
+
+Both modes are read-only and leave routing and services unchanged. Activation verification validates the
+protected activation configuration and requires routing and the live application to match its approved
+deployment ID. Runtime, image identity and routing are checked before the handle prompt and again before
+account verification; mismatches stop the command. The operator receives no pending-registration HMAC.
 
 The command prompts for the current account handle on `/dev/tty` without echoing it and passes the
 handle to the read-only operator container over standard input. The handle, account ID, DID,

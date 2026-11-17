@@ -421,6 +421,60 @@ class ActivationValidatorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn(HMAC, result.stdout + result.stderr)
 
+    def test_default_verification_allows_legacy_or_paused_without_deployment(self) -> None:
+        for mode in ("legacy", "paused"):
+            result = self.run_command(
+                "route-status", "default", stdin=json.dumps({"mode": mode, "deploymentId": None}),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for status in (
+            {"mode": "pending", "deploymentId": DEPLOYMENT_ID},
+            {"mode": "pending", "deploymentId": None},
+            {"mode": "legacy", "deploymentId": DEPLOYMENT_ID},
+            {"mode": "paused", "deploymentId": DEPLOYMENT_ID},
+            {"mode": "legacy"},
+            {"mode": "paused"},
+            {"mode": "unknown", "deploymentId": None},
+        ):
+            with self.subTest(status=status):
+                result = self.run_command("route-status", "default", stdin=json.dumps(status))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn(DEPLOYMENT_ID, result.stdout + result.stderr)
+
+    def test_routing_status_matches_approved_activation_deployment(self) -> None:
+        result = self.run_command(
+            "route-status", "pending", DEPLOYMENT_ID,
+            stdin=json.dumps({"mode": "pending", "deploymentId": DEPLOYMENT_ID}),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for status in (
+            {"mode": "legacy", "deploymentId": None},
+            {"mode": "paused", "deploymentId": None},
+            {"mode": "pending", "deploymentId": None},
+            {"mode": "pending"},
+            {"mode": "pending", "deploymentId": "production-onboarding-other-release"},
+            {"mode": "pending", "deploymentId": {"unexpected": DEPLOYMENT_ID}},
+        ):
+            with self.subTest(status=status):
+                result = self.run_command(
+                    "route-status", "pending", DEPLOYMENT_ID, stdin=json.dumps(status),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn(DEPLOYMENT_ID, result.stdout + result.stderr)
+        for invalid_id in ("", "none", "not-an-approved-deployment"):
+            result = self.run_command(
+                "route-status", "pending", invalid_id,
+                stdin=json.dumps({"mode": "pending", "deploymentId": invalid_id}),
+            )
+            self.assertNotEqual(result.returncode, 0)
+        self.assertNotEqual(
+            self.run_command(
+                "route-status", "legacy", DEPLOYMENT_ID,
+                stdin='{"mode":"legacy","deploymentId":null}',
+            ).returncode,
+            0,
+        )
+
     def test_routing_status_and_zero_operation_guards(self) -> None:
         self.assertEqual(
             self.run_command("route-status", "legacy", stdin='{"mode":"legacy","deploymentId":null}').returncode,
