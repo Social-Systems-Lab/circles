@@ -14,7 +14,7 @@ chmod 755 "$users_dir"
 build_context="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-registration-ops-context.XXXXXX")"
 
 cleanup() {
-    docker rm -f "$mongo" >/dev/null 2>&1 || true
+    docker rm -f -v "$mongo" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
     docker image rm "$image" >/dev/null 2>&1 || true
     rm -rf -- "$users_dir" "$build_context"
