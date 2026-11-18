@@ -1,6 +1,6 @@
 # Kamooni — Living Development Roadmap
 
-**Version 1.3 · 17 November 2026**  
+**Version 1.4 · 17 November 2026**  
 **Master backlog and decision register** · Migrated from the approved `Kamooni_Living_Development_Roadmap_v1_3.docx`.
 
 > **North star:** Make Kamooni reliable, intuitive and useful for early communities. Prioritise working discovery, safe participation and trustworthy contribution records before complex extensions, on the path toward the first 1,000 active users.
@@ -18,10 +18,10 @@ Every ticket has a stable ID. **Do not reuse IDs.** Update status through **Cand
 | 1 | Protect and repair | A09, A02, A03, A01, A04, C01; evaluate G03 |
 | 2 | Restore discovery | A05, A06, C10; review G01/G04 |
 | 3 | Daily communication | A08, C02, C04, C05, C08 |
-| 4 | Circle administration | B01–B05; review G02 |
+| 4 | Circle administration | B01–B05; review G02; scope H02 platform state model |
 | 5 | Contribution recognition | D01–D03, after permissions/completion/privacy decisions |
 | 6 | Coordination | E01, E02, A07 |
-| 7 | Polish | B07–B09, C06–C09, F01; review G05/G06 |
+| 7 | Polish | B07–B09, C06–C09, F01; review G05/G06; H01 can be pulled forward as a quick win |
 | 8 | Community capabilities | B06, C03, D04, F02; O01–O04 subject to design |
 | 9 | Extensions | E03, E04, D05, F03, F04; R01–R03 and U01–U03 after groundwork |
 | Early exploration | Video feasibility | V01 in parallel with batches 1–3, without displacing P0 repairs |
@@ -32,6 +32,13 @@ Every ticket has a stable ID. **Do not reuse IDs.** Update status through **Cand
 **Quick win:** F02 external Donate button can be brought into batches 2–3. A working backup/recovery path should not be held up by frontend repairs.
 
 ## Ticket catalogue
+
+### Platform administration (new additions)
+
+| ID | Pri. | Task | Acceptance outcome | Status | Batch / horizon |
+| --- | --- | --- | --- | --- | --- |
+| **H01** | P2 | Admin shortcut in left sidebar | Show a clear Admin button for authorised platform admins; opens the existing admin view directly, indicates current section, works on desktop/mobile; do not expose access to unauthorised users, and enforce permissions server-side. | Ready | Quick win (4–7) |
+| **H02** | P1 | Clarify platform user states, designations and permissions | Inventory existing Pending, Active, Verified and Founder values and actual enforcement; distinguish account lifecycle states, verification, recognition labels and admin roles; define and approve a state-transition/permissions matrix; migrate and update admin UI safely without unintended privilege changes. | Design | 4 (before changes to user roles) |
 
 ### A. Stability, security and discovery
 
@@ -188,6 +195,7 @@ Explore technical feasibility early (V01), potentially using **LiveKit**, with a
 | Topic | Current decision or unresolved question |
 | --- | --- |
 | Members versus Followers | Followers tune in; Members participate. Detailed rights remain to be defined. |
+| Platform user types / H02 | Audit Pending, Active, Verified and Founder before changing any values. Working hypothesis: Pending/Active are lifecycle states, Verified is an independent verification flag and Founder a recognition badge—not necessarily permission-bearing roles. Confirm actual system behaviour and decide a permissions matrix before implementation. |
 | Contributions | Public task/shift eligibility checked by default; privacy and contributor consent override default. |
 | Resolved issues | Can count as contributions after verified completed work. |
 | Draft recovery | Auto-save substantially written content; recover short-lived automatic drafts and persist deliberately saved drafts. |
@@ -224,7 +232,9 @@ Explore technical feasibility early (V01), potentially using **LiveKit**, with a
 - [ ] Decide how resource Offers connect to project item needs.
 - [ ] Document funding provider, refund and receipt rules before integration.
 - [ ] Confirm F02 placement, eligibility, URL validation and external-link behaviour.
+- [ ] Audit existing platform user statuses and document the H02 permission/state matrix before refactoring.
+- [ ] Check sidebar Admin shortcut visibility across desktop/mobile and roles (H01).
 
 ---
 
-**Maintenance convention:** Change tickets by editing this file in a pull request; retain IDs; use Git history for versioning rather than creating multiple master documents. This migration preserves the v1.3 backlog and its strategic sections; subsequent updates belong here.
+**Maintenance convention:** Change tickets by editing this file in a pull request; retain IDs; use Git history for versioning rather than creating multiple master documents. This roadmap retains the v1.3 backlog and its strategic sections. Version 1.4 adds H01/H02 platform-admin tasks; subsequent updates belong here.
