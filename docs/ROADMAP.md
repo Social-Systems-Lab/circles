@@ -1,6 +1,6 @@
 # Kamooni — Living Development Roadmap
 
-**Version 1.4 · 17 November 2026**  
+**Version 1.5 · 18 November 2026**  
 **Master backlog and decision register** · Migrated from the approved `Kamooni_Living_Development_Roadmap_v1_3.docx`.
 
 > **North star:** Make Kamooni reliable, intuitive and useful for early communities. Prioritise working discovery, safe participation and trustworthy contribution records before complex extensions, on the path toward the first 1,000 active users.
@@ -20,7 +20,7 @@ Every ticket has a stable ID. **Do not reuse IDs.** Update status through **Cand
 | 3 | Daily communication | A08, C02, C04, C05, C08 |
 | 4 | Circle administration | B01–B05; review G02; scope H02 platform state model |
 | 5 | Contribution recognition | D01–D03, after permissions/completion/privacy decisions |
-| 6 | Coordination | E01, E02, A07 |
+| 6 | Coordination | E01, E02, A07; I01 can be pulled forward as a quick bug fix |
 | 7 | Polish | B07–B09, C06–C09, F01; review G05/G06; H01 can be pulled forward as a quick win |
 | 8 | Community capabilities | B06, C03, D04, F02; O01–O04 subject to design |
 | 9 | Extensions | E03, E04, D05, F03, F04; R01–R03 and U01–U03 after groundwork |
@@ -101,6 +101,12 @@ Every ticket has a stable ID. **Do not reuse IDs.** Update status through **Cand
 | **E02** | P2 | Bulk manage overdue tasks | Admin bulk select/archive in clipboard with confirmation before deletion | Ready | 6 |
 | **E03** | P3 | Bookable resources in calendar | Rooms, couches, vehicles and similar bookable without conflicting slots | Future | 9 |
 | **E04** | P3 | Apple Calendar integration | Start with export/subscription, define sync direction before building | Future | 9 |
+
+### I. Issues module
+
+| ID | Pri. | Task | Acceptance outcome | Status | Batch / horizon |
+| --- | --- | --- | --- | --- | --- |
+| **I01** | P2 | Allow delivery-date editing when reopening overdue High-urgency issues | Reproduce with an issue marked **High** urgency whose delivery date has passed; after reopening, authorised users can edit the existing delivery date or set a new date, save it, and see the updated value persist after refresh. Check date editing for other urgencies and issue states to prevent regressions. | Ready | Quick bug fix |
 
 ### F. Interface and growth
 
@@ -234,7 +240,8 @@ Explore technical feasibility early (V01), potentially using **LiveKit**, with a
 - [ ] Confirm F02 placement, eligibility, URL validation and external-link behaviour.
 - [ ] Audit existing platform user statuses and document the H02 permission/state matrix before refactoring.
 - [ ] Check sidebar Admin shortcut visibility across desktop/mobile and roles (H01).
+- [ ] Reproduce I01: overdue High-urgency issue reopened but delivery date cannot be edited or replaced.
 
 ---
 
-**Maintenance convention:** Change tickets by editing this file in a pull request; retain IDs; use Git history for versioning rather than creating multiple master documents. This roadmap retains the v1.3 backlog and its strategic sections. Version 1.4 adds H01/H02 platform-admin tasks; subsequent updates belong here.
+**Maintenance convention:** Change tickets by editing this file in a pull request; retain IDs; use Git history for versioning rather than creating multiple master documents. This roadmap retains the v1.3 backlog and its strategic sections. Version 1.4 added H01/H02 platform-admin tasks. Version 1.5 adds I01 for reopened overdue High-urgency issue date editing; subsequent updates belong here.
