@@ -1,0 +1,7 @@
+[Unit]
+Description=Email the operator when the Kamooni backup fails
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kamooni-backup --notify-failure
+UMask=0077

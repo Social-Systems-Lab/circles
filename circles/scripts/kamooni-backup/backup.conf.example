@@ -1,0 +1,14 @@
+# Install as /root/kamooni-backup-config/backup.conf, mode 600.
+# Use the live bucket names if the app overrides its defaults. Every bucket on
+# the drive is captured. The names here are required to be present.
+MINIO_BUCKETS=(circles circles-private circles-verification)
+# If the app .env uses the documented absolute symlink, listing the link
+# includes /home/ubuntu/migration-export/.env automatically.
+CONFIG_PATHS=(
+    /root/circles/circles/circles/.env
+    /root/circles/circles/circles/docker-compose.yml
+    /root/circles/circles/circles/nginx/nginx.conf
+    /etc/letsencrypt
+)
+# If activation is in use, include its effective Compose overlay,
+# /root/circles/onboarding-secrets, and any active host unit/drop-ins.
