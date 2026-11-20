@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily encrypted off-server Kamooni backup
+Wants=network-online.target
+After=network-online.target docker.service
+OnFailure=kamooni-backup-failure.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kamooni-backup
+UMask=0077
+PrivateTmp=true
+TimeoutStartSec=3h
