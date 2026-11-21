@@ -6,6 +6,7 @@ Docker mount discovery and failure mail use stubs. Fault tests inject targeted
 filesystem changes and a failed S3 DELETE. Retention uses synthetic dates.
 """
 from datetime import datetime, timedelta
+import gzip
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -14,12 +15,14 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 from threading import Thread
 import time
 import unittest
 
 import boto3
+from bson import decode_all
 from botocore import UNSIGNED
 from botocore.config import Config
 from botocore.exceptions import ClientError
@@ -210,7 +213,7 @@ esac
     def snapshots(self, *args):
         return json.loads(self.run_restic("snapshots", "--json", *args)) or []
 
-    def backup(self, *args):
+    def backup(self, *args, server_pair_absent=False):
         log_size = BACKUP_LOG.stat().st_size if BACKUP_LOG.exists() else 0
         result = subprocess.run(["bash", str(SCRIPT), *args], env=self.env,
                                 capture_output=True, text=True, timeout=120)
@@ -226,7 +229,14 @@ esac
             self.assertEqual((info.st_uid, info.st_gid, info.st_mode & 0o777), (0, 0, mode))
         with BACKUP_LOG.open() as log:
             log.seek(log_size)
-            self.assertEqual(log.read(), result.stderr)
+            messages = log.read()
+        if server_pair_absent:
+            start = result.stderr.splitlines()[0]
+            run_id = start.removeprefix("Kamooni backup started ").removesuffix(".")
+            warning = f"Kamooni backup warning for {run_id}: server DID signing key pair absent.\n"
+            self.assertIn(warning, messages)
+            messages = messages.replace(warning, "", 1)
+        self.assertEqual(messages, result.stderr)
         return result
 
     def test_complete_backup_and_restore(self):
@@ -251,7 +261,8 @@ esac
         self.assertIn((backup / "run-id").read_text().strip(), snapshot["tags"])
         self.assertEqual({p.name for p in backup.iterdir()},
                          {"app-data.tar", "user-data.tar", "minio.tar", "config.tar",
-                          "mongo", "run-id", "runtime.txt"})
+                          "manifest.txt", "mongo", "run-id", "runtime.txt"})
+        self.assertEqual((backup / "manifest.txt").read_text(), "server_did_signing_pair=present\n")
         self.assertIn("gitSha=synthetic-test-sha", (backup / "runtime.txt").read_text())
 
         restore_process, mongo = self.mongo(27118)
@@ -315,6 +326,38 @@ esac
                 anonymous.get_object(Bucket=bucket, Key="owner/object")
             self.assertEqual(error.exception.response["ResponseMetadata"]["HTTPStatusCode"], 403)
 
+    def test_missing_server_signing_pair(self):
+        keys = [self.app_data / "server" / name for name in ("privateKey.pem", "publicKey.pem")]
+        for key in keys:
+            key.unlink()
+        (self.app_data / "server" / "app-state").write_bytes(b"app state")
+        server_did = "synthetic-historical-server-digest"
+        with MongoClient(MONGO_URI) as mongo:
+            mongo.circles.serverSettings.insert_one({"did": server_did})
+
+        result = self.backup(server_pair_absent=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        snapshot, = self.snapshots()
+        self.assertIn("kamooni-daily", snapshot["tags"])
+        self.assertNotIn("kamooni-pending", snapshot["tags"])
+        target = self.root / "restore"
+        self.run_restic("restore", "--verify", "--target", str(target), snapshot["id"])
+        backup = target / "set"
+        self.assertEqual((backup / "manifest.txt").read_text(), "server_did_signing_pair=absent\n")
+        with tarfile.open(backup / "app-data.tar") as archive:
+            self.assertEqual(archive.extractfile("./server/app-state").read(), b"app state")
+            for key in keys:
+                self.assertNotIn(f"./server/{key.name}", archive.getnames())
+                self.assertFalse(key.exists())
+        with tarfile.open(backup / "user-data.tar") as archive:
+            self.assertEqual(archive.extractfile(f"./{self.user_key.relative_to(self.user_data)}").read(),
+                             self.user_key.read_bytes())
+        with gzip.open(backup / "mongo/circles/serverSettings.bson.gz", "rb") as dump:
+            settings, = decode_all(dump.read())
+            self.assertEqual(settings["did"], server_did)
+        self.assertTrue((backup / "minio.tar").is_file())
+        self.assertTrue((backup / "config.tar").is_file())
+
     def assert_failure(self, step, *, daily_ids=()):
         result = self.backup()
         self.assertNotEqual(result.returncode, 0)
@@ -334,6 +377,21 @@ echo synthetic-mongo-secret >&2
     def test_missing_minio_bucket(self):
         (self.minio_data / "circles-verification").rename(self.root / "missing-bucket")
         self.assert_failure("check single-drive MinIO data")
+        self.assertEqual(self.snapshots(), [])
+
+    def test_missing_user_did_key(self):
+        self.user_key.unlink()
+        self.assert_failure("check DID data")
+        self.assertEqual(self.snapshots(), [])
+
+    def test_missing_app_data_volume(self):
+        self.app_data.rename(self.root / "missing-app-data")
+        self.assert_failure("check running volumes")
+        self.assertEqual(self.snapshots(), [])
+
+    def test_missing_required_config_path(self):
+        self.app_env.unlink()
+        self.assert_failure("read backup source configuration")
         self.assertEqual(self.snapshots(), [])
 
     def test_bucket_disappears_after_initial_check(self):

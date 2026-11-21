@@ -6,6 +6,8 @@ The set includes every dumpable MongoDB database on the standalone instance, inc
 
 **Accepted recovery risk.** Kamooni stays online throughout capture. MongoDB collections, DID files and MinIO objects can reflect different moments. An account created during capture can restore with a missing DID key, and an attachment record can restore without its object. A concurrent file modification can also leave a MinIO or DID archive internally inconsistent, even when the file read succeeds. A failed read, incomplete Mongo dump, missing required bucket or failed upload fails the run. The job checks each required bucket before capture and again as a directory entry in the staged MinIO archive before upload. An isolated restore and application checks establish recoverability. Expect to lose up to a day of changes after a healthy daily run, or more if a run fails.
 
+**Known Genesis2 recovery gap.** Genesis2 lacks the historical `/circles/server/privateKey.pem` and `/circles/server/publicKey.pem` files. MongoDB still holds the original server DID digest. The job archives both DID volumes as they are and continues when the server signing pair is absent. It records `server_did_signing_pair=absent` in `set/manifest.txt` and writes a warning with the run ID to the root-only `/var/log/kamooni-backup/backup.log`. Both DID volumes, user DID data and all other required sources are still required.
+
 ## Prepare Genesis2
 
 Use this section as root on `kamooniorg` after a separate approval and once the reviewed files are in the production checkout.
@@ -128,8 +130,13 @@ Use a disposable or replacement host with isolated storage, no production routes
    eligible_snapshots |
      awk -v id="$snapshot_id" '$1 == id { found = 1 } END { exit !found }' &&
    restic restore --verify --target "$restore_root" "$snapshot_id" &&
-   cat "$restore_root/set/runtime.txt"
+   cat "$restore_root/set/runtime.txt" &&
+   if [[ -f "$restore_root/set/manifest.txt" ]]; then
+     cat "$restore_root/set/manifest.txt"
+   fi
    ```
+
+   **Server signing keys.** If the manifest says `server_did_signing_pair=absent`, the snapshot cannot restore the historical server signing pair or recover signing for the DID recorded in MongoDB. For older snapshots without a manifest, inspect `app-data.tar` for both nonempty server key files before relying on signing. Keep the original MongoDB server DID and leave the missing keys absent. Do not generate replacement signing keys during recovery.
 
 3. Extract into separate fresh directories. Preserve the owners and modes before using the files as volume contents. Review the archived configuration under `config/` before copying it to the replacement host's paths. If the archive includes the documented `.env` symlink, inspect it with `readlink` and use the extracted `config/home/ubuntu/migration-export/.env` to restore the target file. Recreate the absolute link after placing the target at its original path.
 
