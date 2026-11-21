@@ -135,8 +135,7 @@ app_data=$(mount_source "$app" /circles circles_circles)
 user_data=$(mount_source "$app" /circles/users circles_circles_users)
 minio_data=$(mount_source "$minio" /data circles_minio)
 step='check DID data'
-[[ -s "$app_data/server/privateKey.pem" && -s "$app_data/server/publicKey.pem" &&
-    -n $(find "$user_data" -type f -name privateKey.pem.enc -size +0c -print -quit) ]] || fail
+[[ -n $(find "$user_data" -type f -name privateKey.pem.enc -size +0c -print -quit) ]] || fail
 
 step='check single-drive MinIO data'
 python3 -I -c '
@@ -173,6 +172,23 @@ step='archive DID volumes'
 tar_flags=(--numeric-owner --acls --xattrs)
 tar "${tar_flags[@]}" --exclude='./users' -cf set/app-data.tar -C "$app_data" .
 tar "${tar_flags[@]}" -cf set/user-data.tar -C "$user_data" .
+step='record server DID signing key status'
+server_pair=$(python3 -I -c '
+import tarfile
+missing = {"./server/privateKey.pem", "./server/publicKey.pem"}
+with tarfile.open("set/app-data.tar", "r:") as archive:
+    for member in iter(archive.next, None):
+        if member.isreg() and member.size > 0:
+            missing.discard(member.name)
+        if not missing:
+            break
+        archive.members.clear()
+print("absent" if missing else "present")
+')
+printf 'server_did_signing_pair=%s\n' "$server_pair" > set/manifest.txt
+if [[ $server_pair == absent ]]; then
+    printf 'Kamooni backup warning for %s: server DID signing key pair absent.\n' "$run_id" >&4
+fi
 step='archive MinIO volume'
 # Keep object bytes, xl.meta, versions, bucket settings and IAM on the same drive.
 tar "${tar_flags[@]}" --exclude='./.minio.sys/tmp' -cf set/minio.tar -C "$minio_data" .
