@@ -679,6 +679,16 @@ assert_public_services_stopped() {
         fail "failed paused deployment did not keep public services stopped"
 }
 
+first_migration_write_timestamp() {
+    "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+const row = db.chatReadStates.aggregate([
+  {$match:{_id:"rehearsal-legacy-ok",readStateVersion:2,topicFallbackMessageId:"aaaaaaaaaaaaaaaaaaaaaaaa"}},
+  {$project:{timestamp:{$toString:"$readStateMigratedAt"}}}
+]).next();
+if (!row || !row.timestamp) quit(1);
+print(row.timestamp);'
+}
+
 seed_pending_email() {
     "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
 db.pendingRegistrations.insertOne({
@@ -1109,13 +1119,12 @@ assert_route paused
 assert_pending_email_preserved
 assert_synthetic_identity_preserved
 assert_activation_state_preserved
-first_write="$("${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
-const row = db.chatReadStates.findOne({_id:"rehearsal-legacy-ok",readStateVersion:2,topicFallbackMessageId:"aaaaaaaaaaaaaaaaaaaaaaaa"});
-const blocked = db.chatReadStates.findOne({_id:"rehearsal-legacy-blocked", readStateVersion:{$ne:2}});
+first_write="$(first_migration_write_timestamp)" || fail "no partial migration write was made"
+"${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+const blocked = db.chatReadStates.findOne({_id:"rehearsal-legacy-blocked",readStateVersion:{$ne:2}});
 const marker = db.schemaMigrations.findOne({_id:"chat-read-state-v2"});
-if (!row || !blocked || marker) quit(1);
-print(row.readStateMigratedAt.toISOString());')"
-[[ -n "$first_write" ]] || fail "no partial migration write was made"
+quit(blocked && !marker ? 0 : 1);' >/dev/null
+echo "Migration stopped after a partial chat write with no completion marker."
 
 "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
 db.chatReadStates.updateOne({_id:"rehearsal-legacy-blocked"}, {$set:{lastReadMessageId:"bbbbbbbbbbbbbbbbbbbbbbbb",updatedAt:new Date()}});' >/dev/null
@@ -1138,11 +1147,12 @@ run_paused_recovery "$CONTROL_DIR/deploy-migration-recovery.log" "$migration_sha
 wait_for_external_version "$migration_sha" || fail "offline recovery did not expose the approved SHA"
 active_after_recovery="$(container_id)"
 [[ "$active_after_recovery" != "$old_offline_container" ]] || fail "offline recovery reused the old container"
-"${BASE_COMPOSE[@]}" exec -T -e FIRST_MIGRATED_AT="$first_write" db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
-const first = db.chatReadStates.findOne({_id:"rehearsal-legacy-ok",readStateVersion:2,topicFallbackMessageId:"aaaaaaaaaaaaaaaaaaaaaaaa"});
+[[ "$(first_migration_write_timestamp)" == "$first_write" ]] ||
+    fail "offline recovery rewrote the already migrated chat row"
+"${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
 const second = db.chatReadStates.findOne({_id:"rehearsal-legacy-blocked",readStateVersion:2,topicFallbackMessageId:"bbbbbbbbbbbbbbbbbbbbbbbb"});
 const marker = db.schemaMigrations.findOne({_id:"chat-read-state-v2",status:"complete"});
-quit(first?.readStateMigratedAt.toISOString() === process.env.FIRST_MIGRATED_AT && second && marker ? 0 : 1);' >/dev/null
+quit(second && marker ? 0 : 1);' >/dev/null
 assert_route paused
 assert_no_app_host_port
 assert_pending_email_preserved
