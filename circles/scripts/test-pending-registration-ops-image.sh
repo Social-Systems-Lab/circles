@@ -14,7 +14,7 @@ chmod 755 "$users_dir"
 build_context="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-registration-ops-context.XXXXXX")"
 
 cleanup() {
-    docker rm -f "$mongo" >/dev/null 2>&1 || true
+    docker rm -f -v "$mongo" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
     docker image rm "$image" >/dev/null 2>&1 || true
     rm -rf -- "$users_dir" "$build_context"
@@ -53,7 +53,8 @@ docker run --rm --entrypoint sh "$image" -c '
   test -r /app/src/lib/auth/registration-routing.ts
 ' >/dev/null
 docker network create "$network" >/dev/null
-docker run --detach --name "$mongo" --network "$network" mongo:7.0 --bind_ip_all >/dev/null
+# Keep expired synthetic records present so assertions cannot depend on TTL deletion timing.
+docker run --detach --name "$mongo" --network "$network" mongo:7.0 --bind_ip_all --setParameter ttlMonitorEnabled=false >/dev/null
 
 ready=false
 for _ in $(seq 1 30); do
@@ -81,6 +82,8 @@ route_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$
 operations_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" operations-status)"
 inspection="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles --mount type=bind,src="$users_dir",dst=/circles/users,readonly "$image" inspect --users-dir /circles/users)"
 recovery_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" recovery-activation-status)"
+activation_readiness="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" activation-readiness)"
+printf '%s\n' "$activation_readiness" | python3 "$repo_dir/scripts/validate-production-onboarding-activation.py" activation-ready >/dev/null
 
 python3 - "$route_status" "$operations_status" "$inspection" "$recovery_status" <<'PY'
 import json, sys
@@ -153,6 +156,99 @@ collections_after="$(docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circ
     echo "Read-only operator execution changed MongoDB collections." >&2
     exit 1
 }
+
+# These nonempty readiness cases run in the existing PR CI operator-image job.
+readiness_snapshot() {
+    docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+        EJSON.stringify(["pendingRegistrations", "pendingRegistrationDidReservations", "circles",
+          "pendingRegistrationProvisioningLocks", "pendingRegistrationFinalizationLocks"]
+          .map(name => db.getCollection(name).find().sort({_id:1}).toArray()))'
+}
+
+assert_activation_readiness() {
+    local expected="$1" label="$2" count="${3:-1}" before result after
+    before="$(readiness_snapshot)"
+    result="$(docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+        --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" activation-readiness)"
+    after="$(readiness_snapshot)"
+    [[ "$before" == "$after" ]] || { echo "Readiness changed synthetic records: $label" >&2; exit 1; }
+    python3 - "$result" "$expected" "$count" "$label" <<'PY'
+import json, sys
+result = json.loads(sys.argv[1])
+assert result["ready"] is (sys.argv[2] == "true"), (sys.argv[4], result)
+assert result["pendingRegistrations"] == int(sys.argv[3]), (sys.argv[4], result)
+assert "example.invalid" not in sys.argv[1] and "gmail.com" not in sys.argv[1]
+print("PASS packaged activation readiness: " + sys.argv[4])
+PY
+    if [[ "$expected" == true ]]; then
+        printf '%s\n' "$result" | python3 "$repo_dir/scripts/validate-production-onboarding-activation.py" activation-ready >/dev/null
+    elif printf '%s\n' "$result" | python3 "$repo_dir/scripts/validate-production-onboarding-activation.py" activation-ready >/dev/null 2>&1; then
+        echo "Validator accepted blocked readiness: $label" >&2
+        exit 1
+    fi
+}
+
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.insertOne({
+  _id: ObjectId("cccccccccccccccccccccccc"), name: "Readiness Test",
+  email: "readiness@example.invalid", normalizedEmail: "readiness@example.invalid", requestedHandle: "readiness-test",
+  status: "pending_email", provisioningAttempts: 0, expiresAt: new Date(Date.now() + 86400000),
+  reservedDid: null, accountId: null, accountDid: null, provisionedAt: null, reconciliationRequiredAt: null,
+  provisioningClaimHash: null, provisioningClaimedAt: null, provisioningLeaseHash: null, provisioningLeaseExpiresAt: null,
+  verifiedAt: null, verifiedContinuationHash: null, verifiedContinuationExpiresAt: null
+});' >/dev/null
+assert_activation_readiness true 'untouched pending_email with null provisionedAt'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$set:{expiresAt:new Date(Date.now()-60000)}});' >/dev/null
+assert_activation_readiness true 'expired but retained pending_email'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$set:{reconciliationRequiredAt:new Date()}});' >/dev/null
+assert_activation_readiness false 'reconciliation marker with null provisionedAt'
+reconciliation_status="$(docker run --rm --network "$network" -e MONGODB_URI=mongodb://"$mongo":27017/circles "$image" operations-status)"
+python3 - "$reconciliation_status" <<'PY'
+import json, sys
+assert json.loads(sys.argv[1])["reconciliationRequired"] == 1
+PY
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$set:{reconciliationRequiredAt:null, provisioningClaimHash:"synthetic-claim"}});' >/dev/null
+assert_activation_readiness false 'partial provisioning claim'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$set:{provisioningClaimHash:null}});
+db.pendingRegistrationDidReservations.insertOne({_id:"cccccccccccccccccccccccc",did:"a".repeat(64)});' >/dev/null
+assert_activation_readiness false 'registry-only DID reservation'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrationDidReservations.deleteOne({_id:"cccccccccccccccccccccccc"});
+db.circles.insertOne({_id:ObjectId("dddddddddddddddddddddddd"),metadata:{pendingRegistrationId:"cccccccccccccccccccccccc"}});' >/dev/null
+assert_activation_readiness false 'pending-ID account correlation'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.circles.replaceOne({_id:ObjectId("dddddddddddddddddddddddd")}, {email:"READINESS@EXAMPLE.INVALID",handle:"other-handle",did:"a".repeat(64)});' >/dev/null
+assert_activation_readiness false 'legacy case-insensitive email without pending-ID metadata'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.circles.replaceOne({_id:ObjectId("dddddddddddddddddddddddd")}, {email:"unrelated@example.invalid",handle:"readiness-test",did:"a".repeat(64)});' >/dev/null
+assert_activation_readiness false 'legacy handle without pending-ID metadata'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$set:{email:"new.member+pilot@googlemail.com",normalizedEmail:"newmember@gmail.com"}});
+db.circles.replaceOne({_id:ObjectId("dddddddddddddddddddddddd")}, {email:"New.Member+legacy@GMAIL.COM",handle:"other-handle",did:"a".repeat(64)});' >/dev/null
+assert_activation_readiness false 'legacy Gmail and Googlemail alias collision'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.circles.replaceOne({_id:ObjectId("dddddddddddddddddddddddd")}, {email:"another.member@gmail.com",handle:"other-handle",did:"a".repeat(64)});' >/dev/null
+assert_activation_readiness true 'unrelated legacy account is preserved'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$unset:{normalizedEmail:""}});' >/dev/null
+assert_activation_readiness false 'missing collision lookup key'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrations.updateOne({_id:ObjectId("cccccccccccccccccccccccc")}, {$set:{normalizedEmail:"newmember@gmail.com"}});
+db.pendingRegistrationProvisioningLocks.insertOne({_id:"readiness-lock",expiresAt:new Date(Date.now()+60000)});' >/dev/null
+assert_activation_readiness false 'retained provisioning lock'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrationProvisioningLocks.deleteOne({_id:"readiness-lock"});
+db.pendingRegistrationFinalizationLocks.insertOne({_id:"readiness-lock",expiresAt:new Date(Date.now()-60000)});' >/dev/null
+assert_activation_readiness false 'retained expired finalization lock'
+docker exec "$mongo" mongosh mongodb://127.0.0.1:27017/circles --quiet --eval '
+db.pendingRegistrationFinalizationLocks.deleteOne({_id:"readiness-lock"});
+db.pendingRegistrations.deleteOne({_id:ObjectId("cccccccccccccccccccccccc")});
+db.circles.deleteOne({_id:ObjectId("dddddddddddddddddddddddd")});' >/dev/null
+assert_activation_readiness true 'readiness fixture cleanup' 0
 
 completed_handle="completed-integrity"
 completed_account_id="aaaaaaaaaaaaaaaaaaaaaaaa"

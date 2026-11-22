@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SOURCE_APP_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 RUN_ID="$(openssl rand -hex 16)"
 CONTROL_SCRIPT="$APP_DIR/scripts/production-onboarding-control.sh"
-DEPLOY_SCRIPT="$EXPECTED_REPO_DIR/deploy-genesis2.sh"
+DEPLOY_SCRIPT="$APP_DIR/deploy-genesis2.sh"
 PTY_HELPER="$SOURCE_APP_DIR/scripts/rehearse-production-onboarding-control.pty.py"
 BASE_COMPOSE=(
     docker compose
@@ -560,9 +560,23 @@ assert_synthetic_identity_preserved() {
         'db.pendingRegistrationDidReservations.countDocuments({_id:"rehearsal-preserved-did"})')"
     [[ "$accounts" == "1" && "$reservations" == "1" ]] || \
         fail "synthetic account or DID reservation was altered"
+    docker run --rm --pull never --network none --read-only \
+        --mount type=volume,source=circles_users,target=/circles/users,readonly alpine:latest sh -eu -c '
+        cd /circles/users/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        for file in publicKey.pem privateKey.pem.enc salt.bin iv.bin; do
+            test "$(cat "$file")" = "rehearsal-$file"
+            test "$(stat -c %a "$file")" = 600
+        done' || fail "synthetic account credential files changed"
 }
 
 seed_synthetic_data() {
+    docker exec --user 0 "$(container_id)" sh -eu -c '
+        umask 077
+        mkdir /circles/users/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        cd /circles/users/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        for file in publicKey.pem privateKey.pem.enc salt.bin iv.bin; do
+            printf "rehearsal-%s\n" "$file" > "$file"
+        done'
     "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
 db.pendingRegistrations.insertOne({
   name: "Rehearsal Pending",
@@ -602,9 +616,23 @@ db.pendingRegistrationFinalizationLocks.insertOne({_id:"rehearsal-finalization-l
 expire_active_locks() {
     "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
 const expiredAt = new Date(Date.now() - 60000);
-db.pendingRegistrationProvisioningLocks.updateMany({}, {$set:{expiresAt:expiredAt}});
-db.pendingRegistrationFinalizationLocks.updateMany({}, {$set:{expiresAt:expiredAt}});
+db.pendingRegistrationProvisioningLocks.updateOne({_id:"rehearsal-provisioning-lock"}, {$set:{expiresAt:expiredAt}});
+db.pendingRegistrationFinalizationLocks.updateOne({_id:"rehearsal-finalization-lock"}, {$set:{expiresAt:expiredAt}});
 ' >/dev/null
+}
+
+clear_synthetic_locks() {
+    "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+db.pendingRegistrationProvisioningLocks.deleteOne({_id:"rehearsal-provisioning-lock"});
+db.pendingRegistrationFinalizationLocks.deleteOne({_id:"rehearsal-finalization-lock"});' >/dev/null
+}
+
+set_synthetic_reconciliation() {
+    "${BASE_COMPOSE[@]}" exec -T -e REHEARSAL_RECONCILIATION="$1" db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+const marker = process.env.REHEARSAL_RECONCILIATION === "required" ? new Date() : null;
+const result = db.pendingRegistrations.updateOne(
+    {normalizedEmail:"rehearsal-pending@example.invalid"}, {$set:{reconciliationRequiredAt:marker}});
+quit(result.matchedCount === 1 ? 0 : 1);' >/dev/null
 }
 
 assert_activation_state_preserved() {
@@ -652,20 +680,49 @@ advance_fake_origin() {
 }
 
 run_paused_deploy() {
-    local log="$1"
+    local log="$1" approved_sha="$2"
     (
         cd "$EXPECTED_REPO_DIR"
-        run_pty_command "$CONTROL_DIR/deploy.responses" "$CONTROL_SCRIPT" deploy-paused-services
+        run_pty_command "$CONTROL_DIR/deploy.responses" "$CONTROL_SCRIPT" deploy-paused-services "$approved_sha"
     ) >"$log" 2>&1
 }
 
 start_paused_deploy_background() {
-    local log="$1"
+    local log="$1" approved_sha="$2"
     (
         cd "$EXPECTED_REPO_DIR"
-        run_pty_command "$CONTROL_DIR/deploy.responses" "$CONTROL_SCRIPT" deploy-paused-services
+        run_pty_command "$CONTROL_DIR/deploy.responses" "$CONTROL_SCRIPT" deploy-paused-services "$approved_sha"
     ) >"$log" 2>&1 &
     DEPLOY_PID=$!
+}
+
+rehearse_registration_links() {
+    local image_sha="$1" phase="$2" hmac deployment_id links=""
+    if [[ "$phase" == "verify" ]]; then
+        links="$(cat "$CONTROL_DIR/registration-links.json")"
+    fi
+    hmac="$(docker exec "$(container_id)" printenv PENDING_REGISTRATION_TOKEN_HMAC_KEY)"
+    deployment_id="$(docker exec "$(container_id)" printenv REGISTRATION_DEPLOYMENT_ID)"
+    GIT_SHA="$image_sha" PENDING_REGISTRATION_TOKEN_HMAC_KEY="$hmac" REGISTRATION_DEPLOYMENT_ID="$deployment_id" \
+        REHEARSAL_REGISTRATION_LINKS="$links" \
+        "${OPS_COMPOSE[@]}" run --rm --no-deps --pull never -T \
+        -e PENDING_REGISTRATION_TOKEN_HMAC_KEY -e REHEARSAL_REGISTRATION_LINKS \
+        --entrypoint bun registration_ops run - "$phase" \
+        <"$SOURCE_APP_DIR/scripts/rehearse-production-onboarding-registration.ts"
+}
+
+assert_deploy_rejected() {
+    local log="$1" sha="$2" message="$3" app_before nginx_before
+    app_before="$(container_id)"
+    nginx_before="$("${BASE_COMPOSE[@]}" ps -q nginx)"
+    if run_paused_deploy "$log" "$sha"; then
+        fail "paused deployment accepted an unsafe release"
+    fi
+    grep -Fq "$message" "$log" || { tail -20 "$log" >&2; fail "deployment stopped for the wrong reason"; }
+    [[ "$(container_id)" == "$app_before" && "$("${BASE_COMPOSE[@]}" ps -q nginx)" == "$nginx_before" ]] || \
+        fail "rejected deployment replaced a running service"
+    assert_running_services
+    assert_route paused
 }
 
 wait_for_internal_version_request() {
@@ -801,6 +858,8 @@ assert_running_services
 expire_active_locks
 "$CONTROL_SCRIPT" deactivate-services >/dev/null
 assert_pending_email_preserved
+# Activation readiness rejects even expired retained lock documents.
+clear_synthetic_locks
 run_pty_wrapper "$CONTROL_DIR/route.responses" route-set paused legacy none REHEARSAL >/dev/null
 assert_route legacy
 
@@ -847,10 +906,18 @@ assert_pending_email_preserved
 assert_activation_state_preserved
 
 image_failure_sha="$(advance_fake_origin image-failure)"
+assert_deploy_rejected "$CONTROL_DIR/sha-mismatch.log" "$GIT_SHA" "origin/main does not match the approved paused onboarding SHA"
+[[ "$(git -C "$EXPECTED_REPO_DIR" rev-parse HEAD)" == "$GIT_SHA" ]] || fail "wrong-approved-SHA rejection advanced the checkout"
+insert_active_locks
+assert_deploy_rejected "$CONTROL_DIR/active-locks.log" "$image_failure_sha" "activeProvisioningLocks must be zero"
+clear_synthetic_locks
+set_synthetic_reconciliation required
+assert_deploy_rejected "$CONTROL_DIR/reconciliation.log" "$image_failure_sha" "reconciliationRequired must be zero"
+set_synthetic_reconciliation cleared
 touch "$CONTROL_DIR/image-validation-failure"
 circles_before="$(container_id)"
 nginx_before="$("${BASE_COMPOSE[@]}" ps -q nginx)"
-if run_paused_deploy "$CONTROL_DIR/deploy-image-failure.log"; then
+if run_paused_deploy "$CONTROL_DIR/deploy-image-failure.log" "$image_failure_sha"; then
     fail "paused deployment unexpectedly succeeded during image-validation fault injection"
 fi
 [[ "$(container_id)" == "$circles_before" && "$("${BASE_COMPOSE[@]}" ps -q nginx)" == "$nginx_before" ]] || \
@@ -864,7 +931,7 @@ assert_activation_state_preserved
 rm -f "$CONTROL_DIR/image-validation-failure" "$RUNTIME_DIR/internal-version-requested"
 export REHEARSAL_HOLD_VERSION_SHA="$image_failure_sha"
 export REHEARSAL_RELEASE_TOKEN="$(openssl rand -hex 24)"
-start_paused_deploy_background "$CONTROL_DIR/deploy-image-retry.log"
+start_paused_deploy_background "$CONTROL_DIR/deploy-image-retry.log" "$image_failure_sha"
 wait_for_internal_version_request "$DEPLOY_PID" "$image_failure_sha" || \
     { report_retry_verification_failure; exit 1; }
 [[ -z "$("${BASE_COMPOSE[@]}" ps --status running -q nginx)" ]] || \
@@ -886,7 +953,7 @@ assert_activation_state_preserved
 
 startup_failure_sha="$(advance_fake_origin startup-failure)"
 touch "$CONTROL_DIR/failure"
-if run_paused_deploy "$CONTROL_DIR/deploy-startup-failure.log"; then
+if run_paused_deploy "$CONTROL_DIR/deploy-startup-failure.log" "$startup_failure_sha"; then
     fail "paused deployment unexpectedly succeeded during application startup fault injection"
 fi
 assert_route paused
@@ -906,9 +973,14 @@ clear_unfinished_pending_for_reactivation
 "$CONTROL_SCRIPT" activate-services >/dev/null
 seed_pending_email
 
+run_pty_wrapper "$CONTROL_DIR/route.responses" route-set paused pending activation REHEARSAL >/dev/null
+assert_route pending
+rehearse_registration_links "$startup_failure_sha" seed >"$CONTROL_DIR/registration-links.json"
+run_pty_wrapper "$CONTROL_DIR/route.responses" route-set pending paused none REHEARSAL >/dev/null
+assert_route paused
 nginx_failure_sha="$(advance_fake_origin nginx-failure)"
 touch "$CONTROL_DIR/nginx-failure"
-if run_paused_deploy "$CONTROL_DIR/deploy-nginx-failure.log"; then
+if run_paused_deploy "$CONTROL_DIR/deploy-nginx-failure.log" "$nginx_failure_sha"; then
     fail "paused deployment unexpectedly succeeded during NGINX fault injection"
 fi
 assert_route paused
@@ -920,12 +992,17 @@ assert_synthetic_identity_preserved
 assert_activation_state_preserved
 
 rm -f "$CONTROL_DIR/nginx-failure"
-run_paused_deploy "$CONTROL_DIR/deploy-nginx-retry.log" || fail "paused deployment retry failed after NGINX recovery"
+run_paused_deploy "$CONTROL_DIR/deploy-nginx-retry.log" "$nginx_failure_sha" || fail "paused deployment retry failed after NGINX recovery"
 wait_for_external_version "$nginx_failure_sha" || fail "NGINX retry did not expose the approved SHA"
 assert_route paused
 assert_no_app_host_port
 assert_pending_email_preserved
 assert_synthetic_identity_preserved
 assert_activation_state_preserved
+
+run_pty_wrapper "$CONTROL_DIR/route.responses" route-set paused pending activation REHEARSAL >/dev/null
+assert_route pending
+rehearse_registration_links "$nginx_failure_sha" verify
+assert_synthetic_identity_preserved
 
 echo "Disposable production onboarding activation, rollback and paused-deployment rehearsal passed."

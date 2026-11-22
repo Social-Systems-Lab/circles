@@ -1,0 +1,12 @@
+[Unit]
+Description=Check the Kamooni backup journal for missed backups
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/kamooni-backup-freshness
+StateDirectory=kamooni-backup-freshness
+StateDirectoryMode=0700
+UMask=0077

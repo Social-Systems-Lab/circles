@@ -3,7 +3,7 @@ import { ObjectId, type Collection } from "mongodb";
 import { Circles, getDb } from "@/lib/data/db";
 import { createUserAccount } from "@/lib/auth/auth";
 import { createUserSession } from "@/lib/auth/auth";
-import { normalizeEmailForComparison } from "@/lib/auth/email-normalization";
+import { normalizeEmailForComparison, permanentSignupAccountExists } from "@/lib/auth/email-normalization";
 import { sendEmail } from "@/lib/data/email";
 import { getUserPrivate } from "@/lib/data/user";
 import { ensureWelcomeMessageForNewUser } from "@/lib/data/mongo-chat";
@@ -119,18 +119,7 @@ async function runPendingAccountFinalizationSideEffects(
 }
 
 async function findPermanentAccount(normalizedEmail: string, requestedHandle: string) {
-    const emailCandidates = normalizedEmail.endsWith("@gmail.com")
-        ? await Circles.find({ email: { $regex: "@(gmail\\.com|googlemail\\.com)$", $options: "i" } })
-              .project({ _id: 1, email: 1, handle: 1, did: 1 })
-              .toArray()
-        : await Circles.find({ email: normalizedEmail }, { collation: { locale: "en", strength: 2 } })
-              .project({ _id: 1, email: 1, handle: 1, did: 1 })
-              .toArray();
-    const emailExists = emailCandidates.some(
-        (candidate) => candidate.email && normalizeEmailForComparison(candidate.email) === normalizedEmail,
-    );
-    if (requestedHandle === "__email_only__") return emailExists;
-    return emailExists || Boolean(await Circles.findOne({ handle: requestedHandle }, { projection: { _id: 1 } }));
+    return permanentSignupAccountExists(Circles, normalizedEmail, requestedHandle);
 }
 
 async function acquireProvisioningLocks(

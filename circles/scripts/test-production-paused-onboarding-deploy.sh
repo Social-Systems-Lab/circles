@@ -43,7 +43,7 @@ grep -Fq 'no-published-ports >/dev/null' "$deploy"
 grep -Fq '"$RUNTIME_VALIDATOR" activation "$PAUSED_DEPLOYMENT_ID" "$ACTIVATION_ENV_FILE"' "$deploy"
 grep -Fq 'active_image_id="$(active_application_image_id "$active_container_id")"' "$deploy"
 grep -Fq 'PAUSED_APPLICATION_VERIFIED=true' "$deploy"
-grep -Fq 'exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding' "$control"
+grep -Fq 'exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding "$1"' "$control"
 
 if grep -Eq -- 'route-set|docker compose down|docker volume rm|rm -rf' "$deploy"; then
     fail "paused deployment contains a routing, container-stack, volume, or broad deletion operation"
@@ -69,12 +69,16 @@ assert_order 'verify_registration_routing_paused || \' \
 assert_order 'recreate_and_verify_cron ||' \
     '"${BASE_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate nginx'
 assert_order 'if ! verify_external_version; then' 'registration remains paused'
-replacement_guard_block="$(sed -n '/registration routing changed before the application replacement window/,/stop_nginx_for_paused_onboarding/p' "$deploy")"
-grep -Fq 'require_paused_operations_idle' <<<"$replacement_guard_block" || \
-    fail "paused deployment does not recheck operations immediately before replacement"
-replacement_route_block="$(sed -n '/if ! verify_registration_routing_paused; then/,/registration routing changed before the application replacement window/p' "$deploy")"
-grep -Fq 'stop_nginx_for_paused_onboarding' <<<"$replacement_route_block" || \
-    fail "pre-replacement routing drift does not close NGINX"
+assert_order 'origin/main does not match the approved paused onboarding SHA' 'git merge --ff-only refs/remotes/origin/main'
+cutover_guard="$(sed -n '/^require_paused_replacement_ready() {/,/^}/p' "$deploy")"
+grep -Fq 'verify_registration_routing_paused' <<<"$cutover_guard" || fail "cutover guard does not recheck routing"
+grep -Fq 'require_paused_operations_idle' <<<"$cutover_guard" || fail "cutover guard does not recheck live operations"
+grep -Fq 'stop_nginx_for_paused_onboarding' <<<"$cutover_guard" || fail "routing drift does not close NGINX"
+migration_window="$(sed -n '/Stopping every Compose instance of the old circles application/,/Maintenance window started/p' "$deploy")"
+grep -F -A 1 -x '  require_paused_replacement_ready' <<<"$migration_window" | grep -Fxq '  stop_nginx_for_paused_onboarding' ||
+    fail "migration can interrupt services without rechecking paused and idle operations"
+grep -F -A 1 -x 'require_paused_replacement_ready' "$deploy" | grep -Fxq 'stop_nginx_for_paused_onboarding' ||
+    fail "replacement can interrupt services without rechecking paused and idle operations"
 final_route_block="$(sed -n '/if ! verify_external_version; then/,/registration remains paused/p' "$deploy")"
 grep -Fq 'verify_registration_routing_paused ||' <<<"$final_route_block" || \
     fail "paused deployment does not recheck routing after restoring public access"

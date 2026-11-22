@@ -169,9 +169,23 @@ cd /root/circles/circles
 
 Preflight validates the exact SHA, one production application, default-off environment, Postmark
 configuration, non-empty `CRON_SECRET`, external file permissions, operator image, Compose overlays,
-routing `legacy`, and zero unfinished or reconciliation-required operations. It does not create
+routing `legacy`, and read-only activation readiness. It does not create
 indexes, change routing, restart services, or write registration data. Secret values are never
 printed.
+
+Activation readiness permits only untouched `pending_email` records: zero provisioning attempts,
+explicitly null identity/claim/lease/verification-completion fields, a valid expiry, no DID reservation
+or correlated account (including canonical email or requested-handle conflicts with legacy accounts),
+and no reconciliation marker. Missing fields, other unfinished states, retained
+provisioning/finalization locks (including expired or malformed locks), or more than 100 unfinished
+records fail closed. Completed accounts and their durable DID reservations are preserved.
+
+`pendingRegistrations` counts all retained unfinished records, including expired ones. MongoDB's
+`expiresAt` TTL index performs asynchronous cleanup; expiry does not prove deletion and the read-only
+check never deletes or repairs records. Claims and DID reservation remove expiry to preserve identity
+evidence. `reconciliationRequired` counts non-null markers regardless of whether `provisionedAt` is
+null, absent, or populated; ordinary email-only pending records have a null marker and are not
+reconciliation failures.
 
 Inspect current state without mutation:
 
@@ -182,8 +196,8 @@ Inspect current state without mutation:
 
 ## Pre-activation Postmark canary
 
-After the reviewed candidate is deployed in legacy mode with both pending flags false and zero
-pending operations, test the production Postmark credentials, `email-verification` template and
+After the reviewed candidate is deployed in legacy mode with both pending flags false and activation
+readiness established, test the production Postmark credentials, `email-verification` template and
 production-equivalent template model without activating registration:
 
 ```bash
@@ -192,7 +206,7 @@ cd /root/circles/circles
 ```
 
 The command requires the checkout and deployed image to match `origin/main`, routing to remain
-`legacy`, the default-off runtime configuration, an idle pending-registration state and exact
+`legacy`, the default-off runtime configuration, read-only activation readiness and exact
 confirmation phrase `SEND_POSTMARK_VERIFICATION_CANARY`. It prompts for an approved recipient without
 echoing the address. It does not read or require the pending-registration HMAC or deployment ID.
 
@@ -238,8 +252,8 @@ cd /root/circles/circles
 ```
 
 The command requires the clean checkout and immutable application image to match `origin/main`,
-routing to remain `legacy`, both pending-registration flags to be disabled, and zero pending,
-lock, or reconciliation-required operations. It reads `ONBOARDING_ALERT_EMAIL` from the protected
+routing to remain `legacy`, both pending-registration flags to be disabled, and activation readiness
+with no retained locks or reconciliation evidence. It reads `ONBOARDING_ALERT_EMAIL` from the protected
 activation file and requires the confirmation phrase `SEND_WATCHDOG_ALERT_CANARY`.
 
 It sends exactly one message through the production Postmark transport using the same
@@ -301,7 +315,7 @@ Transition `legacy` to `paused`:
 ```
 
 Confirm both `/signup` and `/signup/pilot` display the unavailable state. Wait at least five minutes,
-then verify zero pending operations again:
+then inspect pending operations again (untouched email-only records may remain):
 
 ```bash
 ./circles/scripts/production-onboarding-control.sh status
@@ -312,6 +326,8 @@ While routing remains `paused`, recreate the application with the validated acti
 ```bash
 ./circles/scripts/production-onboarding-control.sh activate-services
 ```
+
+The command rechecks activation readiness before recreating services.
 
 This stops NGINX before recreating `circles`, verifies one production application with the exact SHA,
 production image role, Postmark, `https://kamooni.org`, both pending flags, the HMAC presence without
@@ -336,7 +352,8 @@ legacy.
 
 Before starting:
 
-- Confirm routing is exactly `paused`, reconciliation-required is zero, and both active
+- After a separately authorized pause, wait at least five minutes before deploying. Confirm routing
+  is exactly `paused`, reconciliation-required is zero, and both active
   provisioning-lock and finalization-lock counts are zero. An unfinished `pending_email` record is
   allowed.
 - Confirm the protected activation environment and routing-operator verifier still exist with their
@@ -362,14 +379,16 @@ cd /root/circles/circles
 test "$(git branch --show-current)" = main
 test -z "$(git status --porcelain --untracked-files=all)"
 git fetch --no-tags origin main
-git merge --ff-only refs/remotes/origin/main
+test "$(git rev-parse refs/remotes/origin/main)" = "$APPROVED_FULL_SHA" &&
+git merge --ff-only "$APPROVED_FULL_SHA"
 ```
 
-Then run the deployment from the production repository root:
+Set `APPROVED_FULL_SHA` to the full 40-character SHA authorized for this release before the
+bootstrap and deployment. Run the deployment from the production repository root:
 
 ```bash
 cd /root/circles/circles
-./circles/scripts/production-onboarding-control.sh deploy-paused-services
+./circles/scripts/production-onboarding-control.sh deploy-paused-services "$APPROVED_FULL_SHA"
 ```
 
 The command requires the exact confirmation phrase `DEPLOY_PAUSED_ONBOARDING_SERVICES`. It acquires
@@ -377,7 +396,7 @@ the shared production maintenance lock, verifies the currently running activatio
 ancestor of the target `main`, fetches and fast-forwards only to exact `origin/main`, and validates
 the operator/application images, Compose overlays, activation file separation, routing, and idle
 operation counts. It rechecks routing and the lock/reconciliation aggregates again immediately before
-stopping the current application.
+stopping the current application, including when the chat migration is required.
 
 It then builds the operator, `circles`, and `cron` images. The new application image's Git SHA,
 immutable image ID, and production role marker are validated before any running application is
@@ -556,11 +575,23 @@ For aggregate classifications without identity identifiers:
 python3 -c 'import collections,json,sys; d=json.load(sys.stdin); r=d.get("results",[]); print(json.dumps({"count":d.get("count",0),"byClassification":dict(collections.Counter(x.get("classification","unknown") for x in r))},sort_keys=True))'
 ```
 
-Verify one completed pending-registration-v1 account without requiring pending registration to be active:
+Verify one completed pending-registration-v1 account while default services are running and routing is
+`legacy` or `paused` with no deployment ID (including the paused rollback state):
 
 ```bash
 ./circles/scripts/production-onboarding-control.sh verify-provisioned-account
 ```
+
+While routing remains `pending` and activation services are running, select activation verification explicitly:
+
+```bash
+./circles/scripts/production-onboarding-control.sh verify-provisioned-account activation
+```
+
+Both modes are read-only and leave routing and services unchanged. Activation verification validates the
+protected activation configuration and requires routing and the live application to match its approved
+deployment ID. Runtime, image identity and routing are checked before the handle prompt and again before
+account verification; mismatches stop the command. The operator receives no pending-registration HMAC.
 
 The command prompts for the current account handle on `/dev/tty` without echoing it and passes the
 handle to the read-only operator container over standard input. The handle, account ID, DID,
@@ -744,7 +775,7 @@ production paths intentionally, but only after proving:
 The rehearsal creates a fake application, disposable authenticated MongoDB, synthetic TLS NGINX,
 fake credentials, and synthetic `pending_email`, DID reservation and account records. Its Git
 `origin` is rewritten to a local bare repository, and Git transport is restricted to `file`, so the
-real `deploy-genesis2.sh main --paused-onboarding` path cannot contact the GitHub remote. It maps
+real `deploy-genesis2.sh main --paused-onboarding APPROVED_FULL_SHA` path cannot contact the GitHub remote. It maps
 `kamooni.org` only to the local synthetic TLS endpoint and never includes a real Postmark client or
 production application code.
 

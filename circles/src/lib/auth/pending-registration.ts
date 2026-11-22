@@ -276,6 +276,20 @@ async function audit(
     });
 }
 
+async function auditEmailDelivery(
+    collections: PendingRegistrationCollections,
+    pendingRegistrationId: string,
+    eventType: string,
+    now: Date,
+) {
+    try {
+        await audit(collections, pendingRegistrationId, eventType, now);
+    } catch {
+        // Diagnostics must not change the transport result. Never log raw errors containing secrets.
+        console.warn("Pending registration email audit failed", { pendingRegistrationId, eventType });
+    }
+}
+
 export async function consumePendingRegistrationRateLimit(
     collections: PendingRegistrationCollections,
     scope: string,
@@ -574,16 +588,22 @@ export async function startPendingRegistration(
         throw error;
     }
     await audit(deps.collections, record._id.toHexString(), "pending_registration.created", now);
+    let deliveryFailed = false;
     try {
         await deps.sendVerificationEmail({
             to: record.email,
             name: record.name,
             verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, verificationToken),
         });
-        await audit(deps.collections, record._id.toHexString(), "pending_registration.verification_sent", now);
     } catch {
-        await audit(deps.collections, record._id.toHexString(), "pending_registration.email_delivery_failed", now);
+        deliveryFailed = true;
     }
+    await auditEmailDelivery(
+        deps.collections,
+        record._id.toHexString(),
+        deliveryFailed ? "pending_registration.email_delivery_failed" : "pending_registration.verification_sent",
+        now,
+    );
     return publicResult;
 }
 
@@ -807,16 +827,24 @@ export async function requestPendingRegistrationRecovery(
     );
     if (!record) return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
 
+    let deliveryFailed = false;
     try {
         await deps.sendVerificationEmail({
             to: record.email,
             name: record.name,
             verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, token),
         });
-        await audit(deps.collections, record._id.toHexString(), "pending_registration.recovery_verification_sent", now);
     } catch {
-        await audit(deps.collections, record._id.toHexString(), "pending_registration.email_delivery_failed", now);
+        deliveryFailed = true;
     }
+    await auditEmailDelivery(
+        deps.collections,
+        record._id.toHexString(),
+        deliveryFailed
+            ? "pending_registration.email_delivery_failed"
+            : "pending_registration.recovery_verification_sent",
+        now,
+    );
     return { success: true, message: PENDING_REGISTRATION_PUBLIC_MESSAGE };
 }
 
@@ -881,16 +909,15 @@ export async function resendPendingRegistrationVerification(
                 name: record.name,
                 verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, token),
             });
-            await audit(deps.collections, input.pendingRegistrationId, "pending_registration.verification_resent", now);
         } catch {
             deliveryFailed = true;
-            await audit(
-                deps.collections,
-                input.pendingRegistrationId,
-                "pending_registration.email_delivery_failed",
-                now,
-            );
         }
+        await auditEmailDelivery(
+            deps.collections,
+            input.pendingRegistrationId,
+            deliveryFailed ? "pending_registration.email_delivery_failed" : "pending_registration.verification_resent",
+            now,
+        );
     }
     return {
         success: true,
@@ -964,16 +991,15 @@ export async function correctPendingRegistrationEmail(
                 name: record.name,
                 verificationUrl: buildPendingRegistrationVerificationUrl(deps.baseUrl, token),
             });
-            await audit(deps.collections, input.pendingRegistrationId, "pending_registration.email_corrected", now);
         } catch {
             deliveryFailed = true;
-            await audit(
-                deps.collections,
-                input.pendingRegistrationId,
-                "pending_registration.email_delivery_failed",
-                now,
-            );
         }
+        await auditEmailDelivery(
+            deps.collections,
+            input.pendingRegistrationId,
+            deliveryFailed ? "pending_registration.email_delivery_failed" : "pending_registration.email_corrected",
+            now,
+        );
     }
     return {
         success: true,

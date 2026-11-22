@@ -55,7 +55,7 @@ assert.ok(
     "agreement stays visible outside the scroll region",
 );
 assert.match(cards, /const \[agreed, setAgreed\] = useState\(false\)/, "guidelines start unchecked");
-assert.match(cards, /set\("picture", file\)/, "photo uses the existing profile image upload action");
+assert.match(cards, /set\("picture", selectedFile\)/, "photo uses the existing profile image upload action");
 assert.match(cards, /personalProfile/, "onboarding uses the privacy-safe personal location picker mode");
 assert.match(cards, /Choose where people can find you/, "onboarding shows the personal location privacy guidance");
 assert.match(cards, /realPersonCount[\s\S]*metInRealLifeCount/, "human verification levels remain distinct");

@@ -313,7 +313,7 @@ def main() -> None:
         errors = validate_no_published_application_ports(read_json(sys.argv[2]))
     elif command == "ops-compose-json" and len(sys.argv) == 4:
         errors = validate_ops_compose(read_json(sys.argv[2]), sys.argv[3])
-    elif command == "route-status" and len(sys.argv) == 3:
+    elif command == "route-status" and len(sys.argv) in (3, 4):
         try:
             status = json.load(sys.stdin)
         except json.JSONDecodeError:
@@ -323,11 +323,40 @@ def main() -> None:
         expected_mode = sys.argv[2]
         mode_matches = status.get("mode") == expected_mode
         deployment_clean = expected_mode == "pending" or status.get("deploymentId") is None
+        if expected_mode == "default":
+            # Default services also run while registration is safely paused during rollback.
+            mode_matches = status.get("mode") in {"legacy", "paused"}
+            deployment_clean = "deploymentId" in status and status["deploymentId"] is None
+        if len(sys.argv) == 4:
+            expected_deployment_id = sys.argv[3]
+            deployment_clean = (
+                expected_mode == "pending"
+                and DEPLOYMENT_ID.fullmatch(expected_deployment_id) is not None
+                and status.get("deploymentId") == expected_deployment_id
+            )
         errors = (
             []
             if mode_matches and deployment_clean
             else [f"registration routing is not the expected {expected_mode} state"]
         )
+    elif command == "activation-ready" and len(sys.argv) == 2:
+        try:
+            status = json.load(sys.stdin)
+        except json.JSONDecodeError:
+            fail("could not parse pending-registration activation readiness")
+        if not isinstance(status, dict) or status.get("ready") is not True:
+            fail("pending-registration activation readiness was not established")
+        errors = []
+        for key in ("pendingRegistrations", "untouchedPendingEmail", "expiredPendingEmail"):
+            if type(status.get(key)) is not int or status[key] < 0:
+                errors.append(f"{key} must be a non-negative integer")
+        if not errors and not (
+            status["expiredPendingEmail"] <= status["untouchedPendingEmail"] == status["pendingRegistrations"]
+        ):
+            errors.append("every unfinished registration must be untouched pending_email")
+        for key in ("reconciliationRequired", "provisioningLocks", "finalizationLocks"):
+            if type(status.get(key)) is not int or status[key] != 0:
+                errors.append(f"{key} must be zero before activation")
     elif command == "operations-zero" and len(sys.argv) == 2:
         try:
             status = json.load(sys.stdin)

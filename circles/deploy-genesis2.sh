@@ -3,17 +3,18 @@
 set +x
 set -euo pipefail
 
-if [[ "$#" -lt 1 || "$#" -gt 2 || "$1" != "main" ]]; then
+if [[ "$#" -lt 1 || "$1" != "main" ]]; then
   echo "Error: production deployment requires the explicit branch argument: main" >&2
   exit 2
 fi
 DEPLOY_MODE="legacy"
-if [[ "$#" -eq 2 ]]; then
-  if [[ "$2" != "--paused-onboarding" ]]; then
-    echo "Error: unsupported production deployment mode: $2" >&2
+if [[ "$#" -ne 1 ]]; then
+  if [[ "$#" -ne 3 || "$2" != "--paused-onboarding" || ! "$3" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Error: paused onboarding deployment requires main --paused-onboarding APPROVED_FULL_SHA" >&2
     exit 2
   fi
   DEPLOY_MODE="paused-onboarding"
+  APPROVED_SHA="$3"
 fi
 
 EXPECTED_DIR="/root/circles/circles"
@@ -134,7 +135,7 @@ require_paused_onboarding_secret_files() {
 require_paused_operations_idle() {
   local status
   status="$("${OPS_COMPOSE[@]}" run --rm --no-deps --pull never -T registration_ops \
-    operations-status --users-dir /circles/users)"
+    operations-status --users-dir /circles/users)" || return 1
   printf '%s\n' "$status" | python3 "$ACTIVATION_VALIDATOR" operations-idle >/dev/null
 }
 
@@ -322,6 +323,11 @@ fi
 echo "Deploying branch: $BRANCH"
 git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
 
+if [[ "$DEPLOY_MODE" == "paused-onboarding" &&
+      "$(git rev-parse refs/remotes/origin/main)" != "$APPROVED_SHA" ]]; then
+  fail "origin/main does not match the approved paused onboarding SHA"
+fi
+
 if ! require_clean_worktree; then
   exit 1
 fi
@@ -348,6 +354,9 @@ ORIGIN_MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
 if [[ "$LOCAL_SHA" != "$ORIGIN_MAIN_SHA" ]]; then
   echo "Error: production HEAD does not exactly match origin/main." >&2
   exit 1
+fi
+if [[ "$DEPLOY_MODE" == "paused-onboarding" && "$LOCAL_SHA" != "$APPROVED_SHA" ]]; then
+  fail "production HEAD does not match the approved paused onboarding SHA"
 fi
 
 ISOLATION_GUARD="$APP_DIR/scripts/check-production-staging-isolation.sh"
@@ -462,6 +471,16 @@ verify_registration_routing_paused() {
     echo "Error: registration routing did not remain paused" >&2
     return 1
   }
+}
+
+require_paused_replacement_ready() {
+  [[ "$DEPLOY_MODE" == "paused-onboarding" ]] || return 0
+  if ! verify_registration_routing_paused; then
+    stop_nginx_for_paused_onboarding
+    fail "registration routing changed before the application replacement window"
+  fi
+  require_paused_operations_idle || \
+    fail "pending-registration operations became active before the application replacement window"
 }
 
 recreate_and_verify_cron() {
@@ -598,6 +617,7 @@ if [[ "$CHAT_READ_STATE_V2_COMPLETION_COUNT" == "1" ]]; then
   fi
 else
   echo "Stopping every Compose instance of the old circles application before chat read-state migration..."
+  require_paused_replacement_ready
   stop_nginx_for_paused_onboarding
   if ! "${BASE_COMPOSE[@]}" stop circles; then
     fail_offline "failed to stop the old circles application; migration was not started"
@@ -618,15 +638,7 @@ else
   fi
 fi
 
-if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
-  if ! verify_registration_routing_paused; then
-    stop_nginx_for_paused_onboarding
-    fail "registration routing changed before the application replacement window"
-  fi
-  require_paused_operations_idle || \
-    fail "pending-registration operations became active before the application replacement window"
-fi
-
+require_paused_replacement_ready
 stop_nginx_for_paused_onboarding
 if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
   if ! "${PAUSED_APPLICATION_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate circles; then
