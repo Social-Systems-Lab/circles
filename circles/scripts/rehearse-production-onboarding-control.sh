@@ -350,6 +350,8 @@ NGINX
         -subj "/CN=kamooni.org" -addext "subjectAltName=DNS:kamooni.org" >/dev/null 2>&1
     chmod 600 "$CONTROL_DIR/server.key"
 
+    # Match the production checkout: host environment values are separate from the reviewed Git tree.
+    printf '/circles/.env\n' >"$EXPECTED_REPO_DIR/.gitignore"
     cat >"$APP_DIR/.env" <<'ENV'
 CIRCLES_PORT=3000
 CIRCLES_NODE_ENV=production
