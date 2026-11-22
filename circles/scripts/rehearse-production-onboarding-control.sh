@@ -239,6 +239,7 @@ const gitSha = process.env.GIT_SHA || "unknown";
 const holdSha = process.env.REHEARSAL_HOLD_VERSION_SHA || "";
 const releaseToken = process.env.REHEARSAL_RELEASE_TOKEN || "";
 const heldResponses = new Set();
+let internalVersionReleased = false;
 function sendVersion(response) {
   response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
   response.end(JSON.stringify({ version: "rehearsal", gitSha, buildTime: "rehearsal" }));
@@ -250,6 +251,7 @@ const server = http.createServer((request, response) => {
     releaseToken &&
     requestUrl.searchParams.get("token") === releaseToken
   ) {
+    internalVersionReleased = true;
     for (const heldResponse of heldResponses) sendVersion(heldResponse);
     heldResponses.clear();
     response.writeHead(200, { "content-type": "application/json" });
@@ -285,7 +287,7 @@ const server = http.createServer((request, response) => {
   try {
     fs.writeFileSync("/rehearsal-runtime/internal-version-requested", gitSha);
   } catch {}
-  if (holdSha && holdSha === gitSha) {
+  if (!internalVersionReleased && holdSha && holdSha === gitSha && request.headers.host !== "kamooni.org") {
     console.log(`REHEARSAL_INTERNAL_VERSION ${gitSha}`);
     heldResponses.add(response);
     setTimeout(() => {
@@ -1038,7 +1040,10 @@ set +e
 wait "$DEPLOY_PID"
 deploy_status=$?
 set -e
-[[ "$deploy_status" -eq 0 ]] || fail "paused deployment retry failed after image-validation recovery"
+if [[ "$deploy_status" -ne 0 ]]; then
+    tail -40 "$CONTROL_DIR/deploy-image-retry.log" >&2
+    fail "paused deployment retry failed after image-validation recovery"
+fi
 unset REHEARSAL_HOLD_VERSION_SHA REHEARSAL_RELEASE_TOKEN REHEARSAL_START_DELAY_MS
 wait_for_external_version "$image_failure_sha" || fail "retry deployment did not expose the approved SHA"
 assert_route paused
