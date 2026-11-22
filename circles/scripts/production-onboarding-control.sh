@@ -61,6 +61,7 @@ Usage:
   production-onboarding-control.sh watchdog-alert-canary
   production-onboarding-control.sh verify-provisioned-account [default|activation]
   production-onboarding-control.sh deploy-paused-services APPROVED_FULL_SHA
+  production-onboarding-control.sh recover-paused-services APPROVED_FULL_SHA
 EOF
     exit 2
 }
@@ -80,11 +81,14 @@ require_terminal_confirmation() {
 [[ "$#" -ge 1 ]] || usage
 command_name="$1"
 shift
-if [[ "$command_name" == "deploy-paused-services" ]]; then
+if [[ "$command_name" == "deploy-paused-services" || "$command_name" == "recover-paused-services" ]]; then
     [[ "$#" -eq 1 && "$1" =~ ^[0-9a-f]{40}$ ]] || usage
     [[ "$(id -u)" -eq 0 ]] || fail "production onboarding control must run as root"
     [[ "$REPO_DIR" == "$EXPECTED_REPO_DIR" ]] || fail "unexpected production repository path"
     [[ -x "$APP_DIR/deploy-genesis2.sh" ]] || fail "production deployment script is missing or not executable"
+    if [[ "$command_name" == "recover-paused-services" ]]; then
+        exec "$APP_DIR/deploy-genesis2.sh" main --recover-paused-onboarding "$1"
+    fi
     exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding "$1"
 fi
 expected=""

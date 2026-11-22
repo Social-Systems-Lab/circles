@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import sys
+from urllib.parse import urlsplit
 
 CONTAINER_NETWORK = "circles_webnet"
 CONTAINER_PRIVATE_NETWORKS = (
@@ -50,6 +51,8 @@ def validate_application(
     mode: str,
     deployment_id: str,
     approved_hmac: str | None = None,
+    *,
+    running: bool = True,
 ) -> list[str]:
     errors: list[str] = []
     env = environment(container)
@@ -78,8 +81,9 @@ def validate_application(
     for key in ("ALTCHA_HMAC_KEY", "POSTMARK_API_TOKEN", "POSTMARK_SENDER_EMAIL"):
         if not env.get(key):
             errors.append(f"running {key} is missing")
-    if container.get("State", {}).get("Running") is not True:
-        errors.append("application container is not running")
+    state = container.get("State", {})
+    if state.get("Running") is not running or (not running and state.get("Status") != "exited"):
+        errors.append("application running state does not match the requested deployment mode")
     if set(container.get("NetworkSettings", {}).get("Networks", {})) != {CONTAINER_NETWORK}:
         errors.append("application has unexpected live network attachments")
     return errors
@@ -140,6 +144,50 @@ def require_no_published_ports(container: dict) -> None:
         raise SystemExit("Error: maintenance application publishes a host port")
 
 
+def compose_environment(path: str, service: str) -> dict:
+    with open(path, encoding="utf-8") as source:
+        return json.load(source)["services"][service]["environment"]
+
+
+def verified_database_uri(environments: list[dict]) -> str:
+    uri = environments[0].get("MONGODB_URI", "")
+    try:
+        parsed = urlsplit(uri)
+        valid = (
+            isinstance(uri, str)
+            and not any(character.isspace() for character in uri)
+            and parsed.scheme == "mongodb"
+            and parsed.hostname == "db"
+            and parsed.port in (None, 27017)
+            and parsed.path == "/circles"
+            and not parsed.fragment
+        )
+    except (AttributeError, TypeError, ValueError):
+        valid = False
+    if not valid or any(
+        env.get("MONGODB_URI") != uri or (env.get("CIRCLES_MONGODB_DATABASE") or "circles") != "circles"
+        for env in environments
+    ):
+        raise SystemExit("Error: production MongoDB identity differs or is invalid")
+    return uri
+
+
+def verify_paused_database_and_credentials(container: dict, base: str, activation: str, ops: str) -> str:
+    runtime = environment(container)
+    try:
+        default = compose_environment(base, "circles")
+        candidate = compose_environment(activation, "circles")
+        operator = compose_environment(ops, "registration_ops")
+    except (OSError, ValueError, KeyError, TypeError):
+        raise SystemExit("Error: unable to determine production Compose database identity")
+    uri = verified_database_uri([runtime, default, candidate, operator])
+    for key in ("PENDING_REGISTRATION_TOKEN_HMAC_KEY", "REGISTRATION_DEPLOYMENT_ID", "CIRCLES_JWT_SECRET", "CRON_SECRET"):
+        value = runtime.get(key)
+        if not value or candidate.get(key) != value:
+            raise SystemExit(f"Error: candidate {key} differs from the existing production application")
+    return uri
+
+
 def main() -> None:
     if len(sys.argv) == 2 and sys.argv[1] == "summary":
         print(json.dumps(application_runtime_summary(read_single_container()), separators=(",", ":")))
@@ -151,17 +199,26 @@ def main() -> None:
         require_no_published_ports(read_single_container())
         print("Maintenance application has no published host ports.")
         return
-    if len(sys.argv) not in {3, 4} or sys.argv[1] not in {"default", "activation"}:
+    if len(sys.argv) == 5 and sys.argv[1] == "paused-database":
+        # Consumed only in a shell variable with tracing disabled. Never send this value to a terminal.
+        print(verify_paused_database_and_credentials(read_single_container(), *sys.argv[2:]))
+        return
+    if len(sys.argv) not in {3, 4} or sys.argv[1] not in {"default", "activation", "stopped-activation"}:
         raise SystemExit(
             f"usage: {sys.argv[0]} summary | endpoint | no-published-ports | "
-            "default|activation DEPLOYMENT_ID_OR_NONE [ACTIVATION_ENV_FILE]"
+            "default|activation|stopped-activation DEPLOYMENT_ID_OR_NONE [ACTIVATION_ENV_FILE]"
         )
     approved_hmac = None
     if len(sys.argv) == 4:
-        if sys.argv[1] != "activation":
+        if sys.argv[1] not in {"activation", "stopped-activation"}:
             raise SystemExit("Error: activation file comparison is valid only for activation mode")
         approved_hmac = read_activation_hmac(Path(sys.argv[3]))
-    errors = validate_application(read_single_container(), sys.argv[1], sys.argv[2], approved_hmac)
+    stopped = sys.argv[1] == "stopped-activation"
+    if stopped and approved_hmac is None:
+        raise SystemExit("Error: stopped activation requires the approved activation file")
+    errors = validate_application(
+        read_single_container(), "activation" if stopped else sys.argv[1], sys.argv[2], approved_hmac, running=not stopped
+    )
     if errors:
         for error in errors:
             print(f"Error: {error}", file=sys.stderr)

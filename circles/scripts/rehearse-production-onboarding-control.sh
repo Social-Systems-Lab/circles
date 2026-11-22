@@ -43,7 +43,11 @@ cleanup() {
     local owned=false
     set +e
     if [[ -n "$DEPLOY_PID" ]] && kill -0 "$DEPLOY_PID" 2>/dev/null; then
-        kill -TERM "$DEPLOY_PID" 2>/dev/null
+        if [[ -f "$CONTROL_DIR/deploy-child.pid" ]]; then
+            kill -TERM "$(cat "$CONTROL_DIR/deploy-child.pid")" 2>/dev/null
+        else
+            kill -TERM "$DEPLOY_PID" 2>/dev/null
+        fi
         wait "$DEPLOY_PID" 2>/dev/null
     fi
     if [[ -f "$ROOT_MARKER" && "$(cat "$ROOT_MARKER" 2>/dev/null)" == "$RUN_ID" ]]; then
@@ -239,7 +243,7 @@ function sendVersion(response) {
   response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
   response.end(JSON.stringify({ version: "rehearsal", gitSha, buildTime: "rehearsal" }));
 }
-http.createServer((request, response) => {
+const server = http.createServer((request, response) => {
   const requestUrl = new URL(request.url, "http://rehearsal.invalid");
   if (
     requestUrl.pathname === "/rehearsal-release" &&
@@ -250,6 +254,16 @@ http.createServer((request, response) => {
     heldResponses.clear();
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ released: true }));
+    return;
+  }
+  if (requestUrl.pathname === "/rehearsal-in-flight-verification") {
+    fs.writeFileSync("/rehearsal-runtime/verification-in-flight", gitSha);
+    const waitForRelease = setInterval(() => {
+      if (!fs.existsSync("/rehearsal-runtime/release-verification")) return;
+      clearInterval(waitForRelease);
+      response.end("verification response completed");
+    }, 100);
+    response.on("close", () => clearInterval(waitForRelease));
     return;
   }
   if (request.url !== "/api/version") {
@@ -264,6 +278,10 @@ http.createServer((request, response) => {
     response.writeHead(404).end("not found");
     return;
   }
+  if (process.env.REHEARSAL_BLOCK_PUBLIC_SHA === gitSha && request.headers.host === "kamooni.org") {
+    fs.writeFileSync("/rehearsal-runtime/public-version-requested", gitSha);
+    return;
+  }
   try {
     fs.writeFileSync("/rehearsal-runtime/internal-version-requested", gitSha);
   } catch {}
@@ -276,7 +294,8 @@ http.createServer((request, response) => {
     return;
   }
   sendVersion(response);
-}).listen(port, "0.0.0.0");
+});
+setTimeout(() => server.listen(port, "0.0.0.0"), Number(process.env.REHEARSAL_START_DELAY_MS || 0));
 NODE
 
     cat >"$APP_DIR/Dockerfile.rehearsal-app" <<'DOCKER'
@@ -384,6 +403,8 @@ services:
       - GIT_SHA=${GIT_SHA:?GIT_SHA is required}
       - REHEARSAL_HOLD_VERSION_SHA=${REHEARSAL_HOLD_VERSION_SHA:-}
       - REHEARSAL_RELEASE_TOKEN=${REHEARSAL_RELEASE_TOKEN:-}
+      - REHEARSAL_START_DELAY_MS=${REHEARSAL_START_DELAY_MS:-}
+      - REHEARSAL_BLOCK_PUBLIC_SHA=${REHEARSAL_BLOCK_PUBLIC_SHA:-}
     volumes:
       - circles_users:/circles/users
       - /root/circles/rehearsal-control:/rehearsal-control:ro
@@ -682,6 +703,26 @@ advance_fake_origin() {
     printf '%s\n' "$sha"
 }
 
+prepare_fake_checkout() {
+    git -C "$EXPECTED_REPO_DIR" merge --quiet --ff-only "$1"
+}
+
+age_disposable_pause() {
+    "${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+const result = db.registrationRouting.updateOne(
+    {_id: "registration-routing", mode: "paused", deploymentId: null},
+    {$set: {updatedAt: new Date(Date.now() - 6 * 60 * 1000)}});
+quit(result.matchedCount === 1 ? 0 : 1);' >/dev/null
+}
+
+run_paused_recovery() {
+    local log="$1" approved_sha="$2"
+    (
+        cd "$EXPECTED_REPO_DIR"
+        run_pty_command "$CONTROL_DIR/paused-recovery.responses" "$CONTROL_SCRIPT" recover-paused-services "$approved_sha"
+    ) >"$log" 2>&1
+}
+
 run_paused_deploy() {
     local log="$1" approved_sha="$2"
     (
@@ -692,9 +733,14 @@ run_paused_deploy() {
 
 start_paused_deploy_background() {
     local log="$1" approved_sha="$2"
+    rm -f "$CONTROL_DIR/deploy-child.pid"
     (
         cd "$EXPECTED_REPO_DIR"
-        run_pty_command "$CONTROL_DIR/deploy.responses" "$CONTROL_SCRIPT" deploy-paused-services "$approved_sha"
+        run_pty_command "$CONTROL_DIR/deploy.responses" bash -c '
+            printf "%s\n" "$$" >"$1"
+            shift
+            exec "$@"
+        ' bash "$CONTROL_DIR/deploy-child.pid" "$CONTROL_SCRIPT" deploy-paused-services "$approved_sha"
     ) >"$log" 2>&1 &
     DEPLOY_PID=$!
 }
@@ -900,6 +946,8 @@ assert_synthetic_identity_preserved
 export GIT_ALLOW_PROTOCOL=file
 write_response_file "$CONTROL_DIR/deploy.responses" \
     "Type DEPLOY_PAUSED_ONBOARDING_SERVICES to continue:	DEPLOY_PAUSED_ONBOARDING_SERVICES"
+write_response_file "$CONTROL_DIR/paused-recovery.responses" \
+    "Type RECOVER_PAUSED_ONBOARDING_SERVICES to continue:	RECOVER_PAUSED_ONBOARDING_SERVICES"
 
 run_pty_wrapper "$CONTROL_DIR/route.responses" route-set legacy paused none REHEARSAL >/dev/null
 assert_route paused
@@ -909,8 +957,16 @@ assert_pending_email_preserved
 assert_activation_state_preserved
 
 image_failure_sha="$(advance_fake_origin image-failure)"
+assert_deploy_rejected "$CONTROL_DIR/stale-script.log" "$image_failure_sha" "check out the approved origin/main SHA"
 assert_deploy_rejected "$CONTROL_DIR/sha-mismatch.log" "$GIT_SHA" "origin/main does not match the approved paused onboarding SHA"
 [[ "$(git -C "$EXPECTED_REPO_DIR" rev-parse HEAD)" == "$GIT_SHA" ]] || fail "wrong-approved-SHA rejection advanced the checkout"
+prepare_fake_checkout "$image_failure_sha"
+DOCKER_CONTEXT=default assert_deploy_rejected "$CONTROL_DIR/daemon-override.log" "$image_failure_sha" "Docker context and host overrides are forbidden"
+assert_deploy_rejected "$CONTROL_DIR/drain.log" "$image_failure_sha" "production registration must remain paused for at least five minutes"
+age_disposable_pause
+printf '\nCIRCLES_MONGODB_DATABASE=wrong_disposable_database\n' >>"$APP_DIR/.env"
+assert_deploy_rejected "$CONTROL_DIR/database-mismatch.log" "$image_failure_sha" "production MongoDB identity differs or is invalid"
+sed -i '/^CIRCLES_MONGODB_DATABASE=wrong_disposable_database$/d' "$APP_DIR/.env"
 insert_active_locks
 assert_deploy_rejected "$CONTROL_DIR/active-locks.log" "$image_failure_sha" "activeProvisioningLocks must be zero"
 clear_synthetic_locks
@@ -942,9 +998,34 @@ assert_activation_state_preserved
 "$CONTROL_SCRIPT" status >/dev/null
 
 rm -f "$CONTROL_DIR/image-validation-failure" "$RUNTIME_DIR/internal-version-requested"
+curl --fail --silent --show-error --max-time 130 \
+    "https://$PUBLIC_HOST/rehearsal-in-flight-verification" >"$CONTROL_DIR/drained-request.log" &
+drain_pid=$!
+for _ in $(seq 1 20); do
+    [[ -f "$RUNTIME_DIR/verification-in-flight" ]] && break
+    sleep 0.25
+done
+[[ -f "$RUNTIME_DIR/verification-in-flight" ]] || fail "no in-flight verification request reached the fixture"
 export REHEARSAL_HOLD_VERSION_SHA="$image_failure_sha"
+export REHEARSAL_START_DELAY_MS=5000
 export REHEARSAL_RELEASE_TOKEN="$(openssl rand -hex 24)"
 start_paused_deploy_background "$CONTROL_DIR/deploy-image-retry.log" "$image_failure_sha"
+drain_observed=false
+for _ in $(seq 1 180); do
+    if ! curl --fail --silent --connect-timeout 1 --max-time 2 "https://$PUBLIC_HOST/api/version" >/dev/null; then
+        drain_observed=true
+        break
+    fi
+    kill -0 "$DEPLOY_PID" 2>/dev/null || fail "deployment exited during verification drain"
+    sleep 0.5
+done
+[[ "$drain_observed" == true ]] || fail "NGINX never stopped accepting new requests during the drain"
+[[ "$(container_id)" == "$circles_before" ]] || fail "application was replaced with an in-flight verification request"
+kill -0 "$drain_pid" 2>/dev/null || fail "NGINX interrupted an in-flight verification request"
+touch "$RUNTIME_DIR/release-verification"
+wait "$drain_pid" || fail "NGINX did not deliver the in-flight verification response"
+grep -Fxq 'verification response completed' "$CONTROL_DIR/drained-request.log" ||
+    fail "in-flight verification response was lost"
 wait_for_internal_version_request "$DEPLOY_PID" "$image_failure_sha" || \
     { report_retry_verification_failure; exit 1; }
 [[ -z "$("${BASE_COMPOSE[@]}" ps --status running -q nginx)" ]] || \
@@ -956,7 +1037,7 @@ wait "$DEPLOY_PID"
 deploy_status=$?
 set -e
 [[ "$deploy_status" -eq 0 ]] || fail "paused deployment retry failed after image-validation recovery"
-unset REHEARSAL_HOLD_VERSION_SHA REHEARSAL_RELEASE_TOKEN
+unset REHEARSAL_HOLD_VERSION_SHA REHEARSAL_RELEASE_TOKEN REHEARSAL_START_DELAY_MS
 wait_for_external_version "$image_failure_sha" || fail "retry deployment did not expose the approved SHA"
 assert_route paused
 assert_no_app_host_port
@@ -965,10 +1046,13 @@ assert_synthetic_identity_preserved
 assert_activation_state_preserved
 
 startup_failure_sha="$(advance_fake_origin startup-failure)"
+prepare_fake_checkout "$startup_failure_sha"
 touch "$CONTROL_DIR/failure"
 if run_paused_deploy "$CONTROL_DIR/deploy-startup-failure.log" "$startup_failure_sha"; then
     fail "paused deployment unexpectedly succeeded during application startup fault injection"
 fi
+grep -Eq 'application (failed to start|runtime verification failed|is not running)' "$CONTROL_DIR/deploy-startup-failure.log" ||
+    fail "fault-injected startup stopped at the wrong step"
 assert_route paused
 assert_public_services_stopped
 assert_pending_email_preserved
@@ -991,11 +1075,82 @@ assert_route pending
 rehearse_registration_links "$startup_failure_sha" seed >"$CONTROL_DIR/registration-links.json"
 run_pty_wrapper "$CONTROL_DIR/route.responses" route-set pending paused none REHEARSAL >/dev/null
 assert_route paused
+age_disposable_pause
+
+# Run the real migration against one healthy legacy row, a malformed legacy row, and an incomplete V2 row.
+# No fault injection is used for these failures. The data makes migration then verification abort in sequence.
+"${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+db.schemaMigrations.deleteOne({_id:"chat-read-state-v2"});
+db.chatReadStates.insertMany([
+  {_id:"rehearsal-legacy-ok", userDid:"did:rehearsal:one", conversationId:"room-one",
+   lastReadMessageId:"aaaaaaaaaaaaaaaaaaaaaaaa", updatedAt:new Date()},
+  {_id:"rehearsal-legacy-blocked", userDid:"did:rehearsal:two", conversationId:"room-two"},
+  {_id:"rehearsal-v2-incomplete", userDid:"did:rehearsal:three", conversationId:"room-three",
+   readStateVersion:2, readStateMigratedAt:new Date()}
+]);' >/dev/null
+migration_sha="$(advance_fake_origin partial-migration)"
+prepare_fake_checkout "$migration_sha"
+old_offline_container="$(container_id)"
+old_started_at="$(docker inspect --format '{{.State.StartedAt}}' "$old_offline_container")"
+if run_paused_deploy "$CONTROL_DIR/deploy-migration-failure.log" "$migration_sha"; then
+    fail "malformed legacy chat row did not interrupt the migration"
+fi
+grep -Fq 'chat read-state V2 migration failed' "$CONTROL_DIR/deploy-migration-failure.log" ||
+    fail "migration failure stopped at the wrong step"
+assert_public_services_stopped
+assert_route paused
+assert_pending_email_preserved
+assert_synthetic_identity_preserved
+assert_activation_state_preserved
+first_write="$("${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+const row = db.chatReadStates.findOne({_id:"rehearsal-legacy-ok",readStateVersion:2,topicFallbackMessageId:"aaaaaaaaaaaaaaaaaaaaaaaa"});
+const blocked = db.chatReadStates.findOne({_id:"rehearsal-legacy-blocked", readStateVersion:{$ne:2}});
+const marker = db.schemaMigrations.findOne({_id:"chat-read-state-v2"});
+if (!row || !blocked || marker) quit(1);
+print(row.readStateMigratedAt.toISOString());')"
+[[ -n "$first_write" ]] || fail "no partial migration write was made"
+
+"${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+db.chatReadStates.updateOne({_id:"rehearsal-legacy-blocked"}, {$set:{lastReadMessageId:"bbbbbbbbbbbbbbbbbbbbbbbb",updatedAt:new Date()}});' >/dev/null
+if run_paused_recovery "$CONTROL_DIR/deploy-migration-verifier-failure.log" "$migration_sha"; then
+    fail "incomplete V2 row did not prevent recovery"
+fi
+grep -Fq 'chat read-state V2 verification failed' "$CONTROL_DIR/deploy-migration-verifier-failure.log" ||
+    fail "recovery did not reach the real failing migration verifier"
+assert_public_services_stopped
+assert_route paused
+[[ "$(docker inspect --format '{{.State.StartedAt}}' "$old_offline_container")" == "$old_started_at" ]] ||
+    fail "offline recovery restarted the incompatible application"
+
+"${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+db.chatReadStates.updateOne({_id:"rehearsal-v2-incomplete"}, {$set:{topicFallbackMessageId:null}});' >/dev/null
+run_paused_recovery "$CONTROL_DIR/deploy-migration-recovery.log" "$migration_sha" || {
+    tail -40 "$CONTROL_DIR/deploy-migration-recovery.log" >&2
+    fail "offline recovery did not restore the approved activation runtime"
+}
+wait_for_external_version "$migration_sha" || fail "offline recovery did not expose the approved SHA"
+active_after_recovery="$(container_id)"
+[[ "$active_after_recovery" != "$old_offline_container" ]] || fail "offline recovery reused the old container"
+"${BASE_COMPOSE[@]}" exec -T -e FIRST_MIGRATED_AT="$first_write" db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval '
+const first = db.chatReadStates.findOne({_id:"rehearsal-legacy-ok",readStateVersion:2,topicFallbackMessageId:"aaaaaaaaaaaaaaaaaaaaaaaa"});
+const second = db.chatReadStates.findOne({_id:"rehearsal-legacy-blocked",readStateVersion:2,topicFallbackMessageId:"bbbbbbbbbbbbbbbbbbbbbbbb"});
+const marker = db.schemaMigrations.findOne({_id:"chat-read-state-v2",status:"complete"});
+quit(first?.readStateMigratedAt.toISOString() === process.env.FIRST_MIGRATED_AT && second && marker ? 0 : 1);' >/dev/null
+assert_route paused
+assert_no_app_host_port
+assert_pending_email_preserved
+assert_synthetic_identity_preserved
+assert_activation_state_preserved
+echo "Partial chat migration and verifier failures recovered with the activation runtime and paused routing."
+
 nginx_failure_sha="$(advance_fake_origin nginx-failure)"
+prepare_fake_checkout "$nginx_failure_sha"
 touch "$CONTROL_DIR/nginx-failure"
 if run_paused_deploy "$CONTROL_DIR/deploy-nginx-failure.log" "$nginx_failure_sha"; then
     fail "paused deployment unexpectedly succeeded during NGINX fault injection"
 fi
+grep -Eq 'NGINX restoration failed|external paused onboarding deployment verification failed' "$CONTROL_DIR/deploy-nginx-failure.log" ||
+    fail "fault-injected NGINX startup stopped at the wrong step"
 assert_route paused
 assert_no_app_host_port
 [[ -z "$("${BASE_COMPOSE[@]}" ps --status running -q nginx)" ]] || \
@@ -1004,7 +1159,29 @@ assert_pending_email_preserved
 assert_synthetic_identity_preserved
 assert_activation_state_preserved
 
-rm -f "$CONTROL_DIR/nginx-failure"
+rm -f "$CONTROL_DIR/nginx-failure" "$RUNTIME_DIR/public-version-requested"
+export REHEARSAL_BLOCK_PUBLIC_SHA="$nginx_failure_sha"
+start_paused_deploy_background "$CONTROL_DIR/deploy-public-interruption.log" "$nginx_failure_sha"
+for _ in $(seq 1 180); do
+    [[ -f "$RUNTIME_DIR/public-version-requested" ]] && break
+    kill -0 "$DEPLOY_PID" 2>/dev/null || break
+    sleep 0.5
+done
+[[ -f "$RUNTIME_DIR/public-version-requested" &&
+   "$(cat "$RUNTIME_DIR/public-version-requested")" == "$nginx_failure_sha" ]] ||
+    fail "the public probe did not reach the deliberately stalled endpoint"
+kill -TERM "$(cat "$CONTROL_DIR/deploy-child.pid")"
+if wait "$DEPLOY_PID"; then
+    fail "interrupted public verification unexpectedly succeeded"
+fi
+DEPLOY_PID=""
+grep -Fq 'public verification was interrupted; closing production NGINX' "$CONTROL_DIR/deploy-public-interruption.log" ||
+    fail "public verification interruption did not run containment"
+[[ -z "$("${BASE_COMPOSE[@]}" ps --status running -q nginx)" ]] ||
+    fail "NGINX remained running after interrupted public verification"
+assert_route paused
+assert_no_app_host_port
+unset REHEARSAL_BLOCK_PUBLIC_SHA
 run_paused_deploy "$CONTROL_DIR/deploy-nginx-retry.log" "$nginx_failure_sha" || fail "paused deployment retry failed after NGINX recovery"
 wait_for_external_version "$nginx_failure_sha" || fail "NGINX retry did not expose the approved SHA"
 assert_route paused

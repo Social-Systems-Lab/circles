@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -140,6 +141,20 @@ class ActivationValidatorTests(unittest.TestCase):
                 ).returncode,
                 0,
             )
+
+    def test_pause_age_must_be_verified(self) -> None:
+        now = datetime.now(timezone.utc)
+        for timestamp, expected in [
+            ((now - timedelta(minutes=6)).isoformat(), 0),
+            ((now - timedelta(minutes=4)).isoformat(), 1),
+            ((now + timedelta(minutes=6)).isoformat(), 1),
+            (None, 1),
+            ("2026-11-01T20:00:00", 1),
+        ]:
+            with self.subTest(timestamp=timestamp):
+                status = {"mode": "paused", "deploymentId": None, "updatedAt": timestamp}
+                result = self.run_command("route-status", "paused-drained", stdin=json.dumps(status))
+                self.assertEqual(result.returncode, expected, result.stderr)
 
     def test_maintenance_compose_must_remove_host_ports_but_keep_webnet(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -114,6 +114,7 @@ set -euo pipefail
 CALLS="$1"
 OPS_COMPOSE=(mock_ops)
 ACTIVATION_VALIDATOR="$2"
+APP_MONGODB_URI="mongodb://fixture@db/circles"
 mock_ops() {
     printf '%s\n' "$*" >>"$CALLS"
     if [[ -n "${STATUS_JSON:-}" ]]; then
@@ -145,6 +146,8 @@ STATUS_JSON='{"pendingRegistrations":1,"reconciliationRequired":0,"activeProvisi
 # Routing drift after replacement stops both public NGINX and the application.
 {
     cat "$test_root/base-functions.sh"
+    extract_function close_public_access
+    extract_function stop_unverified_application
     extract_function fail_offline
     extract_function verify_registration_routing_paused
 } >"$test_root/routing-functions.sh"
@@ -158,6 +161,7 @@ PAUSED_APPLICATION_VERIFIED=true
 BASE_COMPOSE=(mock_base)
 OPS_COMPOSE=(mock_ops)
 ACTIVATION_VALIDATOR="$2"
+APP_MONGODB_URI="mongodb://fixture@db/circles"
 mock_base() {
     printf '%s\n' "$*" >>"$CALLS"
 }
@@ -178,12 +182,14 @@ grep -Fxq 'stop nginx' "$test_root/routing-calls" || \
     fail "routing drift did not stop NGINX"
 grep -Fxq 'stop circles' "$test_root/routing-calls" || \
     fail "routing drift did not stop the application"
-grep -Fq 'Production NGINX and circles remain stopped for recovery' "$test_root/routing-output" || \
+grep -Fq 'Keep public services offline and use recover-paused-services' "$test_root/routing-output" || \
     fail "routing-drift containment message is missing"
 
 # An application that has not passed replacement verification must be stopped with NGINX.
 {
     cat "$test_root/base-functions.sh"
+    extract_function close_public_access
+    extract_function stop_unverified_application
     extract_function fail_offline
 } >"$test_root/unverified-functions.sh"
 cat >"$test_root/run-unverified-failure.sh" <<'SCRIPT'
@@ -243,6 +249,7 @@ fi
 
 # Immutable image metadata is checked without printing its contents.
 {
+    extract_function read_application_image_metadata
     extract_function verify_application_image_identity
 } >"$test_root/image-functions.sh"
 cat >"$test_root/run-image-check.sh" <<'SCRIPT'
@@ -306,6 +313,11 @@ CALLS="$1"
 DEPLOY_MODE=paused-onboarding
 NGINX_STOPPED=false
 BASE_COMPOSE=(mock_base)
+timeout() {
+    [[ "$1" == 75s ]]
+    shift
+    "$@"
+}
 mock_base() {
     printf '%s\n' "$*" >>"$CALLS"
     if [[ "$1" == "ps" ]]; then
@@ -320,7 +332,7 @@ SCRIPT
 chmod 755 "$test_root/run-stop.sh"
 CALLS="$test_root/stop-calls" "$test_root/run-stop.sh" \
     "$test_root/stop-calls" "$test_root/stop-functions.sh"
-[[ "$(grep -c '^stop nginx$' "$test_root/stop-calls")" -eq 1 ]] || \
+[[ "$(grep -c '^stop --timeout -1 nginx$' "$test_root/stop-calls")" -eq 1 ]] || \
     fail "NGINX stop helper was not idempotent"
 if PS_OUTPUT="synthetic-nginx-id" CALLS="$test_root/stop-running-calls" "$test_root/run-stop.sh" \
     "$test_root/stop-running-calls" "$test_root/stop-functions.sh" \
@@ -338,6 +350,8 @@ grep -Fq 'could not confirm that production NGINX stopped' "$test_root/stop-unkn
 # A partially started NGINX must be stopped again even when the stop-state flag says it was down.
 {
     cat "$test_root/base-functions.sh"
+    extract_function close_public_access
+    extract_function stop_unverified_application
     extract_function fail_offline
 } >"$test_root/partial-nginx-functions.sh"
 cat >"$test_root/run-partial-nginx.sh" <<'SCRIPT'

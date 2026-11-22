@@ -121,6 +121,60 @@ class RuntimeValidatorTests(unittest.TestCase):
             self.assertNotIn(HMAC, rejected.stdout + rejected.stderr)
             self.assertNotIn(replacement, rejected.stdout + rejected.stderr)
 
+    def test_database_and_credentials_must_match_serving_application(self) -> None:
+        uri = "mongodb://synthetic:do-not-print@db:27017/circles?authSource=admin"
+        server = container()
+        required = {
+            "MONGODB_URI": uri,
+            "CIRCLES_JWT_SECRET": "synthetic-jwt",
+            "CRON_SECRET": "synthetic-cron",
+        }
+        server["Config"]["Env"].extend(f"{key}={value}" for key, value in required.items())
+        candidate = dict(required, PENDING_REGISTRATION_TOKEN_HMAC_KEY=HMAC, REGISTRATION_DEPLOYMENT_ID=DEPLOYMENT_ID)
+        operator = {"MONGODB_URI": uri, "CIRCLES_MONGODB_DATABASE": "circles"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = root / "base.json"
+            active = root / "activation.json"
+            ops = root / "ops.json"
+            base.write_text(json.dumps({"services": {"circles": {"environment": required}}}), encoding="utf-8")
+
+            def validate() -> subprocess.CompletedProcess[str]:
+                active.write_text(json.dumps({"services": {"circles": {"environment": candidate}}}), encoding="utf-8")
+                ops.write_text(json.dumps({"services": {"registration_ops": {"environment": operator}}}), encoding="utf-8")
+                return subprocess.run(
+                    ["python3", str(VALIDATOR), "paused-database", str(base), str(active), str(ops)],
+                    input=json.dumps([server]), capture_output=True, text=True, check=False,
+                )
+
+            self.assertEqual(validate().stdout.strip(), uri)
+
+            candidate["CIRCLES_MONGODB_DATABASE"] = "staging"
+            mismatched = validate()
+            self.assertNotEqual(mismatched.returncode, 0)
+            self.assertIn("MongoDB identity differs", mismatched.stderr)
+            self.assertNotIn("do-not-print", mismatched.stdout + mismatched.stderr)
+            del candidate["CIRCLES_MONGODB_DATABASE"]
+
+            operator["MONGODB_URI"] = uri.replace("@db:", "@wrong-service:")
+            self.assertNotEqual(validate().returncode, 0)
+            operator["MONGODB_URI"] = uri
+
+            candidate["PENDING_REGISTRATION_TOKEN_HMAC_KEY"] = "0" * 64
+            self.assertNotEqual(validate().returncode, 0)
+
+    def test_offline_recovery_requires_a_stopped_activation_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            activation = Path(directory) / "activation.env"
+            activation.write_text(f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n", encoding="utf-8")
+            live = container()
+            self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["State"].update(Running=False, Status="exited")
+            self.assertEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["State"]["Status"] = "restarting"
+            self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+
     def test_maintenance_application_must_not_publish_host_ports(self) -> None:
         safe = subprocess.run(
             ["python3", str(VALIDATOR), "no-published-ports"],

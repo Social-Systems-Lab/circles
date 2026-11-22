@@ -6,13 +6,21 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 MONGO_SCRIPT="$APP_DIR/scripts/preflight-messaging-stage1a.mongo.js"
 
+COMPOSE=(docker compose)
+if [[ "${1:-}" == "--production-compose" && "$#" -eq 1 ]]; then
+  COMPOSE+=(--project-name circles --project-directory "$APP_DIR" --env-file "$APP_DIR/.env" -f "$APP_DIR/docker-compose.yml")
+elif [[ "$#" -ne 0 ]]; then
+  echo "Error: unsupported Messaging Stage 1A preflight arguments." >&2
+  exit 2
+fi
+
 if [[ ! -f "$MONGO_SCRIPT" ]]; then
   echo "Error: Stage 1A Mongo preflight script is missing." >&2
   exit 1
 fi
 
 resolve_application_environment() {
-  (cd "$APP_DIR" && docker compose run --rm --no-deps -T circles node -e '
+  (cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps -T circles node -e '
     const required = ["MONGODB_URI", "CIRCLES_URL", "NEXT_PUBLIC_CHAT_PROVIDER", "CRON_SECRET", "CIRCLES_JWT_SECRET"];
     const missing = required.filter((name) => !process.env[name]);
     const secretNames = ["CRON_SECRET", "CIRCLES_JWT_SECRET"];
@@ -55,7 +63,7 @@ fi
 echo "Environment preflight passed: $ENVIRONMENT_RESULT"
 
 if [[ -z "${APP_MONGODB_URI:-}" ]]; then
-  APP_MONGODB_URI="$(cd "$APP_DIR" && docker compose run --rm --no-deps -T circles \
+  APP_MONGODB_URI="$(cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps -T circles \
     node -e 'const uri=process.env.MONGODB_URI||"";if(!uri||/[\r\n]/.test(uri))process.exit(1);process.stdout.write(uri)')"
 fi
 if [[ -z "$APP_MONGODB_URI" || "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then
@@ -67,7 +75,7 @@ echo "Running read-only Stage 1A MongoDB checks..."
 {
   printf '%s\n' "$APP_MONGODB_URI"
   cat "$MONGO_SCRIPT"
-} | (cd "$APP_DIR" && docker compose exec -T db sh -lc '
+} | (cd "$APP_DIR" && "${COMPOSE[@]}" exec -T db sh -lc '
   IFS= read -r MONGODB_URI || exit 1
   [ -n "$MONGODB_URI" ] || exit 1
   export MONGODB_URI

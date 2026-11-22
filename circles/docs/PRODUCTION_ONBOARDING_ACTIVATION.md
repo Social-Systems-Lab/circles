@@ -369,22 +369,25 @@ Before starting:
 - Ensure a verified MongoDB backup and the applicable `circles_users`/MinIO recovery material exist.
   Do not start this deployment to repair a missing backup.
 
-The one-time bootstrap below is needed only when the production checkout predates this command. It
-updates source files so the new operator command is available; it does not build, restart, or deploy
-a container. Use it only on the clean `main` checkout after the reviewed tooling commit is on
-`origin/main`:
+Before each paused deployment or offline recovery, put the reviewed deployment tool itself on the
+production checkout. Set `APPROVED_FULL_SHA` to the full commit authorized for this release. Use a
+clean `main` checkout and an exact fast-forward while holding the shared maintenance lock. This
+updates source files without building or restarting containers.
 
 ```bash
-cd /root/circles/circles &&
-test "$(git branch --show-current)" = main &&
-test -z "$(git status --porcelain --untracked-files=all)" &&
-git fetch --no-tags origin main &&
-test "$(git rev-parse refs/remotes/origin/main)" = "$APPROVED_FULL_SHA" &&
-git merge --ff-only "$APPROVED_FULL_SHA"
+(
+  cd /root/circles/circles &&
+  exec 9>/run/lock/circles-production-docker.lock &&
+  flock -w 120 9 &&
+  test "$(git branch --show-current)" = main &&
+  test -z "$(git status --porcelain --untracked-files=all)" &&
+  git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main &&
+  test "$(git rev-parse refs/remotes/origin/main)" = "$APPROVED_FULL_SHA" &&
+  git merge --ff-only "$APPROVED_FULL_SHA"
+)
 ```
 
-Set `APPROVED_FULL_SHA` to the full 40-character SHA authorized for this release before the
-bootstrap and deployment. Run the deployment from the production repository root:
+Run the deployment from the production repository root:
 
 ```bash
 cd /root/circles/circles
@@ -392,11 +395,24 @@ cd /root/circles/circles
 ```
 
 The command requires the exact confirmation phrase `DEPLOY_PAUSED_ONBOARDING_SERVICES`. It acquires
-the shared production maintenance lock, verifies the currently running activation image is a known
-ancestor of the target `main`, fetches and fast-forwards only to exact `origin/main`, and validates
-the operator/application images, Compose overlays, activation file separation, routing, and idle
-operation counts. It rechecks routing and the lock/reconciliation aggregates again immediately before
-stopping the current application, including when the chat migration is required.
+the shared production maintenance lock and requires the checkout to start at the approved SHA. It
+fetches `origin/main` again and verifies the SHA still matches. It also verifies the existing
+activation image is a known ancestor, checks the local `kamooniorg` Docker daemon and default system
+socket, and uses the explicit production Compose project, files, and environment. An explicit Docker
+context or host override blocks execution.
+
+The tool compares the existing application, candidate, and registration operator MongoDB settings,
+including the logical database name. All must use the same local `db` service URI for `circles`. It
+uses that verified URI for preflight, routing, lock checks, and migration. The existing activation
+HMAC, deployment ID, JWT secret, and cron secret must match the candidate before cutover. Mismatches
+are reported without secret values.
+
+The tool verifies the MongoDB pause timestamp is at least five minutes old and checks active locks
+and reconciliation before cutover. It waits up to 75 seconds for NGINX to shut down gracefully.
+If requests are still draining, the tool aborts before stopping the application and leaves those
+requests time to finish. It rechecks routing, the pause timestamp, and idle operations before stopping
+or replacing `circles`. If a verification response was lost before its cookie arrived, the existing
+email recovery flow can issue a new link after separately approved reactivation.
 
 It retains the verified running application image locally under a rollback tag before building
 `circles` and `cron`, so the previous image stays available if a build moves `latest`. The new application image's Git SHA,
@@ -420,8 +436,11 @@ exactly one new `circles` container with the validated activation overlay, while
 - registration routing is still `paused`; and
 - cron contains all existing schedules and an authenticated watchdog invocation succeeds.
 
-Only then does it recreate NGINX, verify the public `/api/version`, and recheck paused routing. It
-does not run `route-set`, automatically enter `legacy` or `pending`, release locks, delete pending
+The internal readiness check retries slow startup within a bounded window. Only then does the tool
+recreate NGINX, verify the public `/api/version` with per-request deadlines, and recheck paused
+routing. If the public check fails or the process receives HUP, INT, or TERM before public
+verification finishes, the tool closes NGINX. After a host failure or an uncatchable process kill,
+independently confirm NGINX and application state before continuing. The tool does not run `route-set`, automatically enter `legacy` or `pending`, release locks, delete pending
 records, change DID reservations, or modify credential files.
 
 Before the maintenance window, the current application remains running. Once migration or
@@ -434,25 +453,55 @@ again and confirms it is not running. Do not reopen NGINX manually.
 
 After a failure:
 
-1. Run `status` and inspect only sanitized aggregates and fixed failure codes.
-   If replacement had not begun, `status` may accept the previous running image when the checkout
-   is clean and the image's immutable ID, production role, `/app/VERSION` SHA and internal
-   `/api/version` all agree and that SHA is an ancestor of the checkout. This exception applies only
-   to read-only `status`; deployment, `inspect`, activation and routing changes still require their
-   existing exact-image and exact-SHA safeguards.
-2. Confirm routing is `paused`; if it drifted, stop and investigate before using a supported
-   authenticated routing transition.
-3. Correct the failed prerequisite or verification, then rerun `deploy-paused-services` when the
-   verified private application is still available.
-4. If recovery with the default runtime is safer, use `recover-default-services` only when the
-   application is stopped and its documented prerequisites pass, or `deactivate-services` when the
-   application is running and idle. These recovery commands preserve routing, data, DIDs, pending
-   registrations, and credentials. `recover-default-services` restores the default runtime, not the
-   activation overlay. `activate-services` currently requires zero unfinished pending
-   registrations, so a retained `pending_email` record may block activation-overlay restoration
-   until that record expires or is separately resolved.
-5. Never use ad-hoc Docker rebuild/recreate commands, delete volumes, restore over production, or
-   change routing merely to make deployment verification pass.
+1. Run `status` and inspect only sanitized aggregates and fixed failure codes. A verified running
+   image at an ancestor SHA is accepted by read-only `status`. Activation and routing changes retain
+   their exact-SHA checks. If the operator image build failed before the target image existed, status
+   requires the approved operator image to be available first.
+2. Confirm routing is `paused`. If it drifted, stop and investigate before using an authenticated
+   transition with its own approval.
+3. If the old application is still running, or the verified candidate remains private after a
+   public verification failure, correct the failed prerequisite and rerun `deploy-paused-services`.
+4. If migration, its verifier, or candidate startup left the application stopped, use the offline
+   recovery procedure below.
+
+### Offline recovery while registration stays paused
+
+Keep NGINX and the application stopped, retain the stopped application container for identity and
+configuration checks, and preserve the verified database backup. After migration has started, an
+older application can write incompatible chat read state. The retained image provides a reference
+for diagnosis and recovery approval. Consult the
+[V2 maintenance-window rules](PRODUCTION_DEPLOYMENT.md#v2-maintenance-window-and-failure-rules)
+before attempting any image rollback.
+
+Investigate the migration or verification failure and correct the prerequisite under its own
+approval. Keep the same database, credentials, HMAC, and deployment ID. Prepare the exact approved
+checkout as above, then run from the production repository root:
+
+```bash
+./circles/scripts/production-onboarding-control.sh recover-paused-services "$APPROVED_FULL_SHA"
+```
+
+Confirm with `RECOVER_PAUSED_ONBOARDING_SERVICES`. Recovery requires one stopped production
+activation container, NGINX stopped, verified paused routing and drain, and the approved SHA still
+at `origin/main`. It rebuilds the approved candidate, runs the same read-only preflight, resumes
+idempotent migration if the completion marker is absent, and runs the V2 verifier. It restores the
+activation overlay only after migration verification succeeds. A continued error leaves NGINX
+closed. A missing stopped container, missing image metadata, or unresolved database inconsistency
+requires an independently reviewed recovery plan.
+
+Independently confirm the migration marker and verifier result, exact running and public Git SHA,
+authenticated cron, and paused routing. Confirm the retained pending-registration and identity
+aggregates against the pre-deployment record. Production email delivery, the canary, and explicit
+registration reactivation approval are separate gates.
+
+`recover-default-services` and `deactivate-services` restore the default runtime. Their use after a
+paused deployment requires a verified compatible chat schema and their documented prerequisites.
+`activate-services` permits unfinished `pending_email` records only when activation readiness
+classifies every unfinished record as untouched and there is no retained lock or reconciliation
+evidence. An `email_verified` record has already received a continuation and can block initial
+activation. Use the paused recovery command to restore the activation overlay for existing journeys
+without clearing either type of record. Avoid ad-hoc container recreation or data restoration over
+production; any live data repair needs separate approval.
 
 ## Controlled canary
 
@@ -786,9 +835,13 @@ The rehearsal additionally exercises:
   override;
 - absence of a published application host port;
 - NGINX remaining unavailable while the new application is started and internally verified;
-- image-validation failure before application replacement and a successful retry;
+- stale deployment tooling, a Docker context override, insufficient drain, and mismatched database
+  configuration rejected before service interruption;
+- image-validation failure before application replacement and a successful retry with slow startup;
 - application startup failure followed by `recover-default-services`;
-- NGINX startup failure followed by a successful paused-deployment retry; and
+- partial chat migration, migration-verifier failure, and offline recovery with the activation overlay;
+- NGINX startup failure and interruption during the bounded public check, followed by a successful
+  paused-deployment retry; and
 - preservation of the synthetic `pending_email` record, DID reservation, account, activation HMAC
   and deployment ID throughout every success and failure path.
 

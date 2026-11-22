@@ -27,8 +27,8 @@ for required in \
   'if ! require_clean_worktree; then' \
   'LOCAL_SHA="$(git rev-parse HEAD)"' \
   'ISOLATION_GUARD="$APP_DIR/scripts/check-production-staging-isolation.sh"' \
-  'registration_ops route-status' \
   'EXPECTED_ROUTING_MODE="legacy"' \
+  'registration_ops route-status' \
   'route-status "$EXPECTED_ROUTING_MODE"' \
   '"${BASE_COMPOSE[@]}" build circles cron'; do
   line="$(grep -nF -- "$required" "$DEPLOY_SCRIPT" | awk -F: -v after="$previous_line" '$1 > after { print $1; exit }')"

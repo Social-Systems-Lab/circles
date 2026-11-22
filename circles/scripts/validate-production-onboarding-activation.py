@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import hmac
 from pathlib import Path
@@ -320,7 +321,8 @@ def main() -> None:
             fail("could not parse registration routing status")
         if not isinstance(status, dict):
             fail("registration routing status must be a JSON object")
-        expected_mode = sys.argv[2]
+        require_drained = sys.argv[2] == "paused-drained"
+        expected_mode = "paused" if require_drained else sys.argv[2]
         mode_matches = status.get("mode") == expected_mode
         deployment_clean = expected_mode == "pending" or status.get("deploymentId") is None
         if expected_mode == "default":
@@ -339,6 +341,13 @@ def main() -> None:
             if mode_matches and deployment_clean
             else [f"registration routing is not the expected {expected_mode} state"]
         )
+        if require_drained and not errors:
+            try:
+                paused_at = datetime.fromisoformat(status["updatedAt"].replace("Z", "+00:00"))
+                if paused_at.tzinfo is None or datetime.now(timezone.utc) - paused_at < timedelta(minutes=5):
+                    errors.append("production registration must remain paused for at least five minutes")
+            except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
+                errors.append("could not verify when production registration was paused")
     elif command == "activation-ready" and len(sys.argv) == 2:
         try:
             status = json.load(sys.stdin)
