@@ -399,6 +399,11 @@ if ! printf '%s\n' "$ROUTING_STATUS" | python3 "$ACTIVATION_VALIDATOR" route-sta
 fi
 if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
   require_paused_operations_idle
+  # Keep the verified serving image addressable even when a candidate build moves latest.
+  retained_image="circles-circles:paused-rollback-$ACTIVE_PAUSED_SHA-${active_image_id#sha256:}"
+  docker image tag "$active_image_id" "$retained_image" || fail "could not retain the active production image"
+  [[ "$(docker image inspect --format '{{.Id}}' "$retained_image")" == "$active_image_id" ]] ||
+    fail "retained production image does not match the serving image"
 fi
 
 "${BASE_COMPOSE[@]}" build circles cron

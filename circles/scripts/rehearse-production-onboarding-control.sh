@@ -53,6 +53,8 @@ cleanup() {
             xargs -r docker rm -f >/dev/null 2>&1
         docker network rm circles_webnet >/dev/null 2>&1
         docker volume rm circles_users >/dev/null 2>&1
+        docker images --format '{{.Repository}}:{{.Tag}}' | grep '^circles-circles:paused-rollback-' | \
+            xargs -r docker image rm >/dev/null 2>&1
         docker image rm -f "circles-circles:latest" >/dev/null 2>&1
         docker image rm -f "circles-cron:latest" >/dev/null 2>&1
         docker images --format '{{.Repository}}:{{.Tag}}' | grep '^circles-registration-ops:' | \
@@ -74,6 +76,7 @@ docker_project_has_resources() {
         docker volume ls --format '{{.Name}}' | grep -Eq '^circles($|_)' || \
         docker network inspect circles_webnet >/dev/null 2>&1 || \
         docker image inspect circles-circles:latest >/dev/null 2>&1 || \
+    docker images --format '{{.Repository}}:{{.Tag}}' | grep -q '^circles-circles:paused-rollback-' || \
         docker image inspect circles-cron:latest >/dev/null 2>&1 || \
         docker images --format '{{.Repository}}' | grep -qx 'circles-registration-ops'
 }
@@ -920,6 +923,16 @@ nginx_before="$("${BASE_COMPOSE[@]}" ps -q nginx)"
 if run_paused_deploy "$CONTROL_DIR/deploy-image-failure.log" "$image_failure_sha"; then
     fail "paused deployment unexpectedly succeeded during image-validation fault injection"
 fi
+grep -Fq 'rehearsal image validation failure' "$CONTROL_DIR/deploy-image-failure.log" || {
+    tail -25 "$CONTROL_DIR/deploy-image-failure.log" >&2
+    fail "paused deployment did not reach the injected candidate image validation failure"
+}
+serving_image="$(docker inspect --format '{{.Image}}' "$circles_before")"
+retained_tag="circles-circles:paused-rollback-$GIT_SHA-${serving_image#sha256:}"
+[[ "$(docker image inspect --format '{{.Id}}' "$retained_tag")" == "$serving_image" ]] ||
+    fail "the previous image became unavailable after the candidate was built"
+[[ "$(docker image inspect --format '{{.Id}}' circles-circles:latest)" != "$serving_image" ]] ||
+    fail "candidate build did not exercise replacement of the latest tag"
 [[ "$(container_id)" == "$circles_before" && "$("${BASE_COMPOSE[@]}" ps -q nginx)" == "$nginx_before" ]] || \
     fail "image-validation failure replaced the running application or NGINX"
 assert_route paused

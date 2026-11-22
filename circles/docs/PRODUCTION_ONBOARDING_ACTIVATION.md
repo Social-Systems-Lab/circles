@@ -375,10 +375,10 @@ a container. Use it only on the clean `main` checkout after the reviewed tooling
 `origin/main`:
 
 ```bash
-cd /root/circles/circles
-test "$(git branch --show-current)" = main
-test -z "$(git status --porcelain --untracked-files=all)"
-git fetch --no-tags origin main
+cd /root/circles/circles &&
+test "$(git branch --show-current)" = main &&
+test -z "$(git status --porcelain --untracked-files=all)" &&
+git fetch --no-tags origin main &&
 test "$(git rev-parse refs/remotes/origin/main)" = "$APPROVED_FULL_SHA" &&
 git merge --ff-only "$APPROVED_FULL_SHA"
 ```
@@ -398,7 +398,8 @@ the operator/application images, Compose overlays, activation file separation, r
 operation counts. It rechecks routing and the lock/reconciliation aggregates again immediately before
 stopping the current application, including when the chat migration is required.
 
-It then builds the operator, `circles`, and `cron` images. The new application image's Git SHA,
+It retains the verified running application image locally under a rollback tag before building
+`circles` and `cron`, so the previous image stays available if a build moves `latest`. The new application image's Git SHA,
 immutable image ID, and production role marker are validated before any running application is
 replaced. A failed build or validation does not prevent a retry: the running old container is
 validated through its own immutable image ID rather than the mutable `circles-circles:latest` tag. The

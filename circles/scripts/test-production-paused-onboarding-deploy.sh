@@ -55,7 +55,8 @@ if grep -Eq -- 'pendingRegistrations.*(?:update|delete|insert)|pendingRegistrati
     fail "paused deployment contains a pending-registration or DID-reservation mutation"
 fi
 
-assert_order '  require_paused_operations_idle' '"${BASE_COMPOSE[@]}" build circles cron'
+assert_order '  require_paused_operations_idle' 'docker image tag "$active_image_id" "$retained_image"'
+assert_order 'docker image tag "$active_image_id" "$retained_image"' '"${BASE_COMPOSE[@]}" build circles cron'
 assert_order '"${BASE_COMPOSE[@]}" build circles cron' \
     'verify_application_image_identity "$PAUSED_EXPECTED_IMAGE_ID"'
 assert_order 'verify_application_image_identity "$PAUSED_EXPECTED_IMAGE_ID"' \
