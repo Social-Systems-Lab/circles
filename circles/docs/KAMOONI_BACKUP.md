@@ -81,15 +81,32 @@ With the service idle, inspect the failed run ID from the journal with `restic s
 
 ## Monitor missed runs
 
-Have existing monitoring run this read-only check on Genesis2 as a user with journal access. Run it at least hourly and alert on a nonzero exit or if the check cannot reach the host. The 28-hour window gives the daily run time to finish and detects a missed start even if the failure unit never ran.
+The hourly `kamooni-backup-freshness.timer` checks the backup service journal for an exact success message in the past 28 hours. Keep the journal persistent across reboots and retain at least 28 hours of entries. A stale check uses the existing Postmark sender and token to email `tim@socialsystems.io` with a subject beginning `[Kamooni backup] No successful backup in 28 hours`. The service records the alert in `/var/lib/kamooni-backup-freshness/` with root-only access, retries a failed Postmark request on the next check, and clears the incident when it sees a new success. The separate `kamooni-backup-failure.service` reports individual failed runs.
 
-```bash
-(
-  set -o pipefail
-  journalctl -u kamooni-backup.service --since '28 hours ago' --no-pager -o cat |
-    grep -E '^Kamooni backup succeeded kamooni-[0-9]{8}T[0-9]{6}Z\.[A-Za-z0-9]{8}\.$' >/dev/null
-)
-```
+After approval, run these steps as root on Genesis2 from the reviewed production checkout.
+
+1. Install the monitor and verify its units.
+
+   ```bash
+   cd /root/circles/circles/circles/scripts/kamooni-backup &&
+   install -m 700 -o root -g root kamooni-backup-freshness.sh /usr/local/sbin/kamooni-backup-freshness &&
+   install -m 644 -o root -g root systemd/kamooni-backup-freshness.{service,timer} /etc/systemd/system/ &&
+   systemd-analyze verify /etc/systemd/system/kamooni-backup-freshness.{service,timer} && systemctl daemon-reload
+   ```
+
+2. Confirm a recent backup before starting the check. The freshness service journal should report `Kamooni backup succeeded within the last 28 hours.`
+
+   ```bash
+   journalctl -u kamooni-backup.service --since '28 hours ago' --until=now --no-pager -o cat |
+     grep -E '^Kamooni backup succeeded kamooni-[0-9]{8}T[0-9]{6}Z\.[A-Za-z0-9]{8}\.$' &&
+   systemctl start kamooni-backup-freshness.service && journalctl -u kamooni-backup-freshness.service -n 10 --no-pager
+   ```
+
+3. After separately approved activation, confirm the hourly schedule.
+
+   ```bash
+   systemctl list-timers kamooni-backup-freshness.timer --all
+   ```
 
 ## Restore one complete snapshot
 
