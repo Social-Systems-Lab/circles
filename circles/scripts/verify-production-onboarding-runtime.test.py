@@ -32,6 +32,7 @@ def container(*, activation: bool = True) -> dict:
             ]
         },
         "HostConfig": {"PortBindings": {}},
+        "Mounts": [{"Destination": "/circles/users", "Type": "volume", "Name": "circles_circles_users", "RW": True}],
         "NetworkSettings": {
             "Networks": {"circles_webnet": {"IPAddress": "172.20.0.4"}},
             "Ports": {"3000/tcp": None},
@@ -138,17 +139,29 @@ class RuntimeValidatorTests(unittest.TestCase):
             base = root / "base.json"
             active = root / "activation.json"
             ops = root / "ops.json"
-            base.write_text(json.dumps({"services": {"circles": {"environment": required}}}), encoding="utf-8")
+            def compose(service: str, env: dict, *, name: str = "circles_circles_users", read_only: bool = False) -> str:
+                return json.dumps({
+                    "services": {service: {
+                        "environment": env,
+                        "volumes": [{"type": "volume", "source": "circles_users", "target": "/circles/users", "read_only": read_only}],
+                    }},
+                    "volumes": {"circles_users": {"name": name}},
+                })
 
-            def validate() -> subprocess.CompletedProcess[str]:
-                active.write_text(json.dumps({"services": {"circles": {"environment": candidate}}}), encoding="utf-8")
-                ops.write_text(json.dumps({"services": {"registration_ops": {"environment": operator}}}), encoding="utf-8")
+            base.write_text(compose("circles", required), encoding="utf-8")
+
+            def validate(*, candidate_volume: str = "circles_circles_users") -> subprocess.CompletedProcess[str]:
+                active.write_text(compose("circles", candidate, name=candidate_volume), encoding="utf-8")
+                ops.write_text(compose("registration_ops", operator, read_only=True), encoding="utf-8")
                 return subprocess.run(
                     ["python3", str(VALIDATOR), "paused-database", str(base), str(active), str(ops)],
                     input=json.dumps([server]), capture_output=True, text=True, check=False,
                 )
 
             self.assertEqual(validate().stdout.strip(), uri)
+            mismatch = validate(candidate_volume="wrong_users_volume")
+            self.assertNotEqual(mismatch.returncode, 0)
+            self.assertIn("production users volume differs", mismatch.stderr)
 
             candidate["CIRCLES_MONGODB_DATABASE"] = "staging"
             mismatched = validate()
@@ -171,6 +184,11 @@ class RuntimeValidatorTests(unittest.TestCase):
             live = container()
             self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
             live["State"].update(Running=False, Status="exited")
+            self.assertEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["State"]["Status"] = "created"
+            live["NetworkSettings"]["Networks"] = {}
+            self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["HostConfig"]["NetworkMode"] = "circles_webnet"
             self.assertEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
             live["State"]["Status"] = "restarting"
             self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
@@ -198,6 +216,16 @@ class RuntimeValidatorTests(unittest.TestCase):
             text=True,
         )
         self.assertNotEqual(rejected.returncode, 0)
+
+    def test_production_bridge_rejects_unprotected_ingress(self) -> None:
+        for options, expected in [({}, 0), ({"com.docker.network.bridge.gateway_mode_ipv4": "nat-unprotected"}, 1)]:
+            with self.subTest(options=options):
+                result = subprocess.run(
+                    ["python3", str(VALIDATOR), "private-webnet"],
+                    input=json.dumps([{"Driver": "bridge", "Options": options}]),
+                    check=False, capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, expected, result.stderr)
 
     def test_rejects_wrong_network_and_multiple_containers(self) -> None:
         wrong_network = container()

@@ -1,6 +1,6 @@
 services:
     circles:
-        image: circles-circles:latest
+        image: ${KAMOONI_DEPLOY_IMAGE_ID:-circles-circles:latest}
         build:
             context: .
             dockerfile: Dockerfile
@@ -8,8 +8,7 @@ services:
                 GIT_SHA: ${GIT_SHA:-unknown}
                 BUILD_TIME: ${BUILD_TIME:-unknown}
                 KAMOONI_DEPLOYMENT_ROLE: production
-        ports:
-            - "${CIRCLES_PORT}:${CIRCLES_PORT}"
+        # NGINX and cron reach this service over webnet.
         env_file:
             - .env
         environment:

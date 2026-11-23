@@ -8,7 +8,12 @@ MONGO_SCRIPT="$APP_DIR/scripts/preflight-messaging-stage1a.mongo.js"
 
 COMPOSE=(docker compose)
 if [[ "${1:-}" == "--production-compose" && "$#" -eq 1 ]]; then
-  COMPOSE+=(--project-name circles --project-directory "$APP_DIR" --env-file "$APP_DIR/.env" -f "$APP_DIR/docker-compose.yml")
+  [[ "${KAMOONI_DEPLOY_IMAGE_ID:-}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+    echo "Error: production preflight requires the verified application image ID." >&2
+    exit 2
+  }
+  COMPOSE=(timeout --kill-after=5s 2m "${COMPOSE[@]}" --project-name circles \
+    --project-directory "$APP_DIR" --env-file "$APP_DIR/.env" -f "$APP_DIR/docker-compose.yml")
 elif [[ "$#" -ne 0 ]]; then
   echo "Error: unsupported Messaging Stage 1A preflight arguments." >&2
   exit 2
@@ -20,7 +25,7 @@ if [[ ! -f "$MONGO_SCRIPT" ]]; then
 fi
 
 resolve_application_environment() {
-  (cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps -T circles node -e '
+  (cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps --pull never -T circles node -e '
     const required = ["MONGODB_URI", "CIRCLES_URL", "NEXT_PUBLIC_CHAT_PROVIDER", "CRON_SECRET", "CIRCLES_JWT_SECRET"];
     const missing = required.filter((name) => !process.env[name]);
     const secretNames = ["CRON_SECRET", "CIRCLES_JWT_SECRET"];
@@ -63,7 +68,7 @@ fi
 echo "Environment preflight passed: $ENVIRONMENT_RESULT"
 
 if [[ -z "${APP_MONGODB_URI:-}" ]]; then
-  APP_MONGODB_URI="$(cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps -T circles \
+  APP_MONGODB_URI="$(cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps --pull never -T circles \
     node -e 'const uri=process.env.MONGODB_URI||"";if(!uri||/[\r\n]/.test(uri))process.exit(1);process.stdout.write(uri)')"
 fi
 if [[ -z "$APP_MONGODB_URI" || "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then
@@ -84,6 +89,6 @@ echo "Running read-only Stage 1A MongoDB checks..."
   chmod 600 "$script_file" || exit 1
   printf '\''%s\n'\'' '\''db = connect(process.env.MONGODB_URI);'\'' > "$script_file" || exit 1
   cat >> "$script_file" || exit 1
-  mongosh --nodb --quiet --file "$script_file"
+  timeout --kill-after=5s 110s mongosh --nodb --quiet --file "$script_file"
 ')
 echo "Messaging Stage 1A production preflight passed. No MongoDB records or indexes were changed."

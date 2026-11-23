@@ -82,9 +82,14 @@ def validate_application(
         if not env.get(key):
             errors.append(f"running {key} is missing")
     state = container.get("State", {})
-    if state.get("Running") is not running or (not running and state.get("Status") != "exited"):
+    if state.get("Running") is not running or (not running and state.get("Status") not in {"exited", "created"}):
         errors.append("application running state does not match the requested deployment mode")
-    if set(container.get("NetworkSettings", {}).get("Networks", {})) != {CONTAINER_NETWORK}:
+    networks = set(container.get("NetworkSettings", {}).get("Networks", {}))
+    created_on_expected_network = (
+        not running and state.get("Status") == "created" and not networks
+        and container.get("HostConfig", {}).get("NetworkMode") == CONTAINER_NETWORK
+    )
+    if networks != {CONTAINER_NETWORK} and not created_on_expected_network:
         errors.append("application has unexpected live network attachments")
     return errors
 
@@ -131,6 +136,8 @@ def application_runtime_summary(container: dict) -> dict:
 
 
 def require_no_published_ports(container: dict) -> None:
+    if container.get("HostConfig", {}).get("PublishAllPorts"):
+        raise SystemExit("Error: production application publishes host ports")
     bindings: list[object] = []
     host_bindings = container.get("HostConfig", {}).get("PortBindings", {})
     network_ports = container.get("NetworkSettings", {}).get("Ports", {})
@@ -141,12 +148,41 @@ def require_no_published_ports(container: dict) -> None:
             if value not in (None, []):
                 bindings.append(value)
     if bindings:
-        raise SystemExit("Error: maintenance application publishes a host port")
+        raise SystemExit("Error: production application publishes a host port")
 
 
-def compose_environment(path: str, service: str) -> dict:
+def require_private_bridge(network: dict) -> None:
+    options = network.get("Options") or {}
+    if (
+        network.get("Driver") != "bridge"
+        or options.get("com.docker.network.bridge.gateway_mode_ipv4", "nat") != "nat"
+        or options.get("com.docker.network.bridge.gateway_mode_ipv6", "nat") != "nat"
+        or options.get("com.docker.network.bridge.trusted_host_interfaces")
+    ):
+        raise SystemExit("Error: production webnet must be a NAT bridge without trusted direct-routing interfaces")
+
+
+def read_compose(path: str) -> dict:
     with open(path, encoding="utf-8") as source:
-        return json.load(source)["services"][service]["environment"]
+        return json.load(source)
+
+
+def require_matching_users_volume(container: dict, configs: list[tuple[dict, str, bool]]) -> None:
+    target = "/circles/users"
+    live = [mount for mount in container.get("Mounts", []) if mount.get("Destination") == target]
+    if len(live) != 1 or live[0].get("Type") != "volume" or live[0].get("RW") is not True or not live[0].get("Name"):
+        raise SystemExit("Error: existing application must mount one writable named users volume")
+    for config, service, read_only in configs:
+        mounts = [mount for mount in config["services"][service].get("volumes", []) if mount.get("target") == target]
+        expected = config.get("volumes", {}).get("circles_users", {}).get("name")
+        if (
+            len(mounts) != 1
+            or mounts[0].get("type") != "volume"
+            or mounts[0].get("source") != "circles_users"
+            or mounts[0].get("read_only", False) is not read_only
+            or live[0]["Name"] != expected
+        ):
+            raise SystemExit("Error: production users volume differs between the application and Compose configuration")
 
 
 def verified_database_uri(environments: list[dict]) -> str:
@@ -175,9 +211,15 @@ def verified_database_uri(environments: list[dict]) -> str:
 def verify_paused_database_and_credentials(container: dict, base: str, activation: str, ops: str) -> str:
     runtime = environment(container)
     try:
-        default = compose_environment(base, "circles")
-        candidate = compose_environment(activation, "circles")
-        operator = compose_environment(ops, "registration_ops")
+        base_config, activation_config, ops_config = map(read_compose, (base, activation, ops))
+        default = base_config["services"]["circles"]["environment"]
+        candidate = activation_config["services"]["circles"]["environment"]
+        operator = ops_config["services"]["registration_ops"]["environment"]
+        require_matching_users_volume(container, [
+            (base_config, "circles", False),
+            (activation_config, "circles", False),
+            (ops_config, "registration_ops", True),
+        ])
     except (OSError, ValueError, KeyError, TypeError):
         raise SystemExit("Error: unable to determine production Compose database identity")
     uri = verified_database_uri([runtime, default, candidate, operator])
@@ -202,6 +244,9 @@ def main() -> None:
     if len(sys.argv) == 5 and sys.argv[1] == "paused-database":
         # Consumed only in a shell variable with tracing disabled. Never send this value to a terminal.
         print(verify_paused_database_and_credentials(read_single_container(), *sys.argv[2:]))
+        return
+    if len(sys.argv) == 2 and sys.argv[1] == "private-webnet":
+        require_private_bridge(read_single_container())
         return
     if len(sys.argv) not in {3, 4} or sys.argv[1] not in {"default", "activation", "stopped-activation"}:
         raise SystemExit(

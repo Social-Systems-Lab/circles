@@ -18,6 +18,12 @@ if [[ "$#" -ne 1 ]]; then
   APPROVED_SHA="$3"
   [[ "$2" != "--recover-paused-onboarding" ]] || RECOVER_PAUSED=true
 fi
+for variable in COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_ENV_FILES COMPOSE_PROFILES BUILDX_BUILDER BUILDKIT_HOST; do
+  if [[ -n "${!variable:-}" ]]; then
+    echo "Error: ambient $variable is forbidden for production deployment" >&2
+    exit 1
+  fi
+done
 
 EXPECTED_DIR="/root/circles/circles"
 APP_DIR="${EXPECTED_DIR}/circles"
@@ -44,8 +50,8 @@ REHEARSAL_LOCAL_ORIGIN="file:///root/circles/rehearsal-origin.git"
 TEMP_FILES=()
 NGINX_STOPPED=false
 PAUSED_APPLICATION_VERIFIED=false
-PAUSED_EXPECTED_IMAGE_ID=""
 PUBLIC_VERIFICATION_PENDING=false
+CANDIDATE_START_PENDING=false
 APP_MONGODB_URI=""
 
 exec 9>"$PRODUCTION_LOCK_FILE"
@@ -66,9 +72,12 @@ finish_deployment() {
   if [[ "$PUBLIC_VERIFICATION_PENDING" == true ]]; then
     echo "Error: public verification was interrupted; closing production NGINX." >&2
     if ! close_public_access; then
-      stop_unverified_application
+      stop_unverified_application || true
       status=1
     fi
+  fi
+  if [[ "$CANDIDATE_START_PENDING" == true ]]; then
+    stop_unverified_application || status=1
   fi
   cleanup_temporary_files
   return "$status"
@@ -83,6 +92,26 @@ fi
 fail() {
   echo "Error: $1" >&2
   exit 1
+}
+
+# Long builds and graceful NGINX drain have their own deadlines below.
+docker() {
+  timeout --kill-after=5s "${DOCKER_DEADLINE:-30s}" docker "$@"
+}
+
+service_is_stopped() {
+  local service="$1" output id state
+  local -a ids=()
+  output="$("${BASE_COMPOSE[@]}" ps --all -q "$service")" || return 1
+  [[ -n "$output" ]] || return 0
+  while IFS= read -r id; do
+    ids+=("$id")
+  done <<<"$output"
+  output="$(docker inspect --format '{{.State.Status}}' "${ids[@]}")" || return 1
+  [[ -n "$output" ]] || return 1
+  while IFS= read -r state; do
+    [[ "$state" == exited || "$state" == created ]] || return 1
+  done <<<"$output"
 }
 
 require_terminal_confirmation() {
@@ -141,8 +170,10 @@ require_paused_onboarding_configuration() {
   python3 "$ACTIVATION_VALIDATOR" ops-compose-json "$PAUSED_OPS_CONFIG" "$GIT_SHA" >/dev/null
   python3 "$ACTIVATION_VALIDATOR" separation \
     "$ACTIVATION_ENV_FILE" "$BASE_ENV_FILE" "$ROUTING_OPERATOR_VERIFIER_FILE" >/dev/null
+  docker network inspect circles_webnet | python3 "$RUNTIME_VALIDATOR" private-webnet ||
+    fail "could not confirm that production webnet prevents direct application ingress"
   APP_MONGODB_URI="$(paused_application_database_uri "$active_container_id")" ||
-    fail "serving application, candidate, operator and migration database identity could not be verified"
+    fail "serving application and candidate database, credentials or users volume could not be verified"
   require_unchanged_paused_configuration
 }
 
@@ -189,15 +220,11 @@ require_application_cron_secret() {
 }
 
 stop_nginx_for_paused_onboarding() {
-  local running_nginx=""
   [[ "$DEPLOY_MODE" == "paused-onboarding" && "$NGINX_STOPPED" == false ]] || return 0
   # NGINX's image uses SIGQUIT for graceful shutdown. Never force-kill requests still draining.
-  timeout 75s "${BASE_COMPOSE[@]}" stop --timeout -1 nginx >/dev/null ||
+  DOCKER_DEADLINE=75s "${BASE_COMPOSE[@]}" stop --timeout -1 nginx >/dev/null ||
     fail "production NGINX did not drain; the application was not stopped"
-  running_nginx="$("${BASE_COMPOSE[@]}" ps --status running -q nginx)" || \
-    fail "could not confirm that production NGINX stopped"
-  [[ -z "$running_nginx" ]] || \
-    fail "production NGINX is still running after the required stop"
+  service_is_stopped nginx || fail "could not confirm that production NGINX stopped"
   NGINX_STOPPED=true
 }
 
@@ -232,8 +259,8 @@ verify_application_image_identity() {
 
 verify_application_http_sha() {
   local container_id="$1" expected_sha="$2" container_ip
-  container_ip="$(docker inspect "$container_id" | python3 "$RUNTIME_VALIDATOR" endpoint)" || return 1
-  docker exec "$container_id" node -e '
+  container_ip="$(DOCKER_DEADLINE=5s docker inspect "$container_id" | python3 "$RUNTIME_VALIDATOR" endpoint)" || return 1
+  DOCKER_DEADLINE=5s docker exec "$container_id" node -e '
 const expected = process.argv[1];
 const host = process.argv[2];
 const port = Number(process.env.PORT);
@@ -288,6 +315,8 @@ if [[ ! -d "$APP_DIR" ]]; then
 fi
 
 BASE_ENV_FILE="$APP_DIR/.env"
+unset DOCKER_DEADLINE
+export KAMOONI_DEPLOY_IMAGE_ID=""
 BASE_COMPOSE=(
   docker compose
   --project-name circles
@@ -307,7 +336,7 @@ fi
 
 require_clean_worktree() {
   local dirty_status
-  dirty_status="$(git status --porcelain --untracked-files=all)"
+  dirty_status="$(git status --porcelain --untracked-files=all)" || return 1
   if [[ -n "$dirty_status" ]]; then
     echo "Error: refusing to deploy with a dirty working tree." >&2
     echo "$dirty_status" >&2
@@ -348,32 +377,19 @@ if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
 fi
 require_production_docker
 
-CURRENT_ROUTING_STATE="$("${BASE_COMPOSE[@]}" exec -T db sh -lc \
-  'mongosh "$MONGODB_URI" --quiet --eval '\''const record = db.getSiblingDB("circles").registrationRouting.findOne({_id:"registration-routing"}); const mode = record && record.mode ? record.mode : "legacy"; const deployment = record && record.deploymentId ? "set" : "null"; print(mode + "|" + deployment)'\''' 2>/dev/null)" || {
-  echo "Error: could not read registration routing before production synchronization." >&2
-  echo "The checkout and running application were not changed." >&2
-  exit 1
-}
-case "$CURRENT_ROUTING_STATE" in
-  "legacy|null"|"paused|null"|"pending|set")
-    ;;
-  *)
-    echo "Error: registration routing returned an unrecognized state before production synchronization." >&2
+if [[ "$DEPLOY_MODE" == "legacy" ]]; then
+  CURRENT_ROUTING_STATE="$("${BASE_COMPOSE[@]}" exec -T db sh -lc \
+    'mongosh "$MONGODB_URI" --quiet --eval '\''const record = db.getSiblingDB("circles").registrationRouting.findOne({_id:"registration-routing"}); const mode = record && record.mode ? record.mode : "legacy"; const deployment = record && record.deploymentId ? "set" : "null"; print(mode + "|" + deployment)'\''' 2>/dev/null)" || {
+    echo "Error: could not read registration routing before production synchronization." >&2
     echo "The checkout and running application were not changed." >&2
     exit 1
-    ;;
-esac
-if [[ "$DEPLOY_MODE" == "legacy" && "$CURRENT_ROUTING_STATE" != "legacy|null" ]]; then
-  echo "Error: normal production deployment requires routing mode legacy with no deployment ID." >&2
-  echo "Use scripts/production-onboarding-control.sh to pause, inspect, or roll back onboarding first." >&2
-  exit 1
-fi
-if [[ "$DEPLOY_MODE" == "paused-onboarding" && "$CURRENT_ROUTING_STATE" != "paused|null" ]]; then
-  echo "Error: paused onboarding deployment requires routing mode paused with no deployment ID." >&2
-  echo "No checkout or application change was made." >&2
-  exit 1
-fi
-if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
+  }
+  if [[ "$CURRENT_ROUTING_STATE" != "legacy|null" ]]; then
+    echo "Error: normal production deployment requires routing mode legacy with no deployment ID." >&2
+    echo "Use scripts/production-onboarding-control.sh to pause, inspect, or roll back onboarding first." >&2
+    exit 1
+  fi
+else
   [[ -f "$ACTIVATION_VALIDATOR" && -f "$OPERATOR_VERIFIER_VALIDATOR" && \
     -f "$RUNTIME_VALIDATOR" && -f "$APPLICATION_IMAGE_VALIDATOR" ]] || \
     fail "paused onboarding deployment validators are missing"
@@ -381,9 +397,7 @@ if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
   expected_runtime=activation
   confirmation="$PAUSED_DEPLOY_CONFIRM"
   if [[ "$RECOVER_PAUSED" == true ]]; then
-    running_public_ids="$("${BASE_COMPOSE[@]}" ps --status running -q nginx circles)" ||
-      fail "could not verify that production public services are stopped"
-    [[ -z "$running_public_ids" ]] ||
+    service_is_stopped nginx && service_is_stopped circles ||
       fail "offline recovery requires both production NGINX and circles to be stopped"
     active_container_id="$("${BASE_COMPOSE[@]}" ps --all -q circles)"
     expected_runtime=stopped-activation
@@ -409,6 +423,8 @@ if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
     python3 "$RUNTIME_VALIDATOR" "$expected_runtime" "$PAUSED_DEPLOYMENT_ID" "$ACTIVATION_ENV_FILE" >/dev/null ||
     fail "existing application is not using the validated paused onboarding runtime"
   if [[ "$RECOVER_PAUSED" == false ]]; then
+    docker inspect "$active_container_id" | python3 "$RUNTIME_VALIDATOR" no-published-ports >/dev/null ||
+      fail "serving application must have no published host port before paused deployment"
     active_container_version="$(docker exec "$active_container_id" cat /app/VERSION)" ||
       fail "could not read serving container version metadata"
     [[ "$active_container_version" == "$(sed '/^---KAMOONI-ROLE---$/,$d' <<<"$active_version_file")" ]] ||
@@ -484,7 +500,7 @@ if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
 fi
 
 echo "Building the read-only registration operator for the production SHA..."
-"${OPS_COMPOSE[@]}" build registration_ops
+DOCKER_DEADLINE=30m "${OPS_COMPOSE[@]}" build registration_ops
 
 echo "Verifying registration routing is unchanged before production deployment..."
 docker image inspect "circles-registration-ops:$GIT_SHA" >/dev/null
@@ -513,14 +529,12 @@ if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
     fail "retained production image does not match the serving image"
 fi
 
-"${BASE_COMPOSE[@]}" build circles cron
+DOCKER_DEADLINE=30m "${BASE_COMPOSE[@]}" build circles cron
 
-if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
-  PAUSED_EXPECTED_IMAGE_ID="$(docker image inspect --format '{{.Id}}' circles-circles:latest)" || \
-    fail "newly built production application image is missing"
-  verify_application_image_identity "$PAUSED_EXPECTED_IMAGE_ID" "$GIT_SHA" || \
-    fail "newly built production application image SHA, identity, or production role is invalid"
-fi
+KAMOONI_DEPLOY_IMAGE_ID="$(docker image inspect --format '{{.Id}}' circles-circles:latest)" || \
+  fail "newly built production application image is missing"
+verify_application_image_identity "$KAMOONI_DEPLOY_IMAGE_ID" "$GIT_SHA" || \
+  fail "newly built production application image SHA, identity, or production role is invalid"
 
 resolve_application_mongodb_uri() {
   # Resolve the exact environment assigned to the application service. This works even when
@@ -540,7 +554,7 @@ application_container_id() {
 }
 
 verify_paused_application_runtime() {
-  local expected_image_id="$1" container_id actual_image_id version_file candidate_uri
+  local expected_image_id="$1" container_id actual_image_id version_file candidate_uri deadline
   container_id="$(application_container_id)" || {
     echo "Error: expected exactly one production application container" >&2
     return 1
@@ -569,7 +583,8 @@ verify_paused_application_runtime() {
     echo "Error: application version metadata does not match the deployed SHA" >&2
     return 1
   fi
-  for _ in $(seq 1 20); do
+  deadline=$((SECONDS + 80))
+  while (( SECONDS < deadline )); do
     if verify_application_http_sha "$container_id" "$GIT_SHA"; then
       return 0
     fi
@@ -581,8 +596,9 @@ verify_paused_application_runtime() {
 
 verify_registration_routing_paused() {
   local expected_mode="${1:-paused}" status
-  status="$(MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run --rm --no-deps --pull never -T registration_ops route-status)" || {
-    echo "Error: could not read registration routing" >&2
+  status="$(DOCKER_DEADLINE=20s MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run \
+    --rm --no-deps --pull never -T registration_ops route-status)" || {
+    echo "Error: could not read registration routing before the deadline" >&2
     return 1
   }
   printf '%s\n' "$status" | python3 "$ACTIVATION_VALIDATOR" route-status "$expected_mode" >/dev/null || {
@@ -649,9 +665,7 @@ if [[ "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then
 fi
 
 echo "Running read-only Messaging Stage 1A production preflight..."
-preflight_args=()
-[[ "$DEPLOY_MODE" == "legacy" ]] || preflight_args+=(--production-compose)
-if ! (cd "$APP_DIR" && APP_MONGODB_URI="$APP_MONGODB_URI" ./scripts/preflight-messaging-stage1a.sh "${preflight_args[@]}"); then
+if ! (cd "$APP_DIR" && APP_MONGODB_URI="$APP_MONGODB_URI" ./scripts/preflight-messaging-stage1a.sh --production-compose); then
   echo "Error: Messaging Stage 1A preflight failed." >&2
   echo "The running circles application and cron services were not stopped or replaced." >&2
   exit 1
@@ -671,7 +685,7 @@ run_mongo_script() {
   {
     printf '%s\n' "$APP_MONGODB_URI"
     cat "$absolute_script_path"
-  } | ("${BASE_COMPOSE[@]}" exec -T db sh -lc \
+  } | (DOCKER_DEADLINE=31m "${BASE_COMPOSE[@]}" exec -T db sh -lc \
     'IFS= read -r MONGODB_URI || exit 1
      [ -n "$MONGODB_URI" ] || exit 1
      export MONGODB_URI
@@ -680,7 +694,7 @@ run_mongo_script() {
      chmod 600 "$script_file" || exit 1
      printf '\''%s\n'\'' '\''db = connect(process.env.MONGODB_URI);'\'' > "$script_file" || exit 1
      cat >> "$script_file" || exit 1
-     mongosh --nodb --quiet --file "$script_file" >/dev/null 2>&1')
+      timeout --kill-after=5s 30m mongosh --nodb --quiet --file "$script_file" >/dev/null 2>&1')
 }
 
 get_chat_read_state_v2_completion_count() {
@@ -697,10 +711,8 @@ get_chat_read_state_v2_completion_count() {
 }
 
 close_public_access() {
-  local running_nginx
   "${BASE_COMPOSE[@]}" stop nginx >/dev/null 2>&1 || true
-  if ! running_nginx="$("${BASE_COMPOSE[@]}" ps --status running -q nginx 2>/dev/null)" ||
-     [[ -n "$running_nginx" ]]; then
+  if ! service_is_stopped nginx; then
     echo "Error: production NGINX could not be confirmed stopped; operator intervention is required." >&2
     return 1
   fi
@@ -709,12 +721,12 @@ close_public_access() {
 }
 
 stop_unverified_application() {
-  local running_app
   "${BASE_COMPOSE[@]}" stop circles >/dev/null 2>&1 || true
-  if ! running_app="$("${BASE_COMPOSE[@]}" ps --status running -q circles 2>/dev/null)" ||
-     [[ -n "$running_app" ]]; then
+  if ! service_is_stopped circles; then
     echo "Error: production application could not be confirmed stopped; operator intervention is required." >&2
+    return 1
   fi
+  CANDIDATE_START_PENDING=false
 }
 
 fail_offline() {
@@ -727,8 +739,9 @@ fail_offline() {
     if [[ "$PAUSED_APPLICATION_VERIFIED" == true && "$stop_application" != true ]]; then
       echo "Registration routing was not changed. NGINX remains stopped; the verified new circles container remains private for diagnosis and retry." >&2
     else
-      stop_unverified_application
-      echo "Registration routing was not changed. Keep public services offline and use recover-paused-services." >&2
+      if stop_unverified_application; then
+        echo "Registration routing was not changed. Keep public services offline and use recover-paused-services." >&2
+      fi
     fi
     echo "Do not reopen NGINX until the failure is corrected and paused routing, image SHA, runtime, and cron are revalidated." >&2
   else
@@ -766,9 +779,8 @@ else
     fail_offline "failed to stop the old circles application; migration was not started"
   fi
 
-  RUNNING_CIRCLES_IDS="$("${BASE_COMPOSE[@]}" ps --status running -q circles)"
-  if [[ -n "$RUNNING_CIRCLES_IDS" ]]; then
-    fail_offline "old circles application containers are still running; migration was not started"
+  if ! service_is_stopped circles; then
+    fail_offline "old circles application containers could not be confirmed stopped; migration was not started"
   fi
   echo "Confirmed: no Compose circles application container is running. Maintenance window started."
 
@@ -785,24 +797,27 @@ require_paused_replacement_ready
 stop_nginx_for_paused_onboarding
 if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
   require_paused_replacement_ready
+  CANDIDATE_START_PENDING=true
   if ! "${PAUSED_APPLICATION_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate circles; then
     fail_offline "the newly built paused onboarding application failed to start"
   fi
 else
-  if ! "${BASE_COMPOSE[@]}" up -d --no-deps --force-recreate circles; then
+  if ! "${BASE_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate circles; then
     fail_offline "the newly built V2 circles application failed to start"
   fi
 fi
 
-RUNNING_CIRCLES_IDS="$("${BASE_COMPOSE[@]}" ps --status running -q circles)"
+RUNNING_CIRCLES_IDS="$("${BASE_COMPOSE[@]}" ps --status running -q circles)" || \
+  fail_offline "the newly built V2 circles application state could not be verified"
 if [[ -z "$RUNNING_CIRCLES_IDS" ]]; then
   fail_offline "the newly built V2 circles application is not running"
 fi
 
 if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
-  verify_paused_application_runtime "$PAUSED_EXPECTED_IMAGE_ID" || \
+  verify_paused_application_runtime "$KAMOONI_DEPLOY_IMAGE_ID" || \
     fail_offline "paused onboarding application runtime verification failed"
   PAUSED_APPLICATION_VERIFIED=true
+  CANDIDATE_START_PENDING=false
   verify_registration_routing_paused || \
     fail_offline "registration routing changed during paused onboarding deployment" true
   recreate_and_verify_cron || fail_offline "cron verification failed during paused onboarding deployment"
@@ -828,25 +843,12 @@ VERSION_URL="https://kamooni.org/api/version"
 VERSION_OUTPUT=""
 
 for attempt in $(seq 1 20); do
-  if VERSION_OUTPUT="$(curl -fsSL "$VERSION_URL" 2>/dev/null)" && \
+  if VERSION_OUTPUT="$(curl -fsS --noproxy kamooni.org --connect-timeout 3 --max-time 5 "$VERSION_URL" 2>/dev/null)" && \
     grep -Eq "\"gitSha\"[[:space:]]*:[[:space:]]*\"$GIT_SHA\"" <<<"$VERSION_OUTPUT"; then
     echo "Version check (attempt $attempt):"
     echo "$VERSION_OUTPUT"
     echo "Recreating the cron service with the verified application deployment..."
-    if ! (cd "$APP_DIR" && docker compose up -d --no-deps --force-recreate cron); then
-      echo "Error: application is healthy, but the cron service could not be recreated." >&2
-      exit 1
-    fi
-    if ! (cd "$APP_DIR" && docker compose exec -T cron sh -lc \
-      'grep -Fq "/api/cron/email-reminders" /etc/crontabs/root && grep -Fq "/api/cron/first-topic-notifications" /etc/crontabs/root && grep -Fq "/api/cron/onboarding-watchdog" /etc/crontabs/root'); then
-      echo "Error: cron schedule verification failed; expected reminder, first-topic and onboarding-watchdog jobs." >&2
-      exit 1
-    fi
-    if ! (cd "$APP_DIR" && docker compose exec -T cron sh -lc \
-      'curl -fsS --max-time 20 -H "Authorization: Bearer $CRON_SECRET" http://circles:3000/api/cron/onboarding-watchdog >/dev/null'); then
-      echo "Error: authenticated onboarding watchdog invocation failed after cron recreation." >&2
-      exit 1
-    fi
+    recreate_and_verify_cron || exit 1
     echo "Verified cron schedules and an authenticated legacy-mode onboarding watchdog invocation."
     exit 0
   fi
@@ -855,5 +857,5 @@ done
 
 echo "Error: version check failed after 20 attempts: $VERSION_URL" >&2
 echo "Expected deployed gitSha: $GIT_SHA" >&2
-(cd "$APP_DIR" && docker compose logs --tail=50 circles || true)
+"${BASE_COMPOSE[@]}" logs --tail=50 circles || true
 fail_offline "new V2 application health/version verification failed"

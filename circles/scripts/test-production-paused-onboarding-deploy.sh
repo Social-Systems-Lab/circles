@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 deploy="$repo_dir/deploy-genesis2.sh"
+compose="$repo_dir/docker-compose.yml"
 control="$repo_dir/scripts/production-onboarding-control.sh"
 validator="$repo_dir/scripts/validate-production-onboarding-activation.py"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/kamooni-paused-deploy-test.XXXXXX")"
@@ -26,7 +27,7 @@ assert_order() {
 
 grep -Fq 'DEPLOY_MODE="paused-onboarding"' "$deploy"
 grep -Fq 'Error: normal production deployment requires routing mode legacy with no deployment ID.' "$deploy"
-grep -Fq 'paused onboarding deployment requires routing mode paused with no deployment ID' "$deploy"
+grep -Fq 'paused onboarding deployment requires verified paused routing and a completed drain' "$deploy"
 grep -Fq 'require_paused_operations_idle' "$deploy"
 grep -Fq 'operations-idle' "$deploy"
 grep -Fq 'activation-compose-json' "$deploy"
@@ -44,6 +45,12 @@ grep -Fq '"$RUNTIME_VALIDATOR" activation "$PAUSED_DEPLOYMENT_ID" "$ACTIVATION_E
 grep -Fq 'active_image_id="$(active_application_image_id "$active_container_id")"' "$deploy"
 grep -Fq 'PAUSED_APPLICATION_VERIFIED=true' "$deploy"
 grep -Fq 'exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding "$1"' "$control"
+grep -Fq 'image: ${KAMOONI_DEPLOY_IMAGE_ID:-circles-circles:latest}' "$compose"
+grep -Fq 'export KAMOONI_DEPLOY_IMAGE_ID=""' "$deploy"
+grep -Fq './scripts/preflight-messaging-stage1a.sh --production-compose' "$deploy"
+if grep -Eq 'docker compose (run|exec|up|stop|ps|logs|build)' "$deploy"; then
+    fail "production deployment uses implicit Compose selection"
+fi
 
 if grep -Eq -- 'route-set|docker compose down|docker volume rm|rm -rf' "$deploy"; then
     fail "paused deployment contains a routing, container-stack, volume, or broad deletion operation"
@@ -58,12 +65,12 @@ fi
 assert_order '  require_paused_operations_idle' 'docker image tag "$active_image_id" "$retained_image"'
 assert_order 'docker image tag "$active_image_id" "$retained_image"' '"${BASE_COMPOSE[@]}" build circles cron'
 assert_order '"${BASE_COMPOSE[@]}" build circles cron' \
-    'verify_application_image_identity "$PAUSED_EXPECTED_IMAGE_ID"'
-assert_order 'verify_application_image_identity "$PAUSED_EXPECTED_IMAGE_ID"' \
+    'verify_application_image_identity "$KAMOONI_DEPLOY_IMAGE_ID"'
+assert_order 'verify_application_image_identity "$KAMOONI_DEPLOY_IMAGE_ID"' \
     '  stop_nginx_for_paused_onboarding'
 assert_order '  stop_nginx_for_paused_onboarding' \
     '"${PAUSED_APPLICATION_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate circles'
-assert_order 'verify_paused_application_runtime "$PAUSED_EXPECTED_IMAGE_ID"' \
+assert_order 'verify_paused_application_runtime "$KAMOONI_DEPLOY_IMAGE_ID"' \
     '"${BASE_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate nginx'
 assert_order 'verify_registration_routing_paused || \' \
     '"${BASE_COMPOSE[@]}" up -d --no-deps --no-build --pull never --force-recreate nginx'
@@ -102,6 +109,16 @@ fail() {
     exit 1
 }
 SCRIPT
+extract_function service_is_stopped >>"$test_root/base-functions.sh"
+
+# Normal deployment must reject ambient Compose targeting before touching Docker or the host lock.
+for override in COMPOSE_FILE COMPOSE_PROJECT_NAME; do
+    if env "$override=wrong-fixture" "$deploy" main >"$test_root/ambient-compose-output" 2>&1; then
+        fail "normal deployment accepted $override"
+    fi
+    grep -Fq "ambient $override is forbidden" "$test_root/ambient-compose-output" || \
+        fail "normal deployment did not reject $override before host checks"
+done
 
 # A rejection before the application replacement window must not stop public services.
 {
@@ -313,17 +330,20 @@ CALLS="$1"
 DEPLOY_MODE=paused-onboarding
 NGINX_STOPPED=false
 BASE_COMPOSE=(mock_base)
-timeout() {
-    [[ "$1" == 75s ]]
-    shift
-    "$@"
-}
 mock_base() {
     printf '%s\n' "$*" >>"$CALLS"
+    if [[ "$1" == "stop" ]]; then
+        [[ "$DOCKER_DEADLINE" == 75s ]]
+        return "${STOP_STATUS:-0}"
+    fi
     if [[ "$1" == "ps" ]]; then
         printf '%s\n' "${PS_OUTPUT:-}"
         return "${PS_STATUS:-0}"
     fi
+}
+docker() {
+    [[ "$1" == inspect && "$4" == synthetic-nginx-id ]]
+    printf '%s\n' "${CONTAINER_STATE:-running}"
 }
 source "$2"
 stop_nginx_for_paused_onboarding
@@ -339,7 +359,17 @@ if PS_OUTPUT="synthetic-nginx-id" CALLS="$test_root/stop-running-calls" "$test_r
     >"$test_root/stop-running-output" 2>&1; then
     fail "NGINX stop helper accepted a still-running NGINX container"
 fi
-grep -Fq 'still running after the required stop' "$test_root/stop-running-output"
+grep -Fq 'could not confirm that production NGINX stopped' "$test_root/stop-running-output"
+if PS_OUTPUT=synthetic-nginx-id CONTAINER_STATE=restarting "$test_root/run-stop.sh" \
+    "$test_root/stop-restarting-calls" "$test_root/stop-functions.sh" >/dev/null 2>&1; then
+    fail "NGINX stop helper accepted a restarting NGINX container"
+fi
+if STOP_STATUS=124 "$test_root/run-stop.sh" "$test_root/stop-timeout-calls" "$test_root/stop-functions.sh" \
+    >"$test_root/stop-timeout-output" 2>&1; then
+    fail "NGINX stop helper accepted a drain timeout"
+fi
+grep -Fq 'production NGINX did not drain; the application was not stopped' "$test_root/stop-timeout-output"
+[[ "$(cat "$test_root/stop-timeout-calls")" == 'stop --timeout -1 nginx' ]]
 if PS_STATUS=1 CALLS="$test_root/stop-unknown-calls" "$test_root/run-stop.sh" \
     "$test_root/stop-unknown-calls" "$test_root/stop-functions.sh" \
     >"$test_root/stop-unknown-output" 2>&1; then

@@ -280,9 +280,9 @@ const server = http.createServer((request, response) => {
     response.writeHead(404).end("not found");
     return;
   }
-  if (process.env.REHEARSAL_BLOCK_PUBLIC_SHA === gitSha && request.headers.host === "kamooni.org") {
+  if (request.headers.host === "kamooni.org") {
     fs.writeFileSync("/rehearsal-runtime/public-version-requested", gitSha);
-    return;
+    if (process.env.REHEARSAL_BLOCK_PUBLIC_SHA === gitSha) return;
   }
   try {
     fs.writeFileSync("/rehearsal-runtime/internal-version-requested", gitSha);
@@ -380,7 +380,7 @@ ENV
     cat >"$APP_DIR/docker-compose.yml" <<'YAML'
 services:
   circles:
-    image: circles-circles:latest
+    image: ${KAMOONI_DEPLOY_IMAGE_ID:-circles-circles:latest}
     build:
       context: .
       dockerfile: Dockerfile.rehearsal-app
@@ -388,8 +388,7 @@ services:
         KAMOONI_DEPLOYMENT_ROLE: production
         GIT_SHA: ${GIT_SHA:?GIT_SHA is required}
         BUILD_TIME: ${BUILD_TIME:-rehearsal}
-    ports:
-      - "${CIRCLES_PORT}:${CIRCLES_PORT}"
+    command: ["${REHEARSAL_APPLICATION_COMMAND:-node}", "/app/rehearsal-app.mjs"]
     env_file:
       - .env
     environment:
@@ -423,7 +422,8 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: rehearsal
       MONGO_INITDB_ROOT_PASSWORD: rehearsal-not-a-credential
-      MONGODB_URI: mongodb://rehearsal:rehearsal-not-a-credential@127.0.0.1:27017/circles?authSource=admin
+      # Paused deployment must use the application's verified connection.
+      MONGODB_URI: mongodb://stale-fixture@127.0.0.1:27017/wrong_disposable_database
     tmpfs:
       - /data/db
     networks:
@@ -456,11 +456,37 @@ services:
       - webnet
 volumes:
   circles_users:
-    name: circles_users
+    name: ${REHEARSAL_USERS_VOLUME:-circles_users}
 networks:
   webnet:
     name: circles_webnet
 YAML
+
+    # Failures here affect only commands issued by the deployment under rehearsal. The
+    # real daemon still builds, creates, starts and inspects the candidate containers.
+    install -d "$CONTROL_DIR/bin"
+    cat >"$CONTROL_DIR/bin/docker" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+faults="$REHEARSAL_DOCKER_FAULTS"
+case " $* " in
+    *" up -d --no-deps --no-build --pull never --force-recreate circles "*)
+        if [[ -f "$faults/retag-before-start" ]]; then
+            printf '%s\n' "$KAMOONI_DEPLOY_IMAGE_ID" >"$faults/verified-image-before-retag"
+            "$REHEARSAL_REAL_DOCKER" image tag "$(cat "$faults/retag-before-start")" circles-circles:latest
+            rm -f "$faults/retag-before-start"
+        fi
+        ;;
+    *" registration_ops route-status "*)
+        if [[ -f "$faults/stall-final-route" && -f "$faults/runtime/public-version-requested" ]]; then
+            touch "$faults/stalled-final-route-attempted"
+            exec sleep 90
+        fi
+        ;;
+esac
+exec "$REHEARSAL_REAL_DOCKER" "$@"
+BASH
+    chmod 755 "$CONTROL_DIR/bin/docker"
 }
 
 initialize_fake_git_repository() {
@@ -585,7 +611,7 @@ assert_synthetic_identity_preserved() {
     accounts="$("${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval \
         'db.circles.countDocuments({did:"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"})')"
     reservations="$("${BASE_COMPOSE[@]}" exec -T db mongosh "$REHEARSAL_MONGO_URI" --quiet --eval \
-        'db.pendingRegistrationDidReservations.countDocuments({_id:"rehearsal-preserved-did"})')"
+        'db.pendingRegistrationDidReservations.countDocuments({_id:"rehearsal-preserved-did",did:"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"})')"
     [[ "$accounts" == "1" && "$reservations" == "1" ]] || \
         fail "synthetic account or DID reservation was altered"
     docker run --rm --pull never --network none --read-only \
@@ -733,6 +759,7 @@ run_paused_recovery() {
     local log="$1" approved_sha="$2"
     (
         cd "$EXPECTED_REPO_DIR"
+        export PATH="$CONTROL_DIR/bin:$PATH"
         run_pty_command "$CONTROL_DIR/paused-recovery.responses" "$CONTROL_SCRIPT" recover-paused-services "$approved_sha"
     ) >"$log" 2>&1
 }
@@ -741,6 +768,7 @@ run_paused_deploy() {
     local log="$1" approved_sha="$2"
     (
         cd "$EXPECTED_REPO_DIR"
+        export PATH="$CONTROL_DIR/bin:$PATH"
         run_pty_command "$CONTROL_DIR/deploy.responses" "$CONTROL_SCRIPT" deploy-paused-services "$approved_sha"
     ) >"$log" 2>&1
 }
@@ -750,6 +778,7 @@ start_paused_deploy_background() {
     rm -f "$CONTROL_DIR/deploy-child.pid"
     (
         cd "$EXPECTED_REPO_DIR"
+        export PATH="$CONTROL_DIR/bin:$PATH"
         run_pty_command "$CONTROL_DIR/deploy.responses" bash -c '
             printf "%s\n" "$$" >"$1"
             shift
@@ -851,6 +880,7 @@ trap cleanup EXIT
 install_fixture_files
 verify_operator_build_context
 write_fixture_configuration
+export REHEARSAL_REAL_DOCKER="$(command -v docker)" REHEARSAL_DOCKER_FAULTS="$CONTROL_DIR"
 initialize_fake_git_repository
 prepare_fake_credentials
 
@@ -976,11 +1006,14 @@ assert_deploy_rejected "$CONTROL_DIR/sha-mismatch.log" "$GIT_SHA" "origin/main d
 [[ "$(git -C "$EXPECTED_REPO_DIR" rev-parse HEAD)" == "$GIT_SHA" ]] || fail "wrong-approved-SHA rejection advanced the checkout"
 prepare_fake_checkout "$image_failure_sha"
 DOCKER_CONTEXT=default assert_deploy_rejected "$CONTROL_DIR/daemon-override.log" "$image_failure_sha" "Docker context and host overrides are forbidden"
+COMPOSE_FILE=/synthetic-wrong-compose.yml assert_deploy_rejected "$CONTROL_DIR/compose-file.log" "$image_failure_sha" "ambient COMPOSE_FILE is forbidden"
+COMPOSE_PROJECT_NAME=synthetic-wrong-project assert_deploy_rejected "$CONTROL_DIR/compose-project.log" "$image_failure_sha" "ambient COMPOSE_PROJECT_NAME is forbidden"
 assert_deploy_rejected "$CONTROL_DIR/drain.log" "$image_failure_sha" "production registration must remain paused for at least five minutes"
 age_disposable_pause
 printf '\nCIRCLES_MONGODB_DATABASE=wrong_disposable_database\n' >>"$APP_DIR/.env"
 assert_deploy_rejected "$CONTROL_DIR/database-mismatch.log" "$image_failure_sha" "production MongoDB identity differs or is invalid"
 sed -i '/^CIRCLES_MONGODB_DATABASE=wrong_disposable_database$/d' "$APP_DIR/.env"
+REHEARSAL_USERS_VOLUME=wrong_disposable_users assert_deploy_rejected "$CONTROL_DIR/users-mismatch.log" "$image_failure_sha" "production users volume differs"
 insert_active_locks
 assert_deploy_rejected "$CONTROL_DIR/active-locks.log" "$image_failure_sha" "activeProvisioningLocks must be zero"
 clear_synthetic_locks
@@ -1012,6 +1045,7 @@ assert_activation_state_preserved
 "$CONTROL_SCRIPT" status >/dev/null
 
 rm -f "$CONTROL_DIR/image-validation-failure" "$RUNTIME_DIR/internal-version-requested"
+printf '%s\n' "$serving_image" >"$CONTROL_DIR/retag-before-start"
 curl --fail --silent --show-error --max-time 130 \
     "https://$PUBLIC_HOST/rehearsal-in-flight-verification" >"$CONTROL_DIR/drained-request.log" &
 drain_pid=$!
@@ -1035,6 +1069,9 @@ for _ in $(seq 1 180); do
 done
 [[ "$drain_observed" == true ]] || fail "NGINX never stopped accepting new requests during the drain"
 [[ "$(container_id)" == "$circles_before" ]] || fail "application was replaced with an in-flight verification request"
+if curl --fail --silent --connect-timeout 1 --max-time 2 http://127.0.0.1:3000/api/version >/dev/null; then
+    fail "the serving application remained reachable through its host port while NGINX drained"
+fi
 kill -0 "$drain_pid" 2>/dev/null || fail "NGINX interrupted an in-flight verification request"
 touch "$RUNTIME_DIR/release-verification"
 wait "$drain_pid" || fail "NGINX did not deliver the in-flight verification response"
@@ -1056,6 +1093,12 @@ if [[ "$deploy_status" -ne 0 ]]; then
 fi
 unset REHEARSAL_HOLD_VERSION_SHA REHEARSAL_RELEASE_TOKEN REHEARSAL_START_DELAY_MS
 wait_for_external_version "$image_failure_sha" || fail "retry deployment did not expose the approved SHA"
+[[ "$(docker inspect --format '{{.Image}}' "$(container_id)")" == "$(cat "$CONTROL_DIR/verified-image-before-retag")" &&
+   "$(docker image inspect --format '{{.Id}}' circles-circles:latest)" == "$serving_image" ]] ||
+    fail "retagging latest changed the deployed image"
+echo "Candidate creation used the verified image ID after latest was retagged."
+# Keep the existing activation and routing commands' exact-SHA image-tag contract.
+docker image tag "$(cat "$CONTROL_DIR/verified-image-before-retag")" circles-circles:latest
 assert_route paused
 assert_no_app_host_port
 assert_pending_email_preserved
@@ -1160,6 +1203,26 @@ assert_synthetic_identity_preserved
 assert_activation_state_preserved
 echo "Partial chat migration and verifier failures recovered with the activation runtime and paused routing."
 
+created_failure_sha="$(advance_fake_origin created-candidate-failure)"
+prepare_fake_checkout "$created_failure_sha"
+if REHEARSAL_APPLICATION_COMMAND=/missing-rehearsal-entrypoint run_paused_deploy \
+    "$CONTROL_DIR/deploy-created-failure.log" "$created_failure_sha"; then
+    fail "candidate with a missing executable unexpectedly started"
+fi
+grep -Fq 'the newly built paused onboarding application failed to start' "$CONTROL_DIR/deploy-created-failure.log" ||
+    fail "missing executable did not fail at candidate startup"
+created_id="$("${BASE_COMPOSE[@]}" ps --all -q circles)"
+[[ "$(docker inspect --format '{{.State.Status}}' "$created_id")" == created ]] ||
+    fail "the failed start did not leave a created candidate"
+assert_public_services_stopped
+run_paused_recovery "$CONTROL_DIR/deploy-created-recovery.log" "$created_failure_sha" || {
+    tail -40 "$CONTROL_DIR/deploy-created-recovery.log" >&2
+    fail "offline recovery from a created candidate failed"
+}
+assert_route paused
+assert_synthetic_identity_preserved
+echo "Offline recovery restored the activation runtime from a created candidate."
+
 nginx_failure_sha="$(advance_fake_origin nginx-failure)"
 prepare_fake_checkout "$nginx_failure_sha"
 touch "$CONTROL_DIR/nginx-failure"
@@ -1199,6 +1262,24 @@ grep -Fq 'public verification was interrupted; closing production NGINX' "$CONTR
 assert_route paused
 assert_no_app_host_port
 unset REHEARSAL_BLOCK_PUBLIC_SHA
+
+rm -f "$RUNTIME_DIR/public-version-requested"
+touch "$CONTROL_DIR/stall-final-route"
+if run_paused_deploy "$CONTROL_DIR/deploy-final-route-stall.log" "$nginx_failure_sha"; then
+    fail "deployment accepted a stalled final routing check"
+fi
+[[ -f "$CONTROL_DIR/stalled-final-route-attempted" ]] || fail "final routing stall was not reached"
+grep -Fq 'could not read registration routing before the deadline' "$CONTROL_DIR/deploy-final-route-stall.log" ||
+    fail "final routing stall did not hit its deadline"
+assert_public_services_stopped
+assert_route paused
+rm -f "$CONTROL_DIR/stall-final-route"
+run_paused_recovery "$CONTROL_DIR/deploy-stalled-route-recovery.log" "$nginx_failure_sha" || {
+    tail -40 "$CONTROL_DIR/deploy-stalled-route-recovery.log" >&2
+    fail "offline recovery after a stalled final routing check failed"
+}
+echo "A stalled final routing check timed out, closed public access and recovered offline."
+
 run_paused_deploy "$CONTROL_DIR/deploy-nginx-retry.log" "$nginx_failure_sha" || fail "paused deployment retry failed after NGINX recovery"
 wait_for_external_version "$nginx_failure_sha" || fail "NGINX retry did not expose the approved SHA"
 assert_route paused

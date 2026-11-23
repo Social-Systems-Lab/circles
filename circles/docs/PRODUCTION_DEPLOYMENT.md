@@ -287,6 +287,9 @@ while pending-registration routing is `paused` uses the separate, explicitly con
 `production-onboarding-control.sh deploy-paused-services` procedure in
 [Production pending-registration activation](PRODUCTION_ONBOARDING_ACTIVATION.md#deploy-while-routing-is-paused).
 The normal command still refuses paused or pending routing.
+Both deployment modes use the explicit production Compose project and reject ambient Compose targeting
+overrides. Production Compose leaves the application port unpublished. NGINX serves public requests
+and reaches `circles` over the Docker network.
 
 The script:
 

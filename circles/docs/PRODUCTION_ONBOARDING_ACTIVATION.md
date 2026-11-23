@@ -364,10 +364,18 @@ Before starting:
   without printing the value and performs an authenticated watchdog call after recreating cron.
 - Confirm the running application uses the activated overlay, one immutable production image, its
   production role marker, and an internal `/api/version` response matching `/app/VERSION`.
+- Confirm the serving application publishes no Docker host ports and NGINX is its only public ingress.
+  Check the host and Cleura firewall and routing configuration for any alternate proxy or direct route
+  to the application. The tool checks the living container's bindings and requires `circles_webnet`
+  to use Docker's NAT bridge without trusted direct-routing interfaces. If an older serving container
+  still publishes an application port, paused deployment stops before the drain. Prepare an independently
+  approved ingress transition first. A normal deployment while routing is `legacy` uses the port-free Compose service.
 - Confirm the reviewed release is on `origin/main` and its Build Check and Production Isolation
-  checks passed.
-- Ensure a verified MongoDB backup and the applicable `circles_users`/MinIO recovery material exist.
-  Do not start this deployment to repair a missing backup.
+  checks and exact-candidate disposable rehearsal passed. The host requires Docker Compose 2.24.4 or later
+  for the maintenance overlay.
+- Take fresh MongoDB, `circles_users`, and MinIO backups, verify their restore in isolation, and record
+  the rollback or forward-recovery plan for the current chat schema. See the
+  [production backup and restore runbook](KAMOONI_BACKUP.md).
 
 Before each paused deployment or offline recovery, put the reviewed deployment tool itself on the
 production checkout. Set `APPROVED_FULL_SHA` to the full commit authorized for this release. Use a
@@ -399,13 +407,14 @@ the shared production maintenance lock and requires the checkout to start at the
 fetches `origin/main` again and verifies the SHA still matches. It also verifies the existing
 activation image is a known ancestor, checks the local `kamooniorg` Docker daemon and default system
 socket, and uses the explicit production Compose project, files, and environment. An explicit Docker
-context or host override blocks execution.
+context, host, Compose project/file/environment/profile, or BuildKit builder override blocks execution.
 
 The tool compares the existing application, candidate, and registration operator MongoDB settings,
 including the logical database name. All must use the same local `db` service URI for `circles`. It
 uses that verified URI for preflight, routing, lock checks, and migration. The existing activation
-HMAC, deployment ID, JWT secret, and cron secret must match the candidate before cutover. Mismatches
-are reported without secret values.
+HMAC, deployment ID, JWT secret, and cron secret must match the candidate before cutover. The tool also
+requires the same named `/circles/users` volume on the existing application, candidate, and read-only
+operator. Mismatches are reported without secret values.
 
 The tool verifies the MongoDB pause timestamp is at least five minutes old and checks active locks
 and reconciliation before cutover. It waits up to 75 seconds for NGINX to shut down gracefully.
@@ -417,14 +426,13 @@ email recovery flow can issue a new link after separately approved reactivation.
 It retains the verified running application image locally under a rollback tag before building
 `circles` and `cron`, so the previous image stays available if a build moves `latest`. The new application image's Git SHA,
 immutable image ID, and production role marker are validated before any running application is
-replaced. A failed build or validation does not prevent a retry: the running old container is
-validated through its own immutable image ID rather than the mutable `circles-circles:latest` tag. The
-existing Messaging Stage 1A preflight, chat read-state migration/verification, and MongoDB URI
-resolution remain mandatory.
+replaced. Compose receives the verified image ID for preflight and creation, and startup uses `--no-build`
+and `--pull never`. A failed build or validation permits a retry against the existing container's image ID.
+Messaging Stage 1A preflight and chat read-state migration verification remain mandatory.
 
 Before replacing `circles`, the command stops NGINX and confirms it is no longer running. The paused
 deployment applies `docker-compose.production-maintenance.yml`, which removes the application's
-host-port publication while retaining `circles_webnet` connectivity for NGINX and cron. It starts
+host-port publication defensively while retaining `circles_webnet` connectivity for NGINX and cron. It starts
 exactly one new `circles` container with the validated activation overlay, while routing remains
 `paused`, and verifies before reopening public access:
 
@@ -436,12 +444,13 @@ exactly one new `circles` container with the validated activation overlay, while
 - registration routing is still `paused`; and
 - cron contains all existing schedules and an authenticated watchdog invocation succeeds.
 
-The internal readiness check retries slow startup within a bounded window. Only then does the tool
-recreate NGINX, verify the public `/api/version` with per-request deadlines, and recheck paused
-routing. If the public check fails or the process receives HUP, INT, or TERM before public
-verification finishes, the tool closes NGINX. After a host failure or an uncatchable process kill,
-independently confirm NGINX and application state before continuing. The tool does not run `route-set`, automatically enter `legacy` or `pending`, release locks, delete pending
-records, change DID reservations, or modify credential files.
+The tool bounds Docker calls and retries internal HTTP readiness before recreating NGINX. It verifies
+the public `/api/version` with per-request deadlines, then checks paused routing with a 20-second Docker
+deadline. A failed or timed-out final routing read closes NGINX and stops the candidate. If public HTTP
+verification fails, a verified candidate can remain private. HUP, INT, or TERM during public verification
+triggers NGINX containment. If Docker cannot confirm a stop, or after a host failure or an uncatchable
+process kill, independently confirm container state before continuing. The tool leaves registration
+routing, locks, pending records, DID reservations, and credential files in place.
 
 Before the maintenance window, the current application remains running. Once migration or
 replacement begins, a failure keeps NGINX closed. A new application that completed all runtime,
@@ -456,7 +465,8 @@ After a failure:
 1. Run `status` and inspect only sanitized aggregates and fixed failure codes. A verified running
    image at an ancestor SHA is accepted by read-only `status`. Activation and routing changes retain
    their exact-SHA checks. If the operator image build failed before the target image existed, status
-   requires the approved operator image to be available first.
+   requires the approved operator image to be available first. Confirm the status command is using the
+   same production environment as the deployment.
 2. Confirm routing is `paused`. If it drifted, stop and investigate before using an authenticated
    transition with its own approval.
 3. If the old application is still running, or the verified candidate remains private after a
@@ -481,12 +491,13 @@ checkout as above, then run from the production repository root:
 ./circles/scripts/production-onboarding-control.sh recover-paused-services "$APPROVED_FULL_SHA"
 ```
 
-Confirm with `RECOVER_PAUSED_ONBOARDING_SERVICES`. Recovery requires one stopped production
-activation container, NGINX stopped, verified paused routing and drain, and the approved SHA still
+Confirm with `RECOVER_PAUSED_ONBOARDING_SERVICES`. Recovery requires one production activation
+container in `exited` or `created` state, NGINX stopped, verified paused routing and drain, and the approved SHA still
 at `origin/main`. It rebuilds the approved candidate, runs the same read-only preflight, resumes
 idempotent migration if the completion marker is absent, and runs the V2 verifier. It restores the
 activation overlay only after migration verification succeeds. A continued error leaves NGINX
-closed. A missing stopped container, missing image metadata, or unresolved database inconsistency
+closed. If a startup failure leaves a `created` candidate, retain it exactly as you would an exited container.
+A missing stopped container, missing image metadata, uncertain Docker state, or unresolved database inconsistency
 requires an independently reviewed recovery plan.
 
 Independently confirm the migration marker and verifier result, exact running and public Git SHA,
@@ -826,8 +837,8 @@ The rehearsal creates a fake application, disposable authenticated MongoDB, synt
 fake credentials, and synthetic `pending_email`, DID reservation and account records. Its Git
 `origin` is rewritten to a local bare repository, and Git transport is restricted to `file`, so the
 real `deploy-genesis2.sh main --paused-onboarding APPROVED_FULL_SHA` path cannot contact the GitHub remote. It maps
-`kamooni.org` only to the local synthetic TLS endpoint and never includes a real Postmark client or
-production application code.
+`kamooni.org` only to the local synthetic TLS endpoint. The fake application has no Postmark transport.
+Link and recovery checks exercise the real registration library against disposable MongoDB.
 
 The rehearsal additionally exercises:
 
@@ -837,9 +848,13 @@ The rehearsal additionally exercises:
 - NGINX remaining unavailable while the new application is started and internally verified;
 - stale deployment tooling, a Docker context override, insufficient drain, and mismatched database
   configuration rejected before service interruption;
+- conflicting Compose file and project overrides and a users-volume mismatch rejected before cutover;
+- retagging `latest` after image verification while container creation still uses the immutable ID;
 - image-validation failure before application replacement and a successful retry with slow startup;
 - application startup failure followed by `recover-default-services`;
 - partial chat migration, migration-verifier failure, and offline recovery with the activation overlay;
+- offline paused recovery from a candidate left in `created` after a failed start;
+- public access closed and offline recovery after a stalled final routing read;
 - NGINX startup failure and interruption during the bounded public check, followed by a successful
   paused-deployment retry; and
 - preservation of the synthetic `pending_email` record, DID reservation, account, activation HMAC
