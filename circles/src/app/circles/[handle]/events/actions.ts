@@ -68,6 +68,11 @@ import {
     notifyEventStatusChanged,
 } from "@/lib/data/eventNotifications";
 import { inviteUsersToEvent } from "@/lib/data/event";
+import {
+    emailNewEventInvitation,
+    insertEventInvitation,
+    listPendingEventInvitations,
+} from "@/lib/data/event-invitations";
 import { resolveFeedActionViewerDid } from "@/lib/data/post-access-policy";
 import {
     addEventCommentWithDependencies,
@@ -385,27 +390,23 @@ async function resolveEventOccurrenceRsvpTarget(
         return { success: false as const, message: "Not authorized to RSVP" };
     }
 
-    const event = await getEventById(seriesId, userDid);
-    if (!event) return { success: false as const, message: "Event not found" };
-    if (!event.recurrence) return { success: false as const, message: "This event is not recurring" };
+    const originalStartAt = new Date(occurrenceKey);
+    const occurrenceId = formatEventOccurrenceId(seriesId, originalStartAt);
+    const event = await getEventById(occurrenceId, userDid);
+    if (!event?.isRecurringInstance) return { success: false as const, message: "Event occurrence not found" };
     if (event.stage === "cancelled") return { success: false as const, message: "This event is cancelled" };
     if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
         return { success: false as const, message: "This event is not hosted by this circle" };
     }
 
-    const originalStartAt = new Date(occurrenceKey);
-    if (!isGeneratedEventOccurrence({ startAt: event.startAt, recurrence: event.recurrence }, originalStartAt)) {
-        return { success: false as const, message: "This occurrence is not part of the recurring series" };
-    }
-    const occurrence = await EventOccurrences.findOne({ seriesId, occurrenceKey });
-    if (occurrence?.status === "cancelled") {
+    if (event.isOccurrenceCancelled) {
         return { success: false as const, message: "This occurrence is cancelled" };
     }
 
     return {
         success: true as const,
         event,
-        occurrenceId: formatEventOccurrenceId(seriesId, originalStartAt),
+        occurrenceId,
     };
 }
 
@@ -632,6 +633,11 @@ export async function getEventsAction(
         console.error("Error in getEventsAction:", error);
         return defaultResult;
     }
+}
+
+export async function getPendingEventInvitationsAction() {
+    const userDid = await getAuthenticatedUserDid();
+    return userDid ? listPendingEventInvitations(userDid) : [];
 }
 
 /**
@@ -1943,6 +1949,8 @@ export async function inviteUsersToEventOccurrenceAction(
         let newlyInvited = 0;
         let updatedAndResent = 0;
         let alreadyInvitedNotResent = 0;
+        const emails: Promise<void>[] = [];
+        const circleId = target.circle._id!.toString();
         for (const { recipientDid, invitedUser } of resolvedRecipients) {
             const result = await upsertEventOccurrenceInvitation(
                 {
@@ -1951,7 +1959,7 @@ export async function inviteUsersToEventOccurrenceAction(
                     userDid: recipientDid,
                     message: normalizedMessage,
                     invitedBy: actorDid,
-                    circleId: target.circle._id!.toString(),
+                    circleId,
                 },
                 { resendExisting: options.resendExisting === true },
             );
@@ -1960,10 +1968,12 @@ export async function inviteUsersToEventOccurrenceAction(
                 continue;
             }
 
-            if (result.status === "inserted") newlyInvited++;
-            else updatedAndResent++;
+            if (result.status === "inserted") {
+                newlyInvited++;
+                emails.push(emailNewEventInvitation(target.occurrenceId, circleId, invitedUser));
+            } else updatedAndResent++;
             await notifyEventOccurrenceInvitation(
-                target.event,
+                circleId,
                 target.occurrenceId,
                 target.occurrenceStart,
                 target.occurrenceEnd,
@@ -1972,6 +1982,7 @@ export async function inviteUsersToEventOccurrenceAction(
                 normalizedMessage,
             );
         }
+        await Promise.all(emails);
 
         revalidatePath(`/circles/${circleHandle}/events/${target.occurrenceId}`);
         return {
@@ -2051,6 +2062,9 @@ export async function inviteUsersToEventAction(
 
         const event = await getEventById(eventId, userDid);
         if (!event) return { success: false, message: "Event not found" };
+        if (event.stage !== "open" || event.isRecurringInstance) {
+            return { success: false, message: "Invitations can only be sent for open events" };
+        }
         await assertEventHostCirclesWritable(event);
         if (!isRouteCircleEventHost(circle._id!.toString(), event)) {
             return { success: false, message: "This event is not hosted by this circle" };
@@ -2059,7 +2073,7 @@ export async function inviteUsersToEventAction(
             return { success: false, message: "Not authorized to invite users to this event" };
         }
 
-        await inviteUsersToEvent(eventId, circle._id!.toString(), recipientValidation.recipients, user);
+        await inviteUsersToEvent(String(event._id), circle._id!.toString(), recipientValidation.recipients, user);
 
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
         return { success: true, message: "Invitations sent" };
@@ -2103,6 +2117,9 @@ async function resolveExternalInviteTarget(
     if (!event || !isRouteCircleEventHost(circle._id!.toString(), event)) {
         return { success: false, message: "Event not found" };
     }
+    if (event.stage !== "open" || event.isRecurringInstance) {
+        return { success: false, message: "Invitations can only be sent for open events" };
+    }
 
     if (!(await canManageEvent(userDid, event))) {
         return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.unauthorized };
@@ -2123,9 +2140,13 @@ async function resolveExternalInviteTarget(
         return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.cannotInvite };
     }
 
+    const canonicalEventId = String(event._id);
     const [existingInvitation, existingRsvp] = await Promise.all([
-        EventInvitations.findOne({ eventId, userDid: targetDid }, { projection: { _id: 1 } }),
-        EventRsvps.findOne({ eventId, userDid: targetDid, status: { $ne: "cancelled" } }, { projection: { _id: 1 } }),
+        EventInvitations.findOne({ eventId: canonicalEventId, userDid: targetDid }, { projection: { _id: 1 } }),
+        EventRsvps.findOne(
+            { eventId: canonicalEventId, userDid: targetDid, status: { $ne: "cancelled" } },
+            { projection: { _id: 1 } },
+        ),
     ]);
 
     const profileError = getExternalEventInviteProfileError({
@@ -2181,28 +2202,17 @@ export async function inviteExternalUserToEventAction(
         }
         await assertEventHostCirclesWritable(resolved.event);
 
-        const now = new Date();
-        const insertResult = await EventInvitations.updateOne(
-            { eventId, userDid: resolved.target.did },
-            {
-                $setOnInsert: {
-                    eventId,
-                    circleId: resolved.circle._id!.toString(),
-                    userDid: resolved.target.did!,
-                    status: "pending",
-                    createdAt: now,
-                    updatedAt: now,
-                },
-            },
-            { upsert: true },
-        );
-
-        if (insertResult.upsertedCount === 0) {
+        const circleId = resolved.circle._id!.toString();
+        const canonicalEventId = String(resolved.event._id);
+        if (!(await insertEventInvitation(canonicalEventId, circleId, resolved.target.did!))) {
             return { success: false, message: EXTERNAL_EVENT_INVITE_ERRORS.duplicate };
         }
 
         const invitedUser = await getUserPrivate(resolved.target.did!);
-        await notifyEventInvitation(resolved.event, resolved.inviter, invitedUser);
+        await Promise.all([
+            notifyEventInvitation(canonicalEventId, circleId, resolved.inviter, invitedUser),
+            emailNewEventInvitation(canonicalEventId, circleId, invitedUser),
+        ]);
 
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
         return { success: true, message: "Invitation sent", user: resolved.target };

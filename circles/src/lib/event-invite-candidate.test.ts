@@ -150,6 +150,8 @@ mock.module("@/lib/data/feed", () => ({
     updatePost: async () => undefined,
 }));
 mock.module("@/lib/data/circle", () => ({
+    getCircleById: async (id: string) => actionState.circles[id] ?? null,
+    isCirclePublished: () => true,
     getCircleByHandle: async () => actionState.routeCircle,
     ensureModuleIsEnabledOnCircle: async () => undefined,
     getCirclesBySearchQuery: async () => [],

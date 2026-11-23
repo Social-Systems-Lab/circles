@@ -17,7 +17,6 @@ import {
     Circle,
     Post,
     Media,
-    EventInvitation,
     EventOccurrence,
     EventOccurrenceRsvp,
     EventOccurrenceInvitation,
@@ -919,7 +918,7 @@ export const inviteUsersToEvent = async (
 
     const existingInvitations = await EventInvitations.find({ eventId, userDid: { $in: userDids } }).toArray();
     const existingUserDids = new Set(existingInvitations.map((inv) => inv.userDid));
-    const newUserDids = userDids.filter((did) => !existingUserDids.has(did));
+    const newUserDids = [...new Set(userDids)].filter((did) => !existingUserDids.has(did));
 
     if (newUserDids.length === 0) {
         return;
@@ -949,31 +948,18 @@ export const inviteUsersToEvent = async (
         return;
     }
 
-    const now = new Date();
-    const invitations: Omit<EventInvitation, "_id">[] = targetUserDids.map((userDid) => ({
-        eventId,
-        circleId,
-        userDid,
-        status: "pending",
-        createdAt: now,
-        updatedAt: now,
-    }));
-
-    await EventInvitations.insertMany(invitations);
-
-    const event = await getEventById(eventId, inviter.did!);
-    if (!event) {
-        console.error(`Event not found for invitation: ${eventId}`);
-        return;
-    }
-
-    // Send notifications
-    for (const userDid of targetUserDids) {
-        const user = await getUserPrivate(userDid);
-        if (user) {
-            await notifyEventInvitation(event, inviter, user);
-        }
-    }
+    const { emailNewEventInvitation, insertEventInvitation } = await import("./event-invitations");
+    await Promise.all(
+        targetUserDids.map(async (userDid) => {
+            if (!(await insertEventInvitation(eventId, circleId, userDid))) return;
+            const user = await getUserPrivate(userDid);
+            if (!user) return;
+            await Promise.all([
+                notifyEventInvitation(eventId, circleId, inviter, user),
+                emailNewEventInvitation(eventId, circleId, user),
+            ]);
+        }),
+    );
 };
 
 export const createEvent = async (data: Omit<Event, "_id" | "commentPostId">, inviter: Circle): Promise<Event> => {

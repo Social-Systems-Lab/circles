@@ -17,7 +17,6 @@ import {
     TaskStage,
     GoalDisplay,
     GoalStage,
-    Event,
 } from "@/models/models";
 import {
     ChatConversationPreferences,
@@ -37,7 +36,7 @@ import { getTaskById } from "./task"; // Import getTaskById
 import { getGoalById } from "./goal"; // Import getGoalById
 import { getEventById } from "./event";
 import { features } from "./constants";
-import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
+import { getAuthorizedMembers } from "../auth/auth";
 import { dispatchExternalNotifications } from "./external-notifications";
 import { getNotificationIdempotencyId } from "./notification-read";
 import {
@@ -2468,14 +2467,19 @@ export async function notifyProposalToGoal(
 /**
  * Send notification when a user is invited to an event.
  */
-export async function notifyEventInvitation(event: Event, inviter: Circle, invitedUser: UserPrivate): Promise<void> {
+export async function notifyEventInvitation(
+    eventId: string,
+    circleId: string,
+    inviter: Circle,
+    invitedUser: UserPrivate,
+): Promise<void> {
     try {
-        console.log(`🔔 [NOTIFY] notifyEventInvitation called for event ${event._id} to user ${invitedUser.did}`);
-        const circle = await getCircleById(event.circleId);
-        if (!circle) {
-            console.error(`🔔 [NOTIFY] Circle not found for event invitation: ${event.circleId}`);
-            return;
-        }
+        if (!invitedUser.did) return;
+        const event = await getEventById(eventId, invitedUser.did);
+        if (!event) return;
+        const { findEventInvitationHost } = await import("./event-invitations");
+        const circle = await findEventInvitationHost(event, circleId, invitedUser.did, false);
+        if (!circle) return;
 
         await sendNotifications(
             "event_invitation",
@@ -2483,7 +2487,7 @@ export async function notifyEventInvitation(event: Event, inviter: Circle, invit
             sanitizeObjectForJSON({
                 circle,
                 user: inviter, // The user who invited
-                eventId: event._id?.toString(),
+                eventId,
                 eventName: event.title,
             }),
         );
@@ -2493,7 +2497,7 @@ export async function notifyEventInvitation(event: Event, inviter: Circle, invit
 }
 
 export async function notifyEventOccurrenceInvitation(
-    event: Event,
+    circleId: string,
     occurrenceId: string,
     occurrenceStart: Date,
     occurrenceEnd: Date,
@@ -2502,7 +2506,11 @@ export async function notifyEventOccurrenceInvitation(
     invitationMessage?: string,
 ): Promise<void> {
     try {
-        const circle = await getCircleById(event.circleId);
+        if (!invitedUser.did) return;
+        const event = await getEventById(occurrenceId, invitedUser.did);
+        if (!event) return;
+        const { findEventInvitationHost } = await import("./event-invitations");
+        const circle = await findEventInvitationHost(event, circleId, invitedUser.did, false);
         if (!circle) return;
 
         const occurrenceLabel = new Intl.DateTimeFormat("en", {

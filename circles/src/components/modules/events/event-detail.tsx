@@ -858,7 +858,11 @@ export default function EventDetail({
                 </div>
 
                 <div className="space-y-4">
-                    <div className="rounded-lg border bg-white/70 p-5 shadow-sm">
+                    <div
+                        id="event-rsvp"
+                        tabIndex={-1}
+                        className="scroll-mt-24 rounded-lg border bg-white/70 p-5 shadow-sm"
+                    >
                         <div className="mb-2 text-sm font-medium text-muted-foreground">RSVP</div>
                         {isRecurringOccurrence && !isOccurrenceCancelled && (
                             <Badge variant="outline" className="mb-3 border-sky-300 bg-sky-50 text-sky-800">

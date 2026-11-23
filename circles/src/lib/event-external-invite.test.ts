@@ -127,12 +127,12 @@ assert.match(
 );
 assert.match(
     actionsSource,
-    /EventInvitations\.updateOne/,
+    /insertEventInvitation\(canonicalEventId, circleId, resolved\.target\.did!\)/,
     "successful external invites use the existing eventInvitations record",
 );
 assert.match(
     actionsSource,
-    /notifyEventInvitation\(resolved\.event, resolved\.inviter, invitedUser\)/,
+    /notifyEventInvitation\(canonicalEventId, circleId, resolved\.inviter, invitedUser\)/,
     "successful external invites create the standard event invitation notification",
 );
 assert.doesNotMatch(

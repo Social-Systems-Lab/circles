@@ -26,7 +26,7 @@ import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
 import { useIsMobile } from "../utils/use-is-mobile";
 import { ChatList } from "../modules/chat/chat-list";
 import EventTimeline from "../modules/events/event-timeline";
-import { getEventsAction } from "@/app/circles/[handle]/events/actions";
+import { getEventsAction, getPendingEventInvitationsAction } from "@/app/circles/[handle]/events/actions";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
@@ -120,6 +120,13 @@ export const UserToolbox = () => {
             ?.map((membership) => membership.circle) || [];
 
     const [events, setEvents] = useState<EventDisplay[]>([]);
+    const [pendingInvitations, setPendingInvitations] = useState<
+        Awaited<ReturnType<typeof getPendingEventInvitationsAction>>
+    >([]);
+    const timelineEvents = useMemo(() => {
+        const pendingIds = new Set(pendingInvitations.map(({ id }) => id));
+        return events.filter((event) => !pendingIds.has(event.occurrenceId ?? String(event._id)));
+    }, [events, pendingInvitations]);
     const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
     const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
@@ -151,13 +158,17 @@ export const UserToolbox = () => {
     );
 
     useEffect(() => {
+        if (tab !== "events") return;
+        let active = true;
         const fetchTimelineItems = async () => {
             if (!user?.handle) {
                 setEvents([]);
+                setPendingInvitations([]);
                 setMilestones([]);
                 return;
             }
 
+            setIsLoading(true);
             try {
                 const today = new Date();
                 const nextYear = new Date(today);
@@ -168,14 +179,18 @@ export const UserToolbox = () => {
                     getGoalsAction(user.handle, true, true),
                     getTasksAction(user.handle, true, true),
                     getIssuesAction(user.handle, true, true),
+                    getPendingEventInvitationsAction(),
                 ] as const);
+                if (!active) return;
 
                 const eventsRes = results[0].status === "fulfilled" ? results[0].value : undefined;
                 const goalsRes = results[1].status === "fulfilled" ? results[1].value : undefined;
                 const tasksRes = results[2].status === "fulfilled" ? results[2].value : undefined;
                 const issuesRes = results[3].status === "fulfilled" ? results[3].value : undefined;
+                const invitationsRes = results[4];
 
                 setEvents(eventsRes?.events ?? []);
+                setPendingInvitations(invitationsRes.status === "fulfilled" ? invitationsRes.value : []);
 
                 const goalMilestones: Milestone[] =
                     (goalsRes?.goals || [])
@@ -221,11 +236,14 @@ export const UserToolbox = () => {
             } catch (e) {
                 console.error("Failed to load toolbox timeline items", e);
             } finally {
-                setIsLoading(false);
+                if (active) setIsLoading(false);
             }
         };
         fetchTimelineItems();
-    }, [user?.handle]);
+        return () => {
+            active = false;
+        };
+    }, [tab, user?.handle, user?.did]);
 
     const chatRoomsRefreshRunner = useMemo(
         () =>
@@ -748,7 +766,7 @@ export const UserToolbox = () => {
                         <TabsTrigger value="chat" className={toolboxActiveTabClassName}>
                             <LuMail className="h-5 w-5" />
                         </TabsTrigger>
-                        <TabsTrigger value="events" className={toolboxActiveTabClassName}>
+                        <TabsTrigger value="events" aria-label="Events" title="Events" className={toolboxActiveTabClassName}>
                             <LuClipboardCheck className="h-5 w-5" />
                         </TabsTrigger>
                         <TabsTrigger value="notifications" className={toolboxActiveTabClassName}>
@@ -925,15 +943,49 @@ export const UserToolbox = () => {
                                 <LoadingSpinner />
                             </div>
                         ) : user ? (
-                            <EventTimeline
-                                circleHandle={user.handle!}
-                                circleId={user._id?.toString()}
-                                events={events}
-                                milestones={milestones}
-                                condensed
-                                onEventHidden={handleToolboxEventHidden}
-                                onNavigate={handleEventNavigate}
-                            />
+                            <>
+                                {pendingInvitations.length > 0 && (
+                                    <section aria-labelledby="pending-event-invitations" className="px-4 pb-4 pt-2">
+                                        <h2 id="pending-event-invitations" className="mb-2 text-sm font-semibold">
+                                            Awaiting response
+                                        </h2>
+                                        <ul className="divide-y rounded-md border">
+                                            {pendingInvitations.map((invitation) => (
+                                                <li key={invitation.id}>
+                                                    <Link
+                                                        href={invitation.href}
+                                                        onClick={handleEventNavigate}
+                                                        className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-muted"
+                                                    >
+                                                        <span className="min-w-0">
+                                                            <span className="block break-words text-sm font-medium">
+                                                                {invitation.title}
+                                                            </span>
+                                                            <span className="block text-xs text-muted-foreground">
+                                                                {new Intl.DateTimeFormat(undefined, {
+                                                                    dateStyle: "medium",
+                                                                    timeZone: invitation.allDay ? "UTC" : undefined,
+                                                                }).format(new Date(invitation.startAt))}
+                                                                {invitation.organiser && ` · ${invitation.organiser}`}
+                                                            </span>
+                                                        </span>
+                                                        <span className="text-sm font-medium text-primary">RSVP</span>
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </section>
+                                )}
+                                <EventTimeline
+                                    circleHandle={user.handle!}
+                                    circleId={user._id?.toString()}
+                                    events={timelineEvents}
+                                    milestones={milestones}
+                                    condensed
+                                    onEventHidden={handleToolboxEventHidden}
+                                    onNavigate={handleEventNavigate}
+                                />
+                            </>
                         ) : (
                             <div className="flex h-full items-center justify-center pt-4 text-sm text-[#4d4d4d]">
                                 Loading events...

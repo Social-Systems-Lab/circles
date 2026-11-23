@@ -11,11 +11,11 @@ assert.ok(targetHelper, "the shared occurrence RSVP validator exists");
 assert.match(targetHelper[0], /ObjectId\.isValid\(seriesId\)/, "series IDs are validated");
 assert.match(targetHelper[0], /isValidEventOccurrenceKey\(occurrenceKey\)/, "occurrence keys are validated");
 assert.match(targetHelper[0], /features\.events\.rsvp/, "existing RSVP permission rules are reused");
-assert.match(targetHelper[0], /if \(!event\.recurrence\)/, "non-recurring events are rejected");
+assert.match(targetHelper[0], /getEventById\(occurrenceId, userDid\)/, "RSVP uses the occurrence's read entitlement");
+assert.match(targetHelper[0], /!event\?\.isRecurringInstance/, "only valid recurring occurrences are accepted");
 assert.match(targetHelper[0], /event\.stage === "cancelled"/, "cancelled series are rejected");
 assert.match(targetHelper[0], /isRouteCircleEventHost/, "route-host identity is validated");
-assert.match(targetHelper[0], /isGeneratedEventOccurrence/, "out-of-rule occurrences are rejected");
-assert.match(targetHelper[0], /occurrence\?\.status === "cancelled"/, "cancelled occurrences are rejected");
+assert.match(targetHelper[0], /event\.isOccurrenceCancelled/, "cancelled occurrences are rejected");
 
 assert.match(actionsSource, /export async function rsvpEventOccurrenceAction/, "the occurrence RSVP action exists");
 assert.match(actionsSource, /getAuthenticatedUserDid\(\)/, "occurrence RSVP actions require authentication");
@@ -68,10 +68,11 @@ assert.match(
 assert.match(detailSource, /isOccurrenceCancelled \?/, "cancelled occurrences keep RSVP controls disabled");
 
 const eventDataSource = readFileSync("src/lib/data/event.ts", "utf8");
+const deletionPolicySource = readFileSync("src/lib/data/event-deletion-policy.ts", "utf8");
 assert.match(
-    eventDataSource,
-    /EventOccurrenceRsvps\.deleteMany\(\{ seriesId: eventId \}\)/,
-    "series deletion cleans occurrence RSVPs",
+    deletionPolicySource,
+    /if \(occurrenceRsvps\) blockers\.push\("occurrence-rsvps"\)/,
+    "active occurrence RSVPs block series deletion",
 );
 
 const calendarSource = readFileSync("src/components/modules/events/calendar.tsx", "utf8");

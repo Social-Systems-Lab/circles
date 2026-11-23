@@ -184,6 +184,7 @@ assert.match(inviteSource, /options: \{ resendExisting\?: boolean \} = \{\}/);
 assert.match(inviteSource, /upsertEventOccurrenceInvitation/);
 assert.match(inviteSource, /validateRecipientInput\(userDids\)/, "one send validates and deduplicates recipient DIDs");
 assert.match(inviteSource, /result\.status === "existing"/);
+assert.match(inviteSource, /if \(result\.status === "inserted"\) \{[^}]*emailNewEventInvitation/);
 assert.match(inviteSource, /updatedAndResent\+\+/);
 assert.match(inviteSource, /notifyEventOccurrenceInvitation/);
 assert.doesNotMatch(inviteSource, /inviteExternalUserToEventAction/);
@@ -221,10 +222,12 @@ assert.match(
     /const occurrenceInvitation = recurringInstance\s*\?\s*await dependencies\.findOccurrenceInvitation\(\s*recurringInstance\.seriesId,\s*recurringInstance\.occurrenceKey,\s*userDid,?\s*\)\s*: null/,
     "base series routes do not use occurrence invitations",
 );
-assert.match(eventDataSource, /EventOccurrenceInvitations\.deleteMany\(\{ seriesId: eventId \}\)/);
+const deletionPolicySource = readFileSync("src/lib/data/event-deletion-policy.ts", "utf8");
+assert.match(deletionPolicySource, /if \(occurrenceInvitations\) blockers\.push\("occurrence-invitations"\)/);
 
 const notificationSource = readFileSync("src/lib/data/notifications.ts", "utf8");
 assert.match(notificationSource, /notifyEventOccurrenceInvitation/);
+assert.match(notificationSource, /getEventById\(occurrenceId, invitedUser\.did\)/);
 assert.match(notificationSource, /eventId: occurrenceId/);
 assert.match(notificationSource, /invitationMessage/);
 

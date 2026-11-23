@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { Errors, ServerClient, TemplatedMessage } from "postmark";
+import { Errors, Models, ServerClient, TemplatedMessage } from "postmark";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 
@@ -180,6 +180,40 @@ function validatePendingVerificationMessage(options: EmailOptions, origin: strin
     }
 }
 
+function renderEventInvitation(options: EmailOptions, origin: string) {
+    const { title, when, location, actionUrl } = options.templateModel;
+    if (![title, when, location, actionUrl].every((value) => typeof value === "string" && value.trim())) {
+        throw new EmailDeliveryError();
+    }
+    const url = new URL(actionUrl);
+    if (
+        url.origin !== new URL(origin).origin ||
+        url.username ||
+        url.password ||
+        !/^\/circles\/[\w-]+\/events\/[a-f\d]{24}(?:_\d+)?$/i.test(url.pathname) ||
+        url.search !== "?respond=1" ||
+        url.hash !== "#event-rsvp"
+    ) {
+        throw new EmailDeliveryError();
+    }
+    return {
+        subject: "You're invited to an event in Kamooni",
+        text: `You're invited to ${title}\n\nWhen: ${when}\nWhere: ${location}\n\nRespond in Kamooni:\n${url}\n`,
+        html: `<p>You're invited to <strong>${escapeHtml(title)}</strong></p><p>When: ${escapeHtml(when)}<br>Where: ${escapeHtml(location)}</p><p><a href="${escapeHtml(url.toString())}">Respond in Kamooni</a></p>`,
+    };
+}
+
+function renderPendingVerification(options: EmailOptions, origin: string) {
+    const { name, url } = validatePendingVerificationMessage(options, origin);
+    const safeName = escapeHtml(name);
+    const safeUrl = escapeHtml(url.toString());
+    return {
+        subject: "Verify your Kamooni email address",
+        text: `Hello ${name},\n\nVerify your email address to continue your Kamooni signup:\n${url.toString()}\n`,
+        html: `<p>Hello ${safeName},</p><p>Verify your email address to continue your Kamooni signup.</p><p><a href="${safeUrl}">Verify email address</a></p>`,
+    };
+}
+
 function errorCategory(error: unknown): string {
     if (!error || typeof error !== "object") return "unknown";
     const code = (error as { code?: unknown }).code;
@@ -220,6 +254,7 @@ export type EmailSenderDependencies = {
     sendPostmark: (
         configuration: Extract<EmailTransportConfiguration, { transport: "postmark" }>,
         options: EmailOptions,
+        eventInvitation?: ReturnType<typeof renderEventInvitation>,
     ) => Promise<unknown>;
     sendMailpit: (
         configuration: Extract<EmailTransportConfiguration, { transport: "mailpit" }>,
@@ -236,24 +271,25 @@ export async function sendEmailWithDependencies(
     try {
         configuration = resolveEmailTransportConfiguration(dependencies.role, dependencies.env);
         if (configuration.transport === "postmark") {
-            await dependencies.sendPostmark(configuration, options);
+            const eventInvitation =
+                options.templateAlias === "event-invitation"
+                    ? renderEventInvitation(options, requireValue(dependencies.env, "CIRCLES_URL"))
+                    : undefined;
+            await dependencies.sendPostmark(configuration, options, eventInvitation);
             return;
         }
 
-        const { name, url } = validatePendingVerificationMessage(options, configuration.origin);
-        const safeName = escapeHtml(name);
-        const safeUrl = escapeHtml(url.toString());
-        const text = `Hello ${name},\n\nVerify your email address to continue your Kamooni signup:\n${url.toString()}\n`;
-        const html = `<p>Hello ${safeName},</p><p>Verify your email address to continue your Kamooni signup.</p><p><a href="${safeUrl}">Verify email address</a></p>`;
+        const message =
+            options.templateAlias === "event-invitation"
+                ? renderEventInvitation(options, configuration.origin)
+                : renderPendingVerification(options, configuration.origin);
         await dependencies.sendMailpit(configuration, {
+            ...message,
             from:
                 configuration.role === "staging"
                     ? "Kamooni Staging <no-reply@staging.kamooni.org>"
                     : "Kamooni Local <no-reply@localhost>",
             to: options.to,
-            subject: "Verify your Kamooni email address",
-            text,
-            html,
         });
     } catch (error) {
         const provider = (() => {
@@ -275,8 +311,20 @@ export async function sendEmailWithDependencies(
 async function sendPostmark(
     configuration: Extract<EmailTransportConfiguration, { transport: "postmark" }>,
     options: EmailOptions,
+    eventInvitation?: ReturnType<typeof renderEventInvitation>,
 ): Promise<unknown> {
     const client = new ServerClient(configuration.token);
+    if (eventInvitation) {
+        return client.sendEmail({
+            From: configuration.sender,
+            To: options.to,
+            Subject: eventInvitation.subject,
+            TextBody: eventInvitation.text,
+            HtmlBody: eventInvitation.html,
+            TrackLinks: Models.LinkTrackingOptions.None,
+            TrackOpens: false,
+        });
+    }
     const message = new TemplatedMessage(
         configuration.sender,
         options.templateAlias,

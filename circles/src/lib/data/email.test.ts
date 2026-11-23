@@ -54,6 +54,71 @@ const stagingConfig = {
     CIRCLES_URL: "https://staging.kamooni.org",
 };
 
+test("Mailpit renders event details and a safe, direct RSVP link", async () => {
+    const actionUrl =
+        "https://staging.kamooni.org/circles/test-host/events/64b000000000000000000099?respond=1#event-rsvp";
+    const invitation = {
+        to: emailOptions.to,
+        templateAlias: "event-invitation",
+        templateModel: {
+            title: "Park <cleanup>",
+            when: "24 November 2026 09:00 UTC",
+            location: "1 Park Road",
+            actionUrl,
+        },
+    };
+    const testHarness = harness("staging", stagingConfig);
+    await sendEmailWithDependencies(invitation, testHarness.dependencies);
+    assert.equal(testHarness.calls.postmark, 0);
+    assert.equal(testHarness.calls.mailpit, 1);
+    const { message } = testHarness.captured[0] as { message: { text: string; html: string } };
+    for (const content of ["Park <cleanup>", "24 November 2026 09:00 UTC", "1 Park Road", actionUrl]) {
+        assert.ok(message.text.includes(content));
+    }
+    assert.ok(message.html.includes("Park &lt;cleanup&gt;"));
+    assert.ok(message.html.includes(`href="${actionUrl}"`));
+
+    const productionHarness = harness(
+        "production",
+        {
+            EMAIL_TRANSPORT: "postmark",
+            POSTMARK_API_TOKEN: "fake-token",
+            POSTMARK_SENDER_EMAIL: "sender@example.invalid",
+            CIRCLES_URL: "https://kamooni.example.invalid",
+        },
+        {
+            sendPostmark: async (_configuration, _options, eventInvitation) => {
+                assert.ok(eventInvitation);
+                assert.ok(
+                    eventInvitation.text.includes(actionUrl.replace("staging.kamooni.org", "kamooni.example.invalid")),
+                );
+                assert.ok(eventInvitation.html.includes("Park &lt;cleanup&gt;"));
+            },
+        },
+    );
+    await sendEmailWithDependencies(
+        {
+            ...invitation,
+            templateModel: {
+                ...invitation.templateModel,
+                actionUrl: actionUrl.replace("staging.kamooni.org", "kamooni.example.invalid"),
+            },
+        },
+        productionHarness.dependencies,
+    );
+    assert.equal(productionHarness.calls.mailpit, 0);
+
+    const externalLink = {
+        ...invitation,
+        templateModel: {
+            ...invitation.templateModel,
+            actionUrl: actionUrl.replace("staging.kamooni.org", "example.invalid"),
+        },
+    };
+    await assert.rejects(sendEmailWithDependencies(externalLink, testHarness.dependencies), EmailDeliveryError);
+    assert.equal(testHarness.calls.mailpit, 1);
+});
+
 test("production Postmark transport preserves templated-message dispatch", async () => {
     const testHarness = harness("production", {
         EMAIL_TRANSPORT: "postmark",

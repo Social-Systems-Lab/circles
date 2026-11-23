@@ -33,8 +33,8 @@ export async function middleware(request: NextRequest) {
         console.log("Requesting access to", request.url);
     }
 
+    const token = readAuthToken(request.cookies);
     try {
-        const token = readAuthToken(request.cookies);
         if (token) {
             let payload = await verifyUserToken(token);
             if (typeof payload.userDid !== "string") throw new Error("Invalid authenticated session");
@@ -49,6 +49,16 @@ export async function middleware(request: NextRequest) {
             res.cookies.set(cookieName, "", { maxAge: 0, path: "/" });
         }
         return res;
+    }
+
+    if (
+        !token &&
+        /^\/circles\/[\w-]+\/events\/[a-f\d]{24}(?:_\d+)?$/i.test(pathname) &&
+        request.nextUrl.searchParams.get("respond") === "1"
+    ) {
+        const loginUrl = new URL("/login", request.url);
+        loginUrl.searchParams.set("redirectTo", `${pathname}?respond=1#event-rsvp`);
+        return NextResponse.redirect(loginUrl);
     }
 
     // get circle handle and module handle from url
