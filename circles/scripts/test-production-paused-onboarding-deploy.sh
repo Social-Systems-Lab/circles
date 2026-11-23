@@ -58,7 +58,7 @@ fi
 if grep -Fq 'active application image does not match circles-circles:latest' "$deploy"; then
     fail "paused deployment still ties the active container to the mutable latest tag"
 fi
-if grep -Eq -- 'pendingRegistrations.*(?:update|delete|insert)|pendingRegistrationDidReservations.*(?:update|delete|insert)' "$deploy"; then
+if grep -Eq -- '(pendingRegistrations|pendingRegistrationDidReservations).*(update|delete|insert)' "$deploy"; then
     fail "paused deployment contains a pending-registration or DID-reservation mutation"
 fi
 

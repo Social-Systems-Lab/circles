@@ -366,7 +366,7 @@ Before starting:
   production role marker, and an internal `/api/version` response matching `/app/VERSION`.
 - Confirm the serving application publishes no Docker host ports and NGINX is its only public ingress.
   Check the host and Cleura firewall and routing configuration for any alternate proxy or direct route
-  to the application. The tool checks the living container's bindings and requires `circles_webnet`
+  to the application. The tool checks the running container's bindings and requires `circles_webnet`
   to use Docker's NAT bridge without trusted direct-routing interfaces. If an older serving container
   still publishes an application port, paused deployment stops before the drain. Prepare an independently
   approved ingress transition first. A normal deployment while routing is `legacy` uses the port-free Compose service.
