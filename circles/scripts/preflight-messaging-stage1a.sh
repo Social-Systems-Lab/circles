@@ -25,7 +25,7 @@ if [[ ! -f "$MONGO_SCRIPT" ]]; then
 fi
 
 resolve_application_environment() {
-  (cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps --pull never -T circles node -e '
+  (cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps --pull never --interactive=false -T circles node -e '
     const required = ["MONGODB_URI", "CIRCLES_URL", "NEXT_PUBLIC_CHAT_PROVIDER", "CRON_SECRET", "CIRCLES_JWT_SECRET"];
     const missing = required.filter((name) => !process.env[name]);
     const secretNames = ["CRON_SECRET", "CIRCLES_JWT_SECRET"];
@@ -68,7 +68,7 @@ fi
 echo "Environment preflight passed: $ENVIRONMENT_RESULT"
 
 if [[ -z "${APP_MONGODB_URI:-}" ]]; then
-  APP_MONGODB_URI="$(cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps --pull never -T circles \
+  APP_MONGODB_URI="$(cd "$APP_DIR" && "${COMPOSE[@]}" run --rm --no-deps --pull never --interactive=false -T circles \
     node -e 'const uri=process.env.MONGODB_URI||"";if(!uri||/[\r\n]/.test(uri))process.exit(1);process.stdout.write(uri)')"
 fi
 if [[ -z "$APP_MONGODB_URI" || "$APP_MONGODB_URI" == *$'\n'* || "$APP_MONGODB_URI" == *$'\r'* ]]; then

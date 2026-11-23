@@ -95,9 +95,14 @@ fail() {
 }
 
 # Long builds and graceful NGINX drain have their own deadlines below.
-docker() {
-  timeout --kill-after=5s "${DOCKER_DEADLINE:-30s}" docker "$@"
-}
+docker() (
+  # GNU timeout starts a process group. Prevent background terminal reads while
+  # keeping piped stdin available for the Mongo commands that consume it.
+  if [[ -t 0 ]]; then
+    exec </dev/null
+  fi
+  exec timeout --kill-after=5s "${DOCKER_DEADLINE:-30s}" docker "$@"
+)
 
 service_is_stopped() {
   local service="$1" output id state
@@ -205,7 +210,7 @@ require_paused_onboarding_secret_files() {
 
 require_paused_operations_idle() {
   local status
-  status="$(MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run --rm --no-deps --pull never -T registration_ops \
+  status="$(MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run --rm --no-deps --pull never --interactive=false -T registration_ops \
     operations-status --users-dir /circles/users)" || return 1
   printf '%s\n' "$status" | python3 "$ACTIVATION_VALIDATOR" operations-idle >/dev/null
 }
@@ -507,9 +512,9 @@ docker image inspect "circles-registration-ops:$GIT_SHA" >/dev/null
 EXPECTED_ROUTING_MODE="legacy"
 if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
   EXPECTED_ROUTING_MODE="paused-drained"
-  ROUTING_STATUS="$(MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run --rm --no-deps --pull never -T registration_ops route-status)"
+  ROUTING_STATUS="$(MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run --rm --no-deps --pull never --interactive=false -T registration_ops route-status)"
 else
-  ROUTING_STATUS="$("${OPS_COMPOSE[@]}" run --rm --no-deps --pull never -T registration_ops route-status)"
+  ROUTING_STATUS="$("${OPS_COMPOSE[@]}" run --rm --no-deps --pull never --interactive=false -T registration_ops route-status)"
 fi
 if ! printf '%s\n' "$ROUTING_STATUS" | python3 "$ACTIVATION_VALIDATOR" route-status "$EXPECTED_ROUTING_MODE" >/dev/null; then
   if [[ "$DEPLOY_MODE" == "paused-onboarding" ]]; then
@@ -539,7 +544,7 @@ verify_application_image_identity "$KAMOONI_DEPLOY_IMAGE_ID" "$GIT_SHA" || \
 resolve_application_mongodb_uri() {
   # Resolve the exact environment assigned to the application service. This works even when
   # the existing circles container is stopped because the newly built image runs only `node -e`.
-  "${BASE_COMPOSE[@]}" run --rm --no-deps --pull never -T circles \
+  "${BASE_COMPOSE[@]}" run --rm --no-deps --pull never --interactive=false -T circles \
     node -e 'const uri = process.env.MONGODB_URI || ""; if (!uri || /[\r\n]/.test(uri)) process.exit(1); process.stdout.write(uri)'
 }
 
@@ -597,7 +602,7 @@ verify_paused_application_runtime() {
 verify_registration_routing_paused() {
   local expected_mode="${1:-paused}" status
   status="$(DOCKER_DEADLINE=20s MONGODB_URI="$APP_MONGODB_URI" "${OPS_COMPOSE[@]}" run \
-    --rm --no-deps --pull never -T registration_ops route-status)" || {
+    --rm --no-deps --pull never --interactive=false -T registration_ops route-status)" || {
     echo "Error: could not read registration routing before the deadline" >&2
     return 1
   }

@@ -127,6 +127,7 @@ python3 "$ACTIVATION_VALIDATOR" origin-eligible \
 export GIT_SHA
 export BUILD_TIME="operator-control"
 export KAMOONI_PRODUCTION_ONBOARDING_ACTIVATION_CONFIRM="$ACTIVATION_CONFIRM"
+export KAMOONI_DEPLOY_IMAGE_ID=""
 
 base_compose=(
     docker compose
