@@ -17,6 +17,8 @@ Goals:
 
 This is a **production system**. All changes must be careful and verifiable.
 
+Follow the repository-wide [Prototype-First Engineering](../AGENTS.md#prototype-first-engineering) guidance.
+
 ---
 
 # CORE PRINCIPLES
