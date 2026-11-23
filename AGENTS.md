@@ -139,7 +139,7 @@ Preferred workflow:
 1. Investigate using Codex
 2. Implement change using Codex
 3. Run relevant local checks and tests
-4. Perform local browser or staging verification when appropriate and authorized
+4. Perform browser and staging verification as appropriate and authorized
 5. Commit, push, and open a pull request when explicitly requested
 6. Merge only after explicit approval
 7. Deploy only after separate explicit approval, using the deployment procedure below
@@ -153,6 +153,19 @@ Golden rules:
 • Never edit directly on main  
 • Fast‑forward merges are preferred  
 • Conflicts on main are a hard stop
+
+---
+
+# Prototype-First Engineering
+
+Kamooni/Circles is a resource-constrained prototype. Prioritise working features, real user feedback, and demonstrated problems.
+
+- Make the smallest safe change. Prefer explicit code and predictable behaviour. Avoid unnecessary abstractions, broad refactors, incidental renames, and speculative edge-case engineering.
+- Protect user data, DID identity, access permissions, database integrity, and recoverable backups. Handle common failures and credible security risks.
+- Default to simple, documented recovery procedures. Explain the tradeoff and get explicit approval before adding safeguards that substantially increase implementation complexity or elaborate safeguards for extremely unlikely scenarios.
+- Keep testing proportional to the change. Cover core functionality, relevant regressions, and realistic failure paths.
+- Prefer staging for browser testing within the approval boundaries above. Use local Docker or other heavy services only when explicitly needed.
+- Once relevant tests pass and any applicable staging verification succeeds, stop expanding scope unless a significant problem remains.
 
 ---
 
@@ -238,27 +251,6 @@ Before modifying code, verify:
 • container state
 
 Prefer **inspection before mutation**.
-
----
-
-# Coding Philosophy
-
-Prefer:
-
-• small patches
-• minimal surface changes
-• explicit code
-• predictable behavior
-
-Avoid:
-
-• large refactors
-• unnecessary abstractions
-• renaming files unless necessary
-
-Always ask:
-
-“What is the smallest safe fix?”
 
 ---
 
