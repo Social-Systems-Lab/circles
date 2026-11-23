@@ -121,7 +121,7 @@ if grep -Fq -- 'run --rm --no-deps --no-build' "$control" "$deploy"; then
     exit 1
 fi
 grep -Fq 'run --rm --no-deps --pull never -T registration_ops' "$control"
-grep -Fq 'run --rm --no-deps --pull never -T registration_ops route-status' "$deploy"
+grep -Fq 'run --rm --no-deps --pull never --interactive=false -T registration_ops route-status' "$deploy"
 grep -Fq 'docker image inspect "circles-registration-ops:$GIT_SHA"' "$deploy"
 docker compose run --help 2>/dev/null | grep -Fq -- '--pull string'
 
