@@ -60,6 +60,8 @@ Usage:
   production-onboarding-control.sh postmark-canary
   production-onboarding-control.sh watchdog-alert-canary
   production-onboarding-control.sh verify-provisioned-account [default|activation]
+  production-onboarding-control.sh deploy-paused-services APPROVED_FULL_SHA
+  production-onboarding-control.sh recover-paused-services APPROVED_FULL_SHA
 EOF
     exit 2
 }
@@ -79,6 +81,16 @@ require_terminal_confirmation() {
 [[ "$#" -ge 1 ]] || usage
 command_name="$1"
 shift
+if [[ "$command_name" == "deploy-paused-services" || "$command_name" == "recover-paused-services" ]]; then
+    [[ "$#" -eq 1 && "$1" =~ ^[0-9a-f]{40}$ ]] || usage
+    [[ "$(id -u)" -eq 0 ]] || fail "production onboarding control must run as root"
+    [[ "$REPO_DIR" == "$EXPECTED_REPO_DIR" ]] || fail "unexpected production repository path"
+    [[ -x "$APP_DIR/deploy-genesis2.sh" ]] || fail "production deployment script is missing or not executable"
+    if [[ "$command_name" == "recover-paused-services" ]]; then
+        exec "$APP_DIR/deploy-genesis2.sh" main --recover-paused-onboarding "$1"
+    fi
+    exec "$APP_DIR/deploy-genesis2.sh" main --paused-onboarding "$1"
+fi
 expected=""
 target=""
 if [[ "$command_name" == "route-set" ]]; then
@@ -115,6 +127,7 @@ python3 "$ACTIVATION_VALIDATOR" origin-eligible \
 export GIT_SHA
 export BUILD_TIME="operator-control"
 export KAMOONI_PRODUCTION_ONBOARDING_ACTIVATION_CONFIRM="$ACTIVATION_CONFIRM"
+export KAMOONI_DEPLOY_IMAGE_ID=""
 
 base_compose=(
     docker compose
@@ -284,7 +297,7 @@ verify_application() {
 }
 
 verify_application_build_identity() {
-    local container_id="$1" container_ip
+    local container_id="$1" expected_sha="${2:-$GIT_SHA}" container_ip
     [[ "$(docker exec "$container_id" cat /app/.kamooni-deployment-role)" == "production" ]] || \
         fail "running application image role is not production"
     container_ip="$(docker inspect "$container_id" | python3 "$RUNTIME_VALIDATOR" endpoint)" || \
@@ -301,7 +314,7 @@ fetch(`http://${host}:${port}/api/version`, {
   .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
   .then((body) => process.exit(body.gitSha === expected ? 0 : 1))
   .catch(() => process.exit(1));
-' "$GIT_SHA" "$container_ip" || fail "running application SHA does not match the approved production SHA"
+' "$expected_sha" "$container_ip" || fail "running application SHA does not match the approved production SHA"
 }
 
 verify_running_application_identity_if_present() {
@@ -313,6 +326,47 @@ verify_running_application_identity_if_present() {
     if [[ "${#ids[@]}" -eq 1 ]]; then
         verify_application_build_identity "${ids[0]}"
     fi
+}
+
+verify_application_image_metadata() {
+    local image_id="$1" expected_sha="$2" metadata
+    [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+        fail "running application image identity is invalid"
+    metadata="$(docker run --rm --pull=never --network none --read-only \
+        --cap-drop ALL --security-opt no-new-privileges --user node --entrypoint sh "$image_id" -c \
+        'cat /app/VERSION; printf "\n---KAMOONI-ROLE---\n"; cat /app/.kamooni-deployment-role')" || \
+        fail "could not read the running application image metadata"
+    printf '%s' "$metadata" | \
+        python3 "$APPLICATION_IMAGE_VALIDATOR" "$expected_sha" "$image_id" "$image_id" >/dev/null || \
+        fail "running application image SHA, identity, or production role is invalid"
+}
+
+verify_running_application_status_identity_if_present() {
+    local -a ids=()
+    local container_id image_id version_file running_sha
+    while IFS= read -r container_id; do
+        [[ -z "$container_id" ]] || ids+=("$container_id")
+    done < <("${base_compose[@]}" ps -q circles)
+    [[ "${#ids[@]}" -le 1 ]] || fail "multiple production application containers are running"
+    [[ "${#ids[@]}" -eq 1 ]] || return 0
+
+    container_id="${ids[0]}"
+    image_id="$(docker inspect --format '{{.Image}}' "$container_id")" || \
+        fail "could not resolve the running application image"
+    version_file="$(docker exec "$container_id" cat /app/VERSION)" || \
+        fail "could not read the running application version metadata"
+    [[ "$(grep -c '^gitSha=' <<<"$version_file")" -eq 1 ]] || \
+        fail "running application version metadata must contain exactly one Git SHA"
+    running_sha="$(sed -n 's/^gitSha=//p' <<<"$version_file")"
+    [[ "$running_sha" =~ ^[0-9a-f]{40}$ ]] || \
+        fail "running application Git SHA is invalid"
+    git -C "$REPO_DIR" cat-file -e "${running_sha}^{commit}" 2>/dev/null || \
+        fail "running application Git SHA is not present in the clean production checkout"
+    git -C "$REPO_DIR" merge-base --is-ancestor "$running_sha" HEAD || \
+        fail "running application Git SHA is not an ancestor of the clean production checkout"
+
+    verify_application_image_metadata "$image_id" "$running_sha"
+    verify_application_build_identity "$container_id" "$running_sha"
 }
 
 runtime_status_summary() {
@@ -571,7 +625,7 @@ case "$command_name" in
     status)
         [[ "$#" -eq 0 ]] || usage
         require_operator_image
-        verify_running_application_identity_if_present
+        verify_running_application_status_identity_if_present
         runtime_summary="$(runtime_status_summary)"
         route_status
         if [[ -f "$ACTIVATION_ENV_FILE" ]]; then

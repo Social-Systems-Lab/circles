@@ -15,7 +15,7 @@ expect_rejected() {
 # Check the ordered locations of production operations, not only their presence.
 previous_line=0
 for required in \
-  'if [[ "$#" -ne 1 || "$1" != "main" ]]' \
+  'if [[ "$#" -lt 1 || "$1" != "main" ]]' \
   'if [[ "$CURRENT_DIR" != "$EXPECTED_DIR" ]]' \
   'if [[ "$(git branch --show-current)" != "main" ]]' \
   'if ! require_clean_worktree; then' \
@@ -27,9 +27,10 @@ for required in \
   'if ! require_clean_worktree; then' \
   'LOCAL_SHA="$(git rev-parse HEAD)"' \
   'ISOLATION_GUARD="$APP_DIR/scripts/check-production-staging-isolation.sh"' \
+  'EXPECTED_ROUTING_MODE="legacy"' \
   'registration_ops route-status' \
-  'route-status legacy' \
-  'docker compose build circles cron'; do
+  'route-status "$EXPECTED_ROUTING_MODE"' \
+  '"${BASE_COMPOSE[@]}" build circles cron'; do
   line="$(grep -nF -- "$required" "$DEPLOY_SCRIPT" | awk -F: -v after="$previous_line" '$1 > after { print $1; exit }')"
   [[ -n "$line" ]] || fail "deploy implementation drifted or is out of order near: $required"
   (( line > previous_line )) || fail "deployment operation order changed near: $required"
@@ -50,15 +51,22 @@ if grep -nF 'git reset --hard' "$DEPLOY_SCRIPT"; then fail "production deploymen
 
 # Invalid-argument tests execute the real script; its argument check exits before
 # production-directory validation, Git, Docker, database, or service operations.
-for argument_case in missing non_main extra; do
+for argument_case in missing non_main extra paused_missing_sha paused_short_sha; do
   output="$TMP_ROOT/argument-$argument_case.out"
   case "$argument_case" in
     missing) if "$DEPLOY_SCRIPT" >"$output" 2>&1; then fail "missing argument was accepted"; else status=$?; fi ;;
     non_main) if "$DEPLOY_SCRIPT" feature/test >"$output" 2>&1; then fail "non-main argument was accepted"; else status=$?; fi ;;
-    extra) if "$DEPLOY_SCRIPT" main extra >"$output" 2>&1; then fail "extra argument was accepted"; else status=$?; fi ;;
+    extra) if "$DEPLOY_SCRIPT" main extra >"$output" 2>&1; then fail "unknown deployment mode was accepted"; else status=$?; fi ;;
+    paused_missing_sha) if "$DEPLOY_SCRIPT" main --paused-onboarding >"$output" 2>&1; then fail "missing approved SHA was accepted"; else status=$?; fi ;;
+    paused_short_sha) if "$DEPLOY_SCRIPT" main --paused-onboarding a1b2c3d >"$output" 2>&1; then fail "abbreviated approved SHA was accepted"; else status=$?; fi ;;
   esac
   [[ "$status" -eq 2 ]] || fail "$argument_case argument returned $status instead of 2"
-  grep -Fq 'Error: production deployment requires the explicit branch argument: main' "$output" || fail "$argument_case argument returned unexpected message"
+  if [[ "$argument_case" == "extra" || "$argument_case" == paused_* ]]; then
+    grep -Fq 'Error: paused onboarding deployment requires main --paused-onboarding APPROVED_FULL_SHA' "$output" ||
+      fail "$argument_case returned an unexpected message"
+  else
+    grep -Fq 'Error: production deployment requires the explicit branch argument: main' "$output" || fail "$argument_case argument returned unexpected message"
+  fi
 done
 if grep -nF 'git reset --hard' "$DEPLOY_SCRIPT"; then fail "production deployment uses destructive reset"; fi
 

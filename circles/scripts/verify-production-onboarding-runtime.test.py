@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 VALIDATOR = Path(__file__).with_name("verify-production-onboarding-runtime.py")
@@ -30,13 +31,26 @@ def container(*, activation: bool = True) -> dict:
                 "POSTMARK_SENDER_EMAIL=hello@example.invalid",
             ]
         },
-        "NetworkSettings": {"Networks": {"circles_webnet": {"IPAddress": "172.20.0.4"}}},
+        "HostConfig": {"PortBindings": {}},
+        "Mounts": [{"Destination": "/circles/users", "Type": "volume", "Name": "circles_circles_users", "RW": True}],
+        "NetworkSettings": {
+            "Networks": {"circles_webnet": {"IPAddress": "172.20.0.4"}},
+            "Ports": {"3000/tcp": None},
+        },
     }
 
 
-def run_validator(mode: str, deployment_id: str, value: object) -> subprocess.CompletedProcess[str]:
+def run_validator(
+    mode: str,
+    deployment_id: str,
+    value: object,
+    activation_file: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    args = ["python3", str(VALIDATOR), mode, deployment_id]
+    if activation_file is not None:
+        args.append(str(activation_file))
     return subprocess.run(
-        ["python3", str(VALIDATOR), mode, deployment_id],
+        args,
         input=json.dumps(value),
         check=False,
         capture_output=True,
@@ -81,6 +95,137 @@ class RuntimeValidatorTests(unittest.TestCase):
         result = run_validator("default", "none", [default])
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn(HMAC, result.stdout + result.stderr)
+
+    def test_activation_hmac_must_match_without_disclosure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            activation = Path(directory) / "activation.env"
+            activation.write_text(
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                "ONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid\n",
+                encoding="utf-8",
+            )
+            accepted = run_validator("activation", DEPLOYMENT_ID, [container()], activation)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertNotIn(HMAC, accepted.stdout + accepted.stderr)
+
+            replacement = "0" * 64
+            activation.write_text(
+                f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={replacement}\n"
+                f"REGISTRATION_DEPLOYMENT_ID={DEPLOYMENT_ID}\n"
+                "ONBOARDING_ALERT_EMAIL=onboarding-alerts@kamooni.invalid\n",
+                encoding="utf-8",
+            )
+            rejected = run_validator("activation", DEPLOYMENT_ID, [container()], activation)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("differs from the approved activation file", rejected.stderr)
+            self.assertNotIn(HMAC, rejected.stdout + rejected.stderr)
+            self.assertNotIn(replacement, rejected.stdout + rejected.stderr)
+
+    def test_database_and_credentials_must_match_serving_application(self) -> None:
+        uri = "mongodb://synthetic:do-not-print@db:27017/circles?authSource=admin"
+        server = container()
+        required = {
+            "MONGODB_URI": uri,
+            "CIRCLES_JWT_SECRET": "synthetic-jwt",
+            "CRON_SECRET": "synthetic-cron",
+        }
+        server["Config"]["Env"].extend(f"{key}={value}" for key, value in required.items())
+        candidate = dict(required, PENDING_REGISTRATION_TOKEN_HMAC_KEY=HMAC, REGISTRATION_DEPLOYMENT_ID=DEPLOYMENT_ID)
+        operator = {"MONGODB_URI": uri, "CIRCLES_MONGODB_DATABASE": "circles"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = root / "base.json"
+            active = root / "activation.json"
+            ops = root / "ops.json"
+            def compose(service: str, env: dict, *, name: str = "circles_circles_users", read_only: bool = False) -> str:
+                return json.dumps({
+                    "services": {service: {
+                        "environment": env,
+                        "volumes": [{"type": "volume", "source": "circles_users", "target": "/circles/users", "read_only": read_only}],
+                    }},
+                    "volumes": {"circles_users": {"name": name}},
+                })
+
+            base.write_text(compose("circles", required), encoding="utf-8")
+
+            def validate(*, candidate_volume: str = "circles_circles_users") -> subprocess.CompletedProcess[str]:
+                active.write_text(compose("circles", candidate, name=candidate_volume), encoding="utf-8")
+                ops.write_text(compose("registration_ops", operator, read_only=True), encoding="utf-8")
+                return subprocess.run(
+                    ["python3", str(VALIDATOR), "paused-database", str(base), str(active), str(ops)],
+                    input=json.dumps([server]), capture_output=True, text=True, check=False,
+                )
+
+            self.assertEqual(validate().stdout.strip(), uri)
+            mismatch = validate(candidate_volume="wrong_users_volume")
+            self.assertNotEqual(mismatch.returncode, 0)
+            self.assertIn("production users volume differs", mismatch.stderr)
+
+            candidate["CIRCLES_MONGODB_DATABASE"] = "staging"
+            mismatched = validate()
+            self.assertNotEqual(mismatched.returncode, 0)
+            self.assertIn("MongoDB identity differs", mismatched.stderr)
+            self.assertNotIn("do-not-print", mismatched.stdout + mismatched.stderr)
+            del candidate["CIRCLES_MONGODB_DATABASE"]
+
+            operator["MONGODB_URI"] = uri.replace("@db:", "@wrong-service:")
+            self.assertNotEqual(validate().returncode, 0)
+            operator["MONGODB_URI"] = uri
+
+            candidate["PENDING_REGISTRATION_TOKEN_HMAC_KEY"] = "0" * 64
+            self.assertNotEqual(validate().returncode, 0)
+
+    def test_offline_recovery_requires_a_stopped_activation_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            activation = Path(directory) / "activation.env"
+            activation.write_text(f"PENDING_REGISTRATION_TOKEN_HMAC_KEY={HMAC}\n", encoding="utf-8")
+            live = container()
+            self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["State"].update(Running=False, Status="exited")
+            self.assertEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["State"]["Status"] = "created"
+            live["NetworkSettings"]["Networks"] = {}
+            self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["HostConfig"]["NetworkMode"] = "circles_webnet"
+            self.assertEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+            live["State"]["Status"] = "restarting"
+            self.assertNotEqual(run_validator("stopped-activation", DEPLOYMENT_ID, [live], activation).returncode, 0)
+
+    def test_maintenance_application_must_not_publish_host_ports(self) -> None:
+        safe = subprocess.run(
+            ["python3", str(VALIDATOR), "no-published-ports"],
+            input=json.dumps([container()]),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(safe.returncode, 0, safe.stderr)
+
+        published = container()
+        published["HostConfig"]["PortBindings"] = {
+            "3000/tcp": [{"HostIp": "", "HostPort": "3000"}],
+        }
+        published["NetworkSettings"]["Ports"] = published["HostConfig"]["PortBindings"]
+        rejected = subprocess.run(
+            ["python3", str(VALIDATOR), "no-published-ports"],
+            input=json.dumps([published]),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+
+    def test_production_bridge_rejects_unprotected_ingress(self) -> None:
+        for options, expected in [({}, 0), ({"com.docker.network.bridge.gateway_mode_ipv4": "nat-unprotected"}, 1)]:
+            with self.subTest(options=options):
+                result = subprocess.run(
+                    ["python3", str(VALIDATOR), "private-webnet"],
+                    input=json.dumps([{"Driver": "bridge", "Options": options}]),
+                    check=False, capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, expected, result.stderr)
 
     def test_rejects_wrong_network_and_multiple_containers(self) -> None:
         wrong_network = container()

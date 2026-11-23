@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import hmac
 from pathlib import Path
@@ -202,6 +203,19 @@ def validate_activation_compose(config: dict, expected_deployment_id: str) -> li
     return errors
 
 
+def validate_no_published_application_ports(config: dict) -> list[str]:
+    services = config.get("services", {})
+    circles = services.get("circles")
+    if not isinstance(circles, dict):
+        return ["maintenance Compose does not contain a circles service"]
+    errors: list[str] = []
+    if circles.get("ports"):
+        errors.append("maintenance application must not publish host ports")
+    if set(circles.get("networks") or {}) != {"webnet"}:
+        errors.append("maintenance application must retain only the production web network")
+    return errors
+
+
 def validate_ops_compose(config: dict, expected_sha: str) -> list[str]:
     services = config.get("services", {})
     ops = services.get("registration_ops")
@@ -296,6 +310,8 @@ def main() -> None:
         errors = validate_default_compose(read_json(sys.argv[2]))
     elif command == "activation-compose-json" and len(sys.argv) == 4:
         errors = validate_activation_compose(read_json(sys.argv[2]), sys.argv[3])
+    elif command == "no-published-ports-json" and len(sys.argv) == 3:
+        errors = validate_no_published_application_ports(read_json(sys.argv[2]))
     elif command == "ops-compose-json" and len(sys.argv) == 4:
         errors = validate_ops_compose(read_json(sys.argv[2]), sys.argv[3])
     elif command == "route-status" and len(sys.argv) in (3, 4):
@@ -305,7 +321,8 @@ def main() -> None:
             fail("could not parse registration routing status")
         if not isinstance(status, dict):
             fail("registration routing status must be a JSON object")
-        expected_mode = sys.argv[2]
+        require_drained = sys.argv[2] == "paused-drained"
+        expected_mode = "paused" if require_drained else sys.argv[2]
         mode_matches = status.get("mode") == expected_mode
         deployment_clean = expected_mode == "pending" or status.get("deploymentId") is None
         if expected_mode == "default":
@@ -324,6 +341,13 @@ def main() -> None:
             if mode_matches and deployment_clean
             else [f"registration routing is not the expected {expected_mode} state"]
         )
+        if require_drained and not errors:
+            try:
+                paused_at = datetime.fromisoformat(status["updatedAt"].replace("Z", "+00:00"))
+                if paused_at.tzinfo is None or datetime.now(timezone.utc) - paused_at < timedelta(minutes=5):
+                    errors.append("production registration must remain paused for at least five minutes")
+            except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
+                errors.append("could not verify when production registration was paused")
     elif command == "activation-ready" and len(sys.argv) == 2:
         try:
             status = json.load(sys.stdin)

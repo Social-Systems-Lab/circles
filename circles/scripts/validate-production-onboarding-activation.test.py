@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,8 @@ def compose_environment(*, mode: str = "default", deployment_id: str = "") -> di
         "services": {
             "circles": {
                 "build": {"args": {"KAMOONI_DEPLOYMENT_ROLE": "production"}},
+                "ports": [],
+                "networks": {"webnet": None},
                 "environment": {
                     "CIRCLES_URL": "https://kamooni.org",
                     "EMAIL_TRANSPORT": "postmark",
@@ -136,6 +139,41 @@ class ActivationValidatorTests(unittest.TestCase):
                     str(composed_path),
                     DEPLOYMENT_ID,
                 ).returncode,
+                0,
+            )
+
+    def test_pause_age_must_be_verified(self) -> None:
+        now = datetime.now(timezone.utc)
+        for timestamp, expected in [
+            ((now - timedelta(minutes=6)).isoformat(), 0),
+            ((now - timedelta(minutes=4)).isoformat(), 1),
+            ((now + timedelta(minutes=6)).isoformat(), 1),
+            (None, 1),
+            ("2026-11-01T20:00:00", 1),
+        ]:
+            with self.subTest(timestamp=timestamp):
+                status = {"mode": "paused", "deploymentId": None, "updatedAt": timestamp}
+                result = self.run_command("route-status", "paused-drained", stdin=json.dumps(status))
+                self.assertEqual(result.returncode, expected, result.stderr)
+
+    def test_maintenance_compose_must_remove_host_ports_but_keep_webnet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            safe = compose_environment(mode="activation", deployment_id=DEPLOYMENT_ID)
+            safe_path = self.write_json(root, "safe.json", safe)
+            result = self.run_command("no-published-ports-json", str(safe_path))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            unsafe = compose_environment(mode="activation", deployment_id=DEPLOYMENT_ID)
+            unsafe["services"]["circles"]["ports"] = [{"target": 3000, "published": "3000"}]
+            unsafe_path = self.write_json(root, "unsafe.json", unsafe)
+            self.assertNotEqual(self.run_command("no-published-ports-json", str(unsafe_path)).returncode, 0)
+
+            wrong_network = compose_environment(mode="activation", deployment_id=DEPLOYMENT_ID)
+            wrong_network["services"]["circles"]["networks"] = {"host": None}
+            wrong_network_path = self.write_json(root, "wrong-network.json", wrong_network)
+            self.assertNotEqual(
+                self.run_command("no-published-ports-json", str(wrong_network_path)).returncode,
                 0,
             )
 

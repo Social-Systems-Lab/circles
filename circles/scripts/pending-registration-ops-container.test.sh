@@ -12,7 +12,7 @@ if grep -Eq 'EXPOSE|HEALTHCHECK|CMD' "$dockerfile"; then
     echo "Operator image must not expose or start a network service." >&2
     exit 1
 fi
-grep -Fq 'const client = new MongoClient(uri)' "$script"
+grep -Fq 'const client = new MongoClient(uri,' "$script"
 if grep -Fq 'getDb' "$script"; then
     echo "Operator CLI must not import application database initialization with index side effects." >&2
     exit 1
