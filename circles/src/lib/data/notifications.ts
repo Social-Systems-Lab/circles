@@ -34,7 +34,6 @@ import { getProposalById, getProposalReactions } from "./proposal"; // Use getPr
 import { getIssueById } from "./issue"; // Import getIssueById
 import { getTaskById } from "./task"; // Import getTaskById
 import { getGoalById } from "./goal"; // Import getGoalById
-import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth";
 import { dispatchExternalNotifications } from "./external-notifications";
@@ -2475,6 +2474,8 @@ export async function notifyEventInvitation(
 ): Promise<void> {
     try {
         if (!invitedUser.did) return;
+        // Load the reader here because the event module also imports notifications.
+        const { getEventById } = await import("./event");
         const event = await getEventById(eventId, invitedUser.did);
         if (!event) return;
         const { findEventInvitationHost } = await import("./event-invitations");
@@ -2507,6 +2508,7 @@ export async function notifyEventOccurrenceInvitation(
 ): Promise<void> {
     try {
         if (!invitedUser.did) return;
+        const { getEventById } = await import("./event");
         const event = await getEventById(occurrenceId, invitedUser.did);
         if (!event) return;
         const { findEventInvitationHost } = await import("./event-invitations");
