@@ -310,6 +310,7 @@ RUN printf '%s' "$KAMOONI_DEPLOYMENT_ROLE" > /app/.kamooni-deployment-role
 RUN printf 'version=rehearsal\ngitSha=%s\nbuildTime=rehearsal\n' "$GIT_SHA" > /app/VERSION
 COPY rehearsal-app.mjs /app/rehearsal-app.mjs
 USER node
+ENTRYPOINT []
 CMD ["node", "/app/rehearsal-app.mjs"]
 DOCKER
     cp "$APP_DIR/Dockerfile.rehearsal-app" "$APP_DIR/Dockerfile"
@@ -1209,8 +1210,10 @@ if REHEARSAL_APPLICATION_COMMAND=/missing-rehearsal-entrypoint run_paused_deploy
     "$CONTROL_DIR/deploy-created-failure.log" "$created_failure_sha"; then
     fail "candidate with a missing executable unexpectedly started"
 fi
-grep -Fq 'the newly built paused onboarding application failed to start' "$CONTROL_DIR/deploy-created-failure.log" ||
+if ! grep -Fq 'the newly built paused onboarding application failed to start' "$CONTROL_DIR/deploy-created-failure.log"; then
+    tail -40 "$CONTROL_DIR/deploy-created-failure.log" >&2
     fail "missing executable did not fail at candidate startup"
+fi
 created_id="$("${BASE_COMPOSE[@]}" ps --all -q circles)"
 [[ "$(docker inspect --format '{{.State.Status}}' "$created_id")" == created ]] ||
     fail "the failed start did not leave a created candidate"
