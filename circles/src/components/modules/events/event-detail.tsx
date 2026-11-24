@@ -20,7 +20,7 @@ import {
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import ImageCarousel from "@/components/ui/image-carousel";
-import { Calendar, MapPin, Clock, X } from "lucide-react";
+import { Calendar, Download, MapPin, Clock, X } from "lucide-react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { MapDisplay } from "@/components/map/map";
 import type { Circle, Media } from "@/models/models";
@@ -130,6 +130,11 @@ export default function EventDetail({
     const isSeriesCancelled = event.stage === "cancelled";
     const isOccurrenceCancelled = event.isOccurrenceCancelled === true;
     const isCancelled = isSeriesCancelled || isOccurrenceCancelled;
+    const calendarEventId = event.occurrenceId ?? eventId;
+    const calendarDownloadUrl =
+        event.stage === "open" && !isCancelled && circleHandle && calendarEventId
+            ? `/circles/${encodeURIComponent(circleHandle)}/events/${encodeURIComponent(calendarEventId)}/ics`
+            : undefined;
     const showCancelOccurrence = shouldShowCancelEventOccurrence(event, Boolean(canEdit));
     const isRecurringOccurrence = Boolean(
         event.isRecurringInstance && event.seriesId && event.occurrenceKey !== undefined,
@@ -524,20 +529,41 @@ export default function EventDetail({
                         </div>
                     )}
 
-                    <a
-                        className="absolute bottom-2 right-2 z-10"
-                        href={googleCalendarUrl(event)}
-                        target="_blank"
-                        rel="noreferrer"
-                    >
+                    <div className="absolute bottom-2 right-2 z-10 flex gap-2">
                         <Button
+                            asChild
                             size="icon"
                             variant="ghost"
                             className="rounded-full bg-black/30 text-white hover:bg-black/50"
                         >
-                            <Calendar className="h-4 w-4" />
+                            <a
+                                href={googleCalendarUrl(event)}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-label="Add to Google Calendar"
+                                title="Add to Google Calendar"
+                            >
+                                <Calendar className="h-4 w-4" />
+                            </a>
                         </Button>
-                    </a>
+                        {calendarDownloadUrl && (
+                            <Button
+                                asChild
+                                size="icon"
+                                variant="ghost"
+                                className="rounded-full bg-black/30 text-white hover:bg-black/50"
+                            >
+                                <a
+                                    href={calendarDownloadUrl}
+                                    download
+                                    aria-label="Download calendar file (.ics)"
+                                    title="Download calendar file (.ics)"
+                                >
+                                    <Download className="h-4 w-4" />
+                                </a>
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="px-4">
@@ -721,9 +747,18 @@ export default function EventDetail({
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
-                        <Button variant="outline">Add to Google Calendar</Button>
-                    </a>
+                    <Button asChild variant="outline">
+                        <a href={googleCalendarUrl(event)} target="_blank" rel="noreferrer">
+                            Add to Google Calendar
+                        </a>
+                    </Button>
+                    {calendarDownloadUrl && (
+                        <Button asChild variant="outline">
+                            <a href={calendarDownloadUrl} download>
+                                Download calendar file (.ics)
+                            </a>
+                        </Button>
+                    )}
                     {canEdit && (event.stage === "draft" || event.stage === "open") && (
                         <Button
                             variant="outline"

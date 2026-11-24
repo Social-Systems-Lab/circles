@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
 import type { Circle, Event } from "@/models/models";
-import { withEventIcsRouteOverrides } from "@/lib/data/ics-route-test-dependencies";
+import { type EventIcsRouteOverrides, withEventIcsRouteOverrides } from "@/lib/data/ics-route-test-dependencies";
+import { formatEventOccurrenceId } from "@/lib/event-occurrence";
 import { GET } from "./route";
 
 const memberDid = "did:example:member";
@@ -58,13 +59,17 @@ async function invoke(
     eventId = String(candidate?._id),
     memberHostIds: string[] = [],
     entitledIds: string[] = [],
+    overrides: Partial<EventIcsRouteOverrides> = {},
 ) {
     const routeCircle = circles.find((item) => String(item._id) === String(routeId)) || circle(routeId);
     return withEventIcsRouteOverrides(
         {
             authenticate: async () => viewerDid,
             findCircle: async () => routeCircle,
-            findEvent: async () => candidate,
+            authorizeView: async () => true,
+            findEvent: async (id) => (id.equals(candidate?._id) ? candidate : null),
+            findOccurrence: async () => null,
+            hasOccurrenceInvitation: async () => false,
             contentPolicyDependencies: {
                 findCircles: async (wanted) =>
                     circles.filter((item) => wanted.some((id) => id.equals(item._id as ObjectId))),
@@ -72,6 +77,7 @@ async function invoke(
                     memberHostIds.filter((id) => wanted.includes(id)).map((circleId) => ({ userDid: did, circleId })),
                 findPrivateEntitledEventIds: async (_did, wanted) => entitledIds.filter((id) => wanted.includes(id)),
             },
+            ...overrides,
         },
         () =>
             GET(new Request(`https://kamooni.test/circles/route-circle/events/${eventId}/ics`), {
@@ -85,17 +91,23 @@ const snapshot = async (response: Response) => ({
     body: await response.text(),
     cache: response.headers.get("cache-control"),
 });
+const unfold = (body: string) => body.replace(/\r\n /g, "");
 
 async function main() {
     const publicEvent = event();
     const publicResponse = await invoke(publicEvent);
     assert.equal(publicResponse.status, 200);
     assert.equal(publicResponse.headers.get("cache-control"), "private, no-store");
-    const publicBody = await publicResponse.text();
+    assert.equal(publicResponse.headers.get("content-type"), "text/calendar; charset=utf-8");
+    assert.equal(publicResponse.headers.get("content-disposition"), 'attachment; filename="authorized-event.ics"');
+    const publicBody = unfold(await publicResponse.text());
     assert.match(publicBody, /BEGIN:VCALENDAR/);
     assert.match(publicBody, /SUMMARY:Authorized Event/);
-    assert.match(publicBody, /DESCRIPTION:Expected description/);
-    assert.match(publicBody, /https:\/\/meet\.example\/allowed/);
+    assert.match(publicBody, /DESCRIPTION:Expected description\\n\\nhttps:\/\/meet\.example\/allowed/);
+    assert.match(publicBody, /DTSTART:20300101T100000Z\r\nDTEND:20300101T110000Z/);
+    assert.deepEqual(publicBody.match(/^URL:.*$/gm), [
+        `URL:https://kamooni.test/circles/route-circle/events/${String(publicEvent._id)}`,
+    ]);
     assert.doesNotMatch(publicBody, /attendee|rsvp|organizer|rrule/i);
 
     const secret = event({ circleId: String(ids.secret) });
@@ -127,6 +139,9 @@ async function main() {
         ),
         await invoke(publicEvent, undefined, ids.public),
         await invoke(publicEvent, undefined, ids.route, "malformed"),
+        await invoke(event({ stage: "draft" })),
+        await invoke(event({ stage: "cancelled" })),
+        await invoke(publicEvent, memberDid, ids.route, undefined, [], [], { authorizeView: async () => false }),
     ]) {
         assert.deepEqual(await snapshot(response), neutral);
     }
@@ -159,13 +174,79 @@ async function main() {
         "private entitlement cannot replace Secret membership",
     );
 
-    const syntheticId = `${String(publicEvent._id)}:1893456000000`;
+    const syntheticId = formatEventOccurrenceId(String(publicEvent._id), publicEvent.startAt);
     assert.deepEqual(
         await snapshot(await invoke(publicEvent, undefined, ids.route, syntheticId)),
         neutral,
-        "ICS rejects occurrence IDs before persistence lookup",
+        "Occurrence IDs only apply to recurring events",
     );
     assert.doesNotMatch(neutral.body, /Route Circle|route-circle|Authorized Event|VCALENDAR/);
+
+    const title = `Venue ${"é🎉".repeat(25)}`;
+    const recurring = event({
+        title,
+        location: { street: "12 Main Street", city: "Cape Town", precision: 1 },
+        recurrence: { frequency: "weekly", interval: 1, count: 2 },
+    });
+    const seriesId = String(recurring._id);
+    const selectedStart = new Date("2030-01-08T10:00:00Z");
+    const selectedId = formatEventOccurrenceId(seriesId, selectedStart);
+    const occurrenceText = await (await invoke(recurring, undefined, ids.route, selectedId)).text();
+    assert.ok(occurrenceText.split("\r\n").every((line) => Buffer.byteLength(line) <= 75));
+    const occurrenceBody = unfold(occurrenceText);
+    assert.ok(occurrenceBody.includes(`SUMMARY:${title}\r\n`));
+    assert.ok(occurrenceBody.includes(`UID:event-${selectedId}@kamooni.test\r\n`));
+    assert.ok(occurrenceBody.includes(`URL:https://kamooni.test/circles/route-circle/events/${selectedId}\r\n`));
+    assert.match(occurrenceBody, /DTSTART:20300108T100000Z\r\nDTEND:20300108T110000Z/);
+    assert.ok(occurrenceBody.includes("LOCATION:12 Main Street\\, Cape Town\r\n"));
+    assert.doesNotMatch(occurrenceBody, /RRULE/i);
+    assert.match(unfold(await (await invoke(recurring)).text()), /DTSTART:20300101T100000Z/);
+
+    const allDay = { ...recurring, allDay: true, endAt: new Date("2030-01-02T10:00:00Z") };
+    const allDayBody = unfold(await (await invoke(allDay, undefined, ids.route, selectedId)).text());
+    assert.match(allDayBody, /DTSTART;VALUE=DATE:20300108\r\nDTEND;VALUE=DATE:20300110/);
+
+    const outsideRuleId = formatEventOccurrenceId(seriesId, new Date("2030-01-15T10:00:00Z"));
+    assert.deepEqual(await snapshot(await invoke(recurring, undefined, ids.route, outsideRuleId)), neutral);
+    assert.deepEqual(await snapshot(await invoke(recurring, undefined, ids.route, `${seriesId}:1893456000000`)), neutral);
+    const cancelled = await invoke(recurring, undefined, ids.route, selectedId, [], [], {
+        findOccurrence: async () => ({
+            seriesId,
+            occurrenceKey: selectedStart.getTime(),
+            originalStartAt: selectedStart,
+            status: "cancelled",
+            createdAt: selectedStart,
+            updatedAt: selectedStart,
+        }),
+    });
+    assert.deepEqual(await snapshot(cancelled), neutral);
+
+    const occurrenceInvitation = {
+        hasOccurrenceInvitation: async (id: string, key: number, did: string) =>
+            id === seriesId && key === selectedStart.getTime() && did === memberDid,
+    };
+    const privateRecurring = { ...recurring, visibility: "private" as const, hostCircleIds: [String(ids.secret)] };
+    const membership = [String(ids.secret)];
+    assert.equal(
+        (await invoke(privateRecurring, memberDid, ids.route, selectedId, membership, [], occurrenceInvitation)).status,
+        200,
+    );
+    for (const response of [
+        await invoke(privateRecurring, memberDid, ids.route, selectedId, [], [], occurrenceInvitation),
+        await invoke(privateRecurring, outsiderDid, ids.route, selectedId, membership, [], occurrenceInvitation),
+        await invoke(privateRecurring, memberDid, ids.route, undefined, membership, [], occurrenceInvitation),
+        await invoke(
+            privateRecurring,
+            memberDid,
+            ids.route,
+            formatEventOccurrenceId(seriesId, recurring.startAt),
+            membership,
+            [],
+            occurrenceInvitation,
+        ),
+    ]) {
+        assert.deepEqual(await snapshot(response), neutral);
+    }
 }
 
 main()

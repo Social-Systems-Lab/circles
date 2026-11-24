@@ -1,12 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ObjectId } from "mongodb";
-import type { Circle, Event } from "@/models/models";
+import type { Circle, Event, EventOccurrence } from "@/models/models";
 import type { EventContentReadPolicyDependencies, EventHostReadPolicyDependencies } from "./event-host-read-policy";
 
 export type EventIcsRouteOverrides = {
     authenticate: () => Promise<string | undefined>;
     findCircle: (handle: string) => Promise<Circle | null>;
+    authorizeView: (viewerDid: string | undefined, circleId: string) => Promise<boolean>;
     findEvent: (id: ObjectId) => Promise<Event | null>;
+    findOccurrence: (seriesId: string, occurrenceKey: number) => Promise<EventOccurrence | null>;
+    hasOccurrenceInvitation: (seriesId: string, occurrenceKey: number, viewerDid: string) => Promise<boolean>;
     contentPolicyDependencies: Partial<EventContentReadPolicyDependencies>;
 };
 
