@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { mock } from "bun:test";
 import { ObjectId } from "mongodb";
 import { formatEventOccurrenceId } from "@/lib/event-occurrence";
-import type { EventOccurrenceRsvpStatus, EventRsvp } from "@/models/models";
+import type { EventInvitation, EventOccurrenceRsvpStatus, EventRsvp } from "@/models/models";
 
 const circleId = new ObjectId().toString();
 const otherCircleId = new ObjectId().toString();
@@ -33,6 +33,11 @@ const sensitiveProfile = {
 };
 
 let profileProjection: unknown;
+let roster: {
+    people: { did: string; name: string; picture: { url: string; originalName: string }; email: string }[];
+    invitations: Pick<EventInvitation, "userDid" | "status">[];
+    rsvps: Pick<EventRsvp, "userDid" | "status">[];
+} | undefined;
 
 const actionState: {
     userDid: string | null;
@@ -128,7 +133,7 @@ mock.module("@/lib/data/db", () => ({
         findOne: async ({ userDid }: { userDid: string }) =>
             actionState.occurrenceRsvps.find((rsvp) => rsvp.userDid === userDid) ?? null,
     },
-    EventRsvps: { find: () => cursor([]) },
+    EventRsvps: { find: () => cursor(roster?.rsvps ?? []) },
     EventOccurrenceInvitations: {
         find: ({ userDid }: { userDid?: string }) =>
             cursor(
@@ -140,14 +145,16 @@ mock.module("@/lib/data/db", () => ({
             ),
     },
     EventInvitations: {
-        find: ({ userDid }: { userDid: string }) =>
-            cursor(
+        find: ({ userDid }: { userDid?: string }) => {
+            if (roster) return cursor(roster.invitations);
+            return cursor(
                 userDid === actionState.userDid &&
                 !actionState.event?.isRecurringInstance &&
                 actionState.event?.userInvitationStatus
                     ? [{ circleId, eventId: String(actionState.event._id), status: actionState.event.userInvitationStatus }]
                     : [],
-            ),
+            );
+        },
     },
     Feeds: {},
     Posts: {},
@@ -181,7 +188,7 @@ mock.module("@/lib/data/circle", () => ({
     ensureModuleIsEnabledOnCircle: async () => undefined,
     getCirclesBySearchQuery: async () => [],
     getDiscoverableCirclesBySearchQuery: async () => [],
-    getCirclesByDids: async () => [],
+    getCirclesByDids: async (dids: string[]) => roster?.people.filter((person) => dids.includes(person.did)) ?? [],
     getCirclesByIds: async (ids: string[]) =>
         ids.flatMap((id) => (actionState.circles[id] ? [actionState.circles[id]] : [])),
 }));
@@ -305,6 +312,7 @@ const {
     getEventCircleMemberInviteCandidatesAction,
     getEventOccurrenceSeriesParticipantCandidatesAction,
     getPendingEventInvitationsAction,
+    getInvitedUsersAction,
     rsvpEventAction,
     rsvpEventWithOptionsAction,
     cancelRsvpAction,
@@ -953,5 +961,57 @@ test("a recurring meeting invitation uses its occurrence response and is changea
         assert.equal((await rsvpEventOccurrenceAction("primary", circleId, occurrenceKey, status)).success, true);
         assert.equal(actionState.event.userRsvpStatus, status);
         assert.deepEqual(await getPendingEventInvitationsAction(), []);
+    }
+});
+
+test("invitee responses come from existing RSVPs and are visible only to event managers", async () => {
+    resetActionState({ userDid: "did:creator" });
+    const statuses = ["pending", "going", "interested", "cancelled", "declined", "waitlist"] as const;
+    const people = statuses.map((status) => ({
+        did: `did:example:${status}`,
+        name: `Member ${status}`,
+        picture: { url: `https://example.test/${status}.png`, originalName: "private-file-name" },
+        email: "private@example.test",
+    }));
+    roster = {
+        people,
+        invitations: statuses.map((status, index) => ({
+            userDid: people[index].did,
+            status: status === "declined" ? "declined" : status === "interested" ? "accepted" : "pending",
+        })),
+        rsvps: [
+            { userDid: people[1].did, status: "going" },
+            { userDid: people[2].did, status: "interested" },
+            { userDid: people[3].did, status: "cancelled" },
+            { userDid: people[5].did, status: "waitlist" },
+        ],
+    };
+    try {
+        const id = String(actionState.event._id);
+        const manager = await getInvitedUsersAction("primary", id, true);
+        assert.equal(manager.success, true);
+        assert.deepEqual(manager.users.map((user) => user.response), [
+            "pending", "going", "interested", "cancelled", "cancelled", "interested",
+        ]);
+        assert.deepEqual(manager.users[0].picture, { url: people[0].picture.url });
+        assert.equal("email" in manager.users[0], false);
+
+        actionState.userDid = "did:visitor";
+        const visitor = await getInvitedUsersAction("primary", id, true);
+        assert.equal(visitor.users.length, people.length);
+        assert.ok(visitor.users.every((user) => !("response" in user)));
+
+        actionState.routeCircle = actionState.circles[otherCircleId];
+        assert.deepEqual(await getInvitedUsersAction("secondary", id, true), { success: false, users: [] });
+
+        actionState.routeCircle = actionState.circles[circleId];
+        actionState.event.isRecurringInstance = true;
+        assert.deepEqual(
+            await getInvitedUsersAction("primary", id, true),
+            { success: false, users: [] },
+            "an occurrence read must not expose the series invitees",
+        );
+    } finally {
+        roster = undefined;
     }
 });

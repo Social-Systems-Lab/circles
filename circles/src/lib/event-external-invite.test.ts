@@ -69,6 +69,24 @@ assert.equal(
 );
 assert.equal(resolveExternalEventInviteHandle("@bad_handle"), null, "malformed handles are rejected");
 
+const staging = "https://staging.kamooni.org";
+const stagingProfile = `${staging}/circles/cryptim/home`;
+assert.equal(resolveExternalEventInviteHandle(stagingProfile, staging), "cryptim");
+assert.equal(resolveExternalEventInviteHandle(`${staging}/circles/cryptim`, staging), "cryptim");
+assert.equal(resolveExternalEventInviteHandle("https://kamooni.org/circles/cryptim/home", staging), "cryptim");
+assert.equal(resolveExternalEventInviteHandle(stagingProfile, "https://kamooni.org"), null);
+for (const invalidUrl of [
+    "https://staging.kamooni.org.example.test/circles/cryptim/home",
+    "https://unrelated.example/circles/cryptim/home",
+    "http://staging.kamooni.org/circles/cryptim/home",
+    `${staging}/circles/cryptim/settings`,
+    `${staging}/circles/cryptim/home/another-segment`,
+    `${staging}/circles/bad_handle/home`,
+]) {
+    assert.equal(resolveExternalEventInviteHandle(invalidUrl, staging), null, invalidUrl);
+}
+assert.equal(resolveExternalEventInviteHandle("https://unrelated.example/circles/cryptim/home", "https://unrelated.example"), null);
+
 assert.equal(
     getExternalEventInviteProfileError({ target: null }),
     EXTERNAL_EVENT_INVITE_ERRORS.notFound,

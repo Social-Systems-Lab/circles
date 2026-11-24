@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Circle } from "@/models/models";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInvitedUsersAction } from "@/app/circles/[handle]/events/actions";
 
@@ -12,7 +11,7 @@ type Props = {
 };
 
 export default function InvitedUserList({ userDids, circleHandle, eventId }: Props) {
-    const [users, setUsers] = useState<Circle[]>([]);
+    const [users, setUsers] = useState<Awaited<ReturnType<typeof getInvitedUsersAction>>["users"]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

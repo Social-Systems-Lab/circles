@@ -141,8 +141,11 @@ type GetEventsActionResult = {
     events: EventDisplay[];
 };
 
+type InviteeProfile = Pick<EventInviteCandidateDto, "did" | "name" | "handle" | "picture">;
+
 type GetInvitedUsersActionResult = {
-    users: Circle[];
+    success: boolean;
+    users: (InviteeProfile & { response?: "pending" | "going" | "interested" | "cancelled" })[];
 };
 
 export type EventOccurrenceInviteeRow = {
@@ -170,7 +173,7 @@ type GetCircleMemberInviteCandidatesActionResult = {
 type ResolveExternalEventInviteActionResult = {
     success: boolean;
     message?: string;
-    user?: Pick<Circle, "_id" | "did" | "name" | "handle" | "picture" | "circleType">;
+    user?: InviteeProfile;
 };
 
 type GetCirclesBySearchQueryActionResult = {
@@ -2179,12 +2182,10 @@ export async function resolveExternalEventInviteAction(
         return {
             success: true,
             user: {
-                _id: resolved.target._id?.toString(),
-                did: resolved.target.did,
-                name: resolved.target.name,
+                did: resolved.target.did!,
+                name: resolved.target.name || resolved.target.handle || "Member",
                 handle: resolved.target.handle,
-                picture: resolved.target.picture,
-                circleType: resolved.target.circleType,
+                ...(resolved.target.picture?.url ? { picture: { url: resolved.target.picture.url } } : {}),
             },
         };
     } catch (error) {
@@ -2197,11 +2198,15 @@ export async function inviteExternalUserToEventAction(
     circleHandle: string,
     eventId: string,
     input: string,
-): Promise<{ success: boolean; message?: string; user?: Circle }> {
+    expectedDid: string,
+): Promise<{ success: boolean; message?: string }> {
     try {
         const resolved = await resolveExternalInviteTarget(circleHandle, eventId, input);
         if (!resolved.success) {
             return resolved;
+        }
+        if (resolved.target.did !== expectedDid) {
+            return { success: false, message: "This profile changed. Find the member again before sending." };
         }
         await assertEventHostCirclesWritable(resolved.event);
 
@@ -2218,7 +2223,7 @@ export async function inviteExternalUserToEventAction(
         ]);
 
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
-        return { success: true, message: "Invitation sent", user: resolved.target };
+        return { success: true, message: "Invitation sent" };
     } catch (error) {
         console.error("Error inviting external user to event:", error);
         return { success: false, message: "Failed to send invitation" };
@@ -2284,8 +2289,9 @@ export async function getAttendeesWithDetailsAction(
 export async function getInvitedUsersAction(
     circleHandle: string,
     eventId: string,
+    includeResponses = false,
 ): Promise<GetInvitedUsersActionResult> {
-    const defaultResult: GetInvitedUsersActionResult = { users: [] };
+    const defaultResult: GetInvitedUsersActionResult = { success: false, users: [] };
 
     try {
         const userDid = await getAuthenticatedUserDid();
@@ -2297,13 +2303,52 @@ export async function getInvitedUsersAction(
         const canView = await isAuthorized(userDid, circle._id as string, features.events.view);
         if (!canView) return defaultResult;
 
-        // Invitations are stored in EventInvitations collection (not on the event document)
-        const invitations = await EventInvitations.find({ eventId }).toArray();
-        const invitedDids = Array.from(new Set(invitations.map((inv: any) => inv.userDid).filter(Boolean)));
-        if (invitedDids.length === 0) return defaultResult;
+        const event = await getEventById(eventId, userDid);
+        if (!event || event.isRecurringInstance || !isRouteCircleEventHost(circle._id!.toString(), event)) {
+            return defaultResult;
+        }
 
-        const users = await getCirclesByDids(invitedDids);
-        return { users };
+        const canonicalEventId = String(event._id);
+        const invitations = await EventInvitations.find(
+            { eventId: canonicalEventId },
+            { projection: { _id: 0, userDid: 1, status: 1 } },
+        ).toArray();
+        const invitationByDid = new Map(invitations.map((invitation) => [invitation.userDid, invitation.status]));
+        const invitedDids = [...invitationByDid.keys()].filter(Boolean);
+        if (invitedDids.length === 0) return { success: true, users: [] };
+
+        // Only managers may see responses, including RSVPs the invitee chose to keep off the public attendee list.
+        const canViewResponses = includeResponses && (await canManageEvent(userDid, event));
+        const [users, rsvps] = await Promise.all([
+            getCirclesByDids(invitedDids),
+            canViewResponses
+                ? EventRsvps.find(
+                      { eventId: canonicalEventId, userDid: { $in: invitedDids } },
+                      { projection: { _id: 0, userDid: 1, status: 1 } },
+                  ).toArray()
+                : [],
+        ]);
+        const rsvpByDid = new Map(rsvps.map((rsvp) => [rsvp.userDid, rsvp.status]));
+        return {
+            success: true,
+            users: users.flatMap((user) => {
+                if (!user.did) return [];
+                const invitationStatus = invitationByDid.get(user.did);
+                const rsvpStatus = rsvpByDid.get(user.did);
+                const invitationResponse =
+                    invitationStatus === "declined" ? "cancelled" : invitationStatus === "accepted" ? "going" : "pending";
+                const response = rsvpStatus === "waitlist" ? "interested" : rsvpStatus ?? invitationResponse;
+                return [
+                    {
+                        did: user.did,
+                        name: user.name || user.handle || "Member",
+                        handle: user.handle,
+                        ...(user.picture?.url ? { picture: { url: user.picture.url } } : {}),
+                        ...(canViewResponses ? { response } : {}),
+                    },
+                ];
+            }),
+        };
     } catch (error) {
         console.error("Error in getInvitedUsersAction:", error);
         return defaultResult;

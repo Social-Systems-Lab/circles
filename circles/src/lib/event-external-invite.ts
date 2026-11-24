@@ -15,7 +15,14 @@ export type ExternalEventInviteValidationInput = {
     alreadyAttending?: boolean;
 };
 
-export const resolveExternalEventInviteHandle = resolveKamooniProfileHandle;
+const STAGING_ORIGIN = "https://staging.kamooni.org";
+
+export function resolveExternalEventInviteHandle(input: string, configuredUrl = process.env.CIRCLES_URL) {
+    return resolveKamooniProfileHandle(input, {
+        additionalOrigin: configuredUrl?.replace(/\/+$/, "") === STAGING_ORIGIN ? STAGING_ORIGIN : undefined,
+        allowHome: true,
+    });
+}
 
 export function getExternalEventInviteProfileError(input: ExternalEventInviteValidationInput): string | null {
     const target = input.target;

@@ -1,11 +1,18 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Circle } from "@/models/models";
 import type { EventInviteCandidateDto } from "@/lib/event-invite-candidate";
 import { chunkRecipientDids } from "@/lib/security/recipient-input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogClose,
+} from "@/components/ui/dialog";
 import UserPicker from "@/components/forms/user-picker";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -19,7 +26,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-type InviteCandidate = EventInviteCandidateDto;
+type InviteCandidate = EventInviteCandidateDto & { profileReference?: string };
+type Invitee = Awaited<ReturnType<typeof getInvitedUsersAction>>["users"][number];
+
+const responseLabel = {
+    pending: "Awaiting response",
+    going: "Attending",
+    interested: "Interested",
+    cancelled: "Not interested",
+} as const;
 
 type Props = {
     circleHandle: string;
@@ -32,30 +47,37 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
     const [selectedUsers, setSelectedUsers] = useState<InviteCandidate[]>([]);
-    const [invitedUsers, setInvitedUsers] = useState<Circle[]>([]);
+    const [invitedUsers, setInvitedUsers] = useState<Invitee[]>([]);
+    const [isLoadingInvitees, setLoadingInvitees] = useState(false);
     const [canBulkInviteCircleMembers, setCanBulkInviteCircleMembers] = useState(false);
     const [circleMemberCount, setCircleMemberCount] = useState(0);
     const [bulkConfirmed, setBulkConfirmed] = useState(false);
     const [isLoadingBulkMembers, setLoadingBulkMembers] = useState(false);
     const [externalInviteInput, setExternalInviteInput] = useState("");
     const [externalInviteError, setExternalInviteError] = useState<string | null>(null);
-    const [resolvedExternalUser, setResolvedExternalUser] = useState<InviteCandidate | null>(null);
     const [isResolvingExternalUser, setIsResolvingExternalUser] = useState(false);
-    const [isAddingExternalInvite, setIsAddingExternalInvite] = useState(false);
 
-    const invitedDids = useMemo(() => invitedUsers.map((u) => u.did!).filter(Boolean), [invitedUsers]);
+    const invitedDids = useMemo(() => invitedUsers.map((user) => user.did), [invitedUsers]);
 
     useEffect(() => {
         if (!open) return;
-        (async () => {
-            try {
-                const { users } = await getInvitedUsersAction(circleHandle, eventId);
-                setInvitedUsers(users || []);
-            } catch (e) {
-                console.error("Failed to fetch invited users:", e);
-                setInvitedUsers([]);
-            }
-        })();
+        let active = true;
+        setLoadingInvitees(true);
+        void getInvitedUsersAction(circleHandle, eventId, true)
+            .then(({ users }) => {
+                if (!active) return;
+                setInvitedUsers(users);
+                setSelectedUsers((selected) =>
+                    selected.filter((user) => !users.some((invitee) => invitee.did === user.did)),
+                );
+            })
+            .catch((error) => console.error("Failed to fetch invited users:", error))
+            .finally(() => {
+                if (active) setLoadingInvitees(false);
+            });
+        return () => {
+            active = false;
+        };
     }, [open, circleHandle, eventId]);
 
     const handleCandidatesLoaded = useCallback(
@@ -82,102 +104,122 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
             return;
         }
 
-        const selectedByDid = new Map(selectedUsers.map((user) => [user.did, user]));
-        for (const member of result.candidates) {
-            if (member.did) {
-                selectedByDid.set(member.did, member);
+        setSelectedUsers((selected) => {
+            const selectedByDid = new Map(selected.map((user) => [user.did, user]));
+            for (const member of result.candidates) {
+                if (member.did && !invitedDids.includes(member.did) && !selectedByDid.has(member.did)) {
+                    selectedByDid.set(member.did, member);
+                }
             }
-        }
-        setSelectedUsers(Array.from(selectedByDid.values()));
+            return [...selectedByDid.values()];
+        });
         setCircleMemberCount(result.count);
     };
 
+    const cannotSend =
+        isPending || isLoadingInvitees || isLoadingBulkMembers || isResolvingExternalUser || selectedUsers.length === 0;
+
     const handleInvite = () => {
-        if (selectedUsers.length === 0) {
-            toast({ title: "No users selected", variant: "destructive" });
-            return;
-        }
+        if (cannotSend) return;
 
         startTransition(async () => {
-            const userDids = selectedUsers.map((u) => u.did!);
-            let invited = 0;
-            for (const batch of chunkRecipientDids(userDids)) {
-                const result = await inviteUsersToEventAction(circleHandle, eventId, batch);
-                if (!result.success) {
+            let sendError: string | undefined;
+            try {
+                const memberDids = selectedUsers.filter((user) => !user.profileReference).map((user) => user.did);
+                for (const batch of chunkRecipientDids(memberDids)) {
+                    const result = await inviteUsersToEventAction(circleHandle, eventId, batch);
+                    if (!result.success) {
+                        sendError = result.message || "Could not send invitations.";
+                        break;
+                    }
+                }
+                for (const user of selectedUsers) {
+                    if (sendError) break;
+                    if (!user.profileReference) continue;
+                    const result = await inviteExternalUserToEventAction(
+                        circleHandle,
+                        eventId,
+                        user.profileReference,
+                        user.did,
+                    );
+                    if (!result.success) sendError = result.message || "Could not send the invitation.";
+                }
+            } catch {
+                sendError = "Could not complete the invitation request.";
+            }
+
+            try {
+                const result = await getInvitedUsersAction(circleHandle, eventId, true);
+                if (!result.success) throw new Error("Could not refresh invitations");
+                setInvitedUsers(result.users);
+                const invited = new Set(result.users.map((user) => user.did));
+                setSelectedUsers((selected) => selected.filter((user) => !invited.has(user.did)));
+                const confirmed = selectedUsers.filter((user) => invited.has(user.did)).length;
+
+                if (confirmed === selectedUsers.length && !sendError) {
+                    toast({ title: "Invitations sent" });
+                } else {
                     toast({
-                        title: invited > 0 ? "Some invitations were sent" : "Error",
-                        description:
-                            invited > 0
-                                ? `Invitations sent to ${invited} of ${userDids.length} selected people. ${result.message || "The remaining invitations were not sent."}`
-                                : result.message,
+                        title: confirmed > 0 ? "Invitation list updated" : "Could not send invitations",
+                        description: sendError || "Some selected members could not be invited.",
                         variant: "destructive",
                     });
-                    return;
                 }
-                invited += batch.length;
+            } catch {
+                toast({
+                    title: "Could not refresh invitations",
+                    description: sendError || "Reopen this dialog to check which invitations were sent.",
+                    variant: "destructive",
+                });
             }
-            toast({ title: "Invitations sent" });
-            onOpenChange(false);
         });
     };
 
     const handleResolveExternalUser = async () => {
+        const reference = externalInviteInput.trim();
+        if (!reference || isResolvingExternalUser || isPending) return;
+
         setExternalInviteError(null);
-        setResolvedExternalUser(null);
         setIsResolvingExternalUser(true);
-
-        const result = await resolveExternalEventInviteAction(circleHandle, eventId, externalInviteInput);
-        setIsResolvingExternalUser(false);
-
-        if (!result.success || !result.user) {
-            setExternalInviteError(result.message || "No Kamooni member was found for that profile link or handle.");
-            return;
-        }
-
-        if (invitedDids.includes(result.user.did!) || selectedUsers.some((user) => user.did === result.user!.did)) {
-            setExternalInviteError("This person has already been invited.");
-            return;
-        }
-
-        setResolvedExternalUser(result.user as InviteCandidate);
-    };
-
-    const handleAddExternalInvite = async () => {
-        if (!resolvedExternalUser) return;
-
-        setExternalInviteError(null);
-        setIsAddingExternalInvite(true);
-        const result = await inviteExternalUserToEventAction(circleHandle, eventId, externalInviteInput);
-        setIsAddingExternalInvite(false);
-
-        if (!result.success) {
-            setExternalInviteError(result.message || "Failed to send invitation");
-            return;
-        }
-
-        setInvitedUsers((users) => {
-            if (users.some((user) => user.did === resolvedExternalUser.did)) {
-                return users;
+        try {
+            const result = await resolveExternalEventInviteAction(circleHandle, eventId, reference);
+            const user = result.user;
+            if (!result.success || !user) {
+                setExternalInviteError(
+                    result.message || "No Kamooni member was found for that profile link or handle.",
+                );
+                return;
             }
-            return [...users, resolvedExternalUser];
-        });
-        setSelectedUsers((users) => users.filter((user) => user.did !== resolvedExternalUser.did));
-        setExternalInviteInput("");
-        setResolvedExternalUser(null);
-        toast({ title: "Invitation sent" });
+            if (invitedDids.includes(user.did)) {
+                setExternalInviteError("This person has already been invited.");
+                return;
+            }
+
+            setSelectedUsers((selected) =>
+                selected.some((candidate) => candidate.did === user.did)
+                    ? selected
+                    : [...selected, { ...user, profileReference: reference, inviteSources: [], inviteSourceLabel: "" }],
+            );
+            setExternalInviteInput("");
+        } catch {
+            setExternalInviteError("Could not find the member. Try again.");
+        } finally {
+            setIsResolvingExternalUser(false);
+        }
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Invite Users</DialogTitle>
+                    <DialogTitle>Invite members</DialogTitle>
+                    <DialogDescription>Select members, then send invitations.</DialogDescription>
                 </DialogHeader>
                 {canBulkInviteCircleMembers && circleMemberCount > 0 && (
                     <div className="rounded-md border bg-muted/30 p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                                <p className="text-sm font-medium">Invite all circle members</p>
+                                <p className="text-sm font-medium">Add all circle members</p>
                                 <p className="text-xs text-muted-foreground">
                                     Adds {circleMemberCount} eligible circle member
                                     {circleMemberCount === 1 ? "" : "s"} to this invitation batch.
@@ -187,7 +229,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                disabled={!bulkConfirmed || isLoadingBulkMembers}
+                                disabled={!bulkConfirmed || isLoadingBulkMembers || isPending}
                                 onClick={handleSelectAllCircleMembers}
                             >
                                 {isLoadingBulkMembers ? "Loading..." : "Add all members"}
@@ -210,7 +252,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                     eventId={eventId}
                     excludeDids={invitedDids}
                 />
-                <div className="mt-4 space-y-3 rounded-md border p-3">
+                <div className="space-y-2 rounded-md border p-3">
                     <div>
                         <p className="text-sm font-medium">Invite another Kamooni member</p>
                         <p className="text-xs text-muted-foreground">
@@ -223,9 +265,9 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                             onChange={(event) => {
                                 setExternalInviteInput(event.target.value);
                                 setExternalInviteError(null);
-                                setResolvedExternalUser(null);
                             }}
-                            placeholder="https://kamooni.org/circles/example-handle or @example-handle"
+                            disabled={isResolvingExternalUser || isPending}
+                            placeholder="Profile link or @handle"
                             onKeyDown={(event) => {
                                 if (event.key === "Enter") {
                                     event.preventDefault();
@@ -237,59 +279,46 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                             type="button"
                             variant="outline"
                             onClick={handleResolveExternalUser}
-                            disabled={isResolvingExternalUser || externalInviteInput.trim().length === 0}
+                            disabled={isPending || isResolvingExternalUser || externalInviteInput.trim().length === 0}
                         >
-                            {isResolvingExternalUser ? "Finding..." : "Find"}
+                            {isResolvingExternalUser ? "Finding..." : "Find and add"}
                         </Button>
                     </div>
                     {externalInviteError && <p className="text-sm text-destructive">{externalInviteError}</p>}
-                    {resolvedExternalUser && (
-                        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <Avatar>
-                                    <AvatarImage src={resolvedExternalUser.picture?.url} />
-                                    <AvatarFallback>{resolvedExternalUser.name?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium">{resolvedExternalUser.name}</p>
-                                    <p className="truncate text-xs text-muted-foreground">
-                                        @{resolvedExternalUser.handle}
-                                    </p>
-                                </div>
-                            </div>
-                            <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleAddExternalInvite}
-                                disabled={isAddingExternalInvite}
-                            >
-                                {isAddingExternalInvite ? "Adding..." : "Add invitation"}
-                            </Button>
-                        </div>
-                    )}
                 </div>
                 {invitedUsers.length > 0 && (
-                    <p
-                        className="mt-2 text-xs text-muted-foreground"
-                        title={invitedUsers
-                            .map((u) => u.name)
-                            .filter(Boolean)
-                            .join(", ")}
-                    >
-                        Previously invited:{" "}
-                        {(() => {
-                            const names = invitedUsers.map((u) => u.name).filter(Boolean);
-                            const shown = names.slice(0, 3).join(", ");
-                            const remaining = names.length - 3;
-                            return remaining > 0 ? `${shown}, and ${remaining} more` : shown;
-                        })()}
-                    </p>
+                    <section aria-labelledby="event-invitees-heading" className="space-y-2">
+                        <h3 id="event-invitees-heading" className="text-sm font-medium">
+                            Previously invited
+                        </h3>
+                        <ul className="max-h-40 divide-y overflow-y-auto rounded-md border">
+                            {invitedUsers.map((user) => (
+                                <li key={user.did} className="flex items-center gap-2 px-2 py-1.5">
+                                    <Avatar className="h-7 w-7">
+                                        <AvatarImage src={user.picture?.url} alt="" />
+                                        <AvatarFallback>{user.name[0]}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="min-w-0 flex-1 truncate text-sm">{user.name}</span>
+                                    {user.response && (
+                                        <span className="shrink-0 text-xs text-muted-foreground">
+                                            {responseLabel[user.response]}
+                                        </span>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
                 )}
-                <DialogFooter>
+                <DialogFooter className="sm:items-center">
+                    <p aria-live="polite" className="mr-auto text-sm text-muted-foreground">
+                        {selectedUsers.length} selected
+                    </p>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button type="button" variant="outline">
+                            Close
+                        </Button>
                     </DialogClose>
-                    <Button onClick={handleInvite} disabled={isPending}>
+                    <Button type="button" onClick={handleInvite} disabled={cannotSend}>
                         {isPending ? "Sending..." : "Send Invitations"}
                     </Button>
                 </DialogFooter>

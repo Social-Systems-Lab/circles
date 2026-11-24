@@ -2,25 +2,30 @@
 const HANDLE_PATTERN = /^[a-z0-9-]{3,20}$/;
 const KAMOONI_HOSTS = new Set(["kamooni.org", "www.kamooni.org"]);
 
-export function resolveKamooniProfileHandle(input: string): string | null {
+type ProfileLinkOptions = { additionalOrigin?: string; allowHome?: boolean };
+
+export function resolveKamooniProfileHandle(input: string, options?: ProfileLinkOptions): string | null {
     const value = input.trim();
     if (!value) return null;
     if (value.startsWith("@")) return normalizeHandle(value.slice(1));
-    if (/^https?:\/\//i.test(value)) return normalizeKamooniProfileUrl(value);
+    if (/^https?:\/\//i.test(value)) return normalizeKamooniProfileUrl(value, options);
     if (value.includes("/") || value.includes(".") || value.includes(":")) return null;
     return normalizeHandle(value);
 }
 
-function normalizeKamooniProfileUrl(input: string): string | null {
+function normalizeKamooniProfileUrl(input: string, options?: ProfileLinkOptions): string | null {
     let url: URL;
     try {
         url = new URL(input);
     } catch {
         return null;
     }
-    if (url.protocol !== "https:" || !KAMOONI_HOSTS.has(url.hostname.toLowerCase())) return null;
+    const isKnownOrigin = KAMOONI_HOSTS.has(url.hostname.toLowerCase()) || url.origin === options?.additionalOrigin;
+    if (url.protocol !== "https:" || !isKnownOrigin || url.username || url.password) return null;
+
     const parts = url.pathname.split("/").filter(Boolean);
-    if (parts.length !== 2 || parts[0] !== "circles") return null;
+    const isProfileHome = options?.allowHome && /^\/circles\/[^/]+\/home\/?$/.test(url.pathname);
+    if (parts[0] !== "circles" || (parts.length !== 2 && !isProfileHome)) return null;
     return normalizeHandle(parts[1]);
 }
 
