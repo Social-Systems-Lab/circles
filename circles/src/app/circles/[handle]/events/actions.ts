@@ -1697,12 +1697,15 @@ export async function cancelRsvpAction(
             return { success: false, message: "Event not found" };
         }
 
-        const ok = await cancelRsvp(eventId, userDid);
+        const declineInvitation = event.stage === "open" && !event.isRecurringInstance && !!event.userInvitationStatus;
+        const ok = declineInvitation
+            ? await upsertRsvp(String(event._id), circle._id!.toString(), userDid, "cancelled", undefined, false)
+            : await cancelRsvp(eventId, userDid);
         if (!ok) return { success: false, message: "Failed to cancel RSVP" };
 
         revalidatePath(`/circles/${circleHandle}/events`);
         revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
-        return { success: true, message: "RSVP cancelled" };
+        return { success: true, message: declineInvitation ? "Invitation declined" : "RSVP cancelled" };
     } catch (error) {
         console.error("Error cancelling RSVP:", error);
         return { success: false, message: "Failed to cancel RSVP" };

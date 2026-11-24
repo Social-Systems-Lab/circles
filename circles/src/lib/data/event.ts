@@ -207,9 +207,10 @@ function buildRecurringInstance(
     occurrenceRsvps: EventOccurrenceRsvp[] = [],
     userDid = "",
 ): EventDisplay {
-    const occurrenceEvent = {
+    const occurrenceEvent: EventDisplay = {
         ...buildRecurringOccurrenceDisplay(event, occurrenceStart, undefined, occurrence),
         originalEventId: event._id,
+        userRsvpStatus: event.userRsvpStatus === "cancelled" ? "none" : event.userRsvpStatus,
     };
     return applyEventOccurrenceRsvpState(occurrenceEvent, occurrenceRsvps, userDid);
 }
@@ -808,6 +809,7 @@ export const getEventById = async (
                     _id: { $toString: "$_id" },
                     author: "$authorDetails",
                     circle: "$circleDetails",
+                    userInvitationStatus: { $first: "$userInvDocs.status" },
                     attendees: {
                         $let: {
                             vars: {
@@ -886,6 +888,12 @@ export const getEventById = async (
         return {
             ...occurrenceEvent,
             _id: event._id,
+            // An explicit response belongs to this meeting, even when the viewer also has a series invitation.
+            userInvitationStatus: occurrenceInvitation
+                ? occurrenceRsvps.some((rsvp) => rsvp.userDid === userDid && rsvp.status === "none")
+                    ? "declined"
+                    : "pending"
+                : undefined,
             occurrenceInvitationMessage: occurrenceInvitation?.message,
         } as EventDisplay;
     } catch (error) {

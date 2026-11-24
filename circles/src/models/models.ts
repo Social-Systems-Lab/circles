@@ -1875,7 +1875,8 @@ export interface EventDisplay extends Event {
     author: Circle; // Creator's details
     circle?: Circle; // Circle details
     attendees?: number; // Aggregated RSVP count (e.g., 'going')
-    userRsvpStatus?: "going" | "interested" | "none"; // Current user RSVP status
+    userRsvpStatus?: EventRsvp["status"] | "none"; // Current user RSVP status
+    userInvitationStatus?: EventInvitation["status"]; // Current viewer on the event detail
     seriesId?: string;
     occurrenceId?: string;
     occurrenceTimestamp?: number;

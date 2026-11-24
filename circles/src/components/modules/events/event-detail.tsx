@@ -200,13 +200,15 @@ export default function EventDetail({
         });
     };
 
+    const hasInvitation = event.stage === "open" && !!event.userInvitationStatus;
+
     const onCancelRsvp = () => {
         startTransition(async () => {
             const res = isRecurringOccurrence
                 ? await cancelEventOccurrenceRsvpAction(circleHandle, event.seriesId!, event.occurrenceKey!)
                 : await cancelRsvpAction(circleHandle, (event as any)._id?.toString?.() || "");
             if (res.success) {
-                toast({ title: "RSVP cancelled" });
+                toast({ title: hasInvitation ? "Invitation declined" : "RSVP cancelled" });
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to cancel RSVP", variant: "destructive" });
@@ -223,6 +225,34 @@ export default function EventDetail({
     };
 
     const renderRsvpControls = () => {
+        if (hasInvitation) {
+            const { userRsvpStatus, userInvitationStatus } = event;
+            const selected =
+                userRsvpStatus === "going" || userRsvpStatus === "interested"
+                    ? userRsvpStatus
+                    : userRsvpStatus === "cancelled" || userInvitationStatus === "declined"
+                      ? "cancelled"
+                      : undefined;
+            const choices = [
+                ["going", "Attending", onGoing],
+                ["interested", "Interested", () => onRsvp("interested")],
+                ["cancelled", "Not interested", onCancelRsvp],
+            ] as const;
+            return choices.map(([status, label, onSelect]) => (
+                <Button
+                    key={status}
+                    type="button"
+                    size="sm"
+                    variant={selected === status ? "default" : "outline"}
+                    aria-pressed={selected === status}
+                    disabled={isPending}
+                    onClick={onSelect}
+                >
+                    {label}
+                </Button>
+            ));
+        }
+
         if (!isRecurringOccurrence) {
             if (event.userRsvpStatus === "going") {
                 return (

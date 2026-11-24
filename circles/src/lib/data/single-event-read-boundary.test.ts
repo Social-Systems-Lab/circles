@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { ObjectId } from "mongodb";
-import type { Circle, EventDisplay } from "@/models/models";
+import type { Circle, EventDisplay, EventOccurrenceRsvp } from "@/models/models";
 import { formatEventOccurrenceId } from "@/lib/event-occurrence";
 import { canReadEventContent } from "./event-host-read-policy";
 import { getEventById, type SingleEventReadDependencies } from "./event";
@@ -57,6 +57,7 @@ function reader(
         entitledIds?: string[];
         occurrenceReads?: { count: number };
         occurrenceInvitation?: boolean;
+        occurrenceRsvps?: EventOccurrenceRsvp[];
     } = {},
 ): SingleEventReadDependencies {
     const policyDependencies = {
@@ -88,7 +89,7 @@ function reader(
         },
         findOccurrenceRsvps: async () => {
             if (options.occurrenceReads) options.occurrenceReads.count += 1;
-            return [];
+            return options.occurrenceRsvps ?? [];
         },
     };
 }
@@ -148,6 +149,31 @@ async function main() {
     );
     assert.equal(deniedOccurrence, null);
     assert.equal(occurrenceReads.count, 0, "canonical series host authorization precedes occurrence expansion reads");
+
+    const declinedSeries = { ...recurring, userRsvpStatus: "cancelled" as const, userInvitationStatus: "pending" as const };
+    const newMeeting = await getEventById(
+        occurrenceId, memberDid, reader(declinedSeries, memberDid, { occurrenceInvitation: true }),
+    );
+    assert.equal(newMeeting?.userInvitationStatus, "pending");
+    assert.equal(newMeeting?.userRsvpStatus, "none", "a series decline does not answer a separate meeting invitation");
+
+    const declinedMeeting = await getEventById(
+        occurrenceId, memberDid, reader(recurring, memberDid, {
+            occurrenceInvitation: true,
+            occurrenceRsvps: [{
+                seriesId: String(recurring._id),
+                occurrenceKey: Date.parse("2030-01-02T10:00:00Z"),
+                userDid: memberDid,
+                status: "none",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }],
+        }),
+    );
+    assert.equal(declinedMeeting?.userInvitationStatus, "declined");
+    assert.equal(declinedMeeting?.userRsvpStatus, "none", "occurrence RSVPs retain their existing status");
+    const visitor = await getEventById(occurrenceId, memberDid, reader(declinedSeries, memberDid));
+    assert.equal(visitor?.userInvitationStatus, undefined, "a series invitation alone is scoped to the series route");
 
     const privateRecurring = { ...recurring, visibility: "private" as const };
     assert.ok(

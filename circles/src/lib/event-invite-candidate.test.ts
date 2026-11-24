@@ -4,6 +4,8 @@ import { test } from "node:test";
 // @ts-expect-error Bun's runtime mock API is available when this test is run with `bun test`.
 import { mock } from "bun:test";
 import { ObjectId } from "mongodb";
+import { formatEventOccurrenceId } from "@/lib/event-occurrence";
+import type { EventOccurrenceRsvpStatus, EventRsvp } from "@/models/models";
 
 const circleId = new ObjectId().toString();
 const otherCircleId = new ObjectId().toString();
@@ -91,6 +93,7 @@ mock.module("@/lib/data/constants", () => ({
             },
             review: { handle: "review", module: "events", defaultUserGroups: ["admins", "moderators"] },
             moderate: { handle: "moderate", module: "events", defaultUserGroups: ["admins"] },
+            rsvp: { handle: "rsvp", module: "events", defaultUserGroups: ["everyone"] },
         },
     },
 }));
@@ -120,10 +123,32 @@ mock.module("@/lib/data/db", () => ({
     EventOccurrences: {
         findOne: async () => (actionState.occurrenceCancelled ? { status: "cancelled" } : null),
     },
-    EventOccurrenceRsvps: { find: () => cursor(actionState.occurrenceRsvps) },
+    EventOccurrenceRsvps: {
+        find: () => cursor(actionState.occurrenceRsvps),
+        findOne: async ({ userDid }: { userDid: string }) =>
+            actionState.occurrenceRsvps.find((rsvp) => rsvp.userDid === userDid) ?? null,
+    },
     EventRsvps: { find: () => cursor([]) },
-    EventOccurrenceInvitations: { find: () => cursor([]) },
-    EventInvitations: {},
+    EventOccurrenceInvitations: {
+        find: ({ userDid }: { userDid?: string }) =>
+            cursor(
+                userDid === actionState.userDid &&
+                actionState.event?.isRecurringInstance &&
+                actionState.event?.userInvitationStatus
+                    ? [{ circleId, seriesId: actionState.event.seriesId, occurrenceKey: actionState.event.occurrenceKey }]
+                    : [],
+            ),
+    },
+    EventInvitations: {
+        find: ({ userDid }: { userDid: string }) =>
+            cursor(
+                userDid === actionState.userDid &&
+                !actionState.event?.isRecurringInstance &&
+                actionState.event?.userInvitationStatus
+                    ? [{ circleId, eventId: String(actionState.event._id), status: actionState.event.userInvitationStatus }]
+                    : [],
+            ),
+    },
     Feeds: {},
     Posts: {},
     Comments: {},
@@ -162,7 +187,7 @@ mock.module("@/lib/data/circle", () => ({
 }));
 mock.module("@/lib/data/user", () => ({
     getUserByDid: async () => null,
-    getUserPrivate: async () => null,
+    getUserPrivate: async (did: string) => ({ did }),
     getPrivateUserByDid: async () => null,
     updateUser: async () => undefined,
     getUserByHandle: async () => null,
@@ -206,8 +231,14 @@ mock.module("@/lib/data/event", () => ({
     inviteUsersToEvent: async () => undefined,
 }));
 mock.module("@/lib/data/eventRsvp", () => ({
-    upsertRsvp: async () => undefined,
-    cancelRsvp: async () => undefined,
+    upsertRsvp: async (_eventId: string, _circleId: string, _did: string, status: EventRsvp["status"]) => {
+        actionState.event.userRsvpStatus = status;
+        return true;
+    },
+    cancelRsvp: async () => {
+        actionState.event.userRsvpStatus = "none";
+        return true;
+    },
     listAttendees: async () => [],
     listAttendeesWithDetails: async () => [],
 }));
@@ -226,7 +257,16 @@ mock.module("@/lib/data/notifications", () => ({
     notifyEventOccurrenceInvitation: async () => undefined,
 }));
 mock.module("@/lib/data/eventOccurrence", () => ({ cancelEventOccurrence: async () => undefined }));
-mock.module("@/lib/data/eventOccurrenceRsvp", () => ({ upsertEventOccurrenceRsvp: async () => undefined }));
+mock.module("@/lib/data/eventOccurrenceRsvp", () => ({
+    upsertEventOccurrenceRsvp: async (_seriesId: string, _key: number, userDid: string, status: EventOccurrenceRsvpStatus) => {
+        actionState.occurrenceRsvps = [
+            ...actionState.occurrenceRsvps.filter((rsvp) => rsvp.userDid !== userDid),
+            { userDid, status },
+        ];
+        actionState.event.userRsvpStatus = status;
+        return true;
+    },
+}));
 mock.module("@/lib/data/eventOccurrenceInvitation", () => ({ upsertEventOccurrenceInvitation: async () => undefined }));
 mock.module("@/lib/data/circle-lifecycle-policy", () => ({
     getCircleModerationStatus: (candidateCircle?: any) => candidateCircle?.moderationStatus ?? "active",
@@ -264,6 +304,12 @@ const {
     getEventInviteCandidatesAction,
     getEventCircleMemberInviteCandidatesAction,
     getEventOccurrenceSeriesParticipantCandidatesAction,
+    getPendingEventInvitationsAction,
+    rsvpEventAction,
+    rsvpEventWithOptionsAction,
+    cancelRsvpAction,
+    rsvpEventOccurrenceAction,
+    cancelEventOccurrenceRsvpAction,
 } = await import("@/app/circles/[handle]/events/actions");
 
 const circle = {
@@ -855,4 +901,57 @@ test("invite UI uses the DTO, selects by DID, renders source labels, and retains
     assert.match(modal, /getEventCircleMemberInviteCandidatesAction/);
     assert.match(modal, /selectedByDid\.set\(member\.did, member\)/);
     assert.match(modal, /inviteUsersToEventAction/);
+});
+
+test("a one-off invitation leaves Awaiting response after a decline and supports later RSVP changes", async () => {
+    resetActionState({
+        eventOverrides: {
+            userInvitationStatus: "pending",
+            userRsvpStatus: "none",
+            endAt: new Date(Date.now() + 86_400_000),
+        },
+    });
+    actionState.routeCircle.enabledModules = ["events"];
+    const eventId = String(actionState.event._id);
+    assert.deepEqual((await getPendingEventInvitationsAction()).map(({ id }) => id), [eventId]);
+
+    assert.deepEqual(await cancelRsvpAction("primary", eventId), { success: true, message: "Invitation declined" });
+    assert.equal(actionState.event.userRsvpStatus, "cancelled");
+    assert.deepEqual(await getPendingEventInvitationsAction(), []);
+
+    assert.equal((await rsvpEventAction("primary", eventId, "interested")).success, true);
+    assert.equal(actionState.event.userRsvpStatus, "interested");
+    assert.equal((await rsvpEventWithOptionsAction("primary", eventId, "going", { isPublic: false })).success, true);
+    assert.equal(actionState.event.userRsvpStatus, "going");
+    assert.deepEqual(await getPendingEventInvitationsAction(), []);
+
+    delete actionState.event.userInvitationStatus;
+    assert.deepEqual(await cancelRsvpAction("primary", eventId), { success: true, message: "RSVP cancelled" });
+    assert.equal(actionState.event.userRsvpStatus, "none", "ordinary cancellation still removes the response");
+});
+
+test("a recurring meeting invitation uses its occurrence response and is changeable after a decline", async () => {
+    resetActionState({
+        eventOverrides: {
+            seriesId: circleId,
+            occurrenceKey,
+            isRecurringInstance: true,
+            userInvitationStatus: "pending",
+            userRsvpStatus: "none",
+            endAt: new Date(Date.now() + 86_400_000),
+        },
+    });
+    actionState.routeCircle.enabledModules = ["events"];
+    const id = formatEventOccurrenceId(circleId, new Date(occurrenceKey));
+    assert.deepEqual((await getPendingEventInvitationsAction()).map(({ id }) => id), [id]);
+
+    assert.equal((await cancelEventOccurrenceRsvpAction("primary", circleId, occurrenceKey)).success, true);
+    assert.ok(actionState.occurrenceRsvps.some((rsvp) => rsvp.userDid === actionState.userDid && rsvp.status === "none"));
+    assert.deepEqual(await getPendingEventInvitationsAction(), []);
+
+    for (const status of ["interested", "going"] as const) {
+        assert.equal((await rsvpEventOccurrenceAction("primary", circleId, occurrenceKey, status)).success, true);
+        assert.equal(actionState.event.userRsvpStatus, status);
+        assert.deepEqual(await getPendingEventInvitationsAction(), []);
+    }
 });

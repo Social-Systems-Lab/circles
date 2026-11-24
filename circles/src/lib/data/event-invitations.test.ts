@@ -230,7 +230,7 @@ test("authorized private invitations email once and disappear as soon as an exis
     assert.equal(await invite(), true);
     assert.equal(mail.length, 1);
     assert.equal((await listPendingEventInvitations(userDid)).length, 1);
-    for (const status of ["going", "interested"] as const) {
+    for (const status of ["going", "interested", "cancelled"] as const) {
         event.userRsvpStatus = status;
         assert.deepEqual(await listPendingEventInvitations(userDid), []);
     }
@@ -290,4 +290,11 @@ test("Toolbox links to the existing RSVP controls and omits pending identities f
     assert.match(source, /events=\{timelineEvents\}/);
     const detail = readFileSync("src/components/modules/events/event-detail.tsx", "utf8");
     assert.match(detail, /id="event-rsvp"[\s\S]*renderRsvpControls\(\)/);
+    const controls = detail.match(/const renderRsvpControls = \(\) => \{[\s\S]*?if \(!isRecurringOccurrence\)/)?.[0];
+    assert.ok(controls);
+    assert.match(controls, /if \(hasInvitation\)/);
+    assert.match(controls, /\["going", "Attending", onGoing\]/);
+    assert.match(controls, /\["interested", "Interested", \(\) => onRsvp\("interested"\)\]/);
+    assert.match(controls, /\["cancelled", "Not interested", onCancelRsvp\]/);
+    assert.match(controls, /aria-pressed=\{selected === status\}/);
 });
