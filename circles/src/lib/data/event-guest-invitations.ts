@@ -243,15 +243,20 @@ export async function hasGuestInvitations(eventId: string): Promise<boolean> {
 export async function listConfirmedGuestNames(
     eventId: string,
     occurrenceKey: number | null,
+    includeEmail = false,
     getCollection = guestInvitations,
 ): Promise<string[]> {
     const collection = await getCollection();
     const rows = await collection
-        .find({ eventId, occurrenceKey, status: "going" }, { projection: { _id: 0, displayName: 1 } })
+        .find(
+            { eventId, occurrenceKey, status: "going" },
+            { projection: { _id: 0, displayName: 1, ...(includeEmail && { email: 1 }) } },
+        )
         .toArray();
-    return rows.map(({ displayName }) => {
+    return rows.map(({ displayName, email }) => {
         const name = typeof displayName === "string" ? displayName.trim() : "";
-        return name && !/\S+@\S+/.test(name) ? name : "Guest";
+        if (name && !/\S+@\S+/.test(name)) return name;
+        return (includeEmail && email) || "Guest";
     });
 }
 

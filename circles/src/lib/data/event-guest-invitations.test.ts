@@ -21,7 +21,7 @@ const otherHost = "64b000000000000000000003";
 const organiser = "did:example:organiser";
 const origin = "https://staging.kamooni.org";
 
-test("the public guest roster contains only confirmed names for the exact event or occurrence", async () => {
+test("the confirmed roster keeps emails manager-only and scopes them to the exact event or occurrence", async () => {
     const occurrenceKey = Date.parse("2030-03-12T15:00:00Z");
     type Scope = Pick<EventGuestInvitation, "eventId" | "occurrenceKey" | "status">;
     type GuestRow = Scope & Pick<EventGuestInvitation, "displayName" | "email" | "tokenHash">;
@@ -34,31 +34,50 @@ test("the public guest roster contains only confirmed names for the exact event 
     };
     const rows: GuestRow[] = [
         { ...scope, displayName: "  Guest One  " },
-        { ...scope },
+        { ...scope, email: "unnamed@example.invalid" },
         { ...scope, displayName: "private@example.invalid" },
         { ...scope, status: "interested", displayName: "Interested Guest" },
         { ...scope, status: "declined", displayName: "Declined Guest" },
         { ...scope, status: "pending", displayName: "Awaiting Guest" },
         { ...scope, occurrenceKey, displayName: "Occurrence Guest" },
-        { ...scope, occurrenceKey: occurrenceKey + 604_800_000, displayName: "Next Meeting Guest" },
+        { ...scope, occurrenceKey, email: "this-meeting@example.invalid" },
+        { ...scope, occurrenceKey: occurrenceKey + 604_800_000, email: "next-meeting@example.invalid" },
         { ...scope, eventId: otherHost, displayName: "Other Event Guest" },
     ];
+    const projections: Record<string, number>[] = [];
     const collection = {
         find: (filter: Scope, options: { projection: Record<string, number> }) => {
-            assert.deepEqual(options.projection, { _id: 0, displayName: 1 });
+            projections.push(options.projection);
             return {
                 toArray: async () =>
                     rows
                         .filter(({ eventId, occurrenceKey, status }) =>
                             eventId === filter.eventId && occurrenceKey === filter.occurrenceKey && status === filter.status,
                         )
-                        .map(({ displayName }) => ({ displayName })),
+                        .map(({ displayName, email }) => ({
+                            displayName,
+                            ...(options.projection.email && { email }),
+                        })),
             };
         },
     } as unknown as Collection<EventGuestInvitation>;
     const getCollection = async () => collection;
-    assert.deepEqual(await listConfirmedGuestNames(eventId, null, getCollection), ["Guest One", "Guest", "Guest"]);
-    assert.deepEqual(await listConfirmedGuestNames(eventId, occurrenceKey, getCollection), ["Occurrence Guest"]);
+    assert.deepEqual(await listConfirmedGuestNames(eventId, null, false, getCollection), ["Guest One", "Guest", "Guest"]);
+    assert.deepEqual(await listConfirmedGuestNames(eventId, null, true, getCollection), [
+        "Guest One", "unnamed@example.invalid", "private@example.invalid",
+    ]);
+    assert.deepEqual(await listConfirmedGuestNames(eventId, occurrenceKey, false, getCollection), [
+        "Occurrence Guest", "Guest",
+    ]);
+    assert.deepEqual(await listConfirmedGuestNames(eventId, occurrenceKey, true, getCollection), [
+        "Occurrence Guest", "this-meeting@example.invalid",
+    ]);
+    assert.deepEqual(projections, [
+        { _id: 0, displayName: 1 },
+        { _id: 0, displayName: 1, email: 1 },
+        { _id: 0, displayName: 1 },
+        { _id: 0, displayName: 1, email: 1 },
+    ]);
 });
 
 function makeEvent(overrides: Partial<Event> = {}): Event & { _id: ObjectId } {

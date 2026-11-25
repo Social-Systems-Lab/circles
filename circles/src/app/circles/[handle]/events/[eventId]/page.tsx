@@ -45,14 +45,6 @@ export default async function EventDetailPage(props: PageProps) {
         notFound();
     }
 
-    const guestAttendeeNames = await listConfirmedGuestNames(
-        event.seriesId ?? String(event._id),
-        event.occurrenceKey ?? null,
-    ).catch(() => {
-        console.error("Could not load confirmed event guests");
-        return [];
-    });
-
     // Permissions
     const hostCircleIds = normalizeEventHostCircleIds(event);
     const hostPermissionChecks = userDid
@@ -67,6 +59,14 @@ export default async function EventDetailPage(props: PageProps) {
     const canReview = hostPermissionChecks.some((check) => check.canReview);
     const isAuthor = !!userDid && userDid === event.createdBy;
     const canEdit = userDid ? await canManageEvent(userDid, event) : false;
+    const guestAttendeeNames = await listConfirmedGuestNames(
+        event.seriesId ?? String(event._id),
+        event.occurrenceKey ?? null,
+        canEdit,
+    ).catch(() => {
+        console.error("Could not load confirmed event guests");
+        return [];
+    });
 
     return (
         <div className="formatted flex w-full flex-col">
