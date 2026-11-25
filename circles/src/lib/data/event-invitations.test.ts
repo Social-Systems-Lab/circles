@@ -52,6 +52,7 @@ let secretMember: boolean;
 let routePermitted: boolean;
 let blockedHostId: string | undefined;
 let occurrenceRsvp: boolean;
+let bellRows: { _id: string; type: string; content: { eventId: string }; isRead: boolean }[];
 
 mock.module("./db", () => ({
     EventInvitations: {
@@ -75,6 +76,11 @@ mock.module("./db", () => ({
 }));
 mock.module("@/lib/auth/auth", () => ({
     isAuthorized: async (_did: string, hostId: string) => routePermitted && hostId !== blockedHostId,
+    getAuthenticatedUserDid: async () => userDid,
+}));
+mock.module("./notifications", () => ({
+    listNotificationsForUser: async () => bellRows,
+    getUnreadNotificationCountForUser: async () => bellRows.filter((row) => !row.isRead).length,
 }));
 mock.module("./circle", () => ({
     getCircleById: async (id: string) => (id === circleId ? publicHost : secretHost),
@@ -120,6 +126,7 @@ mock.module("./event", () => ({
 const { emailNewEventInvitation, insertEventInvitation, listPendingEventInvitations } = await import(
     "./event-invitations"
 );
+const { GET: getNotifications } = await import("@/app/api/notifications/route");
 
 const previousOrigin = process.env.CIRCLES_URL;
 beforeEach(() => {
@@ -133,6 +140,7 @@ beforeEach(() => {
     routePermitted = true;
     blockedHostId = undefined;
     occurrenceRsvp = false;
+    bellRows = [];
 });
 afterEach(() => {
     if (previousOrigin === undefined) delete process.env.CIRCLES_URL;
@@ -236,6 +244,65 @@ test("authorized private invitations email once and disappear as soon as an exis
     }
     assert.equal(await invite(), false);
     assert.equal(mail.length, 1);
+});
+
+test("the notifications endpoint offers the existing RSVP destination only for unanswered invitations", async () => {
+    await insertEventInvitation(eventId, circleId, userDid);
+    const base = { type: "event_invitation", content: { eventId } };
+    bellRows = [
+        { ...base, _id: "unread", isRead: false },
+        { ...base, _id: "read", isRead: true },
+        { ...base, _id: "wrong-occurrence", content: { eventId: occurrenceId }, isRead: true },
+        { ...base, _id: "other-type", type: "event_approved", isRead: true },
+    ];
+    const fetchBell = async () => {
+        const response = await getNotifications(new Request("https://kamooni.example.invalid/api/notifications"));
+        assert.equal(response.status, 200);
+        return response.json();
+    };
+    const initial = await fetchBell();
+    const href = `/circles/public-host/events/${eventId}#event-rsvp`;
+    assert.deepEqual(
+        initial.notifications.map((row: { eventRsvpHref?: string }) => row.eventRsvpHref),
+        [href, href, undefined, undefined],
+    );
+    assert.equal(initial.unreadCount, 1);
+
+    for (const status of ["going", "interested", "cancelled", "waitlist"] as const) {
+        event.userRsvpStatus = status;
+        const answered = await fetchBell();
+        assert.deepEqual(answered.notifications, bellRows);
+        assert.equal(answered.unreadCount, 1);
+    }
+});
+
+test("an occurrence CTA is scoped to the invited meeting and hidden without secret-host access", async () => {
+    event.visibility = "private";
+    event.hostCircleIds = [secretHostId];
+    const now = new Date();
+    occurrences.push({
+        seriesId: eventId,
+        occurrenceKey: occurrenceStart.getTime(),
+        userDid,
+        circleId,
+        invitedBy: event.createdBy,
+        createdAt: now,
+        updatedAt: now,
+        sentAt: now,
+    });
+    bellRows = [{ _id: "occurrence", type: "event_invitation", content: { eventId: occurrenceId }, isRead: false }];
+    const fetchBell = async () =>
+        (await getNotifications(new Request("https://kamooni.example.invalid/api/notifications"))).json();
+
+    assert.equal((await fetchBell()).notifications[0]?.eventRsvpHref, undefined);
+    secretMember = true;
+    blockedHostId = circleId;
+    assert.equal(
+        (await fetchBell()).notifications[0]?.eventRsvpHref,
+        `/circles/secret-host/events/${occurrenceId}#event-rsvp`,
+    );
+    occurrenceRsvp = true;
+    assert.deepEqual((await fetchBell()).notifications, bellRows);
 });
 
 test("invites to private occurrences use the meeting date and lose pending visibility on an RSVP", async () => {

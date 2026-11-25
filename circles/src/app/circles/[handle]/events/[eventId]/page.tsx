@@ -5,6 +5,7 @@ import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { getEventAction } from "@/app/circles/[handle]/events/actions";
 import { canManageEvent, normalizeEventHostCircleIds } from "@/lib/data/event";
+import { listConfirmedGuestNames } from "@/lib/data/event-guest-invitations";
 import EventDetail from "@/components/modules/events/event-detail";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -44,6 +45,14 @@ export default async function EventDetailPage(props: PageProps) {
         notFound();
     }
 
+    const guestAttendeeNames = await listConfirmedGuestNames(
+        event.seriesId ?? String(event._id),
+        event.occurrenceKey ?? null,
+    ).catch(() => {
+        console.error("Could not load confirmed event guests");
+        return [];
+    });
+
     // Permissions
     const hostCircleIds = normalizeEventHostCircleIds(event);
     const hostPermissionChecks = userDid
@@ -76,6 +85,7 @@ export default async function EventDetailPage(props: PageProps) {
                         circle={circle}
                         circleHandle={circle.handle!}
                         event={event}
+                        guestAttendeeNames={guestAttendeeNames}
                         canEdit={!!canEdit}
                         canReview={!!canReview}
                         canModerate={!!canModerate}

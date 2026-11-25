@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { GUEST_INVITATIONS_UPDATED, GuestInviteeRows } from "./guest-invitation-form";
 import type { EventGuestInviteeRow } from "@/lib/event-guest-invitation";
 
-type Props = { circleHandle: string; seriesId: string; occurrenceKey: number };
+type Props = { circleHandle: string; seriesId: string; occurrenceKey: number; guestManagement?: boolean };
 
 const responseLabel = {
     pending: "Pending",
@@ -17,7 +17,7 @@ const responseLabel = {
     not_attending: "Not attending",
 } as const;
 
-export default function OccurrenceInviteeList({ circleHandle, seriesId, occurrenceKey }: Props) {
+export default function OccurrenceInviteeList({ circleHandle, seriesId, occurrenceKey, guestManagement }: Props) {
     const [rows, setRows] = useState<EventOccurrenceInviteeRow[]>([]);
     const [guests, setGuests] = useState<EventGuestInviteeRow[]>([]);
 
@@ -40,13 +40,17 @@ export default function OccurrenceInviteeList({ circleHandle, seriesId, occurren
         };
     }, [circleHandle, seriesId, occurrenceKey]);
 
-    if (rows.length === 0 && guests.length === 0) return null;
+    const members = guestManagement ? [] : rows;
+    const visibleGuests = guestManagement ? guests : guests.filter((guest) => guest.status !== "going");
+    if (members.length === 0 && visibleGuests.length === 0) return null;
 
     return (
         <div className="rounded-md border p-4">
-            <div className="mb-3 text-sm font-medium text-muted-foreground">Invited</div>
+            <div className="mb-3 text-sm font-medium text-muted-foreground">
+                {guestManagement ? "Guest invitations" : "Invited"}
+            </div>
             <ul className="space-y-3">
-                {rows.map((row) => (
+                {members.map((row) => (
                     <li key={row.user.did} className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                             <Avatar>
@@ -66,7 +70,7 @@ export default function OccurrenceInviteeList({ circleHandle, seriesId, occurren
                         </div>
                     </li>
                 ))}
-                <GuestInviteeRows guests={guests} />
+                <GuestInviteeRows guests={visibleGuests} />
             </ul>
         </div>
     );

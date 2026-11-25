@@ -240,6 +240,21 @@ export async function hasGuestInvitations(eventId: string): Promise<boolean> {
     return !!(await (await guestInvitations()).findOne({ eventId }, { projection: { _id: 1 } }));
 }
 
+export async function listConfirmedGuestNames(
+    eventId: string,
+    occurrenceKey: number | null,
+    getCollection = guestInvitations,
+): Promise<string[]> {
+    const collection = await getCollection();
+    const rows = await collection
+        .find({ eventId, occurrenceKey, status: "going" }, { projection: { _id: 0, displayName: 1 } })
+        .toArray();
+    return rows.map(({ displayName }) => {
+        const name = typeof displayName === "string" ? displayName.trim() : "";
+        return name && !/\S+@\S+/.test(name) ? name : "Guest";
+    });
+}
+
 const guestDependencies = {
     collection: guestInvitations,
     resolveTarget: resolveGuestInvitationTarget,

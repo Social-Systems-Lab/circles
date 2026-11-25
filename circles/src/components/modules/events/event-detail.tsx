@@ -60,11 +60,13 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { shouldShowCancelEventOccurrence } from "@/lib/event-occurrence";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 
 type Props = {
     circle?: Circle;
     circleHandle: string;
     event: EventDisplay;
+    guestAttendeeNames?: string[];
     canEdit?: boolean;
     canReview?: boolean;
     canModerate?: boolean;
@@ -95,6 +97,7 @@ export default function EventDetail({
     circle,
     circleHandle,
     event,
+    guestAttendeeNames = [],
     canEdit,
     canReview,
     canModerate,
@@ -117,6 +120,7 @@ export default function EventDetail({
     const [isCancelEventOpen, setCancelEventOpen] = useState(false);
     const [isDeleteEventOpen, setDeleteEventOpen] = useState(false);
     const compact = !!isPreview;
+    const attendeeCount = (event.attendees ?? 0) + guestAttendeeNames.length;
     const [hideUpdating, setHideUpdating] = useState(false);
     const eventId = ((event as any)._id?.toString?.() || (event as any)._id || "") as string;
     const hiddenCancelledIds = user?.hiddenCancelledEventIds || [];
@@ -198,6 +202,7 @@ export default function EventDetail({
                 : await rsvpEventAction(circleHandle, (event as any)._id?.toString?.() || "", status);
             if (res.success) {
                 toast({ title: "RSVP updated" });
+                dispatchNotificationRefresh({ reason: "event-rsvp-updated" });
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to RSVP", variant: "destructive" });
@@ -214,6 +219,7 @@ export default function EventDetail({
                 : await cancelRsvpAction(circleHandle, (event as any)._id?.toString?.() || "");
             if (res.success) {
                 toast({ title: hasInvitation ? "Invitation declined" : "RSVP cancelled" });
+                dispatchNotificationRefresh({ reason: "event-rsvp-updated" });
                 router.refresh();
             } else {
                 toast({ title: "Error", description: res.message || "Failed to cancel RSVP", variant: "destructive" });
@@ -630,7 +636,7 @@ export default function EventDetail({
                             <div className="flex flex-wrap items-center gap-2">{renderRsvpControls()}</div>
                         )}
                         <div className="mt-2 text-xs text-muted-foreground">
-                            Attendees (going): {event.attendees ?? 0}
+                            Attendees (going): {attendeeCount}
                         </div>
                     </div>
                 </div>
@@ -943,12 +949,14 @@ export default function EventDetail({
                             <div className="flex flex-wrap items-center gap-2">{renderRsvpControls()}</div>
                         )}
                         <div className="mt-3 text-sm text-muted-foreground">
-                            Attendees (going): {event.attendees ?? 0}
+                            Attendees (going): {attendeeCount}
                         </div>
                     </div>
-                    {!isRecurringOccurrence && (
-                        <AttendeesList circleHandle={circleHandle} eventId={event._id!.toString()} />
-                    )}
+                    <AttendeesList
+                        circleHandle={circleHandle}
+                        eventId={isRecurringOccurrence ? undefined : eventId}
+                        guestNames={guestAttendeeNames}
+                    />
                     {isRecurringOccurrence && canInvite ? (
                         <OccurrenceInviteeList
                             circleHandle={circleHandle}

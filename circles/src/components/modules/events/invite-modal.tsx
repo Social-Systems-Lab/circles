@@ -301,7 +301,6 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange,
                     </div>
                     {externalInviteError && <p className="text-sm text-destructive">{externalInviteError}</p>}
                 </div>
-                {!event.recurrence && <GuestInvitationForm circleHandle={circleHandle} eventId={eventId} event={event} />}
                 <DialogFooter className="flex-col gap-2 sm:items-center sm:space-x-0">
                     <p aria-live="polite" className="mr-auto text-sm text-muted-foreground">
                         {selectedUsers.length} selected
@@ -315,6 +314,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange,
                         {isPending ? "Sending..." : "Send Invitations"}
                     </Button>
                 </DialogFooter>
+                {!event.recurrence && <GuestInvitationForm circleHandle={circleHandle} eventId={eventId} event={event} />}
                 {(invitedUsers.length > 0 || guestInvitees.length > 0) && (
                     <section aria-labelledby="event-invitees-heading" className="space-y-2">
                         <h3 id="event-invitees-heading" className="text-sm font-medium">

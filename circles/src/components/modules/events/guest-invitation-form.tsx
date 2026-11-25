@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
+import { Mail, Send } from "lucide-react";
 import { inviteEventGuestsAction } from "@/app/circles/[handle]/events/actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,15 +56,23 @@ export function GuestInvitationForm({
                     return;
                 }
                 setAddresses("");
+                const { sent, unconfirmed, alreadyInvited } = result;
+                const savedMessage = unconfirmed > 1
+                    ? `${unconfirmed} invitations saved — email delivery unconfirmed`
+                    : "Invitation saved — email delivery unconfirmed";
                 toast({
-                    title: result.sent ? "Guest invitations sent" : result.unconfirmed ? "Guest delivery unconfirmed" : "Guests already invited",
+                    title:
+                        sent > 0
+                            ? `${sent} guest invitation${sent === 1 ? "" : "s"} sent`
+                            : unconfirmed > 0
+                              ? savedMessage
+                              : "Guests already invited",
                     description: [
-                        result.sent > 0 && `${result.sent} sent`,
-                        result.alreadyInvited > 0 && `${result.alreadyInvited} already invited`,
-                        result.unconfirmed > 0 && `${result.unconfirmed} with delivery unconfirmed`,
+                        sent > 0 && unconfirmed > 0 && savedMessage,
+                        alreadyInvited > 0 && `${alreadyInvited} already invited`,
                     ]
                         .filter(Boolean)
-                        .join(" · "),
+                        .join(" · ") || undefined,
                 });
             } catch {
                 toast({ title: "Could not send guest invitations", variant: "destructive" });
@@ -75,7 +84,10 @@ export function GuestInvitationForm({
 
     return (
         <details className="rounded-md border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Invite guests by email</summary>
+            <summary className="cursor-pointer font-medium">
+                <Mail aria-hidden="true" className="mr-2 inline-block h-4 w-4 align-text-bottom" />
+                Invite guests by email
+            </summary>
             <div className="mt-3 space-y-2">
                 <label htmlFor={fieldId} className="font-medium">
                     Guest email addresses
@@ -109,6 +121,7 @@ export function GuestInvitationForm({
                     disabled={pending || !addresses.trim()}
                     onClick={send}
                 >
+                    <Send aria-hidden="true" className="mr-2 h-4 w-4" />
                     {pending ? "Sending…" : "Send guest invitations"}
                 </Button>
             </div>

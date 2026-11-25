@@ -9,15 +9,17 @@ import { contentPreviewAtom } from "@/lib/data/atoms";
 
 type Props = {
     circleHandle: string;
-    eventId: string;
+    eventId?: string;
+    guestNames: string[];
 };
 
-export default function AttendeesList({ circleHandle, eventId }: Props) {
+export default function AttendeesList({ circleHandle, eventId, guestNames }: Props) {
     const [attendees, setAttendees] = useState<{ user: Circle; message?: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const setContentPreview = useSetAtom(contentPreviewAtom);
 
     useEffect(() => {
+        if (!eventId) return;
         let mounted = true;
         const fetchUsers = async () => {
             try {
@@ -33,14 +35,15 @@ export default function AttendeesList({ circleHandle, eventId }: Props) {
         };
     }, [circleHandle, eventId]);
 
-    if (loading) return <div>Loading participants...</div>;
-    if (!attendees || attendees.length === 0) return null;
+    const members = eventId ? attendees : [];
+    if (eventId && loading && guestNames.length === 0) return <div>Loading participants...</div>;
+    if (members.length === 0 && guestNames.length === 0) return null;
 
     return (
         <div className="formatted rounded-md border p-4">
             <div className="mb-2 text-sm text-muted-foreground">Participants</div>
             <div className="space-y-3">
-                {attendees.map(({ user, message }) => (
+                {members.map(({ user, message }) => (
                     <div
                         key={user.did}
                         onClick={() => setContentPreview({ type: "user", content: user })}
@@ -61,6 +64,16 @@ export default function AttendeesList({ circleHandle, eventId }: Props) {
                             ) : null}
                             {message ? <p className="mt-1 text-sm italic text-muted-foreground">“{message}”</p> : null}
                         </div>
+                    </div>
+                ))}
+                {guestNames.map((name, index) => (
+                    <div key={index} className="flex items-center gap-3 p-1">
+                        <Avatar>
+                            <AvatarFallback>{name[0]}</AvatarFallback>
+                        </Avatar>
+                        <p className="mb-0 pb-0 font-semibold" style={{ marginBottom: 0 }}>
+                            {name}
+                        </p>
                     </div>
                 ))}
             </div>

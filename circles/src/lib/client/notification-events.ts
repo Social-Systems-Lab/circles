@@ -8,6 +8,7 @@ export type NotificationRefreshReason =
     | "notifications-cleared"
     | "pm-notifications-read"
     | "notifications-opened"
+    | "event-rsvp-updated"
     | "chat-read"
     | "chat-sent"
     | "app-visible";

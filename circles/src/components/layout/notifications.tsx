@@ -77,6 +77,7 @@ type Notification = {
     eventId?: string;
     eventName?: string;
     invitationMessage?: string;
+    eventRsvpHref?: string;
     // For grouping purposes
     key?: string;
 };
@@ -121,6 +122,7 @@ type StoredNotificationRecord = {
     content: Record<string, any>;
     isRead: boolean;
     createdAt: string | Date;
+    eventRsvpHref?: string;
 };
 
 export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
@@ -288,6 +290,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                     eventId: content.eventId,
                     eventName: content.eventName,
                     invitationMessage: content.invitationMessage,
+                    eventRsvpHref: record.eventRsvpHref,
                     key: groupKey,
                 };
 
@@ -473,6 +476,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
 
     const getNotificationHref = useCallback(
         (notification: Notification): string | null => {
+            if (notification.notificationType === "event_invitation" && notification.eventRsvpHref) {
+                return notification.eventRsvpHref;
+            }
             if (notification.url) {
                 return notification.url;
             }
@@ -574,6 +580,8 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
             }
 
             switch (notification.notificationType) {
+                case "event_invitation":
+                    return notification.eventRsvpHref ? "Respond" : null;
                 case "contact_request_received":
                     return "Respond";
                 case "pm_received":
@@ -628,7 +636,7 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
     );
 
     const getNotificationActionClassName = useCallback((groupedNotification: GroupedNotification) => {
-        if (groupedNotification.latestNotification.notificationType === "contact_request_received") {
+        if (["contact_request_received", "event_invitation"].includes(groupedNotification.notificationType)) {
             return "ml-2 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-sm hover:bg-amber-600";
         }
 

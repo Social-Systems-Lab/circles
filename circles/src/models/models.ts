@@ -1966,6 +1966,7 @@ export type EventGuestInvitation = {
     circleId: string;
     invitedBy: string;
     email: string;
+    displayName?: string;
     tokenHash: string;
     details: { title: string; description: string; location: string; meetingUrl: string };
     status: EventGuestInvitationStatus;

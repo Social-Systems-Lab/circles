@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { isAuthorized } from "@/lib/auth/auth";
-import { formatEventOccurrenceId, isValidEventOccurrenceKey } from "@/lib/event-occurrence";
+import { formatEventOccurrenceId, isValidEventOccurrenceKey, parseEventOccurrenceId } from "@/lib/event-occurrence";
 import { getEventDetailHref } from "@/lib/event-route";
 import type { Event, EventInvitation, UserPrivate } from "@/models/models";
 import { getCircleById, isCirclePublished } from "./circle";
@@ -73,13 +73,25 @@ export async function findEventInvitationHost(event: Event, circleId: string, us
     return null;
 }
 
-export async function listPendingEventInvitations(userDid: string) {
+export async function listPendingEventInvitations(userDid: string, eventIds?: string[]) {
+    const requestedIds = eventIds && new Set(eventIds);
+    if (requestedIds?.size === 0) return [];
+    const requestedOccurrences =
+        requestedIds && [...requestedIds].flatMap((id) => {
+            const occurrence = parseEventOccurrenceId(id);
+            return occurrence ? [{ seriesId: occurrence.seriesId, occurrenceKey: occurrence.occurrenceKey }] : [];
+        });
     const [eventInvitations, occurrenceInvitations] = await Promise.all([
-        EventInvitations.find({ userDid }, { projection: { eventId: 1, circleId: 1, status: 1 } }).toArray(),
-        EventOccurrenceInvitations.find(
-            { userDid },
-            { projection: { seriesId: 1, occurrenceKey: 1, circleId: 1 } },
+        EventInvitations.find(
+            { userDid, ...(requestedIds && { eventId: { $in: [...requestedIds] } }) },
+            { projection: { eventId: 1, circleId: 1, status: 1 } },
         ).toArray(),
+        requestedOccurrences?.length === 0
+            ? []
+            : EventOccurrenceInvitations.find(
+                  { userDid, ...(requestedOccurrences && { $or: requestedOccurrences }) },
+                  { projection: { seriesId: 1, occurrenceKey: 1, circleId: 1 } },
+              ).toArray(),
     ]);
     const answeredEventIds = new Set(
         eventInvitations.filter(({ status }) => status !== "pending").map(({ eventId }) => eventId),
@@ -96,6 +108,7 @@ export async function listPendingEventInvitations(userDid: string) {
 
     const invitations = await Promise.all(
         Array.from(targets, async ([id, circleId]) => {
+            if (requestedIds && !requestedIds.has(id)) return null;
             const invitation = await readPendingInvitation(id, circleId, userDid);
             if (!invitation) return null;
             const { event, href } = invitation;

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import { rsvpEventWithOptionsAction } from "@/app/circles/[handle]/events/actions";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 
 type Props = {
     open: boolean;
@@ -41,6 +42,7 @@ export default function RsvpDialog({ open, onOpenChange, circleHandle, eventId }
             if (res.success) {
                 toast({ title: "RSVP updated" });
                 onOpenChange(false);
+                dispatchNotificationRefresh({ reason: "event-rsvp-updated" });
                 router.refresh();
             } else {
                 toast({

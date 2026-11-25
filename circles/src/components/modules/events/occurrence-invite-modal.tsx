@@ -14,6 +14,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { GuestInvitationForm } from "./guest-invitation-form";
+import OccurrenceInviteeList from "./occurrence-invitee-list";
 import type { GuestInvitationPreview } from "@/lib/event-guest-invitation";
 
 type Props = {
@@ -214,7 +215,6 @@ export default function OccurrenceInviteModal(props: Props) {
                     eventId={props.occurrenceId}
                     effectiveOccurrenceRsvpStatusByDid={effectiveStatusByDid}
                 />
-                <GuestInvitationForm circleHandle={props.circleHandle} eventId={props.occurrenceId} event={props.event} />
                 <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
@@ -223,6 +223,15 @@ export default function OccurrenceInviteModal(props: Props) {
                         {isPending ? "Sending..." : "Send invitations"}
                     </Button>
                 </DialogFooter>
+                <GuestInvitationForm circleHandle={props.circleHandle} eventId={props.occurrenceId} event={props.event} />
+                {props.open && (
+                    <OccurrenceInviteeList
+                        circleHandle={props.circleHandle}
+                        seriesId={props.seriesId}
+                        occurrenceKey={props.occurrenceKey}
+                        guestManagement
+                    />
+                )}
             </DialogContent>
         </Dialog>
     );

@@ -43,7 +43,8 @@ export default function InvitedUserList({ userDids, circleHandle, eventId, canIn
         };
     }, [hasMemberInvitations, circleHandle, eventId, canInvite]);
 
-    const { users, guests } = invitees;
+    const { users } = invitees;
+    const guests = invitees.guests.filter((guest) => guest.status !== "going");
 
     if (loading) {
         return <div>Loading invited users...</div>;

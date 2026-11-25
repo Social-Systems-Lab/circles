@@ -9,6 +9,7 @@ import { hashToken, type EmailOptions } from "./email";
 import {
     accessGuestInvitation,
     consumeGuestEmailQuota,
+    listConfirmedGuestNames,
     resolveGuestInvitationTarget,
     sendGuestInvitations,
 } from "./event-guest-invitations";
@@ -19,6 +20,46 @@ const secretHost = "64b000000000000000000002";
 const otherHost = "64b000000000000000000003";
 const organiser = "did:example:organiser";
 const origin = "https://staging.kamooni.org";
+
+test("the public guest roster contains only confirmed names for the exact event or occurrence", async () => {
+    const occurrenceKey = Date.parse("2030-03-12T15:00:00Z");
+    type Scope = Pick<EventGuestInvitation, "eventId" | "occurrenceKey" | "status">;
+    type GuestRow = Scope & Pick<EventGuestInvitation, "displayName" | "email" | "tokenHash">;
+    const scope = {
+        eventId,
+        occurrenceKey: null,
+        status: "going" as const,
+        email: "private@example.invalid",
+        tokenHash: "secret",
+    };
+    const rows: GuestRow[] = [
+        { ...scope, displayName: "  Guest One  " },
+        { ...scope },
+        { ...scope, displayName: "private@example.invalid" },
+        { ...scope, status: "interested", displayName: "Interested Guest" },
+        { ...scope, status: "declined", displayName: "Declined Guest" },
+        { ...scope, status: "pending", displayName: "Awaiting Guest" },
+        { ...scope, occurrenceKey, displayName: "Occurrence Guest" },
+        { ...scope, occurrenceKey: occurrenceKey + 604_800_000, displayName: "Next Meeting Guest" },
+        { ...scope, eventId: otherHost, displayName: "Other Event Guest" },
+    ];
+    const collection = {
+        find: (filter: Scope, options: { projection: Record<string, number> }) => {
+            assert.deepEqual(options.projection, { _id: 0, displayName: 1 });
+            return {
+                toArray: async () =>
+                    rows
+                        .filter(({ eventId, occurrenceKey, status }) =>
+                            eventId === filter.eventId && occurrenceKey === filter.occurrenceKey && status === filter.status,
+                        )
+                        .map(({ displayName }) => ({ displayName })),
+            };
+        },
+    } as unknown as Collection<EventGuestInvitation>;
+    const getCollection = async () => collection;
+    assert.deepEqual(await listConfirmedGuestNames(eventId, null, getCollection), ["Guest One", "Guest", "Guest"]);
+    assert.deepEqual(await listConfirmedGuestNames(eventId, occurrenceKey, getCollection), ["Occurrence Guest"]);
+});
 
 function makeEvent(overrides: Partial<Event> = {}): Event & { _id: ObjectId } {
     return {
