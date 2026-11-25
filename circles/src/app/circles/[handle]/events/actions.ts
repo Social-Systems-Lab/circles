@@ -95,7 +95,14 @@ import {
 import { notifyEventInvitation, notifyEventOccurrenceInvitation } from "@/lib/data/notifications";
 import { cancelEventOccurrence } from "@/lib/data/eventOccurrence";
 import { upsertEventOccurrenceRsvp } from "@/lib/data/eventOccurrenceRsvp";
-import { formatEventOccurrenceId, isGeneratedEventOccurrence, isValidEventOccurrenceKey } from "@/lib/event-occurrence";
+import {
+    formatEventOccurrenceId,
+    isGeneratedEventOccurrence,
+    isValidEventOccurrenceKey,
+    parseEventOccurrenceId,
+} from "@/lib/event-occurrence";
+import { listGuestInvitees, sendGuestInvitations } from "@/lib/data/event-guest-invitations";
+import type { EventGuestInviteeRow } from "@/lib/event-guest-invitation";
 import { upsertEventOccurrenceInvitation } from "@/lib/data/eventOccurrenceInvitation";
 import {
     getEffectiveEventOccurrenceParticipants,
@@ -146,6 +153,7 @@ type InviteeProfile = Pick<EventInviteCandidateDto, "did" | "name" | "handle" | 
 type GetInvitedUsersActionResult = {
     success: boolean;
     users: (InviteeProfile & { response?: "pending" | "going" | "interested" | "cancelled" })[];
+    guests: EventGuestInviteeRow[];
 };
 
 export type EventOccurrenceInviteeRow = {
@@ -2009,32 +2017,35 @@ export async function getEventOccurrenceInviteesAction(
     circleHandle: string,
     seriesId: string,
     occurrenceKey: number,
-): Promise<{ rows: EventOccurrenceInviteeRow[] }> {
+): Promise<{ rows: EventOccurrenceInviteeRow[]; guests: EventGuestInviteeRow[] }> {
+    const empty = { rows: [], guests: [] };
     try {
         const userDid = await getAuthenticatedUserDid();
-        if (!userDid || !ObjectId.isValid(seriesId) || !isValidEventOccurrenceKey(occurrenceKey)) return { rows: [] };
+        if (!userDid || !ObjectId.isValid(seriesId) || !isValidEventOccurrenceKey(occurrenceKey)) return empty;
 
         const circle = await getCircleByHandle(circleHandle);
-        if (!circle) return { rows: [] };
+        if (!circle) return empty;
         const occurrenceId = formatEventOccurrenceId(seriesId, new Date(occurrenceKey));
         const event = await getEventById(occurrenceId, userDid);
         if (!event || !isRouteCircleEventHost(circle._id!.toString(), event) || event.isOccurrenceCancelled) {
-            return { rows: [] };
+            return empty;
         }
         if (!(await canManageEvent(userDid, event))) {
-            return { rows: [] };
+            return empty;
         }
 
-        const [seriesInvitations, occurrenceInvitations, rsvps] = await Promise.all([
+        const [seriesInvitations, occurrenceInvitations, rsvps, guests] = await Promise.all([
             EventInvitations.find({ eventId: seriesId }).toArray(),
             EventOccurrenceInvitations.find({ seriesId, occurrenceKey }).toArray(),
             EventOccurrenceRsvps.find({ seriesId, occurrenceKey }).toArray(),
+            listGuestInvitees(new ObjectId(seriesId).toHexString(), occurrenceKey),
         ]);
         const records = mergeEventOccurrenceInvitees(seriesInvitations, occurrenceInvitations, rsvps);
         const users = await getCirclesByDids(records.map((record) => record.userDid));
         const usersByDid = new Map(users.map((user) => [user.did, user]));
 
         return {
+            guests,
             rows: records.flatMap((record) => {
                 const user = usersByDid.get(record.userDid);
                 return user ? [{ ...record, user }] : [];
@@ -2042,7 +2053,7 @@ export async function getEventOccurrenceInviteesAction(
         };
     } catch (error) {
         console.error("Error loading event occurrence invitees:", error);
-        return { rows: [] };
+        return empty;
     }
 }
 
@@ -2086,6 +2097,45 @@ export async function inviteUsersToEventAction(
     } catch (error) {
         console.error("Error inviting users to event:", error);
         return { success: false, message: "Failed to send invitations" };
+    }
+}
+
+export async function inviteEventGuestsAction(
+    circleHandle: string,
+    eventId: string,
+    recipients: string[],
+    previewKey: string,
+) {
+    const unavailable = { success: false as const, message: "This event is unavailable for guest invitations." };
+    try {
+        const userDid = await getAuthenticatedUserDid();
+        if (!userDid) return unavailable;
+        const occurrence = parseEventOccurrenceId(eventId);
+        const targetId = occurrence?.seriesId ?? eventId;
+        if (!ObjectId.isValid(targetId)) return unavailable;
+        const circle = await getCircleByHandle(circleHandle);
+        if (!circle?._id || !(await isAuthorized(userDid, String(circle._id), features.events.view))) return unavailable;
+        const event = await getEventById(eventId, userDid);
+        const circleId = String(circle._id);
+        if (!event || !isRouteCircleEventHost(circleId, event) || !(await canManageEvent(userDid, event))) {
+            return unavailable;
+        }
+        await assertEventHostCirclesWritable(event);
+        const result = await sendGuestInvitations(
+            { eventId: new ObjectId(targetId).toHexString(), occurrenceKey: occurrence?.occurrenceKey ?? null, circleId },
+            userDid,
+            recipients,
+            previewKey,
+        );
+        if (result.success) revalidatePath(`/circles/${circleHandle}/events/${eventId}`);
+        return result;
+    } catch {
+        // Invitation data and request details may contain private guest information.
+        console.error("Could not complete guest invitations");
+        return {
+            success: false as const,
+            message: "Could not complete the guest invitations. Check the invitation list before trying again.",
+        };
     }
 }
 
@@ -2291,7 +2341,7 @@ export async function getInvitedUsersAction(
     eventId: string,
     includeResponses = false,
 ): Promise<GetInvitedUsersActionResult> {
-    const defaultResult: GetInvitedUsersActionResult = { success: false, users: [] };
+    const defaultResult: GetInvitedUsersActionResult = { success: false, users: [], guests: [] };
 
     try {
         const userDid = await getAuthenticatedUserDid();
@@ -2315,22 +2365,22 @@ export async function getInvitedUsersAction(
         ).toArray();
         const invitationByDid = new Map(invitations.map((invitation) => [invitation.userDid, invitation.status]));
         const invitedDids = [...invitationByDid.keys()].filter(Boolean);
-        if (invitedDids.length === 0) return { success: true, users: [] };
-
         // Only managers may see responses, including RSVPs the invitee chose to keep off the public attendee list.
         const canViewResponses = includeResponses && (await canManageEvent(userDid, event));
-        const [users, rsvps] = await Promise.all([
-            getCirclesByDids(invitedDids),
-            canViewResponses
+        const [users, rsvps, guests] = await Promise.all([
+            invitedDids.length ? getCirclesByDids(invitedDids) : [],
+            canViewResponses && invitedDids.length
                 ? EventRsvps.find(
                       { eventId: canonicalEventId, userDid: { $in: invitedDids } },
                       { projection: { _id: 0, userDid: 1, status: 1 } },
                   ).toArray()
                 : [],
+            canViewResponses ? listGuestInvitees(canonicalEventId, null) : [],
         ]);
         const rsvpByDid = new Map(rsvps.map((rsvp) => [rsvp.userDid, rsvp.status]));
         return {
             success: true,
+            guests,
             users: users.flatMap((user) => {
                 if (!user.did) return [];
                 const invitationStatus = invitationByDid.get(user.did);

@@ -54,6 +54,62 @@ const stagingConfig = {
     CIRCLES_URL: "https://staging.kamooni.org",
 };
 
+test("guest invitations render the same approved details in Mailpit and Postmark", async () => {
+    const guestToken = "a".repeat(64);
+    const guestEmail = (origin: string): EmailOptions => ({
+        to: "guest@example.invalid",
+        templateAlias: "event-guest-invitation",
+        templateModel: {
+            title: "Park <cleanup>",
+            when: "5 March 2030, 15:00–16:30 UTC",
+            location: "5 Park Road / Online",
+            meetingUrl: "https://meet.example.invalid/join",
+            description: "Bring water & gloves",
+            actionUrl: `${origin}/event-invitations#${guestToken}`,
+            calendarUrl: `${origin}/event-invitations?download=ics#${guestToken}`,
+        },
+    });
+    const staging = harness("staging", stagingConfig);
+    const invitation = guestEmail(stagingConfig.CIRCLES_URL);
+    await sendEmailWithDependencies(invitation, staging.dependencies);
+    assert.deepEqual(staging.calls, { postmark: 0, mailpit: 1 });
+    const { message } = staging.captured[0] as { message: { text: string; html: string } };
+    for (const key of ["title", "when", "location", "meetingUrl", "description", "actionUrl", "calendarUrl"]) {
+        assert.ok(message.text.includes(invitation.templateModel[key]));
+    }
+    assert.match(message.html, /Park &lt;cleanup&gt;|Bring water &amp; gloves/);
+    assert.match(message.html, /href="https:\/\/staging\.kamooni\.org\/event-invitations\?download=ics#[a-f0-9]{64}"/);
+
+    let delivered = false;
+    const production = harness("production", {
+        EMAIL_TRANSPORT: "postmark",
+        POSTMARK_API_TOKEN: "fake-token",
+        POSTMARK_SENDER_EMAIL: "sender@example.invalid",
+        CIRCLES_URL: "https://kamooni.org",
+    }, {
+        sendPostmark: async (_, options, rendered) => {
+            assert.equal(options.to, invitation.to);
+            assert.ok(rendered?.html.includes(`https://kamooni.org/event-invitations#${guestToken}`));
+            assert.ok(rendered?.html.includes("Bring water &amp; gloves"));
+            delivered = true;
+        },
+    });
+    await sendEmailWithDependencies(guestEmail("https://kamooni.org"), production.dependencies);
+    assert.equal(delivered, true);
+
+    for (const calendarUrl of [
+        `https://example.invalid/event-invitations?download=ics#${guestToken}`,
+        `${stagingConfig.CIRCLES_URL}/event-invitations?download=ics#${"b".repeat(64)}`,
+        `${stagingConfig.CIRCLES_URL}/other-event?download=ics#${guestToken}`,
+    ]) {
+        await assert.rejects(sendEmailWithDependencies({
+            ...invitation, templateModel: { ...invitation.templateModel, calendarUrl },
+        }, staging.dependencies), EmailDeliveryError);
+    }
+    assert.deepEqual(staging.calls, { postmark: 0, mailpit: 1 });
+    assert.ok(!JSON.stringify(staging.logs).includes(guestToken));
+});
+
 test("Mailpit renders event details and a safe, direct RSVP link", async () => {
     const actionUrl =
         "https://staging.kamooni.org/circles/test-host/events/64b000000000000000000099?respond=1#event-rsvp";

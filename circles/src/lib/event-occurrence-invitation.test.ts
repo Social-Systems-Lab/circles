@@ -196,7 +196,7 @@ assert.ok(inviteeReadSource);
 assert.match(inviteeReadSource, /isRouteCircleEventHost/, "the invitee-list read preserves route-host validation");
 assert.match(
     inviteeReadSource,
-    /if \(!\(await canManageEvent\(userDid, event\)\)\) \{[\s\S]*?return \{ rows: \[\] \}/,
+    /const empty = \{ rows: \[\], guests: \[\] \};[\s\S]*?if \(!\(await canManageEvent\(userDid, event\)\)\) \{\s*return empty;/,
     "ordinary authenticated viewers receive no occurrence invitee rows",
 );
 assert.match(

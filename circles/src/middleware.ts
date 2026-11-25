@@ -1,6 +1,7 @@
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { getAuthCookieNamesForClearing, readAuthToken } from "@/lib/auth/cookie";
 import { NextResponse, type NextRequest } from "next/server";
+import { GUEST_INVITATION_PATH } from "@/lib/event-guest-invitation";
 
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
@@ -18,6 +19,9 @@ export async function middleware(request: NextRequest) {
             return Response.redirect(redirectUrl);
         }
     }
+
+    // This route uses the invitation token in the request body and has no session dependency.
+    if (pathname === GUEST_INVITATION_PATH) return;
 
     // Private media performs its own signed-session check and must return the same
     // neutral 404 for missing, invalid, and unauthorized requests.

@@ -1958,6 +1958,22 @@ export const eventInvitationSchema = z.object({
 });
 export type EventInvitation = z.infer<typeof eventInvitationSchema>;
 
+export type EventGuestInvitationStatus = "pending" | "going" | "interested" | "declined";
+
+export type EventGuestInvitation = {
+    eventId: string;
+    occurrenceKey: number | null;
+    circleId: string;
+    invitedBy: string;
+    email: string;
+    tokenHash: string;
+    details: { title: string; description: string; location: string; meetingUrl: string };
+    status: EventGuestInvitationStatus;
+    createdAt: Date;
+    updatedAt: Date;
+    sentAt?: Date;
+};
+
 export const secretCircleInvitationSchema = z.object({
     _id: z.any().optional(),
     circleId: z.string(),

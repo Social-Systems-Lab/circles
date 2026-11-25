@@ -43,11 +43,12 @@ const defaultDependencies: EventDeletionPolicyDependencies = {
     },
     hasEventInvitation: async (eventId) => {
         const { EventInvitations } = await import("./db");
-        return Boolean(
-            await EventInvitations.findOne(buildEventDeletionFilters(eventId).eventInvitation, {
-                projection: { _id: 1 },
-            }),
-        );
+        const { hasGuestInvitations } = await import("./event-guest-invitations");
+        const [memberInvitation, guestInvitation] = await Promise.all([
+            EventInvitations.findOne(buildEventDeletionFilters(eventId).eventInvitation, { projection: { _id: 1 } }),
+            hasGuestInvitations(eventId),
+        ]);
+        return !!memberInvitation || guestInvitation;
     },
     hasActiveOccurrenceRsvp: async (seriesId) => {
         const { EventOccurrenceRsvps } = await import("./db");

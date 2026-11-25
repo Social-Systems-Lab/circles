@@ -665,6 +665,7 @@ export default function EventDetail({
                     eventId={event._id!.toString()}
                     open={isInviteModalOpen}
                     onOpenChange={setInviteModalOpen}
+                    event={event}
                 />
                 <RsvpDialog
                     circleHandle={circleHandle}
@@ -954,11 +955,12 @@ export default function EventDetail({
                             seriesId={event.seriesId!}
                             occurrenceKey={event.occurrenceKey!}
                         />
-                    ) : event.invitations && event.invitations.length > 0 ? (
+                    ) : canInvite || (event.invitations && event.invitations.length > 0) ? (
                         <InvitedUserList
-                            userDids={event.invitations}
+                            userDids={event.invitations ?? []}
                             circleHandle={circleHandle}
                             eventId={event._id!.toString()}
+                            canInvite={canInvite}
                         />
                     ) : null}
                     <EventTasksPanel circleHandle={circleHandle} eventId={event._id!.toString()} />
@@ -970,6 +972,7 @@ export default function EventDetail({
                 eventId={event._id!.toString()}
                 open={isInviteModalOpen}
                 onOpenChange={setInviteModalOpen}
+                event={event}
             />
             {isRecurringOccurrence && event.occurrenceId && (
                 <OccurrenceInviteModal
@@ -979,6 +982,7 @@ export default function EventDetail({
                     occurrenceId={event.occurrenceId}
                     seriesTitle={event.title}
                     occurrenceLabel={`${startFmt}${endFmt ? ` – ${endFmt}` : ""}`}
+                    event={event}
                     open={isOccurrenceInviteModalOpen}
                     onOpenChange={setOccurrenceInviteModalOpen}
                 />

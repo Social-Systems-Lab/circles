@@ -25,6 +25,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { GUEST_INVITATIONS_UPDATED, GuestInvitationForm, GuestInviteeRows } from "./guest-invitation-form";
+import type { EventGuestInviteeRow, GuestInvitationPreview } from "@/lib/event-guest-invitation";
+import type { Event } from "@/models/models";
 
 type InviteCandidate = EventInviteCandidateDto & { profileReference?: string };
 type Invitee = Awaited<ReturnType<typeof getInvitedUsersAction>>["users"][number];
@@ -41,13 +44,15 @@ type Props = {
     eventId: string;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    event: GuestInvitationPreview & Pick<Event, "recurrence">;
 };
 
-export default function InviteModal({ circleHandle, eventId, open, onOpenChange }: Props) {
+export default function InviteModal({ circleHandle, eventId, open, onOpenChange, event }: Props) {
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
     const [selectedUsers, setSelectedUsers] = useState<InviteCandidate[]>([]);
     const [invitedUsers, setInvitedUsers] = useState<Invitee[]>([]);
+    const [guestInvitees, setGuestInvitees] = useState<EventGuestInviteeRow[]>([]);
     const [isLoadingInvitees, setLoadingInvitees] = useState(false);
     const [canBulkInviteCircleMembers, setCanBulkInviteCircleMembers] = useState(false);
     const [circleMemberCount, setCircleMemberCount] = useState(0);
@@ -63,20 +68,26 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
         if (!open) return;
         let active = true;
         setLoadingInvitees(true);
-        void getInvitedUsersAction(circleHandle, eventId, true)
-            .then(({ users }) => {
-                if (!active) return;
-                setInvitedUsers(users);
-                setSelectedUsers((selected) =>
-                    selected.filter((user) => !users.some((invitee) => invitee.did === user.did)),
-                );
-            })
-            .catch((error) => console.error("Failed to fetch invited users:", error))
-            .finally(() => {
-                if (active) setLoadingInvitees(false);
-            });
+        const load = () => {
+            void getInvitedUsersAction(circleHandle, eventId, true)
+                .then(({ users, guests }) => {
+                    if (!active) return;
+                    setInvitedUsers(users);
+                    setGuestInvitees(guests);
+                    setSelectedUsers((selected) =>
+                        selected.filter((user) => !users.some((invitee) => invitee.did === user.did)),
+                    );
+                })
+                .catch((error) => console.error("Failed to fetch invited users:", error))
+                .finally(() => {
+                    if (active) setLoadingInvitees(false);
+                });
+        };
+        load();
+        window.addEventListener(GUEST_INVITATIONS_UPDATED, load);
         return () => {
             active = false;
+            window.removeEventListener(GUEST_INVITATIONS_UPDATED, load);
         };
     }, [open, circleHandle, eventId]);
 
@@ -213,7 +224,11 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
             <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Invite members</DialogTitle>
-                    <DialogDescription>Select members, then send invitations.</DialogDescription>
+                    <DialogDescription>
+                        {event.recurrence
+                            ? "Open a specific meeting to invite guests by email."
+                            : "Select Kamooni members or invite guests by email."}
+                    </DialogDescription>
                 </DialogHeader>
                 {canBulkInviteCircleMembers && circleMemberCount > 0 && (
                     <div className="rounded-md border bg-muted/30 p-3">
@@ -286,6 +301,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                     </div>
                     {externalInviteError && <p className="text-sm text-destructive">{externalInviteError}</p>}
                 </div>
+                {!event.recurrence && <GuestInvitationForm circleHandle={circleHandle} eventId={eventId} event={event} />}
                 <DialogFooter className="flex-col gap-2 sm:items-center sm:space-x-0">
                     <p aria-live="polite" className="mr-auto text-sm text-muted-foreground">
                         {selectedUsers.length} selected
@@ -299,7 +315,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                         {isPending ? "Sending..." : "Send Invitations"}
                     </Button>
                 </DialogFooter>
-                {invitedUsers.length > 0 && (
+                {(invitedUsers.length > 0 || guestInvitees.length > 0) && (
                     <section aria-labelledby="event-invitees-heading" className="space-y-2">
                         <h3 id="event-invitees-heading" className="text-sm font-medium">
                             Previously invited
@@ -319,6 +335,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange 
                                     )}
                                 </li>
                             ))}
+                            <GuestInviteeRows guests={guestInvitees} />
                         </ul>
                     </section>
                 )}

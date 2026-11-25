@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
+import { GuestInvitationForm } from "./guest-invitation-form";
+import type { GuestInvitationPreview } from "@/lib/event-guest-invitation";
 
 type Props = {
     circleHandle: string;
@@ -21,6 +23,7 @@ type Props = {
     occurrenceId: string;
     seriesTitle: string;
     occurrenceLabel: string;
+    event: GuestInvitationPreview;
     open: boolean;
     onOpenChange: (open: boolean) => void;
 };
@@ -211,6 +214,7 @@ export default function OccurrenceInviteModal(props: Props) {
                     eventId={props.occurrenceId}
                     effectiveOccurrenceRsvpStatusByDid={effectiveStatusByDid}
                 />
+                <GuestInvitationForm circleHandle={props.circleHandle} eventId={props.occurrenceId} event={props.event} />
                 <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>

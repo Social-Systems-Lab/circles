@@ -103,6 +103,15 @@ mock.module("@/lib/data/constants", () => ({
     },
 }));
 mock.module("@/lib/data/db", () => ({
+    getDb: async () => ({
+        collection: (name: string) => {
+            assert.equal(name, "eventGuestInvitations");
+            return {
+                createIndexes: async () => [],
+                find: () => cursor([{ email: "guest@example.test", status: "going", sentAt: new Date() }]),
+            };
+        },
+    }),
     Members: {
         find: () => {
             actionState.candidateQueryCalls++;
@@ -995,20 +1004,22 @@ test("invitee responses come from existing RSVPs and are visible only to event m
         ]);
         assert.deepEqual(manager.users[0].picture, { url: people[0].picture.url });
         assert.equal("email" in manager.users[0], false);
+        assert.deepEqual(manager.guests, [{ email: "guest@example.test", status: "going", deliveryConfirmed: true }]);
 
         actionState.userDid = "did:visitor";
         const visitor = await getInvitedUsersAction("primary", id, true);
         assert.equal(visitor.users.length, people.length);
         assert.ok(visitor.users.every((user) => !("response" in user)));
+        assert.deepEqual(visitor.guests, []);
 
         actionState.routeCircle = actionState.circles[otherCircleId];
-        assert.deepEqual(await getInvitedUsersAction("secondary", id, true), { success: false, users: [] });
+        assert.deepEqual(await getInvitedUsersAction("secondary", id, true), { success: false, users: [], guests: [] });
 
         actionState.routeCircle = actionState.circles[circleId];
         actionState.event.isRecurringInstance = true;
         assert.deepEqual(
             await getInvitedUsersAction("primary", id, true),
-            { success: false, users: [] },
+            { success: false, users: [], guests: [] },
             "an occurrence read must not expose the series invitees",
         );
     } finally {

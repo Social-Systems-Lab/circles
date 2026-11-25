@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { Errors, Models, ServerClient, TemplatedMessage } from "postmark";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
+import { GUEST_INVITATION_PATH, GUEST_INVITATION_TOKEN } from "@/lib/event-guest-invitation";
 
 const SOCIAL_SYSTEMS_LAB_URL = "https://www.socialsystems.io/";
 const DEPLOYMENT_ROLE_FILE = "/app/.kamooni-deployment-role";
@@ -203,6 +204,41 @@ function renderEventInvitation(options: EmailOptions, origin: string) {
     };
 }
 
+function renderGuestEventInvitation(options: EmailOptions, origin: string) {
+    const { title, when, location, description, meetingUrl, actionUrl, calendarUrl } = options.templateModel;
+    if (![title, when, location, description, meetingUrl, actionUrl, calendarUrl].every((value) => typeof value === "string")) {
+        throw new EmailDeliveryError();
+    }
+    const respond = new URL(actionUrl);
+    const calendar = new URL(calendarUrl);
+    const expectedOrigin = new URL(origin).origin;
+    if (
+        ![respond, calendar].every((url) =>
+            url.origin === expectedOrigin && url.pathname === GUEST_INVITATION_PATH && !url.username && !url.password,
+        ) ||
+        !GUEST_INVITATION_TOKEN.test(respond.hash.slice(1)) || respond.search ||
+        calendar.hash !== respond.hash || calendar.search !== "?download=ics"
+    ) {
+        throw new EmailDeliveryError();
+    }
+    const where = [location, meetingUrl].filter(Boolean).join(" · ");
+    return {
+        subject: "You're invited to an event in Kamooni",
+        text: [
+            `You're invited to ${title}`,
+            `When: ${when}\nWhere: ${where}`,
+            description,
+            `Respond to the invitation:\n${respond}`,
+            `Download calendar file:\n${calendar}`,
+        ].filter(Boolean).join("\n\n"),
+        html: `<p>You're invited to <strong>${escapeHtml(title)}</strong></p>` +
+            `<p>When: ${escapeHtml(when)}<br>Where: ${escapeHtml(where)}</p>` +
+            (description ? `<p>${escapeHtml(description)}</p>` : "") +
+            `<p><a href="${escapeHtml(respond.href)}">Respond to the invitation</a></p>` +
+            `<p><a href="${escapeHtml(calendar.href)}">Download calendar file</a></p>`,
+    };
+}
+
 function renderPendingVerification(options: EmailOptions, origin: string) {
     const { name, url } = validatePendingVerificationMessage(options, origin);
     const safeName = escapeHtml(name);
@@ -270,19 +306,16 @@ export async function sendEmailWithDependencies(
     let configuration: EmailTransportConfiguration;
     try {
         configuration = resolveEmailTransportConfiguration(dependencies.role, dependencies.env);
+        const eventRenderer =
+            options.templateAlias === "event-invitation" ? renderEventInvitation :
+                options.templateAlias === "event-guest-invitation" ? renderGuestEventInvitation : undefined;
+        const eventInvitation = eventRenderer?.(options, requireValue(dependencies.env, "CIRCLES_URL"));
         if (configuration.transport === "postmark") {
-            const eventInvitation =
-                options.templateAlias === "event-invitation"
-                    ? renderEventInvitation(options, requireValue(dependencies.env, "CIRCLES_URL"))
-                    : undefined;
             await dependencies.sendPostmark(configuration, options, eventInvitation);
             return;
         }
 
-        const message =
-            options.templateAlias === "event-invitation"
-                ? renderEventInvitation(options, configuration.origin)
-                : renderPendingVerification(options, configuration.origin);
+        const message = eventInvitation ?? renderPendingVerification(options, configuration.origin);
         await dependencies.sendMailpit(configuration, {
             ...message,
             from:

@@ -5,6 +5,8 @@ import type { EventOccurrenceInviteeRow } from "@/app/circles/[handle]/events/ac
 import { getEventOccurrenceInviteesAction } from "@/app/circles/[handle]/events/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { GUEST_INVITATIONS_UPDATED, GuestInviteeRows } from "./guest-invitation-form";
+import type { EventGuestInviteeRow } from "@/lib/event-guest-invitation";
 
 type Props = { circleHandle: string; seriesId: string; occurrenceKey: number };
 
@@ -17,26 +19,35 @@ const responseLabel = {
 
 export default function OccurrenceInviteeList({ circleHandle, seriesId, occurrenceKey }: Props) {
     const [rows, setRows] = useState<EventOccurrenceInviteeRow[]>([]);
+    const [guests, setGuests] = useState<EventGuestInviteeRow[]>([]);
 
     useEffect(() => {
+        let active = true;
         const load = () => {
-            void getEventOccurrenceInviteesAction(circleHandle, seriesId, occurrenceKey).then((result) =>
-                setRows(result.rows),
-            );
+            void getEventOccurrenceInviteesAction(circleHandle, seriesId, occurrenceKey).then((result) => {
+                if (!active) return;
+                setRows(result.rows);
+                setGuests(result.guests);
+            });
         };
         load();
         window.addEventListener("event-occurrence-invitations-updated", load);
-        return () => window.removeEventListener("event-occurrence-invitations-updated", load);
+        window.addEventListener(GUEST_INVITATIONS_UPDATED, load);
+        return () => {
+            active = false;
+            window.removeEventListener("event-occurrence-invitations-updated", load);
+            window.removeEventListener(GUEST_INVITATIONS_UPDATED, load);
+        };
     }, [circleHandle, seriesId, occurrenceKey]);
 
-    if (rows.length === 0) return null;
+    if (rows.length === 0 && guests.length === 0) return null;
 
     return (
         <div className="rounded-md border p-4">
             <div className="mb-3 text-sm font-medium text-muted-foreground">Invited</div>
-            <div className="space-y-3">
+            <ul className="space-y-3">
                 {rows.map((row) => (
-                    <div key={row.user.did} className="flex items-center justify-between gap-3">
+                    <li key={row.user.did} className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                             <Avatar>
                                 <AvatarImage src={row.user.picture?.url} />
@@ -53,9 +64,10 @@ export default function OccurrenceInviteeList({ circleHandle, seriesId, occurren
                             </Badge>
                             <span className="text-xs text-muted-foreground">{responseLabel[row.response]}</span>
                         </div>
-                    </div>
+                    </li>
                 ))}
-            </div>
+                <GuestInviteeRows guests={guests} />
+            </ul>
         </div>
     );
 }
