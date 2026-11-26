@@ -320,7 +320,7 @@ export default function InviteModal({ circleHandle, eventId, open, onOpenChange,
                         <h3 id="event-invitees-heading" className="text-sm font-medium">
                             Previously invited
                         </h3>
-                        <ul className="max-h-40 divide-y overflow-y-auto rounded-md border">
+                        <ul className="divide-y rounded-md border">
                             {invitedUsers.map((user) => (
                                 <li key={user.did} className="flex items-center gap-2 px-2 py-1.5">
                                     <Avatar className="h-7 w-7">
