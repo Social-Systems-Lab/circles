@@ -21,6 +21,7 @@ import {
     finishConversationMuteMutation,
     isConversationMuteMutationPending,
 } from "@/lib/client/chat-preference-events";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { useToast } from "@/components/ui/use-toast";
 import { chunkRecipientDids } from "@/lib/security/recipient-input";
 
@@ -1141,6 +1142,7 @@ function SettingsTab({ chatRoom, isAdmin, onOpenChange }: { chatRoom: ChatRoomDi
                 alert(result.message || "Failed to archive conversation");
                 return;
             }
+            dispatchNotificationRefresh({ reason: "chat-rooms-changed", roomId: String(chatRoom._id) });
             onOpenChange(false);
             router.replace("/chat/archived");
         } catch (error) {

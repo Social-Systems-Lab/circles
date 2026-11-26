@@ -10,7 +10,6 @@ import {
     sidePanelContentVisibleAtom,
     authInfoAtom,
     notificationUnreadCountAtom,
-    unreadCountsAtom,
 } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { UserPicture } from "../modules/members/user-picture";
@@ -22,6 +21,7 @@ import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
 import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
+import { useChatRoomList } from "../modules/chat/chat-room-list-provider";
 
 const ProfileMenuBar = () => {
     const router = useRouter();
@@ -31,7 +31,7 @@ const ProfileMenuBar = () => {
     const [userToolboxState, setUserToolboxState] = useAtom(userToolboxDataAtom);
     const [sidePanelContentVisible] = useAtom(sidePanelContentVisibleAtom);
     const [notificationUnreadCount, setNotificationUnreadCount] = useAtom(notificationUnreadCountAtom);
-    const [unreadCounts] = useAtom(unreadCountsAtom);
+    const { unreadCounts } = useChatRoomList();
     const messageUnreadCount = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
     const pathname = usePathname();
     const isMobile = useIsMobile();

@@ -6,6 +6,7 @@ import type { ChatRoomDisplay } from "@/models/models";
 type ChatLayoutState = {
     chatRooms: ChatRoomDisplay[];
     hasLoadedChatRooms: boolean;
+    chatRoomsLoadFailed: boolean;
 };
 
 const ChatLayoutContext = createContext<ChatLayoutState | null>(null);

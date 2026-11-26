@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
+import { notifyDmDraftSaved } from "./chat-draft-rows";
 import {
     discardDmDraftAction,
     getDmComposerAction,
@@ -68,6 +70,7 @@ export function DmTopicComposer({
                 profileCapability,
             });
             if (!result.success) setError(result.message || "Could not save draft");
+            if (explicit && result.success && result.saved) notifyDmDraftSaved();
             if (explicit) setStatus("idle");
         },
         [body, hashtags, profileCapability, recipientDid, title],
@@ -96,6 +99,7 @@ export function DmTopicComposer({
             profileCapability,
         });
         if (result.success) {
+            dispatchNotificationRefresh({ reason: "chat-sent", roomId: result.conversationId });
             router.replace(`/chat/${result.conversationId}${result.topicId ? `?topic=${result.topicId}` : ""}`);
             return;
         }

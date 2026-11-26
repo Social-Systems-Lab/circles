@@ -15,7 +15,7 @@ import { getChatIndexAutoSelectionPath } from "@/lib/chat/chat-index-navigation"
 export default function ChatPage() {
     const isMobile = useIsMobile();
     const [user] = useAtom(userAtom);
-    const { chatRooms, hasLoadedChatRooms } = useChatLayout();
+    const { chatRooms, hasLoadedChatRooms, chatRoomsLoadFailed } = useChatLayout();
     const hasRedirectedRef = useRef(false);
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -47,7 +47,7 @@ export default function ChatPage() {
         router.replace(targetPath);
     }, [chatRooms, hasLoadedChatRooms, isMobile, router, searchParams, user]);
 
-    if (isMobile !== false) {
+    if (isMobile !== false || chatRoomsLoadFailed) {
         return null;
     }
 

@@ -5,6 +5,10 @@ import { readFileSync } from "node:fs";
 const chatIndexSource = readFileSync(new URL("../../app/chat/page.tsx", import.meta.url), "utf8");
 const chatDetailSource = readFileSync(new URL("../../app/chat/[handle]/page.tsx", import.meta.url), "utf8");
 const chatRoomSource = readFileSync(new URL("../../components/modules/chat/chat-room.tsx", import.meta.url), "utf8");
+const chatLayoutSource = readFileSync(new URL("../../app/chat/layout.tsx", import.meta.url), "utf8");
+const toolboxSource = readFileSync(new URL("../../components/layout/user-toolbox.tsx", import.meta.url), "utf8");
+const profileMenuSource = readFileSync(new URL("../../components/layout/profile-menu.tsx", import.meta.url), "utf8");
+const rootLayoutSource = readFileSync(new URL("../../app/layout.tsx", import.meta.url), "utf8");
 
 test("messaging index reuses the layout room request", () => {
     assert.match(chatIndexSource, /useChatLayout\(\)/);
@@ -14,6 +18,15 @@ test("messaging index reuses the layout room request", () => {
 test("conversation detail avoids the full sidebar and unread-count request", () => {
     assert.match(chatDetailSource, /getChatRoomAction\(slug\)/);
     assert.doesNotMatch(chatDetailSource, /listChatRoomsAction/);
+});
+
+test("the root owns conversation-list refreshes for Messages, Toolbox and the badge", () => {
+    assert.match(rootLayoutSource, /<ChatRoomListProvider>/);
+    for (const source of [chatLayoutSource, toolboxSource, profileMenuSource, chatRoomSource]) {
+        assert.match(source, /\buseChatRoomList\(/);
+        assert.doesNotMatch(source, /\blist(?:Archived)?ChatRoomsAction\b/);
+    }
+    assert.doesNotMatch(chatLayoutSource, /\blistDmDraftsAction\(/);
 });
 
 test("topic starters are not gated on recent-message loading or acknowledgement", () => {

@@ -1,7 +1,7 @@
 //user-toolbox.tsx - Displays the user toolbox that contains the user's chat rooms, notifications, circles, contacts, and account settings
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import { LuClipboardCheck, LuMail } from "react-icons/lu";
 import { authInfoAtom, userAtom, userToolboxDataAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { useRouter, usePathname } from "next/navigation";
-import { Circle, UserToolboxTab, EventDisplay, ChatRoomDisplay } from "@/models/models";
+import { Circle, UserToolboxTab, EventDisplay } from "@/models/models";
 import { CirclePicture } from "../modules/circles/circle-picture";
 import { logOut } from "../auth/actions";
 import { Notifications } from "./notifications";
@@ -30,7 +30,7 @@ import { getEventsAction } from "@/app/circles/[handle]/events/actions";
 import { getGoalsAction } from "@/app/circles/[handle]/goals/actions";
 import { getTasksAction } from "@/app/circles/[handle]/tasks/actions";
 import { getIssuesAction } from "@/app/circles/[handle]/issues/actions";
-import { listChatRoomsAction } from "@/components/modules/chat/actions";
+import { useChatRoomList } from "@/components/modules/chat/chat-room-list-provider";
 import {
     acceptConnectRequestAction,
     declineConnectRequestAction,
@@ -43,8 +43,7 @@ const { flushSync } = require("react-dom");
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { useToast } from "../ui/use-toast";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
-import { addNotificationRefreshListener, dispatchNotificationRefresh } from "@/lib/client/notification-events";
-import { createLatestAsyncRunner } from "@/lib/client/latest-async-runner";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
 
 type Milestone = {
@@ -122,7 +121,7 @@ export const UserToolbox = () => {
     const [events, setEvents] = useState<EventDisplay[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [milestones, setMilestones] = useState<Milestone[]>([]);
-    const [chatRooms, setChatRooms] = useState<ChatRoomDisplay[]>([]);
+    const { rooms: chatRooms, unreadCounts, status: chatRoomsStatus, refresh: refreshChatRooms } = useChatRoomList();
     const [bookmarkedItems, setBookmarkedItems] = useState<BookmarkedItem[]>([]);
     const [isLoadingBookmarks, setIsLoadingBookmarks] = useState(true);
     const [bookmarkActionCircleId, setBookmarkActionCircleId] = useState<string | null>(null);
@@ -226,56 +225,6 @@ export const UserToolbox = () => {
         };
         fetchTimelineItems();
     }, [user?.handle]);
-
-    const chatRoomsRefreshRunner = useMemo(
-        () =>
-            createLatestAsyncRunner({
-                load: async () => {
-                    if (!user) {
-                        return { success: true, rooms: [] as ChatRoomDisplay[] };
-                    }
-                    return listChatRoomsAction();
-                },
-                apply: (result) => {
-                    if (result.success && result.rooms) {
-                        setChatRooms(result.rooms);
-                    }
-                },
-                onError: (error) => {
-                    console.error("Failed to load chat rooms:", error);
-                },
-            }),
-        [user],
-    );
-
-    useEffect(() => {
-        const loadRooms = () => {
-            void chatRoomsRefreshRunner.run();
-        };
-
-        loadRooms();
-        const removeRefreshListener = addNotificationRefreshListener(() => {
-            loadRooms();
-        });
-        const handleFocus = () => {
-            loadRooms();
-        };
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") {
-                loadRooms();
-            }
-        };
-
-        window.addEventListener("focus", handleFocus);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-
-        return () => {
-            chatRoomsRefreshRunner.cancel();
-            removeRefreshListener();
-            window.removeEventListener("focus", handleFocus);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-        };
-    }, [chatRoomsRefreshRunner]);
 
     useEffect(() => {
         let isMounted = true;
@@ -411,15 +360,16 @@ export const UserToolbox = () => {
     }, [closeToolbox]);
 
     const signOut = async () => {
-        // clear the user data and redirect to the you've been signed out
-        await logOut();
-
-        setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         setUser(undefined);
-        // close the toolbox
+        setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         closeToolbox();
-
-        router.push("/");
+        try {
+            await logOut();
+            router.push("/");
+        } catch (error) {
+            console.error("Failed to end the browser session:", error);
+            toast({ title: "Could not end your session", variant: "destructive" });
+        }
     };
 
     const openConnection = useCallback(
@@ -680,13 +630,10 @@ export const UserToolbox = () => {
     const handleTabChange = useCallback(
         (nextTab: string) => {
             setTab(nextTab as ToolboxTab);
-            if (nextTab === "notifications" || nextTab === "chat") {
-                dispatchNotificationRefresh({
-                    reason: nextTab === "notifications" ? "notifications-opened" : "app-visible",
-                });
-            }
+            if (nextTab === "notifications") dispatchNotificationRefresh({ reason: "notifications-opened" });
+            if (nextTab === "chat") void refreshChatRooms();
         },
-        [setTab],
+        [refreshChatRooms],
     );
 
     const pinnedBookmarks = bookmarkedItems.filter((item) => item.pinned);
@@ -774,20 +721,25 @@ export const UserToolbox = () => {
                     </TabsList>
                     <TabsContent value="chat" className="m-0 flex-grow overflow-auto pt-1">
                         <ChatList
+                            key={user?.did}
                             chats={chatRooms}
+                            unreadCounts={unreadCounts}
+                            isLoading={chatRoomsStatus === "loading"}
+                            hasLoadError={chatRoomsStatus === "error"}
+                            onRetryLoad={() => refreshChatRooms("retry")}
                             onChatClick={closeToolbox}
-                            onRetryMutePreferences={() => chatRoomsRefreshRunner.run()}
+                            onRetryMutePreferences={() => refreshChatRooms("retry")}
                             onArchive={async (chat) => {
                                 const conversationId = String(chat._id);
                                 const { archiveDmConversationAction } = await import("../modules/chat/actions");
                                 const result = await archiveDmConversationAction(conversationId);
                                 if (result.success) {
+                                    dispatchNotificationRefresh({ reason: "chat-rooms-changed", roomId: conversationId });
                                     const navigationTarget = getPostArchiveNavigationTarget(pathname, conversationId);
                                     if (navigationTarget) {
                                         closeToolbox();
                                         router.replace(navigationTarget);
                                     }
-                                    await chatRoomsRefreshRunner.run();
                                 } else {
                                     alert(result.message || "Failed to archive conversation");
                                 }

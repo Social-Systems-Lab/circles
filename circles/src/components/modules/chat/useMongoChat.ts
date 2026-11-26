@@ -9,12 +9,19 @@ import { deliverAcceptedPollPage, runSingleFlight } from "./async-request-utils"
 
 type UseMongoChatOptions = {
     roomId?: string;
+    notificationRoomId?: string;
     enabled: boolean;
     setRoomMessages: React.Dispatch<React.SetStateAction<Record<string, ChatMessage[]>>>;
     suppressAutoRead?: boolean;
 };
 
-export const useMongoChat = ({ roomId, enabled, setRoomMessages, suppressAutoRead = false }: UseMongoChatOptions) => {
+export const useMongoChat = ({
+    roomId,
+    notificationRoomId = roomId,
+    enabled,
+    setRoomMessages,
+    suppressAutoRead = false,
+}: UseMongoChatOptions) => {
     const [isLoading, setIsLoading] = useState(false);
     const [polledTopicReplySignals, setPolledTopicReplySignals] = useState<Record<string, string>>({});
     const sinceIdRef = useRef<string | null>(null);
@@ -28,10 +35,10 @@ export const useMongoChat = ({ roomId, enabled, setRoomMessages, suppressAutoRea
             const result = await markConversationReadAction(roomId, null);
             if (result.success && !isStale()) {
                 lastMarkedIdRef.current = lastSeenId;
-                dispatchNotificationRefresh({ reason: "chat-read", roomId });
+                dispatchNotificationRefresh({ reason: "chat-read", roomId: notificationRoomId });
             }
         },
-        [roomId, suppressAutoRead],
+        [notificationRoomId, roomId, suppressAutoRead],
     );
 
     useEffect(() => {

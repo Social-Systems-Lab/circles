@@ -136,9 +136,11 @@ export async function getDmComposerAction(recipientDid: string, profileCapabilit
     };
 }
 
-export async function listDmDraftsAction() {
+export async function listDmDraftsAction(expectedViewerDid?: string) {
     const authorDid = await getAuthenticatedUserDid();
-    if (!authorDid) return { success: false, drafts: [] };
+    if (!authorDid || (expectedViewerDid !== undefined && expectedViewerDid !== authorDid)) {
+        return { success: false, drafts: [] };
+    }
     await ensureRequiredChatIndexes();
     const activeDrafts = await ChatTopicDrafts.find({ authorDid, state: "active" }).sort({ updatedAt: -1 }).toArray();
     await Promise.all(

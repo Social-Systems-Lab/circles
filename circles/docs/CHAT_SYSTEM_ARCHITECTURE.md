@@ -356,29 +356,15 @@ Relevant files:
 
 ---
 
-# 17. Unread badge race fix
+# 17. Conversation list refresh and unread snapshots
 
-Confirmed race:
+- The root `ChatRoomListProvider` owns the active list per authenticated DID in each browser tab. Messages, Toolbox, and the global Messages badge read the same snapshot.
+- Routine refreshes share a ten-second cooldown and join an in-flight request. Hidden tabs pause list fetching and refresh on return. Read, send, and room membership events can queue one follow-up while unaffected rows publish immediately.
+- Archived views subscribe to a separate list. A read event protects the affected room's known count during an older response. List and room-local counts are ordered by request so the latest authoritative count can reconcile either direction. A membership change suppresses the affected row until a fresh list confirms it.
+- Sign-out clears the visible account scope immediately. A server-reported session mismatch clears the client account scope, and an earlier account's response cannot populate a new scope.
+- The sidebar reconciles drafts separately on entry, composer navigation, and explicit saves. The first conversation list gets priority in the Server Action queue.
 
-- an older `listChatRoomsAction` request could return after a room was marked read
-- the newer refresh could be dropped while the older request was still in flight
-- the stale response could restore an old unread number
-- `ChatList` also used `mongoUnread || atomUnread || 0`, causing a valid server value of `0` to fall back to stale client state
-
-Fix:
-
-- server unread value `0` is treated as authoritative
-- sidebar, envelope, and toolbox chat refreshes use latest-only/coalesced async refresh handling
-- stale responses are discarded
-- a refresh requested during an in-flight request causes one final fresh request afterward
-
-Relevant files:
-
-- src/components/modules/chat/chat-list.tsx
-- src/app/chat/layout.tsx
-- src/components/layout/profile-menu.tsx
-- src/components/layout/user-toolbox.tsx
-- src/lib/client/latest-async-runner.ts
+See `src/components/modules/chat/chat-room-list-provider.tsx` and `src/lib/client/chat-room-list-refresh.ts`.
 
 ---
 
