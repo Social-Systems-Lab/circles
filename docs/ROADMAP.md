@@ -40,6 +40,12 @@ Every ticket has a stable ID. **Do not reuse IDs.** Update status through **Cand
 | **H01** | P2 | Admin shortcut in left sidebar | Show a clear Admin button for authorised platform admins; opens the existing admin view directly, indicates current section, works on desktop/mobile; do not expose access to unauthorised users, and enforce permissions server-side. | Ready | Quick win (4–7) |
 | **H02** | P1 | Clarify platform user states, designations and permissions | Inventory existing Pending, Active, Verified and Founder values and actual enforcement; distinguish account lifecycle states, verification, recognition labels and admin roles; define and approve a state-transition/permissions matrix; migrate and update admin UI safely without unintended privilege changes. | Design | 4 (before changes to user roles) |
 
+### Production infrastructure
+
+| ID | Pri. | Task | Acceptance outcome | Status | Batch / horizon |
+| --- | --- | --- | --- | --- | --- |
+| **OPS01** | P2 | Single supported operator command for routine production releases | Pin the approved `origin/main` SHA and verify CI, rehearsal, backups, runtime, ingress and watchdog. Coordinate the authenticated signup pause, drain, existing deployment, service and SHA verification, and explicitly authorized resumption with the same onboarding deployment ID. Preserve pending registrations and fail closed with a clear recovery path on any failed check. Exercise successful and failed releases in isolation before production approval. | Candidate | Infrastructure follow-up |
+
 ### A. Stability, security and discovery
 
 | ID | Pri. | Task | Acceptance outcome | Status | Batch / horizon |
