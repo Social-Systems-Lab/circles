@@ -16,6 +16,7 @@ import { Loader2, Users, ArrowLeft, X, Check, Search, Camera } from "lucide-reac
 import { useToast } from "@/components/ui/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { openNewDmComposerAction } from "./draft-actions";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 
 interface CreateChatModalProps {
     isOpen: boolean;
@@ -144,6 +145,7 @@ export function CreateChatModal({ isOpen, onClose }: CreateChatModalProps) {
             const result = await createMongoGroupChatAction(formData);
 
             if (result.success && result.roomId) {
+                dispatchNotificationRefresh({ reason: "chat-rooms-changed", roomId: result.roomId });
                 toast({
                     title: "Success",
                     description: "Group chat created!",

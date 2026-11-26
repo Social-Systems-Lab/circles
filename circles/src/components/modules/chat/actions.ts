@@ -278,19 +278,21 @@ export const getChatContactsAction = async (): Promise<Circle[]> => {
     }
 };
 
-export const listChatRoomsAction = async (): Promise<{
+export const listChatRoomsAction = async (expectedViewerDid?: string): Promise<{
     success: boolean;
     rooms?: ChatRoomDisplay[];
     message?: string;
+    sessionChanged?: true;
 }> => {
-    return await listMongoChatRoomsAction();
+    return await listMongoChatRoomsAction("active", expectedViewerDid);
 };
 
-export const listArchivedChatRoomsAction = async (): Promise<{
+export const listArchivedChatRoomsAction = async (expectedViewerDid?: string): Promise<{
     success: boolean;
     rooms?: ChatRoomDisplay[];
     message?: string;
-}> => listMongoChatRoomsAction("archived");
+    sessionChanged?: true;
+}> => listMongoChatRoomsAction("archived", expectedViewerDid);
 
 export const archiveDmConversationAction = async (conversationId: string) => {
     const { archiveDmConversationAction: archive } = await import("./mongo-actions");
@@ -388,8 +390,12 @@ export const markConversationReadAction = async (conversationId: string, lastSee
     return await markConversationReadActionInternal(conversationId, lastSeenMessageId);
 };
 
-export const getTopicUnreadCountsAction = async (conversationId: string, topicIds?: string[]) => {
-    return await getTopicUnreadCountsActionInternal(conversationId, topicIds);
+export const getTopicUnreadCountsAction = async (
+    conversationId: string,
+    topicIds?: string[],
+    expectedViewerDid?: string,
+) => {
+    return await getTopicUnreadCountsActionInternal(conversationId, topicIds, expectedViewerDid);
 };
 
 export const markTopicReadAction = async (conversationId: string, topicId: string, lastSeenMessageId: string) => {

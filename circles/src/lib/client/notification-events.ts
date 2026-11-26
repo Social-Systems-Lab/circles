@@ -10,6 +10,7 @@ export type NotificationRefreshReason =
     | "notifications-opened"
     | "chat-read"
     | "chat-sent"
+    | "chat-rooms-changed"
     | "app-visible";
 
 export type NotificationRefreshDetail = {

@@ -12,7 +12,7 @@ import {
     useTransition,
 } from "react";
 import { Circle, ChatMessage, ChatRoomDisplay, ReactionAggregation } from "@/models/models";
-import { replyToMessageAtom, roomMessagesAtom, unreadCountsAtom, userAtom } from "@/lib/data/atoms";
+import { replyToMessageAtom, roomMessagesAtom, userAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -105,6 +105,7 @@ import {
     type TopicUnreadIndicator,
 } from "./chat-topic-utils";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
+import { useChatRoomList } from "./chat-room-list-provider";
 import { ArchiveRestore, ArrowLeft } from "lucide-react";
 import { getConversationListPath } from "@/lib/chat/chat-index-navigation";
 import {
@@ -4186,7 +4187,9 @@ export const ChatRoomComponent: React.FC<{
     const inputRef = useRef<HTMLDivElement>(null);
     const [user] = useAtom(userAtom);
     const [roomMessages, setRoomMessages] = useAtom(roomMessagesAtom);
-    const [, setUnreadCounts] = useAtom(unreadCountsAtom);
+    const { beginUnreadUpdate } = useChatRoomList();
+    const { rooms: archivedRooms, status: archivedRoomsStatus, pendingRoomChanges } = useChatRoomList(true);
+    const viewerDid = user?.did;
     const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [hasOlderMessages, setHasOlderMessages] = useState(true);
@@ -4211,6 +4214,7 @@ export const ChatRoomComponent: React.FC<{
     const [isUnarchiving, setIsUnarchiving] = useState(false);
 
     const roomId = routeHandle || (chatRoom as any)?._id || (chatRoom as any)?.id || (chatRoom as any)?.handle || null;
+    const canonicalRoomId = chatRoom?._id ? String(chatRoom._id) : roomId;
     const activeRoomIdRef = useRef<string | null>(roomId);
     const topicLoadRequestRef = useRef(0);
     const topicUnreadRequestRef = useRef(0);
@@ -4236,26 +4240,21 @@ export const ChatRoomComponent: React.FC<{
                 alert(result.message || "Failed to unarchive conversation");
                 return;
             }
+            dispatchNotificationRefresh({ reason: "chat-rooms-changed", roomId: canonicalRoomId || roomId });
             router.replace(`/chat/${roomId}`);
             router.refresh();
         } finally {
             setIsUnarchiving(false);
         }
-    }, [isUnarchiving, roomId, router]);
+    }, [canonicalRoomId, isUnarchiving, roomId, router]);
 
     useEffect(() => {
-        if (!archivedReadOnly || !roomId) return;
-        const checkArchivedState = async () => {
-            const { listArchivedChatRoomsAction } = await import("./actions");
-            const result = await listArchivedChatRoomsAction();
-            if (result.success && !(result.rooms || []).some((room) => String(room._id) === roomId)) {
-                router.replace(`/chat/${roomId}`);
-                router.refresh();
-            }
-        };
-        const interval = window.setInterval(() => void checkArchivedState(), 5000);
-        return () => window.clearInterval(interval);
-    }, [archivedReadOnly, roomId, router]);
+        if (!archivedReadOnly || !canonicalRoomId || archivedRoomsStatus !== "ready" || pendingRoomChanges) return;
+        if (!archivedRooms.some((room) => String(room._id) === canonicalRoomId)) {
+            router.replace(`/chat/${canonicalRoomId}`);
+            router.refresh();
+        }
+    }, [archivedReadOnly, archivedRooms, archivedRoomsStatus, canonicalRoomId, pendingRoomChanges, router]);
 
     useEffect(() => {
         if (!replyToMessage) return;
@@ -4346,6 +4345,7 @@ export const ChatRoomComponent: React.FC<{
 
     const { isLoading: isLoadingMongo, polledTopicReplySignals } = useMongoChat({
         roomId,
+        notificationRoomId: canonicalRoomId || undefined,
         enabled: provider === "mongo" && !!roomId,
         setRoomMessages,
         suppressAutoRead,
@@ -4454,29 +4454,33 @@ export const ChatRoomComponent: React.FC<{
         navigateToTopic(topicToOpen, initialMessageId);
     }, [hasLoadedTopics, initialMessageId, initialTopicId, navigateToTopic, roomId, roomMessages]);
 
+    useEffect(() => {
+        return () => {
+            topicUnreadRequestRef.current += 1;
+        };
+    }, [roomId, viewerDid]);
+
     const refreshTopicUnreadCounts = useCallback(async () => {
         const targetRoomId = roomId;
-        if (!targetRoomId) return;
+        if (!targetRoomId || !viewerDid) return;
         const requestId = ++topicUnreadRequestRef.current;
         try {
             const { getTopicUnreadCountsAction } = await import("./actions");
-            const result = await getTopicUnreadCountsAction(targetRoomId);
+            const applyRoomUnread = !archivedReadOnly && canonicalRoomId ? beginUnreadUpdate(canonicalRoomId) : undefined;
+            const result = await getTopicUnreadCountsAction(targetRoomId, undefined, viewerDid);
             if (activeRoomIdRef.current !== targetRoomId || topicUnreadRequestRef.current !== requestId) return;
             if (result.success && result.counts) {
                 setTopicUnreadCounts(result.counts);
                 topicUnreadCountsLoadedRoomRef.current = targetRoomId;
                 setHasLoadedTopicUnreadCounts(true);
                 if (typeof result.conversationUnreadCount === "number") {
-                    setUnreadCounts((previous) => ({
-                        ...previous,
-                        [targetRoomId]: result.conversationUnreadCount!,
-                    }));
+                    applyRoomUnread?.(result.conversationUnreadCount);
                 }
             }
         } catch (error) {
             console.error("Failed to refresh topic unread counts:", error);
         }
-    }, [roomId, setUnreadCounts]);
+    }, [archivedReadOnly, beginUnreadUpdate, canonicalRoomId, roomId, viewerDid]);
 
     useEffect(() => {
         if (
@@ -4517,9 +4521,9 @@ export const ChatRoomComponent: React.FC<{
     const handleTopicRead = useCallback(
         async (_topicId: string) => {
             await refreshTopicUnreadCounts();
-            dispatchNotificationRefresh({ reason: "chat-read", roomId: roomId || undefined });
+            dispatchNotificationRefresh({ reason: "chat-read", roomId: canonicalRoomId || undefined });
         },
-        [refreshTopicUnreadCounts, roomId],
+        [canonicalRoomId, refreshTopicUnreadCounts],
     );
 
     const refreshTopicStarters = useCallback(

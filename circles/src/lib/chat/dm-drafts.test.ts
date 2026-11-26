@@ -251,7 +251,11 @@ async function main() {
         "navigation performs no conversation, notification, draft, or read-state write",
     );
     assert.match(actions, /listDmDraftsAction/, "private drafts remain listable");
-    assert.match(chatLayout, /listDmDraftsAction\(\)/, "private drafts remain accessible in the chat sidebar");
+    assert.match(
+        chatLayout,
+        /<ChatDraftRows[\s\S]*?loadDrafts=\{listDmDraftsAction\}[\s\S]*?<ChatList/,
+        "the chat sidebar still renders private drafts through their independent loader",
+    );
     assert.match(canonicalDm, /existing\.length > 1/, "historical duplicate DMs fail safely");
     assert.match(actions, /submissionId/, "stable submission ids protect retries");
     assert.match(actions, /publishDmFirstTopic/, "the action delegates publication to the production helper");

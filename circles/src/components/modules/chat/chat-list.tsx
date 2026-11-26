@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAtom } from "jotai";
 import { ChatRoomDisplay } from "@/models/models";
 import { CirclePicture } from "@/components/modules/circles/circle-picture";
-import { unreadCountsAtom, chatSettingsModalAtom } from "@/lib/data/atoms";
+import { chatSettingsModalAtom } from "@/lib/data/atoms";
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { Archive, ArchiveRestore, Bell, BellOff, Info, Settings } from "lucide-react";
 import { useIsMobile } from "@/components/utils/use-is-mobile";
@@ -25,10 +25,14 @@ import {
 } from "@/lib/client/chat-preference-events";
 import { useToast } from "@/components/ui/use-toast";
 import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
+import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 
 interface ChatListProps {
     chats: ChatRoomDisplay[];
     isLoading?: boolean;
+    hasLoadError?: boolean;
+    onRetryLoad?: () => void | Promise<void>;
+    unreadCounts?: Record<string, number>;
     searchTerm?: string;
     totalChatsCount?: number;
     onChatClick?: (chat: ChatRoomDisplay) => void | Promise<void>;
@@ -41,6 +45,9 @@ interface ChatListProps {
 export const ChatList: React.FC<ChatListProps> = ({
     chats,
     isLoading = false,
+    hasLoadError = false,
+    onRetryLoad,
+    unreadCounts,
     searchTerm,
     totalChatsCount = chats.length,
     onChatClick,
@@ -49,7 +56,6 @@ export const ChatList: React.FC<ChatListProps> = ({
     onArchive,
     onRetryMutePreferences,
 }) => {
-    const [unreadCounts] = useAtom(unreadCountsAtom);
     const [, setChatSettingsModal] = useAtom(chatSettingsModalAtom);
     const { toast } = useToast();
     const isMobile = useIsMobile();
@@ -124,6 +130,7 @@ export const ChatList: React.FC<ChatListProps> = ({
         const { archiveDmConversationAction } = await import("./actions");
         const result = await archiveDmConversationAction(getConversationId(chat));
         if (result.success) {
+            dispatchNotificationRefresh({ reason: "chat-rooms-changed", roomId: getConversationId(chat) });
             const navigationTarget = getPostArchiveNavigationTarget(pathname, getConversationId(chat));
             if (navigationTarget) router.replace(navigationTarget);
         } else {
@@ -174,10 +181,7 @@ export const ChatList: React.FC<ChatListProps> = ({
                             : undefined;
                     const mongoUnread =
                         typeof (chat as any).unreadCount === "number" ? (chat as any).unreadCount : undefined;
-                    const atomUnread = Object.entries(unreadCounts).find(([key]) =>
-                        key.startsWith(getConversationId(chat)),
-                    )?.[1];
-                    const unreadCount = resolveConversationUnreadCount(atomUnread, mongoUnread);
+                    const unreadCount = resolveConversationUnreadCount(unreadCounts?.[getConversationId(chat)], mongoUnread);
 
                     return (
                         <div
@@ -307,7 +311,12 @@ export const ChatList: React.FC<ChatListProps> = ({
                 })
             ) : (
                 <div className="flex h-full items-center justify-center pt-4 text-sm text-gray-500">
-                    {archivedView && !isLoadingRooms ? (
+                    {hasLoadError ? (
+                        <div className="flex flex-col items-center gap-2 p-4" role="status">
+                            <p>Couldn’t load conversations.</p>
+                            <Button variant="outline" onClick={onRetryLoad}>Try again</Button>
+                        </div>
+                    ) : archivedView && !isLoadingRooms ? (
                         <p className="p-4 text-center">No archived conversations</p>
                     ) : isLoadingRooms ? (
                         <p className="flex animate-pulse items-center" aria-live="polite">

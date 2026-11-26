@@ -475,12 +475,17 @@ const validateReplyTargetForConversation = async (
 
 export const listChatRoomsAction = async (
     view: "active" | "archived" = "active",
+    expectedViewerDid?: string,
 ): Promise<{
     success: boolean;
     rooms?: ChatRoomDisplay[];
     message?: string;
+    sessionChanged?: true;
 }> => {
-    const userDid = await getAuthenticatedUserDid();
+    const userDid = await getAuthenticatedUserDid().catch(() => undefined);
+    if (expectedViewerDid !== undefined && expectedViewerDid !== userDid) {
+        return { success: false, message: "Chat session changed", sessionChanged: true };
+    }
     if (!userDid) {
         return { success: false, message: "You need to be logged in to view chats" };
     }
@@ -2261,6 +2266,7 @@ export const markConversationReadAction = async (
 export const getTopicUnreadCountsAction = async (
     conversationId: string,
     topicIds?: string[],
+    expectedViewerDid?: string,
 ): Promise<{
     success: boolean;
     counts?: Record<string, number>;
@@ -2269,6 +2275,9 @@ export const getTopicUnreadCountsAction = async (
 }> => {
     const userDid = await getAuthenticatedUserDid();
     if (!userDid) return { success: false, message: "Not authenticated" };
+    if (expectedViewerDid !== undefined && expectedViewerDid !== userDid) {
+        return { success: false, message: "Chat session changed" };
+    }
     const access = await resolveMongoConversationAccess(conversationId, userDid);
     if (!access.ok) return { success: false, message: access.message };
     try {

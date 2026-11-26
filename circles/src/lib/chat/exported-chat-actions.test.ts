@@ -904,6 +904,32 @@ test("read-receipt compatibility action uses write authorization without adding 
     assert.equal((await invoke({ _id: new ObjectId(), type: "group", participants: [alice] }, null)).success, true);
 });
 
+test("chat snapshots reject a changed session before authorization queries or unread enrichment", async () => {
+    await runWithChatActionContext(
+        {
+            viewerDid: alice,
+            findCanonicalMemberships: async () => assert.fail("unexpected list query"),
+            findConversation: async () => assert.fail("unexpected room query"),
+        },
+        async () => {
+            assert.deepEqual(await mongoActions.listChatRoomsAction("active", "did:bob"), {
+                success: false,
+                message: "Chat session changed",
+                sessionChanged: true,
+            });
+            assert.deepEqual(await mongoActions.listChatRoomsAction("archived", "did:bob"), {
+                success: false,
+                message: "Chat session changed",
+                sessionChanged: true,
+            });
+            assert.deepEqual(await mongoActions.getTopicUnreadCountsAction("room", undefined, "did:bob"), {
+                success: false,
+                message: "Chat session changed",
+            });
+        },
+    );
+});
+
 test("real listChatRoomsAction performs no ensure, creation, backfill or other write before enrichment", async () => {
     const ownerId = new ObjectId().toHexString();
     const candidates = Array.from({ length: 20 }, () => ({

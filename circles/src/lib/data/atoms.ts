@@ -56,7 +56,6 @@ export const sidePanelSearchStateAtom = atom<SidePanelSearchState>({
 export const focusPostAtom = atom<PostDisplay | undefined>(undefined);
 export const imageGalleryAtom = atom<{ images: Media[]; initialIndex: number } | null>(null);
 
-export const unreadCountsAtom = atom<Record<string, number>>({});
 export const notificationUnreadCountAtom = atom<number>(0);
 export const latestMessagesAtom = atom<Record<string, any>>({});
 export const roomDataAtom = atom<Record<string, any>>({});
