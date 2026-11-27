@@ -53,6 +53,7 @@ import {
 import type { PlatformBroadcastMessage } from "./platform-broadcasts";
 import type { MembershipCredentialHandoff } from "@/lib/vibe-id/membership-credential-handoffs";
 import type { MembershipCredentialStatus } from "@/lib/vibe-id/membership-credential-statuses";
+import type { PushDeliveryJobDoc, PushSubscriptionDoc } from "@/lib/push/types";
 import { COMMUNITY_FEED_UNIQUE_INDEX_KEYS, COMMUNITY_FEED_UNIQUE_INDEX_OPTIONS } from "./feed-indexes";
 import { EVENT_OCCURRENCE_UNIQUE_INDEX_KEYS, EVENT_OCCURRENCE_UNIQUE_INDEX_OPTIONS } from "./event-occurrence-indexes";
 import {
@@ -139,6 +140,8 @@ let PlatformAuditEvents: Collection<PlatformAuditEvent>;
 let PrivateMediaCollection: Collection<PrivateMedia>;
 let MembershipCredentialHandoffs: Collection<MembershipCredentialHandoff>;
 let MembershipCredentialStatuses: Collection<MembershipCredentialStatus>;
+let PushSubscriptions: Collection<PushSubscriptionDoc>;
+let PushDeliveryJobs: Collection<PushDeliveryJobDoc>;
 
 // Only initialize the database connection if not in build mode
 if (process.env.IS_BUILD !== "true") {
@@ -234,6 +237,8 @@ if (process.env.IS_BUILD !== "true") {
     MembershipCredentialStatuses.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }).catch((error) => {
         console.error("Failed to create membership credential status expiry index:", error);
     });
+    PushSubscriptions = db.collection<PushSubscriptionDoc>("pushSubscriptions");
+    PushDeliveryJobs = db.collection<PushDeliveryJobDoc>("pushDeliveryJobs");
 }
 export async function getDb() {
     if (!client) throw new Error("Mongo client not initialised (IS_BUILD=true?)");
@@ -335,6 +340,36 @@ export function ensureSecretCircleInvitationIndexes(): Promise<void> {
     return secretCircleInvitationIndexesReady;
 }
 
+let webPushIndexesReady: Promise<void> | undefined;
+
+export function ensureWebPushIndexes(): Promise<void> {
+    if (!client || !PushSubscriptions || !PushDeliveryJobs) {
+        return Promise.reject(new Error("Mongo client not initialised (IS_BUILD=true?)"));
+    }
+    webPushIndexesReady ??= (async () => {
+        await client.connect();
+        await Promise.all([
+            PushSubscriptions.createIndex({ endpointHash: 1 }, { unique: true }),
+            PushSubscriptions.createIndex({ userDid: 1, revokedAt: 1 }),
+            PushSubscriptions.createIndex(
+                { revokedAt: 1 },
+                { expireAfterSeconds: 30 * 86400, partialFilterExpression: { revokedAt: { $type: "date" } } },
+            ),
+            PushDeliveryJobs.createIndex({ deliveryKey: 1 }, { unique: true }),
+            PushDeliveryJobs.createIndex({ status: 1, nextAttemptAt: 1, leaseUntil: 1 }),
+            PushDeliveryJobs.createIndex({ subscriptionId: 1, status: 1 }),
+            PushDeliveryJobs.createIndex(
+                { completedAt: 1 },
+                { expireAfterSeconds: 14 * 86400, partialFilterExpression: { completedAt: { $type: "date" } } },
+            ),
+        ]);
+    })().catch((error) => {
+        webPushIndexesReady = undefined;
+        throw error;
+    });
+    return webPushIndexesReady;
+}
+
 export {
     client,
     db,
@@ -390,4 +425,6 @@ export {
     PrivateMediaCollection,
     MembershipCredentialHandoffs,
     MembershipCredentialStatuses,
+    PushSubscriptions,
+    PushDeliveryJobs,
 };

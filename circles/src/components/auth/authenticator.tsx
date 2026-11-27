@@ -6,6 +6,7 @@ import { checkAuth } from "./actions";
 import { userAtom, authInfoAtom } from "@/lib/data/atoms";
 import { useAtom } from "jotai";
 import { LOG_LEVEL_TRACE, logLevel } from "@/lib/data/constants";
+import { reconcilePushSubscriptionForAuthenticatedUser } from "@/lib/push/client-push";
 
 export const Authenticator = () => {
     const [authInfo, setAuthInfo] = useAtom(authInfoAtom);
@@ -40,6 +41,7 @@ export const Authenticator = () => {
             console.log("checkAuthentication: checkAuth responded authenticated");
             setAuthInfo({ authStatus: "authenticated" });
             setUser(response.user);
+            void reconcilePushSubscriptionForAuthenticatedUser();
         } else {
             console.log("checkAuthentication: checkAuth responded unauthenticated");
             setAuthInfo({ authStatus: "unauthenticated" });

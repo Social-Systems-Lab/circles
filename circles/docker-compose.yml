@@ -36,6 +36,8 @@ services:
             - PENDING_REGISTRATION_JOURNEY_READY=false
             - PENDING_REGISTRATION_TOKEN_HMAC_KEY=
             - REGISTRATION_DEPLOYMENT_ID=${REGISTRATION_DEPLOYMENT_ID:-}
+            - WEB_PUSH_ENABLED=${WEB_PUSH_ENABLED:-false}
+            - WEB_PUSH_DISPATCH_ENABLED=${WEB_PUSH_DISPATCH_ENABLED:-false}
 
         volumes:
             - circles:/circles

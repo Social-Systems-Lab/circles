@@ -45,6 +45,7 @@ import { useToast } from "../ui/use-toast";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 import { dispatchNotificationRefresh } from "@/lib/client/notification-events";
 import { getPostArchiveNavigationTarget } from "@/lib/chat/archive-navigation";
+import { revokePushSubscriptionOnLogout } from "@/lib/push/client-push";
 
 type Milestone = {
     id: string;
@@ -364,6 +365,7 @@ export const UserToolbox = () => {
         setAuthInfo({ ...authInfo, authStatus: "unauthenticated" });
         closeToolbox();
         try {
+            await revokePushSubscriptionOnLogout();
             await logOut();
             router.push("/");
         } catch (error) {

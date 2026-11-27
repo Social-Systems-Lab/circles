@@ -14,15 +14,19 @@ import Script from "next/script";
 import { ChatRoomListProvider } from "@/components/modules/chat/chat-room-list-provider";
 import { getServerSettings } from "@/lib/data/server-settings";
 import { SidePanel } from "@/components/layout/side-panel";
-import { Metadata } from "next";
+import { Metadata, Viewport } from "next";
 import { getDefaultCircle } from "@/lib/data/circle";
 import { MapboxInitializer } from "@/components/map/map-initializer";
 import { FeedPostDialog } from "@/components/global-create/feed-post-dialog"; // Import FeedPostDialog
+import { PwaLifecycle } from "@/components/pwa/pwa-lifecycle";
 
 // Disable caching for this layout to prevent the "hard refresh bug"
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
+export const viewport: Viewport = {
+    themeColor: "#346f4c",
+};
 const enableReactScan = false;
 
 const wix = Wix_Madefor_Display({ subsets: ["latin"], variable: "--font-wix-display" });
@@ -61,6 +65,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                             </div>
                             <Toaster />
                             <Authenticator />
+                            <PwaLifecycle />
                             <ImageGallery />
                             <Onboarding />
                             <MapboxInitializer mapboxKey={serverConfig.mapboxKey} />
@@ -108,7 +113,16 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
         title: title,
         description: description,
-        icons: [icon],
+        manifest: "/manifest.webmanifest",
+        appleWebApp: {
+            capable: true,
+            title: "Kamooni",
+            statusBarStyle: "default",
+        },
+        icons: {
+            icon: [icon],
+            apple: "/icons/apple-180.png",
+        },
     };
 }
 

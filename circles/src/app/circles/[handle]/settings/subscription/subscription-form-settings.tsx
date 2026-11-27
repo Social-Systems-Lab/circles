@@ -6,6 +6,8 @@ import type { TelegramChannelView } from "@/lib/data/external-notification-chann
 import SubscriptionForm from "./subscription-form";
 import { VerificationSettingsCard } from "./verification-settings-card";
 import { TelegramNotificationsSettingsCard } from "./telegram-notifications-card";
+import { PushNotificationsCard } from "@/components/pwa/push-notifications-card";
+import { InstallAppCard } from "@/components/pwa/install-app-card";
 import { updateEmailPreferenceSetting } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -66,6 +68,8 @@ export default function SubscriptionFormSettings({
                 <VerificationSettingsCard user={user} />
                 <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
                 <TelegramNotificationsSettingsCard initialChannel={telegramChannel} />
+                <PushNotificationsCard />
+                <InstallAppCard />
                 <section className="space-y-4">
                     <div className="space-y-1 px-1">
                         <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>
@@ -91,6 +95,8 @@ export default function SubscriptionFormSettings({
             <VerificationSettingsCard user={user} />
             <EmailPreferencesSettingsCard initialValues={initialEmailPreferences} />
             <TelegramNotificationsSettingsCard initialChannel={telegramChannel} />
+            <PushNotificationsCard />
+            <InstallAppCard />
             <section className="space-y-4">
                 <div className="space-y-1 px-1">
                     <h2 className="text-lg font-semibold tracking-tight">Supporting</h2>

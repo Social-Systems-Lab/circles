@@ -39,6 +39,7 @@ import { getEventById } from "./event";
 import { features } from "./constants";
 import { getAuthorizedMembers } from "../auth/auth"; // Import the function to get authorized members
 import { dispatchExternalNotifications } from "./external-notifications";
+import { enqueuePushJobsForNotifications, processPendingPushJobs } from "../push/dispatcher";
 import { getNotificationIdempotencyId } from "./notification-read";
 import {
     filterNotificationRecipientsWhoCanViewPost,
@@ -324,11 +325,28 @@ export async function sendNotifications(
         persistentIds.push(id);
         if (result.upsertedCount === 1) insertedDocs.push({ ...doc, _id: id });
     }
-    if (!options?.idempotencyKey && insertedDocs.length) await Notifications.insertMany(insertedDocs as any[]);
+    if (!options?.idempotencyKey && insertedDocs.length) {
+        const insertResult = await Notifications.insertMany(insertedDocs as any[]);
+        insertedDocs.forEach((doc, index) => {
+            if (!(doc as any)._id && insertResult.insertedIds?.[index]) {
+                (doc as any)._id = insertResult.insertedIds[index];
+            }
+        });
+    }
     if (insertedDocs.length) {
         void dispatchExternalNotifications(insertedDocs as any[]).catch((error) => {
             console.error("External notification dispatch failed:", error);
         });
+        try {
+            const { enqueued } = await enqueuePushJobsForNotifications(insertedDocs as any[]);
+            if (enqueued > 0) {
+                void processPendingPushJobs(Math.min(enqueued, 10)).catch((error) => {
+                    console.error("Immediate push dispatch failed:", error);
+                });
+            }
+        } catch (error) {
+            console.error("Failed to enqueue push notifications:", error);
+        }
     }
     return persistentIds;
 }

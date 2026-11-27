@@ -556,6 +556,9 @@ export const Notifications = ({ onNavigate }: { onNavigate?: () => void }) => {
                 case "goal_status_changed":
                     return notification.goalId ? `/circles/${circleHandle}/goals/${notification.goalId}` : null;
                 case "event_invitation":
+                case "event_submitted_for_review":
+                case "event_approved":
+                case "event_status_changed":
                     return notification.eventId ? `/circles/${circleHandle}/events/${notification.eventId}` : null;
                 default:
                     return null;

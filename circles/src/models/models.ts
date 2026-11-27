@@ -1,6 +1,7 @@
 import { Toast } from "@/components/ui/use-toast";
 import type { ChatAttachment } from "@/lib/chat/mongo-types";
 import type { SystemMessageMetadata } from "@/lib/chat/system-messages";
+import type { PushNotificationPreferences } from "@/lib/push/types";
 import { COMMUNITY_GUIDELINE_RULE_IDS } from "@/lib/community-guidelines";
 import { isCanonicalInternalPreviewRoute } from "@/lib/internal-preview-route";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
@@ -116,6 +117,7 @@ export interface UserPrivate extends Circle {
     fullMatrixName?: string;
     ignoredCircles?: string[]; // IDs of circles the user has chosen to ignore
     notificationSettings?: GroupedNotificationSettings;
+    pushPreferences?: PushNotificationPreferences;
     notificationPauseConfig?: {
         allUntil?: Date; // For "Pause All"
         categoryUntil?: Record<string, Date>; // For "Pause Category", key is category/module handle
