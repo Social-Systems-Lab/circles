@@ -85,7 +85,10 @@ def check_launch_config():
             assert error_text in str(error), error
         else:
             raise AssertionError(f"accepted incompatible launch configuration {service!r}")
-    print(f"PASS {len(passed) + len(rejected)} launch configuration inheritance and mismatch cases", flush=True)
+    image_without_strings = {key: image[key] for key in ("Entrypoint", "Cmd")}
+    serving_with_strings = image_without_strings | {"User": "", "WorkingDir": ""}
+    ingress.require_matching_launch_config({}, image_without_strings, serving_with_strings)
+    print(f"PASS {len(passed) + len(rejected) + 1} launch configuration inheritance and mismatch cases", flush=True)
 
 
 class Rehearsal(ingress.Transition):
@@ -222,11 +225,11 @@ def check_release_models(root, docker):
     original, candidate, recovery = render(old), render(new, maintenance), render(old, maintenance)
     assert original["services"]["circles"]["ports"][0]["published"] == "3000"
     assert ingress.without_app_ports(original) == candidate == recovery
-    inherited = {"Entrypoint": ["docker-entrypoint.sh"], "Cmd": ["node", "server.js"], "User": "node", "WorkingDir": "/app"}
+    inherited = {"Entrypoint": ["docker-entrypoint.sh"], "Cmd": ["node", "server.js"], "WorkingDir": "/app"}
     for model in (candidate, recovery):
         assert ingress.activation.validate_no_published_application_ports(model) == []
         assert ingress.activation.validate_activation_compose(model, ingress.DEPLOYMENT) == []
-        ingress.require_matching_launch_config(model["services"]["circles"], inherited, inherited)
+        ingress.require_matching_launch_config(model["services"]["circles"], inherited, inherited | {"User": ""})
     print("PASS exact Git Compose models: only application host publication changes", flush=True)
 
 

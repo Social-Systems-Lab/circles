@@ -498,11 +498,12 @@ def require_matching_launch_config(service, image, serving):
         # as zero-length vectors. Do not approve a launch that relies on clearing it.
         raise Failure("rendered application command cannot safely clear the image default with an empty or inherited entrypoint")
 
+    # Image inspection can omit unset string defaults that container inspection reports as "".
     for field, key, desired in (
         ("entrypoint", "Entrypoint", desired_entrypoint),
         ("command", "Cmd", command),
-        ("user", "User", service.get("user", image.get("User"))),
-        ("working_dir", "WorkingDir", service.get("working_dir", image.get("WorkingDir"))),
+        ("user", "User", service.get("user", image.get("User", ""))),
+        ("working_dir", "WorkingDir", service.get("working_dir", image.get("WorkingDir", ""))),
     ):
         require(desired == serving.get(key), f"rendered application {field} differs from the serving container")
 
