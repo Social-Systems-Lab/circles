@@ -1,7 +1,7 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { getCircleByHandle } from "@/lib/data/circle";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { isAuthorized } from "@/lib/auth/auth";
 import AboutPage from "@/components/modules/home/AboutPage";
 import { getTasksByCircleId } from "@/lib/data/task";
 import { features } from "@/lib/data/constants";
@@ -14,7 +14,7 @@ import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { getProfileContributionPanelData } from "./profile-contribution-panel-data";
 import { buildAboutPageClientProps, type ServerVerifiedContributionInput } from "@/lib/data/client-circle-dto";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
-import { resolveCircleRouteAccess } from "../circle-route-access";
+import { getCirclePageAccess } from "../circle-page-access";
 import type { MemberDisplay } from "@/models/models";
 
 // TODO: Add error handling and loading states more robustly
@@ -25,13 +25,9 @@ type PageProps = {
 
 export default async function CircleHomePage(props: PageProps) {
     const { handle } = await props.params;
-    const access = await resolveCircleRouteAccess(handle, {
-        findCircle: getCircleByHandle,
-        authenticate: getAuthenticatedUserDid,
-        canReadCircle,
-    });
+    const access = await getCirclePageAccess(handle);
     if (!access) notFound();
-    const { circle, viewerDid } = access;
+    const { circle, viewerDid, canEditAbout } = access;
 
     let verifiedContributions: ServerVerifiedContributionInput[] = [];
     let verifiedContributionPublicCount = 0;
@@ -125,6 +121,7 @@ export default async function CircleHomePage(props: PageProps) {
     const aboutPageProps = buildAboutPageClientProps({
         circle,
         viewerDid,
+        canEditAbout,
         adminLeaders,
         verifiedContributions,
         verifiedContributionPublicCount,

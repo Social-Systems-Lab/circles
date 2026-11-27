@@ -1,10 +1,8 @@
-// /src/app/circles/[handle]/post/[postId]/page.tsx
 import { getFullPost } from "@/lib/data/feed";
 import { getReadablePostComments, resolveReadablePostContext } from "@/lib/data/post-access-policy";
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
-import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
+import { buildClientFeedDto, buildPostCircleDto } from "@/lib/data/client-circle-dto";
+import { getCirclePageAccess } from "../../circle-page-access";
 import { notFound } from "next/navigation";
-import { CommentDisplay } from "@/models/models";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -15,24 +13,20 @@ type SinglePostPageProps = {
 };
 
 export default async function SinglePostPage(props: SinglePostPageProps) {
-    const params = await props.params;
-    const userDid = await resolveAuthenticatedViewerDid(getAuthenticatedUserDid);
-    const postId = params.postId;
-    const handle = params.handle;
+    const { handle, postId } = await props.params;
+    const access = await getCirclePageAccess(handle);
+    if (!access) notFound();
+    const { viewerDid } = access;
 
-    const context = await resolveReadablePostContext(postId, userDid);
-    if (!context) notFound();
-    const { feed, circle } = context;
-
-    if (circle.handle !== handle) {
-        notFound();
-    }
+    const context = await resolveReadablePostContext(postId, viewerDid);
+    if (!context || context.circle._id !== access.circle._id || context.circle.handle !== handle) notFound();
+    const { circle, feed, post } = context;
 
     // Get all comments for the post
-    const commentResult = await getReadablePostComments(postId, userDid);
+    const commentResult = await getReadablePostComments(postId, viewerDid);
     if (!commentResult.success) notFound();
-    const comments = (commentResult.comments ?? []) as CommentDisplay[];
-    const sanitizedPost = await getFullPost(postId, userDid);
+    const comments = commentResult.comments ?? [];
+    const sanitizedPost = await getFullPost(postId, viewerDid);
     if (!sanitizedPost) notFound();
 
     return (
@@ -49,8 +43,8 @@ export default async function SinglePostPage(props: SinglePostPageProps) {
                     <div className="w-full">
                         <PostItem
                             post={sanitizedPost}
-                            circle={circle}
-                            feed={feed}
+                            circle={buildPostCircleDto(circle, post.postType)}
+                            feed={buildClientFeedDto(feed)}
                             initialComments={comments}
                             initialShowAllComments={true}
                             isAggregateFeed={false}

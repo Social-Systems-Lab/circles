@@ -2,6 +2,7 @@ import type { Circle, Member } from "@/models/models";
 import { NextResponse } from "next/server";
 import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
 import { readJsonBodyLimited } from "@/lib/security/bounded-input";
+import { features } from "@/lib/data/constants";
 
 type AccessHandlerDependencies = {
     authenticate: () => Promise<string | undefined>;
@@ -43,10 +44,13 @@ export const createAccessPostHandler = (dependencies: AccessHandlerDependencies)
                 return neutralCircleNotFound();
             }
 
+            let membership: Member | null | undefined;
             if (!dependencies.isCirclePublished(circle)) {
-                const membership = userDid ? await dependencies.getMember(userDid, circle._id) : null;
-                const canViewUnpublished = circle.createdBy === userDid || membership?.userGroups?.includes("admins");
-                if (!canViewUnpublished) return neutralCircleNotFound();
+                if (!userDid) return neutralCircleNotFound();
+                if (circle.createdBy !== userDid) {
+                    membership = await dependencies.getMember(userDid, circle._id);
+                    if (!membership?.userGroups?.includes("admins")) return neutralCircleNotFound();
+                }
             }
 
             const isFundingRoute = safeModuleHandle === "funding";
@@ -58,18 +62,21 @@ export const createAccessPostHandler = (dependencies: AccessHandlerDependencies)
                 return NextResponse.json({ notFound: true, notFoundType: "module" }, { status: 404 });
             }
 
-            const accessRules = circle.accessRules || {};
-            let allowedUserGroups = accessRules[permissionModuleHandle]?.view;
-            if (!allowedUserGroups) {
-                allowedUserGroups = isFundingRoute ? ["admins", "moderators", "members"] : ["everyone"];
-            }
+            const isSettingsRoute = safeModuleHandle === "settings";
+            const defaultViewGroups = isSettingsRoute
+                ? (features.settings.view.defaultUserGroups ?? [])
+                : isFundingRoute
+                  ? ["admins", "moderators", "members"]
+                  : ["everyone"];
+            const allowedUserGroups = circle.accessRules?.[permissionModuleHandle]?.view ?? defaultViewGroups;
+            if (isSettingsRoute && !userDid) return NextResponse.json({ authenticated: false, authorized: false });
 
             if (allowedUserGroups.includes("everyone")) {
                 return NextResponse.json({ authenticated: true, authorized: true });
             }
             if (!userDid) return NextResponse.json({ authenticated: false, authorized: false });
 
-            const membership = await dependencies.getMember(userDid, circle._id);
+            if (membership === undefined) membership = await dependencies.getMember(userDid, circle._id);
             if (!membership) return NextResponse.json({ authenticated: true, authorized: false });
 
             const authorized = allowedUserGroups.some((group) => membership.userGroups?.includes(group));

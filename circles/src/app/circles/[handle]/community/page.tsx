@@ -1,8 +1,9 @@
 import CommunityModule from "@/components/modules/community/community";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { createCommunityFeed } from "@/lib/data/feed";
-import { getCircleByHandle } from "@/lib/data/circle";
+import { buildClientFeedDto, buildFeedCircleDto } from "@/lib/data/client-circle-dto";
+import { getCirclePageAccess } from "../circle-page-access";
 import { getMember } from "@/lib/data/member";
 import { getUserPrivate } from "@/lib/data/user";
 import { canParticipate, getParticipationBlockReason } from "@/lib/profile-completion";
@@ -34,19 +35,13 @@ const hasFeatureGroupPermission = async (
 };
 
 export default async function CommunityPage(props: PageProps) {
-    const params = await props.params;
-    const circle = await getCircleByHandle(params.handle);
+    const { handle } = await props.params;
+    const access = await getCirclePageAccess(handle);
+    if (!access) notFound();
+    const { circle, viewerDid: userDid } = access;
+    if (!circle._id || !circle.enabledModules?.includes("community")) notFound();
 
-    if (!circle) {
-        notFound();
-    }
-
-    if (!circle.enabledModules?.includes("community")) {
-        notFound();
-    }
-
-    const userDid = await getAuthenticatedUserDid();
-    const canViewCommunity = await isAuthorized(userDid, circle._id.toString(), features.community.view);
+    const canViewCommunity = await isAuthorized(userDid, circle._id, features.community.view);
     if (!canViewCommunity) {
         const reason = userDid ? "unauthorized" : "unauthenticated";
         redirect(
@@ -67,8 +62,8 @@ export default async function CommunityPage(props: PageProps) {
 
     return (
         <CommunityModule
-            circle={JSON.parse(JSON.stringify(circle))}
-            feed={JSON.parse(JSON.stringify(feed))}
+            circle={buildFeedCircleDto(circle, "community")}
+            feed={buildClientFeedDto(feed)}
             hasPostPermission={hasPostPermission}
             canParticipate={isParticipationReady}
             participationBlockReason={participationBlockReason}

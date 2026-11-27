@@ -18,13 +18,20 @@ const baseCircle: Circle = {
 type Scenario = {
     circle?: Circle | null;
     viewerDid?: string;
+    memberGroups?: string[];
     member?: boolean;
     invalidSession?: boolean;
 };
 
-const makeHandler = ({ circle = baseCircle, viewerDid, member = false, invalidSession = false }: Scenario) => {
+const makeHandler = ({
+    circle = baseCircle,
+    viewerDid,
+    member = false,
+    memberGroups = member ? ["members"] : undefined,
+    invalidSession = false,
+}: Scenario) => {
     const canonicalMember: Member | null =
-        member && viewerDid ? { userDid: viewerDid, circleId, userGroups: ["members"], joinedAt: new Date() } : null;
+        memberGroups && viewerDid ? { userDid: viewerDid, circleId, userGroups: memberGroups, joinedAt: new Date() } : null;
     return createAccessPostHandler({
         authenticate: async () => {
             if (invalidSession) throw new errors.JWTInvalid("invalid session");
@@ -44,11 +51,11 @@ const makeHandler = ({ circle = baseCircle, viewerDid, member = false, invalidSe
     });
 };
 
-const invoke = (scenario: Scenario) =>
+const invoke = (scenario: Scenario, moduleHandle = "feed") =>
     makeHandler(scenario)(
         new Request("http://localhost/api/access", {
             method: "POST",
-            body: JSON.stringify({ circleHandle: "target", moduleHandle: "feed" }),
+            body: JSON.stringify({ circleHandle: "target", moduleHandle }),
         }),
     );
 
@@ -101,6 +108,34 @@ async function main() {
     const legacyPublicResponse = await invoke({ circle: { ...baseCircle, visibility: undefined } });
     assert.equal(legacyPublicResponse.status, 200);
     assert.deepEqual(await legacyPublicResponse.json(), { authenticated: true, authorized: true });
+
+    const draft: Circle = { ...baseCircle, publishStatus: "draft" };
+    assert.deepEqual(await neutral(await invoke({ circle: draft })), expectedNeutral);
+    assert.deepEqual(await neutral(await invoke({ circle: draft, viewerDid: "did:outsider" })), expectedNeutral);
+    assert.equal((await invoke({ circle: { ...draft, createdBy: "did:creator" }, viewerDid: "did:creator" })).status, 200);
+    assert.equal((await invoke({ circle: draft, viewerDid: "did:admin", memberGroups: ["admins"] })).status, 200);
+
+    const settings: Circle = { ...baseCircle, enabledModules: ["settings"] };
+    for (const [scenario, expected] of [
+        [{ circle: settings }, { authenticated: false, authorized: false }],
+        [{ circle: settings, viewerDid: "did:outsider" }, { authenticated: true, authorized: false }],
+        [{ circle: settings, viewerDid: "did:member", member: true }, { authenticated: true, authorized: false }],
+        [{ circle: settings, viewerDid: "did:admin", memberGroups: ["admins"] }, { authenticated: true, authorized: true }],
+        [
+            { circle: { ...settings, accessRules: { settings: { view: ["members"] } } }, viewerDid: "did:member", member: true },
+            { authenticated: true, authorized: true },
+        ],
+        [
+            { circle: { ...settings, accessRules: { settings: { view: ["everyone"] } } } },
+            { authenticated: false, authorized: false },
+        ],
+        [
+            { circle: { ...settings, visibility: "secret", accessRules: { settings: { view: ["everyone"] } } }, viewerDid: "did:outsider" },
+            expectedNeutral.body,
+        ],
+    ] satisfies Array<[Scenario, unknown]>) {
+        assert.deepEqual(await (await invoke(scenario, "settings")).json(), expected);
+    }
 
     console.log("access route handler tests passed");
 }

@@ -25,8 +25,6 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { contactCircleAdminsAction } from "@/components/modules/chat/mongo-actions";
-import { isAuthorized } from "@/lib/auth/client-auth";
-import { features } from "@/lib/data/constants";
 import OffersCard from "./offers-card";
 import EngagementCard from "./engagement-card";
 import NeedsCard from "./needs-card";
@@ -42,6 +40,7 @@ import { getProfileAboutText } from "@/lib/profile-completion";
 
 export default function AboutPage({
     circle,
+    canEditAbout,
     verifiedContributions = [],
     verifiedContributionPublicCount = 0,
     fundingPreviewAsks = [],
@@ -67,8 +66,7 @@ export default function AboutPage({
     const [contactMessage, setContactMessage] = React.useState("");
     const [contactError, setContactError] = React.useState("");
     const [isSendingContactMessage, setIsSendingContactMessage] = React.useState(false);
-    const isOwner = user?.did === circle.did;
-    const canEditAbout = isAuthorized(user, circle, features.settings.edit_about);
+    const isOwner = Boolean(user?.did && user.did === circle.did);
     const isUserProfile = circle.circleType === "user";
     const [relationshipState] = useProfileRelationshipState(circle, user?.did);
     const profileOfferSkills = circle.offers?.skills?.length ? circle.offers.skills : circle.skills || [];
@@ -361,9 +359,9 @@ export default function AboutPage({
                                 </>
                             )}
                         </div>
-                        <OffersCard circle={circle} isOwner={isOwner} />
-                        {isUserProfile && <EngagementCard circle={circle} isOwner={isOwner} />}
-                        {!isUserProfile && <NeedsCard circle={circle} isOwner={isOwner} />}
+                        <OffersCard circle={circle} canEdit={canEditAbout} />
+                        {isUserProfile && <EngagementCard circle={circle} canEdit={canEditAbout} isOwner={isOwner} />}
+                        {!isUserProfile && <NeedsCard circle={circle} canEdit={canEditAbout} />}
                     </div>
                 </div>
                 {/* --- Sidebar Column (Conditionally Rendered) --- */}

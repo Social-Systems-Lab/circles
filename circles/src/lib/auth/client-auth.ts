@@ -45,8 +45,11 @@ export const hasHigherAccess = (
  * @returns True if the user is authorized, false otherwise
  */
 export const isAuthorized = (user: UserPrivate | undefined, circle: Circle, feature: Feature): boolean => {
-    const canEditOwnSettings =
-        feature.module === "settings" && (user?._id === circle._id || user?.did === circle.createdBy);
+    if (feature.module === "settings" && !user) return false;
+
+    const canEditOwnSettings = feature.module === "settings" && Boolean(
+        (user?._id && user._id === circle._id) || (user?.did && user.did === circle.createdBy),
+    );
 
     // Historical feature name: restricted participation now requires derived profile completion.
     if (feature.needsToBeVerified && !canParticipate(user) && !canEditOwnSettings) {

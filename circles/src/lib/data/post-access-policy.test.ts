@@ -11,7 +11,7 @@ import {
     resolvePublicUserFeed,
     resolveReadablePostContext,
 } from "./post-access-policy";
-import type { Circle, Feed, Member, Post } from "@/models/models";
+import type { Circle, CommentDisplay, Feed, Member, Post } from "@/models/models";
 
 const oid = () => new ObjectId();
 const circleId = oid();
@@ -104,6 +104,21 @@ async function testDirectPostAccess() {
         }),
         null,
     );
+
+    const draft = circle({ publishStatus: "draft" });
+    assert.equal(await resolveReadablePostContext(postId.toString(), undefined, dependencies(draft)), null);
+    assert.equal(await resolveReadablePostContext(postId.toString(), viewerDid, dependencies(draft, member())), null);
+    assert.ok(await resolveReadablePostContext(postId.toString(), viewerDid, {
+        ...dependencies(draft),
+        canEditCircle: async () => true,
+    }));
+    assert.ok(await resolveReadablePostContext(
+        postId.toString(), viewerDid, dependencies({ ...draft, createdBy: viewerDid }),
+    ));
+    assert.equal(await resolveReadablePostContext(postId.toString(), viewerDid, {
+        ...dependencies({ ...draft, visibility: "secret" }),
+        canEditCircle: async () => true,
+    }), null);
 
     const secret = circle({ visibility: "secret" });
     assert.equal(await resolveReadablePostContext(postId.toString(), undefined, dependencies(secret)), null);
@@ -220,7 +235,17 @@ async function testTrustedIdentity() {
 }
 
 async function testCommentReadAuthorization() {
-    const comments = [{ _id: oid().toString(), content: "comment" }] as any;
+    const comments: CommentDisplay[] = [{
+        _id: oid().toString(),
+        postId: postId.toString(),
+        content: "comment",
+        parentCommentId: null,
+        createdBy: "did:fixture:commenter",
+        createdAt: new Date(),
+        reactions: {},
+        replies: 0,
+        author: { name: "Fixture commenter", email: "PRIVATE_COMMENT_AUTHOR_EMAIL" },
+    }];
     const allowedContext = (await resolveReadablePostContext(
         postId.toString(),
         viewerDid,
@@ -234,7 +259,10 @@ async function testCommentReadAuthorization() {
             return comments;
         },
     });
-    assert.deepEqual(allowed, { success: true, comments });
+    assert.equal(allowed.success, true);
+    assert.equal(allowed.comments?.[0].content, "comment");
+    assert.equal(allowed.comments?.[0].author.name, "Fixture commenter");
+    assert.doesNotMatch(JSON.stringify(allowed), /PRIVATE_COMMENT_AUTHOR_EMAIL/);
     assert.equal(commentLoads, 1);
 
     const metadataBearingComments = [

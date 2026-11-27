@@ -149,21 +149,32 @@ const ProfileMenuBar = () => {
     }
 
     const isMobileExplore = isMobile && pathname === "/explore";
+    const hasVisitorHeader = authInfo.authStatus === "unauthenticated" && pathname?.startsWith("/circles/");
 
     return (
-        <div className="flex items-center justify-center gap-1 overflow-visible">
+        <div
+            className={
+                hasVisitorHeader
+                    ? "flex justify-end px-4 py-2 md:fixed md:right-6 md:top-4 md:z-40 md:p-0"
+                    : "fixed right-6 top-4 z-40"
+            }
+        >
             <>
                 <div className="flex items-center space-x-2">
                     {authInfo.authStatus === "unauthenticated" && (
                         <div className="flex flex-row gap-2">
                             <Button
-                                className="h-full w-full bg-[#00000077] text-white"
+                                className={`h-full w-full bg-[#00000077] text-white ${hasVisitorHeader ? "min-h-11 md:min-h-0" : ""}`}
                                 onClick={onLogInClick}
                                 variant="outline"
                             >
                                 Log in
                             </Button>
-                            <Button className="h-full w-full" onClick={onSignUpClick} variant="outline">
+                            <Button
+                                className={`h-full w-full ${hasVisitorHeader ? "min-h-11 md:min-h-0" : ""}`}
+                                onClick={onSignUpClick}
+                                variant="outline"
+                            >
                                 Sign up
                             </Button>
                         </div>
@@ -252,7 +263,7 @@ export const ProfileMenu = () => {
     }, []);
 
     return (
-        <Suspense fallback={<div className="h-10 w-10"></div>}>
+        <Suspense fallback={null}>
             <ProfileMenuBar key={loadStateKey} />
         </Suspense>
     );

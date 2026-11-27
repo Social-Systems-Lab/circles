@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UserPlus } from "lucide-react";
+import { Link2, UserPlus } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -27,24 +27,31 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { PendingSecretCircleInvitation } from "@/lib/data/secret-circle-invitations";
 
 interface InviteButtonProps {
-    circle: Pick<Circle, "_id" | "handle" | "circleType" | "visibility">;
+    circle: Pick<Circle, "_id" | "handle" | "circleType" | "visibility" | "publishStatus">;
     renderCompact?: boolean;
     canInviteSecret?: boolean;
+    canSharePublic?: boolean;
 }
 
 export const getInviteButtonMode = (
-    circle: Pick<Circle, "visibility">,
+    circle: Pick<Circle, "visibility" | "publishStatus">,
     canInviteSecret = false,
-): "copy-link" | "secret" | null =>
-    circle.visibility === "secret" ? (canInviteSecret ? "secret" : null) : "copy-link";
+    canSharePublic = true,
+): "copy-link" | "secret" | null => {
+    if (circle.visibility === "secret") return canInviteSecret ? "secret" : null;
+    const isPublic = circle.visibility === undefined || circle.visibility === "public";
+    const isPublished = circle.publishStatus === undefined || circle.publishStatus === "published";
+    return canSharePublic && isPublic && isPublished ? "copy-link" : null;
+};
 
-const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canInviteSecret = false }) => {
+const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canInviteSecret, canSharePublic }) => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const isCompact = useIsCompact();
     const { toast } = useToast();
     const isUser = circle?.circleType === "user";
-    const compact = isCompact || renderCompact;
-    const mode = getInviteButtonMode(circle, canInviteSecret);
+    const mode = getInviteButtonMode(circle, canInviteSecret, canSharePublic);
+    const iconOnly = renderCompact || (isCompact && mode === "secret");
+    const label = mode === "secret" ? "Invite" : "Share link";
     const [reference, setReference] = useState("");
     const [candidate, setCandidate] = useState<{ name?: string; handle?: string; picture?: { url: string } } | null>(
         null,
@@ -75,27 +82,20 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canI
         if (isDialogOpen && mode === "secret") void loadPendingInvitations();
     }, [isDialogOpen, loadPendingInvitations, mode]);
 
-    const getCirclePagePath = (
-        circle: Pick<Circle, "handle" | "circleType">,
-        pageHandle: string,
-        absolutePath: boolean,
-    ): string => {
-        if (typeof window === "undefined") {
-            return "";
-        }
+    const shareLink =
+        mode === "copy-link" && circle.handle && typeof window !== "undefined"
+            ? `${window.location.origin}/circles/${encodeURIComponent(circle.handle)}/home`
+            : "";
 
-        let rootPath = absolutePath ? window.location.origin : "";
-        return `${rootPath}/circles/${circle.handle}${pageHandle ? `/${pageHandle}` : ""}`;
-    };
-
-    const inviteLink = getCirclePagePath(circle, "", true);
+    const ShareIcon = mode === "secret" ? UserPlus : Link2;
 
     const copyToClipboard = async () => {
+        if (!shareLink) return;
         try {
-            await navigator.clipboard.writeText(inviteLink);
+            await navigator.clipboard.writeText(shareLink);
             toast({
                 title: "Link copied",
-                description: "Invite link has been copied to clipboard",
+                description: "Link copied to your clipboard",
             });
         } catch (err) {
             toast({
@@ -106,11 +106,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canI
         }
     };
 
-    // if (isCompact) {
-    //     return null;
-    // }
-
-    if (mode === null) {
+    if (mode === null || (mode === "copy-link" && !circle.handle)) {
         return null;
     }
 
@@ -191,11 +187,12 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canI
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
                 <Button
-                    variant={compact ? "ghost" : "outline"}
-                    className={compact ? "h-[32px] w-[32px] p-0" : "gap-2 rounded-full"}
+                    variant={iconOnly ? "ghost" : "outline"}
+                    className={iconOnly ? "h-[32px] w-[32px] p-0" : "gap-2 rounded-full"}
+                    aria-label={iconOnly ? label : undefined}
                 >
-                    <UserPlus className="h-4 w-4" />
-                    {compact ? "" : "Invite"}
+                    <ShareIcon className="h-4 w-4" />
+                    {!iconOnly && label}
                 </Button>
             </DialogTrigger>
             <DialogContent
@@ -205,13 +202,7 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canI
                 }}
             >
                 <DialogHeader>
-                    <DialogTitle>
-                        {mode === "secret"
-                            ? "Invite a Kamooni member"
-                            : isUser
-                              ? "Invite people to the user"
-                              : "Invite people to the circle"}
-                    </DialogTitle>
+                    <DialogTitle>{mode === "secret" ? "Invite a Kamooni member" : "Share link"}</DialogTitle>
                     <DialogDescription>
                         {mode === "secret"
                             ? "Enter an exact @handle, handle, or Kamooni profile URL."
@@ -294,8 +285,8 @@ const InviteButton: React.FC<InviteButtonProps> = ({ circle, renderCompact, canI
                     </div>
                 ) : (
                     <div className="flex items-center space-x-2">
-                        <Input className="flex-1" value={inviteLink} readOnly />
-                        <Button type="submit" onClick={copyToClipboard}>
+                        <Input aria-label="Link to share" className="min-w-0 flex-1" value={shareLink} readOnly />
+                        <Button type="button" onClick={copyToClipboard}>
                             Copy
                         </Button>
                     </div>

@@ -1,9 +1,11 @@
 import { ObjectId } from "mongodb";
 import type { Circle, CommentDisplay, Feature, Feed, Member, Post } from "@/models/models";
 import { canReadCircle } from "./circle-visibility-policy";
-import { getPostViewFeature } from "./constants";
+import { features, getPostViewFeature } from "./constants";
 import { canReadPostSource } from "./post-source-access-policy";
 import { sanitizeCommentMentions } from "./comment-mention-policy";
+import { buildClientCommentDto } from "./client-circle-dto";
+import { canViewUnpublishedInventoryCircle } from "./circle-discovery-queries";
 
 export type ReadablePostContext = { post: Post; feed: Feed; circle: Circle };
 export const POST_UNAVAILABLE_MESSAGE = "Post unavailable";
@@ -16,6 +18,7 @@ type PostAccessDependencies = {
     findAuthor: (createdBy: string) => Promise<Circle | null>;
     authorizeFeature: (viewerDid: string | undefined, circleId: string, post: Post) => Promise<boolean>;
     canReadSource?: (post: Post, viewerDid?: string) => Promise<boolean>;
+    canEditCircle?: (viewerDid: string, circleId: string) => Promise<boolean>;
 };
 
 const defaultPostAccessDependencies: PostAccessDependencies = {
@@ -46,6 +49,10 @@ const defaultPostAccessDependencies: PostAccessDependencies = {
         return isAuthorized(viewerDid, circleId, feature);
     },
     canReadSource: canReadPostSource,
+    canEditCircle: async (viewerDid, circleId) => {
+        const { isAuthorized } = await import("@/lib/auth/auth");
+        return isAuthorized(viewerDid, circleId, features.settings.edit_about);
+    },
 };
 
 const normalizeObjectId = (value: unknown): ObjectId | null => {
@@ -77,6 +84,13 @@ export async function resolveReadablePostContext(
         getMember: async (did, circleId) => dependencies.findMember(did, circleId),
     });
     if (!readable) return null;
+
+    if ((circle.publishStatus ?? "published") !== "published") {
+        const canReadDraft = await canViewUnpublishedInventoryCircle(circle, viewerDid, async (circleId) =>
+            Boolean(viewerDid && (await dependencies.canEditCircle?.(viewerDid, circleId))),
+        );
+        if (!canReadDraft) return null;
+    }
 
     if (post.postType === "community" && !circle.enabledModules?.includes("community")) return null;
     if (post.postType === "discussion" && !circle.enabledModules?.includes("discussions")) return null;
@@ -133,7 +147,8 @@ export async function getReadablePostComments(
     const context = await dependencies.resolveContext(postId, viewerDid);
     if (!context) return { success: false, message: POST_UNAVAILABLE_MESSAGE };
     const comments = await dependencies.loadComments(postId, viewerDid);
-    return { success: true, comments: await sanitizeCommentMentions(comments, viewerDid) };
+    const sanitized = await sanitizeCommentMentions(comments, viewerDid);
+    return { success: true, comments: sanitized.map(buildClientCommentDto) };
 }
 
 type PublicUserFeedDependencies = {

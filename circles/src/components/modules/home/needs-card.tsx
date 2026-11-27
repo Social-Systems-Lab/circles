@@ -3,15 +3,17 @@
 import React from "react";
 import PresenceCard from "./presence-card";
 import { Circle } from "@/models/models";
+import { Badge } from "@/components/ui/badge";
+import { getSkillLabelByHandle } from "@/lib/data/skills";
 import RichText from "../feeds/RichText";
 import { useRouter } from "next/navigation";
 
 interface NeedsCardProps {
     circle: Circle;
-    isOwner: boolean;
+    canEdit: boolean;
 }
 
-export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
+export default function NeedsCard({ circle, canEdit }: NeedsCardProps) {
     const router = useRouter();
     const isUserProfile = circle.circleType === "user";
 
@@ -23,15 +25,23 @@ export default function NeedsCard({ circle, isOwner }: NeedsCardProps) {
         router.push(`/circles/${circle.handle}/settings/presence`);
     };
 
-    if (!isOwner && !circle.needs?.text) {
+    const { text, tags = [] } = circle.needs ?? {};
+    const hasText = Boolean(text?.trim());
+    if (!canEdit && !hasText && !tags.length) {
         return null;
     }
 
     return (
-        <PresenceCard title="What we need help with" isOwner={isOwner} onEdit={onEdit}>
-            {circle.needs?.text ? (
+        <PresenceCard title="What we need help with" canEdit={canEdit} onEdit={onEdit}>
+            {hasText && text ? (
                 <div>
-                    {circle.needs?.text && <RichText content={circle.needs.text} />}
+                    <RichText content={text} />
+                </div>
+            ) : tags.length ? (
+                <div className="flex flex-wrap gap-2">
+                    {[...new Set(tags)].map((handle) => (
+                        <Badge key={handle}>{getSkillLabelByHandle(handle)}</Badge>
+                    ))}
                 </div>
             ) : (
                 <div className="text-center text-muted-foreground">

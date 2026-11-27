@@ -1,8 +1,8 @@
-import { getCircleByHandle } from "@/lib/data/circle";
+import { buildFeedCircleDto } from "@/lib/data/client-circle-dto";
+import { getCirclePageAccess } from "../circle-page-access";
 import FeedsModule from "@/components/modules/feeds/feeds";
 import { notFound } from "next/navigation";
 import { createDefaultFeed } from "@/lib/data/feed";
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -10,22 +10,15 @@ type PageProps = {
 };
 
 export default async function FeedPage(props: PageProps) {
-    const params = await props.params;
-    const circle = await getCircleByHandle(params.handle);
+    const { handle } = await props.params;
+    const access = await getCirclePageAccess(handle);
+    if (!access) notFound();
 
-    if (!circle) {
-        notFound();
-    }
-
-    // ensure it has a default feed
-    let userDid = await getAuthenticatedUserDid();
-    if (userDid) {
+    const { circle, viewerDid } = access;
+    if (!circle._id) notFound();
+    if (viewerDid) {
         await createDefaultFeed(circle._id);
     }
 
-    const plainCircle = JSON.parse(JSON.stringify(circle));
-
-    // Pass circle and original props down to FeedsModule
-    // FeedsModule likely fetches its own feed/posts using these props
-    return <FeedsModule key={params.handle} {...props} circle={plainCircle} />;
+    return <FeedsModule key={handle} searchParams={props.searchParams} circle={buildFeedCircleDto(circle)} />;
 }
