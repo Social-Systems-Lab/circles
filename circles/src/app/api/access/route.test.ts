@@ -18,13 +18,22 @@ const baseCircle: Circle = {
 type Scenario = {
     circle?: Circle | null;
     viewerDid?: string;
+    memberGroups?: string[];
     member?: boolean;
     invalidSession?: boolean;
+    canEditAbout?: boolean;
 };
 
-const makeHandler = ({ circle = baseCircle, viewerDid, member = false, invalidSession = false }: Scenario) => {
+const makeHandler = ({
+    circle = baseCircle,
+    viewerDid,
+    member = false,
+    memberGroups = member ? ["members"] : undefined,
+    invalidSession = false,
+    canEditAbout = false,
+}: Scenario) => {
     const canonicalMember: Member | null =
-        member && viewerDid ? { userDid: viewerDid, circleId, userGroups: ["members"], joinedAt: new Date() } : null;
+        memberGroups && viewerDid ? { userDid: viewerDid, circleId, userGroups: memberGroups, joinedAt: new Date() } : null;
     return createAccessPostHandler({
         authenticate: async () => {
             if (invalidSession) throw new errors.JWTInvalid("invalid session");
@@ -39,16 +48,17 @@ const makeHandler = ({ circle = baseCircle, viewerDid, member = false, invalidSe
                         : null,
             }),
         getMember: async () => canonicalMember,
+        canEditAbout: async () => canEditAbout,
         isCirclePublished: (candidate) => candidate.publishStatus === "published",
         isModuleEnabled: (candidate, moduleHandle) => candidate.enabledModules?.includes(moduleHandle) === true,
     });
 };
 
-const invoke = (scenario: Scenario) =>
+const invoke = (scenario: Scenario, moduleHandle = "feed", settingsEditor?: string) =>
     makeHandler(scenario)(
         new Request("http://localhost/api/access", {
             method: "POST",
-            body: JSON.stringify({ circleHandle: "target", moduleHandle: "feed" }),
+            body: JSON.stringify({ circleHandle: "target", moduleHandle, settingsEditor }),
         }),
     );
 
@@ -101,6 +111,70 @@ async function main() {
     const legacyPublicResponse = await invoke({ circle: { ...baseCircle, visibility: undefined } });
     assert.equal(legacyPublicResponse.status, 200);
     assert.deepEqual(await legacyPublicResponse.json(), { authenticated: true, authorized: true });
+
+    const draft: Circle = { ...baseCircle, publishStatus: "draft" };
+    assert.deepEqual(await neutral(await invoke({ circle: draft })), expectedNeutral);
+    assert.deepEqual(await neutral(await invoke({ circle: draft, viewerDid: "did:outsider" })), expectedNeutral);
+    assert.equal((await invoke({ circle: { ...draft, createdBy: "did:creator" }, viewerDid: "did:creator" })).status, 200);
+    assert.equal((await invoke({ circle: draft, viewerDid: "did:admin", memberGroups: ["admins"] })).status, 200);
+
+    const settings: Circle = { ...baseCircle, enabledModules: ["settings"] };
+    for (const [scenario, expected] of [
+        [{ circle: settings }, { authenticated: false, authorized: false }],
+        [{ circle: settings, viewerDid: "did:outsider" }, { authenticated: true, authorized: false }],
+        [{ circle: settings, viewerDid: "did:member", member: true }, { authenticated: true, authorized: false }],
+        [{ circle: settings, viewerDid: "did:admin", memberGroups: ["admins"] }, { authenticated: true, authorized: true }],
+        [
+            { circle: { ...settings, accessRules: { settings: { view: ["members"] } } }, viewerDid: "did:member", member: true },
+            { authenticated: true, authorized: true },
+        ],
+        [
+            { circle: { ...settings, accessRules: { settings: { view: ["everyone"] } } } },
+            { authenticated: false, authorized: false },
+        ],
+        [
+            { circle: { ...settings, visibility: "secret", accessRules: { settings: { view: ["everyone"] } } }, viewerDid: "did:outsider" },
+            expectedNeutral.body,
+        ],
+    ] satisfies Array<[Scenario, unknown]>) {
+        assert.deepEqual(await (await invoke(scenario, "settings")).json(), expected);
+    }
+
+    const legacySettings: Circle = { ...settings, accessRules: { settings: { edit_about: ["editors", "admins"] } } };
+    const editor: Scenario = { circle: legacySettings, viewerDid: "did:editor", memberGroups: ["editors"], canEditAbout: true };
+    const settingsResponse = async (scenario: Scenario, page?: string) =>
+        neutral(await invoke(scenario, "settings", page));
+    const allowed = { status: 200, body: { authenticated: true, authorized: true } };
+    const denied = { status: 200, body: { authenticated: true, authorized: false } };
+
+    for (const page of ["about", "presence"]) {
+        assert.deepEqual(await settingsResponse(editor, page), allowed);
+        assert.deepEqual(await settingsResponse({ ...editor, viewerDid: undefined }, page), {
+            status: 200,
+            body: { authenticated: false, authorized: false },
+        });
+        assert.deepEqual(await settingsResponse({ ...editor, memberGroups: ["members"], canEditAbout: false }, page), denied);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: settings }, page), denied);
+        for (const view of [[], ["admins"], ["editors"]]) {
+            const circle: Circle = {
+                ...legacySettings,
+                accessRules: { settings: { ...legacySettings.accessRules?.settings, view } },
+            };
+            assert.deepEqual(await settingsResponse({ ...editor, circle }, page), view.includes("editors") ? allowed : denied);
+        }
+        assert.deepEqual(await settingsResponse({ ...editor, circle: { ...legacySettings, publishStatus: "draft" } }, page), expectedNeutral);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: { ...legacySettings, publishStatus: "draft", createdBy: editor.viewerDid } }, page), allowed);
+        const secret: Circle = { ...legacySettings, visibility: "secret" };
+        assert.deepEqual(await settingsResponse({ ...editor, circle: secret, memberGroups: undefined }, page), expectedNeutral);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: secret }, page), allowed);
+        const profile: Circle = { ...legacySettings, circleType: "user", did: "did:owner" };
+        assert.deepEqual(await settingsResponse({ ...editor, circle: profile }, page), denied);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: profile, viewerDid: profile.did }, page), allowed);
+    }
+    for (const page of [undefined, "general", "access-rules"]) {
+        assert.deepEqual(await settingsResponse(editor, page), denied);
+        assert.deepEqual(await settingsResponse({ ...editor, memberGroups: ["admins"] }, page), allowed);
+    }
 
     console.log("access route handler tests passed");
 }

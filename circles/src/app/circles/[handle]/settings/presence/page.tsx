@@ -1,5 +1,7 @@
 import { PresenceSettingsForm } from "@/components/forms/circle-settings/presence-settings-form";
-import { getCircleByHandle } from "@/lib/data/circle";
+import { toPresenceSettingsDto } from "@/lib/data/presence-settings-dto";
+import { notFound } from "next/navigation";
+import { getCirclePageAccess } from "../../circle-page-access";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -7,15 +9,11 @@ type PageProps = {
 };
 
 export default async function PresenceSettingsPage(props: PageProps) {
-    const params = await props.params;
-    const { handle } = params;
-    const circle = await getCircleByHandle(handle);
+    const { handle } = await props.params;
+    const access = await getCirclePageAccess(handle);
+    if (!access?.viewerDid || !access.canEditAbout) notFound();
 
-    if (!circle) {
-        return <div>Circle not found</div>;
-    }
-
-    const isUser = circle.circleType === "user";
+    const isUser = access.circle.circleType === "user";
 
     return (
         <div className="container py-6">
@@ -25,7 +23,7 @@ export default async function PresenceSettingsPage(props: PageProps) {
                     ? "Manage what you can offer and the topics or roles you want to engage in."
                     : "Describe your opportunities and what support your circle or project needs."}
             </p>
-            <PresenceSettingsForm circle={circle} />
+            <PresenceSettingsForm circle={toPresenceSettingsDto(access.circle)} />
         </div>
     );
 }

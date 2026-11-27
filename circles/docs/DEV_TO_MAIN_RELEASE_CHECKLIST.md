@@ -17,6 +17,12 @@
 13. Deploy production with `cd /root/circles/circles && ./circles/deploy-genesis2.sh main`.
 14. Independently verify `curl -sS https://kamooni.org/api/version && echo`; its `gitSha` must match the approved `origin/main` commit.
 
+## Circle privacy verification
+
+Build Check runs the focused Circle privacy and authorisation regressions on pull requests. For changes to Circle access or client payloads, also run `bun scripts/test-circle-post-route-privacy.ts` against a loopback app and a disposable `circles_stage1a_test_*` MongoDB database. The script header lists the required environment variables.
+
+Follow-up for CI: provision a disposable MongoDB service and start the built app on loopback so Build Check can also run the full HTML and React Server Component matrix.
+
 ## Staging-only separation gate
 
 Before merging a release to `main`, compare the clean release branch with both `main` and the branch tested on staging. Classify every difference as production-ready, staging-only, or excluded.

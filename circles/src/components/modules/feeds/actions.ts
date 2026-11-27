@@ -93,6 +93,8 @@ import { orchestrateOrdinaryPostDelete } from "@/lib/data/post-delete-access-pol
 import { orchestratePostReaction } from "@/lib/data/post-reaction-access-policy";
 import { orchestrateCommentReaction } from "@/lib/data/comment-reaction-access-policy";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
+import { buildClientPostDto } from "@/lib/data/client-circle-dto";
+import { canViewUnpublishedInventoryCircle } from "@/lib/data/circle-discovery-queries";
 import { sanitizeCommentMentions } from "@/lib/data/comment-mention-policy";
 import {
     resolveInternalPreviewAction,
@@ -321,8 +323,14 @@ export async function getPostsAction(
     }
 
     if (feed.handle === "community") {
-        if (!circle?.enabledModules?.includes("community")) {
+        if (!circle.enabledModules?.includes("community")) {
             redirect("/not-found");
+        }
+        if ((circle.publishStatus ?? "published") !== "published") {
+            const canReadDraft = await canViewUnpublishedInventoryCircle(circle, userDid, (id) =>
+                isAuthorized(userDid, id, features.settings.edit_about),
+            );
+            if (!canReadDraft) redirect("/not-found");
         }
     }
 
@@ -338,7 +346,7 @@ export async function getPostsAction(
 
     // get posts for feed
     const posts = await getPostsWithMetrics(feedId, userDid, limit, skip, sortingOptions, sdgHandles, postType);
-    return posts;
+    return feed.handle === "community" ? posts.map(buildClientPostDto) : posts;
 }
 
 export async function createPostAction(

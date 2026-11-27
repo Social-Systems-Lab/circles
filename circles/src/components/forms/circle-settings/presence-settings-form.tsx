@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { useToast } from "@/components/ui/use-toast";
-import { Circle } from "@/models/models";
+import type { PresenceSettingsDto } from "@/lib/data/presence-settings-dto";
 import { useRouter } from "next/navigation";
 import { useForm, Controller, Control } from "react-hook-form";
 import { savePresence } from "@/app/circles/[handle]/settings/presence/actions";
@@ -19,7 +19,7 @@ import { skillsV2, skillCategoryLabels, SkillCategory } from "@/lib/data/skills-
 import { cn } from "@/lib/utils";
 
 interface PresenceSettingsFormProps {
-    circle: Circle;
+    circle: PresenceSettingsDto;
 }
 
 const skillNameByHandle = new Map(skillsV2.map((skill) => [skill.handle, skill.name]));
@@ -271,12 +271,9 @@ export function PresenceSettingsForm({ circle }: PresenceSettingsFormProps): Rea
         defaultValues: {
             _id: circle._id,
             handle: circle.handle,
-            offers: circle.offers || {},
-            engagements: {
-                ...(circle.engagements || {}),
-                interests: circle.interests?.length ? circle.interests : circle.engagements?.interests || [],
-            },
-            needs: circle.needs || {},
+            offers: circle.offers,
+            engagements: circle.engagements,
+            needs: circle.needs,
         },
     });
 

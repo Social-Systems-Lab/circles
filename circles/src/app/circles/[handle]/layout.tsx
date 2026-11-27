@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { getCircleByHandle, getDefaultCircle, getDiscoverableCirclesByIds, isCirclePublished } from "@/lib/data/circle";
+import { getDefaultCircle, getDiscoverableCirclesByIds, isCirclePublished } from "@/lib/data/circle";
 import { redirect } from "next/navigation";
 import HomeCover from "@/components/modules/home/home-cover";
 import HomeContent from "@/components/modules/home/home-content";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
+import { isAuthorized } from "@/lib/auth/auth";
 import { features } from "@/lib/data/constants";
 import { CircleTabs } from "@/components/layout/circle-tabs";
 import { getHumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
-import { canReadCircle } from "@/lib/data/circle-visibility-policy";
-import { resolveCircleRouteAccess, resolveCircleRouteMetadata } from "./circle-route-access";
+import { resolveCircleRouteMetadata } from "./circle-route-access";
+import { getCirclePageAccess } from "./circle-page-access";
 import { getMember } from "@/lib/data/member";
-import { buildLayoutClientProps } from "@/lib/data/client-circle-dto";
+import { buildLayoutClientProps, buildVisibleCircleModuleHandles } from "@/lib/data/client-circle-dto";
 
 type Props = { params: Promise<{ handle: string }>; children: React.ReactNode };
 
@@ -23,22 +23,14 @@ export default async function RootLayout(props: Props) {
         return null;
     }
 
-    const access = await resolveCircleRouteAccess(params.handle, {
-        findCircle: getCircleByHandle,
-        authenticate: getAuthenticatedUserDid,
-        canReadCircle,
-    });
+    const access = await getCirclePageAccess(params.handle);
     if (!access) redirect("/not-found");
 
-    const { circle, viewerDid: userDid } = access;
-    const authorizedToEdit = await isAuthorized(userDid, circle._id ?? "", features.settings.edit_about);
-    const canInviteSecret =
-        circle.visibility === "secret" &&
-        (await isAuthorized(userDid, circle._id?.toString() ?? "", features.general.invite_members));
-    const canViewCircle = isCirclePublished(circle) || authorizedToEdit || circle.createdBy === userDid;
-    if (!canViewCircle) {
-        redirect("/not-found");
-    }
+    const { circle, viewerDid: userDid, canEditAbout } = access;
+    const canInviteSecret = Boolean(
+        userDid && circle._id && circle.visibility === "secret" &&
+            (await isAuthorized(userDid, circle._id, features.general.invite_members)),
+    );
     const parentCircle = circle.parentCircleId
         ? (await getDiscoverableCirclesByIds([circle.parentCircleId], userDid))[0]
         : undefined;
@@ -63,9 +55,10 @@ export default async function RootLayout(props: Props) {
                 <HomeCover {...clientProps.homeCover} />
                 <HomeContent
                     {...clientProps.homeContent}
-                    authorizedToEdit={authorizedToEdit}
+                    authorizedToEdit={canEditAbout}
                     viewerDid={userDid}
                     canInviteSecret={canInviteSecret}
+                    canSharePublic={isCirclePublished(circle) && buildVisibleCircleModuleHandles(circle, []).includes("home")}
                 />
             </>
             <CircleTabs {...clientProps.circleTabs} />
@@ -77,10 +70,5 @@ export default async function RootLayout(props: Props) {
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
     const params = await props.params;
-    return resolveCircleRouteMetadata(params.handle, {
-        findCircle: getCircleByHandle,
-        authenticate: getAuthenticatedUserDid,
-        canReadCircle,
-        getGenericCircle: getDefaultCircle,
-    });
+    return resolveCircleRouteMetadata(await getCirclePageAccess(params.handle), getDefaultCircle);
 }

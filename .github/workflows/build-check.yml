@@ -23,6 +23,28 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Circle privacy and authorisation regressions
+        env:
+          IS_BUILD: "true"
+          MONGODB_URI: mongodb://127.0.0.1:1/?directConnection=true&serverSelectionTimeoutMS=100
+          CIRCLES_MONGODB_DATABASE: circles_stage1a_test_circle_privacy_ci
+        run: |
+          bun test \
+            src/app/api/access/route.test.ts \
+            'src/app/circles/[handle]/circle-route-access.test.ts' \
+            src/lib/data/circle-visibility-policy.test.ts \
+            src/lib/data/client-circle-dto.test.ts \
+            src/lib/data/comment-dto.test.ts \
+            src/lib/data/post-access-policy.test.ts \
+            src/lib/data/post-nested-content-policy.test.ts \
+            src/lib/data/settings-navigation-dto.test.ts \
+            src/components/modules/home/invite-button.test.ts \
+            src/components/modules/home/presence-cards.test.tsx
+          bun test 'src/app/circles/[handle]/settings/about/actions.profile-name.test.ts'
+          bun test 'src/app/circles/[handle]/settings/presence/actions.test.ts'
+          bun test 'src/app/circles/[handle]/settings/presence/page.test.tsx'
+          bun test src/lib/data/secret-circle-invitations.test.ts
+
       - name: Production onboarding safety contracts
         run: |
           ./scripts/test-production-onboarding-control.sh

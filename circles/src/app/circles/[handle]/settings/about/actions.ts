@@ -45,6 +45,7 @@ import { ObjectId } from "mongodb";
 import { assertCircleWritesAllowed } from "@/lib/data/circle-lifecycle-policy";
 import { preparePersonalLocationForSave } from "@/lib/location-privacy";
 import { validatePersonalProfileDisplayName } from "@/lib/profile-name-validation";
+import { getAboutEditorMode } from "@/lib/auth/settings-editor-access.server";
 
 const normalizeWebsiteUrl = (url?: string) => {
     if (!url) return undefined;
@@ -108,27 +109,23 @@ async function revalidateCircleAffiliationPaths(currentCircleId: string, affilia
     revalidatePath("/circles");
 }
 
-async function updateCirclePublishStatus(circleId: string, publishStatus: "published" | "pending_verification") {
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to edit circle settings" };
-    }
-
-    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
-    if (!authorized) {
-        return { success: false, message: "You are not authorized to edit circle settings" };
-    }
-
+// The scoped editors do not grant access to publishing, verification or affiliations.
+async function getFullAboutSettingsCircle(userDid: string, circleId: string): Promise<Circle | null> {
+    if (!(await isAuthorized(userDid, circleId, features.settings.edit_about))) return null;
     const circle = await getCircleById(circleId);
-    if (!circle) {
-        return { success: false, message: "Circle not found" };
-    }
+    return circle && (await getAboutEditorMode(circle, userDid)) === "full" ? circle : null;
+}
 
+async function updateCirclePublishStatus(
+    circle: Circle,
+    userDid: string,
+    publishStatus: "published" | "pending_verification",
+) {
     if (circle.circleType === "user") {
         return { success: false, message: "User profiles do not support this workflow" };
     }
 
-    await updateCircle({ _id: circleId, publishStatus }, userDid);
+    await updateCircle({ _id: circle._id, publishStatus }, userDid);
 
     const circlePath = await getCirclePath(circle);
     revalidatePath(circlePath);
@@ -144,16 +141,20 @@ export async function publishCircleAction(formData: FormData) {
         return { success: false, message: "Circle not found" };
     }
 
-    const circle = await getCircleById(circleId);
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+    const circle = await getFullAboutSettingsCircle(userDid, circleId);
     if (!circle) {
-        return { success: false, message: "Circle not found" };
+        return { success: false, message: "You are not authorized to edit circle settings" };
     }
 
     if (circle.circleLevel !== "profile_child") {
         return { success: false, message: "Only profile circles can be published directly" };
     }
 
-    return updateCirclePublishStatus(circleId, "published");
+    return updateCirclePublishStatus(circle, userDid, "published");
 }
 
 export async function submitCircleForVerificationAction(formData: FormData) {
@@ -162,9 +163,14 @@ export async function submitCircleForVerificationAction(formData: FormData) {
         return { success: false, message: "Circle not found" };
     }
 
-    const circle = await getCircleById(circleId);
+    const userDid = await getAuthenticatedUserDid();
+    if (!userDid) {
+        return { success: false, message: "You need to be logged in to edit circle settings" };
+    }
+
+    const circle = await getFullAboutSettingsCircle(userDid, circleId);
     if (!circle) {
-        return { success: false, message: "Circle not found" };
+        return { success: false, message: "You are not authorized to edit circle settings" };
     }
 
     if (circle.circleLevel === "profile_child") {
@@ -199,20 +205,10 @@ export async function submitCircleForVerificationAction(formData: FormData) {
         }
     }
 
-    const userDid = await getAuthenticatedUserDid();
-    if (!userDid) {
-        return { success: false, message: "You need to be logged in to edit circle settings" };
-    }
-
-    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
-    if (!authorized) {
-        return { success: false, message: "You are not authorized to edit circle settings" };
-    }
-
     const existingRequest = await getActiveVerificationRequestForIndependentCircle(circleId);
     if (existingRequest) {
         if (circle.publishStatus !== "pending_verification") {
-            await updateCirclePublishStatus(circleId, "pending_verification");
+            await updateCirclePublishStatus(circle, userDid, "pending_verification");
         }
         return { success: true, message: "A verification request for this circle is already pending review." };
     }
@@ -232,7 +228,7 @@ export async function submitCircleForVerificationAction(formData: FormData) {
         });
     }
 
-    return updateCirclePublishStatus(circleId, "pending_verification");
+    return updateCirclePublishStatus(circle, userDid, "pending_verification");
 }
 
 export async function createDetachCircleRequestAction(circleId: string): Promise<FormSubmitResponse> {
@@ -376,8 +372,8 @@ export async function addCircleAffiliationAction(
         return { success: false, message: "You need to be logged in to manage affiliations" };
     }
 
-    const authorized = await isAuthorized(userDid, currentCircleId, features.settings.edit_about);
-    if (!authorized) {
+    const currentCircle = await getFullAboutSettingsCircle(userDid, currentCircleId);
+    if (!currentCircle) {
         return { success: false, message: "You are not authorized to manage affiliations for this circle" };
     }
 
@@ -387,11 +383,6 @@ export async function addCircleAffiliationAction(
     }
 
     try {
-        const currentCircle = await getCircleById(currentCircleId);
-        if (!currentCircle) {
-            return { success: false, message: "Current circle not found" };
-        }
-
         const affiliatedCircle = await getCircleByHandle(handle);
         if (!affiliatedCircle?._id) {
             return { success: false, message: "Affiliated circle not found" };
@@ -438,8 +429,8 @@ export async function removeCircleAffiliationAction(
         return { success: false, message: "You need to be logged in to manage affiliations" };
     }
 
-    const authorized = await isAuthorized(userDid, currentCircleId, features.settings.edit_about);
-    if (!authorized) {
+    const currentCircle = await getFullAboutSettingsCircle(userDid, currentCircleId);
+    if (!currentCircle) {
         return { success: false, message: "You are not authorized to manage affiliations for this circle" };
     }
 
@@ -558,8 +549,7 @@ export async function getIndependentCircleVerificationThreadAction(circleId: str
         throw new Error("Unauthorized");
     }
 
-    const authorized = await isAuthorized(userDid, circleId, features.settings.edit_about);
-    if (!authorized) {
+    if (!(await getFullAboutSettingsCircle(userDid, circleId))) {
         throw new Error("Unauthorized");
     }
 
@@ -583,8 +573,8 @@ export async function replyToIndependentCircleVerificationThreadAction(formData:
         return { success: false, message: "Circle not found" };
     }
 
-    const authorized = await isAuthorized(userDid, circleIdValue, features.settings.edit_about);
-    if (!authorized) {
+    const circle = await getFullAboutSettingsCircle(userDid, circleIdValue);
+    if (!circle) {
         return { success: false, message: "You are not authorized to edit circle settings" };
     }
 
@@ -605,8 +595,7 @@ export async function replyToIndependentCircleVerificationThreadAction(formData:
         const admins = await getVerificationAdmins(userDid);
         await notifyAdminsOfApplicantVerificationReply(result.applicant, admins);
 
-        const circle = await getCircleById(circleIdValue);
-        const circlePath = circle ? await getCirclePath(circle) : null;
+        const circlePath = await getCirclePath(circle);
         if (circlePath) {
             revalidatePath(circlePath);
             revalidatePath(`${circlePath}settings/about`);
@@ -644,7 +633,7 @@ export async function saveAbout(values: {
 }): Promise<FormSubmitResponse> {
     console.log("Saving circle about with values (images length):", values.images?.length);
 
-    let circleUpdateData: Partial<Circle> = {
+    const circleUpdateData: Partial<Circle> = {
         _id: values._id,
         name: values.name,
         handle: values.handle,
@@ -673,14 +662,14 @@ export async function saveAbout(values: {
         return { success: false, message: "You need to be logged in to edit circle settings" };
     }
 
-    let authorized = await isAuthorized(userDid, circleUpdateData._id ?? "", features.settings.edit_about);
+    const authorized = await isAuthorized(userDid, circleUpdateData._id ?? "", features.settings.edit_about);
     try {
         if (!authorized) {
             return { success: false, message: "You are not authorized to edit circle settings" };
         }
 
         // make sure the circle exists
-        let existingCircle = await getCircleById(values._id);
+        const existingCircle = await getCircleById(values._id);
         if (!existingCircle) {
             throw new Error("Circle not found");
         }
@@ -706,6 +695,21 @@ export async function saveAbout(values: {
             circleUpdateData.representsOrganization = undefined;
             circleUpdateData.organizationName = undefined;
             circleUpdateData.officialEmail = undefined;
+        }
+
+        const editorMode = await getAboutEditorMode(existingCircle, userDid);
+        if (!editorMode) {
+            return { success: false, message: "You are not authorized to edit circle settings" };
+        }
+        if (editorMode === "delegated") {
+            delete circleUpdateData.handle;
+            delete circleUpdateData.websiteUrl;
+            delete circleUpdateData.isPublic;
+            delete circleUpdateData.showAdminsPublicly;
+            delete circleUpdateData.location;
+            delete circleUpdateData.representsOrganization;
+            delete circleUpdateData.organizationName;
+            delete circleUpdateData.officialEmail;
         }
 
         // Handle picture upload (keeping existing logic for profile picture)
@@ -794,13 +798,12 @@ export async function saveAbout(values: {
             console.error("Circle update saved but old media cleanup failed:", cleanup.error);
 
         // clear page cache
-        let circlePath = await getCirclePath(circleUpdateData);
+        const circlePath = await getCirclePath({ ...existingCircle, ...circleUpdateData });
         revalidatePath(`${circlePath}settings/about`);
         revalidatePath(circlePath); // revalidate home page too
 
         // Check if handle was updated and return it for potential redirect
-        const handleChanged = values.handle && values.handle !== existingCircle.handle;
-        const newHandle = handleChanged ? values.handle : undefined;
+        const newHandle = circleUpdateData.handle !== existingCircle.handle ? circleUpdateData.handle : undefined;
 
         return {
             success: true,

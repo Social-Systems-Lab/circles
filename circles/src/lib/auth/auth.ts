@@ -17,6 +17,7 @@ import { getCircleById, getCirclesByDids, getCirclesByIds, getDefaultCircle } fr
 import { generateSecureToken, hashToken, sendEmail } from "../data/email"; // Added sendEmail for now, will be sendVerificationEmail
 import { canParticipate } from "@/lib/profile-completion";
 import { canReadCircleByLifecycle, canWriteCircleByLifecycle } from "@/lib/data/circle-lifecycle-policy";
+import { getCircleVisibility } from "@/lib/data/circle-visibility-policy";
 
 export const SALT_FILENAME = "salt.bin";
 export const IV_FILENAME = "iv.bin";
@@ -388,6 +389,9 @@ export const isAuthorized = async (
     circleId: string,
     featureInput: Feature,
 ): Promise<boolean> => {
+    const isSettings = featureInput.module === "settings";
+    if (isSettings && !userDid) return false;
+
     let circle = await Circles.findOne({ _id: new ObjectId(circleId) });
     if (!circle) return false;
     if (featureInput.handle === "view") {
@@ -399,7 +403,7 @@ export const isAuthorized = async (
     if (userDid) {
         const user = await Circles.findOne({ did: userDid });
         const canEditOwnSettings =
-            featureInput.module === "settings" && (user?._id.toString() === circleId || user?.did === circle.createdBy);
+            isSettings && Boolean(user && (user._id?.toString() === circleId || userDid === circle.createdBy));
         if (
             featureInput.needsToBeVerified &&
             // Historical feature name: restricted participation now requires derived profile completion.
@@ -428,7 +432,9 @@ export const isAuthorized = async (
     }
 
     // Now allowedUserGroups is guaranteed to be string[]
-    if (allowedUserGroups.includes("everyone")) return true;
+    const allowsEveryone = allowedUserGroups.includes("everyone");
+    // Settings on Secret Circles still require canonical membership with an "everyone" rule.
+    if (allowsEveryone && !(isSettings && getCircleVisibility(circle) === "secret")) return true;
 
     // If user is not logged in and "everyone" is not allowed, deny access
     if (!userDid) return false;
@@ -439,7 +445,7 @@ export const isAuthorized = async (
 
     // Ensure membership.userGroups is also an array before calling includes
     const memberGroups = membership.userGroups ?? [];
-    return allowedUserGroups.some((group) => memberGroups.includes(group));
+    return allowsEveryone || allowedUserGroups.some((group) => memberGroups.includes(group));
 };
 
 export const getAuthorizedMembers = async (circle: string | Circle, feature: Feature): Promise<Circle[]> => {

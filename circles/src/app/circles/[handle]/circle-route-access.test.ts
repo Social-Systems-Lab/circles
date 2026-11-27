@@ -21,11 +21,13 @@ const dependencies = ({
     circle = secretCircle,
     viewerDid,
     member = false,
+    canEdit = false,
     invalidSession = false,
 }: {
     circle?: Circle | null;
     viewerDid?: string;
     member?: boolean;
+    canEdit?: boolean;
     invalidSession?: boolean;
 }) => ({
     findCircle: async () => circle,
@@ -40,8 +42,12 @@ const dependencies = ({
                     ? { userDid: memberDid, circleId: memberCircleId, userGroups: ["members"], joinedAt: new Date() }
                     : null,
         }),
-    getGenericCircle: async () => genericCircle,
+    isCirclePublished: (candidate: Circle) => (candidate.publishStatus ?? "published") === "published",
+    canEditAbout: async () => canEdit,
 });
+
+const metadataFor = async (scenario: ReturnType<typeof dependencies>) =>
+    resolveCircleRouteMetadata(await resolveCircleRouteAccess("fixture", scenario), async () => genericCircle);
 
 async function main() {
     assert.equal(await resolveCircleRouteAccess("missing", dependencies({ circle: null })), null);
@@ -60,7 +66,7 @@ async function main() {
     );
     assert.equal(memberAccess?.circle.name, secretCircle.name);
 
-    const missingMetadata = await resolveCircleRouteMetadata("missing", dependencies({ circle: null }));
+    const missingMetadata = await metadataFor(dependencies({ circle: null }));
     for (const scenario of [
         dependencies({}),
         dependencies({ invalidSession: true }),
@@ -77,15 +83,12 @@ async function main() {
             member: true,
         }),
     ]) {
-        const metadata = await resolveCircleRouteMetadata("secret", scenario);
+        const metadata = await metadataFor(scenario);
         assert.deepEqual(metadata, missingMetadata);
         assert.doesNotMatch(JSON.stringify(metadata), /Hidden circle/);
     }
 
-    const memberMetadata = await resolveCircleRouteMetadata(
-        "secret",
-        dependencies({ viewerDid: "did:member", member: true }),
-    );
+    const memberMetadata = await metadataFor(dependencies({ viewerDid: "did:member", member: true }));
     assert.equal(memberMetadata.title, secretCircle.name);
     assert.equal(memberMetadata.description, secretCircle.description);
 
@@ -95,7 +98,7 @@ async function main() {
         name: "Public circle",
         description: "Public description",
     };
-    const publicMetadata = await resolveCircleRouteMetadata("public", dependencies({ circle: publicCircle }));
+    const publicMetadata = await metadataFor(dependencies({ circle: publicCircle }));
     assert.equal(publicMetadata.title, publicCircle.name);
     assert.equal(publicMetadata.description, publicCircle.description);
 
@@ -106,6 +109,35 @@ async function main() {
     });
     if (inaccessible) protectedDetailsLoaded = true;
     assert.equal(protectedDetailsLoaded, false, "layout cannot proceed to parent, hero, or detail loading");
+
+    const draft: Circle = { ...publicCircle, publishStatus: "draft" };
+    for (const viewerDid of [undefined, "did:outsider"]) {
+        const scenario = dependencies({ circle: draft, viewerDid, canEdit: !viewerDid });
+        assert.equal(await resolveCircleRouteAccess("draft", scenario), null);
+        assert.deepEqual(await metadataFor(scenario), missingMetadata);
+    }
+    const creatorDraft = { ...draft, createdBy: "did:creator" };
+    const creatorAccess = await resolveCircleRouteAccess("draft", dependencies({
+        circle: creatorDraft, viewerDid: "did:creator",
+    }));
+    assert.equal(creatorAccess?.canEditAbout, false);
+    const editorAccess = await resolveCircleRouteAccess("draft", dependencies({
+        circle: draft, viewerDid: "did:editor", canEdit: true,
+    }));
+    assert.equal(editorAccess?.canEditAbout, true);
+
+    for (const [circle, viewerDid, authorized, expected] of [
+        [publicCircle, undefined, true, false],
+        [publicCircle, "did:member", false, false],
+        [publicCircle, "did:admin", true, true],
+        [{ ...publicCircle, circleType: "user", did: "did:owner" }, "did:owner", true, true],
+        [{ ...publicCircle, circleType: "user", did: "did:owner" }, "did:member", true, false],
+    ] satisfies Array<[Circle, string | undefined, boolean, boolean]>) {
+        const routeAccess = await resolveCircleRouteAccess("fixture", dependencies({
+            circle, viewerDid, canEdit: authorized,
+        }));
+        assert.equal(routeAccess?.canEditAbout, expected);
+    }
 
     console.log("circle route access and metadata tests passed");
 }

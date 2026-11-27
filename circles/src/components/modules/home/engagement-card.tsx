@@ -14,10 +14,11 @@ import { getInterestLabel } from "@/lib/data/interests";
 
 interface EngagementCardProps {
     circle: Circle;
+    canEdit: boolean;
     isOwner: boolean;
 }
 
-export default function EngagementCard({ circle, isOwner }: EngagementCardProps) {
+export default function EngagementCard({ circle, canEdit, isOwner }: EngagementCardProps) {
     const router = useRouter();
     const [showDM, setShowDM] = useState(false);
     const [initialMessage, setInitialMessage] = useState("");
@@ -40,20 +41,22 @@ export default function EngagementCard({ circle, isOwner }: EngagementCardProps)
         }
     };
 
-    if (!isOwner && (!circle.engagements || !circle.engagements.text)) {
+    const text = circle.engagements?.text;
+    const hasText = Boolean(text?.trim());
+    if (!canEdit && !hasText) {
         return null;
     }
 
     return (
         <PresenceCard
             title={circle.circleType === "user" ? "What I want to engage in" : "What we want to engage in"}
-            isOwner={isOwner}
+            canEdit={canEdit}
             onEdit={onEdit}
         >
-            {circle.engagements?.text ? (
+            {hasText && text ? (
                 <div>
-                    <RichText content={circle.engagements.text} />
-                    {!isOwner && circle.engagements.inviteEnabled && (
+                    <RichText content={text} />
+                    {!isOwner && circle.engagements?.inviteEnabled && (
                         <div className="mt-4">
                             <Button onClick={onInvite}>Invite to project</Button>
                         </div>

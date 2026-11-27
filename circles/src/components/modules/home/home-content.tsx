@@ -51,6 +51,7 @@ type HomeContentProps = {
     proofOfHumanitySummary?: ClientHumanityVerificationSummaryDto | null;
     shouldSuppressWelcomeOnboarding?: boolean;
     canInviteSecret?: boolean;
+    canSharePublic: boolean;
 };
 
 export default function HomeContent({
@@ -61,6 +62,7 @@ export default function HomeContent({
     proofOfHumanitySummary,
     shouldSuppressWelcomeOnboarding = false,
     canInviteSecret = false,
+    canSharePublic,
 }: HomeContentProps) {
     const isUser = circle?.circleType === "user";
     const isKamooniRootCircle = circle?.handle === "default" || circle?.handle === "kamooni";
@@ -70,7 +72,7 @@ export default function HomeContent({
     const memberCount = circle?.members ? (isUser ? circle.members - 1 : circle.members) : 0;
     const isCompact = useIsCompact();
     const [user] = useAtom(userAtom);
-    const isOwnUserProfile = isUser && (user?.did === circle.did || viewerDid === circle.did);
+    const isOwnUserProfile = isUser && Boolean(circle.did && (user?.did === circle.did || viewerDid === circle.did));
     const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
     const showSettingsButton = authorizedToEdit && circle.handle && (!isUser || isOwnUserProfile);
     const settingsButtonTitle = isUser ? "Profile settings" : "Circle settings";
@@ -205,7 +207,6 @@ export default function HomeContent({
                                     {user && circle.circleType === "circle" && isMember && (
                                         <ChatButton circle={circle} />
                                     )}
-                                    {!isUser && <InviteButton circle={circle} canInviteSecret={canInviteSecret} />}
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (
@@ -271,7 +272,13 @@ export default function HomeContent({
                                         {user && circle.circleType === "circle" && isMember && (
                                             <ChatButton circle={circle} />
                                         )}
-                                        {!isUser && <InviteButton circle={circle} canInviteSecret={canInviteSecret} />}
+                                        {!isUser && (
+                                            <InviteButton
+                                                circle={circle}
+                                                canInviteSecret={canInviteSecret}
+                                                canSharePublic={canSharePublic}
+                                            />
+                                        )}
                                         {user && <FollowButton circle={circle} />}
                                         {user && <BookmarkButton circle={circle} iconOnly />}
                                         {showSettingsButton && (
@@ -306,7 +313,11 @@ export default function HomeContent({
                                     {user && circle.circleType === "circle" && isMember && (
                                         <ChatButton circle={circle} />
                                     )}
-                                    <InviteButton circle={circle} canInviteSecret={canInviteSecret} />
+                                    <InviteButton
+                                        circle={circle}
+                                        canInviteSecret={canInviteSecret}
+                                        canSharePublic={canSharePublic}
+                                    />
                                     {user && <FollowButton circle={circle} />}
                                     {user && <BookmarkButton circle={circle} iconOnly />}
                                     {showSettingsButton && (

@@ -24,6 +24,7 @@ import {
     sanitizePostNestedContent,
 } from "./post-nested-content-policy";
 import { sanitizeHighlightedCommentsOnPosts } from "./comment-mention-policy";
+import { buildClientPostDto } from "./client-circle-dto";
 import { applyPostUpdateOperation } from "./post-update-operation";
 import { applyLikeMutation, applyUnlikeMutation, type ReactionMutationInput } from "./reaction-mutation";
 import { highlightedCommentFilter, highlightedCommentPointerUpdate } from "./highlighted-comment-policy";
@@ -509,6 +510,7 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
                     picture: "$circle.picture",
                     accessRules: "$circle.accessRules",
                     userGroups: "$circle.userGroups",
+                    visibility: "$circle.visibility",
                 },
             },
         },
@@ -521,7 +523,7 @@ export const getFullPost = async (postId: string, userDid?: string): Promise<Pos
     const sanitizedPosts = await sanitizePostNestedContent(posts, userDid);
 
     const [postWithSanitizedHighlight] = await sanitizeHighlightedCommentsOnPosts(sanitizedPosts, userDid);
-    return postWithSanitizedHighlight;
+    return buildClientPostDto(postWithSanitizedHighlight);
 };
 
 // Function to update the highlighted comment for a post

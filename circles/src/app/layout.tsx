@@ -52,14 +52,12 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
                     <ChatRoomListProvider>
                         <main className="relative flex flex-col md:flex-row">
                             <GlobalNav />
+                            <ProfileMenu />
                             <div className="relative flex w-full flex-row overflow-hidden">
                                 <SidePanel />
                                 <div className="relative min-h-[calc(100%-72px)] w-full overflow-x-hidden bg-[#fbfbfb] md:min-h-screen">
                                     {children}
                                 </div>
-                            </div>
-                            <div className="fixed right-6 top-4 z-40">
-                                <ProfileMenu />
                             </div>
                             <Toaster />
                             <Authenticator />

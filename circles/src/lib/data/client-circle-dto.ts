@@ -1,14 +1,19 @@
-import { getFeature, hiddenPublicModuleHandles, modules } from "@/lib/data/constants";
+import { getFeature, getPostViewFeature, hiddenPublicModuleHandles, modules } from "@/lib/data/constants";
 import { canSeeFoundingBadge, hasContributorPerks } from "@/lib/auth/perks";
 import { isVerifiedUser } from "@/lib/auth/verification";
+import { userGroupSchema } from "@/models/models";
 import type {
     Circle,
+    CommentDisplay,
+    Feed,
     FundingAskDisplay,
     FundingAskItem,
     Location,
     Media,
     MemberDisplay,
     Metrics,
+    Post,
+    PostDisplay,
     Question,
     SocialLink,
     TaskDisplay,
@@ -16,6 +21,7 @@ import type {
 } from "@/models/models";
 import type { HumanityVerificationSummary } from "@/lib/data/proof-of-humanity";
 import { projectPublicLocation } from "@/lib/location-privacy";
+import { toCommentDto } from "./comment-dto";
 
 export type ClientCircleDto = Pick<
     Circle,
@@ -131,6 +137,7 @@ export type ServerVerifiedContributionInput = { task: TaskDisplay; circle: Circl
 
 export type AboutPageClientProps = {
     circle: ClientCircleDto;
+    canEditAbout: boolean;
     showFoundingBadge: boolean;
     adminLeaders: ClientAdminDisplayDto[];
     verifiedContributions: ClientContributionDto[];
@@ -147,6 +154,7 @@ export type AboutPageClientProps = {
 
 export type BuildAboutPageClientPropsInput = {
     circle: Circle;
+    canEditAbout?: boolean;
     viewerDid?: string;
     adminLeaders?: MemberDisplay[];
     verifiedContributions?: ServerVerifiedContributionInput[];
@@ -269,6 +277,67 @@ export const buildClientCircleDto = (circle: Circle): ClientCircleDto => ({
     ...(copyPublicOffers(circle.offers) ? { offers: copyPublicOffers(circle.offers) } : {}),
     ...(copyPublicEngagements(circle.engagements) ? { engagements: copyPublicEngagements(circle.engagements) } : {}),
     ...(copyPublicNeeds(circle.needs) ? { needs: copyPublicNeeds(circle.needs) } : {}),
+});
+
+const feedClientFeatures = {
+    feed: ["view", "post", "comment", "moderate"],
+    community: ["view", "post", "moderate"],
+    discussions: ["view", "create", "comment", "moderate"],
+} as const;
+
+export const buildFeedCircleDto = (circle: Circle, feedModule: keyof typeof feedClientFeatures = "feed"): Circle => {
+    const rules = circle.accessRules?.[feedModule];
+    return {
+        _id: circle._id?.toString(),
+        handle: circle.handle,
+        name: circle.name,
+        circleType: circle.circleType,
+        visibility: circle.visibility,
+        picture: copyPicture(circle.picture),
+        userGroups: circle.userGroups?.flatMap((group) => {
+            const parsed = userGroupSchema.safeParse(group);
+            return parsed.success ? [parsed.data] : [];
+        }),
+        accessRules: circle.accessRules && {
+            [feedModule]: Object.fromEntries(
+                feedClientFeatures[feedModule].flatMap((feature) => {
+                    const groups = copyStringArray(rules?.[feature]);
+                    return groups ? [[feature, groups]] : [];
+                }),
+            ),
+        },
+    };
+};
+
+export const buildClientFeedDto = (feed: Feed): Feed => ({
+    _id: feed._id?.toString(),
+    name: feed.name,
+    handle: feed.handle,
+    circleId: feed.circleId,
+    createdAt: feed.createdAt,
+    userGroups: copyStringArray(feed.userGroups) ?? [],
+});
+
+export const buildClientCommentDto = (comment: CommentDisplay): CommentDisplay => ({
+    ...toCommentDto(comment),
+    author: buildClientCircleDto(comment.author ?? {}),
+    ...(comment.rootParentId !== undefined ? { rootParentId: comment.rootParentId } : {}),
+    ...(comment.userReaction !== undefined ? { userReaction: comment.userReaction } : {}),
+    ...(comment.mentionsDisplay !== undefined ? { mentionsDisplay: comment.mentionsDisplay } : {}),
+});
+
+export const buildPostCircleDto = (circle: Circle, postType: Post["postType"]): Circle => {
+    const postModule = getPostViewFeature(postType)?.module;
+    return buildFeedCircleDto(circle, postModule === "community" || postModule === "discussions" ? postModule : "feed");
+};
+
+// Posts are projected by the feed queries. Project their nested identities again at the client boundary.
+export const buildClientPostDto = (post: PostDisplay): PostDisplay => ({
+    ...post,
+    author: buildClientCircleDto(post.author),
+    circle: post.circle ? buildPostCircleDto(post.circle, post.postType) : undefined,
+    feed: post.feed ? buildClientFeedDto(post.feed) : undefined,
+    highlightedComment: post.highlightedComment ? buildClientCommentDto(post.highlightedComment) : undefined,
 });
 
 const buildPublicMapMetrics = (value: unknown): PublicMapCircleDto["metrics"] => {
@@ -472,6 +541,7 @@ export const buildClientHumanityVerificationSummaryDto = (
 
 export const buildAboutPageClientProps = (input: BuildAboutPageClientPropsInput): AboutPageClientProps => ({
     circle: buildClientCircleDto(input.circle),
+    canEditAbout: Boolean(input.viewerDid && input.canEditAbout),
     showFoundingBadge: canSeeFoundingBadge(input.viewerDid, input.circle),
     adminLeaders: (input.adminLeaders ?? []).map(buildClientAdminDisplayDto),
     verifiedContributions: (input.verifiedContributions ?? []).map(buildClientContributionDto),

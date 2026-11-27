@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { getCircleByHandle } from "@/lib/data/circle";
-import { getAuthenticatedUserDid } from "@/lib/auth/auth";
+import { notFound } from "next/navigation";
+import { getCirclePageAccess } from "../circle-page-access";
 import { getMember } from "@/lib/data/member";
 import { getUserPendingMembershipRequests } from "@/lib/data/membership-requests";
 import { requestMembershipAction, cancelMembershipRequestAction } from "@/components/circle/actions";
@@ -20,11 +20,9 @@ export default async function AccessDeniedPage({ params, searchParams }: PagePro
     const moduleHandle = (sp.module as string) || undefined;
     const redirectTo = (sp.redirectTo as string) || `/circles/${handle}`;
 
-    // Load circle to ensure layout gets proper context; middleware guarantees circle exists
-    const circle = await getCircleByHandle(handle);
-
-    // Determine authentication and membership state
-    const userDid = await getAuthenticatedUserDid();
+    const access = await getCirclePageAccess(handle);
+    if (!access) notFound();
+    const { circle, viewerDid: userDid } = access;
     const isUnauthenticated = !userDid || reason === "unauthenticated";
     let isMember = false;
     let hasPendingRequest = false;

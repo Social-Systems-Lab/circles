@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getCircleByHandle } from "@/lib/data/circle";
+import { notFound } from "next/navigation";
+import { getCirclePageAccess } from "../circle-page-access";
 import { getCircleDefaultPath } from "@/lib/utils/circle-routes";
 
 type PageProps = {
@@ -14,9 +15,10 @@ export default async function CircleNotFoundPage({ params, searchParams }: PageP
 
     // Extract context provided by middleware
     const moduleHandle = (sp.module as string) || undefined;
-    // Load circle so the layout renders with proper context
-    const circle = await getCircleByHandle(handle);
-    const fallbackHref = circle ? getCircleDefaultPath(circle) : `/circles/${handle}/home`;
+    const access = await getCirclePageAccess(handle);
+    if (!access) notFound();
+    const { circle } = access;
+    const fallbackHref = getCircleDefaultPath(circle);
     const fallbackText = circle?.enabledModules?.includes("home") ? "Go to Home" : "Open Circle";
 
     const title = "Not found";

@@ -1,8 +1,12 @@
+import type { PostDisplay, Feed } from "@/models/models";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Circle } from "@/models/models";
 import {
     buildAboutPageClientProps,
+    buildFeedCircleDto,
+    buildClientPostDto,
+    buildClientFeedDto,
     buildClientCircleDto,
     buildClientLocation,
     buildHomeClientProps,
@@ -318,6 +322,8 @@ test("Secret Circle authorization succeeds before browser props are constructed 
     let dtoConstructions = 0;
     const access = await resolveCircleRouteAccess(secret.handle!, {
         findCircle: async () => secret,
+        isCirclePublished: () => true,
+        canEditAbout: async () => false,
         authenticate: async () => "did:example:member",
         canReadCircle: async (viewerDid, candidate) =>
             viewerDid === "did:example:member" && candidate._id === secret._id,
@@ -338,6 +344,8 @@ test("Secret Circle outsider is denied before any browser prop construction", as
     let dtoConstructions = 0;
     const access = await resolveCircleRouteAccess(secret.handle!, {
         findCircle: async () => secret,
+        isCirclePublished: () => true,
+        canEditAbout: async () => false,
         authenticate: async () => "did:example:outsider",
         canReadCircle: async () => false,
     });
@@ -460,4 +468,55 @@ test("serialized-boundary regression guard rejects a raw Circle added beside saf
         upcomingShiftsVisibility: "sign_in",
     });
     assert.throws(() => assertForbiddenDataAbsent({ ...safe, accidentalRawCircle: makeCircle("circle") }));
+});
+
+
+test("Noticeboard sends only feed-related circle data and preserves custom posting rules", () => {
+    const circle = makeCircle("circle");
+    circle.accessRules = { feed: { post: ["editors"], view: ["everyone"], unexpected: ["forbidden"] },
+        settings: { view: ["FORBIDDEN_SETTINGS_RULE"] } };
+    const dto = buildFeedCircleDto(circle);
+    assert.deepEqual(dto.accessRules, { feed: { view: ["everyone"], post: ["editors"] } });
+    assert.doesNotMatch(JSON.stringify(dto), /FORBIDDEN_SETTINGS_RULE|private-offer-secret|private-email|privateMetadata/);
+    for (const key of ["email", "location", "metadata", "createdBy", "offers", "needs", "engagements", "officialEmail"]) {
+        assert.equal(Object.hasOwn(dto, key), false, key);
+    }
+});
+
+
+test("post and comment displays preserve supported content and project nested profiles and feed permissions", () => {
+    const circle = makeCircle("circle");
+    circle.accessRules = {
+        feed: { post: ["FORBIDDEN_NOTICEBOARD_RULE"] },
+        community: { post: ["editors"], moderate: ["moderators"] },
+        settings: { view: ["FORBIDDEN_SETTINGS_RULE"] },
+    };
+    const author = {
+        ...makeCircle("user"),
+        email: "FORBIDDEN_EMAIL",
+        location: { precision: 1, region: "Visible region", street: "FORBIDDEN_STREET" },
+        picture: { url: "/profile.png", metadata: "FORBIDDEN_IMAGE_METADATA" },
+    } as unknown as Circle;
+    const feed = {
+        _id: "feed-id", name: "Feed", handle: "community", circleId: "circle-id", createdAt: new Date(),
+        userGroups: ["everyone"], metadata: "FORBIDDEN_FEED_METADATA",
+    } as Feed;
+    const display = buildClientPostDto({
+        postType: "community",
+        content: "Post body",
+        author, circle, feed,
+        highlightedComment: {
+            content: "Comment body", author, rootParentId: "parent-id", userReaction: "like",
+        },
+    } as PostDisplay);
+    assert.equal(display.content, "Post body");
+    assert.equal(display.highlightedComment?.content, "Comment body");
+    assert.equal(display.highlightedComment?.rootParentId, "parent-id");
+    assert.equal(display.highlightedComment?.userReaction, "like");
+    assert.deepEqual(display.author.picture, { url: "/profile.png" });
+    assert.deepEqual(display.author.location, { precision: 1, region: "Visible region" });
+    assert.deepEqual(display.circle?.accessRules, { community: { post: ["editors"], moderate: ["moderators"] } });
+    assert.deepEqual(display.feed?.userGroups, ["everyone"]);
+    assert.doesNotMatch(JSON.stringify(display), /FORBIDDEN_/);
+    assert.doesNotMatch(JSON.stringify(buildClientFeedDto(feed)), /FORBIDDEN_/);
 });

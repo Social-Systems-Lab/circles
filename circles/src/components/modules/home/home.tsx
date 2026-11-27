@@ -5,7 +5,7 @@ import HomeModuleWrapper from "./home-module-wrapper";
 import HomeCover from "./home-cover";
 import HomeContent from "./home-content";
 import ContentDisplayWrapper from "@/components/utils/content-display-wrapper";
-import { getCirclesWithMetrics } from "@/lib/data/circle";
+import { getCirclesWithMetrics, isCirclePublished } from "@/lib/data/circle";
 import { getMembersWithMetrics } from "@/lib/data/member";
 import { buildLayoutClientProps } from "@/lib/data/client-circle-dto";
 
@@ -40,6 +40,7 @@ export default async function HomeModule(props: HomeModuleProps) {
             authorizedToEdit={authorizedToEdit}
             viewerDid={userDid}
             canInviteSecret={canInviteSecret}
+            canSharePublic={isCirclePublished(circle)}
         />
     );
 }

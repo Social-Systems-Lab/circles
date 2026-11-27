@@ -2,6 +2,7 @@
 
 import { getPendingAdminRoleRemovalRequest } from "@/lib/data/admin-role-removal";
 import { getMemberDirectoryForViewer } from "@/lib/data/member";
+import { isCirclePublished } from "@/lib/data/circle";
 import { getUserPrivate } from "@/lib/data/user";
 import AdminRoleRemovalBanner from "./admin-role-removal-banner";
 import MembersTable from "./members-table";
@@ -42,7 +43,7 @@ export default async function MembersModule(props: PageProps) {
     const circleClient = {
         id: circleId,
         handle: circle.handle ?? "",
-        canInvite: circle.visibility !== "secret",
+        canInvite: circle.visibility !== "secret" && isCirclePublished(circle),
         circleType: circle.circleType,
         userGroups: canManageMembers ? (circle.userGroups ?? []) : undefined,
     };
