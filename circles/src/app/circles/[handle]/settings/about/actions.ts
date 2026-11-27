@@ -1,7 +1,14 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { getCircleByHandle, getCircleById, getCirclePath, updateCircle } from "@/lib/data/circle";
+import {
+    CircleAboutContentConflictError,
+    getCircleAboutContent,
+    getCircleByHandle,
+    getCircleById,
+    getCirclePath,
+    updateCircle,
+} from "@/lib/data/circle";
 import {
     approveAttachCircleRequest,
     createAttachCircleRequest,
@@ -34,6 +41,7 @@ import { features } from "@/lib/data/constants";
 import { isFile } from "@/lib/data/storage";
 import {
     canRetainSubmittedCircleMediaUrl,
+    cleanupCircleOwnedMedia,
     collectReplacedCircleMedia,
     persistCircleThenCleanupMedia,
     saveCircleOwnedFile,
@@ -177,7 +185,7 @@ export async function submitCircleForVerificationAction(formData: FormData) {
         return { success: false, message: "Profile circles should be published directly" };
     }
 
-    const readiness = getVerificationReadiness(circle);
+    const readiness = getVerificationReadiness({ ...circle, content: await getCircleAboutContent(circleId) });
     if (!readiness.isReady) {
         return { success: false, message: readiness.title, data: { readiness } };
     }
@@ -618,6 +626,7 @@ export async function saveAbout(values: {
     handle?: string;
     description?: string;
     content?: string;
+    expectedContent?: string | null;
     mission?: string;
     picture?: any;
     // cover?: any; // Removed cover
@@ -638,7 +647,6 @@ export async function saveAbout(values: {
         name: values.name,
         handle: values.handle,
         description: values.description,
-        content: values.content,
         mission: values.mission,
         isPublic: values.isPublic,
         showAdminsPublicly: values.showAdminsPublicly,
@@ -712,6 +720,17 @@ export async function saveAbout(values: {
             delete circleUpdateData.officialEmail;
         }
 
+        const { content, expectedContent } = values;
+        let expectedAboutContent: string | null | undefined;
+        if (content !== undefined) {
+            if (typeof content !== "string" || (expectedContent !== null && typeof expectedContent !== "string")) {
+                return { success: false, message: "Invalid About content. Reload the page and try again." };
+            }
+            circleUpdateData.content = content;
+            expectedAboutContent = expectedContent;
+        }
+
+        const uploadedMediaUrls: string[] = [];
         // Handle picture upload (keeping existing logic for profile picture)
         if (isFile(values.picture)) {
             // save the picture and get the file info
@@ -723,6 +742,7 @@ export async function saveAbout(values: {
                 overwrite: true,
                 resourceType: "circle",
             });
+            uploadedMediaUrls.push(circleUpdateData.picture.url);
             revalidatePath(circleUpdateData.picture.url);
         }
 
@@ -745,6 +765,7 @@ export async function saveAbout(values: {
                             overwrite: true,
                             resourceType: "circle",
                         });
+                        uploadedMediaUrls.push(savedFileInfo.url);
                         finalMediaArray.push({
                             name: imageItem.file.name,
                             type: imageItem.file.type,
@@ -790,7 +811,22 @@ export async function saveAbout(values: {
             ? collectReplacedCircleMedia(existingCircle.picture, circleUpdateData.picture)
             : [];
         const cleanup = await persistCircleThenCleanupMedia(
-            () => updateCircle(circleUpdateData, userDid),
+            async () => {
+                try {
+                    await updateCircle(circleUpdateData, userDid, undefined, expectedAboutContent);
+                } catch (error) {
+                    if (error instanceof CircleAboutContentConflictError && uploadedMediaUrls.length > 0) {
+                        const rollback = await cleanupCircleOwnedMedia(
+                            uploadedMediaUrls,
+                            existingCircle._id!.toString(),
+                        );
+                        if (rollback.status === "failed") {
+                            console.error("Could not clean up unsaved About media:", rollback.error);
+                        }
+                    }
+                    throw error;
+                }
+            },
             [...urlsToDelete, ...replacedPicture],
             existingCircle._id!.toString(),
         );
@@ -801,6 +837,7 @@ export async function saveAbout(values: {
         const circlePath = await getCirclePath({ ...existingCircle, ...circleUpdateData });
         revalidatePath(`${circlePath}settings/about`);
         revalidatePath(circlePath); // revalidate home page too
+        if (content !== undefined) revalidatePath(`/circles/${circleUpdateData.handle ?? existingCircle.handle}/home`);
 
         // Check if handle was updated and return it for potential redirect
         const newHandle = circleUpdateData.handle !== existingCircle.handle ? circleUpdateData.handle : undefined;

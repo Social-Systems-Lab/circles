@@ -6,7 +6,6 @@ import path from "node:path";
 async function main() {
     const root = fileURLToPath(new URL("../../..", import.meta.url));
     const allowedDirectSaveFile = new Set([
-        "src/lib/data/verification-workflow.ts",
         "src/components/modules/home/actions.ts",
         "src/components/modules/chat/actions.ts",
         "src/components/modules/chat/mongo-actions.ts",
@@ -114,7 +113,7 @@ async function main() {
     for (const marker of [
         "collectReplacedCircleMedia(",
         "persistCircleThenCleanupMedia(",
-        "updateCircle(circleUpdateData, userDid)",
+        "updateCircle(circleUpdateData, userDid, undefined, expectedAboutContent)",
     ])
         assert.ok(settings.indexOf(marker) >= 0, `missing Circle replacement marker: ${marker}`);
     for (const caller of [

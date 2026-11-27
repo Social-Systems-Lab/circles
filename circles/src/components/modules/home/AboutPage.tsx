@@ -36,7 +36,6 @@ import { UserPicture } from "../members/user-picture";
 import { ProofOfHumanityCard } from "./proof-of-humanity-card";
 import { isVerifiedUser } from "@/lib/auth/verification";
 import { ProfileRelationshipHeaderAction, useProfileRelationshipState } from "./message-button";
-import { getProfileAboutText } from "@/lib/profile-completion";
 
 export default function AboutPage({
     circle,
@@ -248,8 +247,6 @@ export default function AboutPage({
         shouldShowUpcomingShiftsPanel;
 
     const richAboutContent = circle.content?.trim() ? circle.content : null;
-    const aboutText = getProfileAboutText(circle) ?? "";
-    const hasMainContent = Boolean(aboutText);
     const canContactCircle = hasMatchingOfferNeeds && !isOwner;
 
     const openLeaderPreview = (leader: ClientAdminDisplayDto) => {
@@ -317,46 +314,21 @@ export default function AboutPage({
                         <div
                             className={`bg-white p-6 ${isCompact ? "rounded-none" : "rounded-[15px] border-0 shadow-lg"}`}
                         >
-                            {/* Main Content */}
-                            {hasMainContent ? (
-                                <>
-                                    <div className="flex flex-row items-center justify-between gap-4">
-                                        <h1 className="my-4">About</h1>
-                                        {canEditAbout && (
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
-                                            >
-                                                Edit
-                                            </Button>
-                                        )}
-                                    </div>
-                                    {richAboutContent ? (
-                                        <RichText content={richAboutContent} />
-                                    ) : (
-                                        <p className="mb-6 text-base">{aboutText}</p>
-                                    )}
-                                </>
+                            <div className="flex flex-row items-center justify-between gap-4">
+                                <h1 className="my-4">About</h1>
+                                {canEditAbout && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
+                                    >
+                                        Edit
+                                    </Button>
+                                )}
+                            </div>
+                            {richAboutContent ? (
+                                <RichText content={richAboutContent} />
                             ) : (
-                                // Default text if no content or description
-                                <>
-                                    <div className="flex flex-row items-center justify-between gap-4">
-                                        <h1 className="my-4">About</h1>
-                                        {canEditAbout && (
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => router.push(`/circles/${circle.handle}/settings/about`)}
-                                            >
-                                                Edit
-                                            </Button>
-                                        )}
-                                    </div>
-                                    <p className="mb-6 text-base text-muted-foreground">
-                                        {isUserProfile
-                                            ? "This profile hasn't added an About section yet."
-                                            : "This circle hasn&apos;t added a description yet."}
-                                    </p>
-                                </>
+                                <p className="mb-6 text-base text-muted-foreground">No About text yet.</p>
                             )}
                         </div>
                         <OffersCard circle={circle} canEdit={canEditAbout} />

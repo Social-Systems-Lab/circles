@@ -11,23 +11,36 @@ const state = {
         circleType: "user",
     } as Record<string, unknown>,
     updates: [] as Array<Record<string, unknown>>,
+    expectedContent: [] as Array<string | null | undefined>,
     paths: [] as string[],
     viewerDid: "did:profile-owner" as string | undefined,
     canEdit: true,
     groups: ["admins"],
+    contentConflict: false,
 };
+
+class CircleAboutContentConflictError extends Error {}
 
 mock.module("@/lib/auth/auth", () => ({
     getAuthenticatedUserDid: async () => state.viewerDid,
     isAuthorized: async () => state.canEdit,
 }));
 mock.module("@/lib/data/circle", () => ({
+    CircleAboutContentConflictError,
     getCircleByHandle: async () => undefined,
     getCircleById: async () => state.circle,
+    getCircleAboutContent: async () => state.circle.content,
     isCirclePublished: () => true,
     getCirclePath: async (circle: { handle: string }) => `/circles/${circle.handle}/`,
-    updateCircle: async (update: Record<string, unknown>) => {
+    updateCircle: async (
+        update: Record<string, unknown>,
+        _did: string,
+        _dependencies: unknown,
+        expectedContent?: string | null,
+    ) => {
+        if (state.contentConflict) throw new CircleAboutContentConflictError("About content changed. Reload the page.");
         state.updates.push(update);
+        state.expectedContent.push(expectedContent);
     },
 }));
 mock.module("@/lib/data/circle-attach", () => ({
@@ -64,6 +77,7 @@ mock.module("next/cache", () => ({ revalidatePath: (path: string) => state.paths
 mock.module("@/lib/data/storage", () => ({ isFile: () => false }));
 mock.module("@/lib/data/circle-media-storage", () => ({
     canRetainSubmittedCircleMediaUrl: () => false,
+    cleanupCircleOwnedMedia: async () => ({ status: "complete" }),
     collectReplacedCircleMedia: () => [],
     persistCircleThenCleanupMedia: async (persist: () => Promise<void>) => {
         await persist();
@@ -98,10 +112,12 @@ beforeEach(() => {
         circleType: "user",
     };
     state.updates = [];
+    state.expectedContent = [];
     state.paths = [];
     state.viewerDid = "did:profile-owner";
     state.canEdit = true;
     state.groups = ["admins"];
+    state.contentConflict = false;
 });
 
 const profileValues = (name: string, circleId = "personal-profile-id") => ({
@@ -129,6 +145,30 @@ test("server action trims valid personal names and preserves the existing handle
     assert.equal(state.updates[0].name, "Jordan Member");
     assert.equal(state.updates[0].handle, "existing-handle");
     assert.equal(Object.hasOwn(state.updates[0], "did"), false);
+    assert.equal(Object.hasOwn(state.updates[0], "content"), false);
+    assert.deepEqual(state.expectedContent, [undefined]);
+});
+
+test("About content requires the editor baseline and preserves the exact Markdown or an intentional clear", async () => {
+    const values = profileValues("Profile Owner");
+    const markdown = "**First line**\nSecond line";
+    assert.equal((await saveAbout({ ...values, content: markdown })).success, false);
+    assert.equal((await saveAbout({ ...values, content: 7 as any, expectedContent: null })).success, false);
+    assert.equal(state.updates.length, 0);
+
+    assert.equal((await saveAbout({ ...values, content: markdown, expectedContent: null })).success, true);
+    assert.equal((await saveAbout({ ...values, content: "", expectedContent: markdown })).success, true);
+    assert.deepEqual(state.updates.map((update) => update.content), [markdown, ""]);
+    assert.deepEqual(state.expectedContent, [null, markdown]);
+});
+
+test("a stale About save reports a conflict and leaves the form draft available", async () => {
+    state.contentConflict = true;
+    const values = { ...profileValues("Profile Owner"), content: "My draft", expectedContent: "Earlier About" };
+    const result = await saveAbout(values);
+    assert.equal(result.success, false);
+    assert.match(result.message ?? "", /About content changed/);
+    assert.deepEqual(state.paths, []);
 });
 
 test("personal profiles with a missing legacy name can repair it", async () => {
@@ -172,6 +212,8 @@ test("delegated editor can save About content without changing administrative se
         ...profileValues("Updated About", "circle-id"),
         ...protectedValues,
         mission: "Updated mission",
+        content: "Updated **About**",
+        expectedContent: "Earlier About",
     });
 
     assert.equal(result.success, true);
@@ -179,8 +221,10 @@ test("delegated editor can save About content without changing administrative se
     assert.equal(state.updates.length, 1);
     assert.equal(state.updates[0].name, "Updated About");
     assert.equal(state.updates[0].mission, "Updated mission");
+    assert.equal(state.updates[0].content, "Updated **About**");
+    assert.deepEqual(state.expectedContent, ["Earlier About"]);
     for (const field of Object.keys(protectedValues)) assert.equal(Object.hasOwn(state.updates[0], field), false);
-    assert.deepEqual(state.paths, ["/circles/community/settings/about", "/circles/community/"]);
+    assert.deepEqual(state.paths, ["/circles/community/settings/about", "/circles/community/", "/circles/community/home"]);
 });
 
 test("a scoped Edit About grant does not authorize administrative About actions", async () => {
@@ -207,10 +251,13 @@ test("a scoped Edit About grant does not authorize administrative About actions"
 });
 
 test("anonymous visitors and members without Edit About cannot save", async () => {
+    const edit = { content: "Forbidden edit", expectedContent: null };
     state.viewerDid = undefined;
-    assert.equal((await saveAbout(profileValues("Anonymous"))).success, false);
+    assert.equal((await saveAbout({ ...profileValues("Anonymous"), ...edit })).success, false);
     state.viewerDid = "did:ordinary-member";
     state.canEdit = false;
-    assert.equal((await saveAbout(profileValues("Member"))).success, false);
+    assert.equal((await saveAbout({ ...profileValues("Member"), ...edit })).success, false);
+    state.canEdit = true;
+    assert.equal((await saveAbout({ ...profileValues("Wrong owner"), ...edit })).success, false);
     assert.deepEqual(state.updates, []);
 });
