@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"; // Import Label
 import { useToast } from "@/components/ui/use-toast";
 import { Circle } from "@/models/models";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, Controller, Control, FieldValues } from "react-hook-form";
 import { saveAbout } from "@/app/circles/[handle]/settings/about/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,7 @@ export function AboutSettingsForm({ circle, delegated = false }: AboutSettingsFo
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const savedContent = useRef(circle.content ?? null);
     const isUserProfile = circle.circleType === "user";
     const isIndependentCircle = circle.circleType !== "user" && circle.circleLevel !== "profile_child";
 
@@ -46,7 +47,7 @@ export function AboutSettingsForm({ circle, delegated = false }: AboutSettingsFo
             name: circle.name || "",
             handle: circle.handle || "",
             description: circle.description || "",
-            content: circle.content || "",
+            content: savedContent.current ?? "",
             mission: circle.mission || "",
             picture: undefined as any, // Keep picture for now
             // cover: undefined as any, // Remove cover
@@ -71,31 +72,14 @@ export function AboutSettingsForm({ circle, delegated = false }: AboutSettingsFo
 
     const representsOrganization = form.watch("representsOrganization");
 
-    const onSubmit = async (data: {
-        _id: any;
-        name?: string;
-        handle?: string;
-        description?: string;
-        content?: string;
-        mission?: string;
-        picture?: any;
-        // cover?: any; // Remove cover
-        images?: ImageItem[]; // Add images
-        isPublic?: boolean;
-        showAdminsPublicly?: boolean;
-        location?: any;
-        socialLinks?: any;
-        websiteUrl?: string;
-        representsOrganization?: boolean;
-        organizationName?: string;
-        officialEmail?: string;
-    }) => {
+    const onSubmit: Parameters<typeof form.handleSubmit>[0] = async ({ content, ...data }) => {
         setIsSubmitting(true);
         try {
-            // TODO: Update saveAbout action to handle the 'images' array correctly
-            // For now, pass the data as is. The action needs modification.
-            const result = await saveAbout(data as any); // Cast for now, needs action update
+            const contentEdit =
+                content === (savedContent.current ?? "") ? {} : { content, expectedContent: savedContent.current };
+            const result = await saveAbout({ ...data, ...contentEdit });
             if (result.success) {
+                if (contentEdit.content !== undefined) savedContent.current = content;
                 toast({
                     title: "Success",
                     description: isUserProfile ? "Profile updated successfully" : "Circle profile updated successfully",

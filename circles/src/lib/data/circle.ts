@@ -606,6 +606,11 @@ export const getCircleByHandle = async (handle: string): Promise<Circle> => {
     return circle;
 };
 
+export async function getCircleAboutContent(circleId: string): Promise<string | undefined> {
+    const circle = await Circles.findOne({ _id: new ObjectId(circleId) }, { projection: { _id: 0, content: 1 } });
+    return typeof circle?.content === "string" ? circle.content : undefined;
+}
+
 export const getCircleById = async (id: string | null, criteria?: any): Promise<Circle> => {
     let query = id ? { _id: new ObjectId(id) } : criteria;
     let circle = (await Circles.findOne(query, { projection: SAFE_CIRCLE_PROJECTION })) as Circle;
@@ -647,10 +652,17 @@ const getDefaultUpdateCircleDependencies = (): UpdateCircleDependencies => ({
     updateChatRoom,
 });
 
+export class CircleAboutContentConflictError extends Error {
+    constructor() {
+        super("About content changed since you opened this form. Copy your draft and reload the page before saving it again.");
+    }
+}
+
 export const updateCircle = async (
     circle: Partial<Circle>,
     authenticatedUserDid: string,
     dependencies: UpdateCircleDependencies = getDefaultUpdateCircleDependencies(),
+    expectedAboutContent?: string | null,
 ): Promise<void> => {
     const { _id, ...circleWithoutId } = circle;
     if (!_id) {
@@ -732,8 +744,16 @@ export const updateCircle = async (
     if (existingCircle.circleType !== "user") {
         updateFilter.$or = [{ moderationStatus: "active" }, { moderationStatus: { $exists: false } }];
     }
+    if (expectedAboutContent !== undefined) {
+        // Compare with the value loaded by the editor in the same operation that writes the update.
+        updateFilter.$expr =
+            expectedAboutContent === null
+                ? { $ne: [{ $type: "$content" }, "string"] }
+                : { $eq: ["$content", { $literal: expectedAboutContent }] };
+    }
     let result = await dependencies.updateCircleRecord(updateFilter, { $set: circleWithoutId });
     if (result.matchedCount === 0) {
+        if (expectedAboutContent !== undefined) throw new CircleAboutContentConflictError();
         // This should theoretically not happen due to the getCircleById check above, but keep for safety
         throw new Error("Circle not found during update operation");
     }

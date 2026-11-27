@@ -2,6 +2,7 @@ import { AboutSettingsForm } from "@/components/forms/circle-settings/about-sett
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+    getCircleAboutContent,
     getDiscoverableAffiliatedCirclesForCircle,
     getDiscoverableCirclesByIds,
     getCirclePublishStatus,
@@ -16,7 +17,7 @@ import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
 import { notFound } from "next/navigation";
 import { buildClientCircleDto } from "@/lib/data/client-circle-dto";
-import { getCircleSettingsAccess } from "../../circle-page-access";
+import { getCircleAboutSettingsAccess } from "../../circle-page-access";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -25,12 +26,13 @@ type PageProps = {
 
 export default async function AboutSettingsPage(props: PageProps) {
     const { handle } = await props.params;
-    const access = await getCircleSettingsAccess(handle);
+    const access = await getCircleAboutSettingsAccess(handle);
     if (!access) notFound();
     const { circle, viewerDid: userDid, canEditAbout, delegatedAboutEditor } = access;
+    const content = await getCircleAboutContent(circle._id);
 
     if (delegatedAboutEditor) {
-        const { _id, circleType, name, description, mission, content, picture, images, socialLinks } =
+        const { _id, circleType, name, description, mission, picture, images, socialLinks } =
             buildClientCircleDto(circle);
         return (
             <div className="container py-6">
@@ -87,7 +89,7 @@ export default async function AboutSettingsPage(props: PageProps) {
     const isDraft = publishStatus === "draft";
     const resolvedCircleLevel = circle.circleLevel ?? (circle.parentCircleId ? "profile_child" : "top_level");
     const isProfileCircle = resolvedCircleLevel === "profile_child";
-    const verificationReadiness = getVerificationReadiness(circle);
+    const verificationReadiness = getVerificationReadiness({ ...circle, content });
     const statusCopy =
         publishStatus === "draft"
             ? "Draft"
@@ -211,7 +213,7 @@ export default async function AboutSettingsPage(props: PageProps) {
                     viewerDid={userDid || null}
                 />
             ) : null}
-            <AboutSettingsForm circle={circle} />
+            <AboutSettingsForm circle={{ ...circle, content }} />
         </div>
     );
 }
