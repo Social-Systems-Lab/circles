@@ -46,6 +46,48 @@ def connect(port, address):
             return response.readline()
 
 
+def check_launch_config():
+    image = {"Entrypoint": ["docker-entrypoint.sh"], "Cmd": ["node", "server.js"], "User": "node", "WorkingDir": "/app"}
+    override = {"Entrypoint": ["/bin/sh"], "Cmd": None}
+    passed = (
+        ({}, {}),
+        ({"entrypoint": None, "command": None}, {}),
+        ({"entrypoint": None, "command": ["other"]}, {"Cmd": ["other"]}),
+        ({"entrypoint": ["/bin/sh"]}, override),
+        ({"entrypoint": ["/bin/sh"], "command": None}, override),
+        ({"entrypoint": image["Entrypoint"], "command": None}, {"Cmd": None}),
+        ({"entrypoint": ["/bin/sh"], "command": ["-c", "true"]}, override | {"Cmd": ["-c", "true"]}),
+        ({"entrypoint": [], "command": ["true"]}, {"Entrypoint": [], "Cmd": ["true"]}),
+        ({"entrypoint": "", "command": ["true"]}, {"Entrypoint": [], "Cmd": ["true"]}),
+        ({"entrypoint": ["/bin/sh"], "command": []}, override | {"Cmd": []}),
+        ({"entrypoint": ["/bin/sh"], "command": ""}, override | {"Cmd": []}),
+    )
+    for service, serving in passed:
+        ingress.require_matching_launch_config(service, image, image | serving)
+
+    rejected = (
+        ({"entrypoint": None}, {"Entrypoint": ["/bin/sh"]}, "entrypoint differs"),
+        ({"command": None}, {"Cmd": ["unexpected"]}, "command differs"),
+        ({"entrypoint": image["Entrypoint"]}, {}, "command differs"),
+        ({"entrypoint": [], "command": ["true"]}, {"Cmd": ["true"]}, "entrypoint differs"),
+        ({"entrypoint": ["/bin/sh"], "command": []}, {"Entrypoint": ["/bin/sh"]}, "command differs"),
+        ({"command": []}, {"Cmd": []}, "cannot safely clear"),
+        ({"command": ""}, {"Cmd": []}, "cannot safely clear"),
+        ({"entrypoint": [], "command": None}, {"Entrypoint": [], "Cmd": None}, "cannot safely clear"),
+        ({"entrypoint": [], "command": []}, {"Entrypoint": [], "Cmd": []}, "cannot safely clear"),
+        ({}, {"User": "root"}, "user differs"),
+        ({}, {"WorkingDir": "/other"}, "working_dir differs"),
+    )
+    for service, serving, error_text in rejected:
+        try:
+            ingress.require_matching_launch_config(service, image, image | serving)
+        except ingress.Failure as error:
+            assert error_text in str(error), error
+        else:
+            raise AssertionError(f"accepted incompatible launch configuration {service!r}")
+    print(f"PASS {len(passed) + len(rejected)} launch configuration inheritance and mismatch cases", flush=True)
+
+
 class Rehearsal(ingress.Transition):
     def __init__(self, root, project, docker, app_port, tls_port):
         super().__init__(root, "/storage/sample.png")
@@ -180,9 +222,11 @@ def check_release_models(root, docker):
     original, candidate, recovery = render(old), render(new, maintenance), render(old, maintenance)
     assert original["services"]["circles"]["ports"][0]["published"] == "3000"
     assert ingress.without_app_ports(original) == candidate == recovery
+    inherited = {"Entrypoint": ["docker-entrypoint.sh"], "Cmd": ["node", "server.js"], "User": "node", "WorkingDir": "/app"}
     for model in (candidate, recovery):
         assert ingress.activation.validate_no_published_application_ports(model) == []
         assert ingress.activation.validate_activation_compose(model, ingress.DEPLOYMENT) == []
+        ingress.require_matching_launch_config(model["services"]["circles"], inherited, inherited)
     print("PASS exact Git Compose models: only application host publication changes", flush=True)
 
 
@@ -310,6 +354,7 @@ def rehearse(root, context):
 
 
 if __name__ == "__main__":
+    check_launch_config()
     with tempfile.TemporaryDirectory(prefix="kamooni-ingress-docker-") as directory:
         # Resolved path avoids macOS /var symlink issues with Docker sharing.
         rehearse(Path(directory).resolve(), os.environ.get("INGRESS_TEST_DOCKER_CONTEXT"))

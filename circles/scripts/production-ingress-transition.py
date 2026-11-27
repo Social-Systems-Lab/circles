@@ -320,9 +320,7 @@ class Transition:
             if value is None:
                 expected_env.pop(key, None)
         require(expected_env == serving_env, "rendered activation environment does not exactly match the serving container")
-        for key, field in (("Entrypoint", "entrypoint"), ("Cmd", "command"), ("User", "user"), ("WorkingDir", "working_dir")):
-            desired = target["services"]["circles"].get(field, image["Config"].get(key))
-            require(desired == self.before["Config"].get(key), f"rendered application {field} differs from the serving container")
+        require_matching_launch_config(target["services"]["circles"], image["Config"], self.before["Config"])
         require(bool(serving_env.get("CRON_SECRET")) and bool(serving_env.get("CIRCLES_JWT_SECRET")),
                 "serving cron or JWT credential is missing")
         self.verify_model_mounts(target)
@@ -484,6 +482,29 @@ class Transition:
                     self.stop_public()
                 raise Failure("rollback could not be verified; keep NGINX closed and review production state") from None
             raise Failure("transition failed; rollback verified with the original image, HTTPS and no host ports") from None
+
+
+def require_matching_launch_config(service, image, serving):
+    entrypoint = service.get("entrypoint")
+    command = service.get("command")
+    entrypoint = [] if entrypoint == "" else entrypoint
+    command = [] if command == "" else command
+
+    desired_entrypoint = image.get("Entrypoint") if entrypoint is None else entrypoint
+    if command is None and entrypoint is None:
+        command = image.get("Cmd")
+    elif entrypoint in (None, []) and command in (None, []) and image.get("Cmd"):
+        # Docker can restore the image CMD when both overrides reach the Engine
+        # as zero-length vectors. Do not approve a launch that relies on clearing it.
+        raise Failure("rendered application command cannot safely clear the image default with an empty or inherited entrypoint")
+
+    for field, key, desired in (
+        ("entrypoint", "Entrypoint", desired_entrypoint),
+        ("command", "Cmd", command),
+        ("user", "User", service.get("user", image.get("User"))),
+        ("working_dir", "WorkingDir", service.get("working_dir", image.get("WorkingDir"))),
+    ):
+        require(desired == serving.get(key), f"rendered application {field} differs from the serving container")
 
 
 def mounts(container):
