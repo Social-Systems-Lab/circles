@@ -21,6 +21,7 @@ type Scenario = {
     memberGroups?: string[];
     member?: boolean;
     invalidSession?: boolean;
+    canEditAbout?: boolean;
 };
 
 const makeHandler = ({
@@ -29,6 +30,7 @@ const makeHandler = ({
     member = false,
     memberGroups = member ? ["members"] : undefined,
     invalidSession = false,
+    canEditAbout = false,
 }: Scenario) => {
     const canonicalMember: Member | null =
         memberGroups && viewerDid ? { userDid: viewerDid, circleId, userGroups: memberGroups, joinedAt: new Date() } : null;
@@ -46,16 +48,17 @@ const makeHandler = ({
                         : null,
             }),
         getMember: async () => canonicalMember,
+        canEditAbout: async () => canEditAbout,
         isCirclePublished: (candidate) => candidate.publishStatus === "published",
         isModuleEnabled: (candidate, moduleHandle) => candidate.enabledModules?.includes(moduleHandle) === true,
     });
 };
 
-const invoke = (scenario: Scenario, moduleHandle = "feed") =>
+const invoke = (scenario: Scenario, moduleHandle = "feed", settingsEditor?: string) =>
     makeHandler(scenario)(
         new Request("http://localhost/api/access", {
             method: "POST",
-            body: JSON.stringify({ circleHandle: "target", moduleHandle }),
+            body: JSON.stringify({ circleHandle: "target", moduleHandle, settingsEditor }),
         }),
     );
 
@@ -135,6 +138,42 @@ async function main() {
         ],
     ] satisfies Array<[Scenario, unknown]>) {
         assert.deepEqual(await (await invoke(scenario, "settings")).json(), expected);
+    }
+
+    const legacySettings: Circle = { ...settings, accessRules: { settings: { edit_about: ["editors", "admins"] } } };
+    const editor: Scenario = { circle: legacySettings, viewerDid: "did:editor", memberGroups: ["editors"], canEditAbout: true };
+    const settingsResponse = async (scenario: Scenario, page?: string) =>
+        neutral(await invoke(scenario, "settings", page));
+    const allowed = { status: 200, body: { authenticated: true, authorized: true } };
+    const denied = { status: 200, body: { authenticated: true, authorized: false } };
+
+    for (const page of ["about", "presence"]) {
+        assert.deepEqual(await settingsResponse(editor, page), allowed);
+        assert.deepEqual(await settingsResponse({ ...editor, viewerDid: undefined }, page), {
+            status: 200,
+            body: { authenticated: false, authorized: false },
+        });
+        assert.deepEqual(await settingsResponse({ ...editor, memberGroups: ["members"], canEditAbout: false }, page), denied);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: settings }, page), denied);
+        for (const view of [[], ["admins"], ["editors"]]) {
+            const circle: Circle = {
+                ...legacySettings,
+                accessRules: { settings: { ...legacySettings.accessRules?.settings, view } },
+            };
+            assert.deepEqual(await settingsResponse({ ...editor, circle }, page), view.includes("editors") ? allowed : denied);
+        }
+        assert.deepEqual(await settingsResponse({ ...editor, circle: { ...legacySettings, publishStatus: "draft" } }, page), expectedNeutral);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: { ...legacySettings, publishStatus: "draft", createdBy: editor.viewerDid } }, page), allowed);
+        const secret: Circle = { ...legacySettings, visibility: "secret" };
+        assert.deepEqual(await settingsResponse({ ...editor, circle: secret, memberGroups: undefined }, page), expectedNeutral);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: secret }, page), allowed);
+        const profile: Circle = { ...legacySettings, circleType: "user", did: "did:owner" };
+        assert.deepEqual(await settingsResponse({ ...editor, circle: profile }, page), denied);
+        assert.deepEqual(await settingsResponse({ ...editor, circle: profile, viewerDid: profile.did }, page), allowed);
+    }
+    for (const page of [undefined, "general", "access-rules"]) {
+        assert.deepEqual(await settingsResponse(editor, page), denied);
+        assert.deepEqual(await settingsResponse({ ...editor, memberGroups: ["admins"] }, page), allowed);
     }
 
     console.log("access route handler tests passed");

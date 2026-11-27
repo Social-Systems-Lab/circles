@@ -1,3 +1,4 @@
+import { isAboutSettingsEditor } from "@/lib/auth/settings-editor-access";
 import { verifyUserToken } from "@/lib/auth/jwt";
 import { getAuthCookieNamesForClearing, readAuthToken } from "@/lib/auth/cookie";
 import { NextResponse, type NextRequest } from "next/server";
@@ -89,11 +90,16 @@ export async function middleware(request: NextRequest) {
         return;
     }
 
+    const settingsEditor =
+        moduleHandle === "settings" && urlSegments.length === 4 && isAboutSettingsEditor(urlSegments[3])
+            ? urlSegments[3]
+            : undefined;
+
     // fetch access rules for specified circle and module
     try {
         const response = await fetchFirstAccessApi(
             accessApiUrls,
-            { circleHandle, moduleHandle },
+            { circleHandle, moduleHandle, settingsEditor },
             request.headers.get("cookie"),
         );
         const { authenticated, authorized, notFound, notFoundType, error } = await response.json();
@@ -154,7 +160,7 @@ function getAccessApiUrls(request: NextRequest, host: string | undefined, port: 
 
 async function fetchFirstAccessApi(
     accessApiUrls: string[],
-    body: { circleHandle: string; moduleHandle: string },
+    body: { circleHandle: string; moduleHandle: string; settingsEditor?: "about" | "presence" },
     cookieHeader: string | null,
 ) {
     let lastError: unknown;

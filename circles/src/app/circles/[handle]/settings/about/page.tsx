@@ -1,10 +1,8 @@
 import { AboutSettingsForm } from "@/components/forms/circle-settings/about-settings-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import {
     getDiscoverableAffiliatedCirclesForCircle,
-    getCircleByHandle,
     getDiscoverableCirclesByIds,
     getCirclePublishStatus,
 } from "@/lib/data/circle";
@@ -16,7 +14,9 @@ import { CircleVerificationThreadCard } from "./circle-verification-thread-card"
 import { CircleStructureCard } from "./circle-structure-card";
 import { getVerificationReadiness } from "@/lib/verification-readiness";
 import { VerificationReadinessChecklist } from "@/components/modules/verification/verification-readiness-checklist";
-import { features } from "@/lib/data/constants";
+import { notFound } from "next/navigation";
+import { buildClientCircleDto } from "@/lib/data/client-circle-dto";
+import { getCircleSettingsAccess } from "../../circle-page-access";
 
 type PageProps = {
     params: Promise<{ handle: string }>;
@@ -24,15 +24,25 @@ type PageProps = {
 };
 
 export default async function AboutSettingsPage(props: PageProps) {
-    const params = await props.params;
-    const { handle } = params;
-    const circle = await getCircleByHandle(handle);
+    const { handle } = await props.params;
+    const access = await getCircleSettingsAccess(handle);
+    if (!access) notFound();
+    const { circle, viewerDid: userDid, canEditAbout, delegatedAboutEditor } = access;
 
-    if (!circle) {
-        return <div>Circle not found</div>;
+    if (delegatedAboutEditor) {
+        const { _id, circleType, name, description, mission, content, picture, images, socialLinks } =
+            buildClientCircleDto(circle);
+        return (
+            <div className="container py-6">
+                <h1 className="mb-6 text-2xl font-bold">About Settings</h1>
+                <AboutSettingsForm
+                    circle={{ _id, circleType, name, description, mission, content, picture, images, socialLinks }}
+                    delegated
+                />
+            </div>
+        );
     }
 
-    const userDid = await getAuthenticatedUserDid();
     const parentCircle = circle.parentCircleId
         ? (await getDiscoverableCirclesByIds([circle.parentCircleId], userDid))[0]
         : undefined;
@@ -69,8 +79,7 @@ export default async function AboutSettingsPage(props: PageProps) {
     const affiliatedCircles = circle._id
         ? await getDiscoverableAffiliatedCirclesForCircle(String(circle._id), userDid)
         : [];
-    const canManageAffiliations =
-        userDid && circle._id ? await isAuthorized(userDid, String(circle._id), features.settings.edit_about) : false;
+    const canManageAffiliations = canEditAbout;
 
     const publishStatus = getCirclePublishStatus(circle);
     const showWorkflowCard = circle.circleType !== "user";

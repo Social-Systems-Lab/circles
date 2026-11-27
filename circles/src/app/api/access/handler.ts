@@ -2,6 +2,7 @@ import type { Circle, Member } from "@/models/models";
 import { NextResponse } from "next/server";
 import { resolveAuthenticatedViewerDid } from "@/lib/auth/authenticated-viewer";
 import { readJsonBodyLimited } from "@/lib/security/bounded-input";
+import { hasDelegatedAboutRule, isAboutSettingsEditor } from "@/lib/auth/settings-editor-access";
 import { features } from "@/lib/data/constants";
 
 type AccessHandlerDependencies = {
@@ -11,6 +12,7 @@ type AccessHandlerDependencies = {
     getMember: (userDid: string, circleId: string) => Promise<Member | null>;
     isCirclePublished: (circle: Circle) => boolean;
     isModuleEnabled: (circle: Circle, moduleHandle: string) => boolean;
+    canEditAbout: (viewerDid: string, circleId: string) => Promise<boolean>;
 };
 
 const neutralCircleNotFound = () => NextResponse.json({ notFound: true, notFoundType: "circle" }, { status: 404 });
@@ -23,7 +25,11 @@ export const createAccessPostHandler = (dependencies: AccessHandlerDependencies)
             if (!body.value || typeof body.value !== "object" || Array.isArray(body.value)) {
                 return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
             }
-            const { circleHandle, moduleHandle } = body.value as { circleHandle?: unknown; moduleHandle?: unknown };
+            const { circleHandle, moduleHandle, settingsEditor } = body.value as {
+                circleHandle?: unknown;
+                moduleHandle?: unknown;
+                settingsEditor?: unknown;
+            };
             if (
                 (circleHandle !== undefined && (typeof circleHandle !== "string" || circleHandle.length > 100)) ||
                 (moduleHandle !== undefined && (typeof moduleHandle !== "string" || moduleHandle.length > 100))
@@ -77,10 +83,16 @@ export const createAccessPostHandler = (dependencies: AccessHandlerDependencies)
             if (!userDid) return NextResponse.json({ authenticated: false, authorized: false });
 
             if (membership === undefined) membership = await dependencies.getMember(userDid, circle._id);
-            if (!membership) return NextResponse.json({ authenticated: true, authorized: false });
-
-            const authorized = allowedUserGroups.some((group) => membership.userGroups?.includes(group));
-            return NextResponse.json({ authenticated: true, authorized });
+            const canViewModule = allowedUserGroups.some((group) => membership?.userGroups?.includes(group));
+            const canOpenEditor =
+                !canViewModule &&
+                isSettingsRoute &&
+                isAboutSettingsEditor(settingsEditor) &&
+                hasDelegatedAboutRule(circle) &&
+                !!circle._id &&
+                (circle.circleType !== "user" || circle.did === userDid) &&
+                (await dependencies.canEditAbout(userDid, circle._id));
+            return NextResponse.json({ authenticated: true, authorized: canViewModule || canOpenEditor });
         } catch (error) {
             console.error("Error in /api/access:", error);
             return NextResponse.json({ error: true }, { status: 500 });

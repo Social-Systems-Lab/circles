@@ -11,16 +11,21 @@ const state = {
         circleType: "user",
     } as Record<string, unknown>,
     updates: [] as Array<Record<string, unknown>>,
+    paths: [] as string[],
+    viewerDid: "did:profile-owner" as string | undefined,
+    canEdit: true,
+    groups: ["admins"],
 };
 
 mock.module("@/lib/auth/auth", () => ({
-    getAuthenticatedUserDid: async () => "did:profile-owner",
-    isAuthorized: async () => true,
+    getAuthenticatedUserDid: async () => state.viewerDid,
+    isAuthorized: async () => state.canEdit,
 }));
 mock.module("@/lib/data/circle", () => ({
     getCircleByHandle: async () => undefined,
     getCircleById: async () => state.circle,
-    getCirclePath: async () => "/circles/existing-handle/",
+    isCirclePublished: () => true,
+    getCirclePath: async (circle: { handle: string }) => `/circles/${circle.handle}/`,
     updateCircle: async (update: Record<string, unknown>) => {
         state.updates.push(update);
     },
@@ -51,9 +56,11 @@ mock.module("@/lib/data/notifications", () => ({
     sendDetachCircleRequestNotification: async () => undefined,
     sendVerificationRequestNotification: async () => undefined,
 }));
-mock.module("@/lib/data/member", () => ({ getMembers: async () => [] }));
-mock.module("next/cache", () => ({ revalidatePath: () => undefined }));
-mock.module("@/lib/data/constants", () => ({ features: { settings: { edit_about: {} } } }));
+mock.module("@/lib/data/member", () => ({
+    getMembers: async () => [],
+    getMember: async () => ({ userGroups: state.groups }),
+}));
+mock.module("next/cache", () => ({ revalidatePath: (path: string) => state.paths.push(path) }));
 mock.module("@/lib/data/storage", () => ({ isFile: () => false }));
 mock.module("@/lib/data/circle-media-storage", () => ({
     canRetainSubmittedCircleMediaUrl: () => false,
@@ -72,7 +79,15 @@ mock.module("@/lib/location-privacy", () => ({
     preparePersonalLocationForSave: (location: unknown) => ({ valid: true, location }),
 }));
 
-const { saveAbout } = await import("./actions");
+const {
+    addCircleAffiliationAction,
+    getIndependentCircleVerificationThreadAction,
+    publishCircleAction,
+    replyToIndependentCircleVerificationThreadAction,
+    removeCircleAffiliationAction,
+    saveAbout,
+    submitCircleForVerificationAction,
+} = await import("./actions");
 
 beforeEach(() => {
     state.circle = {
@@ -83,6 +98,10 @@ beforeEach(() => {
         circleType: "user",
     };
     state.updates = [];
+    state.paths = [];
+    state.viewerDid = "did:profile-owner";
+    state.canEdit = true;
+    state.groups = ["admins"];
 });
 
 const profileValues = (name: string, circleId = "personal-profile-id") => ({
@@ -126,4 +145,72 @@ test("non-personal circle naming rules remain unchanged", async () => {
 
     assert.equal(result.success, true);
     assert.equal(state.updates[0]?.name, "");
+});
+
+
+test("delegated editor can save About content without changing administrative settings", async () => {
+    state.circle = {
+        _id: "circle-id",
+        handle: "community",
+        circleType: "circle",
+        accessRules: { settings: { edit_about: ["editors", "admins"] } },
+    };
+    state.viewerDid = "did:editor";
+    state.groups = ["editors"];
+
+    const protectedValues = {
+        handle: "different-handle",
+        isPublic: false,
+        showAdminsPublicly: true,
+        location: { street: "Fixture street" },
+        representsOrganization: true,
+        organizationName: "Fixture organisation",
+        officialEmail: "organisation@example.invalid",
+        websiteUrl: "https://example.invalid",
+    };
+    const result = await saveAbout({
+        ...profileValues("Updated About", "circle-id"),
+        ...protectedValues,
+        mission: "Updated mission",
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.newHandle, undefined);
+    assert.equal(state.updates.length, 1);
+    assert.equal(state.updates[0].name, "Updated About");
+    assert.equal(state.updates[0].mission, "Updated mission");
+    for (const field of Object.keys(protectedValues)) assert.equal(Object.hasOwn(state.updates[0], field), false);
+    assert.deepEqual(state.paths, ["/circles/community/settings/about", "/circles/community/"]);
+});
+
+test("a scoped Edit About grant does not authorize administrative About actions", async () => {
+    state.circle = {
+        _id: "circle-id",
+        circleType: "circle",
+        circleLevel: "profile_child",
+        accessRules: { settings: { edit_about: ["editors"] } },
+    };
+    state.viewerDid = "did:editor";
+    state.groups = ["editors"];
+    const formData = new FormData();
+    formData.set("circleId", "circle-id");
+    const results = await Promise.all([
+        publishCircleAction(formData),
+        submitCircleForVerificationAction(formData),
+        replyToIndependentCircleVerificationThreadAction(formData),
+        addCircleAffiliationAction("circle-id", "other-circle"),
+        removeCircleAffiliationAction("circle-id", "other-circle-id"),
+    ]);
+    for (const result of results) assert.match(result.message ?? "", /not authorized/);
+    await assert.rejects(getIndependentCircleVerificationThreadAction("circle-id"), /Unauthorized/);
+    assert.deepEqual(state.updates, []);
+});
+
+test("anonymous visitors and members without Edit About cannot save", async () => {
+    state.viewerDid = undefined;
+    assert.equal((await saveAbout(profileValues("Anonymous"))).success, false);
+    state.viewerDid = "did:ordinary-member";
+    state.canEdit = false;
+    assert.equal((await saveAbout(profileValues("Member"))).success, false);
+    assert.deepEqual(state.updates, []);
 });

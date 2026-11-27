@@ -1,10 +1,11 @@
 "use server";
 
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
-import { updateCircle } from "@/lib/data/circle";
+import { getCircleById, updateCircle } from "@/lib/data/circle";
 import { Circle, FormSubmitResponse } from "@/models/models";
 import { revalidatePath } from "next/cache";
 import { features } from "@/lib/data/constants";
+import { getAboutEditorMode } from "@/lib/auth/settings-editor-access.server";
 
 export async function savePresence(data: Circle): Promise<FormSubmitResponse> {
     try {
@@ -13,6 +14,11 @@ export async function savePresence(data: Circle): Promise<FormSubmitResponse> {
             throw new Error("User not authenticated");
         }
         if (!(await isAuthorized(userDid, data._id ?? "", features.settings.edit_about))) {
+            throw new Error("Not authorized to edit circle settings");
+        }
+
+        const circle = await getCircleById(data._id);
+        if (!circle || !(await getAboutEditorMode(circle, userDid))) {
             throw new Error("Not authorized to edit circle settings");
         }
 
@@ -34,9 +40,9 @@ export async function savePresence(data: Circle): Promise<FormSubmitResponse> {
             userDid,
         );
 
-        revalidatePath(`/circles/${data.handle}/settings/presence`);
-        revalidatePath(`/circles/${data.handle}/home`);
-        revalidatePath(`/circles/${data.handle}`);
+        revalidatePath(`/circles/${circle.handle}/settings/presence`);
+        revalidatePath(`/circles/${circle.handle}/home`);
+        revalidatePath(`/circles/${circle.handle}`);
 
         return {
             success: true,

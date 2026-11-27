@@ -29,9 +29,10 @@ import { validatePersonalProfileDisplayNameField } from "@/lib/profile-name-vali
 
 interface AboutSettingsFormProps {
     circle: Circle;
+    delegated?: boolean;
 }
 
-export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.ReactElement {
+export function AboutSettingsForm({ circle, delegated = false }: AboutSettingsFormProps): React.ReactElement {
     const { toast } = useToast();
     const [, setUser] = useAtom(userAtom);
     const router = useRouter();
@@ -160,30 +161,32 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             )}
                         />
 
-                        <Controller
-                            name="handle"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicTextField
-                                    field={{
-                                        name: "handle",
-                                        type: "text",
-                                        label: "Handle",
-                                        placeholder: "handle",
-                                        description: {
-                                            circle: "Choose a unique handle that will identify the circle on the platform.",
-                                            user: "Choose a unique handle that will identify your profile on Kamooni.",
-                                        },
-                                        required: true,
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                    isUser={isUserProfile}
-                                />
-                            )}
-                        />
+                        {!delegated && (
+                            <Controller
+                                name="handle"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicTextField
+                                        field={{
+                                            name: "handle",
+                                            type: "text",
+                                            label: "Handle",
+                                            placeholder: "handle",
+                                            description: {
+                                                circle: "Choose a unique handle that will identify the circle on the platform.",
+                                                user: "Choose a unique handle that will identify your profile on Kamooni.",
+                                            },
+                                            required: true,
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                        isUser={isUserProfile}
+                                    />
+                                )}
+                            />
+                        )}
 
-                        {!isIndependentCircle || !representsOrganization ? (
+                        {!delegated && (!isIndependentCircle || !representsOrganization) ? (
                             <Controller
                                 name="websiteUrl"
                                 control={form.control as unknown as Control}
@@ -207,7 +210,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
                             />
                         ) : null}
 
-                        {isIndependentCircle ? (
+                        {!delegated && isIndependentCircle ? (
                             <div className="space-y-4 rounded-lg border bg-slate-50 p-4">
                                 <div className="space-y-1">
                                     <h3 className="font-medium">Organization Claim</h3>
@@ -368,7 +371,7 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
 
                 {renderSaveButton()}
 
-                {!isUserProfile ? (
+                {!delegated && !isUserProfile ? (
                     <Card>
                         <CardHeader>
                             <CardTitle>Visibility</CardTitle>
@@ -473,33 +476,35 @@ export function AboutSettingsForm({ circle }: AboutSettingsFormProps): React.Rea
 
                 {renderSaveButton()}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>{isUserProfile ? "Your location" : "Location"}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Controller
-                            name="location"
-                            control={form.control as unknown as Control}
-                            render={({ field }) => (
-                                <DynamicLocationField
-                                    field={{
-                                        name: "location",
-                                        type: "location",
-                                        label: isUserProfile ? "Your location" : "Location",
-                                        description: {
-                                            circle: "Specify the location of the circle.",
-                                            user: "If you choose a location, this will help with location-based information. However, for your personal profile, a general location is recommended.",
-                                        },
-                                    }}
-                                    formField={field}
-                                    control={form.control as unknown as Control}
-                                    isUser={isUserProfile}
-                                />
-                            )}
-                        />
-                    </CardContent>
-                </Card>
+                {!delegated && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>{isUserProfile ? "Your location" : "Location"}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Controller
+                                name="location"
+                                control={form.control as unknown as Control}
+                                render={({ field }) => (
+                                    <DynamicLocationField
+                                        field={{
+                                            name: "location",
+                                            type: "location",
+                                            label: isUserProfile ? "Your location" : "Location",
+                                            description: {
+                                                circle: "Specify the location of the circle.",
+                                                user: "If you choose a location, this will help with location-based information. However, for your personal profile, a general location is recommended.",
+                                            },
+                                        }}
+                                        formField={field}
+                                        control={form.control as unknown as Control}
+                                        isUser={isUserProfile}
+                                    />
+                                )}
+                            />
+                        </CardContent>
+                    </Card>
+                )}
 
                 <Card>
                     <CardHeader>

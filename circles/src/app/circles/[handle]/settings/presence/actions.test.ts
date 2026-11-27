@@ -15,9 +15,10 @@ const circle = {
     _id: circleId,
     circleType: "circle" as const,
     handle: "fixture",
+    publishStatus: "published" as const,
     accessRules: getDefaultAccessRules(),
 };
-const owner = { _id: ownerId, did: ownerDid, circleType: "user", accessRules: getDefaultAccessRules() };
+const owner = { _id: ownerId, did: ownerDid, handle: "owner", circleType: "user", accessRules: getDefaultAccessRules() };
 const readyProfiles = [adminDid, memberDid, outsiderDid].map((did) => ({
     _id: new ObjectId(),
     did,
@@ -128,4 +129,25 @@ test("presence authorisation never treats a missing account or a Secret Circle o
         writes.map(({ actor }) => actor),
         [memberDid],
     );
+});
+
+
+test("a delegated editor can save presence without a stored View Settings rule", async () => {
+    target = { ...circle, accessRules: { settings: { edit_about: ["members"] } } };
+    viewerDid = memberDid;
+    writes.length = 0;
+    revalidatedPaths.length = 0;
+
+    assert.equal(await auth.isAuthorized(memberDid, circleId.toString(), features.settings.view), false);
+    assert.equal((await savePresence(values)).success, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].actor, memberDid);
+    assert.deepEqual(writes[0].update.offers, values.offers);
+    assert.ok(revalidatedPaths.includes("/circles/fixture/settings/presence"));
+    writes.length = 0;
+    target = { ...target, accessRules: { settings: { edit_about: ["members"], view: [] } } };
+    assert.equal((await savePresence(values)).success, false);
+    target = { ...circle, publishStatus: "draft", accessRules: { settings: { edit_about: ["members"] } } };
+    assert.equal((await savePresence(values)).success, false);
+    assert.deepEqual(writes, []);
 });

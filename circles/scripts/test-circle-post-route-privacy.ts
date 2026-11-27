@@ -217,6 +217,86 @@ try {
         owner: `token=${await sign(authorDid)}`,
     };
 
+    const delegatedCircle = new ObjectId();
+    const editorHandle = `route-privacy-editors-${suffix}`;
+    const editorMarker = marker("EDITORS_RULE");
+    const officialEmail = `${marker("OFFICIAL_EMAIL")}@example.invalid`;
+    const editorRules = { edit_about: ["admins", editorMarker] };
+    await db.collection("circles").insertOne({
+        _id: delegatedCircle,
+        handle: editorHandle,
+        circleType: "circle",
+        name: "Fixture delegated settings",
+        createdBy: authorDid,
+        publishStatus: "published",
+        visibility: "public",
+        enabledModules: ["home", "settings"],
+        accessRules: { settings: editorRules },
+        officialEmail,
+        location: { precision: 1, street: marker("LOCATION") },
+        metadata: { test: marker("METADATA") },
+        passwordResetToken: marker("ACCOUNT"),
+    });
+    await db.collection("members").insertMany([
+        { circleId: delegatedCircle.toHexString(), userDid: authorDid, userGroups: ["admins"] },
+        { circleId: delegatedCircle.toHexString(), userDid: memberDid, userGroups: ["members", editorMarker] },
+        { circleId: delegatedCircle.toHexString(), userDid: outsiderDid, userGroups: ["members"] },
+    ]);
+
+    const editorRoutes = {
+        about: "About Settings",
+        presence: "Offers and needs",
+        "access-rules": "Access Rules Settings",
+    };
+    async function checkEditorRoutes(state: string, allowedPages: string[], cookie: string) {
+        for (const [page, title] of Object.entries(editorRoutes)) {
+            for (const rsc of [false, true]) {
+                const path = `/circles/${editorHandle}/settings/${page}`;
+                const label = `${state} ${page} ${rsc ? "RSC" : "HTML"}`;
+                const response = await fetch(new URL(path, origin), {
+                    headers: { ...(cookie && { cookie }), ...(rsc && { RSC: "1" }) },
+                    redirect: "manual",
+                    signal: AbortSignal.timeout(10000),
+                });
+                const body = await response.text();
+                const allowed = allowedPages.includes(page);
+                check(body.includes(title) === allowed, `${label} had unexpected editor access (${response.status})`);
+                if (allowed) {
+                    check(response.status === 200, `${label} had unexpected status ${response.status}`);
+                    check(
+                        response.headers.get("content-type")?.includes(rsc ? "text/x-component" : "text/html") === true,
+                        `${label} had an unexpected content type`,
+                    );
+                }
+                if (state !== "administrator") {
+                    for (const field of [editorMarker, officialEmail, marker("LOCATION"), marker("METADATA"), marker("ACCOUNT")]) {
+                        check(!body.includes(field), `${label} exposed a restricted value`);
+                    }
+                    check(!body.includes("Organization Claim"), `${label} exposed administrative controls`);
+                }
+            }
+        }
+    }
+
+    await checkEditorRoutes("delegated editor", ["about", "presence"], viewerCookies.member);
+    await checkEditorRoutes("ordinary member", [], viewerCookies.outsider);
+    await checkEditorRoutes("anonymous visitor", [], viewerCookies.guest);
+    await checkEditorRoutes("administrator", Object.keys(editorRoutes), viewerCookies.owner);
+    await db.collection("circles").updateOne({ _id: delegatedCircle }, { $set: { "accessRules.settings.view": [] } });
+    await checkEditorRoutes("explicit Settings denial", [], viewerCookies.member);
+    await db.collection("circles").updateOne(
+        { _id: delegatedCircle },
+        { $set: { accessRules: { settings: editorRules }, publishStatus: "draft" } },
+    );
+    await checkEditorRoutes("unpublished circle non-creator", [], viewerCookies.member);
+    await db.collection("circles").updateOne(
+        { _id: delegatedCircle },
+        { $set: { publishStatus: "published", visibility: "secret" } },
+    );
+    await db.collection("members").deleteOne({ circleId: delegatedCircle.toHexString(), userDid: outsiderDid });
+    await checkEditorRoutes("Secret Circle outsider", [], viewerCookies.outsider);
+    await checkEditorRoutes("Secret Circle editor", ["about", "presence"], viewerCookies.member);
+
     for (const fixture of fixtures) {
         const { name, handle, post, body, communityPost, restrictedPost } = fixture;
         const routes = [
@@ -283,5 +363,5 @@ try {
 
 assert.equal(failures.length, 0, failures.join("\n"));
 console.log(
-    `Community and post HTML/RSC responses passed for public, restricted, unpublished and Secret Circles (${suffix}).`,
+    `Community, post and Settings HTML/RSC privacy checks passed (${suffix}).`,
 );

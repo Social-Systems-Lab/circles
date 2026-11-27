@@ -1,4 +1,6 @@
 import { cache } from "react";
+import { hasDelegatedAboutRule } from "@/lib/auth/settings-editor-access";
+import { getAboutEditorMode } from "@/lib/auth/settings-editor-access.server";
 import { getAuthenticatedUserDid, isAuthorized } from "@/lib/auth/auth";
 import { getCircleByHandle, isCirclePublished } from "@/lib/data/circle";
 import { canReadCircle } from "@/lib/data/circle-visibility-policy";
@@ -15,3 +17,13 @@ export const getCirclePageAccess = cache((handle: string) =>
         canEditAbout: (viewerDid, circleId) => isAuthorized(viewerDid, circleId, features.settings.edit_about),
     }),
 );
+
+export const getCircleSettingsAccess = cache(async (handle: string) => {
+    const access = await getCirclePageAccess(handle);
+    if (!access?.viewerDid) return null;
+    const delegatedAboutEditor =
+        access.canEditAbout &&
+        hasDelegatedAboutRule(access.circle) &&
+        (await getAboutEditorMode(access.circle, access.viewerDid)) === "delegated";
+    return { ...access, viewerDid: access.viewerDid, delegatedAboutEditor };
+});
